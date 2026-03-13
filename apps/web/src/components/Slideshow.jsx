@@ -40,6 +40,12 @@ function Slideshow() {
       .filter(Boolean);
   }, [location.search]);
 
+  const startId = useMemo(() => {
+    const searchParams = new URLSearchParams(location.search);
+    const value = Number(searchParams.get('start'));
+    return Number.isFinite(value) && value > 0 ? value : null;
+  }, [location.search]);
+
   useEffect(() => {
     let active = true;
 
@@ -52,6 +58,13 @@ function Slideshow() {
         const noteMap = new Map(payload.notes.map((note) => [note.id, note]));
         const orderedNotes = ids.length ? ids.map((id) => noteMap.get(id)).filter(Boolean) : payload.notes;
         setNotes(orderedNotes);
+
+        if (startId) {
+          const startIndex = orderedNotes.findIndex((note) => note.id === startId);
+          setCurrentIndex(startIndex >= 0 ? startIndex : 0);
+        } else {
+          setCurrentIndex(0);
+        }
       })
       .finally(() => {
         if (active) {
@@ -62,7 +75,7 @@ function Slideshow() {
     return () => {
       active = false;
     };
-  }, [ids]);
+  }, [ids, startId]);
 
   useEffect(() => {
     function onKeyDown(event) {

@@ -181,6 +181,21 @@ td {
   text-align: left;
 }
 
+.table-row-link {
+  cursor: pointer;
+  transition: background 0.18s ease;
+}
+
+.table-row-link:hover,
+.table-row-link:focus-visible {
+  background: rgba(217, 162, 93, 0.12);
+}
+
+.table-row-link:focus-visible {
+  outline: 2px solid rgba(111, 66, 31, 0.45);
+  outline-offset: -2px;
+}
+
 thead {
   background: rgba(231, 212, 187, 0.5);
   position: sticky;
