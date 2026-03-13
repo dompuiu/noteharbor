@@ -87,9 +87,15 @@ function NotesTable() {
     setSortDirection('asc');
   }
 
-  function openSlideshow() {
+  function openSlideshow(startId) {
     const ids = orderedNotes.map((note) => note.id).join(',');
-    navigate(`/slideshow?ids=${ids}`);
+    const searchParams = new URLSearchParams({ ids });
+
+    if (startId) {
+      searchParams.set('start', String(startId));
+    }
+
+    navigate(`/slideshow?${searchParams.toString()}`);
   }
 
   return (
@@ -159,7 +165,19 @@ function NotesTable() {
               </thead>
               <tbody>
                 {orderedNotes.map((note) => (
-                  <tr key={note.id}>
+                  <tr
+                    className="table-row-link"
+                    key={note.id}
+                    onClick={() => openSlideshow(note.id)}
+                    onKeyDown={(event) => {
+                      if (event.key === 'Enter' || event.key === ' ') {
+                        event.preventDefault();
+                        openSlideshow(note.id);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                  >
                     <td>{note.denomination}</td>
                     <td>{note.issue_date}</td>
                     <td>{note.catalog_number}</td>
@@ -169,7 +187,7 @@ function NotesTable() {
                     <td>{note.serial}</td>
                     <td>
                       {note.url ? (
-                        <a href={note.url} rel="noreferrer" target="_blank">
+                        <a href={note.url} onClick={(event) => event.stopPropagation()} rel="noreferrer" target="_blank">
                           Open
                         </a>
                       ) : (
@@ -183,9 +201,9 @@ function NotesTable() {
                       </div>
                     </td>
                     <td>
-                      <Link className="icon-link" to={`/notes/${note.id}/edit`}>
-                        Edit
-                      </Link>
+                       <Link className="icon-link" onClick={(event) => event.stopPropagation()} to={`/notes/${note.id}/edit`}>
+                         Edit
+                       </Link>
                     </td>
                   </tr>
                 ))}
