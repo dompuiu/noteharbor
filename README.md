@@ -336,3 +336,9 @@ Edit all fields for a single note. The tag editor shows suggestions from previou
 
 ### Slideshow (`/slideshow`)
 Full-screen image viewer. Pass `?ids=1,2,3` to restrict to specific notes, or show all. Navigate with arrow buttons or keyboard arrow keys.
+
+---
+
+## License
+
+[MIT](./LICENSE)
