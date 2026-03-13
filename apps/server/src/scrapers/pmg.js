@@ -13,7 +13,7 @@ class PMGScraper extends BaseScraper {
     const $ = cheerio.load(html);
     const details = {};
 
-    $('.certlookup-results-data dl').each((_, element) => {
+    $('.certlookup-wrapper dl').each((_, element) => {
       const label = $(element).find('dt').text().trim().replace(/:$/, '');
       const value = $(element).find('dd').text().trim();
 
@@ -29,16 +29,16 @@ class PMGScraper extends BaseScraper {
       const anchor = $(element).find('a').first();
       const img = $(element).find('img').first();
       const title = (img.attr('title') || '').toLowerCase();
-      const side = title.includes('rev') || title.includes('back') || title.includes('reverse') ? 'back' : 'front';
+      const side = title.includes('rev') || title.includes('back') || title.includes('reverse') ? 'front' : 'back';
       const fullSizeUrl = anchor.attr('href') ? new URL(anchor.attr('href'), pageUrl).href : null;
       const thumbnailUrl = img.attr('src') ? new URL(img.attr('src'), pageUrl).href : null;
 
-      if (fullSizeUrl || thumbnailUrl) {
-        images.push({
-          side,
-          fullSizeUrl,
-          thumbnailUrl
-        });
+      if (fullSizeUrl) {
+        images.push({ side, variant: 'full', url: fullSizeUrl });
+      }
+
+      if (thumbnailUrl) {
+        images.push({ side, variant: 'thumbnail', url: thumbnailUrl });
       }
     });
 
@@ -60,25 +60,17 @@ class PMGScraper extends BaseScraper {
     const savedImages = [];
 
     for (const image of parsedResult.images) {
-      if (image.fullSizeUrl) {
-        const localPath = await this.downloadImage(image.fullSizeUrl, `${folder}/${image.side}.jpg`);
-        savedImages.push({
-          type: image.side,
-          variant: 'full',
-          localPath,
-          sourceUrl: image.fullSizeUrl
-        });
-      }
+      const filename = image.variant === 'thumbnail'
+        ? `${image.side}_thumb.jpg`
+        : `${image.side}.jpg`;
 
-      if (image.thumbnailUrl) {
-        const localPath = await this.downloadImage(image.thumbnailUrl, `${folder}/${image.side}_thumb.jpg`);
-        savedImages.push({
-          type: image.side,
-          variant: 'thumbnail',
-          localPath,
-          sourceUrl: image.thumbnailUrl
-        });
-      }
+      const localPath = await this.downloadImage(image.url, `${folder}/${filename}`);
+      savedImages.push({
+        type: image.side,
+        variant: image.variant,
+        localPath,
+        sourceUrl: image.url
+      });
     }
 
     return savedImages;
