@@ -330,19 +330,45 @@ thead {
   background: rgba(31, 22, 15, 0.8);
 }
 
-.image-frame {
-  border-radius: 22px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.02));
-  min-height: 480px;
+.slide-images {
   display: grid;
-  place-items: center;
-  overflow: hidden;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  align-items: start;
 }
 
-.image-frame img {
+.slide-thumb-btn {
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 235, 212, 0.18);
+  border-radius: 16px;
+  padding: 10px;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
   width: 100%;
-  height: 100%;
+}
+
+.slide-thumb-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  border-color: rgba(255, 235, 212, 0.45);
+}
+
+.slide-thumb-btn img {
+  width: 100%;
+  height: 180px;
   object-fit: contain;
+  border-radius: 10px;
+}
+
+.slide-thumb-label {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  color: rgba(255, 245, 233, 0.55);
 }
 
 .placeholder-card {
@@ -350,6 +376,55 @@ thead {
   border-radius: 20px;
   padding: 32px;
   color: rgba(255, 245, 233, 0.8);
+}
+
+.image-popover-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.88);
+  z-index: 1000;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+}
+
+.image-popover-content {
+  position: relative;
+  max-width: min(1200px, 92vw);
+  max-height: 90vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.image-popover-content img {
+  max-width: 100%;
+  max-height: 88vh;
+  object-fit: contain;
+  border-radius: 10px;
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
+}
+
+.image-popover-close {
+  position: absolute;
+  top: -18px;
+  right: -18px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: rgba(30, 20, 10, 0.85);
+  color: #fff;
+  font-size: 0.9rem;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  z-index: 1;
+  transition: background 0.15s ease;
+}
+
+.image-popover-close:hover {
+  background: rgba(60, 40, 20, 0.95);
 }
 
 .slide-meta {
@@ -375,7 +450,8 @@ thead {
   }
 
   .form-grid,
-  .detail-grid {
+  .detail-grid,
+  .slide-images {
     grid-template-columns: 1fr;
   }
 
