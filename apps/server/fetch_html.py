@@ -21,7 +21,7 @@ from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig
 
 async def fetch(url: str, wait_seconds: float, profile_dir: str = None) -> None:
     browser_config = BrowserConfig(headless=False, user_data_dir=profile_dir or None)
-    run_config = CrawlerRunConfig(delay_before_return_html=wait_seconds)
+    run_config = CrawlerRunConfig(wait_for=".certlookup-details")
 
     async with AsyncWebCrawler(config=browser_config) as crawler:
         result = await crawler.arun(url=url, config=run_config)
