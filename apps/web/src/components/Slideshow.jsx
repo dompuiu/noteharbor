@@ -6,12 +6,31 @@ function pickImage(note, type, variant = 'full') {
   return note.images.find((image) => image.type === type && image.variant === variant)?.localPath ?? null;
 }
 
+function ImagePopover({ src, alt, onClose }) {
+  useEffect(() => {
+    function onKeyDown(e) {
+      if (e.key === 'Escape') onClose();
+    }
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [onClose]);
+
+  return (
+    <div className="image-popover-overlay" onClick={onClose}>
+      <div className="image-popover-content" onClick={(e) => e.stopPropagation()}>
+        <button className="image-popover-close" onClick={onClose} type="button">✕</button>
+        <img alt={alt} src={src} />
+      </div>
+    </div>
+  );
+}
+
 function Slideshow() {
   const location = useLocation();
   const [notes, setNotes] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
-  const [side, setSide] = useState('front');
   const [loading, setLoading] = useState(true);
+  const [popoverImage, setPopoverImage] = useState(null);
 
   const ids = useMemo(() => {
     const searchParams = new URLSearchParams(location.search);
@@ -47,10 +66,10 @@ function Slideshow() {
 
   useEffect(() => {
     function onKeyDown(event) {
+      if (popoverImage) return;
       if (event.key === 'ArrowRight') {
         setCurrentIndex((current) => (current + 1) % Math.max(notes.length, 1));
       }
-
       if (event.key === 'ArrowLeft') {
         setCurrentIndex((current) => (current - 1 + Math.max(notes.length, 1)) % Math.max(notes.length, 1));
       }
@@ -58,11 +77,7 @@ function Slideshow() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [notes.length]);
-
-  useEffect(() => {
-    setSide('front');
-  }, [currentIndex]);
+  }, [notes.length, popoverImage]);
 
   if (loading) {
     return <section className="slideshow-screen"><p>Loading slideshow...</p></section>;
@@ -80,12 +95,21 @@ function Slideshow() {
   }
 
   const note = notes[currentIndex];
-  const frontImage = pickImage(note, 'front');
-  const backImage = pickImage(note, 'back');
-  const currentImage = side === 'back' ? backImage || frontImage : frontImage || backImage;
+  const frontFull = pickImage(note, 'front', 'full');
+  const backFull = pickImage(note, 'back', 'full');
+  const frontThumb = pickImage(note, 'front', 'thumbnail') || frontFull;
+  const backThumb = pickImage(note, 'back', 'thumbnail') || backFull;
 
   return (
     <section className="slideshow-screen">
+      {popoverImage && (
+        <ImagePopover
+          src={popoverImage.src}
+          alt={popoverImage.alt}
+          onClose={() => setPopoverImage(null)}
+        />
+      )}
+
       <div className="slideshow-topbar">
         <Link className="button" to="/">
           Exit slideshow
@@ -101,9 +125,37 @@ function Slideshow() {
         </button>
 
         <div className="slide-card">
-          <div className="image-frame">
-            {currentImage ? <img alt={`${note.denomination} ${side}`} src={currentImage} /> : <div className="placeholder-card">No scraped image yet</div>}
+          <div className="slide-images">
+            {frontThumb || backThumb ? (
+              <>
+                {frontThumb && (
+                  <button
+                    className="slide-thumb-btn"
+                    onClick={() => setPopoverImage({ src: frontFull || frontThumb, alt: `${note.denomination} front` })}
+                    title="Click to enlarge"
+                    type="button"
+                  >
+                    <img alt={`${note.denomination} front`} src={frontThumb} />
+                    <span className="slide-thumb-label">Front</span>
+                  </button>
+                )}
+                {backThumb && (
+                  <button
+                    className="slide-thumb-btn"
+                    onClick={() => setPopoverImage({ src: backFull || backThumb, alt: `${note.denomination} back` })}
+                    title="Click to enlarge"
+                    type="button"
+                  >
+                    <img alt={`${note.denomination} back`} src={backThumb} />
+                    <span className="slide-thumb-label">Back</span>
+                  </button>
+                )}
+              </>
+            ) : (
+              <div className="placeholder-card">No scraped image yet</div>
+            )}
           </div>
+
           <div className="slide-meta">
             <div>
               <p className="eyebrow">{note.grading_company || 'Collection note'}</p>
@@ -121,14 +173,6 @@ function Slideshow() {
               {note.tags.map((tag) => (
                 <span className="tag" key={tag.id || tag.name}>{tag.name}</span>
               ))}
-            </div>
-            <div className="inline-actions">
-              <button className="button" disabled={!frontImage} onClick={() => setSide('front')} type="button">
-                Front
-              </button>
-              <button className="button" disabled={!backImage} onClick={() => setSide('back')} type="button">
-                Back
-              </button>
             </div>
           </div>
         </div>
