@@ -1,0 +1,21 @@
+# Development layout example
+workspace:
+  name: "notesshow"
+  description: "layout for development"
+  directory: "/home/dompuiu/Development/notesshow"
+
+panes:
+  # General terminal (bottom-left)
+  - id: "terminal"
+    split: "vertical"
+
+  # Main editor (top-left)
+  - id: "editor"
+    commands:
+      - "nvim ."
+
+  # Claude Code (top-right, smaller)
+  - id: "dev"
+    commands:
+      - "pnpm dev"
+    focus: true
