@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import {
   deleteNote,
@@ -147,6 +147,8 @@ function pickImage(note, type, variant = "full") {
 
 function NotesTable() {
   const initialTableStateRef = useRef(undefined);
+  const rowElementMapRef = useRef(new Map());
+  const dragPreviewRef = useRef(null);
 
   if (initialTableStateRef.current === undefined) {
     initialTableStateRef.current = loadSavedTableState();
@@ -176,8 +178,9 @@ function NotesTable() {
   const [slideshowNotes, setSlideshowNotes] = useState([]);
   const [slideshowIndex, setSlideshowIndex] = useState(0);
   const [draggedNoteId, setDraggedNoteId] = useState(null);
-  const [dragOverNoteId, setDragOverNoteId] = useState(null);
+  const [dropTarget, setDropTarget] = useState(null);
   const selectAllRef = useRef(null);
+  const totalColumnCount = columns.length + 5;
 
   async function loadNotes() {
     const payload = await getNotes();
@@ -365,13 +368,38 @@ function NotesTable() {
     setSelectedIds([]);
   }
 
-  function clearDragState() {
-    setDraggedNoteId(null);
-    setDragOverNoteId(null);
+  function clearDragPreview() {
+    if (dragPreviewRef.current) {
+      dragPreviewRef.current.remove();
+      dragPreviewRef.current = null;
+    }
   }
 
-  async function handleReorder(targetNoteId) {
-    if (!canReorder || draggedNoteId === null || draggedNoteId === targetNoteId) {
+  function clearDragState() {
+    clearDragPreview();
+    setDraggedNoteId(null);
+    setDropTarget(null);
+  }
+
+  function updateDropTarget(noteId, event) {
+    const row = rowElementMapRef.current.get(noteId);
+
+    if (!row) {
+      return;
+    }
+
+    const bounds = row.getBoundingClientRect();
+    const placement = event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+
+    setDropTarget((current) =>
+      current?.noteId === noteId && current?.placement === placement
+        ? current
+        : { noteId, placement },
+    );
+  }
+
+  async function handleReorder(targetNoteId, placement) {
+    if (!canReorder || draggedNoteId === null) {
       clearDragState();
       return;
     }
@@ -384,10 +412,21 @@ function NotesTable() {
       return;
     }
 
+    const rawInsertIndex = targetIndex + (placement === "after" ? 1 : 0);
+
+    if (
+      (placement === "before" && startIndex === targetIndex) ||
+      (placement === "after" && startIndex === targetIndex + 1)
+    ) {
+      clearDragState();
+      return;
+    }
+
     const previousNotes = notes;
     const nextNotes = [...notes];
     const [movedNote] = nextNotes.splice(startIndex, 1);
-    nextNotes.splice(targetIndex, 0, movedNote);
+    const insertIndex = startIndex < rawInsertIndex ? rawInsertIndex - 1 : rawInsertIndex;
+    nextNotes.splice(insertIndex, 0, movedNote);
 
     const reorderedNotes = nextNotes.map((note, index) => ({
       ...note,
@@ -562,7 +601,7 @@ function NotesTable() {
               <table>
                 <thead>
                   <tr>
-                    <th>Move</th>
+                    <th className="drag-cell" />
                     <th>
                       <input
                         aria-label="Select all visible rows"
@@ -591,7 +630,7 @@ function NotesTable() {
                     <th>Actions</th>
                   </tr>
                   <tr>
-                    <th />
+                    <th className="drag-cell" />
                     <th />
                     <th />
                     <th />
@@ -622,149 +661,203 @@ function NotesTable() {
                       pickImage(note, "front", "full");
                     const frontPreview =
                       pickImage(note, "front", "full") || frontThumb;
+                    const showPlaceholderBefore =
+                      dropTarget?.noteId === note.id && dropTarget.placement === "before";
+                    const showPlaceholderAfter =
+                      dropTarget?.noteId === note.id && dropTarget.placement === "after";
 
                     return (
-                      <tr
-                        className={`table-row-link${dragOverNoteId === note.id ? " table-row-link--drop-target" : ""}`}
-                        key={note.id}
-                        onDragLeave={() => {
-                          if (dragOverNoteId === note.id) {
-                            setDragOverNoteId(null);
-                          }
-                        }}
-                        onDragOver={(event) => {
-                          if (!canReorder || draggedNoteId === null) {
-                            return;
-                          }
+                      <Fragment key={note.id}>
+                        {showPlaceholderBefore ? (
+                          <tr className="table-drop-placeholder-row" aria-hidden="true">
+                            <td className="table-drop-placeholder-cell" colSpan={totalColumnCount}>
+                              <span className="table-drop-placeholder-line" />
+                            </td>
+                          </tr>
+                        ) : null}
+                        <tr
+                          className={`table-row-link${draggedNoteId === note.id ? " table-row-link--dragging" : ""}`}
+                          key={note.id}
+                          ref={(element) => {
+                            if (element) {
+                              rowElementMapRef.current.set(note.id, element);
+                            } else {
+                              rowElementMapRef.current.delete(note.id);
+                            }
+                          }}
+                          onDragLeave={(event) => {
+                            if (!event.currentTarget.contains(event.relatedTarget)) {
+                              setDropTarget((current) =>
+                                current?.noteId === note.id ? null : current,
+                              );
+                            }
+                          }}
+                          onDragOver={(event) => {
+                            if (!canReorder || draggedNoteId === null) {
+                              return;
+                            }
 
-                          event.preventDefault();
-                          if (dragOverNoteId !== note.id) {
-                            setDragOverNoteId(note.id);
-                          }
-                        }}
-                        onDrop={(event) => {
-                          event.preventDefault();
-                          void handleReorder(note.id);
-                        }}
-                        onClick={() => {
-                          openSlideshow(note.id);
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
+                            updateDropTarget(note.id, event);
+                          }}
+                          onDrop={(event) => {
+                            event.preventDefault();
+                            const nextPlacement =
+                              dropTarget?.noteId === note.id
+                                ? dropTarget.placement
+                                : event.clientY <
+                                    event.currentTarget.getBoundingClientRect().top +
+                                      event.currentTarget.getBoundingClientRect().height / 2
+                                  ? "before"
+                                  : "after";
+                            void handleReorder(note.id, nextPlacement);
+                          }}
+                          onClick={() => {
                             openSlideshow(note.id);
-                          }
-                        }}
-                        role="button"
-                        tabIndex={0}
-                      >
-                        <td onClick={(event) => event.stopPropagation()}>
-                          <button
-                            aria-label={`Move ${note.denomination}`}
-                            className="drag-handle"
-                            disabled={!canReorder}
-                            draggable={canReorder}
-                            onClick={(event) => event.stopPropagation()}
-                            onDragEnd={clearDragState}
-                            onDragStart={(event) => {
-                              if (!canReorder) {
-                                event.preventDefault();
-                                return;
-                              }
-
-                              event.stopPropagation();
-                              event.dataTransfer.effectAllowed = "move";
-                              event.dataTransfer.setData("text/plain", String(note.id));
-                              setDraggedNoteId(note.id);
-                              setDragOverNoteId(note.id);
-                            }}
-                            type="button"
-                          >
-                            ::
-                          </button>
-                        </td>
-                        <td onClick={(event) => event.stopPropagation()}>
-                          <input
-                            aria-label={`Select ${note.denomination}`}
-                            checked={selectedIds.includes(note.id)}
-                            onChange={() => toggleNote(note.id)}
-                            type="checkbox"
-                          />
-                        </td>
-                        <td>{note.display_order ?? "-"}</td>
-                        <td>
-                          {frontThumb ? (
-                            <span className="table-thumb-wrap">
-                              <img
-                                alt={`${note.denomination} front`}
-                                className="table-thumb"
-                                src={frontThumb}
-                              />
-                              {frontPreview ? (
-                                <span className="table-thumb-preview">
-                                  <img
-                                    alt={`${note.denomination} preview`}
-                                    src={frontPreview}
-                                  />
-                                </span>
-                              ) : null}
-                            </span>
-                          ) : (
-                            <span className="muted">-</span>
-                          )}
-                        </td>
-                        <td>{note.denomination}</td>
-                        <td>{note.issue_date}</td>
-                        <td>{note.catalog_number}</td>
-                        <td>{note.grading_company}</td>
-                        <td>{note.grade}</td>
-                        <td>{note.watermark}</td>
-                        <td>{note.serial}</td>
-                        <td>
-                          {note.url ? (
-                            <a
-                              href={note.url}
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              openSlideshow(note.id);
+                            }
+                          }}
+                          role="button"
+                          tabIndex={0}
+                        >
+                        <td
+                          className={`drag-cell${canReorder ? " drag-cell--enabled" : ""}`}
+                          onClick={(event) => event.stopPropagation()}
+                        >
+                          {canReorder ? (
+                            <button
+                              aria-label={`Move ${note.denomination}`}
+                              className="drag-handle"
+                              draggable={canReorder}
                               onClick={(event) => event.stopPropagation()}
-                              rel="noreferrer"
-                              target="_blank"
+                              onDragEnd={clearDragState}
+                              onDragStart={(event) => {
+                                const row = rowElementMapRef.current.get(note.id);
+
+                                clearDragPreview();
+                                event.stopPropagation();
+                                event.dataTransfer.effectAllowed = "move";
+                                event.dataTransfer.setData("text/plain", String(note.id));
+
+                                if (row) {
+                                  const preview = row.cloneNode(true);
+                                  preview.classList.add("table-drag-preview");
+                                  preview.style.width = `${row.getBoundingClientRect().width}px`;
+                                  document.body.appendChild(preview);
+                                  dragPreviewRef.current = preview;
+                                  event.dataTransfer.setDragImage(preview, 24, 24);
+                                }
+
+                                setDraggedNoteId(note.id);
+                                setDropTarget({ noteId: note.id, placement: "before" });
+                              }}
+                              type="button"
                             >
-                              Open
-                            </a>
-                          ) : (
-                            <span className="muted">-</span>
-                          )}
+                              <span className="drag-handle-dots" aria-hidden="true">
+                                <span />
+                                <span />
+                                <span />
+                                <span />
+                                <span />
+                                <span />
+                              </span>
+                            </button>
+                          ) : null}
                         </td>
-                        <td>{note.notes}</td>
-                        <td>
-                          <div className="tag-list">
-                            {note.tags.length ? (
-                              note.tags.map((tag) => (
-                                <span className="tag" key={tag.id || tag.name}>
-                                  {tag.name}
-                                </span>
-                              ))
+                          <td onClick={(event) => event.stopPropagation()}>
+                            <input
+                              aria-label={`Select ${note.denomination}`}
+                              checked={selectedIds.includes(note.id)}
+                              onChange={() => toggleNote(note.id)}
+                              type="checkbox"
+                            />
+                          </td>
+                          <td>{note.display_order ?? "-"}</td>
+                          <td>
+                            {frontThumb ? (
+                              <span className="table-thumb-wrap">
+                                <img
+                                  alt={`${note.denomination} front`}
+                                  className="table-thumb"
+                                  src={frontThumb}
+                                />
+                                {frontPreview ? (
+                                  <span className="table-thumb-preview">
+                                    <img
+                                      alt={`${note.denomination} preview`}
+                                      src={frontPreview}
+                                    />
+                                  </span>
+                                ) : null}
+                              </span>
                             ) : (
                               <span className="muted">-</span>
                             )}
-                          </div>
-                        </td>
-                        <td>
-                          <span
-                            className={`scrape-badge scrape-badge--${noteScrapeStatus}`}
-                          >
-                            {statusLabel(noteScrapeStatus)}
-                          </span>
-                        </td>
-                        <td>
-                          <Link
-                            className="icon-link"
-                            onClick={(event) => event.stopPropagation()}
-                            to={`/notes/${note.id}/edit`}
-                          >
-                            Edit
-                          </Link>
-                        </td>
-                      </tr>
+                          </td>
+                          <td>{note.denomination}</td>
+                          <td>{note.issue_date}</td>
+                          <td>{note.catalog_number}</td>
+                          <td>{note.grading_company}</td>
+                          <td>{note.grade}</td>
+                          <td>{note.watermark}</td>
+                          <td>{note.serial}</td>
+                          <td>
+                            {note.url ? (
+                              <a
+                                href={note.url}
+                                onClick={(event) => event.stopPropagation()}
+                                rel="noreferrer"
+                                target="_blank"
+                              >
+                                Open
+                              </a>
+                            ) : (
+                              <span className="muted">-</span>
+                            )}
+                          </td>
+                          <td>{note.notes}</td>
+                          <td>
+                            <div className="tag-list">
+                              {note.tags.length ? (
+                                note.tags.map((tag) => (
+                                  <span className="tag" key={tag.id || tag.name}>
+                                    {tag.name}
+                                  </span>
+                                ))
+                              ) : (
+                                <span className="muted">-</span>
+                              )}
+                            </div>
+                          </td>
+                          <td>
+                            <span
+                              className={`scrape-badge scrape-badge--${noteScrapeStatus}`}
+                            >
+                              {statusLabel(noteScrapeStatus)}
+                            </span>
+                          </td>
+                          <td>
+                            <Link
+                              className="icon-link"
+                              onClick={(event) => event.stopPropagation()}
+                              to={`/notes/${note.id}/edit`}
+                            >
+                              Edit
+                            </Link>
+                          </td>
+                        </tr>
+                        {showPlaceholderAfter ? (
+                          <tr className="table-drop-placeholder-row" aria-hidden="true">
+                            <td className="table-drop-placeholder-cell" colSpan={totalColumnCount}>
+                              <span className="table-drop-placeholder-line" />
+                            </td>
+                          </tr>
+                        ) : null}
+                      </Fragment>
                     );
                   })}
                 </tbody>

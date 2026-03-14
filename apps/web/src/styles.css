@@ -335,15 +335,57 @@ thead {
   font-size: 0.92rem;
 }
 
+.drag-cell {
+  width: 26px;
+  min-width: 26px;
+  max-width: 26px;
+  padding: 0;
+  overflow: hidden;
+}
+
+th.drag-cell,
+td.drag-cell {
+  width: 26px;
+  min-width: 26px;
+  max-width: 26px;
+  padding: 0;
+  overflow: hidden;
+}
+
+td.drag-cell {
+  position: relative;
+}
+
+.drag-cell--enabled {
+  background: transparent;
+}
+
 .drag-handle {
-  border: 1px solid rgba(92, 59, 24, 0.2);
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.75);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: absolute;
+  inset: 0;
+  border: 0;
+  border-radius: 0;
+  background: rgba(198, 164, 128, 0.26);
   color: #6b4626;
   cursor: grab;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  padding: 6px 8px;
+  padding: 0;
+  transition:
+    background 0.18s ease,
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+}
+
+.drag-handle:hover:not(:disabled),
+.drag-handle:focus-visible:not(:disabled) {
+  background: rgba(184, 147, 108, 0.34);
+}
+
+.drag-handle:active:not(:disabled) {
+  cursor: grabbing;
+  transform: translateY(1px);
 }
 
 .drag-handle:disabled {
@@ -351,8 +393,53 @@ thead {
   opacity: 0.45;
 }
 
-.table-row-link--drop-target {
-  background: rgba(217, 162, 93, 0.22);
+.drag-handle-dots {
+  display: grid;
+  grid-template-columns: repeat(2, 4px);
+  gap: 2px 4px;
+}
+
+.drag-handle-dots span {
+  width: 4px;
+  height: 4px;
+  border-radius: 999px;
+  background: currentColor;
+  opacity: 0.9;
+}
+
+.table-row-link--dragging {
+  opacity: 0.38;
+}
+
+.table-drop-placeholder-row td {
+  padding: 0;
+  border-bottom: 0;
+}
+
+.table-drop-placeholder-cell {
+  background: rgba(217, 162, 93, 0.06);
+}
+
+.table-drop-placeholder-line {
+  display: block;
+  height: 10px;
+  margin: 0 14px;
+  border-top: 3px dashed rgba(139, 92, 49, 0.7);
+}
+
+.table-drag-preview {
+  position: fixed;
+  top: -1000px;
+  left: -1000px;
+  background: rgba(255, 252, 247, 0.96);
+  box-shadow: 0 22px 44px rgba(62, 39, 16, 0.22);
+  opacity: 0.98;
+  pointer-events: none;
+  z-index: 1000;
+}
+
+.table-drag-preview td {
+  background: rgba(255, 252, 247, 0.96);
 }
 
 .scrape-badge {
