@@ -1,15 +1,22 @@
-import { BrowserRouter, Link, NavLink, Route, Routes, useLocation } from 'react-router-dom';
-import { ImportScreen } from './components/ImportScreen.jsx';
-import { NoteEditForm } from './components/NoteEditForm.jsx';
-import { NotesTable } from './components/NotesTable.jsx';
-import { ScrapeScreen } from './components/ScrapeScreen.jsx';
-import { Slideshow } from './components/Slideshow.jsx';
+import {
+  BrowserRouter,
+  Link,
+  NavLink,
+  Route,
+  Routes,
+  useLocation,
+} from "react-router-dom";
+import { ImportScreen } from "./components/ImportScreen.jsx";
+import { NoteEditForm } from "./components/NoteEditForm.jsx";
+import { NotesTable } from "./components/NotesTable.jsx";
+import { ScrapeScreen } from "./components/ScrapeScreen.jsx";
+import { Slideshow } from "./components/Slideshow.jsx";
 
 function Shell() {
   const { pathname } = useLocation();
-  const isTable = pathname === '/';
+  const isTable = pathname === "/";
   return (
-    <div className={`app-shell${isTable ? ' app-shell--wide' : ''}`}>
+    <div className={`app-shell${isTable ? " app-shell--wide" : ""}`}>
       <header className="site-header">
         <div>
           <p className="eyebrow">Local collection studio</p>
@@ -17,17 +24,6 @@ function Shell() {
             <h1 className="site-title">Notesshow</h1>
           </Link>
         </div>
-        <nav className="site-nav">
-          <NavLink className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`} to="/">
-            Table
-          </NavLink>
-          <NavLink className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`} to="/import">
-            Import
-          </NavLink>
-          <NavLink className={({ isActive }) => `nav-link${isActive ? ' active' : ''}`} to="/scrape">
-            Scrape
-          </NavLink>
-        </nav>
       </header>
 
       <main>
