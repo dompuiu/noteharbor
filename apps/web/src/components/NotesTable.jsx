@@ -1,12 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
-import {
-  createSlideshowSession,
-  deleteNote,
-  getNotes,
-  getScrapeStatus,
-  startScrape,
-} from "../lib/api.js";
+import { Link } from "react-router-dom";
+import { deleteNote, getNotes, getScrapeStatus, startScrape } from "../lib/api.js";
+import { Slideshow } from "./Slideshow.jsx";
 
 export function HomeHero() {
   return (
@@ -145,7 +140,8 @@ function NotesTable() {
   const [actionError, setActionError] = useState("");
   const [loading, setLoading] = useState(true);
   const [bulkLoading, setBulkLoading] = useState(false);
-  const navigate = useNavigate();
+  const [slideshowNotes, setSlideshowNotes] = useState([]);
+  const [slideshowIndex, setSlideshowIndex] = useState(0);
   const selectAllRef = useRef(null);
 
   async function loadNotes() {
@@ -286,17 +282,20 @@ function NotesTable() {
     setSortDirection("asc");
   }
 
-  async function openSlideshow(startId) {
+  function openSlideshow(startId) {
     setActionError("");
 
-    const payload = await createSlideshowSession(orderedNotes.map((note) => note.id));
-    const searchParams = new URLSearchParams({ token: payload.token });
+    const nextIndex = startId
+      ? orderedNotes.findIndex((note) => note.id === startId)
+      : 0;
 
-    if (startId) {
-      searchParams.set("start", String(startId));
-    }
+    setSlideshowNotes(orderedNotes);
+    setSlideshowIndex(nextIndex >= 0 ? nextIndex : 0);
+  }
 
-    navigate(`/slideshow?${searchParams.toString()}`);
+  function closeSlideshow() {
+    setSlideshowNotes([]);
+    setSlideshowIndex(0);
   }
 
   function toggleNote(noteId) {
@@ -385,6 +384,15 @@ function NotesTable() {
 
   return (
     <section className="screen-stack">
+      {slideshowNotes.length ? (
+        <Slideshow
+          currentIndex={slideshowIndex}
+          notes={slideshowNotes}
+          onChangeIndex={setSlideshowIndex}
+          onClose={closeSlideshow}
+        />
+      ) : null}
+
       <div className="panel">
         <div className="panel-heading">
           <div>
@@ -520,23 +528,19 @@ function NotesTable() {
                       pickImage(note, "front", "full") || frontThumb;
 
                     return (
-                      <tr
-                        className="table-row-link"
-                        key={note.id}
-                        onClick={() => {
-                          void openSlideshow(note.id).catch((error) => {
-                            setActionError(error.message);
-                          });
-                        }}
-                        onKeyDown={(event) => {
-                          if (event.key === "Enter" || event.key === " ") {
-                            event.preventDefault();
-                            void openSlideshow(note.id).catch((error) => {
-                              setActionError(error.message);
-                            });
-                          }
-                        }}
-                        role="button"
+                        <tr
+                          className="table-row-link"
+                          key={note.id}
+                          onClick={() => {
+                            openSlideshow(note.id);
+                          }}
+                          onKeyDown={(event) => {
+                            if (event.key === "Enter" || event.key === " ") {
+                              event.preventDefault();
+                              openSlideshow(note.id);
+                            }
+                          }}
+                          role="button"
                         tabIndex={0}
                       >
                         <td onClick={(event) => event.stopPropagation()}>

@@ -457,6 +457,14 @@ thead {
   padding: 24px;
 }
 
+.slideshow-screen--overlay {
+  position: fixed;
+  inset: 16px;
+  min-height: 0;
+  z-index: 100;
+  overflow: auto;
+}
+
 .slideshow-topbar {
   display: flex;
   justify-content: space-between;
@@ -629,6 +637,10 @@ thead {
     border-radius: 16px;
     height: auto;
     padding: 12px;
+  }
+
+  .slideshow-screen--overlay {
+    inset: 10px;
   }
 
   .app-shell {
