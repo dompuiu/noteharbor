@@ -6,3 +6,4 @@ apps/*/dist/
 data/
 apps/*/.env
 apps/server/storage
+data
