@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { getNotes } from '../lib/api.js';
 
 function pickImage(note, type, variant = 'full') {
@@ -27,6 +27,7 @@ function ImagePopover({ src, alt, onClose }) {
 
 function Slideshow() {
   const location = useLocation();
+  const navigate = useNavigate();
   const [notes, setNotes] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
@@ -80,6 +81,10 @@ function Slideshow() {
   useEffect(() => {
     function onKeyDown(event) {
       if (popoverImage) return;
+      if (event.key === 'Escape') {
+        navigate('/');
+        return;
+      }
       if (event.key === 'ArrowRight') {
         setCurrentIndex((current) => (current + 1) % Math.max(notes.length, 1));
       }
@@ -90,7 +95,7 @@ function Slideshow() {
 
     window.addEventListener('keydown', onKeyDown);
     return () => window.removeEventListener('keydown', onKeyDown);
-  }, [notes.length, popoverImage]);
+  }, [navigate, notes.length, popoverImage]);
 
   if (loading) {
     return <section className="slideshow-screen"><p>Loading slideshow...</p></section>;
