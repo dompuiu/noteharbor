@@ -2,13 +2,12 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { spawn } from 'node:child_process';
 import { Router } from 'express';
-import { getNotesByIds, updateScrapeResult, SCRAPED_IMAGES_DIR } from '../db.js';
+import { getNotesByIds, updateScrapeResult } from '../db.js';
 import { PMGScraper } from '../scrapers/pmg.js';
 
 const scrapeRouter = Router();
 const ROUTES_DIR = path.dirname(fileURLToPath(import.meta.url));
 const FETCH_SCRIPT = path.resolve(ROUTES_DIR, '../../fetch_html.py');
-const DEFAULT_PMG_PREP_URL = 'https://www.pmgnotes.com/certlookup/';
 const DEFAULT_PMG_PROFILE_DIR = path.resolve(ROUTES_DIR, '../../storage/browser_profiles/pmg');
 const DEFAULT_WAIT_SECONDS = 10;
 
@@ -23,27 +22,8 @@ const scrapeState = {
   error: null
 };
 
-const pmgPrepState = {
-  status: 'idle',
-  startedAt: null,
-  targetUrl: null,
-  error: null
-};
-
-let pmgPrepProcess = null;
-
 function getProfileDir() {
   return process.env.PMG_BROWSER_PROFILE_DIR || DEFAULT_PMG_PROFILE_DIR;
-}
-
-function normalizePmgUrl(value) {
-  if (!value) return DEFAULT_PMG_PREP_URL;
-  try {
-    const parsed = new URL(value);
-    return parsed.hostname.toLowerCase().includes('pmgnotes.com') ? parsed.href : DEFAULT_PMG_PREP_URL;
-  } catch {
-    return DEFAULT_PMG_PREP_URL;
-  }
 }
 
 function setIdleState() {
@@ -108,53 +88,6 @@ function fetchHtml(url) {
   });
 }
 
-function openPmgPreparationBrowser(targetUrl) {
-  const normalizedUrl = normalizePmgUrl(targetUrl);
-
-  if (pmgPrepProcess && !pmgPrepProcess.killed) {
-    return Promise.resolve(normalizedUrl);
-  }
-
-  return new Promise((resolve, reject) => {
-    const args = [
-      FETCH_SCRIPT,
-      '--prepare',
-      normalizedUrl,
-      '--profile-dir', getProfileDir()
-    ];
-
-    pmgPrepProcess = spawn('python3', args);
-
-    pmgPrepProcess.stdout.once('data', () => {
-      pmgPrepState.status = 'open';
-      pmgPrepState.startedAt = pmgPrepState.startedAt || new Date().toISOString();
-      pmgPrepState.targetUrl = normalizedUrl;
-      pmgPrepState.error = null;
-      resolve(normalizedUrl);
-    });
-
-    pmgPrepProcess.stderr.on('data', (data) => {
-      const msg = data.toString().trim();
-      if (msg) console.error('[fetch_html prepare]', msg);
-    });
-
-    pmgPrepProcess.on('close', () => {
-      pmgPrepProcess = null;
-      pmgPrepState.status = 'idle';
-      pmgPrepState.startedAt = null;
-      pmgPrepState.targetUrl = null;
-      pmgPrepState.error = null;
-    });
-
-    pmgPrepProcess.on('error', (err) => {
-      pmgPrepProcess = null;
-      pmgPrepState.status = 'failed';
-      pmgPrepState.error = err.message;
-      reject(err);
-    });
-  });
-}
-
 async function runScrapeJob(notes) {
   scrapeState.status = 'running';
   scrapeState.total = notes.length;
@@ -206,27 +139,7 @@ async function runScrapeJob(notes) {
 }
 
 scrapeRouter.get('/status', (_request, response) => {
-  response.json({ ...scrapeState, pmgPreparation: pmgPrepState });
-});
-
-scrapeRouter.post('/prepare-pmg', async (request, response) => {
-  if (scrapeState.status === 'running') {
-    response.status(409).json({ error: 'Cannot open PMG preparation browser while a scrape job is running.' });
-    return;
-  }
-
-  try {
-    const targetUrl = await openPmgPreparationBrowser(request.body?.url);
-    response.json({
-      message: 'PMG preparation browser opened. Complete the Cloudflare check there, then return here and start scraping.',
-      targetUrl,
-      profileDir: getProfileDir()
-    });
-  } catch (error) {
-    pmgPrepState.status = 'failed';
-    pmgPrepState.error = error.message;
-    response.status(500).json({ error: `Failed to open the PMG preparation browser. ${error.message}` });
-  }
+  response.json(scrapeState);
 });
 
 scrapeRouter.post('/start', async (request, response) => {

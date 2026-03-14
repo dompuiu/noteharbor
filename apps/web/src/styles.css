@@ -161,6 +161,10 @@ button {
   align-items: center;
 }
 
+.toolbar-row {
+  margin-bottom: 16px;
+}
+
 .panel {
   padding: 24px;
 }

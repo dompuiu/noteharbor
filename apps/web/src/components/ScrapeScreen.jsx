@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { getNotes, getScrapeStatus, preparePmg, startScrape } from '../lib/api.js';
+import { getNotes, getScrapeStatus, startScrape } from '../lib/api.js';
 
 function ScrapeScreen() {
   const [notes, setNotes] = useState([]);
@@ -8,8 +8,6 @@ function ScrapeScreen() {
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [prepMessage, setPrepMessage] = useState('');
-  const [preparing, setPreparing] = useState(false);
 
   async function loadNotes() {
     const notesPayload = await getNotes();
@@ -48,7 +46,7 @@ function ScrapeScreen() {
   }, []);
 
   useEffect(() => {
-    const shouldPoll = status && (status.status === 'running' || status.pmgPreparation?.status === 'open');
+    const shouldPoll = status && status.status === 'running';
 
     if (!shouldPoll) {
       return undefined;
@@ -102,49 +100,6 @@ function ScrapeScreen() {
     }
   }
 
-  async function handlePreparePmg() {
-    setError('');
-    setPrepMessage('');
-    setPreparing(true);
-
-    try {
-      const firstSelectedPmgNote = notes.find(
-        (note) => selectedIds.includes(note.id) && note.url?.toLowerCase().includes('pmgnotes.com')
-      );
-      const payload = await preparePmg(firstSelectedPmgNote?.url);
-
-      setPrepMessage(payload.message);
-      setStatus((current) =>
-        current
-          ? {
-              ...current,
-              pmgPreparation: {
-                status: 'open',
-                startedAt: new Date().toISOString(),
-                targetUrl: payload.targetUrl,
-                error: null
-              }
-            }
-          : {
-              status: 'idle',
-              total: 0,
-              completed: 0,
-              items: [],
-              pmgPreparation: {
-                status: 'open',
-                startedAt: new Date().toISOString(),
-                targetUrl: payload.targetUrl,
-                error: null
-              }
-            }
-      );
-    } catch (prepareError) {
-      setError(prepareError.message);
-    } finally {
-      setPreparing(false);
-    }
-  }
-
   return (
     <section className="screen-stack">
       <div className="panel">
@@ -165,23 +120,12 @@ function ScrapeScreen() {
         {!loading ? (
           <>
             <div className="toolbar-row">
-              <button className="button" disabled={status?.status === 'running' || preparing} onClick={handlePreparePmg} type="button">
-                {preparing ? 'Opening PMG browser...' : 'Prepare PMG browser'}
-              </button>
               <button className="button" onClick={toggleAll} type="button">
                 {allSelected ? 'Deselect all' : 'Select all'}
               </button>
               <button className="button button-primary" disabled={!selectedIds.length || status?.status === 'running'} onClick={handleStart} type="button">
                 Start scraping
               </button>
-            </div>
-
-            <div className="result-card">
-              <h2>Recommended PMG flow</h2>
-              <p>Open the persistent PMG browser first, solve Cloudflare there, then return and start scraping with the same saved profile.</p>
-              {prepMessage ? <p>{prepMessage}</p> : null}
-              {status?.pmgPreparation?.status === 'open' ? <p>Preparation browser is open for <code>{status.pmgPreparation.targetUrl}</code>.</p> : null}
-              {status?.pmgPreparation?.error ? <p className="error-text">{status.pmgPreparation.error}</p> : null}
             </div>
 
             <div className="table-shell">
