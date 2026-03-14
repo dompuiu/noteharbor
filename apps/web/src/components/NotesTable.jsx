@@ -116,9 +116,6 @@ function NotesTable() {
           <Link className="button" to="/scrape">
             Scrape images
           </Link>
-          <button className="button" onClick={openSlideshow} type="button" disabled={!orderedNotes.length}>
-            Slideshow current view
-          </button>
         </div>
       </div>
 
