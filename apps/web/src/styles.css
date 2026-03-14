@@ -222,8 +222,8 @@ th,
 td {
   padding: 12px 14px;
   border-bottom: 1px solid rgba(95, 61, 26, 0.1);
-  vertical-align: top;
-  text-align: left;
+  vertical-align: middle;
+  text-align: center;
 }
 
 .table-thumb {
