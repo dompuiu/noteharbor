@@ -380,7 +380,7 @@ function NotesTable() {
                         type="checkbox"
                       />
                     </th>
-                    <th>#</th>
+                    <th>ID</th>
                     <th>Front</th>
                     {columns.map(([key, label]) => (
                       <th key={key}>
@@ -422,7 +422,7 @@ function NotesTable() {
                   </tr>
                 </thead>
                 <tbody>
-                  {orderedNotes.map((note, index) => {
+                  {orderedNotes.map((note) => {
                     const frontThumb =
                       pickImage(note, "front", "thumbnail") ||
                       pickImage(note, "front", "full");
@@ -457,7 +457,7 @@ function NotesTable() {
                             type="checkbox"
                           />
                         </td>
-                        <td>{index + 1}</td>
+                        <td>{note.id}</td>
                         <td>
                           {frontThumb ? (
                             <span className="table-thumb-wrap">
