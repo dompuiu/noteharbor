@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import {
+  createSlideshowSession,
   deleteNote,
   getNotes,
   getScrapeStatus,
@@ -203,9 +204,11 @@ function NotesTable() {
     setSortDirection("asc");
   }
 
-  function openSlideshow(startId) {
-    const ids = orderedNotes.map((note) => note.id).join(",");
-    const searchParams = new URLSearchParams({ ids });
+  async function openSlideshow(startId) {
+    setActionError("");
+
+    const payload = await createSlideshowSession(orderedNotes.map((note) => note.id));
+    const searchParams = new URLSearchParams({ token: payload.token });
 
     if (startId) {
       searchParams.set("start", String(startId));
@@ -430,11 +433,17 @@ function NotesTable() {
                       <tr
                         className="table-row-link"
                         key={note.id}
-                        onClick={() => openSlideshow(note.id)}
+                        onClick={() => {
+                          void openSlideshow(note.id).catch((error) => {
+                            setActionError(error.message);
+                          });
+                        }}
                         onKeyDown={(event) => {
                           if (event.key === "Enter" || event.key === " ") {
                             event.preventDefault();
-                            openSlideshow(note.id);
+                            void openSlideshow(note.id).catch((error) => {
+                              setActionError(error.message);
+                            });
                           }
                         }}
                         role="button"
