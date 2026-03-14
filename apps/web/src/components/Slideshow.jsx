@@ -8,30 +8,43 @@ function pickImage(note, type, variant = "full") {
   );
 }
 
-function getPreviewItems(note) {
+function getPreviewItems(note, { includeMissingSides = false } = {}) {
   const items = [];
   const frontFull = pickImage(note, "front", "full");
   const backFull = pickImage(note, "back", "full");
   const frontThumb = pickImage(note, "front", "thumbnail") || frontFull;
   const backThumb = pickImage(note, "back", "thumbnail") || backFull;
 
-  if (frontFull || frontThumb) {
-    items.push({
-      alt: `${note.denomination} front`,
-      kind: "front",
-      label: "Front",
-      src: frontFull || frontThumb,
-      thumb: frontThumb || frontFull,
-    });
+  const frontItem = {
+    alt: `${note.denomination} front`,
+    kind: "front",
+    label: "Front",
+    src: frontFull || frontThumb,
+    thumb: frontThumb || frontFull,
+  };
+  const backItem = {
+    alt: `${note.denomination} back`,
+    kind: "back",
+    label: "Back",
+    src: backFull || backThumb,
+    thumb: backThumb || backFull,
+  };
+
+  if (frontItem.src || includeMissingSides) {
+    items.push(frontItem);
   }
 
-  if (backFull || backThumb) {
+  if (backItem.src || includeMissingSides) {
+    items.push(backItem);
+  }
+
+  if (!items.length) {
     items.push({
-      alt: `${note.denomination} back`,
-      kind: "back",
-      label: "Back",
-      src: backFull || backThumb,
-      thumb: backThumb || backFull,
+      alt: `${note.denomination} preview unavailable`,
+      kind: "missing",
+      label: "No image",
+      src: null,
+      thumb: null,
     });
   }
 
@@ -47,6 +60,7 @@ function ImagePopover({
   onClose,
   onNext,
   onPrevious,
+  placeholderText,
   src,
 }) {
   useEffect(() => {
@@ -101,7 +115,14 @@ function ImagePopover({
           </button>
 
           <div className="image-popover-image-wrap">
-            <img alt={alt} src={src} />
+            {src ? (
+              <img alt={alt} src={src} />
+            ) : (
+              <div className="image-popover-empty-state">
+                <p className="eyebrow">No preview</p>
+                <p>{placeholderText}</p>
+              </div>
+            )}
           </div>
 
           <button
@@ -142,7 +163,9 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
 
       const direction = offset >= 0 ? 1 : -1;
       let nextNoteIndex = currentPreview.noteIndex;
-      let nextItems = getPreviewItems(notes[nextNoteIndex]);
+      let nextItems = getPreviewItems(notes[nextNoteIndex], {
+        includeMissingSides: true,
+      });
       let nextItemIndex = nextItems.findIndex(
         (item) => item.kind === currentPreview.imageKind,
       );
@@ -162,24 +185,10 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
           continue;
         }
 
-        let attempts = 0;
-        let foundItems = null;
-
-        while (attempts < notes.length) {
-          nextNoteIndex = (nextNoteIndex + direction + notes.length) % notes.length;
-          foundItems = getPreviewItems(notes[nextNoteIndex]);
-          attempts += 1;
-
-          if (foundItems.length) {
-            break;
-          }
-        }
-
-        if (!foundItems?.length) {
-          return currentPreview;
-        }
-
-        nextItems = foundItems;
+        nextNoteIndex = (nextNoteIndex + direction + notes.length) % notes.length;
+        nextItems = getPreviewItems(notes[nextNoteIndex], {
+          includeMissingSides: true,
+        });
         nextItemIndex = direction > 0 ? 0 : nextItems.length - 1;
         remainingSteps -= 1;
       }
@@ -225,11 +234,9 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
       }
 
       const boundedNoteIndex = ((currentPreview.noteIndex % notes.length) + notes.length) % notes.length;
-      const previewItems = getPreviewItems(notes[boundedNoteIndex]);
-
-      if (!previewItems.length) {
-        return null;
-      }
+      const previewItems = getPreviewItems(notes[boundedNoteIndex], {
+        includeMissingSides: true,
+      });
 
       if (previewItems.some((item) => item.kind === currentPreview.imageKind)) {
         if (boundedNoteIndex === currentPreview.noteIndex) {
@@ -256,17 +263,20 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
     previewState && notes[previewState.noteIndex]
       ? notes[previewState.noteIndex]
       : null;
-  const previewNoteItems = previewNote ? getPreviewItems(previewNote) : [];
+  const previewNoteItems = previewNote
+    ? getPreviewItems(previewNote, { includeMissingSides: true })
+    : [];
   const previewItem = previewNoteItems.find(
     (item) => item.kind === previewState?.imageKind,
   );
   const totalPreviewCount = notes.reduce(
-    (count, entry) => count + getPreviewItems(entry).length,
+    (count, entry) => count + getPreviewItems(entry, { includeMissingSides: true }).length,
     0,
   );
   const previewSequenceIndex = previewState
     ? notes.slice(0, previewState.noteIndex).reduce(
-        (count, entry) => count + getPreviewItems(entry).length,
+        (count, entry) =>
+          count + getPreviewItems(entry, { includeMissingSides: true }).length,
         0,
       ) + previewNoteItems.findIndex((item) => item.kind === previewState.imageKind) + 1
     : 0;
@@ -283,6 +293,7 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
           onClose={closePreview}
           onNext={() => movePreview(1)}
           onPrevious={() => movePreview(-1)}
+          placeholderText={`No scraped ${previewItem.label.toLowerCase()} image exists for this note yet.`}
           src={previewItem.src}
         />
       )}
