@@ -46,6 +46,14 @@ button {
   padding: 24px 0 40px;
 }
 
+.app-shell--wide {
+  width: 100%;
+  max-width: none;
+  margin: 0;
+  padding-left: 16px;
+  padding-right: 16px;
+}
+
 .site-header {
   display: flex;
   justify-content: space-between;

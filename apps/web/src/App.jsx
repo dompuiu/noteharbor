@@ -1,4 +1,4 @@
-import { BrowserRouter, NavLink, Route, Routes } from 'react-router-dom';
+import { BrowserRouter, NavLink, Route, Routes, useLocation } from 'react-router-dom';
 import { ImportScreen } from './components/ImportScreen.jsx';
 import { NoteEditForm } from './components/NoteEditForm.jsx';
 import { NotesTable } from './components/NotesTable.jsx';
@@ -6,8 +6,10 @@ import { ScrapeScreen } from './components/ScrapeScreen.jsx';
 import { Slideshow } from './components/Slideshow.jsx';
 
 function Shell() {
+  const { pathname } = useLocation();
+  const isTable = pathname === '/';
   return (
-    <div className="app-shell">
+    <div className={`app-shell${isTable ? ' app-shell--wide' : ''}`}>
       <header className="site-header">
         <div>
           <p className="eyebrow">Local collection studio</p>
