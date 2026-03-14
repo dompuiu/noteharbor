@@ -17,7 +17,7 @@ const columns = [
   ["denomination", "Denomination"],
   ["issue_date", "Date"],
   ["catalog_number", "Catalog #"],
-  ["grading_company", "Grading Company"],
+  ["grading_company", "Grading"],
   ["grade", "Grade"],
   ["watermark", "Watermark"],
   ["serial", "Serial"],
@@ -102,7 +102,9 @@ function displayScrapeStatus(note, scrapeJob) {
     return "running";
   }
 
-  const item = (scrapeJob.items ?? []).find((entry) => entry.noteId === note.id);
+  const item = (scrapeJob.items ?? []).find(
+    (entry) => entry.noteId === note.id,
+  );
 
   if (item?.status === "queued") {
     return "queued";
@@ -371,7 +373,8 @@ function NotesTable() {
     }
 
     const bounds = row.getBoundingClientRect();
-    const placement = event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+    const placement =
+      event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
 
     setDropTarget((current) =>
       current?.noteId === noteId && current?.placement === placement
@@ -407,7 +410,8 @@ function NotesTable() {
     const previousNotes = notes;
     const nextNotes = [...notes];
     const [movedNote] = nextNotes.splice(startIndex, 1);
-    const insertIndex = startIndex < rawInsertIndex ? rawInsertIndex - 1 : rawInsertIndex;
+    const insertIndex =
+      startIndex < rawInsertIndex ? rawInsertIndex - 1 : rawInsertIndex;
     nextNotes.splice(insertIndex, 0, movedNote);
 
     const reorderedNotes = nextNotes.map((note, index) => ({
@@ -421,7 +425,9 @@ function NotesTable() {
     clearDragState();
 
     try {
-      const payload = await saveNotesOrder(reorderedNotes.map((note) => note.id));
+      const payload = await saveNotesOrder(
+        reorderedNotes.map((note) => note.id),
+      );
       setNotes(payload.notes);
     } catch (reorderError) {
       setActionError(reorderError.message);
@@ -642,22 +648,33 @@ function NotesTable() {
                 </thead>
                 <tbody>
                   {orderedNotes.map((note) => {
-                    const noteScrapeStatus = displayScrapeStatus(note, scrapeJob);
+                    const noteScrapeStatus = displayScrapeStatus(
+                      note,
+                      scrapeJob,
+                    );
                     const frontThumb =
                       pickImage(note, "front", "thumbnail") ||
                       pickImage(note, "front", "full");
                     const frontPreview =
                       pickImage(note, "front", "full") || frontThumb;
                     const showPlaceholderBefore =
-                      dropTarget?.noteId === note.id && dropTarget.placement === "before";
+                      dropTarget?.noteId === note.id &&
+                      dropTarget.placement === "before";
                     const showPlaceholderAfter =
-                      dropTarget?.noteId === note.id && dropTarget.placement === "after";
+                      dropTarget?.noteId === note.id &&
+                      dropTarget.placement === "after";
 
                     return (
                       <Fragment key={note.id}>
                         {showPlaceholderBefore ? (
-                          <tr className="table-drop-placeholder-row" aria-hidden="true">
-                            <td className="table-drop-placeholder-cell" colSpan={totalColumnCount}>
+                          <tr
+                            className="table-drop-placeholder-row"
+                            aria-hidden="true"
+                          >
+                            <td
+                              className="table-drop-placeholder-cell"
+                              colSpan={totalColumnCount}
+                            >
                               <span className="table-drop-placeholder-line" />
                             </td>
                           </tr>
@@ -673,7 +690,9 @@ function NotesTable() {
                             }
                           }}
                           onDragLeave={(event) => {
-                            if (!event.currentTarget.contains(event.relatedTarget)) {
+                            if (
+                              !event.currentTarget.contains(event.relatedTarget)
+                            ) {
                               setDropTarget((current) =>
                                 current?.noteId === note.id ? null : current,
                               );
@@ -693,8 +712,11 @@ function NotesTable() {
                               dropTarget?.noteId === note.id
                                 ? dropTarget.placement
                                 : event.clientY <
-                                    event.currentTarget.getBoundingClientRect().top +
-                                      event.currentTarget.getBoundingClientRect().height / 2
+                                    event.currentTarget.getBoundingClientRect()
+                                      .top +
+                                      event.currentTarget.getBoundingClientRect()
+                                        .height /
+                                        2
                                   ? "before"
                                   : "after";
                             void handleReorder(note.id, nextPlacement);
@@ -711,50 +733,65 @@ function NotesTable() {
                           role="button"
                           tabIndex={0}
                         >
-                        <td
-                          className={`drag-cell${canReorder ? " drag-cell--enabled" : ""}`}
-                          onClick={(event) => event.stopPropagation()}
-                        >
-                          {canReorder ? (
-                            <button
-                              aria-label={`Move ${note.denomination}`}
-                              className="drag-handle"
-                              draggable={canReorder}
-                              onClick={(event) => event.stopPropagation()}
-                              onDragEnd={clearDragState}
-                              onDragStart={(event) => {
-                                const row = rowElementMapRef.current.get(note.id);
+                          <td
+                            className={`drag-cell${canReorder ? " drag-cell--enabled" : ""}`}
+                            onClick={(event) => event.stopPropagation()}
+                          >
+                            {canReorder ? (
+                              <button
+                                aria-label={`Move ${note.denomination}`}
+                                className="drag-handle"
+                                draggable={canReorder}
+                                onClick={(event) => event.stopPropagation()}
+                                onDragEnd={clearDragState}
+                                onDragStart={(event) => {
+                                  const row = rowElementMapRef.current.get(
+                                    note.id,
+                                  );
 
-                                clearDragPreview();
-                                event.stopPropagation();
-                                event.dataTransfer.effectAllowed = "move";
-                                event.dataTransfer.setData("text/plain", String(note.id));
+                                  clearDragPreview();
+                                  event.stopPropagation();
+                                  event.dataTransfer.effectAllowed = "move";
+                                  event.dataTransfer.setData(
+                                    "text/plain",
+                                    String(note.id),
+                                  );
 
-                                if (row) {
-                                  const preview = row.cloneNode(true);
-                                  preview.classList.add("table-drag-preview");
-                                  preview.style.width = `${row.getBoundingClientRect().width}px`;
-                                  document.body.appendChild(preview);
-                                  dragPreviewRef.current = preview;
-                                  event.dataTransfer.setDragImage(preview, 24, 24);
-                                }
+                                  if (row) {
+                                    const preview = row.cloneNode(true);
+                                    preview.classList.add("table-drag-preview");
+                                    preview.style.width = `${row.getBoundingClientRect().width}px`;
+                                    document.body.appendChild(preview);
+                                    dragPreviewRef.current = preview;
+                                    event.dataTransfer.setDragImage(
+                                      preview,
+                                      24,
+                                      24,
+                                    );
+                                  }
 
-                                setDraggedNoteId(note.id);
-                                setDropTarget({ noteId: note.id, placement: "before" });
-                              }}
-                              type="button"
-                            >
-                              <span className="drag-handle-dots" aria-hidden="true">
-                                <span />
-                                <span />
-                                <span />
-                                <span />
-                                <span />
-                                <span />
-                              </span>
-                            </button>
-                          ) : null}
-                        </td>
+                                  setDraggedNoteId(note.id);
+                                  setDropTarget({
+                                    noteId: note.id,
+                                    placement: "before",
+                                  });
+                                }}
+                                type="button"
+                              >
+                                <span
+                                  className="drag-handle-dots"
+                                  aria-hidden="true"
+                                >
+                                  <span />
+                                  <span />
+                                  <span />
+                                  <span />
+                                  <span />
+                                  <span />
+                                </span>
+                              </button>
+                            ) : null}
+                          </td>
                           <td onClick={(event) => event.stopPropagation()}>
                             <input
                               aria-label={`Select ${note.denomination}`}
@@ -811,7 +848,10 @@ function NotesTable() {
                             <div className="tag-list">
                               {note.tags.length ? (
                                 note.tags.map((tag) => (
-                                  <span className="tag" key={tag.id || tag.name}>
+                                  <span
+                                    className="tag"
+                                    key={tag.id || tag.name}
+                                  >
                                     {tag.name}
                                   </span>
                                 ))
@@ -838,8 +878,14 @@ function NotesTable() {
                           </td>
                         </tr>
                         {showPlaceholderAfter ? (
-                          <tr className="table-drop-placeholder-row" aria-hidden="true">
-                            <td className="table-drop-placeholder-cell" colSpan={totalColumnCount}>
+                          <tr
+                            className="table-drop-placeholder-row"
+                            aria-hidden="true"
+                          >
+                            <td
+                              className="table-drop-placeholder-cell"
+                              colSpan={totalColumnCount}
+                            >
                               <span className="table-drop-placeholder-line" />
                             </td>
                           </tr>
@@ -850,7 +896,6 @@ function NotesTable() {
                 </tbody>
               </table>
             </div>
-
           </>
         ) : null}
       </div>
