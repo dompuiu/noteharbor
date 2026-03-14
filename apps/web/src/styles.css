@@ -328,6 +328,33 @@ thead {
   align-items: stretch;
 }
 
+.table-helper-text {
+  margin: 0;
+  align-self: center;
+  color: #6b5c4e;
+  font-size: 0.92rem;
+}
+
+.drag-handle {
+  border: 1px solid rgba(92, 59, 24, 0.2);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.75);
+  color: #6b4626;
+  cursor: grab;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  padding: 6px 8px;
+}
+
+.drag-handle:disabled {
+  cursor: not-allowed;
+  opacity: 0.45;
+}
+
+.table-row-link--drop-target {
+  background: rgba(217, 162, 93, 0.22);
+}
+
 .scrape-badge {
   display: inline-flex;
   align-items: center;

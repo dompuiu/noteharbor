@@ -20,6 +20,7 @@ db.pragma('foreign_keys = ON');
 db.exec(`
   CREATE TABLE IF NOT EXISTS banknotes (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    display_order INTEGER,
     denomination TEXT,
     issue_date TEXT,
     catalog_number TEXT,
@@ -56,8 +57,47 @@ db.exec(`
   );
 `);
 
+const banknoteColumns = db.prepare(`PRAGMA table_info(banknotes)`).all();
+
+if (!banknoteColumns.some((column) => column.name === 'display_order')) {
+  db.exec(`ALTER TABLE banknotes ADD COLUMN display_order INTEGER`);
+}
+
+const assignMissingDisplayOrderStatement = db.prepare(`
+  UPDATE banknotes
+  SET display_order = @display_order
+  WHERE id = @id
+`);
+
+const missingDisplayOrderRows = db.prepare(`
+  SELECT id
+  FROM banknotes
+  WHERE display_order IS NULL
+  ORDER BY id ASC
+`).all();
+
+if (missingDisplayOrderRows.length) {
+  const maxDisplayOrderRow = db
+    .prepare(`SELECT COALESCE(MAX(display_order), 0) AS value FROM banknotes`)
+    .get();
+  let nextDisplayOrder = Number(maxDisplayOrderRow?.value ?? 0) + 1;
+
+  const backfillDisplayOrder = db.transaction((rows) => {
+    for (const row of rows) {
+      assignMissingDisplayOrderStatement.run({
+        id: row.id,
+        display_order: nextDisplayOrder
+      });
+      nextDisplayOrder += 1;
+    }
+  });
+
+  backfillDisplayOrder(missingDisplayOrderRows);
+}
+
 const noteFields = `
   id,
+  display_order,
   denomination,
   issue_date,
   catalog_number,
@@ -75,7 +115,7 @@ const noteFields = `
   updated_at
 `;
 
-const listNotesStatement = db.prepare(`SELECT ${noteFields} FROM banknotes ORDER BY id ASC`);
+const listNotesStatement = db.prepare(`SELECT ${noteFields} FROM banknotes ORDER BY display_order ASC, id ASC`);
 const getNoteStatement = db.prepare(`SELECT ${noteFields} FROM banknotes WHERE id = ?`);
 const listTagsForNotesStatement = db.prepare(`
   SELECT bt.banknote_id, t.id, t.name
@@ -90,6 +130,7 @@ const clearNoteTagsStatement = db.prepare(`DELETE FROM banknote_tags WHERE bankn
 const insertNoteTagStatement = db.prepare(`INSERT OR IGNORE INTO banknote_tags (banknote_id, tag_id) VALUES (?, ?)`);
 const upsertBanknoteStatement = db.prepare(`
   INSERT INTO banknotes (
+    display_order,
     denomination,
     issue_date,
     catalog_number,
@@ -101,7 +142,7 @@ const upsertBanknoteStatement = db.prepare(`
     notes,
     updated_at
   )
-  VALUES (@denomination, @issue_date, @catalog_number, @grading_company, @grade, @watermark, @serial, @url, @notes, datetime('now'))
+  VALUES (@display_order, @denomination, @issue_date, @catalog_number, @grading_company, @grade, @watermark, @serial, @url, @notes, datetime('now'))
   ON CONFLICT(catalog_number, serial) DO NOTHING
 `);
 const updateNoteStatement = db.prepare(`
@@ -128,6 +169,19 @@ const updateScrapeStatement = db.prepare(`
   WHERE id = @id
 `);
 const deleteNoteStatement = db.prepare(`DELETE FROM banknotes WHERE id = ?`);
+const compactDisplayOrderAfterDeleteStatement = db.prepare(`
+  UPDATE banknotes
+  SET display_order = display_order - 1,
+      updated_at = datetime('now')
+  WHERE display_order > ?
+`);
+const maxDisplayOrderStatement = db.prepare(`SELECT COALESCE(MAX(display_order), 0) AS value FROM banknotes`);
+const updateDisplayOrderStatement = db.prepare(`
+  UPDATE banknotes
+  SET display_order = @display_order,
+      updated_at = datetime('now')
+  WHERE id = @id
+`);
 const insertSlideshowSessionStatement = db.prepare(`
   INSERT INTO slideshow_sessions (token, ids, created_at)
   VALUES (@token, @ids, datetime('now'))
@@ -231,7 +285,15 @@ function seedTagSuggestions(tagNames) {
 }
 
 function upsertImportedNote(note) {
-  return upsertBanknoteStatement.run(note);
+  return upsertBanknoteStatement.run({
+    ...note,
+    display_order: getNextDisplayOrder()
+  });
+}
+
+function getNextDisplayOrder() {
+  const row = maxDisplayOrderStatement.get();
+  return Number(row?.value ?? 0) + 1;
 }
 
 function replaceNoteTags(noteId, tagNames) {
@@ -274,7 +336,49 @@ function updateScrapeResult({ id, scrapedData, images, scrapeStatus, scrapeError
 }
 
 function deleteNote(id) {
-  deleteNoteStatement.run(id);
+  const existing = getNoteStatement.get(id);
+
+  if (!existing) {
+    return;
+  }
+
+  const transaction = db.transaction((noteId, displayOrder) => {
+    deleteNoteStatement.run(noteId);
+    compactDisplayOrderAfterDeleteStatement.run(displayOrder);
+  });
+
+  transaction(id, existing.display_order);
+}
+
+function reorderNotes(ids) {
+  const normalizedIds = ids.map((id) => Number(id));
+  const allNotes = getAllNotes();
+  const existingIds = allNotes.map((note) => note.id);
+
+  if (!normalizedIds.length || normalizedIds.length !== existingIds.length) {
+    throw new Error('Reorder request must include every note exactly once.');
+  }
+
+  const nextIdsSet = new Set(normalizedIds);
+
+  if (
+    nextIdsSet.size !== normalizedIds.length ||
+    existingIds.some((id) => !nextIdsSet.has(id))
+  ) {
+    throw new Error('Reorder request must include every note exactly once.');
+  }
+
+  const transaction = db.transaction((nextIds) => {
+    nextIds.forEach((id, index) => {
+      updateDisplayOrderStatement.run({
+        id,
+        display_order: index + 1
+      });
+    });
+  });
+
+  transaction(normalizedIds);
+  return getAllNotes();
 }
 
 function createSlideshowSession(ids) {
@@ -331,6 +435,7 @@ export {
   getNoteById,
   getNotesByIds,
   getSlideshowSession,
+  reorderNotes,
   replaceNoteTags,
   seedTagSuggestions,
   updateNote,

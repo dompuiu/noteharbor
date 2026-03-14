@@ -1,10 +1,32 @@
 import { Router } from 'express';
-import { deleteNote, getAllNotes, getNoteById, updateNote } from '../db.js';
+import {
+  deleteNote,
+  getAllNotes,
+  getNoteById,
+  reorderNotes,
+  updateNote
+} from '../db.js';
 
 const notesRouter = Router();
 
 notesRouter.get('/', (_request, response) => {
   response.json({ notes: getAllNotes() });
+});
+
+notesRouter.post('/reorder', (request, response) => {
+  const ids = Array.isArray(request.body.ids) ? request.body.ids : null;
+
+  if (!ids) {
+    response.status(400).json({ error: 'A full ordered list of note IDs is required.' });
+    return;
+  }
+
+  try {
+    const notes = reorderNotes(ids);
+    response.json({ notes });
+  } catch (error) {
+    response.status(400).json({ error: error.message });
+  }
 });
 
 notesRouter.get('/:id', (request, response) => {
