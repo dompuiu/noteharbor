@@ -23,6 +23,10 @@ function valueToString(note, key) {
   return String(note[key] ?? '');
 }
 
+function pickImage(note, type, variant = 'full') {
+  return note.images.find((image) => image.type === type && image.variant === variant)?.localPath ?? null;
+}
+
 function NotesTable() {
   const [notes, setNotes] = useState([]);
   const [filters, setFilters] = useState({});
@@ -136,6 +140,7 @@ function NotesTable() {
               <thead>
                 <tr>
                   <th>#</th>
+                  <th>Front</th>
                   {columns.map(([key, label]) => (
                     <th key={key}>
                       <button className="sort-button" onClick={() => toggleSort(key)} type="button">
@@ -147,6 +152,7 @@ function NotesTable() {
                   <th>Actions</th>
                 </tr>
                 <tr>
+                  <th />
                   <th />
                   {columns.map(([key, label]) => (
                     <th key={`${key}-filter`}>
@@ -163,50 +169,69 @@ function NotesTable() {
                 </tr>
               </thead>
               <tbody>
-                {orderedNotes.map((note, index) => (
-                  <tr
-                    className="table-row-link"
-                    key={note.id}
-                    onClick={() => openSlideshow(note.id)}
-                    onKeyDown={(event) => {
-                      if (event.key === 'Enter' || event.key === ' ') {
-                        event.preventDefault();
-                        openSlideshow(note.id);
-                      }
-                    }}
-                    role="button"
-                    tabIndex={0}
-                  >
-                    <td>{index + 1}</td>
-                    <td>{note.denomination}</td>
-                    <td>{note.issue_date}</td>
-                    <td>{note.catalog_number}</td>
-                    <td>{note.grading_company}</td>
-                    <td>{note.grade}</td>
-                    <td>{note.watermark}</td>
-                    <td>{note.serial}</td>
-                    <td>
-                      {note.url ? (
-                        <a href={note.url} onClick={(event) => event.stopPropagation()} rel="noreferrer" target="_blank">
-                          Open
-                        </a>
-                      ) : (
-                        <span className="muted">-</span>
-                      )}
-                    </td>
-                    <td>{note.notes}</td>
-                    <td>
-                      <div className="tag-list">
-                        {note.tags.length ? note.tags.map((tag) => <span className="tag" key={tag.id || tag.name}>{tag.name}</span>) : <span className="muted">-</span>}
-                      </div>
-                    </td>
-                    <td>
-                       <Link className="icon-link" onClick={(event) => event.stopPropagation()} to={`/notes/${note.id}/edit`}>
-                         Edit
-                       </Link>
-                    </td>
-                  </tr>
-                ))}
+                {orderedNotes.map((note, index) => {
+                  const frontThumb = pickImage(note, 'front', 'thumbnail') || pickImage(note, 'front', 'full');
+                  const frontPreview = pickImage(note, 'front', 'full') || frontThumb;
+
+                  return (
+                    <tr
+                      className="table-row-link"
+                      key={note.id}
+                      onClick={() => openSlideshow(note.id)}
+                      onKeyDown={(event) => {
+                        if (event.key === 'Enter' || event.key === ' ') {
+                          event.preventDefault();
+                          openSlideshow(note.id);
+                        }
+                      }}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <td>{index + 1}</td>
+                      <td>
+                        {frontThumb ? (
+                          <span className="table-thumb-wrap">
+                            <img alt={`${note.denomination} front`} className="table-thumb" src={frontThumb} />
+                            {frontPreview ? (
+                              <span className="table-thumb-preview">
+                                <img alt={`${note.denomination} preview`} src={frontPreview} />
+                              </span>
+                            ) : null}
+                          </span>
+                        ) : (
+                          <span className="muted">-</span>
+                        )}
+                      </td>
+                      <td>{note.denomination}</td>
+                      <td>{note.issue_date}</td>
+                      <td>{note.catalog_number}</td>
+                      <td>{note.grading_company}</td>
+                      <td>{note.grade}</td>
+                      <td>{note.watermark}</td>
+                      <td>{note.serial}</td>
+                      <td>
+                        {note.url ? (
+                          <a href={note.url} onClick={(event) => event.stopPropagation()} rel="noreferrer" target="_blank">
+                            Open
+                          </a>
+                        ) : (
+                          <span className="muted">-</span>
+                        )}
+                      </td>
+                      <td>{note.notes}</td>
+                      <td>
+                        <div className="tag-list">
+                          {note.tags.length ? note.tags.map((tag) => <span className="tag" key={tag.id || tag.name}>{tag.name}</span>) : <span className="muted">-</span>}
+                        </div>
+                      </td>
+                      <td>
+                        <Link className="icon-link" onClick={(event) => event.stopPropagation()} to={`/notes/${note.id}/edit`}>
+                          Edit
+                        </Link>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
