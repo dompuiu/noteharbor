@@ -59,19 +59,9 @@ async function startScrape(ids) {
   return handleResponse(response);
 }
 
-async function preparePmg(url) {
-  const response = await fetch('/api/scrape/prepare-pmg', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ url })
-  });
-
-  return handleResponse(response);
-}
-
 async function getScrapeStatus() {
   const response = await fetch('/api/scrape/status');
   return handleResponse(response);
 }
 
-export { getNote, getNotes, getScrapeStatus, getTags, importCsv, preparePmg, startScrape, updateNote };
+export { getNote, getNotes, getScrapeStatus, getTags, importCsv, startScrape, updateNote };
