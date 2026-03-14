@@ -10,10 +10,10 @@ const ROUTES_DIR = path.dirname(fileURLToPath(import.meta.url));
 const FETCH_SCRIPT = path.resolve(ROUTES_DIR, '../../fetch_html.py');
 const DEFAULT_PMG_PREP_URL = 'https://www.pmgnotes.com/certlookup/';
 const DEFAULT_PMG_PROFILE_DIR = path.resolve(ROUTES_DIR, '../../storage/browser_profiles/pmg');
+const DEFAULT_WAIT_SECONDS = 10;
 
 const scrapeState = {
   status: 'idle',
-  waitSeconds: 10,
   total: 0,
   completed: 0,
   currentNoteId: null,
@@ -48,7 +48,6 @@ function normalizePmgUrl(value) {
 
 function setIdleState() {
   scrapeState.status = 'idle';
-  scrapeState.waitSeconds = 10;
   scrapeState.total = 0;
   scrapeState.completed = 0;
   scrapeState.currentNoteId = null;
@@ -77,12 +76,12 @@ function getScraperForNote(note) {
  * Spawns fetch_html.py to open the page with crawl4ai and return the raw HTML.
  * The browser runs headless=False so the user can interact with bot challenges.
  */
-function fetchHtml(url, waitSeconds) {
+function fetchHtml(url) {
   return new Promise((resolve, reject) => {
     const args = [
       FETCH_SCRIPT,
       url,
-      '--wait', String(waitSeconds),
+      '--wait', String(DEFAULT_WAIT_SECONDS),
       '--profile-dir', getProfileDir()
     ];
 
@@ -156,9 +155,8 @@ function openPmgPreparationBrowser(targetUrl) {
   });
 }
 
-async function runScrapeJob(notes, waitSeconds) {
+async function runScrapeJob(notes) {
   scrapeState.status = 'running';
-  scrapeState.waitSeconds = waitSeconds;
   scrapeState.total = notes.length;
   scrapeState.completed = 0;
   scrapeState.startedAt = new Date().toISOString();
@@ -188,7 +186,7 @@ async function runScrapeJob(notes, waitSeconds) {
     }
 
     try {
-      const html = await fetchHtml(note.url, waitSeconds);
+      const html = await fetchHtml(note.url);
       const parsed = scraper.parse(html, note.url);
       const images = await scraper.downloadImages(parsed);
 
@@ -238,7 +236,6 @@ scrapeRouter.post('/start', async (request, response) => {
   }
 
   const ids = Array.isArray(request.body.ids) ? request.body.ids.map(Number).filter(Boolean) : [];
-  const waitSeconds = Number(request.body.waitSeconds) > 0 ? Number(request.body.waitSeconds) : 10;
   const notes = getNotesByIds(ids).filter((note) => note.url);
 
   if (!notes.length) {
@@ -247,9 +244,9 @@ scrapeRouter.post('/start', async (request, response) => {
   }
 
   setIdleState();
-  runScrapeJob(notes, waitSeconds);
+  runScrapeJob(notes);
 
-  response.json({ message: 'Scrape job started.', total: notes.length, waitSeconds });
+  response.json({ message: 'Scrape job started.', total: notes.length });
 });
 
 export { scrapeRouter };

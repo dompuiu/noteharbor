@@ -14,9 +14,9 @@ import { Slideshow } from "./components/Slideshow.jsx";
 
 function Shell() {
   const { pathname } = useLocation();
-  const isTable = pathname === "/";
+  const isWideLayout = pathname === "/" || pathname === "/scrape";
   return (
-    <div className={`app-shell${isTable ? " app-shell--wide" : ""}`}>
+    <div className={`app-shell${isWideLayout ? " app-shell--wide" : ""}`}>
       <header className="site-header">
         <div>
           <p className="eyebrow">Local collection studio</p>
