@@ -102,6 +102,28 @@ function statusLabel(status) {
   return String(status).replace(/_/g, " ");
 }
 
+function activeScrapeJob(status) {
+  return status?.status === "running" ? status : null;
+}
+
+function displayScrapeStatus(note, scrapeJob) {
+  if (!scrapeJob) {
+    return note.scrape_status || "pending";
+  }
+
+  if (scrapeJob.currentNoteId === note.id) {
+    return "running";
+  }
+
+  const item = (scrapeJob.items ?? []).find((entry) => entry.noteId === note.id);
+
+  if (item?.status === "queued") {
+    return "queued";
+  }
+
+  return note.scrape_status || "pending";
+}
+
 function valueToString(note, key) {
   if (key === "tags") {
     return note.tags.map((tag) => tag.name).join(", ");
@@ -140,7 +162,7 @@ function NotesTable() {
   );
   const [selectNextCount, setSelectNextCount] = useState(10);
   const [bulkAction, setBulkAction] = useState("scrape");
-  const [status, setStatus] = useState(null);
+  const [scrapeJob, setScrapeJob] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -162,7 +184,7 @@ function NotesTable() {
       .then(([notesPayload, statusPayload]) => {
         if (active) {
           setNotes(notesPayload.notes);
-          setStatus(statusPayload);
+          setScrapeJob(activeScrapeJob(statusPayload));
         }
       })
       .catch((fetchError) => {
@@ -188,29 +210,27 @@ function NotesTable() {
   }, [notes]);
 
   useEffect(() => {
-    const shouldPoll = status && status.status === "running";
-
-    if (!shouldPoll) {
+    if (!scrapeJob) {
       return undefined;
     }
 
     const timer = window.setInterval(async () => {
       try {
-        const nextStatus = await getScrapeStatus();
-        const didFinishRunning =
-          status?.status === "running" && nextStatus.status !== "running";
-        setStatus(nextStatus);
+        const [nextStatus, notesPayload] = await Promise.all([
+          getScrapeStatus(),
+          getNotes(),
+        ]);
+        const nextScrapeJob = activeScrapeJob(nextStatus);
 
-        if (didFinishRunning) {
-          await loadNotes();
-        }
+        setNotes(notesPayload.notes);
+        setScrapeJob(nextScrapeJob);
       } catch {
         // Ignore transient polling errors.
       }
     }, 2000);
 
     return () => window.clearInterval(timer);
-  }, [status]);
+  }, [scrapeJob]);
 
   const orderedNotes = useMemo(() => {
     const filtered = notes.filter((note) =>
@@ -356,18 +376,16 @@ function NotesTable() {
 
         await Promise.all(selectedIds.map((id) => deleteNote(id)));
         await loadNotes();
-        setStatus((current) =>
-          current?.status === "running" ? current : null,
-        );
         clearSelection();
         return;
       }
 
       const payload = await startScrape(selectedIds);
-      setStatus({
+      setScrapeJob({
         status: "running",
         total: payload.total,
         completed: 0,
+        currentNoteId: null,
         items: notes
           .filter((note) => selectedIds.includes(note.id))
           .map((note) => ({
@@ -460,7 +478,7 @@ function NotesTable() {
                   </select>
                   <button
                     className="button button-primary"
-                    disabled={bulkLoading || status?.status === "running"}
+                    disabled={bulkLoading || Boolean(scrapeJob)}
                     onClick={handleBulkAction}
                     type="button"
                   >
@@ -526,6 +544,7 @@ function NotesTable() {
                 </thead>
                 <tbody>
                   {orderedNotes.map((note) => {
+                    const noteScrapeStatus = displayScrapeStatus(note, scrapeJob);
                     const frontThumb =
                       pickImage(note, "front", "thumbnail") ||
                       pickImage(note, "front", "full");
@@ -615,9 +634,9 @@ function NotesTable() {
                         </td>
                         <td>
                           <span
-                            className={`scrape-badge scrape-badge--${note.scrape_status || "pending"}`}
+                            className={`scrape-badge scrape-badge--${noteScrapeStatus}`}
                           >
-                            {statusLabel(note.scrape_status)}
+                            {statusLabel(noteScrapeStatus)}
                           </span>
                         </td>
                         <td>
@@ -636,29 +655,6 @@ function NotesTable() {
               </table>
             </div>
 
-            {status ? (
-              <div className="result-card">
-                <h2>Job status: {status.status}</h2>
-                <p>
-                  Progress: {status.completed ?? 0} / {status.total ?? 0}
-                </p>
-                <div className="status-list">
-                  {(status.items ?? []).map((item) => (
-                    <div className="status-row" key={item.noteId}>
-                      <strong>{item.label}</strong>
-                      <span
-                        className={`scrape-badge scrape-badge--${item.status || "pending"}`}
-                      >
-                        {statusLabel(item.status)}
-                      </span>
-                      {item.error ? (
-                        <span className="error-text">{item.error}</span>
-                      ) : null}
-                    </div>
-                  ))}
-                </div>
-              </div>
-            ) : null}
           </>
         ) : null}
       </div>

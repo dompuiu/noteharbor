@@ -423,19 +423,6 @@ thead {
   margin-top: 20px;
 }
 
-.status-list {
-  display: grid;
-  gap: 8px;
-}
-
-.status-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 8px 20px;
-  padding: 10px 0;
-  border-bottom: 1px solid rgba(95, 61, 26, 0.12);
-}
-
 .muted {
   color: #8b7b68;
 }
