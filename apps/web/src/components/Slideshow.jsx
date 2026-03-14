@@ -88,7 +88,7 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
       )}
 
       <div className="slideshow-topbar">
-        <button className="button" onClick={onClose} type="button">
+        <button className="slideshow-exit-button" onClick={onClose} type="button">
           Exit slideshow
         </button>
         <div className="counter-pill">
