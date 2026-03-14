@@ -32,6 +32,14 @@ async function updateNote(id, payload) {
   return handleResponse(response);
 }
 
+async function deleteNote(id) {
+  const response = await fetch(`/api/notes/${id}`, {
+    method: 'DELETE'
+  });
+
+  return handleResponse(response);
+}
+
 async function importCsv(file) {
   const formData = new FormData();
   formData.append('file', file);
@@ -64,4 +72,4 @@ async function getScrapeStatus() {
   return handleResponse(response);
 }
 
-export { getNote, getNotes, getScrapeStatus, getTags, importCsv, startScrape, updateNote };
+export { deleteNote, getNote, getNotes, getScrapeStatus, getTags, importCsv, startScrape, updateNote };

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { getAllNotes, getNoteById, updateNote } from '../db.js';
+import { deleteNote, getAllNotes, getNoteById, updateNote } from '../db.js';
 
 const notesRouter = Router();
 
@@ -47,6 +47,19 @@ notesRouter.put('/:id', (request, response) => {
   } catch (error) {
     response.status(400).json({ error: error.message });
   }
+});
+
+notesRouter.delete('/:id', (request, response) => {
+  const noteId = Number(request.params.id);
+  const existing = getNoteById(noteId);
+
+  if (!existing) {
+    response.status(404).json({ error: 'Note not found.' });
+    return;
+  }
+
+  deleteNote(noteId);
+  response.json({ success: true });
 });
 
 export { notesRouter };

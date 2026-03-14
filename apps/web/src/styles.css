@@ -31,6 +31,7 @@ a {
 
 button,
 input,
+select,
 textarea {
   font: inherit;
 }
@@ -284,12 +285,66 @@ thead {
 .field-block input,
 .field-block textarea,
 .inline-field input,
-.tag-editor input {
+.tag-editor input,
+.select-input {
   width: 100%;
   border-radius: 14px;
   border: 1px solid rgba(92, 59, 24, 0.2);
   background: rgba(255, 255, 255, 0.85);
   padding: 11px 13px;
+}
+
+.inline-select-group {
+  display: inline-flex;
+  gap: 10px;
+  align-items: center;
+}
+
+.inline-select-group .select-input {
+  width: auto;
+  min-width: 88px;
+}
+
+.inline-select-group--bulk {
+  margin-left: auto;
+}
+
+.toolbar-row--table-controls {
+  align-items: stretch;
+}
+
+.scrape-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 82px;
+  padding: 5px 10px;
+  border-radius: 999px;
+  font-size: 0.78rem;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+
+.scrape-badge--pending,
+.scrape-badge--queued,
+.scrape-badge--idle {
+  background: rgba(140, 130, 120, 0.15);
+  color: #6b5c4e;
+}
+
+.scrape-badge--done {
+  background: rgba(60, 160, 80, 0.15);
+  color: #1e6b35;
+}
+
+.scrape-badge--failed {
+  background: rgba(180, 40, 40, 0.13);
+  color: #8b1a1a;
+}
+
+.scrape-badge--running {
+  background: rgba(200, 140, 20, 0.15);
+  color: #7a5200;
 }
 
 .form-grid {
@@ -564,5 +619,11 @@ thead {
   .app-shell {
     width: min(100vw - 20px, 1400px);
     padding-top: 10px;
+  }
+
+  .inline-select-group,
+  .inline-select-group--bulk {
+    width: 100%;
+    margin-left: 0;
   }
 }
