@@ -1,7 +1,5 @@
 import {
   BrowserRouter,
-  Link,
-  NavLink,
   Route,
   Routes,
   useLocation,
@@ -9,7 +7,6 @@ import {
 import { ImportScreen } from "./components/ImportScreen.jsx";
 import { NoteEditForm } from "./components/NoteEditForm.jsx";
 import { HomeHero, NotesTable } from "./components/NotesTable.jsx";
-import { Slideshow } from "./components/Slideshow.jsx";
 
 function Shell() {
   const { pathname } = useLocation();
@@ -25,7 +22,6 @@ function Shell() {
           <Route element={<NotesTable />} path="/" />
           <Route element={<ImportScreen />} path="/import" />
           <Route element={<NoteEditForm />} path="/notes/:id/edit" />
-          <Route element={<Slideshow />} path="/slideshow" />
         </Routes>
       </main>
     </div>
