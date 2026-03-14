@@ -8,6 +8,8 @@ panes:
   # General terminal (bottom-left)
   - id: "terminal"
     split: "vertical"
+    commands:
+      - "opencode"
 
   # Main editor (top-left)
   - id: "editor"
