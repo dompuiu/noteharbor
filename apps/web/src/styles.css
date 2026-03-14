@@ -599,6 +599,27 @@ td.drag-cell {
   background: rgba(255, 255, 255, 0.08);
 }
 
+.slideshow-exit-button {
+  border: 1px solid rgba(255, 235, 212, 0.14);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff5e9;
+  padding: 10px 16px;
+  border-radius: 999px;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease,
+    border-color 0.2s ease;
+}
+
+.slideshow-exit-button:hover,
+.slideshow-exit-button:focus-visible {
+  transform: translateY(-1px);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 235, 212, 0.3);
+  box-shadow: 0 12px 24px rgba(0, 0, 0, 0.22);
+}
+
 .slideshow-layout {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
