@@ -135,6 +135,7 @@ function NotesTable() {
             <table>
               <thead>
                 <tr>
+                  <th>#</th>
                   {columns.map(([key, label]) => (
                     <th key={key}>
                       <button className="sort-button" onClick={() => toggleSort(key)} type="button">
@@ -146,6 +147,7 @@ function NotesTable() {
                   <th>Actions</th>
                 </tr>
                 <tr>
+                  <th />
                   {columns.map(([key, label]) => (
                     <th key={`${key}-filter`}>
                       <input
@@ -161,7 +163,7 @@ function NotesTable() {
                 </tr>
               </thead>
               <tbody>
-                {orderedNotes.map((note) => (
+                {orderedNotes.map((note, index) => (
                   <tr
                     className="table-row-link"
                     key={note.id}
@@ -175,6 +177,7 @@ function NotesTable() {
                     role="button"
                     tabIndex={0}
                   >
+                    <td>{index + 1}</td>
                     <td>{note.denomination}</td>
                     <td>{note.issue_date}</td>
                     <td>{note.catalog_number}</td>
