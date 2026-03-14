@@ -8,18 +8,67 @@ function pickImage(note, type, variant = "full") {
   );
 }
 
-function ImagePopover({ src, alt, onClose }) {
+function getPreviewItems(note) {
+  const items = [];
+  const frontFull = pickImage(note, "front", "full");
+  const backFull = pickImage(note, "back", "full");
+  const frontThumb = pickImage(note, "front", "thumbnail") || frontFull;
+  const backThumb = pickImage(note, "back", "thumbnail") || backFull;
+
+  if (frontFull || frontThumb) {
+    items.push({
+      alt: `${note.denomination} front`,
+      kind: "front",
+      label: "Front",
+      src: frontFull || frontThumb,
+      thumb: frontThumb || frontFull,
+    });
+  }
+
+  if (backFull || backThumb) {
+    items.push({
+      alt: `${note.denomination} back`,
+      kind: "back",
+      label: "Back",
+      src: backFull || backThumb,
+      thumb: backThumb || backFull,
+    });
+  }
+
+  return items;
+}
+
+function ImagePopover({
+  alt,
+  canGoNext,
+  canGoPrevious,
+  counterLabel,
+  noteLabel,
+  onClose,
+  onNext,
+  onPrevious,
+  src,
+}) {
   useEffect(() => {
     function onKeyDown(e) {
       if (e.key === "Escape") {
         onClose();
+        return;
+      }
+
+      if (e.key === "ArrowRight") {
+        onNext();
+      }
+
+      if (e.key === "ArrowLeft") {
+        onPrevious();
       }
     }
 
     window.addEventListener("keydown", onKeyDown);
 
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose]);
+  }, [onClose, onNext, onPrevious]);
 
   return (
     <div className="image-popover-overlay" onClick={onClose}>
@@ -27,21 +76,126 @@ function ImagePopover({ src, alt, onClose }) {
         className="image-popover-content"
         onClick={(e) => e.stopPropagation()}
       >
-        <button className="image-popover-close" onClick={onClose} type="button">
-          x
-        </button>
-        <img alt={alt} src={src} />
+        <div className="image-popover-topbar">
+          <div className="image-popover-meta">
+            <p className="eyebrow">Preview</p>
+            <p className="image-popover-note-label">{noteLabel}</p>
+          </div>
+          <div className="image-popover-actions">
+            <div className="counter-pill">{counterLabel}</div>
+            <button className="image-popover-close" onClick={onClose} type="button">
+              Close
+            </button>
+          </div>
+        </div>
+
+        <div className="image-popover-stage">
+          <button
+            aria-label="Show previous image"
+            className="arrow-button image-popover-arrow"
+            disabled={!canGoPrevious}
+            onClick={onPrevious}
+            type="button"
+          >
+            <span aria-hidden="true">&larr;</span>
+          </button>
+
+          <div className="image-popover-image-wrap">
+            <img alt={alt} src={src} />
+          </div>
+
+          <button
+            aria-label="Show next image"
+            className="arrow-button image-popover-arrow"
+            disabled={!canGoNext}
+            onClick={onNext}
+            type="button"
+          >
+            <span aria-hidden="true">&rarr;</span>
+          </button>
+        </div>
       </div>
     </div>
   );
 }
 
 function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
-  const [popoverImage, setPopoverImage] = useState(null);
+  const [previewState, setPreviewState] = useState(null);
+
+  function openPreview(noteIndex, imageKind) {
+    setPreviewState({ imageKind, noteIndex });
+  }
+
+  function closePreview() {
+    setPreviewState(null);
+  }
+
+  function moveSlideshow(offset) {
+    onChangeIndex((current) => (current + offset + notes.length) % notes.length);
+  }
+
+  function movePreview(offset) {
+    setPreviewState((currentPreview) => {
+      if (!currentPreview || !notes.length) {
+        return currentPreview;
+      }
+
+      const direction = offset >= 0 ? 1 : -1;
+      let nextNoteIndex = currentPreview.noteIndex;
+      let nextItems = getPreviewItems(notes[nextNoteIndex]);
+      let nextItemIndex = nextItems.findIndex(
+        (item) => item.kind === currentPreview.imageKind,
+      );
+
+      if (nextItemIndex < 0) {
+        nextItemIndex = direction > 0 ? -1 : nextItems.length;
+      }
+
+      let remainingSteps = Math.abs(offset);
+
+      while (remainingSteps > 0) {
+        const candidateIndex = nextItemIndex + direction;
+
+        if (candidateIndex >= 0 && candidateIndex < nextItems.length) {
+          nextItemIndex = candidateIndex;
+          remainingSteps -= 1;
+          continue;
+        }
+
+        let attempts = 0;
+        let foundItems = null;
+
+        while (attempts < notes.length) {
+          nextNoteIndex = (nextNoteIndex + direction + notes.length) % notes.length;
+          foundItems = getPreviewItems(notes[nextNoteIndex]);
+          attempts += 1;
+
+          if (foundItems.length) {
+            break;
+          }
+        }
+
+        if (!foundItems?.length) {
+          return currentPreview;
+        }
+
+        nextItems = foundItems;
+        nextItemIndex = direction > 0 ? 0 : nextItems.length - 1;
+        remainingSteps -= 1;
+      }
+
+      onChangeIndex(nextNoteIndex);
+
+      return {
+        imageKind: nextItems[nextItemIndex].kind,
+        noteIndex: nextNoteIndex,
+      };
+    });
+  }
 
   useEffect(() => {
     function onKeyDown(event) {
-      if (popoverImage) {
+      if (previewState) {
         return;
       }
 
@@ -51,39 +205,85 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
       }
 
       if (event.key === "ArrowRight") {
-        onChangeIndex((current) => (current + 1) % Math.max(notes.length, 1));
+        moveSlideshow(1);
       }
 
       if (event.key === "ArrowLeft") {
-        onChangeIndex(
-          (current) =>
-            (current - 1 + Math.max(notes.length, 1)) % Math.max(notes.length, 1),
-        );
+        moveSlideshow(-1);
       }
     }
 
     window.addEventListener("keydown", onKeyDown);
 
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [notes.length, onChangeIndex, onClose, popoverImage]);
+  }, [notes.length, onClose, previewState]);
+
+  useEffect(() => {
+    setPreviewState((currentPreview) => {
+      if (!currentPreview || !notes.length) {
+        return currentPreview;
+      }
+
+      const boundedNoteIndex = ((currentPreview.noteIndex % notes.length) + notes.length) % notes.length;
+      const previewItems = getPreviewItems(notes[boundedNoteIndex]);
+
+      if (!previewItems.length) {
+        return null;
+      }
+
+      if (previewItems.some((item) => item.kind === currentPreview.imageKind)) {
+        if (boundedNoteIndex === currentPreview.noteIndex) {
+          return currentPreview;
+        }
+
+        return { ...currentPreview, noteIndex: boundedNoteIndex };
+      }
+
+      return {
+        imageKind: previewItems[0].kind,
+        noteIndex: boundedNoteIndex,
+      };
+    });
+  }, [notes]);
 
   if (!notes.length) {
     return null;
   }
 
   const note = notes[currentIndex];
-  const frontFull = pickImage(note, "front", "full");
-  const backFull = pickImage(note, "back", "full");
-  const frontThumb = pickImage(note, "front", "thumbnail") || frontFull;
-  const backThumb = pickImage(note, "back", "thumbnail") || backFull;
+  const previewItems = getPreviewItems(note);
+  const previewNote =
+    previewState && notes[previewState.noteIndex]
+      ? notes[previewState.noteIndex]
+      : null;
+  const previewNoteItems = previewNote ? getPreviewItems(previewNote) : [];
+  const previewItem = previewNoteItems.find(
+    (item) => item.kind === previewState?.imageKind,
+  );
+  const totalPreviewCount = notes.reduce(
+    (count, entry) => count + getPreviewItems(entry).length,
+    0,
+  );
+  const previewSequenceIndex = previewState
+    ? notes.slice(0, previewState.noteIndex).reduce(
+        (count, entry) => count + getPreviewItems(entry).length,
+        0,
+      ) + previewNoteItems.findIndex((item) => item.kind === previewState.imageKind) + 1
+    : 0;
 
   return (
     <section className="slideshow-screen slideshow-screen--overlay">
-      {popoverImage && (
+      {previewItem && previewNote && (
         <ImagePopover
-          src={popoverImage.src}
-          alt={popoverImage.alt}
-          onClose={() => setPopoverImage(null)}
+          alt={previewItem.alt}
+          canGoNext={totalPreviewCount > 1}
+          canGoPrevious={totalPreviewCount > 1}
+          counterLabel={`${previewSequenceIndex} / ${totalPreviewCount}`}
+          noteLabel={`${previewNote.denomination} - ${previewItem.label}`}
+          onClose={closePreview}
+          onNext={() => movePreview(1)}
+          onPrevious={() => movePreview(-1)}
+          src={previewItem.src}
         />
       )}
 
@@ -99,9 +299,7 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
       <div className="slideshow-layout">
         <button
           className="arrow-button"
-          onClick={() =>
-            onChangeIndex((current) => (current - 1 + notes.length) % notes.length)
-          }
+          onClick={() => moveSlideshow(-1)}
           type="button"
         >
           <span aria-hidden="true">&larr;</span>
@@ -109,40 +307,20 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
 
         <div className="slide-card">
           <div className="slide-images">
-            {frontThumb || backThumb ? (
+            {previewItems.length ? (
               <>
-                {frontThumb && (
+                {previewItems.map((item) => (
                   <button
+                    key={item.kind}
                     className="slide-thumb-btn"
-                    onClick={() =>
-                      setPopoverImage({
-                        src: frontFull || frontThumb,
-                        alt: `${note.denomination} front`,
-                      })
-                    }
+                    onClick={() => openPreview(currentIndex, item.kind)}
                     title="Click to enlarge"
                     type="button"
                   >
-                    <img alt={`${note.denomination} front`} src={frontThumb} />
-                    <span className="slide-thumb-label">Front</span>
+                    <img alt={item.alt} src={item.thumb} />
+                    <span className="slide-thumb-label">{item.label}</span>
                   </button>
-                )}
-                {backThumb && (
-                  <button
-                    className="slide-thumb-btn"
-                    onClick={() =>
-                      setPopoverImage({
-                        src: backFull || backThumb,
-                        alt: `${note.denomination} back`,
-                      })
-                    }
-                    title="Click to enlarge"
-                    type="button"
-                  >
-                    <img alt={`${note.denomination} back`} src={backThumb} />
-                    <span className="slide-thumb-label">Back</span>
-                  </button>
-                )}
+                ))}
               </>
             ) : (
               <div className="placeholder-card">No scraped image yet</div>
@@ -172,7 +350,7 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
 
         <button
           className="arrow-button"
-          onClick={() => onChangeIndex((current) => (current + 1) % notes.length)}
+          onClick={() => moveSlideshow(1)}
           type="button"
         >
           <span aria-hidden="true">&rarr;</span>
