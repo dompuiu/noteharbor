@@ -120,6 +120,7 @@ const updateScrapeStatement = db.prepare(`
       updated_at = datetime('now')
   WHERE id = @id
 `);
+const deleteNoteStatement = db.prepare(`DELETE FROM banknotes WHERE id = ?`);
 
 function parseJson(value, fallback) {
   if (!value) {
@@ -256,12 +257,17 @@ function updateScrapeResult({ id, scrapedData, images, scrapeStatus, scrapeError
   return getNoteById(id);
 }
 
+function deleteNote(id) {
+  deleteNoteStatement.run(id);
+}
+
 export {
   DATA_DIR,
   DB_PATH,
   IMAGES_DIR,
   ROOT_DIR,
   SCRAPED_IMAGES_DIR,
+  deleteNote,
   ensureTag,
   getAllNotes,
   getAllTags,
