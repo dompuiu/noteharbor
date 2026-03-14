@@ -558,14 +558,15 @@ function NotesTable() {
                 >
                   Select next unscraped
                 </button>
-                <button
-                  className="button"
-                  disabled={!hasSavedTableState}
-                  onClick={resetTableState}
-                  type="button"
-                >
-                  Reset filters, sorting, and selection
-                </button>
+                {hasSavedTableState ? (
+                  <button
+                    className="button"
+                    onClick={resetTableState}
+                    type="button"
+                  >
+                    Reset filters, sorting, and selection
+                  </button>
+                ) : null}
               </div>
               <p className="table-helper-text">
                 {reorderLoading
