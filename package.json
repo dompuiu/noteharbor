@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "concurrently \"pnpm --filter server dev\" \"pnpm --filter web dev\"",
     "build": "pnpm --filter web build",
-    "start": "pnpm --filter server start"
+    "layout": "tsps --layout layout.yml"
   },
   "devDependencies": {
     "concurrently": "^9.2.1"
