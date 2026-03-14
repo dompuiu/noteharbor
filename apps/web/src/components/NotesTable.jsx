@@ -47,6 +47,52 @@ const columns = [
 ];
 
 const selectCountOptions = [5, 10, 25, 50];
+const tableStateStorageKey = "notesshow.notesTableState";
+const validSortKeys = new Set(["id", ...columns.map(([key]) => key)]);
+
+function loadSavedTableState() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  try {
+    const rawValue = window.localStorage.getItem(tableStateStorageKey);
+
+    if (!rawValue) {
+      return null;
+    }
+
+    const parsedValue = JSON.parse(rawValue);
+    const nextFilters =
+      parsedValue.filters && typeof parsedValue.filters === "object"
+        ? Object.fromEntries(
+            Object.entries(parsedValue.filters)
+              .filter(([key]) => columns.some(([columnKey]) => columnKey === key))
+              .map(([key, value]) => [key, String(value ?? "")]),
+          )
+        : {};
+    const nextSortKey = validSortKeys.has(parsedValue.sortKey)
+      ? parsedValue.sortKey
+      : "id";
+    const nextSortDirection =
+      parsedValue.sortDirection === "desc" ? "desc" : "asc";
+    const nextSelectedIds = Array.isArray(parsedValue.selectedIds)
+      ? parsedValue.selectedIds.filter(
+          (value) => Number.isInteger(value) && value > 0,
+        )
+      : [];
+
+    return {
+      filters: nextFilters,
+      selectedIds: [...new Set(nextSelectedIds)],
+      sortKey: nextSortKey,
+      sortDirection: nextSortDirection,
+    };
+  } catch {
+    window.localStorage.removeItem(tableStateStorageKey);
+    return null;
+  }
+}
 
 function statusLabel(status) {
   if (!status) {
@@ -73,11 +119,25 @@ function pickImage(note, type, variant = "full") {
 }
 
 function NotesTable() {
+  const initialTableStateRef = useRef(undefined);
+
+  if (initialTableStateRef.current === undefined) {
+    initialTableStateRef.current = loadSavedTableState();
+  }
+
   const [notes, setNotes] = useState([]);
-  const [filters, setFilters] = useState({});
-  const [sortKey, setSortKey] = useState("id");
-  const [sortDirection, setSortDirection] = useState("asc");
-  const [selectedIds, setSelectedIds] = useState([]);
+  const [filters, setFilters] = useState(
+    () => initialTableStateRef.current?.filters ?? {},
+  );
+  const [sortKey, setSortKey] = useState(
+    () => initialTableStateRef.current?.sortKey ?? "id",
+  );
+  const [sortDirection, setSortDirection] = useState(
+    () => initialTableStateRef.current?.sortDirection ?? "asc",
+  );
+  const [selectedIds, setSelectedIds] = useState(
+    () => initialTableStateRef.current?.selectedIds ?? [],
+  );
   const [selectNextCount, setSelectNextCount] = useState(10);
   const [bulkAction, setBulkAction] = useState("scrape");
   const [status, setStatus] = useState(null);
@@ -184,6 +244,14 @@ function NotesTable() {
     () => orderedNotes.some((note) => selectedIds.includes(note.id)),
     [orderedNotes, selectedIds],
   );
+  const hasSavedTableState = useMemo(
+    () =>
+      Object.values(filters).some((value) => String(value).trim()) ||
+      sortKey !== "id" ||
+      sortDirection !== "asc" ||
+      selectedIds.length > 0,
+    [filters, selectedIds, sortDirection, sortKey],
+  );
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -191,6 +259,20 @@ function NotesTable() {
         someVisibleSelected && !allVisibleSelected;
     }
   }, [allVisibleSelected, someVisibleSelected]);
+
+  useEffect(() => {
+    window.localStorage.setItem(
+      tableStateStorageKey,
+      JSON.stringify({ filters, selectedIds, sortKey, sortDirection }),
+    );
+  }, [filters, selectedIds, sortDirection, sortKey]);
+
+  function resetTableState() {
+    setFilters({});
+    setSortKey("id");
+    setSortDirection("asc");
+    setSelectedIds([]);
+  }
 
   function toggleSort(key) {
     if (sortKey === key) {
@@ -342,6 +424,14 @@ function NotesTable() {
                   type="button"
                 >
                   Select next unscraped
+                </button>
+                <button
+                  className="button"
+                  disabled={!hasSavedTableState}
+                  onClick={resetTableState}
+                  type="button"
+                >
+                  Reset filters, sorting, and selection
                 </button>
               </div>
               {selectedIds.length ? (
