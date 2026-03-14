@@ -4,8 +4,11 @@
   line-height: 1.5;
   font-weight: 400;
   color: #241912;
-  background:
-    radial-gradient(circle at top left, rgba(217, 162, 93, 0.25), transparent 25%),
+  background: radial-gradient(
+      circle at top left,
+      rgba(217, 162, 93, 0.25),
+      transparent 25%
+    ),
     linear-gradient(180deg, #f8efe2 0%, #efe2cf 100%);
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -80,12 +83,6 @@ button {
   text-decoration: none;
 }
 
-.site-nav {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
 .nav-link,
 .button,
 .icon-link {
@@ -95,7 +92,10 @@ button {
   padding: 10px 16px;
   border-radius: 999px;
   text-decoration: none;
-  transition: transform 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease;
 }
 
 .nav-link:hover,
@@ -313,7 +313,12 @@ thead {
 
 .slideshow-screen {
   min-height: calc(100vh - 64px);
-  background: radial-gradient(circle at top, rgba(163, 112, 55, 0.24), transparent 25%), #18120d;
+  background: radial-gradient(
+      circle at top,
+      rgba(163, 112, 55, 0.24),
+      transparent 25%
+    ),
+    #18120d;
   color: #fff5e9;
   border-radius: 28px;
   padding: 24px;
@@ -375,7 +380,10 @@ thead {
   flex-direction: column;
   align-items: center;
   gap: 8px;
-  transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+  transition:
+    transform 0.15s ease,
+    box-shadow 0.15s ease,
+    border-color 0.15s ease;
   width: 100%;
 }
 
