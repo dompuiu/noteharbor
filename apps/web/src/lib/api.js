@@ -17,6 +17,21 @@ async function getNotes() {
   return handleResponse(response);
 }
 
+async function createSlideshowSession(ids) {
+  const response = await fetch('/api/slideshow', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ ids })
+  });
+
+  return handleResponse(response);
+}
+
+async function getSlideshowSession(token) {
+  const response = await fetch(`/api/slideshow/${token}`);
+  return handleResponse(response);
+}
+
 async function getNote(id) {
   const response = await fetch(`/api/notes/${id}`);
   return handleResponse(response);
@@ -72,4 +87,15 @@ async function getScrapeStatus() {
   return handleResponse(response);
 }
 
-export { deleteNote, getNote, getNotes, getScrapeStatus, getTags, importCsv, startScrape, updateNote };
+export {
+  createSlideshowSession,
+  deleteNote,
+  getNote,
+  getNotes,
+  getScrapeStatus,
+  getSlideshowSession,
+  getTags,
+  importCsv,
+  startScrape,
+  updateNote
+};

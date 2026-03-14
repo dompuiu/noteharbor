@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { getNotes } from '../lib/api.js';
+import { getNotes, getSlideshowSession } from '../lib/api.js';
 
 function pickImage(note, type, variant = 'full') {
   return note.images.find((image) => image.type === type && image.variant === variant)?.localPath ?? null;
@@ -31,14 +31,12 @@ function Slideshow() {
   const [notes, setNotes] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState('');
   const [popoverImage, setPopoverImage] = useState(null);
 
-  const ids = useMemo(() => {
+  const token = useMemo(() => {
     const searchParams = new URLSearchParams(location.search);
-    return (searchParams.get('ids') ?? '')
-      .split(',')
-      .map((value) => Number(value))
-      .filter(Boolean);
+    return (searchParams.get('token') ?? '').trim();
   }, [location.search]);
 
   const startId = useMemo(() => {
@@ -50,14 +48,23 @@ function Slideshow() {
   useEffect(() => {
     let active = true;
 
-    getNotes()
-      .then((payload) => {
+    setLoading(true);
+    setLoadError('');
+
+    Promise.all([
+      token ? getSlideshowSession(token) : Promise.resolve({ ids: [] }),
+      getNotes()
+    ])
+      .then(([sessionPayload, notesPayload]) => {
         if (!active) {
           return;
         }
 
-        const noteMap = new Map(payload.notes.map((note) => [note.id, note]));
-        const orderedNotes = ids.length ? ids.map((id) => noteMap.get(id)).filter(Boolean) : payload.notes;
+        const noteMap = new Map(notesPayload.notes.map((note) => [note.id, note]));
+        const orderedNotes = sessionPayload.ids.length
+          ? sessionPayload.ids.map((id) => noteMap.get(id)).filter(Boolean)
+          : notesPayload.notes;
+
         setNotes(orderedNotes);
 
         if (startId) {
@@ -65,6 +72,12 @@ function Slideshow() {
           setCurrentIndex(startIndex >= 0 ? startIndex : 0);
         } else {
           setCurrentIndex(0);
+        }
+      })
+      .catch((error) => {
+        if (active) {
+          setLoadError(error.message);
+          setNotes([]);
         }
       })
       .finally(() => {
@@ -76,7 +89,7 @@ function Slideshow() {
     return () => {
       active = false;
     };
-  }, [ids, startId]);
+  }, [startId, token]);
 
   useEffect(() => {
     function onKeyDown(event) {
@@ -99,6 +112,17 @@ function Slideshow() {
 
   if (loading) {
     return <section className="slideshow-screen"><p>Loading slideshow...</p></section>;
+  }
+
+  if (loadError) {
+    return (
+      <section className="slideshow-screen">
+        <p>{loadError}</p>
+        <Link className="button" to="/">
+          Back to table
+        </Link>
+      </section>
+    );
   }
 
   if (!notes.length) {

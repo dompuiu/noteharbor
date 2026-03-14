@@ -1,5 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import Database from 'better-sqlite3';
 import { fileURLToPath } from 'node:url';
 
@@ -46,6 +47,12 @@ db.exec(`
     banknote_id INTEGER NOT NULL REFERENCES banknotes(id) ON DELETE CASCADE,
     tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
     PRIMARY KEY (banknote_id, tag_id)
+  );
+
+  CREATE TABLE IF NOT EXISTS slideshow_sessions (
+    token TEXT PRIMARY KEY,
+    ids TEXT NOT NULL,
+    created_at TEXT DEFAULT (datetime('now'))
   );
 `);
 
@@ -121,6 +128,15 @@ const updateScrapeStatement = db.prepare(`
   WHERE id = @id
 `);
 const deleteNoteStatement = db.prepare(`DELETE FROM banknotes WHERE id = ?`);
+const insertSlideshowSessionStatement = db.prepare(`
+  INSERT INTO slideshow_sessions (token, ids, created_at)
+  VALUES (@token, @ids, datetime('now'))
+`);
+const getSlideshowSessionStatement = db.prepare(`SELECT token, ids, created_at FROM slideshow_sessions WHERE token = ?`);
+const deleteExpiredSlideshowSessionsStatement = db.prepare(`
+  DELETE FROM slideshow_sessions
+  WHERE created_at < datetime('now', '-1 day')
+`);
 
 function parseJson(value, fallback) {
   if (!value) {
@@ -261,18 +277,60 @@ function deleteNote(id) {
   deleteNoteStatement.run(id);
 }
 
+function createSlideshowSession(ids) {
+  const normalizedIds = [...new Set((ids ?? []).map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
+
+  if (!normalizedIds.length) {
+    throw new Error('A slideshow session requires at least one valid note ID.');
+  }
+
+  deleteExpiredSlideshowSessionsStatement.run();
+
+  const token = crypto.randomUUID();
+  insertSlideshowSessionStatement.run({
+    token,
+    ids: JSON.stringify(normalizedIds)
+  });
+
+  return { token, ids: normalizedIds };
+}
+
+function getSlideshowSession(token) {
+  const normalizedToken = String(token ?? '').trim();
+
+  if (!normalizedToken) {
+    return null;
+  }
+
+  deleteExpiredSlideshowSessionsStatement.run();
+
+  const row = getSlideshowSessionStatement.get(normalizedToken);
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    token: row.token,
+    ids: parseJson(row.ids, []),
+    created_at: row.created_at
+  };
+}
+
 export {
   DATA_DIR,
   DB_PATH,
   IMAGES_DIR,
   ROOT_DIR,
   SCRAPED_IMAGES_DIR,
+  createSlideshowSession,
   deleteNote,
   ensureTag,
   getAllNotes,
   getAllTags,
   getNoteById,
   getNotesByIds,
+  getSlideshowSession,
   replaceNoteTags,
   seedTagSuggestions,
   updateNote,
