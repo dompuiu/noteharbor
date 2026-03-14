@@ -210,6 +210,47 @@ td {
   text-align: left;
 }
 
+.table-thumb {
+  display: block;
+  width: 48px;
+  height: 32px;
+  object-fit: contain;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.65);
+}
+
+.table-thumb-wrap {
+  position: relative;
+  display: inline-flex;
+}
+
+.table-thumb-preview {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%);
+  display: none;
+  padding: 8px;
+  border-radius: 12px;
+  background: rgba(255, 252, 247, 0.98);
+  border: 1px solid rgba(92, 59, 24, 0.18);
+  box-shadow: 0 18px 36px rgba(62, 39, 16, 0.18);
+  z-index: 20;
+  pointer-events: none;
+}
+
+.table-thumb-wrap:hover .table-thumb-preview,
+.table-thumb-wrap:focus-within .table-thumb-preview {
+  display: block;
+}
+
+.table-thumb-preview img {
+  display: block;
+  width: 180px;
+  height: 120px;
+  object-fit: contain;
+}
+
 .table-row-link {
   cursor: pointer;
   transition: background 0.18s ease;
