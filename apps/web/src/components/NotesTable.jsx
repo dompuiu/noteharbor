@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { deleteNote, getNotes, getScrapeStatus, startScrape } from "../lib/api.js";
+import {
+  deleteNote,
+  getNotes,
+  getScrapeStatus,
+  startScrape,
+} from "../lib/api.js";
 import { Slideshow } from "./Slideshow.jsx";
 
 export function HomeHero() {
@@ -8,9 +13,7 @@ export function HomeHero() {
     <div className="hero-card hero-card--header">
       <div>
         <p className="eyebrow">Romanian Paper Money Archive</p>
-        <Link className="site-title-link" to="/">
-          <h1 className="site-title">Notesshow</h1>
-        </Link>
+        <h1 className="site-title">Notes Show</h1>
 
         <p className="hero-copy">
           Import your graded notes, keep the catalog tidy, enrich each entry
@@ -62,7 +65,9 @@ function loadSavedTableState() {
       parsedValue.filters && typeof parsedValue.filters === "object"
         ? Object.fromEntries(
             Object.entries(parsedValue.filters)
-              .filter(([key]) => columns.some(([columnKey]) => columnKey === key))
+              .filter(([key]) =>
+                columns.some(([columnKey]) => columnKey === key),
+              )
               .map(([key, value]) => [key, String(value ?? "")]),
           )
         : {};
@@ -528,19 +533,19 @@ function NotesTable() {
                       pickImage(note, "front", "full") || frontThumb;
 
                     return (
-                        <tr
-                          className="table-row-link"
-                          key={note.id}
-                          onClick={() => {
+                      <tr
+                        className="table-row-link"
+                        key={note.id}
+                        onClick={() => {
+                          openSlideshow(note.id);
+                        }}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
                             openSlideshow(note.id);
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              openSlideshow(note.id);
-                            }
-                          }}
-                          role="button"
+                          }
+                        }}
+                        role="button"
                         tabIndex={0}
                       >
                         <td onClick={(event) => event.stopPropagation()}>
