@@ -7,6 +7,30 @@ import {
   startScrape,
 } from "../lib/api.js";
 
+export function HomeHero() {
+  return (
+    <div className="hero-card hero-card--header">
+      <div>
+        <p className="eyebrow">Romanian Paper Money Archive</p>
+        <Link className="site-title-link" to="/">
+          <h1 className="site-title">Notesshow</h1>
+        </Link>
+
+        <p className="hero-copy">
+          Import your graded notes, keep the catalog tidy, enrich each entry
+          with scraped imagery, and browse the collection in a dedicated
+          slideshow.
+        </p>
+      </div>
+      <div className="hero-actions">
+        <Link className="button button-primary" to="/import">
+          Import CSV
+        </Link>
+      </div>
+    </div>
+  );
+}
+
 const columns = [
   ["denomination", "Denomination"],
   ["issue_date", "Date"],
@@ -276,23 +300,6 @@ function NotesTable() {
 
   return (
     <section className="screen-stack">
-      <div className="hero-card">
-        <div>
-          <p className="eyebrow">Romanian Paper Money Archive</p>
-          <h1>Banknotes collection</h1>
-          <p className="hero-copy">
-            Import your graded notes, keep the catalog tidy, enrich each entry
-            with scraped imagery, and browse the collection in a dedicated
-            slideshow.
-          </p>
-        </div>
-        <div className="hero-actions">
-          <Link className="button button-primary" to="/import">
-            Import CSV
-          </Link>
-        </div>
-      </div>
-
       <div className="panel">
         <div className="panel-heading">
           <div>

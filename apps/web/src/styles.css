@@ -61,9 +61,14 @@ button {
 .site-header {
   display: flex;
   justify-content: space-between;
-  align-items: end;
+  align-items: flex-start;
   gap: 24px;
   margin-bottom: 28px;
+}
+
+.site-branding {
+  flex: 0 0 auto;
+  min-width: max-content;
 }
 
 .site-title,
@@ -148,8 +153,18 @@ button {
   padding: 28px;
 }
 
+.hero-card--header {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 22px 24px;
+}
+
+.hero-card--header h1 {
+  font-size: clamp(1.8rem, 3vw, 2.6rem);
+}
+
 .hero-copy {
-  max-width: 54rem;
+  margin-bottom: 0;
 }
 
 .hero-actions,
@@ -619,6 +634,14 @@ thead {
   .app-shell {
     width: min(100vw - 20px, 1400px);
     padding-top: 10px;
+  }
+
+  .site-branding {
+    min-width: 0;
+  }
+
+  .hero-card--header {
+    padding: 28px;
   }
 
   .inline-select-group,

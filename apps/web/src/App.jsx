@@ -8,7 +8,7 @@ import {
 } from "react-router-dom";
 import { ImportScreen } from "./components/ImportScreen.jsx";
 import { NoteEditForm } from "./components/NoteEditForm.jsx";
-import { NotesTable } from "./components/NotesTable.jsx";
+import { HomeHero, NotesTable } from "./components/NotesTable.jsx";
 import { Slideshow } from "./components/Slideshow.jsx";
 
 function Shell() {
@@ -17,12 +17,7 @@ function Shell() {
   return (
     <div className={`app-shell${isWideLayout ? " app-shell--wide" : ""}`}>
       <header className="site-header">
-        <div>
-          <p className="eyebrow">Local collection studio</p>
-          <Link className="site-title-link" to="/">
-            <h1 className="site-title">Notesshow</h1>
-          </Link>
-        </div>
+        {isWideLayout ? <HomeHero /> : null}
       </header>
 
       <main>
