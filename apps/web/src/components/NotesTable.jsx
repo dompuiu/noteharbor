@@ -501,8 +501,8 @@ function NotesTable() {
       ) : null}
 
       <div className="panel">
-        <div className="panel-heading">
-          <div>
+        <div className="panel-heading panel-heading--compact">
+          <div className="panel-heading-copy">
             <p className="eyebrow">Romanian Paper Money Archive</p>
             <h2>Notes Show</h2>
             <p>
