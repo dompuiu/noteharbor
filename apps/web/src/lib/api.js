@@ -17,6 +17,16 @@ async function getNotes() {
   return handleResponse(response);
 }
 
+async function reorderNotes(ids) {
+  const response = await fetch('/api/notes/reorder', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ ids })
+  });
+
+  return handleResponse(response);
+}
+
 async function getNote(id) {
   const response = await fetch(`/api/notes/${id}`);
   return handleResponse(response);
@@ -79,6 +89,7 @@ export {
   getScrapeStatus,
   getTags,
   importCsv,
+  reorderNotes,
   startScrape,
   updateNote
 };

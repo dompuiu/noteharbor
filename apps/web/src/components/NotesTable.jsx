@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import {
   deleteNote,
   getNotes,
+  reorderNotes as saveNotesOrder,
   getScrapeStatus,
   startScrape,
 } from "../lib/api.js";
@@ -75,7 +76,11 @@ function loadSavedTableState() {
       ? parsedValue.sortKey
       : "id";
     const nextSortDirection =
-      parsedValue.sortDirection === "desc" ? "desc" : "asc";
+      nextSortKey === "id"
+        ? "asc"
+        : parsedValue.sortDirection === "desc"
+          ? "desc"
+          : "asc";
     const nextSelectedIds = Array.isArray(parsedValue.selectedIds)
       ? parsedValue.selectedIds.filter(
           (value) => Number.isInteger(value) && value > 0,
@@ -157,7 +162,6 @@ function NotesTable() {
   const [sortDirection, setSortDirection] = useState(
     () => initialTableStateRef.current?.sortDirection ?? "asc",
   );
-  const [displayIdMap, setDisplayIdMap] = useState(() => new Map());
   const [selectedIds, setSelectedIds] = useState(
     () => initialTableStateRef.current?.selectedIds ?? [],
   );
@@ -168,8 +172,11 @@ function NotesTable() {
   const [actionError, setActionError] = useState("");
   const [loading, setLoading] = useState(true);
   const [bulkLoading, setBulkLoading] = useState(false);
+  const [reorderLoading, setReorderLoading] = useState(false);
   const [slideshowNotes, setSlideshowNotes] = useState([]);
   const [slideshowIndex, setSlideshowIndex] = useState(0);
+  const [draggedNoteId, setDraggedNoteId] = useState(null);
+  const [dragOverNoteId, setDragOverNoteId] = useState(null);
   const selectAllRef = useRef(null);
 
   async function loadNotes() {
@@ -211,26 +218,6 @@ function NotesTable() {
   }, [notes]);
 
   useEffect(() => {
-    if (!notes.length) {
-      return;
-    }
-
-    setDisplayIdMap((current) => {
-      const nextDisplayIdMap = new Map(current);
-      let nextDisplayId = nextDisplayIdMap.size + 1;
-
-      for (const note of notes) {
-        if (!nextDisplayIdMap.has(note.id)) {
-          nextDisplayIdMap.set(note.id, nextDisplayId);
-          nextDisplayId += 1;
-        }
-      }
-
-      return nextDisplayIdMap.size === current.size ? current : nextDisplayIdMap;
-    });
-  }, [notes]);
-
-  useEffect(() => {
     if (!scrapeJob) {
       return undefined;
     }
@@ -265,6 +252,10 @@ function NotesTable() {
       }),
     );
 
+    if (sortKey === "id") {
+      return filtered;
+    }
+
     return [...filtered].sort((left, right) => {
       const leftValue = valueToString(left, sortKey).toLowerCase();
       const rightValue = valueToString(right, sortKey).toLowerCase();
@@ -275,6 +266,12 @@ function NotesTable() {
       return sortDirection === "asc" ? result : -result;
     });
   }, [filters, notes, sortDirection, sortKey]);
+  const hasActiveFilters = useMemo(
+    () => Object.values(filters).some((value) => String(value).trim()),
+    [filters],
+  );
+  const isDefaultOrder = sortKey === "id" && sortDirection === "asc";
+  const canReorder = !hasActiveFilters && isDefaultOrder && !reorderLoading;
 
   const allVisibleSelected = useMemo(
     () =>
@@ -288,11 +285,11 @@ function NotesTable() {
   );
   const hasSavedTableState = useMemo(
     () =>
-      Object.values(filters).some((value) => String(value).trim()) ||
+      hasActiveFilters ||
       sortKey !== "id" ||
       sortDirection !== "asc" ||
       selectedIds.length > 0,
-    [filters, selectedIds, sortDirection, sortKey],
+    [hasActiveFilters, selectedIds, sortDirection, sortKey],
   );
 
   useEffect(() => {
@@ -366,6 +363,51 @@ function NotesTable() {
 
   function clearSelection() {
     setSelectedIds([]);
+  }
+
+  function clearDragState() {
+    setDraggedNoteId(null);
+    setDragOverNoteId(null);
+  }
+
+  async function handleReorder(targetNoteId) {
+    if (!canReorder || draggedNoteId === null || draggedNoteId === targetNoteId) {
+      clearDragState();
+      return;
+    }
+
+    const startIndex = notes.findIndex((note) => note.id === draggedNoteId);
+    const targetIndex = notes.findIndex((note) => note.id === targetNoteId);
+
+    if (startIndex < 0 || targetIndex < 0) {
+      clearDragState();
+      return;
+    }
+
+    const previousNotes = notes;
+    const nextNotes = [...notes];
+    const [movedNote] = nextNotes.splice(startIndex, 1);
+    nextNotes.splice(targetIndex, 0, movedNote);
+
+    const reorderedNotes = nextNotes.map((note, index) => ({
+      ...note,
+      display_order: index + 1,
+    }));
+
+    setActionError("");
+    setNotes(reorderedNotes);
+    setReorderLoading(true);
+    clearDragState();
+
+    try {
+      const payload = await saveNotesOrder(reorderedNotes.map((note) => note.id));
+      setNotes(payload.notes);
+    } catch (reorderError) {
+      setActionError(reorderError.message);
+      setNotes(previousNotes);
+    } finally {
+      setReorderLoading(false);
+    }
   }
 
   function selectNextUnscraped() {
@@ -486,6 +528,13 @@ function NotesTable() {
                   Reset filters, sorting, and selection
                 </button>
               </div>
+              <p className="table-helper-text">
+                {reorderLoading
+                  ? "Saving manual order..."
+                  : canReorder
+                    ? "Drag rows from the handle to change the default order."
+                    : "Reordering is available only in the default unfiltered view."}
+              </p>
               {selectedIds.length ? (
                 <div className="inline-select-group inline-select-group--bulk">
                   <select
@@ -513,6 +562,7 @@ function NotesTable() {
               <table>
                 <thead>
                   <tr>
+                    <th>Move</th>
                     <th>
                       <input
                         aria-label="Select all visible rows"
@@ -541,6 +591,7 @@ function NotesTable() {
                     <th>Actions</th>
                   </tr>
                   <tr>
+                    <th />
                     <th />
                     <th />
                     <th />
@@ -574,8 +625,27 @@ function NotesTable() {
 
                     return (
                       <tr
-                        className="table-row-link"
+                        className={`table-row-link${dragOverNoteId === note.id ? " table-row-link--drop-target" : ""}`}
                         key={note.id}
+                        onDragLeave={() => {
+                          if (dragOverNoteId === note.id) {
+                            setDragOverNoteId(null);
+                          }
+                        }}
+                        onDragOver={(event) => {
+                          if (!canReorder || draggedNoteId === null) {
+                            return;
+                          }
+
+                          event.preventDefault();
+                          if (dragOverNoteId !== note.id) {
+                            setDragOverNoteId(note.id);
+                          }
+                        }}
+                        onDrop={(event) => {
+                          event.preventDefault();
+                          void handleReorder(note.id);
+                        }}
                         onClick={() => {
                           openSlideshow(note.id);
                         }}
@@ -589,6 +659,31 @@ function NotesTable() {
                         tabIndex={0}
                       >
                         <td onClick={(event) => event.stopPropagation()}>
+                          <button
+                            aria-label={`Move ${note.denomination}`}
+                            className="drag-handle"
+                            disabled={!canReorder}
+                            draggable={canReorder}
+                            onClick={(event) => event.stopPropagation()}
+                            onDragEnd={clearDragState}
+                            onDragStart={(event) => {
+                              if (!canReorder) {
+                                event.preventDefault();
+                                return;
+                              }
+
+                              event.stopPropagation();
+                              event.dataTransfer.effectAllowed = "move";
+                              event.dataTransfer.setData("text/plain", String(note.id));
+                              setDraggedNoteId(note.id);
+                              setDragOverNoteId(note.id);
+                            }}
+                            type="button"
+                          >
+                            ::
+                          </button>
+                        </td>
+                        <td onClick={(event) => event.stopPropagation()}>
                           <input
                             aria-label={`Select ${note.denomination}`}
                             checked={selectedIds.includes(note.id)}
@@ -596,7 +691,7 @@ function NotesTable() {
                             type="checkbox"
                           />
                         </td>
-                        <td>{displayIdMap.get(note.id) ?? "-"}</td>
+                        <td>{note.display_order ?? "-"}</td>
                         <td>
                           {frontThumb ? (
                             <span className="table-thumb-wrap">
