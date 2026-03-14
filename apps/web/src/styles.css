@@ -587,10 +587,17 @@ td.drag-cell {
 
 .slideshow-topbar {
   display: flex;
-  justify-content: space-between;
+  justify-content: flex-end;
   gap: 16px;
   align-items: center;
   margin-bottom: 24px;
+}
+
+.slideshow-topbar-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
 }
 
 .counter-pill {

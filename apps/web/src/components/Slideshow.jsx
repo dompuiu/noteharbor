@@ -288,11 +288,13 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
       )}
 
       <div className="slideshow-topbar">
-        <button className="slideshow-exit-button" onClick={onClose} type="button">
-          Exit slideshow
-        </button>
-        <div className="counter-pill">
-          {currentIndex + 1} / {notes.length}
+        <div className="slideshow-topbar-actions">
+          <div className="counter-pill">
+            {currentIndex + 1} / {notes.length}
+          </div>
+          <button className="slideshow-exit-button" onClick={onClose} type="button">
+            Close
+          </button>
         </div>
       </div>
 
