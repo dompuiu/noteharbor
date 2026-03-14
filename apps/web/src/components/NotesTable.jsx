@@ -157,6 +157,7 @@ function NotesTable() {
   const [sortDirection, setSortDirection] = useState(
     () => initialTableStateRef.current?.sortDirection ?? "asc",
   );
+  const [displayIdMap, setDisplayIdMap] = useState(() => new Map());
   const [selectedIds, setSelectedIds] = useState(
     () => initialTableStateRef.current?.selectedIds ?? [],
   );
@@ -207,6 +208,26 @@ function NotesTable() {
     setSelectedIds((current) =>
       current.filter((id) => notes.some((note) => note.id === id)),
     );
+  }, [notes]);
+
+  useEffect(() => {
+    if (!notes.length) {
+      return;
+    }
+
+    setDisplayIdMap((current) => {
+      const nextDisplayIdMap = new Map(current);
+      let nextDisplayId = nextDisplayIdMap.size + 1;
+
+      for (const note of notes) {
+        if (!nextDisplayIdMap.has(note.id)) {
+          nextDisplayIdMap.set(note.id, nextDisplayId);
+          nextDisplayId += 1;
+        }
+      }
+
+      return nextDisplayIdMap.size === current.size ? current : nextDisplayIdMap;
+    });
   }, [notes]);
 
   useEffect(() => {
@@ -575,7 +596,7 @@ function NotesTable() {
                             type="checkbox"
                           />
                         </td>
-                        <td>{note.id}</td>
+                        <td>{displayIdMap.get(note.id) ?? "-"}</td>
                         <td>
                           {frontThumb ? (
                             <span className="table-thumb-wrap">
