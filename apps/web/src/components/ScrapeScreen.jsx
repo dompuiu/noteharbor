@@ -5,7 +5,6 @@ import { getNotes, getScrapeStatus, preparePmg, startScrape } from '../lib/api.j
 function ScrapeScreen() {
   const [notes, setNotes] = useState([]);
   const [selectedIds, setSelectedIds] = useState([]);
-  const [waitSeconds, setWaitSeconds] = useState(10);
   const [status, setStatus] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -88,12 +87,11 @@ function ScrapeScreen() {
     setError('');
 
     try {
-      const payload = await startScrape(selectedIds, waitSeconds);
+      const payload = await startScrape(selectedIds);
       setStatus({
         status: 'running',
         total: payload.total,
         completed: 0,
-        waitSeconds: payload.waitSeconds,
         items: notes
           .filter((note) => selectedIds.includes(note.id))
           .map((note) => ({ noteId: note.id, label: note.denomination, status: 'queued', error: null }))
@@ -131,7 +129,6 @@ function ScrapeScreen() {
               status: 'idle',
               total: 0,
               completed: 0,
-              waitSeconds,
               items: [],
               pmgPreparation: {
                 status: 'open',
@@ -174,10 +171,6 @@ function ScrapeScreen() {
               <button className="button" onClick={toggleAll} type="button">
                 {allSelected ? 'Deselect all' : 'Select all'}
               </button>
-              <label className="inline-field">
-                <span>Wait seconds</span>
-                <input min="1" onChange={(event) => setWaitSeconds(Number(event.target.value) || 10)} type="number" value={waitSeconds} />
-              </label>
               <button className="button button-primary" disabled={!selectedIds.length || status?.status === 'running'} onClick={handleStart} type="button">
                 Start scraping
               </button>

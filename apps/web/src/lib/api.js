@@ -49,11 +49,11 @@ async function getTags() {
   return handleResponse(response);
 }
 
-async function startScrape(ids, waitSeconds) {
+async function startScrape(ids) {
   const response = await fetch('/api/scrape/start', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ ids, waitSeconds })
+    body: JSON.stringify({ ids })
   });
 
   return handleResponse(response);
