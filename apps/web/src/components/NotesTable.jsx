@@ -10,25 +10,7 @@ import {
 import { Slideshow } from "./Slideshow.jsx";
 
 export function HomeHero() {
-  return (
-    <div className="hero-card hero-card--header">
-      <div>
-        <p className="eyebrow">Romanian Paper Money Archive</p>
-        <h1 className="site-title">Notes Show</h1>
-
-        <p className="hero-copy">
-          Import your graded notes, keep the catalog tidy, enrich each entry
-          with scraped imagery, and browse the collection in a dedicated
-          slideshow.
-        </p>
-      </div>
-      <div className="hero-actions">
-        <Link className="button button-primary" to="/import">
-          Import CSV
-        </Link>
-      </div>
-    </div>
-  );
+  return null;
 }
 
 const columns = [
@@ -521,12 +503,16 @@ function NotesTable() {
       <div className="panel">
         <div className="panel-heading">
           <div>
-            <h2>Collection table</h2>
+            <p className="eyebrow">Romanian Paper Money Archive</p>
+            <h2>Notes Show</h2>
             <p>
               {orderedNotes.length} notes in the current view.
               {selectedIds.length ? ` ${selectedIds.length} selected.` : ""}
             </p>
           </div>
+          <Link className="button button-primary" to="/import">
+            Import CSV
+          </Link>
         </div>
 
         {loading ? <p>Loading notes...</p> : null}
