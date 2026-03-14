@@ -31,7 +31,7 @@ function ImportScreen() {
   }
 
   return (
-    <section className="screen-stack narrow-stack">
+    <section className="screen-stack narrow-stack import-screen">
       <div className="panel">
         <div className="panel-heading">
           <div>
@@ -49,7 +49,7 @@ function ImportScreen() {
             <span>CSV file</span>
             <input accept=".csv" onChange={(event) => setFile(event.target.files?.[0] ?? null)} type="file" />
           </label>
-          <button className="button button-primary" disabled={submitting} type="submit">
+          <button className="button button-primary import-submit" disabled={submitting} type="submit">
             {submitting ? 'Importing...' : 'Import file'}
           </button>
         </form>
