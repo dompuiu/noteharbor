@@ -259,9 +259,6 @@ function NotesTable() {
           <Link className="button button-primary" to="/import">
             Import CSV
           </Link>
-          <Link className="button" to="/scrape">
-            Scrape images
-          </Link>
         </div>
       </div>
 

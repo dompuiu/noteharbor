@@ -9,12 +9,11 @@ import {
 import { ImportScreen } from "./components/ImportScreen.jsx";
 import { NoteEditForm } from "./components/NoteEditForm.jsx";
 import { NotesTable } from "./components/NotesTable.jsx";
-import { ScrapeScreen } from "./components/ScrapeScreen.jsx";
 import { Slideshow } from "./components/Slideshow.jsx";
 
 function Shell() {
   const { pathname } = useLocation();
-  const isWideLayout = pathname === "/" || pathname === "/scrape";
+  const isWideLayout = pathname === "/";
   return (
     <div className={`app-shell${isWideLayout ? " app-shell--wide" : ""}`}>
       <header className="site-header">
@@ -31,7 +30,6 @@ function Shell() {
           <Route element={<NotesTable />} path="/" />
           <Route element={<ImportScreen />} path="/import" />
           <Route element={<NoteEditForm />} path="/notes/:id/edit" />
-          <Route element={<ScrapeScreen />} path="/scrape" />
           <Route element={<Slideshow />} path="/slideshow" />
         </Routes>
       </main>
