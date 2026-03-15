@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { parse } from 'csv-parse/sync';
-import { seedTagSuggestions, upsertImportedNote } from '../db.js';
+import { importNotes, seedTagSuggestions } from '../db.js';
 
 const importRouter = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -48,10 +48,9 @@ importRouter.post('/', upload.single('file'), (request, response) => {
     trim: true
   });
 
-  let imported = 0;
-  let skipped = 0;
   let ignored = 0;
   const tagSuggestions = [];
+  const notesToImport = [];
 
   for (const rawRow of records) {
     if (isHeaderRow(rawRow)) {
@@ -74,21 +73,18 @@ importRouter.post('/', upload.single('file'), (request, response) => {
       tagSuggestions.push(note.notes);
     }
 
-    const result = upsertImportedNote(note);
-    if (result.changes > 0) {
-      imported += 1;
-    } else {
-      skipped += 1;
-    }
+    notesToImport.push(note);
   }
 
+  const { imported, skipped } = importNotes(notesToImport);
   seedTagSuggestions(tagSuggestions);
 
   response.json({
     imported,
     skipped,
     ignored,
-    total: records.length
+    total: records.length,
+    ordered: notesToImport.length
   });
 });
 

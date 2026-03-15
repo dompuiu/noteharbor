@@ -9,6 +9,10 @@ function normalizeLabel(label) {
 }
 
 class PMGScraper extends BaseScraper {
+  getWaitForSelector() {
+    return '.certlookup-details';
+  }
+
   parse(html, pageUrl) {
     const $ = cheerio.load(html);
     const details = {};

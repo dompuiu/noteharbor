@@ -35,8 +35,7 @@ db.exec(`
     scrape_status TEXT DEFAULT 'pending',
     scrape_error TEXT,
     created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now')),
-    UNIQUE(catalog_number, serial)
+    updated_at TEXT DEFAULT (datetime('now'))
   );
 
   CREATE TABLE IF NOT EXISTS tags (
@@ -56,6 +55,82 @@ db.exec(`
     created_at TEXT DEFAULT (datetime('now'))
   );
 `);
+
+const banknotesTableDefinition = db.prepare(`
+  SELECT sql
+  FROM sqlite_master
+  WHERE type = 'table' AND name = 'banknotes'
+`).get();
+
+if (/UNIQUE\s*\(\s*catalog_number\s*,\s*serial\s*\)/i.test(banknotesTableDefinition?.sql ?? '')) {
+  db.exec(`
+    PRAGMA foreign_keys = OFF;
+
+    CREATE TABLE banknotes_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      display_order INTEGER,
+      denomination TEXT,
+      issue_date TEXT,
+      catalog_number TEXT,
+      grading_company TEXT,
+      grade TEXT,
+      watermark TEXT,
+      serial TEXT,
+      url TEXT,
+      notes TEXT,
+      scraped_data TEXT,
+      images TEXT,
+      scrape_status TEXT DEFAULT 'pending',
+      scrape_error TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    INSERT INTO banknotes_new (
+      id,
+      display_order,
+      denomination,
+      issue_date,
+      catalog_number,
+      grading_company,
+      grade,
+      watermark,
+      serial,
+      url,
+      notes,
+      scraped_data,
+      images,
+      scrape_status,
+      scrape_error,
+      created_at,
+      updated_at
+    )
+    SELECT
+      id,
+      display_order,
+      denomination,
+      issue_date,
+      catalog_number,
+      grading_company,
+      grade,
+      watermark,
+      serial,
+      url,
+      notes,
+      scraped_data,
+      images,
+      scrape_status,
+      scrape_error,
+      created_at,
+      updated_at
+    FROM banknotes;
+
+    DROP TABLE banknotes;
+    ALTER TABLE banknotes_new RENAME TO banknotes;
+
+    PRAGMA foreign_keys = ON;
+  `);
+}
 
 const banknoteColumns = db.prepare(`PRAGMA table_info(banknotes)`).all();
 
@@ -143,7 +218,6 @@ const upsertBanknoteStatement = db.prepare(`
     updated_at
   )
   VALUES (@display_order, @denomination, @issue_date, @catalog_number, @grading_company, @grade, @watermark, @serial, @url, @notes, datetime('now'))
-  ON CONFLICT(catalog_number, serial) DO NOTHING
 `);
 const insertNoteStatement = db.prepare(`
   INSERT INTO banknotes (
@@ -212,6 +286,22 @@ const updateDisplayOrderStatement = db.prepare(`
       updated_at = datetime('now')
   WHERE id = @id
 `);
+const listImportRowsStatement = db.prepare(`
+  SELECT
+    id,
+    display_order,
+    denomination,
+    issue_date,
+    catalog_number,
+    grading_company,
+    grade,
+    watermark,
+    serial,
+    url,
+    notes
+  FROM banknotes
+  ORDER BY display_order ASC, id ASC
+`);
 const insertSlideshowSessionStatement = db.prepare(`
   INSERT INTO slideshow_sessions (token, ids, created_at)
   VALUES (@token, @ids, datetime('now'))
@@ -236,6 +326,36 @@ function parseJson(value, fallback) {
 
 function normalizeTagName(name) {
   return String(name ?? '').trim().replace(/\s+/g, ' ');
+}
+
+function normalizeImportValue(value) {
+  return String(value ?? '').trim().toLowerCase();
+}
+
+function buildImportIdentity(note) {
+  const url = normalizeImportValue(note.url);
+  if (url) {
+    return `url:${url}`;
+  }
+
+  const company = normalizeImportValue(note.grading_company);
+  const catalogNumber = normalizeImportValue(note.catalog_number);
+  const serial = normalizeImportValue(note.serial);
+
+  if (company && (catalogNumber || serial)) {
+    return `company:${company}|catalog:${catalogNumber}|serial:${serial}`;
+  }
+
+  return [
+    normalizeImportValue(note.denomination),
+    normalizeImportValue(note.issue_date),
+    catalogNumber,
+    company,
+    normalizeImportValue(note.grade),
+    normalizeImportValue(note.watermark),
+    serial,
+    normalizeImportValue(note.notes)
+  ].join('|');
 }
 
 function rowToNote(row, tagMap) {
@@ -314,11 +434,66 @@ function seedTagSuggestions(tagNames) {
   transaction(uniqueNames);
 }
 
-function upsertImportedNote(note) {
-  return upsertBanknoteStatement.run({
-    ...note,
-    display_order: getNextDisplayOrder()
+function importNotes(notes) {
+  const transaction = db.transaction((rows) => {
+    const existingRows = listImportRowsStatement.all();
+    const matchedIds = new Set();
+    const identityToRow = new Map();
+    let importedCount = 0;
+    let skippedCount = 0;
+    let nextDisplayOrder = 1;
+
+    for (const row of existingRows) {
+      identityToRow.set(buildImportIdentity(row), row);
+    }
+
+    for (const note of rows) {
+      const identity = buildImportIdentity(note);
+      const existing = identityToRow.get(identity);
+
+      if (existing) {
+        updateDisplayOrderStatement.run({
+          id: existing.id,
+          display_order: nextDisplayOrder
+        });
+        matchedIds.add(existing.id);
+        skippedCount += 1;
+      } else {
+        const result = upsertBanknoteStatement.run({
+          ...note,
+          display_order: nextDisplayOrder
+        });
+
+        identityToRow.set(identity, {
+          id: Number(result.lastInsertRowid),
+          ...note,
+          display_order: nextDisplayOrder
+        });
+        importedCount += 1;
+      }
+
+      nextDisplayOrder += 1;
+    }
+
+    for (const row of existingRows) {
+      if (matchedIds.has(row.id)) {
+        continue;
+      }
+
+      updateDisplayOrderStatement.run({
+        id: row.id,
+        display_order: nextDisplayOrder
+      });
+      nextDisplayOrder += 1;
+    }
+
+    return {
+      imported: importedCount,
+      skipped: skippedCount
+    };
   });
+
+  return transaction(notes);
 }
 
 function getNextDisplayOrder() {
@@ -481,10 +656,10 @@ export {
   getNoteById,
   getNotesByIds,
   getSlideshowSession,
+  importNotes,
   reorderNotes,
   replaceNoteTags,
   seedTagSuggestions,
   updateNote,
-  updateScrapeResult,
-  upsertImportedNote
+  updateScrapeResult
 };

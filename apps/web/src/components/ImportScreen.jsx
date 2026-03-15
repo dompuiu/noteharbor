@@ -37,7 +37,7 @@ function ImportScreen() {
           <div>
             <p className="eyebrow">Import</p>
             <h1>Upload a collection CSV</h1>
-            <p>The importer skips empty separators, ignores non-banknote rows, and only adds new notes to the database.</p>
+            <p>The importer skips empty separators, ignores non-banknote rows, adds missing notes, and syncs the table order to match the CSV.</p>
           </div>
           <Link className="button" to="/">
             Back to table
@@ -62,6 +62,7 @@ function ImportScreen() {
             <p>Imported: {result.imported}</p>
             <p>Duplicates skipped: {result.skipped}</p>
             <p>Ignored rows: {result.ignored}</p>
+            <p>Rows used for ordering: {result.ordered}</p>
             <p>Total rows scanned: {result.total}</p>
           </div>
         ) : null}
