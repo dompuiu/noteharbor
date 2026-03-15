@@ -12,6 +12,11 @@ function isHttpUrl(value) {
   return /^https?:\/\//i.test(String(value ?? "").trim());
 }
 
+function getScrapePanelTitle(note) {
+  const company = String(note?.grading_company ?? "").trim();
+  return company ? `${company} scrape` : "Scraped details";
+}
+
 function getScrapedDetailEntries(note) {
   const scrapedData = note.scraped_data;
   const details =
@@ -336,6 +341,7 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
       ) +
       1
     : 0;
+  const scrapePanelTitle = getScrapePanelTitle(note);
 
   return (
     <section className="slideshow-screen slideshow-screen--overlay">
@@ -422,7 +428,7 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
             </div>
             {scrapedDetailEntries.length ? (
               <div className="scraped-details-panel">
-                <p className="eyebrow">PMG scrape</p>
+                <p className="eyebrow">{scrapePanelTitle}</p>
                 <div className="scraped-details-grid">
                   {scrapedDetailEntries.map(([key, value]) => (
                     <p key={key}>
