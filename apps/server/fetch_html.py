@@ -4,14 +4,28 @@
 import argparse
 import asyncio
 import sys
+from typing import Any, Optional
 
 from crawl4ai import AsyncWebCrawler
 from crawl4ai.async_configs import BrowserConfig, CrawlerRunConfig
 
 
-async def fetch(url: str, wait_seconds: float, profile_dir: str = None) -> None:
-    browser_config = BrowserConfig(headless=False, user_data_dir=profile_dir or None)
-    run_config = CrawlerRunConfig(wait_for=".certlookup-details")
+async def fetch(
+    url: str,
+    wait_seconds: float,
+    profile_dir: Optional[str] = None,
+    wait_for: Optional[str] = None,
+) -> None:
+    browser_kwargs: dict[str, Any] = {"headless": False}
+    if profile_dir:
+        browser_kwargs["user_data_dir"] = profile_dir
+
+    run_config_kwargs: dict[str, Any] = {}
+    if wait_for:
+        run_config_kwargs["wait_for"] = wait_for
+
+    browser_config = BrowserConfig(**browser_kwargs)
+    run_config = CrawlerRunConfig(**run_config_kwargs)
 
     async with AsyncWebCrawler(config=browser_config) as crawler:
         result = await crawler.arun(url=url, config=run_config)
@@ -39,8 +53,13 @@ def main() -> None:
         default=None,
         help="Persistent browser profile directory for session reuse",
     )
+    parser.add_argument(
+        "--wait-for",
+        default=None,
+        help="CSS selector to wait for before capturing HTML",
+    )
     args = parser.parse_args()
-    asyncio.run(fetch(args.url, args.wait, args.profile_dir))
+    asyncio.run(fetch(args.url, args.wait, args.profile_dir, args.wait_for))
 
 
 if __name__ == "__main__":

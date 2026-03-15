@@ -4,6 +4,7 @@ import { spawn } from 'node:child_process';
 import { Router } from 'express';
 import { getNotesByIds, updateScrapeResult } from '../db.js';
 import { PMGScraper } from '../scrapers/pmg.js';
+import { TQGScraper } from '../scrapers/tqg.js';
 
 const scrapeRouter = Router();
 const ROUTES_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -49,6 +50,10 @@ function getScraperForNote(note) {
     return new PMGScraper(note);
   }
 
+  if (url.includes('tqggrading.com') || company.includes('tqg')) {
+    return new TQGScraper(note);
+  }
+
   return null;
 }
 
@@ -56,7 +61,7 @@ function getScraperForNote(note) {
  * Spawns fetch_html.py to open the page with crawl4ai and return the raw HTML.
  * The browser runs headless=False so the user can interact with bot challenges.
  */
-function fetchHtml(url) {
+function fetchHtml(url, waitForSelector) {
   return new Promise((resolve, reject) => {
     const args = [
       FETCH_SCRIPT,
@@ -64,6 +69,10 @@ function fetchHtml(url) {
       '--wait', String(DEFAULT_WAIT_SECONDS),
       '--profile-dir', getProfileDir()
     ];
+
+    if (waitForSelector) {
+      args.push('--wait-for', waitForSelector);
+    }
 
     const proc = spawn('python3', args);
     const chunks = [];
@@ -119,7 +128,7 @@ async function runScrapeJob(notes) {
     }
 
     try {
-      const html = await fetchHtml(note.url);
+      const html = await fetchHtml(note.url, scraper.getWaitForSelector());
       const parsed = scraper.parse(html, note.url);
       const images = await scraper.downloadImages(parsed);
 
