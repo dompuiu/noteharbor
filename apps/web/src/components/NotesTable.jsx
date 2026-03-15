@@ -17,12 +17,9 @@ const columns = [
   ["denomination", "Denomination"],
   ["issue_date", "Date"],
   ["catalog_number", "Catalog #"],
-  ["grading_company", "Grading"],
+  ["grading_company", "Company"],
   ["grade", "Grade"],
-  ["watermark", "Watermark"],
   ["serial", "Serial"],
-  ["url", "URL"],
-  ["notes", "Notes"],
   ["tags", "Tags"],
   ["scrape_status", "Scrape Status"],
 ];
@@ -822,13 +819,6 @@ function NotesTable() {
                               <span className="muted">-</span>
                             )}
                           </td>
-                          <td>{note.denomination}</td>
-                          <td>{note.issue_date}</td>
-                          <td>{note.catalog_number}</td>
-                          <td>{note.grading_company}</td>
-                          <td>{note.grade}</td>
-                          <td>{note.watermark}</td>
-                          <td>{note.serial}</td>
                           <td>
                             {note.url ? (
                               <a
@@ -837,13 +827,17 @@ function NotesTable() {
                                 rel="noreferrer"
                                 target="_blank"
                               >
-                                Open
+                                {note.denomination}
                               </a>
                             ) : (
-                              <span className="muted">-</span>
+                              note.denomination
                             )}
                           </td>
-                          <td>{note.notes}</td>
+                          <td>{note.issue_date}</td>
+                          <td>{note.catalog_number}</td>
+                          <td>{note.grading_company}</td>
+                          <td>{note.grade}</td>
+                          <td>{note.serial}</td>
                           <td>
                             <div className="tag-list">
                               {note.tags.length ? (
