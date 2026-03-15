@@ -942,6 +942,12 @@ td.drag-cell {
   max-width: 100%;
 }
 
+.slideshow-screen .tag {
+  background: rgba(255, 236, 216, 0.16);
+  color: #fff1de;
+  border: 1px solid rgba(255, 236, 216, 0.22);
+}
+
 .detail-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
