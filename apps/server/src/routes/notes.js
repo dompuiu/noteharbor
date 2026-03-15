@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import {
+  createNote,
   deleteNote,
   getAllNotes,
   getNoteById,
@@ -9,8 +10,39 @@ import {
 
 const notesRouter = Router();
 
+function sanitizeNotePayload(body) {
+  return {
+    denomination: String(body.denomination ?? '').trim(),
+    issue_date: String(body.issue_date ?? '').trim(),
+    catalog_number: String(body.catalog_number ?? '').trim(),
+    grading_company: String(body.grading_company ?? '').trim(),
+    grade: String(body.grade ?? '').trim(),
+    watermark: String(body.watermark ?? '').trim(),
+    serial: String(body.serial ?? '').trim(),
+    url: String(body.url ?? '').trim(),
+    notes: String(body.notes ?? '').trim(),
+    tags: Array.isArray(body.tags) ? body.tags : []
+  };
+}
+
 notesRouter.get('/', (_request, response) => {
   response.json({ notes: getAllNotes() });
+});
+
+notesRouter.post('/', (request, response) => {
+  const payload = sanitizeNotePayload(request.body);
+
+  if (!payload.denomination) {
+    response.status(400).json({ error: 'Denomination is required.' });
+    return;
+  }
+
+  try {
+    const note = createNote(payload);
+    response.status(201).json({ note });
+  } catch (error) {
+    response.status(400).json({ error: error.message });
+  }
 });
 
 notesRouter.post('/reorder', (request, response) => {
@@ -51,16 +83,7 @@ notesRouter.put('/:id', (request, response) => {
 
   const payload = {
     id: noteId,
-    denomination: String(request.body.denomination ?? '').trim(),
-    issue_date: String(request.body.issue_date ?? '').trim(),
-    catalog_number: String(request.body.catalog_number ?? '').trim(),
-    grading_company: String(request.body.grading_company ?? '').trim(),
-    grade: String(request.body.grade ?? '').trim(),
-    watermark: String(request.body.watermark ?? '').trim(),
-    serial: String(request.body.serial ?? '').trim(),
-    url: String(request.body.url ?? '').trim(),
-    notes: String(request.body.notes ?? '').trim(),
-    tags: Array.isArray(request.body.tags) ? request.body.tags : []
+    ...sanitizeNotePayload(request.body)
   };
 
   try {

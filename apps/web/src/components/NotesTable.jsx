@@ -163,6 +163,7 @@ function NotesTable() {
   const [slideshowNotes, setSlideshowNotes] = useState([]);
   const [slideshowIndex, setSlideshowIndex] = useState(0);
   const [editingNoteId, setEditingNoteId] = useState(null);
+  const [creatingNote, setCreatingNote] = useState(false);
   const [draggedNoteId, setDraggedNoteId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const selectAllRef = useRef(null);
@@ -230,22 +231,23 @@ function NotesTable() {
   }, [scrapeJob]);
 
   useEffect(() => {
-    if (!editingNoteId) {
+    if (!editingNoteId && !creatingNote) {
       return undefined;
     }
 
     function handleKeyDown(event) {
-      if (event.key === "Escape") {
-        setEditingNoteId(null);
+        if (event.key === "Escape") {
+          setEditingNoteId(null);
+          setCreatingNote(false);
+        }
       }
-    }
 
     window.addEventListener("keydown", handleKeyDown);
 
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [editingNoteId]);
+  }, [creatingNote, editingNoteId]);
 
   const orderedNotes = useMemo(() => {
     const filtered = notes.filter((note) =>
@@ -365,18 +367,34 @@ function NotesTable() {
 
   function openEditor(noteId) {
     setActionError("");
+    setCreatingNote(false);
     setEditingNoteId(noteId);
+  }
+
+  function openCreateNote() {
+    setActionError("");
+    setEditingNoteId(null);
+    setCreatingNote(true);
   }
 
   function closeEditor() {
     setEditingNoteId(null);
+    setCreatingNote(false);
   }
 
   function handleSaveEditedNote(updatedNote) {
-    setNotes((current) =>
-      current.map((note) => (note.id === updatedNote.id ? updatedNote : note)),
-    );
-    setEditingNoteId(null);
+    setNotes((current) => {
+      const noteExists = current.some((note) => note.id === updatedNote.id);
+
+      if (noteExists) {
+        return current.map((note) =>
+          note.id === updatedNote.id ? updatedNote : note,
+        );
+      }
+
+      return [...current, updatedNote];
+    });
+    closeEditor();
   }
 
   function toggleNote(noteId) {
@@ -566,6 +584,26 @@ function NotesTable() {
     }
   }
 
+  async function handleDeleteNote(noteId) {
+    const note = notes.find((entry) => entry.id === noteId);
+    const noteLabel = note?.denomination || `note #${noteId}`;
+    const shouldDelete = window.confirm(`Delete ${noteLabel}?`);
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    setActionError("");
+
+    try {
+      await deleteNote(noteId);
+      setNotes((current) => current.filter((entry) => entry.id !== noteId));
+      setSelectedIds((current) => current.filter((id) => id !== noteId));
+    } catch (deleteError) {
+      setActionError(deleteError.message);
+    }
+  }
+
   return (
     <section className="screen-stack">
       {slideshowNotes.length ? (
@@ -577,7 +615,7 @@ function NotesTable() {
         />
       ) : null}
 
-      {editingNoteId ? (
+      {editingNoteId || creatingNote ? (
         <section className="edit-note-overlay" onClick={closeEditor}>
           <div
             className="edit-note-overlay-frame"
@@ -595,19 +633,28 @@ function NotesTable() {
       ) : null}
 
       <div className="panel">
-        <div className="panel-heading panel-heading--compact">
-          <div className="panel-heading-copy">
-            <p className="eyebrow">Romanian Paper Money Archive</p>
-            <h2>Notes Show</h2>
+          <div className="panel-heading panel-heading--compact">
+            <div className="panel-heading-copy">
+              <p className="eyebrow">Romanian Paper Money Archive</p>
+              <h2>Notes Show</h2>
             <p>
               {orderedNotes.length} notes in the current view.
               {selectedIds.length ? ` ${selectedIds.length} selected.` : ""}
             </p>
+            </div>
+            <div className="inline-actions">
+              <button
+                className="button button-primary"
+                onClick={openCreateNote}
+                type="button"
+              >
+                Add banknote
+              </button>
+              <Link className="button" to="/import">
+                Import CSV
+              </Link>
+            </div>
           </div>
-          <Link className="button button-primary" to="/import">
-            Import CSV
-          </Link>
-        </div>
 
         {loading ? <p>Loading notes...</p> : null}
         {loadError ? <p className="error-text">{loadError}</p> : null}
@@ -974,16 +1021,28 @@ function NotesTable() {
                             </span>
                           </td>
                           <td>
-                            <button
-                              className="icon-link"
-                              onClick={(event) => {
-                                event.stopPropagation();
-                                openEditor(note.id);
-                              }}
-                              type="button"
-                            >
-                              Edit
-                            </button>
+                            <div className="inline-actions">
+                              <button
+                                className="icon-link"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  openEditor(note.id);
+                                }}
+                                type="button"
+                              >
+                                Edit
+                              </button>
+                              <button
+                                className="icon-link"
+                                onClick={(event) => {
+                                  event.stopPropagation();
+                                  void handleDeleteNote(note.id);
+                                }}
+                                type="button"
+                              >
+                                Delete
+                              </button>
+                            </div>
                           </td>
                         </tr>
                         {showPlaceholderAfter ? (
