@@ -1,5 +1,43 @@
 import { useEffect, useState } from "react";
 
+function formatScrapedLabel(label) {
+  return String(label ?? "")
+    .split("_")
+    .filter(Boolean)
+    .map((part) => part.charAt(0).toUpperCase() + part.slice(1))
+    .join(" ");
+}
+
+function isHttpUrl(value) {
+  return /^https?:\/\//i.test(String(value ?? "").trim());
+}
+
+function getScrapedDetailEntries(note) {
+  const scrapedData = note.scraped_data;
+  const details =
+    scrapedData && typeof scrapedData === "object"
+      ? scrapedData.details && typeof scrapedData.details === "object"
+        ? scrapedData.details
+        : scrapedData
+      : null;
+
+  if (!details || typeof details !== "object") {
+    return [];
+  }
+
+  return Object.entries(details).filter(([key, value]) => {
+    if (key === "images" || key === "details") {
+      return false;
+    }
+
+    if (value === null || value === undefined) {
+      return false;
+    }
+
+    return String(value).trim() !== "";
+  });
+}
+
 function pickImage(note, type, variant = "full") {
   return (
     note.images.find(
@@ -97,7 +135,11 @@ function ImagePopover({
           </div>
           <div className="image-popover-actions">
             <div className="counter-pill">{counterLabel}</div>
-            <button className="image-popover-close" onClick={onClose} type="button">
+            <button
+              className="image-popover-close"
+              onClick={onClose}
+              type="button"
+            >
               Close
             </button>
           </div>
@@ -152,7 +194,9 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
   }
 
   function moveSlideshow(offset) {
-    onChangeIndex((current) => (current + offset + notes.length) % notes.length);
+    onChangeIndex(
+      (current) => (current + offset + notes.length) % notes.length,
+    );
   }
 
   function movePreview(offset) {
@@ -185,7 +229,8 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
           continue;
         }
 
-        nextNoteIndex = (nextNoteIndex + direction + notes.length) % notes.length;
+        nextNoteIndex =
+          (nextNoteIndex + direction + notes.length) % notes.length;
         nextItems = getPreviewItems(notes[nextNoteIndex], {
           includeMissingSides: true,
         });
@@ -233,7 +278,9 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
         return currentPreview;
       }
 
-      const boundedNoteIndex = ((currentPreview.noteIndex % notes.length) + notes.length) % notes.length;
+      const boundedNoteIndex =
+        ((currentPreview.noteIndex % notes.length) + notes.length) %
+        notes.length;
       const previewItems = getPreviewItems(notes[boundedNoteIndex], {
         includeMissingSides: true,
       });
@@ -259,6 +306,7 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
 
   const note = notes[currentIndex];
   const previewItems = getPreviewItems(note);
+  const scrapedDetailEntries = getScrapedDetailEntries(note);
   const previewNote =
     previewState && notes[previewState.noteIndex]
       ? notes[previewState.noteIndex]
@@ -270,15 +318,23 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
     (item) => item.kind === previewState?.imageKind,
   );
   const totalPreviewCount = notes.reduce(
-    (count, entry) => count + getPreviewItems(entry, { includeMissingSides: true }).length,
+    (count, entry) =>
+      count + getPreviewItems(entry, { includeMissingSides: true }).length,
     0,
   );
   const previewSequenceIndex = previewState
-    ? notes.slice(0, previewState.noteIndex).reduce(
-        (count, entry) =>
-          count + getPreviewItems(entry, { includeMissingSides: true }).length,
-        0,
-      ) + previewNoteItems.findIndex((item) => item.kind === previewState.imageKind) + 1
+    ? notes
+        .slice(0, previewState.noteIndex)
+        .reduce(
+          (count, entry) =>
+            count +
+            getPreviewItems(entry, { includeMissingSides: true }).length,
+          0,
+        ) +
+      previewNoteItems.findIndex(
+        (item) => item.kind === previewState.imageKind,
+      ) +
+      1
     : 0;
 
   return (
@@ -303,7 +359,11 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
           <div className="counter-pill">
             {currentIndex + 1} / {notes.length}
           </div>
-          <button className="slideshow-exit-button" onClick={onClose} type="button">
+          <button
+            className="slideshow-exit-button"
+            onClick={onClose}
+            type="button"
+          >
             Close
           </button>
         </div>
@@ -342,20 +402,55 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
 
           <div className="slide-meta">
             <div>
-              <p className="eyebrow">{note.grading_company || "Collection note"}</p>
+              <p className="eyebrow">
+                {note.grading_company || "Collection note"}
+              </p>
               <h1>{note.denomination}</h1>
               <p>{note.issue_date}</p>
             </div>
             <div className="detail-grid">
-              <p><strong>Catalog:</strong> {note.catalog_number || "-"}</p>
-              <p><strong>Grade:</strong> {note.grade || "-"}</p>
-              <p><strong>Serial:</strong> {note.serial || "-"}</p>
-              <p><strong>Watermark:</strong> {note.watermark || "-"}</p>
+              <p>
+                <strong>Catalog:</strong> {note.catalog_number || "-"}
+              </p>
+              <p>
+                <strong>Grade:</strong> {note.grade || "-"}
+              </p>
+              <p>
+                <strong>Serial:</strong> {note.serial || "-"}
+              </p>
+              <p>
+                <strong>Watermark:</strong> {note.watermark || "-"}
+              </p>
             </div>
+            {scrapedDetailEntries.length ? (
+              <div className="scraped-details-panel">
+                <p className="eyebrow">PMG scrape</p>
+                <div className="scraped-details-grid">
+                  {scrapedDetailEntries.map(([key, value]) => (
+                    <p key={key}>
+                      <strong>{formatScrapedLabel(key)}:</strong>{" "}
+                      {key === "source_url" && isHttpUrl(value) ? (
+                        <a
+                          href={String(value)}
+                          rel="noreferrer"
+                          target="_blank"
+                        >
+                          {String(value)}
+                        </a>
+                      ) : (
+                        String(value)
+                      )}
+                    </p>
+                  ))}
+                </div>
+              </div>
+            ) : null}
             <p>{note.notes || "No extra notes."}</p>
             <div className="tag-list">
               {note.tags.map((tag) => (
-                <span className="tag" key={tag.id || tag.name}>{tag.name}</span>
+                <span className="tag" key={tag.id || tag.name}>
+                  {tag.name}
+                </span>
               ))}
             </div>
           </div>
