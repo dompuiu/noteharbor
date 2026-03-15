@@ -200,6 +200,11 @@ button {
   align-items: center;
 }
 
+.inline-actions {
+  flex-wrap: nowrap;
+  white-space: nowrap;
+}
+
 .toolbar-row {
   margin-bottom: 10px;
 }
