@@ -1,4 +1,5 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { Link } from "react-router-dom";
 import {
   deleteNote,
@@ -27,6 +28,7 @@ const columns = [
 const selectCountOptions = [5, 10, 25, 50];
 const tableStateStorageKey = "notesshow.notesTableState";
 const validSortKeys = new Set(["id", ...columns.map(([key]) => key)]);
+const rowHeightEstimate = 43;
 
 function loadSavedTableState() {
   if (typeof window === "undefined") {
@@ -130,6 +132,7 @@ function NotesTable() {
   const initialTableStateRef = useRef(undefined);
   const rowElementMapRef = useRef(new Map());
   const dragPreviewRef = useRef(null);
+  const tableShellRef = useRef(null);
 
   if (initialTableStateRef.current === undefined) {
     initialTableStateRef.current = loadSavedTableState();
@@ -275,6 +278,17 @@ function NotesTable() {
       selectedIds.length > 0,
     [hasActiveFilters, selectedIds, sortDirection, sortKey],
   );
+  const rowVirtualizer = useVirtualizer({
+    count: orderedNotes.length,
+    estimateSize: () => rowHeightEstimate,
+    getScrollElement: () => tableShellRef.current,
+    overscan: 10,
+  });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const topSpacerHeight = virtualRows.length ? virtualRows[0].start : 0;
+  const bottomSpacerHeight = virtualRows.length
+    ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end
+    : 0;
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -289,6 +303,10 @@ function NotesTable() {
       JSON.stringify({ filters, selectedIds, sortKey, sortDirection }),
     );
   }, [filters, selectedIds, sortDirection, sortKey]);
+
+  useEffect(() => {
+    rowVirtualizer.scrollToOffset(0);
+  }, [filters, rowVirtualizer, sortDirection, sortKey]);
 
   function resetTableState() {
     setFilters({});
@@ -360,6 +378,26 @@ function NotesTable() {
     clearDragPreview();
     setDraggedNoteId(null);
     setDropTarget(null);
+  }
+
+  function autoScrollTableShell(event) {
+    const shell = tableShellRef.current;
+
+    if (!shell || draggedNoteId === null) {
+      return;
+    }
+
+    const bounds = shell.getBoundingClientRect();
+    const threshold = 56;
+    const maxStep = 24;
+
+    if (event.clientY < bounds.top + threshold) {
+      const ratio = (bounds.top + threshold - event.clientY) / threshold;
+      shell.scrollTop -= Math.ceil(maxStep * Math.min(1, ratio));
+    } else if (event.clientY > bounds.bottom - threshold) {
+      const ratio = (event.clientY - (bounds.bottom - threshold)) / threshold;
+      shell.scrollTop += Math.ceil(maxStep * Math.min(1, ratio));
+    }
   }
 
   function updateDropTarget(noteId, event) {
@@ -587,7 +625,11 @@ function NotesTable() {
               ) : null}
             </div>
 
-            <div className="table-shell">
+            <div
+              className="table-shell"
+              onDragOver={autoScrollTableShell}
+              ref={tableShellRef}
+            >
               <table>
                 <thead>
                   <tr>
@@ -654,7 +696,13 @@ function NotesTable() {
                   </tr>
                 </thead>
                 <tbody>
-                  {orderedNotes.map((note) => {
+                  {topSpacerHeight ? (
+                    <tr aria-hidden="true" className="table-spacer-row">
+                      <td colSpan={totalColumnCount} style={{ height: topSpacerHeight }} />
+                    </tr>
+                  ) : null}
+                  {virtualRows.map((virtualRow) => {
+                    const note = orderedNotes[virtualRow.index];
                     const noteScrapeStatus = displayScrapeStatus(
                       note,
                       scrapeJob,
@@ -692,6 +740,7 @@ function NotesTable() {
                           ref={(element) => {
                             if (element) {
                               rowElementMapRef.current.set(note.id, element);
+                              rowVirtualizer.measureElement(element);
                             } else {
                               rowElementMapRef.current.delete(note.id);
                             }
@@ -897,6 +946,11 @@ function NotesTable() {
                       </Fragment>
                     );
                   })}
+                  {bottomSpacerHeight ? (
+                    <tr aria-hidden="true" className="table-spacer-row">
+                      <td colSpan={totalColumnCount} style={{ height: bottomSpacerHeight }} />
+                    </tr>
+                  ) : null}
                 </tbody>
               </table>
             </div>
