@@ -680,7 +680,7 @@ td.drag-cell {
   display: grid;
   grid-template-columns: auto minmax(0, 1280px) auto;
   gap: 10px;
-  align-items: center;
+  align-items: start;
   justify-content: center;
   width: 100%;
 }
@@ -693,6 +693,8 @@ td.drag-cell {
   background: rgba(255, 255, 255, 0.05);
   color: inherit;
   font-size: 1.8rem;
+  position: sticky;
+  top: 320px;
 }
 
 .arrow-button:disabled {
