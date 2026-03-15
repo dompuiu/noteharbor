@@ -32,6 +32,16 @@ async function getNote(id) {
   return handleResponse(response);
 }
 
+async function createNote(payload) {
+  const response = await fetch('/api/notes', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload)
+  });
+
+  return handleResponse(response);
+}
+
 async function updateNote(id, payload) {
   const response = await fetch(`/api/notes/${id}`, {
     method: 'PUT',
@@ -83,6 +93,7 @@ async function getScrapeStatus() {
 }
 
 export {
+  createNote,
   deleteNote,
   getNote,
   getNotes,

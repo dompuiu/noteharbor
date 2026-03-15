@@ -145,6 +145,36 @@ const upsertBanknoteStatement = db.prepare(`
   VALUES (@display_order, @denomination, @issue_date, @catalog_number, @grading_company, @grade, @watermark, @serial, @url, @notes, datetime('now'))
   ON CONFLICT(catalog_number, serial) DO NOTHING
 `);
+const insertNoteStatement = db.prepare(`
+  INSERT INTO banknotes (
+    display_order,
+    denomination,
+    issue_date,
+    catalog_number,
+    grading_company,
+    grade,
+    watermark,
+    serial,
+    url,
+    notes,
+    created_at,
+    updated_at
+  )
+  VALUES (
+    @display_order,
+    @denomination,
+    @issue_date,
+    @catalog_number,
+    @grading_company,
+    @grade,
+    @watermark,
+    @serial,
+    @url,
+    @notes,
+    datetime('now'),
+    datetime('now')
+  )
+`);
 const updateNoteStatement = db.prepare(`
   UPDATE banknotes
   SET denomination = @denomination,
@@ -323,6 +353,21 @@ function updateNote(note) {
   return getNoteById(note.id);
 }
 
+function createNote(note) {
+  const transaction = db.transaction((payload) => {
+    const result = insertNoteStatement.run({
+      ...payload,
+      display_order: getNextDisplayOrder()
+    });
+    const noteId = Number(result.lastInsertRowid);
+    replaceNoteTags(noteId, payload.tags);
+    return noteId;
+  });
+
+  const noteId = transaction(note);
+  return getNoteById(noteId);
+}
+
 function updateScrapeResult({ id, scrapedData, images, scrapeStatus, scrapeError }) {
   updateScrapeStatement.run({
     id,
@@ -427,6 +472,7 @@ export {
   IMAGES_DIR,
   ROOT_DIR,
   SCRAPED_IMAGES_DIR,
+  createNote,
   createSlideshowSession,
   deleteNote,
   ensureTag,

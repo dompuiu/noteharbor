@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { getNote, getTags, updateNote } from "../lib/api.js";
+import { createNote, getNote, getTags, updateNote } from "../lib/api.js";
 
 const emptyForm = {
   denomination: "",
@@ -25,6 +25,7 @@ function NoteEditForm({
   const { id: routeNoteId } = useParams();
   const navigate = useNavigate();
   const noteId = noteIdProp ?? routeNoteId;
+  const isCreateMode = !noteId;
   const [form, setForm] = useState(emptyForm);
   const [suggestions, setSuggestions] = useState([]);
   const [tagInput, setTagInput] = useState("");
@@ -48,37 +49,35 @@ function NoteEditForm({
   useEffect(() => {
     let active = true;
 
-    if (!noteId) {
-      setError("Note not found.");
-      setLoading(false);
-      return () => {
-        active = false;
-      };
-    }
-
     setLoading(true);
     setError("");
     setForm(emptyForm);
     setTagInput("");
 
-    Promise.all([getNote(noteId), getTags()])
+    const dataPromise = noteId
+      ? Promise.all([getNote(noteId), getTags()])
+      : Promise.all([Promise.resolve(null), getTags()]);
+
+    dataPromise
       .then(([notePayload, tagsPayload]) => {
         if (!active) {
           return;
         }
 
-        setForm({
-          denomination: notePayload.note.denomination ?? "",
-          issue_date: notePayload.note.issue_date ?? "",
-          catalog_number: notePayload.note.catalog_number ?? "",
-          grading_company: notePayload.note.grading_company ?? "",
-          grade: notePayload.note.grade ?? "",
-          watermark: notePayload.note.watermark ?? "",
-          serial: notePayload.note.serial ?? "",
-          url: notePayload.note.url ?? "",
-          notes: notePayload.note.notes ?? "",
-          tags: notePayload.note.tags.map((tag) => tag.name),
-        });
+        if (notePayload?.note) {
+          setForm({
+            denomination: notePayload.note.denomination ?? "",
+            issue_date: notePayload.note.issue_date ?? "",
+            catalog_number: notePayload.note.catalog_number ?? "",
+            grading_company: notePayload.note.grading_company ?? "",
+            grade: notePayload.note.grade ?? "",
+            watermark: notePayload.note.watermark ?? "",
+            serial: notePayload.note.serial ?? "",
+            url: notePayload.note.url ?? "",
+            notes: notePayload.note.notes ?? "",
+            tags: notePayload.note.tags.map((tag) => tag.name),
+          });
+        }
         setSuggestions(tagsPayload.tags.map((tag) => tag.name));
       })
       .catch((fetchError) => {
@@ -131,7 +130,9 @@ function NoteEditForm({
     setError("");
 
     try {
-      const payload = await updateNote(noteId, form);
+      const payload = isCreateMode
+        ? await createNote(form)
+        : await updateNote(noteId, form);
 
       if (onSaveSuccess) {
         onSaveSuccess(payload.note);
@@ -149,7 +150,7 @@ function NoteEditForm({
   if (loading) {
     return (
       <section className="panel narrow-stack">
-        <p>Loading note...</p>
+        <p>{isCreateMode ? "Preparing form..." : "Loading note..."}</p>
       </section>
     );
   }
@@ -159,8 +160,12 @@ function NoteEditForm({
       <div className="panel">
         <div className="panel-heading">
           <div>
-            <p className="eyebrow">Edit note</p>
-            <h1>Adjust collection details</h1>
+            <p className="eyebrow">{isCreateMode ? "Add note" : "Edit note"}</p>
+            <h1>
+              {isCreateMode
+                ? "Add a banknote to the collection"
+                : "Adjust collection details"}
+            </h1>
           </div>
           <div className="inline-actions">
             {onCancel ? (
@@ -178,7 +183,13 @@ function NoteEditForm({
               disabled={saving}
               type="submit"
             >
-              {saving ? "Saving..." : "Save changes"}
+              {saving
+                ? isCreateMode
+                  ? "Adding..."
+                  : "Saving..."
+                : isCreateMode
+                  ? "Add banknote"
+                  : "Save changes"}
             </button>
           </div>
         </div>
