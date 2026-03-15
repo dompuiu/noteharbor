@@ -95,8 +95,9 @@ button {
   border: 1px solid rgba(65, 43, 18, 0.2);
   background: rgba(255, 248, 239, 0.8);
   color: inherit;
-  padding: 10px 16px;
+  padding: 6px 11px;
   border-radius: 999px;
+  font-size: 0.82rem;
   text-decoration: none;
   transition:
     transform 0.2s ease,
@@ -178,7 +179,7 @@ button {
 }
 
 .toolbar-row {
-  margin-bottom: 16px;
+  margin-bottom: 10px;
 }
 
 .panel {
@@ -239,18 +240,19 @@ table {
 
 th,
 td {
-  padding: 12px 14px;
+  padding: 6px 8px;
   border-bottom: 1px solid rgba(95, 61, 26, 0.1);
   vertical-align: middle;
   text-align: center;
+  font-size: 0.82rem;
 }
 
 .table-thumb {
   display: block;
-  width: 48px;
-  height: 32px;
+  width: 36px;
+  height: 24px;
   object-fit: contain;
-  border-radius: 6px;
+  border-radius: 4px;
   background: rgba(255, 255, 255, 0.65);
 }
 
@@ -322,10 +324,11 @@ thead {
 .tag-editor input,
 .select-input {
   width: 100%;
-  border-radius: 14px;
+  border-radius: 10px;
   border: 1px solid rgba(92, 59, 24, 0.2);
   background: rgba(255, 255, 255, 0.85);
-  padding: 11px 13px;
+  padding: 5px 8px;
+  font-size: 0.82rem;
 }
 
 .inline-select-group {
@@ -351,7 +354,7 @@ thead {
   margin: 0;
   align-self: center;
   color: #6b5c4e;
-  font-size: 0.92rem;
+  font-size: 0.78rem;
 }
 
 .drag-cell {
@@ -465,10 +468,10 @@ td.drag-cell {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 82px;
-  padding: 5px 10px;
+  min-width: 64px;
+  padding: 3px 7px;
   border-radius: 999px;
-  font-size: 0.78rem;
+  font-size: 0.7rem;
   font-weight: 700;
   text-transform: capitalize;
 }
@@ -601,8 +604,9 @@ td.drag-cell {
 }
 
 .counter-pill {
-  padding: 10px 16px;
+  padding: 6px 11px;
   border-radius: 999px;
+  font-size: 0.82rem;
   background: rgba(255, 255, 255, 0.08);
 }
 
@@ -610,8 +614,9 @@ td.drag-cell {
   border: 1px solid rgba(255, 235, 212, 0.14);
   background: rgba(255, 255, 255, 0.08);
   color: #fff5e9;
-  padding: 10px 16px;
+  padding: 6px 11px;
   border-radius: 999px;
+  font-size: 0.82rem;
   transition:
     transform 0.2s ease,
     box-shadow 0.2s ease,
@@ -804,8 +809,9 @@ td.drag-cell {
 }
 
 .image-popover-close {
-  padding: 10px 16px;
+  padding: 6px 11px;
   border-radius: 999px;
+  font-size: 0.82rem;
   border: 1px solid rgba(255, 255, 255, 0.3);
   background: rgba(30, 20, 10, 0.85);
   color: #fff;
