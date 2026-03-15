@@ -468,12 +468,18 @@ td.drag-cell {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 64px;
-  padding: 3px 7px;
+  min-width: 52px;
+  padding: 2px 6px;
   border-radius: 999px;
-  font-size: 0.7rem;
+  font-size: 0.66rem;
   font-weight: 700;
   text-transform: capitalize;
+}
+
+.scrape-status-column {
+  width: 78px;
+  min-width: 78px;
+  white-space: nowrap;
 }
 
 .scrape-badge--pending,
