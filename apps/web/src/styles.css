@@ -632,6 +632,36 @@ td.drag-cell {
   overflow: auto;
 }
 
+.edit-note-overlay {
+  position: fixed;
+  inset: 16px;
+  z-index: 90;
+  display: grid;
+  place-items: center;
+  padding: 12px;
+  background: rgba(36, 25, 18, 0.48);
+  backdrop-filter: blur(8px);
+}
+
+.edit-note-overlay-frame {
+  width: 100%;
+  max-width: 900px;
+  max-height: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.edit-note-overlay-content {
+  width: min(100%, 900px);
+  max-height: 100%;
+  overflow: auto;
+  margin: 0 auto;
+}
+
+.edit-note-overlay-content .panel {
+  margin: 0;
+}
+
 .slideshow-topbar {
   display: flex;
   justify-content: flex-end;
@@ -1013,6 +1043,20 @@ td.drag-cell {
 
   .slideshow-screen--overlay {
     inset: 10px;
+  }
+
+  .edit-note-overlay {
+    inset: 10px;
+    padding: 0;
+  }
+
+  .edit-note-overlay-content {
+    width: 100%;
+    max-height: 100%;
+  }
+
+  .edit-note-overlay-frame {
+    max-width: none;
   }
 
   .app-shell {
