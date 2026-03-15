@@ -305,7 +305,7 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
   }
 
   const note = notes[currentIndex];
-  const previewItems = getPreviewItems(note);
+  const previewItems = getPreviewItems(note, { includeMissingSides: true });
   const scrapedDetailEntries = getScrapedDetailEntries(note);
   const previewNote =
     previewState && notes[previewState.noteIndex]
@@ -380,24 +380,22 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
 
         <div className="slide-card">
           <div className="slide-images">
-            {previewItems.length ? (
-              <>
-                {previewItems.map((item) => (
-                  <button
-                    key={item.kind}
-                    className="slide-thumb-btn"
-                    onClick={() => openPreview(currentIndex, item.kind)}
-                    title="Click to enlarge"
-                    type="button"
-                  >
-                    <img alt={item.alt} src={item.thumb} />
-                    <span className="slide-thumb-label">{item.label}</span>
-                  </button>
-                ))}
-              </>
-            ) : (
-              <div className="placeholder-card">No scraped image yet</div>
-            )}
+            {previewItems.map((item) => (
+              <button
+                key={item.kind}
+                className="slide-thumb-btn"
+                onClick={() => openPreview(currentIndex, item.kind)}
+                title="Click to enlarge"
+                type="button"
+              >
+                {item.thumb ? (
+                  <img alt={item.alt} src={item.thumb} />
+                ) : (
+                  <div className="slide-thumb-placeholder">No scraped image yet</div>
+                )}
+                <span className="slide-thumb-label">{item.label}</span>
+              </button>
+            ))}
           </div>
 
           <div className="slide-meta">
@@ -422,9 +420,9 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
                 <strong>Watermark:</strong> {note.watermark || "-"}
               </p>
             </div>
-            {scrapedDetailEntries.length ? (
-              <div className="scraped-details-panel">
-                <p className="eyebrow">PMG scrape</p>
+            <div className="scraped-details-panel">
+              <p className="eyebrow">PMG scrape</p>
+              {scrapedDetailEntries.length ? (
                 <div className="scraped-details-grid">
                   {scrapedDetailEntries.map(([key, value]) => (
                     <p key={key}>
@@ -443,8 +441,18 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
                     </p>
                   ))}
                 </div>
-              </div>
-            ) : null}
+              ) : (
+                <p className="scraped-details-empty">
+                  {note.scrape_status === "failed"
+                    ? note.scrape_error || "Scrape failed for this note."
+                    : note.scrape_status === "running"
+                      ? "Scrape is currently running for this note."
+                      : note.scrape_status === "queued"
+                        ? "This note is queued to be scraped."
+                        : "No PMG data has been scraped for this note yet."}
+                </p>
+              )}
+            </div>
             <p>{note.notes || "No extra notes."}</p>
             <div className="tag-list">
               {note.tags.map((tag) => (
