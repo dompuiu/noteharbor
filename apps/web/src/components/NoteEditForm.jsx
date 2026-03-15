@@ -1,50 +1,83 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
-import { getNote, getTags, updateNote } from '../lib/api.js';
+import { useEffect, useMemo, useState } from "react";
+import { Link, useNavigate, useParams } from "react-router-dom";
+import { getNote, getTags, updateNote } from "../lib/api.js";
 
 const emptyForm = {
-  denomination: '',
-  issue_date: '',
-  catalog_number: '',
-  grading_company: '',
-  grade: '',
-  watermark: '',
-  serial: '',
-  url: '',
-  notes: '',
-  tags: []
+  denomination: "",
+  issue_date: "",
+  catalog_number: "",
+  grading_company: "",
+  grade: "",
+  watermark: "",
+  serial: "",
+  url: "",
+  notes: "",
+  tags: [],
 };
 
-function NoteEditForm() {
-  const { id } = useParams();
+function NoteEditForm({
+  cancelLabel = "Cancel",
+  noteId: noteIdProp,
+  onCancel,
+  onSaveSuccess,
+  overlay = false,
+}) {
+  const { id: routeNoteId } = useParams();
   const navigate = useNavigate();
+  const noteId = noteIdProp ?? routeNoteId;
   const [form, setForm] = useState(emptyForm);
   const [suggestions, setSuggestions] = useState([]);
-  const [tagInput, setTagInput] = useState('');
+  const [tagInput, setTagInput] = useState("");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
+
+  const wrapperClassName = overlay
+    ? "edit-note-overlay-content"
+    : "screen-stack narrow-stack";
+
+  function handleCancel() {
+    if (onCancel) {
+      onCancel();
+      return;
+    }
+
+    navigate("/");
+  }
 
   useEffect(() => {
     let active = true;
 
-    Promise.all([getNote(id), getTags()])
+    if (!noteId) {
+      setError("Note not found.");
+      setLoading(false);
+      return () => {
+        active = false;
+      };
+    }
+
+    setLoading(true);
+    setError("");
+    setForm(emptyForm);
+    setTagInput("");
+
+    Promise.all([getNote(noteId), getTags()])
       .then(([notePayload, tagsPayload]) => {
         if (!active) {
           return;
         }
 
         setForm({
-          denomination: notePayload.note.denomination ?? '',
-          issue_date: notePayload.note.issue_date ?? '',
-          catalog_number: notePayload.note.catalog_number ?? '',
-          grading_company: notePayload.note.grading_company ?? '',
-          grade: notePayload.note.grade ?? '',
-          watermark: notePayload.note.watermark ?? '',
-          serial: notePayload.note.serial ?? '',
-          url: notePayload.note.url ?? '',
-          notes: notePayload.note.notes ?? '',
-          tags: notePayload.note.tags.map((tag) => tag.name)
+          denomination: notePayload.note.denomination ?? "",
+          issue_date: notePayload.note.issue_date ?? "",
+          catalog_number: notePayload.note.catalog_number ?? "",
+          grading_company: notePayload.note.grading_company ?? "",
+          grade: notePayload.note.grade ?? "",
+          watermark: notePayload.note.watermark ?? "",
+          serial: notePayload.note.serial ?? "",
+          url: notePayload.note.url ?? "",
+          notes: notePayload.note.notes ?? "",
+          tags: notePayload.note.tags.map((tag) => tag.name),
         });
         setSuggestions(tagsPayload.tags.map((tag) => tag.name));
       })
@@ -62,12 +95,14 @@ function NoteEditForm() {
     return () => {
       active = false;
     };
-  }, [id]);
+  }, [noteId]);
 
   const filteredSuggestions = useMemo(() => {
     const searchValue = tagInput.trim().toLowerCase();
     return suggestions.filter(
-      (tag) => !form.tags.includes(tag) && (!searchValue || tag.toLowerCase().includes(searchValue))
+      (tag) =>
+        !form.tags.includes(tag) &&
+        (!searchValue || tag.toLowerCase().includes(searchValue)),
     );
   }, [form.tags, suggestions, tagInput]);
 
@@ -93,11 +128,17 @@ function NoteEditForm() {
   async function handleSubmit(event) {
     event.preventDefault();
     setSaving(true);
-    setError('');
+    setError("");
 
     try {
-      await updateNote(id, form);
-      navigate('/');
+      const payload = await updateNote(noteId, form);
+
+      if (onSaveSuccess) {
+        onSaveSuccess(payload.note);
+        return;
+      }
+
+      navigate("/");
     } catch (saveError) {
       setError(saveError.message);
     } finally {
@@ -106,11 +147,15 @@ function NoteEditForm() {
   }
 
   if (loading) {
-    return <section className="panel narrow-stack"><p>Loading note...</p></section>;
+    return (
+      <section className="panel narrow-stack">
+        <p>Loading note...</p>
+      </section>
+    );
   }
 
   return (
-    <section className="screen-stack narrow-stack">
+    <section className={wrapperClassName}>
       <div className="panel">
         <div className="panel-heading">
           <div>
@@ -118,11 +163,22 @@ function NoteEditForm() {
             <h1>Adjust collection details</h1>
           </div>
           <div className="inline-actions">
-            <Link className="button" to="/">
-              Cancel
-            </Link>
-            <button className="button button-primary" form="edit-note-form" disabled={saving} type="submit">
-              {saving ? 'Saving...' : 'Save changes'}
+            {onCancel ? (
+              <button className="button" onClick={handleCancel} type="button">
+                {cancelLabel}
+              </button>
+            ) : (
+              <Link className="button" to="/">
+                {cancelLabel}
+              </Link>
+            )}
+            <button
+              className="button button-primary"
+              form="edit-note-form"
+              disabled={saving}
+              type="submit"
+            >
+              {saving ? "Saving..." : "Save changes"}
             </button>
           </div>
         </div>
@@ -131,14 +187,14 @@ function NoteEditForm() {
 
         <form className="form-grid" id="edit-note-form" onSubmit={handleSubmit}>
           {[
-            ['denomination', 'Denomination'],
-            ['issue_date', 'Date'],
-            ['catalog_number', 'Catalog #'],
-            ['grading_company', 'Grading Company'],
-            ['grade', 'Grade'],
-            ['watermark', 'Watermark'],
-            ['serial', 'Serial'],
-            ['url', 'URL']
+            ["denomination", "Denomination"],
+            ["issue_date", "Date"],
+            ["catalog_number", "Catalog #"],
+            ["grading_company", "Grading Company"],
+            ["grade", "Grade"],
+            ["watermark", "Watermark"],
+            ["serial", "Serial"],
+            ["url", "URL"],
           ].map(([name, label]) => (
             <label className="field-block" key={name}>
               <span>{label}</span>

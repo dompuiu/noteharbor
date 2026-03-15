@@ -8,6 +8,7 @@ import {
   getScrapeStatus,
   startScrape,
 } from "../lib/api.js";
+import { NoteEditForm } from "./NoteEditForm.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 
 export function HomeHero() {
@@ -161,6 +162,7 @@ function NotesTable() {
   const [reorderLoading, setReorderLoading] = useState(false);
   const [slideshowNotes, setSlideshowNotes] = useState([]);
   const [slideshowIndex, setSlideshowIndex] = useState(0);
+  const [editingNoteId, setEditingNoteId] = useState(null);
   const [draggedNoteId, setDraggedNoteId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const selectAllRef = useRef(null);
@@ -226,6 +228,24 @@ function NotesTable() {
 
     return () => window.clearInterval(timer);
   }, [scrapeJob]);
+
+  useEffect(() => {
+    if (!editingNoteId) {
+      return undefined;
+    }
+
+    function handleKeyDown(event) {
+      if (event.key === "Escape") {
+        setEditingNoteId(null);
+      }
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => {
+      window.removeEventListener("keydown", handleKeyDown);
+    };
+  }, [editingNoteId]);
 
   const orderedNotes = useMemo(() => {
     const filtered = notes.filter((note) =>
@@ -341,6 +361,22 @@ function NotesTable() {
   function closeSlideshow() {
     setSlideshowNotes([]);
     setSlideshowIndex(0);
+  }
+
+  function openEditor(noteId) {
+    setActionError("");
+    setEditingNoteId(noteId);
+  }
+
+  function closeEditor() {
+    setEditingNoteId(null);
+  }
+
+  function handleSaveEditedNote(updatedNote) {
+    setNotes((current) =>
+      current.map((note) => (note.id === updatedNote.id ? updatedNote : note)),
+    );
+    setEditingNoteId(null);
   }
 
   function toggleNote(noteId) {
@@ -539,6 +575,23 @@ function NotesTable() {
           onChangeIndex={setSlideshowIndex}
           onClose={closeSlideshow}
         />
+      ) : null}
+
+      {editingNoteId ? (
+        <section className="edit-note-overlay" onClick={closeEditor}>
+          <div
+            className="edit-note-overlay-frame"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <NoteEditForm
+              cancelLabel="Close"
+              noteId={editingNoteId}
+              onCancel={closeEditor}
+              onSaveSuccess={handleSaveEditedNote}
+              overlay
+            />
+          </div>
+        </section>
       ) : null}
 
       <div className="panel">
@@ -921,13 +974,16 @@ function NotesTable() {
                             </span>
                           </td>
                           <td>
-                            <Link
+                            <button
                               className="icon-link"
-                              onClick={(event) => event.stopPropagation()}
-                              to={`/notes/${note.id}/edit`}
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                openEditor(note.id);
+                              }}
+                              type="button"
                             >
                               Edit
-                            </Link>
+                            </button>
                           </td>
                         </tr>
                         {showPlaceholderAfter ? (
