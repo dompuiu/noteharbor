@@ -506,17 +506,18 @@ td.drag-cell {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 52px;
-  padding: 2px 6px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border-radius: 999px;
-  font-size: 0.66rem;
+  font-size: 0.92rem;
   font-weight: 700;
-  text-transform: capitalize;
+  line-height: 1;
 }
 
 .scrape-status-column {
-  width: 78px;
-  min-width: 78px;
+  width: 54px;
+  min-width: 54px;
   white-space: nowrap;
 }
 

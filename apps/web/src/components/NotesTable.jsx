@@ -89,6 +89,23 @@ function statusLabel(status) {
   return String(status).replace(/_/g, " ");
 }
 
+function statusIcon(status) {
+  switch (status) {
+    case "done":
+      return "✓";
+    case "failed":
+      return "✕";
+    case "running":
+      return "↻";
+    case "queued":
+      return "…";
+    case "pending":
+    case "idle":
+    default:
+      return "○";
+  }
+}
+
 function activeScrapeJob(status) {
   return status?.status === "running" ? status : null;
 }
@@ -1015,9 +1032,12 @@ function NotesTable() {
                           </td>
                           <td className="scrape-status-column">
                             <span
+                              aria-label={statusLabel(noteScrapeStatus)}
                               className={`scrape-badge scrape-badge--${noteScrapeStatus}`}
+                              role="img"
+                              title={statusLabel(noteScrapeStatus)}
                             >
-                              {statusLabel(noteScrapeStatus)}
+                              {statusIcon(noteScrapeStatus)}
                             </span>
                           </td>
                           <td>
