@@ -805,7 +805,6 @@ function NotesTable() {
                               [key]: event.target.value,
                             }))
                           }
-                          placeholder={`Filter ${label}`}
                         />
                       </th>
                     ))}
