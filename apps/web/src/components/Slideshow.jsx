@@ -420,9 +420,9 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
                 <strong>Watermark:</strong> {note.watermark || "-"}
               </p>
             </div>
-            <div className="scraped-details-panel">
-              <p className="eyebrow">PMG scrape</p>
-              {scrapedDetailEntries.length ? (
+            {scrapedDetailEntries.length ? (
+              <div className="scraped-details-panel">
+                <p className="eyebrow">PMG scrape</p>
                 <div className="scraped-details-grid">
                   {scrapedDetailEntries.map(([key, value]) => (
                     <p key={key}>
@@ -441,18 +441,8 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
                     </p>
                   ))}
                 </div>
-              ) : (
-                <p className="scraped-details-empty">
-                  {note.scrape_status === "failed"
-                    ? note.scrape_error || "Scrape failed for this note."
-                    : note.scrape_status === "running"
-                      ? "Scrape is currently running for this note."
-                      : note.scrape_status === "queued"
-                        ? "This note is queued to be scraped."
-                        : "No PMG data has been scraped for this note yet."}
-                </p>
-              )}
-            </div>
+              </div>
+            ) : null}
             <p>{note.notes || "No extra notes."}</p>
             <div className="tag-list">
               {note.tags.map((tag) => (
