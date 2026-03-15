@@ -21,7 +21,7 @@ const columns = [
   ["grade", "Grade"],
   ["serial", "Serial"],
   ["tags", "Tags"],
-  ["scrape_status", "Scrape Status"],
+  ["scrape_status", "Scraped"],
 ];
 
 const selectCountOptions = [5, 10, 25, 50];
@@ -604,7 +604,12 @@ function NotesTable() {
                     <th>ID</th>
                     <th>Front</th>
                     {columns.map(([key, label]) => (
-                      <th key={key}>
+                      <th
+                        className={
+                          key === "scrape_status" ? "scrape-status-column" : undefined
+                        }
+                        key={key}
+                      >
                         <button
                           className="sort-button"
                           onClick={() => toggleSort(key)}
@@ -625,7 +630,12 @@ function NotesTable() {
                     <th />
                     <th />
                     {columns.map(([key, label]) => (
-                      <th key={`${key}-filter`}>
+                      <th
+                        className={
+                          key === "scrape_status" ? "scrape-status-column" : undefined
+                        }
+                        key={`${key}-filter`}
+                      >
                         <input
                           aria-label={`Filter ${label}`}
                           className="filter-input"
@@ -854,7 +864,7 @@ function NotesTable() {
                               )}
                             </div>
                           </td>
-                          <td>
+                          <td className="scrape-status-column">
                             <span
                               className={`scrape-badge scrape-badge--${noteScrapeStatus}`}
                             >
