@@ -853,6 +853,7 @@ function NotesTable() {
                         ) : null}
                         <tr
                           className={`table-row-link${draggedNoteId === note.id ? " table-row-link--dragging" : ""}`}
+                          data-index={virtualRow.index}
                           key={note.id}
                           ref={(element) => {
                             if (element) {
