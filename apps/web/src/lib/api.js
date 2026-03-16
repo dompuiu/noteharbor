@@ -104,9 +104,16 @@ async function deleteNote(id) {
   return handleResponse(response);
 }
 
-async function importCsv(file) {
+async function importCsv(source) {
   const formData = new FormData();
-  formData.append('file', file);
+
+  if (isFileValue(source)) {
+    formData.append('file', source);
+  } else if (typeof source === 'string' && source.trim()) {
+    formData.append('csv_text', source);
+  } else {
+    throw new Error('Choose a CSV file or paste CSV text before importing.');
+  }
 
   const response = await fetch('/api/import', {
     method: 'POST',
