@@ -5,27 +5,50 @@ import { importNotes, seedTagSuggestions } from '../db.js';
 
 const importRouter = Router();
 const upload = multer({ storage: multer.memoryStorage() });
+const IGNORE_AFTER_MARKER = 'ignore after this line';
+
+function normalizeCell(value) {
+  return String(value ?? '').trim();
+}
+
+function normalizeHeader(value) {
+  return normalizeCell(value).toLowerCase();
+}
+
+function splitTags(value) {
+  return normalizeCell(value)
+    .split(',')
+    .map((tag) => tag.trim())
+    .filter(Boolean);
+}
 
 function mapRow(rawRow) {
   return {
-    denomination: String(rawRow[0] ?? '').trim(),
-    issue_date: String(rawRow[1] ?? '').trim(),
-    catalog_number: String(rawRow[2] ?? '').trim(),
-    grading_company: String(rawRow[3] ?? '').trim(),
-    grade: String(rawRow[4] ?? '').trim(),
-    watermark: String(rawRow[5] ?? '').trim(),
-    serial: String(rawRow[6] ?? '').trim(),
-    url: String(rawRow[7] ?? '').trim(),
-    notes: String(rawRow[8] ?? '').trim()
+    denomination: normalizeCell(rawRow[0]),
+    issue_date: normalizeCell(rawRow[1]),
+    catalog_number: normalizeCell(rawRow[2]),
+    grading_company: normalizeCell(rawRow[3]),
+    grade: normalizeCell(rawRow[4]),
+    watermark: normalizeCell(rawRow[5]),
+    serial: normalizeCell(rawRow[6]),
+    url: normalizeCell(rawRow[7]),
+    tags: splitTags(rawRow[8]),
+    notes: normalizeCell(rawRow[9])
   };
 }
 
 function isHeaderRow(rawRow) {
-  return String(rawRow[0] ?? '').trim() === 'Denominatia' && String(rawRow[2] ?? '').trim() === 'Numar catalog';
+  return normalizeHeader(rawRow[0]) === 'denomination' && normalizeHeader(rawRow[2]) === 'catalog no';
+}
+
+function isIgnoreAfterRow(rawRow) {
+  return normalizeHeader(rawRow[0]).startsWith(IGNORE_AFTER_MARKER);
 }
 
 function isEmptyRow(note) {
-  return Object.values(note).every((value) => !String(value ?? '').trim());
+  return Object.entries(note)
+    .filter(([key]) => key !== 'tags')
+    .every(([, value]) => !normalizeCell(value)) && !note.tags.length;
 }
 
 function isLikelyBanknote(note) {
@@ -34,13 +57,28 @@ function isLikelyBanknote(note) {
   );
 }
 
+function getCsvSource(request) {
+  if (request.file) {
+    return request.file.buffer;
+  }
+
+  const csvText = normalizeCell(request.body?.csv_text);
+  if (csvText) {
+    return csvText;
+  }
+
+  return null;
+}
+
 importRouter.post('/', upload.single('file'), (request, response) => {
-  if (!request.file) {
-    response.status(400).json({ error: 'CSV file is required.' });
+  const source = getCsvSource(request);
+
+  if (!source) {
+    response.status(400).json({ error: 'CSV file or pasted CSV text is required.' });
     return;
   }
 
-  const records = parse(request.file.buffer, {
+  const records = parse(source, {
     columns: false,
     bom: true,
     skip_empty_lines: false,
@@ -52,7 +90,14 @@ importRouter.post('/', upload.single('file'), (request, response) => {
   const tagSuggestions = [];
   const notesToImport = [];
 
-  for (const rawRow of records) {
+  for (let index = 0; index < records.length; index += 1) {
+    const rawRow = records[index];
+
+    if (isIgnoreAfterRow(rawRow)) {
+      ignored += records.length - index;
+      break;
+    }
+
     if (isHeaderRow(rawRow)) {
       continue;
     }
@@ -69,19 +114,16 @@ importRouter.post('/', upload.single('file'), (request, response) => {
       continue;
     }
 
-    if (note.notes) {
-      tagSuggestions.push(note.notes);
-    }
-
+    tagSuggestions.push(...note.tags);
     notesToImport.push(note);
   }
 
-  const { imported, skipped } = importNotes(notesToImport);
+  const { imported, updated } = importNotes(notesToImport);
   seedTagSuggestions(tagSuggestions);
 
   response.json({
     imported,
-    skipped,
+    updated,
     ignored,
     total: records.length,
     ordered: notesToImport.length

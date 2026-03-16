@@ -570,6 +570,26 @@ td.drag-cell {
   align-self: end;
 }
 
+.import-dropzone {
+  min-height: 140px;
+}
+
+.import-dropzone-content {
+  display: grid;
+  gap: 6px;
+  text-align: center;
+}
+
+.import-dropzone-help {
+  margin: 0;
+}
+
+.import-actions {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
 .full-span {
   grid-column: 1 / -1;
 }

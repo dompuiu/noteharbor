@@ -307,6 +307,20 @@ const listImportRowsStatement = db.prepare(`
   FROM banknotes
   ORDER BY display_order ASC, id ASC
 `);
+const updateImportedNoteStatement = db.prepare(`
+  UPDATE banknotes
+  SET denomination = @denomination,
+      issue_date = @issue_date,
+      catalog_number = @catalog_number,
+      grading_company = @grading_company,
+      grade = @grade,
+      watermark = @watermark,
+      serial = @serial,
+      url = @url,
+      notes = @notes,
+      updated_at = datetime('now')
+  WHERE id = @id
+`);
 const insertSlideshowSessionStatement = db.prepare(`
   INSERT INTO slideshow_sessions (token, ids, created_at)
   VALUES (@token, @ids, datetime('now'))
@@ -356,10 +370,8 @@ function buildImportIdentity(note) {
     normalizeImportValue(note.issue_date),
     catalogNumber,
     company,
-    normalizeImportValue(note.grade),
     normalizeImportValue(note.watermark),
-    serial,
-    normalizeImportValue(note.notes)
+    serial
   ].join('|');
 }
 
@@ -445,7 +457,7 @@ function importNotes(notes) {
     const matchedIds = new Set();
     const identityToRow = new Map();
     let importedCount = 0;
-    let skippedCount = 0;
+    let updatedCount = 0;
     let nextDisplayOrder = 1;
 
     for (const row of existingRows) {
@@ -457,20 +469,33 @@ function importNotes(notes) {
       const existing = identityToRow.get(identity);
 
       if (existing) {
+        updateImportedNoteStatement.run({
+          ...note,
+          id: existing.id
+        });
         updateDisplayOrderStatement.run({
           id: existing.id,
           display_order: nextDisplayOrder
         });
+        replaceNoteTags(existing.id, note.tags);
         matchedIds.add(existing.id);
-        skippedCount += 1;
+        identityToRow.set(identity, {
+          ...existing,
+          ...note,
+          id: existing.id,
+          display_order: nextDisplayOrder
+        });
+        updatedCount += 1;
       } else {
         const result = upsertBanknoteStatement.run({
           ...note,
           display_order: nextDisplayOrder
         });
+        const noteId = Number(result.lastInsertRowid);
+        replaceNoteTags(noteId, note.tags);
 
         identityToRow.set(identity, {
-          id: Number(result.lastInsertRowid),
+          id: noteId,
           ...note,
           display_order: nextDisplayOrder
         });
@@ -494,7 +519,7 @@ function importNotes(notes) {
 
     return {
       imported: importedCount,
-      skipped: skippedCount
+      updated: updatedCount
     };
   });
 
