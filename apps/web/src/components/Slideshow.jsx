@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { isReadOnlyMode } from "../lib/appMode.js";
 
 function formatScrapedLabel(label) {
   return String(label ?? "")
@@ -376,13 +377,15 @@ function Slideshow({
           <div className="counter-pill">
             {currentIndex + 1} / {notes.length}
           </div>
-          <button
-            className="slideshow-exit-button"
-            onClick={() => onEdit?.(note.id)}
-            type="button"
-          >
-            Edit note
-          </button>
+          {!isReadOnlyMode ? (
+            <button
+              className="slideshow-exit-button"
+              onClick={() => onEdit?.(note.id)}
+              type="button"
+            >
+              Edit note
+            </button>
+          ) : null}
           <button
             className="slideshow-exit-button"
             onClick={onClose}
