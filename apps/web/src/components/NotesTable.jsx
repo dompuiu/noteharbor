@@ -629,6 +629,7 @@ function NotesTable() {
           notes={slideshowNotes}
           onChangeIndex={setSlideshowIndex}
           onClose={closeSlideshow}
+          onEdit={openEditor}
         />
       ) : null}
 
