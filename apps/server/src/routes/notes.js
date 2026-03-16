@@ -1,14 +1,122 @@
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
 import { Router } from 'express';
+import multer from 'multer';
 import {
   createNote,
   deleteNote,
   getAllNotes,
   getNoteById,
+  IMAGES_DIR,
   reorderNotes,
   updateNote
 } from '../db.js';
 
 const notesRouter = Router();
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 15 * 1024 * 1024
+  }
+});
+const imageSlots = [
+  { field: 'image_front_full', type: 'front', variant: 'full' },
+  { field: 'image_front_thumbnail', type: 'front', variant: 'thumbnail' },
+  { field: 'image_back_full', type: 'back', variant: 'full' },
+  { field: 'image_back_thumbnail', type: 'back', variant: 'thumbnail' }
+];
+const slotFieldMap = new Map(imageSlots.map((slot) => [slot.field, slot]));
+const uploadFields = upload.fields(imageSlots.map((slot) => ({ name: slot.field, maxCount: 1 })));
+
+function normalizeTags(value) {
+  if (Array.isArray(value)) {
+    return value;
+  }
+
+  if (typeof value === 'string') {
+    return [value];
+  }
+
+  return [];
+}
+
+function getExtensionForMimeType(mimeType, originalName) {
+  if (mimeType === 'image/png') {
+    return '.png';
+  }
+
+  if (mimeType === 'image/webp') {
+    return '.webp';
+  }
+
+  if (mimeType === 'image/gif') {
+    return '.gif';
+  }
+
+  if (mimeType === 'image/jpeg') {
+    return '.jpg';
+  }
+
+  const parsedExtension = path.extname(originalName || '').toLowerCase();
+  return parsedExtension || '.jpg';
+}
+
+function isManagedNoteImage(noteId, image) {
+  return typeof image?.localPath === 'string' && image.localPath.startsWith(`/api/images/notes/${noteId}/`);
+}
+
+function removeManagedImageFile(noteId, image) {
+  if (!isManagedNoteImage(noteId, image)) {
+    return;
+  }
+
+  const relativePath = image.localPath.replace('/api/images/', '');
+  const filePath = path.join(IMAGES_DIR, relativePath);
+  if (fs.existsSync(filePath)) {
+    fs.unlinkSync(filePath);
+  }
+}
+
+function saveUploadedImages(noteId, existingImages, filesByField) {
+  const noteImagesDir = path.join(IMAGES_DIR, 'notes', String(noteId));
+  fs.mkdirSync(noteImagesDir, { recursive: true });
+
+  const mergedImages = new Map();
+  for (const image of existingImages ?? []) {
+    if (image?.type && image?.variant) {
+      mergedImages.set(`${image.type}:${image.variant}`, image);
+    }
+  }
+
+  for (const [fieldName, files] of Object.entries(filesByField ?? {})) {
+    const slot = slotFieldMap.get(fieldName);
+    const file = files?.[0];
+
+    if (!slot || !file || !String(file.mimetype ?? '').startsWith('image/')) {
+      continue;
+    }
+
+    const key = `${slot.type}:${slot.variant}`;
+    removeManagedImageFile(noteId, mergedImages.get(key));
+
+    const extension = getExtensionForMimeType(file.mimetype, file.originalname);
+    const filename = `${slot.type}-${slot.variant}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}${extension}`;
+    const targetPath = path.join(noteImagesDir, filename);
+    fs.writeFileSync(targetPath, file.buffer);
+
+    mergedImages.set(key, {
+      type: slot.type,
+      variant: slot.variant,
+      localPath: `/api/images/notes/${noteId}/${filename}`,
+      sourceUrl: null
+    });
+  }
+
+  return imageSlots
+    .map((slot) => mergedImages.get(`${slot.type}:${slot.variant}`))
+    .filter(Boolean);
+}
 
 function sanitizeNotePayload(body) {
   return {
@@ -21,7 +129,7 @@ function sanitizeNotePayload(body) {
     serial: String(body.serial ?? '').trim(),
     url: String(body.url ?? '').trim(),
     notes: String(body.notes ?? '').trim(),
-    tags: Array.isArray(body.tags) ? body.tags : []
+    tags: normalizeTags(body.tags)
   };
 }
 
@@ -29,7 +137,7 @@ notesRouter.get('/', (_request, response) => {
   response.json({ notes: getAllNotes() });
 });
 
-notesRouter.post('/', (request, response) => {
+notesRouter.post('/', uploadFields, (request, response) => {
   const payload = sanitizeNotePayload(request.body);
 
   if (!payload.denomination) {
@@ -38,7 +146,20 @@ notesRouter.post('/', (request, response) => {
   }
 
   try {
-    const note = createNote(payload);
+    let note = createNote({
+      ...payload,
+      images: []
+    });
+
+    const nextImages = saveUploadedImages(note.id, [], request.files);
+    if (nextImages.length) {
+      note = updateNote({
+        id: note.id,
+        ...payload,
+        images: nextImages
+      });
+    }
+
     response.status(201).json({ note });
   } catch (error) {
     response.status(400).json({ error: error.message });
@@ -72,7 +193,7 @@ notesRouter.get('/:id', (request, response) => {
   response.json({ note });
 });
 
-notesRouter.put('/:id', (request, response) => {
+notesRouter.put('/:id', uploadFields, (request, response) => {
   const noteId = Number(request.params.id);
   const existing = getNoteById(noteId);
 
@@ -83,7 +204,8 @@ notesRouter.put('/:id', (request, response) => {
 
   const payload = {
     id: noteId,
-    ...sanitizeNotePayload(request.body)
+    ...sanitizeNotePayload(request.body),
+    images: saveUploadedImages(noteId, existing.images, request.files)
   };
 
   try {
