@@ -187,7 +187,7 @@ function ImagePopover({
   );
 }
 
-function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
+function Slideshow({ currentIndex, notes, onChangeIndex, onClose, onEdit }) {
   const [previewState, setPreviewState] = useState(null);
 
   function openPreview(noteIndex, imageKind) {
@@ -365,6 +365,13 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose }) {
           <div className="counter-pill">
             {currentIndex + 1} / {notes.length}
           </div>
+          <button
+            className="slideshow-exit-button"
+            onClick={() => onEdit?.(note.id)}
+            type="button"
+          >
+            Edit note
+          </button>
           <button
             className="slideshow-exit-button"
             onClick={onClose}
