@@ -89,6 +89,29 @@ pnpm start    # runs Express on port 3001
 
 Serve the built `apps/web/dist/` folder via your preferred static host, or extend the Express server to serve it.
 
+### Build the Electron viewer
+
+```bash
+pnpm build:electron
+```
+
+This creates a desktop viewer build from `apps/desktop/dist-electron/`. The Electron app:
+
+- builds the React UI with `VITE_READ_ONLY_MODE=true`
+- serves the built UI and API locally through the embedded Express server
+- bundles the current `data/banknotes.db` file and `data/images/` directory
+- copies that bundled data into the app's user-data folder on first launch so slideshows and image browsing work without modifying the packaged files
+
+The packaged viewer blocks import, note create/edit/delete, reorder, and scrape-start API calls server-side in addition to the existing read-only UI.
+
+To create Windows artifacts, run the build on Windows instead of WSL/Linux:
+
+```bash
+pnpm build:electron:win
+```
+
+That produces Windows installer output from `apps/desktop/dist-electron/`, including an NSIS installer and a portable `.exe` build.
+
 ### Environment variables
 
 Create `apps/server/.env` (loaded automatically via Node's `--env-file` flag):
@@ -97,6 +120,9 @@ Create `apps/server/.env` (loaded automatically via Node's `--env-file` flag):
 |---|---|---|
 | `PORT` | `3001` | Express server port |
 | `PMG_BROWSER_PROFILE_DIR` | `storage/browser_profiles/pmg` | Persistent browser profile path for scraping |
+| `NOTESSHOW_DATA_DIR` | `data` | Overrides where SQLite and image files are read from |
+| `NOTESSHOW_WEB_DIST_DIR` | `apps/web/dist` | Overrides the static web build served by Express |
+| `NOTESSHOW_READ_ONLY_MODE` | `false` | Blocks mutating API routes when enabled |
 
 For the web app, Vite exposes client-side variables prefixed with `VITE_`. To enable table-and-slideshow-only mode, create `apps/web/.env` with:
 

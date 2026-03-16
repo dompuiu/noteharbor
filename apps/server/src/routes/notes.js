@@ -12,6 +12,7 @@ import {
   reorderNotes,
   updateNote
 } from '../db.js';
+import { rejectReadOnly, shouldUseReadOnlyMode } from '../serverMode.js';
 
 const notesRouter = Router();
 const upload = multer({
@@ -138,6 +139,11 @@ notesRouter.get('/', (_request, response) => {
 });
 
 notesRouter.post('/', uploadFields, (request, response) => {
+  if (shouldUseReadOnlyMode()) {
+    rejectReadOnly(response);
+    return;
+  }
+
   const payload = sanitizeNotePayload(request.body);
 
   if (!payload.denomination) {
@@ -167,6 +173,11 @@ notesRouter.post('/', uploadFields, (request, response) => {
 });
 
 notesRouter.post('/reorder', (request, response) => {
+  if (shouldUseReadOnlyMode()) {
+    rejectReadOnly(response);
+    return;
+  }
+
   const ids = Array.isArray(request.body.ids) ? request.body.ids : null;
 
   if (!ids) {
@@ -194,6 +205,11 @@ notesRouter.get('/:id', (request, response) => {
 });
 
 notesRouter.put('/:id', uploadFields, (request, response) => {
+  if (shouldUseReadOnlyMode()) {
+    rejectReadOnly(response);
+    return;
+  }
+
   const noteId = Number(request.params.id);
   const existing = getNoteById(noteId);
 
@@ -217,6 +233,11 @@ notesRouter.put('/:id', uploadFields, (request, response) => {
 });
 
 notesRouter.delete('/:id', (request, response) => {
+  if (shouldUseReadOnlyMode()) {
+    rejectReadOnly(response);
+    return;
+  }
+
   const noteId = Number(request.params.id);
   const existing = getNoteById(noteId);
 
