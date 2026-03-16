@@ -734,34 +734,40 @@ td.drag-cell {
 
 .edit-note-overlay {
   position: fixed;
-  inset: 16px;
+  inset: 0;
   z-index: 90;
   display: grid;
-  place-items: center;
-  padding: 12px;
-  background: rgba(36, 25, 18, 0.48);
-  backdrop-filter: blur(8px);
+  place-items: start center;
+  padding: 28px 24px 40px;
+  background: radial-gradient(
+      circle at top left,
+      rgba(217, 162, 93, 0.18),
+      transparent 24%
+    ),
+    linear-gradient(180deg, #efe1cd 0%, #e4d1b8 100%);
   overflow-y: auto;
 }
 
 .edit-note-overlay-frame {
   width: 100%;
   max-width: 900px;
-  max-height: calc(100vh - 48px);
   display: flex;
   justify-content: center;
   min-height: 0;
+  padding-bottom: 28px;
 }
 
 .edit-note-overlay-content {
   width: min(100%, 900px);
-  max-height: calc(100vh - 48px);
-  overflow-y: auto;
+  overflow: visible;
   margin: 0 auto;
 }
 
 .edit-note-overlay-content .panel {
   margin: 0;
+  background: #fffaf2;
+  border: 1px solid rgba(92, 59, 24, 0.18);
+  box-shadow: 0 28px 60px rgba(62, 39, 16, 0.14);
 }
 
 .slideshow-topbar {
@@ -1155,18 +1161,17 @@ td.drag-cell {
   }
 
   .edit-note-overlay {
-    inset: 10px;
-    padding: 0;
+    inset: 0;
+    padding: 16px 12px 28px;
   }
 
   .edit-note-overlay-content {
     width: 100%;
-    max-height: calc(100vh - 20px);
   }
 
   .edit-note-overlay-frame {
     max-width: none;
-    max-height: calc(100vh - 20px);
+    padding-bottom: 20px;
   }
 
   .app-shell {
