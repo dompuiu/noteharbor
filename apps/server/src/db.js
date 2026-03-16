@@ -200,7 +200,12 @@ const listTagsForNotesStatement = db.prepare(`
   INNER JOIN tags t ON t.id = bt.tag_id
   ORDER BY t.name COLLATE NOCASE ASC
 `);
-const listAllTagsStatement = db.prepare(`SELECT id, name FROM tags ORDER BY name COLLATE NOCASE ASC`);
+const listAllTagsStatement = db.prepare(`
+  SELECT DISTINCT t.id, t.name
+  FROM tags t
+  INNER JOIN banknote_tags bt ON bt.tag_id = t.id
+  ORDER BY t.name COLLATE NOCASE ASC
+`);
 const insertTagStatement = db.prepare(`INSERT OR IGNORE INTO tags (name) VALUES (?)`);
 const getTagByNameStatement = db.prepare(`SELECT id, name FROM tags WHERE name = ?`);
 const clearNoteTagsStatement = db.prepare(`DELETE FROM banknote_tags WHERE banknote_id = ?`);
@@ -437,18 +442,6 @@ function ensureTag(name) {
 
   insertTagStatement.run(normalizedName);
   return getTagByNameStatement.get(normalizedName);
-}
-
-function seedTagSuggestions(tagNames) {
-  const uniqueNames = [...new Set(tagNames.map(normalizeTagName).filter(Boolean))];
-
-  const transaction = db.transaction((names) => {
-    for (const name of names) {
-      insertTagStatement.run(name);
-    }
-  });
-
-  transaction(uniqueNames);
 }
 
 function importNotes(notes) {
@@ -693,7 +686,6 @@ export {
   importNotes,
   reorderNotes,
   replaceNoteTags,
-  seedTagSuggestions,
   updateNote,
   updateScrapeResult
 };

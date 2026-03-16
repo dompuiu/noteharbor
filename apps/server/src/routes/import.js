@@ -1,7 +1,7 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { parse } from 'csv-parse/sync';
-import { importNotes, seedTagSuggestions } from '../db.js';
+import { importNotes } from '../db.js';
 
 const importRouter = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -87,7 +87,6 @@ importRouter.post('/', upload.single('file'), (request, response) => {
   });
 
   let ignored = 0;
-  const tagSuggestions = [];
   const notesToImport = [];
 
   for (let index = 0; index < records.length; index += 1) {
@@ -114,12 +113,10 @@ importRouter.post('/', upload.single('file'), (request, response) => {
       continue;
     }
 
-    tagSuggestions.push(...note.tags);
     notesToImport.push(note);
   }
 
   const { imported, updated } = importNotes(notesToImport);
-  seedTagSuggestions(tagSuggestions);
 
   response.json({
     imported,
