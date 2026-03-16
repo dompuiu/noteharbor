@@ -1,0 +1,65 @@
+{
+  "name": "desktop",
+  "private": true,
+  "version": "1.0.0",
+  "description": "Read-only Electron viewer for Notesshow",
+  "type": "module",
+  "main": "src/main.js",
+  "scripts": {
+    "build:web": "node ./scripts/build-web.mjs",
+    "prepare:package": "node ./scripts/prepare-package.mjs",
+    "build": "pnpm run build:web && pnpm run prepare:package && electron-builder install-app-deps && electron-builder",
+    "build:win": "pnpm run build:web && pnpm run prepare:package && electron-builder install-app-deps && electron-builder --win nsis portable",
+    "pack": "pnpm run build:web && pnpm run prepare:package && electron-builder install-app-deps && electron-builder --dir"
+  },
+  "dependencies": {
+    "better-sqlite3": "^12.4.1",
+    "cheerio": "^1.1.2",
+    "cors": "^2.8.5",
+    "csv-parse": "^5.6.0",
+    "express": "^5.1.0",
+    "multer": "^2.0.2"
+  },
+  "devDependencies": {
+    "electron": "^35.0.1",
+    "electron-builder": "^26.0.12"
+  },
+  "build": {
+    "appId": "com.notesshow.viewer",
+    "productName": "Notesshow Viewer",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "files": [
+      "src/**/*",
+      ".build/**/*",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../../data",
+        "to": "bundled-data"
+      }
+    ],
+    "asarUnpack": [
+      "**/*.node"
+    ],
+    "linux": {
+      "target": [
+        "AppImage",
+        "dir"
+      ],
+      "category": "Utility"
+    },
+    "win": {
+      "target": [
+        "nsis",
+        "portable"
+      ]
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
