@@ -8,6 +8,7 @@ import {
   getScrapeStatus,
   startScrape,
 } from "../lib/api.js";
+import { isReadOnlyMode } from "../lib/appMode.js";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 
@@ -184,7 +185,25 @@ function NotesTable() {
   const [draggedNoteId, setDraggedNoteId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const selectAllRef = useRef(null);
-  const totalColumnCount = columns.length + 5;
+  const showSelection = !isReadOnlyMode;
+  const showReorder = !isReadOnlyMode;
+  const showActions = !isReadOnlyMode;
+  const visibleColumns = useMemo(
+    () =>
+      isReadOnlyMode
+        ? columns.filter(([key]) => key !== "scrape_status")
+        : columns,
+    [],
+  );
+  const showScrapeStatusColumn = visibleColumns.some(
+    ([key]) => key === "scrape_status",
+  );
+  const totalColumnCount =
+    visibleColumns.length +
+    2 +
+    (showSelection ? 1 : 0) +
+    (showReorder ? 1 : 0) +
+    (showActions ? 1 : 0);
 
   async function loadNotes() {
     const payload = await getNotes();
@@ -216,6 +235,12 @@ function NotesTable() {
     return () => {
       active = false;
     };
+  }, []);
+
+  useEffect(() => {
+    if (isReadOnlyMode) {
+      setSelectedIds([]);
+    }
   }, []);
 
   useEffect(() => {
@@ -268,7 +293,7 @@ function NotesTable() {
 
   const orderedNotes = useMemo(() => {
     const filtered = notes.filter((note) =>
-      columns.every(([key]) => {
+      visibleColumns.every(([key]) => {
         const filterValue = (filters[key] ?? "").trim().toLowerCase();
         if (!filterValue) {
           return true;
@@ -291,13 +316,14 @@ function NotesTable() {
       });
       return sortDirection === "asc" ? result : -result;
     });
-  }, [filters, notes, sortDirection, sortKey]);
+  }, [filters, notes, sortDirection, sortKey, visibleColumns]);
   const hasActiveFilters = useMemo(
     () => Object.values(filters).some((value) => String(value).trim()),
     [filters],
   );
   const isDefaultOrder = sortKey === "id" && sortDirection === "asc";
-  const canReorder = !hasActiveFilters && isDefaultOrder && !reorderLoading;
+  const canReorder =
+    showReorder && !hasActiveFilters && isDefaultOrder && !reorderLoading;
 
   const allVisibleSelected = useMemo(
     () =>
@@ -351,7 +377,9 @@ function NotesTable() {
     setFilters({});
     setSortKey("id");
     setSortDirection("asc");
-    setSelectedIds([]);
+    if (showSelection) {
+      setSelectedIds([]);
+    }
   }
 
   function toggleSort(key) {
@@ -675,21 +703,25 @@ function NotesTable() {
               <h2>Notes Show</h2>
             <p>
               {orderedNotes.length} notes in the current view.
-              {selectedIds.length ? ` ${selectedIds.length} selected.` : ""}
+              {showSelection && selectedIds.length
+                ? ` ${selectedIds.length} selected.`
+                : ""}
             </p>
             </div>
-            <div className="inline-actions">
-              <button
-                className="button button-primary"
-                onClick={openCreateNote}
-                type="button"
-              >
-                Add banknote
-              </button>
-              <Link className="button" to="/import">
-                Import CSV
-              </Link>
-            </div>
+            {!isReadOnlyMode ? (
+              <div className="inline-actions">
+                <button
+                  className="button button-primary"
+                  onClick={openCreateNote}
+                  type="button"
+                >
+                  Add banknote
+                </button>
+                <Link className="button" to="/import">
+                  Import CSV
+                </Link>
+              </div>
+            ) : null}
           </div>
 
         {loading ? <p>Loading notes...</p> : null}
@@ -700,27 +732,6 @@ function NotesTable() {
           <>
             <div className="toolbar-row toolbar-row--table-controls">
               <div className="inline-select-group">
-                <select
-                  aria-label="Select next count"
-                  className="select-input"
-                  onChange={(event) =>
-                    setSelectNextCount(Number(event.target.value))
-                  }
-                  value={selectNextCount}
-                >
-                  {selectCountOptions.map((count) => (
-                    <option key={count} value={count}>
-                      {count}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  className="button"
-                  onClick={selectNextUnscraped}
-                  type="button"
-                >
-                  Select next unscraped
-                </button>
                 {hasSavedTableState ? (
                   <button
                     className="button"
@@ -730,15 +741,42 @@ function NotesTable() {
                     Reset filters, sorting, and selection
                   </button>
                 ) : null}
+                {!isReadOnlyMode ? (
+                  <>
+                    <select
+                      aria-label="Select next count"
+                      className="select-input"
+                      onChange={(event) =>
+                        setSelectNextCount(Number(event.target.value))
+                      }
+                      value={selectNextCount}
+                    >
+                      {selectCountOptions.map((count) => (
+                        <option key={count} value={count}>
+                          {count}
+                        </option>
+                      ))}
+                    </select>
+                    <button
+                      className="button"
+                      onClick={selectNextUnscraped}
+                      type="button"
+                    >
+                      Select next unscraped
+                    </button>
+                  </>
+                ) : null}
               </div>
-              <p className="table-helper-text">
-                {reorderLoading
-                  ? "Saving manual order..."
-                  : canReorder
-                    ? "Drag rows from the handle to change the default order."
-                    : "Reordering is available only in the default unfiltered view."}
-              </p>
-              {selectedIds.length ? (
+              {!isReadOnlyMode ? (
+                <p className="table-helper-text">
+                  {reorderLoading
+                    ? "Saving manual order..."
+                    : canReorder
+                      ? "Drag rows from the handle to change the default order."
+                      : "Reordering is available only in the default unfiltered view."}
+                </p>
+              ) : null}
+              {!isReadOnlyMode && selectedIds.length ? (
                 <div className="inline-select-group inline-select-group--bulk">
                   <select
                     aria-label="Bulk action"
@@ -769,19 +807,21 @@ function NotesTable() {
               <table>
                 <thead>
                   <tr>
-                    <th className="drag-cell" />
-                    <th>
-                      <input
-                        aria-label="Select all visible rows"
-                        checked={allVisibleSelected}
-                        onChange={toggleAllVisible}
-                        ref={selectAllRef}
-                        type="checkbox"
-                      />
-                    </th>
+                    {showReorder ? <th className="drag-cell" /> : null}
+                    {showSelection ? (
+                      <th>
+                        <input
+                          aria-label="Select all visible rows"
+                          checked={allVisibleSelected}
+                          onChange={toggleAllVisible}
+                          ref={selectAllRef}
+                          type="checkbox"
+                        />
+                      </th>
+                    ) : null}
                     <th>ID</th>
                     <th>Front</th>
-                    {columns.map(([key, label]) => (
+                    {visibleColumns.map(([key, label]) => (
                       <th
                         className={
                           key === "scrape_status" ? "scrape-status-column" : undefined
@@ -800,14 +840,14 @@ function NotesTable() {
                         </button>
                       </th>
                     ))}
-                    <th>Actions</th>
+                    {showActions ? <th>Actions</th> : null}
                   </tr>
                   <tr>
-                    <th className="drag-cell" />
+                    {showReorder ? <th className="drag-cell" /> : null}
+                    {showSelection ? <th /> : null}
                     <th />
                     <th />
-                    <th />
-                    {columns.map(([key, label]) => (
+                    {visibleColumns.map(([key, label]) => (
                       <th
                         className={
                           key === "scrape_status" ? "scrape-status-column" : undefined
@@ -827,7 +867,7 @@ function NotesTable() {
                         />
                       </th>
                     ))}
-                    <th />
+                    {showActions ? <th /> : null}
                   </tr>
                 </thead>
                 <tbody>
@@ -925,73 +965,77 @@ function NotesTable() {
                           role="button"
                           tabIndex={0}
                         >
-                          <td
-                            className={`drag-cell${canReorder ? " drag-cell--enabled" : ""}`}
-                            onClick={(event) => event.stopPropagation()}
-                          >
-                            {canReorder ? (
-                              <button
-                                aria-label={`Move ${note.denomination}`}
-                                className="drag-handle"
-                                draggable={canReorder}
-                                onClick={(event) => event.stopPropagation()}
-                                onDragEnd={clearDragState}
-                                onDragStart={(event) => {
-                                  const row = rowElementMapRef.current.get(
-                                    note.id,
-                                  );
-
-                                  clearDragPreview();
-                                  event.stopPropagation();
-                                  event.dataTransfer.effectAllowed = "move";
-                                  event.dataTransfer.setData(
-                                    "text/plain",
-                                    String(note.id),
-                                  );
-
-                                  if (row) {
-                                    const preview = row.cloneNode(true);
-                                    preview.classList.add("table-drag-preview");
-                                    preview.style.width = `${row.getBoundingClientRect().width}px`;
-                                    document.body.appendChild(preview);
-                                    dragPreviewRef.current = preview;
-                                    event.dataTransfer.setDragImage(
-                                      preview,
-                                      24,
-                                      24,
+                          {showReorder ? (
+                            <td
+                              className={`drag-cell${canReorder ? " drag-cell--enabled" : ""}`}
+                              onClick={(event) => event.stopPropagation()}
+                            >
+                              {canReorder ? (
+                                <button
+                                  aria-label={`Move ${note.denomination}`}
+                                  className="drag-handle"
+                                  draggable={canReorder}
+                                  onClick={(event) => event.stopPropagation()}
+                                  onDragEnd={clearDragState}
+                                  onDragStart={(event) => {
+                                    const row = rowElementMapRef.current.get(
+                                      note.id,
                                     );
-                                  }
 
-                                  setDraggedNoteId(note.id);
-                                  setDropTarget({
-                                    noteId: note.id,
-                                    placement: "before",
-                                  });
-                                }}
-                                type="button"
-                              >
-                                <span
-                                  className="drag-handle-dots"
-                                  aria-hidden="true"
+                                    clearDragPreview();
+                                    event.stopPropagation();
+                                    event.dataTransfer.effectAllowed = "move";
+                                    event.dataTransfer.setData(
+                                      "text/plain",
+                                      String(note.id),
+                                    );
+
+                                    if (row) {
+                                      const preview = row.cloneNode(true);
+                                      preview.classList.add("table-drag-preview");
+                                      preview.style.width = `${row.getBoundingClientRect().width}px`;
+                                      document.body.appendChild(preview);
+                                      dragPreviewRef.current = preview;
+                                      event.dataTransfer.setDragImage(
+                                        preview,
+                                        24,
+                                        24,
+                                      );
+                                    }
+
+                                    setDraggedNoteId(note.id);
+                                    setDropTarget({
+                                      noteId: note.id,
+                                      placement: "before",
+                                    });
+                                  }}
+                                  type="button"
                                 >
-                                  <span />
-                                  <span />
-                                  <span />
-                                  <span />
-                                  <span />
-                                  <span />
-                                </span>
-                              </button>
-                            ) : null}
-                          </td>
-                          <td onClick={(event) => event.stopPropagation()}>
-                            <input
-                              aria-label={`Select ${note.denomination}`}
-                              checked={selectedIds.includes(note.id)}
-                              onChange={() => toggleNote(note.id)}
-                              type="checkbox"
-                            />
-                          </td>
+                                  <span
+                                    className="drag-handle-dots"
+                                    aria-hidden="true"
+                                  >
+                                    <span />
+                                    <span />
+                                    <span />
+                                    <span />
+                                    <span />
+                                    <span />
+                                  </span>
+                                </button>
+                              ) : null}
+                            </td>
+                          ) : null}
+                          {showSelection ? (
+                            <td onClick={(event) => event.stopPropagation()}>
+                              <input
+                                aria-label={`Select ${note.denomination}`}
+                                checked={selectedIds.includes(note.id)}
+                                onChange={() => toggleNote(note.id)}
+                                type="checkbox"
+                              />
+                            </td>
+                          ) : null}
                           <td>{note.display_order ?? "-"}</td>
                           <td>
                             {frontThumb ? (
@@ -1049,40 +1093,44 @@ function NotesTable() {
                               )}
                             </div>
                           </td>
-                          <td className="scrape-status-column">
-                            <span
-                              aria-label={statusLabel(noteScrapeStatus)}
-                              className={`scrape-badge scrape-badge--${noteScrapeStatus}`}
-                              role="img"
-                              title={statusLabel(noteScrapeStatus)}
-                            >
-                              {statusIcon(noteScrapeStatus)}
-                            </span>
-                          </td>
-                          <td>
-                            <div className="inline-actions">
-                              <button
-                                className="icon-link"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  openEditor(note.id);
-                                }}
-                                type="button"
+                          {showScrapeStatusColumn ? (
+                            <td className="scrape-status-column">
+                              <span
+                                aria-label={statusLabel(noteScrapeStatus)}
+                                className={`scrape-badge scrape-badge--${noteScrapeStatus}`}
+                                role="img"
+                                title={statusLabel(noteScrapeStatus)}
                               >
-                                Edit
-                              </button>
-                              <button
-                                className="icon-link"
-                                onClick={(event) => {
-                                  event.stopPropagation();
-                                  void handleDeleteNote(note.id);
-                                }}
-                                type="button"
-                              >
-                                Delete
-                              </button>
-                            </div>
-                          </td>
+                                {statusIcon(noteScrapeStatus)}
+                              </span>
+                            </td>
+                          ) : null}
+                          {showActions ? (
+                            <td>
+                              <div className="inline-actions">
+                                <button
+                                  className="icon-link"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openEditor(note.id);
+                                  }}
+                                  type="button"
+                                >
+                                  Edit
+                                </button>
+                                <button
+                                  className="icon-link"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    void handleDeleteNote(note.id);
+                                  }}
+                                  type="button"
+                                >
+                                  Delete
+                                </button>
+                              </div>
+                            </td>
+                          ) : null}
                         </tr>
                         {showPlaceholderAfter ? (
                           <tr

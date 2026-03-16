@@ -1,5 +1,6 @@
 import {
   BrowserRouter,
+  Navigate,
   Route,
   Routes,
   useLocation,
@@ -7,6 +8,7 @@ import {
 import { ImportScreen } from "./components/ImportScreen.jsx";
 import { NoteEditForm } from "./components/NoteEditForm.jsx";
 import { NotesTable } from "./components/NotesTable.jsx";
+import { isReadOnlyMode } from "./lib/appMode.js";
 
 function Shell() {
   const { pathname } = useLocation();
@@ -16,8 +18,18 @@ function Shell() {
       <main>
         <Routes>
           <Route element={<NotesTable />} path="/" />
-          <Route element={<ImportScreen />} path="/import" />
-          <Route element={<NoteEditForm />} path="/notes/:id/edit" />
+          <Route
+            element={
+              isReadOnlyMode ? <Navigate replace to="/" /> : <ImportScreen />
+            }
+            path="/import"
+          />
+          <Route
+            element={
+              isReadOnlyMode ? <Navigate replace to="/" /> : <NoteEditForm />
+            }
+            path="/notes/:id/edit"
+          />
         </Routes>
       </main>
     </div>

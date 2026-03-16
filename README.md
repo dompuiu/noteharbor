@@ -98,6 +98,14 @@ Create `apps/server/.env` (loaded automatically via Node's `--env-file` flag):
 | `PORT` | `3001` | Express server port |
 | `PMG_BROWSER_PROFILE_DIR` | `storage/browser_profiles/pmg` | Persistent browser profile path for scraping |
 
+For the web app, Vite exposes client-side variables prefixed with `VITE_`. To enable table-and-slideshow-only mode, create `apps/web/.env` with:
+
+```bash
+VITE_READ_ONLY_MODE=true
+```
+
+When `VITE_READ_ONLY_MODE` is enabled, the UI hides import, add, edit, delete, scrape, reorder, row-selection controls, and the scraped-status column, and redirects `/import` plus `/notes/:id/edit` back to `/`.
+
 ---
 
 ## Database
