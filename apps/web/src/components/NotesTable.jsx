@@ -411,6 +411,23 @@ function NotesTable() {
 
       return [...current, updatedNote];
     });
+
+    setSlideshowNotes((current) => {
+      if (!current.length) {
+        return current;
+      }
+
+      const noteExists = current.some((note) => note.id === updatedNote.id);
+
+      if (!noteExists) {
+        return current;
+      }
+
+      return current.map((note) =>
+        note.id === updatedNote.id ? updatedNote : note,
+      );
+    });
+
     closeEditor();
   }
 
@@ -626,6 +643,7 @@ function NotesTable() {
       {slideshowNotes.length ? (
         <Slideshow
           currentIndex={slideshowIndex}
+          keyboardDisabled={Boolean(editingNoteId || creatingNote)}
           notes={slideshowNotes}
           onChangeIndex={setSlideshowIndex}
           onClose={closeSlideshow}

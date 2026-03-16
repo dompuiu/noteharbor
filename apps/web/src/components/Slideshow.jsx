@@ -187,7 +187,14 @@ function ImagePopover({
   );
 }
 
-function Slideshow({ currentIndex, notes, onChangeIndex, onClose, onEdit }) {
+function Slideshow({
+  currentIndex,
+  keyboardDisabled = false,
+  notes,
+  onChangeIndex,
+  onClose,
+  onEdit,
+}) {
   const [previewState, setPreviewState] = useState(null);
 
   function openPreview(noteIndex, imageKind) {
@@ -253,6 +260,10 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose, onEdit }) {
   }
 
   useEffect(() => {
+    if (keyboardDisabled) {
+      return undefined;
+    }
+
     function onKeyDown(event) {
       if (previewState) {
         return;
@@ -275,7 +286,7 @@ function Slideshow({ currentIndex, notes, onChangeIndex, onClose, onEdit }) {
     window.addEventListener("keydown", onKeyDown);
 
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [notes.length, onClose, previewState]);
+  }, [keyboardDisabled, notes.length, onClose, previewState]);
 
   useEffect(() => {
     setPreviewState((currentPreview) => {
