@@ -2,6 +2,58 @@ const headers = {
   'Content-Type': 'application/json'
 };
 
+const imageFieldNames = [
+  'image_front_full',
+  'image_front_thumbnail',
+  'image_back_full',
+  'image_back_thumbnail'
+];
+
+function isFileValue(value) {
+  return typeof File !== 'undefined' && value instanceof File;
+}
+
+function buildNoteRequestOptions(method, payload) {
+  const shouldUseFormData = Object.values(payload).some(isFileValue);
+
+  if (!shouldUseFormData) {
+    return {
+      method,
+      headers,
+      body: JSON.stringify(payload)
+    };
+  }
+
+  const formData = new FormData();
+
+  Object.entries(payload).forEach(([key, value]) => {
+    if (value == null) {
+      return;
+    }
+
+    if (key === 'tags' && Array.isArray(value)) {
+      value.forEach((tag) => {
+        formData.append('tags', tag);
+      });
+      return;
+    }
+
+    if (imageFieldNames.includes(key)) {
+      if (isFileValue(value)) {
+        formData.append(key, value);
+      }
+      return;
+    }
+
+    formData.append(key, value);
+  });
+
+  return {
+    method,
+    body: formData
+  };
+}
+
 async function handleResponse(response) {
   const payload = await response.json().catch(() => ({}));
 
@@ -33,21 +85,13 @@ async function getNote(id) {
 }
 
 async function createNote(payload) {
-  const response = await fetch('/api/notes', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify(payload)
-  });
+  const response = await fetch('/api/notes', buildNoteRequestOptions('POST', payload));
 
   return handleResponse(response);
 }
 
 async function updateNote(id, payload) {
-  const response = await fetch(`/api/notes/${id}`, {
-    method: 'PUT',
-    headers,
-    body: JSON.stringify(payload)
-  });
+  const response = await fetch(`/api/notes/${id}`, buildNoteRequestOptions('PUT', payload));
 
   return handleResponse(response);
 }

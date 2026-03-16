@@ -10,9 +10,11 @@ const ROOT_DIR = path.resolve(__dirname, '../../..');
 const DATA_DIR = path.join(ROOT_DIR, 'data');
 const IMAGES_DIR = path.join(DATA_DIR, 'images');
 const SCRAPED_IMAGES_DIR = path.join(IMAGES_DIR, 'scraped');
+const NOTE_IMAGES_DIR = path.join(IMAGES_DIR, 'notes');
 const DB_PATH = path.join(DATA_DIR, 'banknotes.db');
 
 fs.mkdirSync(SCRAPED_IMAGES_DIR, { recursive: true });
+fs.mkdirSync(NOTE_IMAGES_DIR, { recursive: true });
 
 const db = new Database(DB_PATH);
 db.pragma('foreign_keys = ON');
@@ -231,6 +233,7 @@ const insertNoteStatement = db.prepare(`
     serial,
     url,
     notes,
+    images,
     created_at,
     updated_at
   )
@@ -245,6 +248,7 @@ const insertNoteStatement = db.prepare(`
     @serial,
     @url,
     @notes,
+    @images,
     datetime('now'),
     datetime('now')
   )
@@ -260,6 +264,7 @@ const updateNoteStatement = db.prepare(`
       serial = @serial,
       url = @url,
       notes = @notes,
+      images = @images,
       updated_at = datetime('now')
   WHERE id = @id
 `);
@@ -520,7 +525,10 @@ function replaceNoteTags(noteId, tagNames) {
 
 function updateNote(note) {
   const transaction = db.transaction((payload) => {
-    updateNoteStatement.run(payload);
+    updateNoteStatement.run({
+      ...payload,
+      images: JSON.stringify(payload.images ?? [])
+    });
     replaceNoteTags(payload.id, payload.tags);
   });
 
@@ -532,6 +540,7 @@ function createNote(note) {
   const transaction = db.transaction((payload) => {
     const result = insertNoteStatement.run({
       ...payload,
+      images: JSON.stringify(payload.images ?? []),
       display_order: getNextDisplayOrder()
     });
     const noteId = Number(result.lastInsertRowid);
