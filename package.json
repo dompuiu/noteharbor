@@ -5,6 +5,8 @@
   "scripts": {
     "dev": "concurrently \"pnpm --filter server dev\" \"pnpm --filter web dev\"",
     "build": "pnpm --filter web build",
+    "build:electron": "pnpm --filter desktop build",
+    "build:electron:win": "pnpm --filter desktop build:win",
     "layout": "tsps --layout layout.yml"
   },
   "devDependencies": {
