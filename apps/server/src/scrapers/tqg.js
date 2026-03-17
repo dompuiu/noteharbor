@@ -1,6 +1,16 @@
 import * as cheerio from 'cheerio';
 import { BaseScraper } from './base.js';
 
+function getQueryFolderName(pageUrl) {
+  try {
+    const { pathname } = new URL(pageUrl);
+    const match = pathname.match(/\/query\/([^/]+)$/i);
+    return match?.[1] || null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeLabel(label) {
   return label
     .toLowerCase()
@@ -55,7 +65,10 @@ class TQGScraper extends BaseScraper {
       });
     });
 
-    const certNumber = this.note.serial || this.note.catalog_number || String(this.note.id);
+    const certNumber = getQueryFolderName(pageUrl)
+      || this.note.serial
+      || this.note.catalog_number
+      || String(this.note.id);
 
     return {
       certNumber,
