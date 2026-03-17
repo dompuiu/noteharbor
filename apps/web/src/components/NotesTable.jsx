@@ -152,6 +152,7 @@ function NotesTable() {
   const rowElementMapRef = useRef(new Map());
   const dragPreviewRef = useRef(null);
   const tableShellRef = useRef(null);
+  const tagsFilterInputRef = useRef(null);
 
   if (initialTableStateRef.current === undefined) {
     initialTableStateRef.current = loadSavedTableState();
@@ -380,6 +381,18 @@ function NotesTable() {
     if (showSelection) {
       setSelectedIds([]);
     }
+  }
+
+  function applyTagFilter(tagName) {
+    setFilters((current) => ({
+      ...current,
+      tags: tagName,
+    }));
+
+    window.requestAnimationFrame(() => {
+      tagsFilterInputRef.current?.focus();
+      tagsFilterInputRef.current?.select();
+    });
   }
 
   function toggleSort(key) {
@@ -857,6 +870,7 @@ function NotesTable() {
                         <input
                           aria-label={`Filter ${label}`}
                           className="filter-input"
+                          ref={key === "tags" ? tagsFilterInputRef : undefined}
                           value={filters[key] ?? ""}
                           onChange={(event) =>
                             setFilters((current) => ({
@@ -1081,12 +1095,17 @@ function NotesTable() {
                             <div className="tag-list">
                               {note.tags.length ? (
                                 note.tags.map((tag) => (
-                                  <span
+                                  <button
                                     className="tag"
                                     key={tag.id || tag.name}
+                                    onClick={(event) => {
+                                      event.stopPropagation();
+                                      applyTagFilter(tag.name);
+                                    }}
+                                    type="button"
                                   >
                                     {tag.name}
-                                  </span>
+                                  </button>
                                 ))
                               ) : (
                                 <span className="muted">-</span>
