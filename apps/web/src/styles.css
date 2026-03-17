@@ -606,6 +606,11 @@ td.drag-cell {
   padding: 6px 12px;
   background: rgba(217, 162, 93, 0.18);
   color: #5b3715;
+  font: inherit;
+}
+
+button.tag {
+  cursor: pointer;
 }
 
 .editable-tag-list {
