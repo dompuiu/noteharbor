@@ -18,6 +18,17 @@ function getScrapePanelTitle(note) {
   return company ? `${company} scrape` : "Scraped details";
 }
 
+function getNoteDisplayLabel(note) {
+  const denomination = String(note?.denomination ?? "").trim();
+  const catalogNumber = String(note?.catalog_number ?? "").trim();
+
+  if (denomination && catalogNumber) {
+    return `${denomination} - ${catalogNumber}`;
+  }
+
+  return denomination || catalogNumber || "Untitled note";
+}
+
 function getScrapedDetailEntries(note) {
   const scrapedData = note.scraped_data;
   const details =
@@ -363,7 +374,7 @@ function Slideshow({
           canGoNext={totalPreviewCount > 1}
           canGoPrevious={totalPreviewCount > 1}
           counterLabel={`${previewSequenceIndex} / ${totalPreviewCount}`}
-          noteLabel={`${previewNote.denomination} - ${previewItem.label}`}
+          noteLabel={`${getNoteDisplayLabel(previewNote)} - ${previewItem.label}`}
           onClose={closePreview}
           onNext={() => movePreview(1)}
           onPrevious={() => movePreview(-1)}
