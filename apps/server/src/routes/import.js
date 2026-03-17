@@ -122,11 +122,12 @@ importRouter.post('/', upload.single('file'), (request, response) => {
     notesToImport.push(note);
   }
 
-  const { imported, updated } = importNotes(notesToImport);
+  const { imported, updated, deleted } = importNotes(notesToImport);
 
   response.json({
     imported,
     updated,
+    deleted,
     ignored,
     total: records.length,
     ordered: notesToImport.length

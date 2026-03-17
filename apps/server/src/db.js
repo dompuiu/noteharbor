@@ -444,6 +444,16 @@ function ensureTag(name) {
   return getTagByNameStatement.get(normalizedName);
 }
 
+function removeManagedNoteImages(noteId) {
+  const noteImagesDir = path.join(NOTE_IMAGES_DIR, String(noteId));
+
+  if (!fs.existsSync(noteImagesDir)) {
+    return;
+  }
+
+  fs.rmSync(noteImagesDir, { recursive: true, force: true });
+}
+
 function importNotes(notes) {
   const transaction = db.transaction((rows) => {
     const existingRows = listImportRowsStatement.all();
@@ -451,6 +461,7 @@ function importNotes(notes) {
     const identityToRow = new Map();
     let importedCount = 0;
     let updatedCount = 0;
+    const deletedIds = [];
     let nextDisplayOrder = 1;
 
     for (const row of existingRows) {
@@ -503,20 +514,29 @@ function importNotes(notes) {
         continue;
       }
 
-      updateDisplayOrderStatement.run({
-        id: row.id,
-        display_order: nextDisplayOrder
-      });
-      nextDisplayOrder += 1;
+      deleteNoteStatement.run(row.id);
+      deletedIds.push(row.id);
     }
 
     return {
       imported: importedCount,
-      updated: updatedCount
+      updated: updatedCount,
+      deleted: deletedIds.length,
+      deletedIds
     };
   });
 
-  return transaction(notes);
+  const result = transaction(notes);
+
+  for (const noteId of result.deletedIds) {
+    removeManagedNoteImages(noteId);
+  }
+
+  return {
+    imported: result.imported,
+    updated: result.updated,
+    deleted: result.deleted
+  };
 }
 
 function getNextDisplayOrder() {
@@ -595,6 +615,7 @@ function deleteNote(id) {
   });
 
   transaction(id, existing.display_order);
+  removeManagedNoteImages(id);
 }
 
 function reorderNotes(ids) {

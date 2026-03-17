@@ -85,7 +85,8 @@ function ImportScreen() {
             <h1>Upload a collection CSV</h1>
             <p>
               Drop a CSV, paste it with Ctrl+V, or choose a file. Existing notes are updated in place,
-              tags are replaced from the CSV, and rows after `Ignore after this line` are skipped.
+              notes missing from the CSV are deleted, tags are replaced from the CSV, and rows after
+              `Ignore after this line` are skipped.
             </p>
           </div>
           <Link className="button" to="/">
@@ -206,6 +207,7 @@ function ImportScreen() {
             <h2>Import finished</h2>
             <p>Added: {result.imported}</p>
             <p>Updated: {result.updated}</p>
+            <p>Deleted: {result.deleted}</p>
             <p>Ignored rows: {result.ignored}</p>
             <p>Rows used for ordering: {result.ordered}</p>
             <p>Total rows scanned: {result.total}</p>
