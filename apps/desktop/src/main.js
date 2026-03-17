@@ -21,11 +21,20 @@ function resolveBundledDataDir() {
 function ensureViewerDataDir() {
   const bundledDataDir = resolveBundledDataDir();
   const targetDataDir = path.join(app.getPath('userData'), 'data');
+  const bundledDbPath = path.join(bundledDataDir, 'banknotes.db');
   const targetDbPath = path.join(targetDataDir, 'banknotes.db');
 
-  if (!fs.existsSync(targetDbPath) && fs.existsSync(bundledDataDir)) {
-    fs.mkdirSync(path.dirname(targetDataDir), { recursive: true });
-    fs.cpSync(bundledDataDir, targetDataDir, { recursive: true });
+  if (fs.existsSync(bundledDataDir) && fs.existsSync(bundledDbPath)) {
+    const bundledDbMtime = fs.statSync(bundledDbPath).mtimeMs;
+    const targetDbMtime = fs.existsSync(targetDbPath)
+      ? fs.statSync(targetDbPath).mtimeMs
+      : -1;
+
+    if (targetDbMtime < bundledDbMtime) {
+      fs.mkdirSync(path.dirname(targetDataDir), { recursive: true });
+      fs.rmSync(targetDataDir, { recursive: true, force: true });
+      fs.cpSync(bundledDataDir, targetDataDir, { recursive: true });
+    }
   }
 
   fs.mkdirSync(targetDataDir, { recursive: true });
