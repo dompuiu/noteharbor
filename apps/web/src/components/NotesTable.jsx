@@ -153,6 +153,7 @@ function NotesTable() {
   const dragPreviewRef = useRef(null);
   const tableShellRef = useRef(null);
   const tagsFilterInputRef = useRef(null);
+  const shouldCloseEditorOverlayRef = useRef(false);
 
   if (initialTableStateRef.current === undefined) {
     initialTableStateRef.current = loadSavedTableState();
@@ -440,6 +441,24 @@ function NotesTable() {
     setCreatingNote(false);
   }
 
+  function handleEditorOverlayMouseDown(event) {
+    shouldCloseEditorOverlayRef.current =
+      event.button === 0 && event.target === event.currentTarget;
+  }
+
+  function handleEditorOverlayClick(event) {
+    const shouldClose =
+      shouldCloseEditorOverlayRef.current &&
+      event.button === 0 &&
+      event.target === event.currentTarget;
+
+    shouldCloseEditorOverlayRef.current = false;
+
+    if (shouldClose) {
+      closeEditor();
+    }
+  }
+
   function handleSaveEditedNote(updatedNote) {
     setNotes((current) => {
       const noteExists = current.some((note) => note.id === updatedNote.id);
@@ -693,7 +712,11 @@ function NotesTable() {
       ) : null}
 
       {editingNoteId || creatingNote ? (
-        <section className="edit-note-overlay" onClick={closeEditor}>
+        <section
+          className="edit-note-overlay"
+          onClick={handleEditorOverlayClick}
+          onMouseDown={handleEditorOverlayMouseDown}
+        >
           <div
             className="edit-note-overlay-frame"
             onClick={(event) => event.stopPropagation()}
