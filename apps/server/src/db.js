@@ -7,7 +7,7 @@ import { fileURLToPath } from 'node:url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '../../..');
-const DATA_DIR = path.resolve(process.env.NOTESSHOW_DATA_DIR || path.join(ROOT_DIR, 'data'));
+const DATA_DIR = path.resolve(process.env.NOTE_HARBOR_DATA_DIR || path.join(ROOT_DIR, 'data'));
 const IMAGES_DIR = path.join(DATA_DIR, 'images');
 const SCRAPED_IMAGES_DIR = path.join(IMAGES_DIR, 'scraped');
 const NOTE_IMAGES_DIR = path.join(IMAGES_DIR, 'notes');

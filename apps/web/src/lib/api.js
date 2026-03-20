@@ -149,7 +149,7 @@ async function downloadArchive() {
   const blob = await response.blob();
   const contentDisposition = response.headers.get('content-disposition') || '';
   const filenameMatch = contentDisposition.match(/filename="?([^\"]+)"?/i);
-  const filename = filenameMatch?.[1] || 'notesshow-archive.zip';
+  const filename = filenameMatch?.[1] || 'noteharbor-archive.zip';
   const objectUrl = window.URL.createObjectURL(blob);
   const link = document.createElement('a');
 

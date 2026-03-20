@@ -3,7 +3,7 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { app, BrowserWindow } from 'electron';
 
-app.setName('Notesshow Viewer');
+app.setName('Note Harbor Viewer');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -49,10 +49,10 @@ async function startEmbeddedServer() {
   const webDistDir = path.join(appRoot, '.build', 'web-dist');
   const dataDir = ensureViewerDataDir();
 
-  process.env.NOTESSHOW_DATA_DIR = dataDir;
-  process.env.NOTESSHOW_WEB_DIST_DIR = webDistDir;
-  process.env.NOTESSHOW_DISABLE_SCRAPING = 'true';
-  process.env.NOTESSHOW_SERVE_WEB_DIST = 'true';
+  process.env.NOTE_HARBOR_DATA_DIR = dataDir;
+  process.env.NOTE_HARBOR_WEB_DIST_DIR = webDistDir;
+  process.env.NOTE_HARBOR_DISABLE_SCRAPING = 'true';
+  process.env.NOTE_HARBOR_SERVE_WEB_DIST = 'true';
 
   const { startServer } = await import(pathToFileURL(serverEntry).href);
   return startServer({ host: '127.0.0.1', port: 0 });

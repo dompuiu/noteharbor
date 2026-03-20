@@ -33,7 +33,7 @@ const columns = [
 ];
 
 const selectCountOptions = [5, 10, 25, 50];
-const tableStateStorageKey = "notesshow.notesTableState";
+const tableStateStorageKey = "noteharbor.notesTableState";
 const validSortKeys = new Set(["id", ...columns.map(([key]) => key)]);
 const rowHeightEstimate = 43;
 
@@ -762,7 +762,7 @@ function NotesTable() {
             <div className="panel-heading panel-heading--compact">
             <div className="panel-heading-copy">
               <p className="eyebrow">Romanian Paper Money Archive</p>
-              <h2>Notes Show</h2>
+              <h2>Note Harbor</h2>
             <p>
               {orderedNotes.length} notes in the current view.
               {showSelection && selectedIds.length

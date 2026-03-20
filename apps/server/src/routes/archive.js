@@ -88,7 +88,7 @@ function findArchiveDataDir(rootDir) {
 }
 
 function createStageDir() {
-  const stageRoot = fs.mkdtempSync(path.join(path.dirname(DATA_DIR), '.notesshow-stage-'));
+  const stageRoot = fs.mkdtempSync(path.join(path.dirname(DATA_DIR), '.noteharbor-stage-'));
   const stagedDataDir = path.join(stageRoot, path.basename(DATA_DIR));
   fs.mkdirSync(stagedDataDir, { recursive: true });
   return { stageRoot, stagedDataDir };
@@ -110,7 +110,7 @@ function prepareStagedDataDir(sourceDataDir) {
 
 function swapInImportedData(stagedDataDir) {
   const dataParentDir = path.dirname(DATA_DIR);
-  const backupRoot = fs.mkdtempSync(path.join(dataParentDir, '.notesshow-backup-'));
+  const backupRoot = fs.mkdtempSync(path.join(dataParentDir, '.noteharbor-backup-'));
   const backupDataDir = path.join(backupRoot, path.basename(DATA_DIR));
   let previousDataMoved = false;
 
@@ -147,7 +147,7 @@ function swapInImportedData(stagedDataDir) {
 }
 
 archiveRouter.get('/export', async (_request, response) => {
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'notesshow-export-'));
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'noteharbor-export-'));
   const snapshotDbPath = path.join(tempRoot, 'banknotes.db');
 
   try {
@@ -155,7 +155,7 @@ archiveRouter.get('/export', async (_request, response) => {
       await backupDatabase(snapshotDbPath);
 
       response.setHeader('Content-Type', 'application/zip');
-      response.setHeader('Content-Disposition', `attachment; filename="notesshow-archive-${new Date().toISOString().slice(0, 10)}.zip"`);
+      response.setHeader('Content-Disposition', `attachment; filename="noteharbor-archive-${new Date().toISOString().slice(0, 10)}.zip"`);
 
       const archive = archiver('zip', { zlib: { level: 9 } });
 
@@ -214,7 +214,7 @@ archiveRouter.post('/import', upload.single('file'), async (request, response) =
     return;
   }
 
-  const extractedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'notesshow-import-'));
+  const extractedRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'noteharbor-import-'));
   let stageRoot = null;
 
   try {

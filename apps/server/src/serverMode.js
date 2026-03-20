@@ -4,7 +4,7 @@ function parseBooleanEnv(value) {
 }
 
 function shouldDisableScraping() {
-  return parseBooleanEnv(process.env.NOTESSHOW_DISABLE_SCRAPING);
+  return parseBooleanEnv(process.env.NOTE_HARBOR_DISABLE_SCRAPING);
 }
 
 function rejectScrapingDisabled(response) {
