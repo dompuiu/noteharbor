@@ -3,7 +3,6 @@
 /.venv
 .env
 apps/*/dist/
-data/
+/data
 apps/*/.env
 apps/server/storage
-data
