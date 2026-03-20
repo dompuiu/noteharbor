@@ -155,6 +155,7 @@ function pickImage(note, type, variant = "full") {
 function NotesTable() {
   const initialTableStateRef = useRef(undefined);
   const rowElementMapRef = useRef(new Map());
+  const thumbPreviewElementMapRef = useRef(new Map());
   const dragPreviewRef = useRef(null);
   const tableShellRef = useRef(null);
   const tagsFilterInputRef = useRef(null);
@@ -197,6 +198,7 @@ function NotesTable() {
   const [creatingNote, setCreatingNote] = useState(false);
   const [draggedNoteId, setDraggedNoteId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
+  const [thumbPreviewState, setThumbPreviewState] = useState(null);
   const selectAllRef = useRef(null);
   const showSelection = true;
   const showReorder = true;
@@ -391,6 +393,57 @@ function NotesTable() {
     rowVirtualizer.scrollToOffset(0);
   }, [filters, rowVirtualizer, sortDirection, sortKey]);
 
+  useEffect(() => {
+    if (!thumbPreviewState) {
+      return undefined;
+    }
+
+    const shell = tableShellRef.current;
+
+    if (!shell) {
+      return undefined;
+    }
+
+    function updateThumbPreviewPosition() {
+      const thumbElement = thumbPreviewElementMapRef.current.get(
+        thumbPreviewState.noteId,
+      );
+
+      if (!thumbElement) {
+        setThumbPreviewState(null);
+        return;
+      }
+
+      const shellBounds = shell.getBoundingClientRect();
+      const thumbBounds = thumbElement.getBoundingClientRect();
+      const headerBottom =
+        shell.querySelector("thead")?.getBoundingClientRect().bottom ?? shellBounds.top;
+      const previewHeight = 138;
+      const desiredTop = thumbBounds.top + thumbBounds.height / 2 - previewHeight / 2;
+      const minTop = Math.max(shellBounds.top + 8, headerBottom + 8);
+      const maxTop = shellBounds.bottom - previewHeight - 8;
+      const clampedTop = Math.min(Math.max(desiredTop, minTop), maxTop);
+      const offsetY = Math.round(clampedTop - desiredTop);
+
+      setThumbPreviewState((current) =>
+        current && current.noteId === thumbPreviewState.noteId
+          ? current.offsetY === offsetY
+            ? current
+            : { ...current, offsetY }
+          : current,
+      );
+    }
+
+    updateThumbPreviewPosition();
+    shell.addEventListener("scroll", updateThumbPreviewPosition, { passive: true });
+    window.addEventListener("resize", updateThumbPreviewPosition);
+
+    return () => {
+      shell.removeEventListener("scroll", updateThumbPreviewPosition);
+      window.removeEventListener("resize", updateThumbPreviewPosition);
+    };
+  }, [thumbPreviewState]);
+
   function resetTableState() {
     setFilters({});
     setSortKey("id");
@@ -410,6 +463,16 @@ function NotesTable() {
       tagsFilterInputRef.current?.focus();
       tagsFilterInputRef.current?.select();
     });
+  }
+
+  function showThumbPreview(noteId) {
+    setThumbPreviewState({ noteId, offsetY: 0 });
+  }
+
+  function hideThumbPreview(noteId) {
+    setThumbPreviewState((current) =>
+      current?.noteId === noteId ? null : current,
+    );
   }
 
   function toggleSort(key) {
@@ -1123,14 +1186,44 @@ function NotesTable() {
                           <td>{note.display_order ?? "-"}</td>
                           <td>
                             {frontThumb ? (
-                              <span className="table-thumb-wrap">
+                              <span
+                                className="table-thumb-wrap"
+                                onBlur={(event) => {
+                                  if (!event.currentTarget.contains(event.relatedTarget)) {
+                                    hideThumbPreview(note.id);
+                                  }
+                                }}
+                                onFocus={() => showThumbPreview(note.id)}
+                                onMouseEnter={() => showThumbPreview(note.id)}
+                                onMouseLeave={() => hideThumbPreview(note.id)}
+                                ref={(element) => {
+                                  if (element) {
+                                    thumbPreviewElementMapRef.current.set(note.id, element);
+                                  } else {
+                                    thumbPreviewElementMapRef.current.delete(note.id);
+                                  }
+                                }}
+                              >
                                 <img
                                   alt={`${note.denomination} front`}
                                   className="table-thumb"
                                   src={frontThumb}
                                 />
                                 {frontPreview ? (
-                                  <span className="table-thumb-preview">
+                                  <span
+                                    className={`table-thumb-preview${
+                                      thumbPreviewState?.noteId === note.id
+                                        ? " is-visible"
+                                        : ""
+                                    }`}
+                                    style={{
+                                      "--table-thumb-preview-offset": `${
+                                        thumbPreviewState?.noteId === note.id
+                                          ? thumbPreviewState.offsetY
+                                          : 0
+                                      }px`,
+                                    }}
+                                  >
                                     <img
                                       alt={`${note.denomination} preview`}
                                       src={frontPreview}
