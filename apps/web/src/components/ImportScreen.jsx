@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
-import { downloadArchive, getOperationStatus, importArchive, importCsv } from '../lib/api.js';
+import { clearAppData, downloadArchive, getOperationStatus, importArchive, importCsv } from '../lib/api.js';
 
 function getPastedCsvFile(event) {
   const items = Array.from(event.clipboardData?.items ?? []);
@@ -55,6 +55,7 @@ function ImportScreen() {
   const [submittingCsv, setSubmittingCsv] = useState(false);
   const [submittingArchive, setSubmittingArchive] = useState(false);
   const [exportingArchive, setExportingArchive] = useState(false);
+  const [clearingData, setClearingData] = useState(false);
   const [operationStatus, setOperationStatus] = useState({
     currentOperation: 'idle',
     isBusy: false,
@@ -196,6 +197,33 @@ function ImportScreen() {
       setError(exportError.message);
     } finally {
       setExportingArchive(false);
+    }
+  }
+
+  async function handleClearData() {
+    if (isBusy) {
+      setError(busyMessage);
+      return;
+    }
+
+    const confirmed = window.confirm('Delete all current app data and pictures? This cannot be undone.');
+
+    if (!confirmed) {
+      return;
+    }
+
+    setClearingData(true);
+    setError('');
+    setCsvResult(null);
+    setArchiveResult(null);
+
+    try {
+      await clearAppData();
+      window.location.assign('/');
+    } catch (clearError) {
+      setError(clearError.message);
+    } finally {
+      setClearingData(false);
     }
   }
 
@@ -357,6 +385,9 @@ function ImportScreen() {
                 Export downloads a `.zip` with `banknotes.db` and the `images/` folder. Importing that
                 archive replaces the current app data and reloads the app state.
               </p>
+              <p className="warning-text import-card-warning">
+                You can also delete the current app data and start from an empty collection.
+              </p>
             </div>
 
             <div className="field-block full-span">
@@ -452,6 +483,9 @@ function ImportScreen() {
               </button>
               <button className="button button-primary" disabled={submittingArchive || isBusy || !archiveSource} type="submit">
                 {submittingArchive ? 'Importing archive...' : 'Import archive'}
+              </button>
+              <button className="button button-danger" disabled={clearingData || isBusy} onClick={handleClearData} type="button">
+                {clearingData ? 'Deleting data...' : 'Delete current data'}
               </button>
             </div>
           </form>

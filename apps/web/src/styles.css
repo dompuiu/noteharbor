@@ -137,6 +137,11 @@ button {
   color: #fff8ef;
 }
 
+.button-danger {
+  background: linear-gradient(135deg, #8b2a20, #b3483b);
+  color: #fff7f4;
+}
+
 .screen-stack {
   display: flex;
   flex-direction: column;
@@ -674,6 +679,10 @@ button.tag {
 .warning-text {
   color: #7a5200;
   margin: 0;
+}
+
+.import-card-warning {
+  margin-top: 8px;
 }
 
 .button:disabled,

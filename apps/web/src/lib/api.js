@@ -168,6 +168,14 @@ async function getOperationStatus() {
   return handleResponse(response);
 }
 
+async function clearAppData() {
+  const response = await fetch('/api/archive/data', {
+    method: 'DELETE'
+  });
+
+  return handleResponse(response);
+}
+
 async function getTags() {
   const response = await fetch('/api/tags/suggestions');
   return handleResponse(response);
@@ -189,6 +197,7 @@ async function getScrapeStatus() {
 }
 
 export {
+  clearAppData,
   createNote,
   deleteNote,
   downloadArchive,
