@@ -3,16 +3,16 @@ function parseBooleanEnv(value) {
   return ['1', 'true', 'yes', 'on'].includes(normalized);
 }
 
-function shouldUseReadOnlyMode() {
-  return parseBooleanEnv(process.env.NOTESSHOW_READ_ONLY_MODE);
+function shouldDisableScraping() {
+  return parseBooleanEnv(process.env.NOTESSHOW_DISABLE_SCRAPING);
 }
 
-function rejectReadOnly(response) {
-  response.status(403).json({ error: 'This build is read only.' });
+function rejectScrapingDisabled(response) {
+  response.status(403).json({ error: 'Scraping is disabled in this build.' });
 }
 
 export {
   parseBooleanEnv,
-  rejectReadOnly,
-  shouldUseReadOnlyMode
+  rejectScrapingDisabled,
+  shouldDisableScraping
 };

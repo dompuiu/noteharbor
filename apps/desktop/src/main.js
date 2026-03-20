@@ -49,7 +49,7 @@ async function startEmbeddedServer() {
 
   process.env.NOTESSHOW_DATA_DIR = dataDir;
   process.env.NOTESSHOW_WEB_DIST_DIR = webDistDir;
-  process.env.NOTESSHOW_READ_ONLY_MODE = 'true';
+  process.env.NOTESSHOW_DISABLE_SCRAPING = 'true';
   process.env.NOTESSHOW_SERVE_WEB_DIST = 'true';
 
   const { startServer } = await import(pathToFileURL(serverEntry).href);

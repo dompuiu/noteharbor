@@ -6,6 +6,6 @@ function parseBooleanEnv(value) {
   return ["1", "true", "yes", "on"].includes(normalized);
 }
 
-const isReadOnlyMode = parseBooleanEnv(import.meta.env.VITE_READ_ONLY_MODE);
+const isScrapingDisabled = parseBooleanEnv(import.meta.env.VITE_DISABLE_SCRAPING);
 
-export { isReadOnlyMode };
+export { isScrapingDisabled };

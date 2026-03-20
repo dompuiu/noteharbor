@@ -4,11 +4,12 @@ import { Link } from "react-router-dom";
 import {
   deleteNote,
   getNotes,
+  getOperationStatus,
   reorderNotes as saveNotesOrder,
   getScrapeStatus,
   startScrape,
 } from "../lib/api.js";
-import { isReadOnlyMode } from "../lib/appMode.js";
+import { isScrapingDisabled } from "../lib/appMode.js";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 
@@ -16,7 +17,7 @@ export function HomeHero() {
   return null;
 }
 
-const columns = [
+const baseColumns = [
   ["denomination", "Denomination"],
   ["issue_date", "Date"],
   ["catalog_number", "Catalog #"],
@@ -24,6 +25,10 @@ const columns = [
   ["grade", "Grade"],
   ["serial", "Serial"],
   ["tags", "Tags"],
+];
+const scrapeStatusColumn = ["scrape_status", "Scraped"];
+const columns = [
+  ...baseColumns,
   ["scrape_status", "Scraped"],
 ];
 
@@ -173,8 +178,14 @@ function NotesTable() {
     () => initialTableStateRef.current?.selectedIds ?? [],
   );
   const [selectNextCount, setSelectNextCount] = useState(10);
-  const [bulkAction, setBulkAction] = useState("scrape");
+  const [bulkAction, setBulkAction] = useState(
+    isScrapingDisabled ? "delete" : "scrape",
+  );
   const [scrapeJob, setScrapeJob] = useState(null);
+  const [operationStatus, setOperationStatus] = useState({
+    currentOperation: "idle",
+    isBusy: false,
+  });
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -187,14 +198,11 @@ function NotesTable() {
   const [draggedNoteId, setDraggedNoteId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const selectAllRef = useRef(null);
-  const showSelection = !isReadOnlyMode;
-  const showReorder = !isReadOnlyMode;
-  const showActions = !isReadOnlyMode;
+  const showSelection = true;
+  const showReorder = true;
+  const showActions = true;
   const visibleColumns = useMemo(
-    () =>
-      isReadOnlyMode
-        ? columns.filter(([key]) => key !== "scrape_status")
-        : columns,
+    () => (isScrapingDisabled ? baseColumns : [...baseColumns, scrapeStatusColumn]),
     [],
   );
   const showScrapeStatusColumn = visibleColumns.some(
@@ -216,13 +224,25 @@ function NotesTable() {
   useEffect(() => {
     let active = true;
 
-    Promise.all([getNotes(), getScrapeStatus()])
-      .then(([notesPayload, statusPayload]) => {
-        if (active) {
-          setNotes(notesPayload.notes);
-          setScrapeJob(activeScrapeJob(statusPayload));
-        }
-      })
+    const initialLoad = isScrapingDisabled
+      ? Promise.all([getNotes(), getOperationStatus()]).then(([notesPayload, operationPayload]) => {
+          if (active) {
+            setNotes(notesPayload.notes);
+            setScrapeJob(null);
+            setOperationStatus(operationPayload);
+          }
+        })
+      : Promise.all([getNotes(), getScrapeStatus(), getOperationStatus()]).then(
+          ([notesPayload, statusPayload, operationPayload]) => {
+            if (active) {
+              setNotes(notesPayload.notes);
+              setScrapeJob(activeScrapeJob(statusPayload));
+              setOperationStatus(operationPayload);
+            }
+          },
+        );
+
+    initialLoad
       .catch((fetchError) => {
         if (active) {
           setLoadError(fetchError.message);
@@ -240,39 +260,35 @@ function NotesTable() {
   }, []);
 
   useEffect(() => {
-    if (isReadOnlyMode) {
-      setSelectedIds([]);
-    }
-  }, []);
-
-  useEffect(() => {
     setSelectedIds((current) =>
       current.filter((id) => notes.some((note) => note.id === id)),
     );
   }, [notes]);
 
   useEffect(() => {
-    if (!scrapeJob) {
+    if (isScrapingDisabled || !operationStatus.isBusy) {
       return undefined;
     }
 
     const timer = window.setInterval(async () => {
       try {
-        const [nextStatus, notesPayload] = await Promise.all([
+        const [nextStatus, notesPayload, nextOperationStatus] = await Promise.all([
           getScrapeStatus(),
           getNotes(),
+          getOperationStatus(),
         ]);
         const nextScrapeJob = activeScrapeJob(nextStatus);
 
         setNotes(notesPayload.notes);
         setScrapeJob(nextScrapeJob);
+        setOperationStatus(nextOperationStatus);
       } catch {
         // Ignore transient polling errors.
       }
     }, 2000);
 
     return () => window.clearInterval(timer);
-  }, [scrapeJob]);
+  }, [operationStatus.isBusy, scrapeJob]);
 
   useEffect(() => {
     if (!editingNoteId && !creatingNote) {
@@ -653,6 +669,16 @@ function NotesTable() {
         return;
       }
 
+      if (isScrapingDisabled) {
+        return;
+      }
+
+      if (operationStatus.isBusy) {
+        throw new Error(
+          `Scraping is unavailable while ${String(operationStatus.currentOperation).replace(/_/g, " ")} is in progress.`,
+        );
+      }
+
       const payload = await startScrape(selectedIds);
       setScrapeJob({
         status: "running",
@@ -733,7 +759,7 @@ function NotesTable() {
       ) : null}
 
       <div className="panel">
-          <div className="panel-heading panel-heading--compact">
+            <div className="panel-heading panel-heading--compact">
             <div className="panel-heading-copy">
               <p className="eyebrow">Romanian Paper Money Archive</p>
               <h2>Notes Show</h2>
@@ -744,25 +770,36 @@ function NotesTable() {
                 : ""}
             </p>
             </div>
-            {!isReadOnlyMode ? (
-              <div className="inline-actions">
-                <button
-                  className="button button-primary"
-                  onClick={openCreateNote}
-                  type="button"
-                >
-                  Add banknote
-                </button>
-                <Link className="button" to="/import">
-                  Import CSV
-                </Link>
-              </div>
-            ) : null}
+            <div className="inline-actions">
+              <button
+                className="button button-primary"
+                onClick={openCreateNote}
+                type="button"
+              >
+                Add banknote
+              </button>
+              <Link
+                className={`button${operationStatus.isBusy ? " button-disabled" : ""}`}
+                onClick={(event) => {
+                  if (operationStatus.isBusy) {
+                    event.preventDefault();
+                  }
+                }}
+                to="/import"
+              >
+                Import / Export
+              </Link>
+            </div>
           </div>
 
         {loading ? <p>Loading notes...</p> : null}
         {loadError ? <p className="error-text">{loadError}</p> : null}
         {actionError ? <p className="error-text">{actionError}</p> : null}
+        {operationStatus.isBusy ? (
+          <p className="warning-text">
+            Current operation: {String(operationStatus.currentOperation).replace(/_/g, " ")}.
+          </p>
+        ) : null}
 
         {!loading && !loadError ? (
           <>
@@ -777,7 +814,7 @@ function NotesTable() {
                     Reset filters, sorting, and selection
                   </button>
                 ) : null}
-                {!isReadOnlyMode ? (
+                {!isScrapingDisabled ? (
                   <>
                     <select
                       aria-label="Select next count"
@@ -795,6 +832,7 @@ function NotesTable() {
                     </select>
                     <button
                       className="button"
+                      disabled={operationStatus.isBusy}
                       onClick={selectNextUnscraped}
                       type="button"
                     >
@@ -803,16 +841,14 @@ function NotesTable() {
                   </>
                 ) : null}
               </div>
-              {!isReadOnlyMode ? (
-                <p className="table-helper-text">
-                  {reorderLoading
-                    ? "Saving manual order..."
-                    : canReorder
-                      ? "Drag rows from the handle to change the default order."
-                      : "Reordering is available only in the default unfiltered view."}
-                </p>
-              ) : null}
-              {!isReadOnlyMode && selectedIds.length ? (
+              <p className="table-helper-text">
+                {reorderLoading
+                  ? "Saving manual order..."
+                  : canReorder
+                    ? "Drag rows from the handle to change the default order."
+                    : "Reordering is available only in the default unfiltered view."}
+              </p>
+              {selectedIds.length ? (
                 <div className="inline-select-group inline-select-group--bulk">
                   <select
                     aria-label="Bulk action"
@@ -820,12 +856,14 @@ function NotesTable() {
                     onChange={(event) => setBulkAction(event.target.value)}
                     value={bulkAction}
                   >
-                    <option value="scrape">Scrape selected</option>
+                    {!isScrapingDisabled ? (
+                      <option value="scrape">Scrape selected</option>
+                    ) : null}
                     <option value="delete">Delete selected</option>
                   </select>
                   <button
                     className="button button-primary"
-                    disabled={bulkLoading || Boolean(scrapeJob)}
+                    disabled={bulkLoading || operationStatus.isBusy || Boolean(scrapeJob)}
                     onClick={handleBulkAction}
                     type="button"
                   >

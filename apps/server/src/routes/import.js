@@ -2,7 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { parse } from 'csv-parse/sync';
 import { importNotes } from '../db.js';
-import { rejectReadOnly, shouldUseReadOnlyMode } from '../serverMode.js';
+import { withExclusiveOperation } from '../operationState.js';
 
 const importRouter = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -71,12 +71,7 @@ function getCsvSource(request) {
   return null;
 }
 
-importRouter.post('/', upload.single('file'), (request, response) => {
-  if (shouldUseReadOnlyMode()) {
-    rejectReadOnly(response);
-    return;
-  }
-
+importRouter.post('/', upload.single('file'), async (request, response) => {
   const source = getCsvSource(request);
 
   if (!source) {
@@ -84,54 +79,62 @@ importRouter.post('/', upload.single('file'), (request, response) => {
     return;
   }
 
-  const records = parse(source, {
-    columns: false,
-    bom: true,
-    skip_empty_lines: false,
-    relax_column_count: true,
-    trim: true
-  });
+  try {
+    const payload = await withExclusiveOperation('importing_csv', null, async () => {
+      const records = parse(source, {
+        columns: false,
+        bom: true,
+        skip_empty_lines: false,
+        relax_column_count: true,
+        trim: true
+      });
 
-  let ignored = 0;
-  const notesToImport = [];
+      let ignored = 0;
+      const notesToImport = [];
 
-  for (let index = 0; index < records.length; index += 1) {
-    const rawRow = records[index];
+      for (let index = 0; index < records.length; index += 1) {
+        const rawRow = records[index];
 
-    if (isIgnoreAfterRow(rawRow)) {
-      ignored += records.length - index;
-      break;
-    }
+        if (isIgnoreAfterRow(rawRow)) {
+          ignored += records.length - index;
+          break;
+        }
 
-    if (isHeaderRow(rawRow)) {
-      continue;
-    }
+        if (isHeaderRow(rawRow)) {
+          continue;
+        }
 
-    const note = mapRow(rawRow);
+        const note = mapRow(rawRow);
 
-    if (isEmptyRow(note)) {
-      ignored += 1;
-      continue;
-    }
+        if (isEmptyRow(note)) {
+          ignored += 1;
+          continue;
+        }
 
-    if (!isLikelyBanknote(note)) {
-      ignored += 1;
-      continue;
-    }
+        if (!isLikelyBanknote(note)) {
+          ignored += 1;
+          continue;
+        }
 
-    notesToImport.push(note);
+        notesToImport.push(note);
+      }
+
+      const { imported, updated, deleted } = importNotes(notesToImport);
+
+      return {
+        imported,
+        updated,
+        deleted,
+        ignored,
+        total: records.length,
+        ordered: notesToImport.length
+      };
+    });
+
+    response.json(payload);
+  } catch (error) {
+    response.status(error.statusCode || 500).json({ error: error.message, currentOperation: error.currentOperation });
   }
-
-  const { imported, updated, deleted } = importNotes(notesToImport);
-
-  response.json({
-    imported,
-    updated,
-    deleted,
-    ignored,
-    total: records.length,
-    ordered: notesToImport.length
-  });
 });
 
 export { importRouter };

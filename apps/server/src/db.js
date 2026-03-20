@@ -13,165 +13,6 @@ const SCRAPED_IMAGES_DIR = path.join(IMAGES_DIR, 'scraped');
 const NOTE_IMAGES_DIR = path.join(IMAGES_DIR, 'notes');
 const DB_PATH = path.join(DATA_DIR, 'banknotes.db');
 
-fs.mkdirSync(SCRAPED_IMAGES_DIR, { recursive: true });
-fs.mkdirSync(NOTE_IMAGES_DIR, { recursive: true });
-
-const db = new Database(DB_PATH);
-db.pragma('foreign_keys = ON');
-
-db.exec(`
-  CREATE TABLE IF NOT EXISTS banknotes (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    display_order INTEGER,
-    denomination TEXT,
-    issue_date TEXT,
-    catalog_number TEXT,
-    grading_company TEXT,
-    grade TEXT,
-    watermark TEXT,
-    serial TEXT,
-    url TEXT,
-    notes TEXT,
-    scraped_data TEXT,
-    images TEXT,
-    scrape_status TEXT DEFAULT 'pending',
-    scrape_error TEXT,
-    created_at TEXT DEFAULT (datetime('now')),
-    updated_at TEXT DEFAULT (datetime('now'))
-  );
-
-  CREATE TABLE IF NOT EXISTS tags (
-    id INTEGER PRIMARY KEY AUTOINCREMENT,
-    name TEXT NOT NULL UNIQUE
-  );
-
-  CREATE TABLE IF NOT EXISTS banknote_tags (
-    banknote_id INTEGER NOT NULL REFERENCES banknotes(id) ON DELETE CASCADE,
-    tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
-    PRIMARY KEY (banknote_id, tag_id)
-  );
-
-  CREATE TABLE IF NOT EXISTS slideshow_sessions (
-    token TEXT PRIMARY KEY,
-    ids TEXT NOT NULL,
-    created_at TEXT DEFAULT (datetime('now'))
-  );
-`);
-
-const banknotesTableDefinition = db.prepare(`
-  SELECT sql
-  FROM sqlite_master
-  WHERE type = 'table' AND name = 'banknotes'
-`).get();
-
-if (/UNIQUE\s*\(\s*catalog_number\s*,\s*serial\s*\)/i.test(banknotesTableDefinition?.sql ?? '')) {
-  db.exec(`
-    PRAGMA foreign_keys = OFF;
-
-    CREATE TABLE banknotes_new (
-      id INTEGER PRIMARY KEY AUTOINCREMENT,
-      display_order INTEGER,
-      denomination TEXT,
-      issue_date TEXT,
-      catalog_number TEXT,
-      grading_company TEXT,
-      grade TEXT,
-      watermark TEXT,
-      serial TEXT,
-      url TEXT,
-      notes TEXT,
-      scraped_data TEXT,
-      images TEXT,
-      scrape_status TEXT DEFAULT 'pending',
-      scrape_error TEXT,
-      created_at TEXT DEFAULT (datetime('now')),
-      updated_at TEXT DEFAULT (datetime('now'))
-    );
-
-    INSERT INTO banknotes_new (
-      id,
-      display_order,
-      denomination,
-      issue_date,
-      catalog_number,
-      grading_company,
-      grade,
-      watermark,
-      serial,
-      url,
-      notes,
-      scraped_data,
-      images,
-      scrape_status,
-      scrape_error,
-      created_at,
-      updated_at
-    )
-    SELECT
-      id,
-      display_order,
-      denomination,
-      issue_date,
-      catalog_number,
-      grading_company,
-      grade,
-      watermark,
-      serial,
-      url,
-      notes,
-      scraped_data,
-      images,
-      scrape_status,
-      scrape_error,
-      created_at,
-      updated_at
-    FROM banknotes;
-
-    DROP TABLE banknotes;
-    ALTER TABLE banknotes_new RENAME TO banknotes;
-
-    PRAGMA foreign_keys = ON;
-  `);
-}
-
-const banknoteColumns = db.prepare(`PRAGMA table_info(banknotes)`).all();
-
-if (!banknoteColumns.some((column) => column.name === 'display_order')) {
-  db.exec(`ALTER TABLE banknotes ADD COLUMN display_order INTEGER`);
-}
-
-const assignMissingDisplayOrderStatement = db.prepare(`
-  UPDATE banknotes
-  SET display_order = @display_order
-  WHERE id = @id
-`);
-
-const missingDisplayOrderRows = db.prepare(`
-  SELECT id
-  FROM banknotes
-  WHERE display_order IS NULL
-  ORDER BY id ASC
-`).all();
-
-if (missingDisplayOrderRows.length) {
-  const maxDisplayOrderRow = db
-    .prepare(`SELECT COALESCE(MAX(display_order), 0) AS value FROM banknotes`)
-    .get();
-  let nextDisplayOrder = Number(maxDisplayOrderRow?.value ?? 0) + 1;
-
-  const backfillDisplayOrder = db.transaction((rows) => {
-    for (const row of rows) {
-      assignMissingDisplayOrderStatement.run({
-        id: row.id,
-        display_order: nextDisplayOrder
-      });
-      nextDisplayOrder += 1;
-    }
-  });
-
-  backfillDisplayOrder(missingDisplayOrderRows);
-}
-
 const noteFields = `
   id,
   display_order,
@@ -192,149 +33,376 @@ const noteFields = `
   updated_at
 `;
 
-const listNotesStatement = db.prepare(`SELECT ${noteFields} FROM banknotes ORDER BY display_order ASC, id ASC`);
-const getNoteStatement = db.prepare(`SELECT ${noteFields} FROM banknotes WHERE id = ?`);
-const listTagsForNotesStatement = db.prepare(`
-  SELECT bt.banknote_id, t.id, t.name
-  FROM banknote_tags bt
-  INNER JOIN tags t ON t.id = bt.tag_id
-  ORDER BY t.name COLLATE NOCASE ASC
-`);
-const listAllTagsStatement = db.prepare(`
-  SELECT DISTINCT t.id, t.name
-  FROM tags t
-  INNER JOIN banknote_tags bt ON bt.tag_id = t.id
-  ORDER BY t.name COLLATE NOCASE ASC
-`);
-const insertTagStatement = db.prepare(`INSERT OR IGNORE INTO tags (name) VALUES (?)`);
-const getTagByNameStatement = db.prepare(`SELECT id, name FROM tags WHERE name = ?`);
-const clearNoteTagsStatement = db.prepare(`DELETE FROM banknote_tags WHERE banknote_id = ?`);
-const insertNoteTagStatement = db.prepare(`INSERT OR IGNORE INTO banknote_tags (banknote_id, tag_id) VALUES (?, ?)`);
-const upsertBanknoteStatement = db.prepare(`
-  INSERT INTO banknotes (
-    display_order,
-    denomination,
-    issue_date,
-    catalog_number,
-    grading_company,
-    grade,
-    watermark,
-    serial,
-    url,
-    notes,
-    updated_at
-  )
-  VALUES (@display_order, @denomination, @issue_date, @catalog_number, @grading_company, @grade, @watermark, @serial, @url, @notes, datetime('now'))
-`);
-const insertNoteStatement = db.prepare(`
-  INSERT INTO banknotes (
-    display_order,
-    denomination,
-    issue_date,
-    catalog_number,
-    grading_company,
-    grade,
-    watermark,
-    serial,
-    url,
-    notes,
-    images,
-    created_at,
-    updated_at
-  )
-  VALUES (
-    @display_order,
-    @denomination,
-    @issue_date,
-    @catalog_number,
-    @grading_company,
-    @grade,
-    @watermark,
-    @serial,
-    @url,
-    @notes,
-    @images,
-    datetime('now'),
-    datetime('now')
-  )
-`);
-const updateNoteStatement = db.prepare(`
-  UPDATE banknotes
-  SET denomination = @denomination,
-      issue_date = @issue_date,
-      catalog_number = @catalog_number,
-      grading_company = @grading_company,
-      grade = @grade,
-      watermark = @watermark,
-      serial = @serial,
-      url = @url,
-      notes = @notes,
-      images = @images,
-      updated_at = datetime('now')
-  WHERE id = @id
-`);
-const updateScrapeStatement = db.prepare(`
-  UPDATE banknotes
-  SET scraped_data = @scraped_data,
-      images = @images,
-      scrape_status = @scrape_status,
-      scrape_error = @scrape_error,
-      updated_at = datetime('now')
-  WHERE id = @id
-`);
-const deleteNoteStatement = db.prepare(`DELETE FROM banknotes WHERE id = ?`);
-const compactDisplayOrderAfterDeleteStatement = db.prepare(`
-  UPDATE banknotes
-  SET display_order = display_order - 1,
-      updated_at = datetime('now')
-  WHERE display_order > ?
-`);
-const maxDisplayOrderStatement = db.prepare(`SELECT COALESCE(MAX(display_order), 0) AS value FROM banknotes`);
-const updateDisplayOrderStatement = db.prepare(`
-  UPDATE banknotes
-  SET display_order = @display_order,
-      updated_at = datetime('now')
-  WHERE id = @id
-`);
-const listImportRowsStatement = db.prepare(`
-  SELECT
-    id,
-    display_order,
-    denomination,
-    issue_date,
-    catalog_number,
-    grading_company,
-    grade,
-    watermark,
-    serial,
-    url,
-    notes
-  FROM banknotes
-  ORDER BY display_order ASC, id ASC
-`);
-const updateImportedNoteStatement = db.prepare(`
-  UPDATE banknotes
-  SET denomination = @denomination,
-      issue_date = @issue_date,
-      catalog_number = @catalog_number,
-      grading_company = @grading_company,
-      grade = @grade,
-      watermark = @watermark,
-      serial = @serial,
-      url = @url,
-      notes = @notes,
-      updated_at = datetime('now')
-  WHERE id = @id
-`);
-const insertSlideshowSessionStatement = db.prepare(`
-  INSERT INTO slideshow_sessions (token, ids, created_at)
-  VALUES (@token, @ids, datetime('now'))
-`);
-const getSlideshowSessionStatement = db.prepare(`SELECT token, ids, created_at FROM slideshow_sessions WHERE token = ?`);
-const deleteExpiredSlideshowSessionsStatement = db.prepare(`
-  DELETE FROM slideshow_sessions
-  WHERE created_at < datetime('now', '-1 day')
-`);
+let db = null;
+let statements = null;
+
+function ensureDataDirs() {
+  fs.mkdirSync(SCRAPED_IMAGES_DIR, { recursive: true });
+  fs.mkdirSync(NOTE_IMAGES_DIR, { recursive: true });
+}
+
+function initializeSchema(database) {
+  database.pragma('foreign_keys = ON');
+
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS banknotes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      display_order INTEGER,
+      denomination TEXT,
+      issue_date TEXT,
+      catalog_number TEXT,
+      grading_company TEXT,
+      grade TEXT,
+      watermark TEXT,
+      serial TEXT,
+      url TEXT,
+      notes TEXT,
+      scraped_data TEXT,
+      images TEXT,
+      scrape_status TEXT DEFAULT 'pending',
+      scrape_error TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS tags (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE
+    );
+
+    CREATE TABLE IF NOT EXISTS banknote_tags (
+      banknote_id INTEGER NOT NULL REFERENCES banknotes(id) ON DELETE CASCADE,
+      tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+      PRIMARY KEY (banknote_id, tag_id)
+    );
+
+    CREATE TABLE IF NOT EXISTS slideshow_sessions (
+      token TEXT PRIMARY KEY,
+      ids TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+  `);
+
+  const banknotesTableDefinition = database.prepare(`
+    SELECT sql
+    FROM sqlite_master
+    WHERE type = 'table' AND name = 'banknotes'
+  `).get();
+
+  if (/UNIQUE\s*\(\s*catalog_number\s*,\s*serial\s*\)/i.test(banknotesTableDefinition?.sql ?? '')) {
+    database.exec(`
+      PRAGMA foreign_keys = OFF;
+
+      CREATE TABLE banknotes_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        display_order INTEGER,
+        denomination TEXT,
+        issue_date TEXT,
+        catalog_number TEXT,
+        grading_company TEXT,
+        grade TEXT,
+        watermark TEXT,
+        serial TEXT,
+        url TEXT,
+        notes TEXT,
+        scraped_data TEXT,
+        images TEXT,
+        scrape_status TEXT DEFAULT 'pending',
+        scrape_error TEXT,
+        created_at TEXT DEFAULT (datetime('now')),
+        updated_at TEXT DEFAULT (datetime('now'))
+      );
+
+      INSERT INTO banknotes_new (
+        id,
+        display_order,
+        denomination,
+        issue_date,
+        catalog_number,
+        grading_company,
+        grade,
+        watermark,
+        serial,
+        url,
+        notes,
+        scraped_data,
+        images,
+        scrape_status,
+        scrape_error,
+        created_at,
+        updated_at
+      )
+      SELECT
+        id,
+        display_order,
+        denomination,
+        issue_date,
+        catalog_number,
+        grading_company,
+        grade,
+        watermark,
+        serial,
+        url,
+        notes,
+        scraped_data,
+        images,
+        scrape_status,
+        scrape_error,
+        created_at,
+        updated_at
+      FROM banknotes;
+
+      DROP TABLE banknotes;
+      ALTER TABLE banknotes_new RENAME TO banknotes;
+
+      PRAGMA foreign_keys = ON;
+    `);
+  }
+
+  const banknoteColumns = database.prepare(`PRAGMA table_info(banknotes)`).all();
+
+  if (!banknoteColumns.some((column) => column.name === 'display_order')) {
+    database.exec(`ALTER TABLE banknotes ADD COLUMN display_order INTEGER`);
+  }
+
+  const assignMissingDisplayOrderStatement = database.prepare(`
+    UPDATE banknotes
+    SET display_order = @display_order
+    WHERE id = @id
+  `);
+
+  const missingDisplayOrderRows = database.prepare(`
+    SELECT id
+    FROM banknotes
+    WHERE display_order IS NULL
+    ORDER BY id ASC
+  `).all();
+
+  if (missingDisplayOrderRows.length) {
+    const maxDisplayOrderRow = database
+      .prepare(`SELECT COALESCE(MAX(display_order), 0) AS value FROM banknotes`)
+      .get();
+    let nextDisplayOrder = Number(maxDisplayOrderRow?.value ?? 0) + 1;
+
+    const backfillDisplayOrder = database.transaction((rows) => {
+      for (const row of rows) {
+        assignMissingDisplayOrderStatement.run({
+          id: row.id,
+          display_order: nextDisplayOrder
+        });
+        nextDisplayOrder += 1;
+      }
+    });
+
+    backfillDisplayOrder(missingDisplayOrderRows);
+  }
+}
+
+function createStatements(database) {
+  return {
+    listNotesStatement: database.prepare(`SELECT ${noteFields} FROM banknotes ORDER BY display_order ASC, id ASC`),
+    getNoteStatement: database.prepare(`SELECT ${noteFields} FROM banknotes WHERE id = ?`),
+    listTagsForNotesStatement: database.prepare(`
+      SELECT bt.banknote_id, t.id, t.name
+      FROM banknote_tags bt
+      INNER JOIN tags t ON t.id = bt.tag_id
+      ORDER BY t.name COLLATE NOCASE ASC
+    `),
+    listAllTagsStatement: database.prepare(`
+      SELECT DISTINCT t.id, t.name
+      FROM tags t
+      INNER JOIN banknote_tags bt ON bt.tag_id = t.id
+      ORDER BY t.name COLLATE NOCASE ASC
+    `),
+    insertTagStatement: database.prepare(`INSERT OR IGNORE INTO tags (name) VALUES (?)`),
+    getTagByNameStatement: database.prepare(`SELECT id, name FROM tags WHERE name = ?`),
+    clearNoteTagsStatement: database.prepare(`DELETE FROM banknote_tags WHERE banknote_id = ?`),
+    insertNoteTagStatement: database.prepare(`INSERT OR IGNORE INTO banknote_tags (banknote_id, tag_id) VALUES (?, ?)`),
+    upsertBanknoteStatement: database.prepare(`
+      INSERT INTO banknotes (
+        display_order,
+        denomination,
+        issue_date,
+        catalog_number,
+        grading_company,
+        grade,
+        watermark,
+        serial,
+        url,
+        notes,
+        updated_at
+      )
+      VALUES (@display_order, @denomination, @issue_date, @catalog_number, @grading_company, @grade, @watermark, @serial, @url, @notes, datetime('now'))
+    `),
+    insertNoteStatement: database.prepare(`
+      INSERT INTO banknotes (
+        display_order,
+        denomination,
+        issue_date,
+        catalog_number,
+        grading_company,
+        grade,
+        watermark,
+        serial,
+        url,
+        notes,
+        images,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        @display_order,
+        @denomination,
+        @issue_date,
+        @catalog_number,
+        @grading_company,
+        @grade,
+        @watermark,
+        @serial,
+        @url,
+        @notes,
+        @images,
+        datetime('now'),
+        datetime('now')
+      )
+    `),
+    updateNoteStatement: database.prepare(`
+      UPDATE banknotes
+      SET denomination = @denomination,
+          issue_date = @issue_date,
+          catalog_number = @catalog_number,
+          grading_company = @grading_company,
+          grade = @grade,
+          watermark = @watermark,
+          serial = @serial,
+          url = @url,
+          notes = @notes,
+          images = @images,
+          updated_at = datetime('now')
+      WHERE id = @id
+    `),
+    updateScrapeStatement: database.prepare(`
+      UPDATE banknotes
+      SET scraped_data = @scraped_data,
+          images = @images,
+          scrape_status = @scrape_status,
+          scrape_error = @scrape_error,
+          updated_at = datetime('now')
+      WHERE id = @id
+    `),
+    deleteNoteStatement: database.prepare(`DELETE FROM banknotes WHERE id = ?`),
+    compactDisplayOrderAfterDeleteStatement: database.prepare(`
+      UPDATE banknotes
+      SET display_order = display_order - 1,
+          updated_at = datetime('now')
+      WHERE display_order > ?
+    `),
+    maxDisplayOrderStatement: database.prepare(`SELECT COALESCE(MAX(display_order), 0) AS value FROM banknotes`),
+    updateDisplayOrderStatement: database.prepare(`
+      UPDATE banknotes
+      SET display_order = @display_order,
+          updated_at = datetime('now')
+      WHERE id = @id
+    `),
+    listImportRowsStatement: database.prepare(`
+      SELECT
+        id,
+        display_order,
+        denomination,
+        issue_date,
+        catalog_number,
+        grading_company,
+        grade,
+        watermark,
+        serial,
+        url,
+        notes
+      FROM banknotes
+      ORDER BY display_order ASC, id ASC
+    `),
+    updateImportedNoteStatement: database.prepare(`
+      UPDATE banknotes
+      SET denomination = @denomination,
+          issue_date = @issue_date,
+          catalog_number = @catalog_number,
+          grading_company = @grading_company,
+          grade = @grade,
+          watermark = @watermark,
+          serial = @serial,
+          url = @url,
+          notes = @notes,
+          updated_at = datetime('now')
+      WHERE id = @id
+    `),
+    insertSlideshowSessionStatement: database.prepare(`
+      INSERT INTO slideshow_sessions (token, ids, created_at)
+      VALUES (@token, @ids, datetime('now'))
+    `),
+    getSlideshowSessionStatement: database.prepare(`SELECT token, ids, created_at FROM slideshow_sessions WHERE token = ?`),
+    deleteExpiredSlideshowSessionsStatement: database.prepare(`
+      DELETE FROM slideshow_sessions
+      WHERE created_at < datetime('now', '-1 day')
+    `)
+  };
+}
+
+function openDatabase() {
+  if (db) {
+    return db;
+  }
+
+  ensureDataDirs();
+  db = new Database(DB_PATH);
+  initializeSchema(db);
+  statements = createStatements(db);
+  return db;
+}
+
+function getDatabase() {
+  return openDatabase();
+}
+
+function closeDatabase() {
+  if (!db) {
+    return;
+  }
+
+  db.close();
+  db = null;
+  statements = null;
+}
+
+function reloadDatabase() {
+  closeDatabase();
+  return openDatabase();
+}
+
+function verifyDatabaseFile(filePath) {
+  const tempDatabase = new Database(filePath, { readonly: true, fileMustExist: true });
+
+  try {
+    tempDatabase.pragma('foreign_keys = ON');
+    const tables = tempDatabase.prepare(`
+      SELECT name
+      FROM sqlite_master
+      WHERE type = 'table' AND name IN ('banknotes', 'tags', 'banknote_tags')
+    `).all();
+    const tableNames = new Set(tables.map((row) => row.name));
+
+    if (!tableNames.has('banknotes') || !tableNames.has('tags') || !tableNames.has('banknote_tags')) {
+      throw new Error('Archive database is missing required tables.');
+    }
+
+    tempDatabase.prepare('SELECT COUNT(*) AS value FROM banknotes').get();
+  } finally {
+    tempDatabase.close();
+  }
+}
+
+async function backupDatabase(destinationPath) {
+  const activeDatabase = getDatabase();
+  await activeDatabase.backup(destinationPath);
+}
 
 function parseJson(value, fallback) {
   if (!value) {
@@ -392,7 +460,7 @@ function rowToNote(row, tagMap) {
 function buildTagMap() {
   const tagMap = new Map();
 
-  for (const row of listTagsForNotesStatement.all()) {
+  for (const row of statements.listTagsForNotesStatement.all()) {
     if (!tagMap.has(row.banknote_id)) {
       tagMap.set(row.banknote_id, []);
     }
@@ -404,12 +472,14 @@ function buildTagMap() {
 }
 
 function getAllNotes() {
+  getDatabase();
   const tagMap = buildTagMap();
-  return listNotesStatement.all().map((row) => rowToNote(row, tagMap));
+  return statements.listNotesStatement.all().map((row) => rowToNote(row, tagMap));
 }
 
 function getNoteById(id) {
-  const row = getNoteStatement.get(id);
+  getDatabase();
+  const row = statements.getNoteStatement.get(id);
 
   if (!row) {
     return null;
@@ -419,6 +489,8 @@ function getNoteById(id) {
 }
 
 function getNotesByIds(ids) {
+  getDatabase();
+
   if (!ids.length) {
     return [];
   }
@@ -430,18 +502,20 @@ function getNotesByIds(ids) {
 }
 
 function getAllTags() {
-  return listAllTagsStatement.all();
+  getDatabase();
+  return statements.listAllTagsStatement.all();
 }
 
 function ensureTag(name) {
+  getDatabase();
   const normalizedName = normalizeTagName(name);
 
   if (!normalizedName) {
     return null;
   }
 
-  insertTagStatement.run(normalizedName);
-  return getTagByNameStatement.get(normalizedName);
+  statements.insertTagStatement.run(normalizedName);
+  return statements.getTagByNameStatement.get(normalizedName);
 }
 
 function removeManagedNoteImages(noteId) {
@@ -454,9 +528,29 @@ function removeManagedNoteImages(noteId) {
   fs.rmSync(noteImagesDir, { recursive: true, force: true });
 }
 
+function replaceNoteTags(noteId, tagNames) {
+  getDatabase();
+  const normalizedNames = [...new Set((tagNames ?? []).map(normalizeTagName).filter(Boolean))];
+
+  const transaction = db.transaction(() => {
+    statements.clearNoteTagsStatement.run(noteId);
+
+    for (const tagName of normalizedNames) {
+      const tag = ensureTag(tagName);
+      if (tag) {
+        statements.insertNoteTagStatement.run(noteId, tag.id);
+      }
+    }
+  });
+
+  transaction();
+}
+
 function importNotes(notes) {
+  getDatabase();
+
   const transaction = db.transaction((rows) => {
-    const existingRows = listImportRowsStatement.all();
+    const existingRows = statements.listImportRowsStatement.all();
     const matchedIds = new Set();
     const identityToRow = new Map();
     let importedCount = 0;
@@ -473,11 +567,11 @@ function importNotes(notes) {
       const existing = identityToRow.get(identity);
 
       if (existing) {
-        updateImportedNoteStatement.run({
+        statements.updateImportedNoteStatement.run({
           ...note,
           id: existing.id
         });
-        updateDisplayOrderStatement.run({
+        statements.updateDisplayOrderStatement.run({
           id: existing.id,
           display_order: nextDisplayOrder
         });
@@ -491,7 +585,7 @@ function importNotes(notes) {
         });
         updatedCount += 1;
       } else {
-        const result = upsertBanknoteStatement.run({
+        const result = statements.upsertBanknoteStatement.run({
           ...note,
           display_order: nextDisplayOrder
         });
@@ -514,7 +608,7 @@ function importNotes(notes) {
         continue;
       }
 
-      deleteNoteStatement.run(row.id);
+      statements.deleteNoteStatement.run(row.id);
       deletedIds.push(row.id);
     }
 
@@ -540,30 +634,16 @@ function importNotes(notes) {
 }
 
 function getNextDisplayOrder() {
-  const row = maxDisplayOrderStatement.get();
+  getDatabase();
+  const row = statements.maxDisplayOrderStatement.get();
   return Number(row?.value ?? 0) + 1;
 }
 
-function replaceNoteTags(noteId, tagNames) {
-  const normalizedNames = [...new Set((tagNames ?? []).map(normalizeTagName).filter(Boolean))];
-
-  const transaction = db.transaction(() => {
-    clearNoteTagsStatement.run(noteId);
-
-    for (const tagName of normalizedNames) {
-      const tag = ensureTag(tagName);
-      if (tag) {
-        insertNoteTagStatement.run(noteId, tag.id);
-      }
-    }
-  });
-
-  transaction();
-}
-
 function updateNote(note) {
+  getDatabase();
+
   const transaction = db.transaction((payload) => {
-    updateNoteStatement.run({
+    statements.updateNoteStatement.run({
       ...payload,
       images: JSON.stringify(payload.images ?? [])
     });
@@ -575,8 +655,10 @@ function updateNote(note) {
 }
 
 function createNote(note) {
+  getDatabase();
+
   const transaction = db.transaction((payload) => {
-    const result = insertNoteStatement.run({
+    const result = statements.insertNoteStatement.run({
       ...payload,
       images: JSON.stringify(payload.images ?? []),
       display_order: getNextDisplayOrder()
@@ -591,7 +673,9 @@ function createNote(note) {
 }
 
 function updateScrapeResult({ id, scrapedData, images, scrapeStatus, scrapeError }) {
-  updateScrapeStatement.run({
+  getDatabase();
+
+  statements.updateScrapeStatement.run({
     id,
     scraped_data: scrapedData ? JSON.stringify(scrapedData) : null,
     images: images ? JSON.stringify(images) : JSON.stringify([]),
@@ -603,15 +687,16 @@ function updateScrapeResult({ id, scrapedData, images, scrapeStatus, scrapeError
 }
 
 function deleteNote(id) {
-  const existing = getNoteStatement.get(id);
+  getDatabase();
+  const existing = statements.getNoteStatement.get(id);
 
   if (!existing) {
     return;
   }
 
   const transaction = db.transaction((noteId, displayOrder) => {
-    deleteNoteStatement.run(noteId);
-    compactDisplayOrderAfterDeleteStatement.run(displayOrder);
+    statements.deleteNoteStatement.run(noteId);
+    statements.compactDisplayOrderAfterDeleteStatement.run(displayOrder);
   });
 
   transaction(id, existing.display_order);
@@ -619,6 +704,7 @@ function deleteNote(id) {
 }
 
 function reorderNotes(ids) {
+  getDatabase();
   const normalizedIds = ids.map((id) => Number(id));
   const allNotes = getAllNotes();
   const existingIds = allNotes.map((note) => note.id);
@@ -638,7 +724,7 @@ function reorderNotes(ids) {
 
   const transaction = db.transaction((nextIds) => {
     nextIds.forEach((id, index) => {
-      updateDisplayOrderStatement.run({
+      statements.updateDisplayOrderStatement.run({
         id,
         display_order: index + 1
       });
@@ -650,16 +736,17 @@ function reorderNotes(ids) {
 }
 
 function createSlideshowSession(ids) {
+  getDatabase();
   const normalizedIds = [...new Set((ids ?? []).map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
 
   if (!normalizedIds.length) {
     throw new Error('A slideshow session requires at least one valid note ID.');
   }
 
-  deleteExpiredSlideshowSessionsStatement.run();
+  statements.deleteExpiredSlideshowSessionsStatement.run();
 
   const token = crypto.randomUUID();
-  insertSlideshowSessionStatement.run({
+  statements.insertSlideshowSessionStatement.run({
     token,
     ids: JSON.stringify(normalizedIds)
   });
@@ -668,15 +755,16 @@ function createSlideshowSession(ids) {
 }
 
 function getSlideshowSession(token) {
+  getDatabase();
   const normalizedToken = String(token ?? '').trim();
 
   if (!normalizedToken) {
     return null;
   }
 
-  deleteExpiredSlideshowSessionsStatement.run();
+  statements.deleteExpiredSlideshowSessionsStatement.run();
 
-  const row = getSlideshowSessionStatement.get(normalizedToken);
+  const row = statements.getSlideshowSessionStatement.get(normalizedToken);
 
   if (!row) {
     return null;
@@ -689,24 +777,32 @@ function getSlideshowSession(token) {
   };
 }
 
+openDatabase();
+
 export {
   DATA_DIR,
   DB_PATH,
   IMAGES_DIR,
   ROOT_DIR,
   SCRAPED_IMAGES_DIR,
+  backupDatabase,
+  closeDatabase,
   createNote,
   createSlideshowSession,
   deleteNote,
   ensureTag,
   getAllNotes,
   getAllTags,
+  getDatabase,
   getNoteById,
   getNotesByIds,
   getSlideshowSession,
   importNotes,
+  openDatabase,
+  reloadDatabase,
   reorderNotes,
   replaceNoteTags,
   updateNote,
-  updateScrapeResult
+  updateScrapeResult,
+  verifyDatabaseFile
 };
