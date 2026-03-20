@@ -2,7 +2,7 @@
   "name": "desktop",
   "private": true,
   "version": "1.0.0",
-  "description": "Read-only Electron viewer for Notesshow",
+  "description": "Electron viewer for Notesshow with scraping disabled",
   "type": "module",
   "main": "src/main.js",
   "scripts": {
