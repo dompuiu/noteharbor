@@ -123,6 +123,51 @@ async function importCsv(source) {
   return handleResponse(response);
 }
 
+async function importArchive(file) {
+  if (!isFileValue(file)) {
+    throw new Error('Choose a .zip archive before importing.');
+  }
+
+  const formData = new FormData();
+  formData.append('file', file);
+
+  const response = await fetch('/api/archive/import', {
+    method: 'POST',
+    body: formData
+  });
+
+  return handleResponse(response);
+}
+
+async function downloadArchive() {
+  const response = await fetch('/api/archive/export');
+
+  if (!response.ok) {
+    return handleResponse(response);
+  }
+
+  const blob = await response.blob();
+  const contentDisposition = response.headers.get('content-disposition') || '';
+  const filenameMatch = contentDisposition.match(/filename="?([^\"]+)"?/i);
+  const filename = filenameMatch?.[1] || 'notesshow-archive.zip';
+  const objectUrl = window.URL.createObjectURL(blob);
+  const link = document.createElement('a');
+
+  link.href = objectUrl;
+  link.download = filename;
+  document.body.append(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
+
+  return { filename };
+}
+
+async function getOperationStatus() {
+  const response = await fetch('/api/operations/status');
+  return handleResponse(response);
+}
+
 async function getTags() {
   const response = await fetch('/api/tags/suggestions');
   return handleResponse(response);
@@ -146,10 +191,13 @@ async function getScrapeStatus() {
 export {
   createNote,
   deleteNote,
+  downloadArchive,
   getNote,
   getNotes,
+  getOperationStatus,
   getScrapeStatus,
   getTags,
+  importArchive,
   importCsv,
   reorderNotes,
   startScrape,

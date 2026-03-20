@@ -13,12 +13,14 @@
     "pack": "pnpm run build:web && pnpm run prepare:package && electron-builder install-app-deps && electron-builder --dir"
   },
   "dependencies": {
+    "archiver": "^7.0.1",
     "better-sqlite3": "^12.4.1",
     "cheerio": "^1.1.2",
     "cors": "^2.8.5",
     "csv-parse": "^5.6.0",
     "express": "^5.1.0",
-    "multer": "^2.0.2"
+    "multer": "^2.0.2",
+    "unzipper": "^0.12.3"
   },
   "devDependencies": {
     "electron": "^35.0.1",
