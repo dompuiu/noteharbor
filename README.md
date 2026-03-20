@@ -1,4 +1,4 @@
-# Notesshow
+# Note Harbor
 
 A local collection studio for managing and displaying banknote collections. Import your collection from CSV, scrape grading company certification pages for details and images, browse your notes in a filterable table, and present them in a full-screen slideshow.
 
@@ -16,7 +16,7 @@ A local collection studio for managing and displaying banknote collections. Impo
 ## Project Structure
 
 ```
-notesshow/
+noteharbor/
 ├── package.json                  # Workspace root — dev/build/start scripts
 ├── pnpm-workspace.yaml
 ├── apps/
@@ -120,9 +120,9 @@ Create `apps/server/.env` (loaded automatically via Node's `--env-file` flag):
 |---|---|---|
 | `PORT` | `3001` | Express server port |
 | `PMG_BROWSER_PROFILE_DIR` | `storage/browser_profiles/pmg` | Persistent browser profile path for scraping |
-| `NOTESSHOW_DATA_DIR` | `data` | Overrides where SQLite and image files are read from |
-| `NOTESSHOW_WEB_DIST_DIR` | `apps/web/dist` | Overrides the static web build served by Express |
-| `NOTESSHOW_DISABLE_SCRAPING` | `false` | Blocks scrape-start API routes when enabled |
+| `NOTE_HARBOR_DATA_DIR` | `data` | Overrides where SQLite and image files are read from |
+| `NOTE_HARBOR_WEB_DIST_DIR` | `apps/web/dist` | Overrides the static web build served by Express |
+| `NOTE_HARBOR_DISABLE_SCRAPING` | `false` | Blocks scrape-start API routes when enabled |
 
 For the web app, Vite exposes client-side variables prefixed with `VITE_`. To hide scrape-only UI, create `apps/web/.env` with:
 

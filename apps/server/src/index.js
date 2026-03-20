@@ -21,11 +21,11 @@ function parseBooleanEnv(value) {
 }
 
 function resolveWebDistDir() {
-  return path.resolve(process.env.NOTESSHOW_WEB_DIST_DIR || path.join(ROOT_DIR, 'apps/web/dist'));
+  return path.resolve(process.env.NOTE_HARBOR_WEB_DIST_DIR || path.join(ROOT_DIR, 'apps/web/dist'));
 }
 
 function shouldServeWebDist() {
-  return parseBooleanEnv(process.env.NOTESSHOW_SERVE_WEB_DIST);
+  return parseBooleanEnv(process.env.NOTE_HARBOR_SERVE_WEB_DIST);
 }
 
 function createApp() {

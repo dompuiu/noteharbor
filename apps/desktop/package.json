@@ -2,7 +2,7 @@
   "name": "desktop",
   "private": true,
   "version": "1.0.0",
-  "description": "Electron viewer for Notesshow with scraping disabled",
+  "description": "Electron viewer for Note Harbor with scraping disabled",
   "type": "module",
   "main": "src/main.js",
   "scripts": {
@@ -27,8 +27,8 @@
     "electron-builder": "^26.0.12"
   },
   "build": {
-    "appId": "com.notesshow.viewer",
-    "productName": "Notesshow Viewer",
+    "appId": "com.noteharbor.viewer",
+    "productName": "Note Harbor Viewer",
     "directories": {
       "output": "dist-electron"
     },

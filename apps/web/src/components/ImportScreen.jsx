@@ -442,7 +442,7 @@ function ImportScreen() {
               >
                 <div className="import-dropzone-content">
                   <strong>{archiveSource?.name || 'Drop archive here or choose a file'}</strong>
-                  <p className="muted import-dropzone-help">Supports `.zip` archives exported from Notesshow.</p>
+                  <p className="muted import-dropzone-help">Supports `.zip` archives exported from Note Harbor.</p>
                 </div>
               </div>
               <div className="import-actions">

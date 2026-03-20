@@ -1,6 +1,6 @@
 # Development layout example
 workspace:
-  name: "notesshow"
+  name: "noteharbor"
   description: "layout for development"
   directory: "/home/dompuiu/Development/notesshow"
 
