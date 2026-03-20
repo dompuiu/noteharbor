@@ -319,10 +319,11 @@ td {
 }
 
 .table-thumb-preview {
+  --table-thumb-preview-offset: 0px;
   position: absolute;
   left: calc(100% + 10px);
   top: 50%;
-  transform: translateY(-50%);
+  transform: translateY(calc(-50% + var(--table-thumb-preview-offset)));
   display: none;
   padding: 8px;
   border-radius: 12px;
@@ -333,8 +334,7 @@ td {
   pointer-events: none;
 }
 
-.table-thumb-wrap:hover .table-thumb-preview,
-.table-thumb-wrap:focus-within .table-thumb-preview {
+.table-thumb-preview.is-visible {
   display: block;
 }
 
