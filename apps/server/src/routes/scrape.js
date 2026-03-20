@@ -5,7 +5,7 @@ import { Router } from 'express';
 import { getNotesByIds, updateScrapeResult } from '../db.js';
 import { PMGScraper } from '../scrapers/pmg.js';
 import { TQGScraper } from '../scrapers/tqg.js';
-import { rejectReadOnly, shouldUseReadOnlyMode } from '../serverMode.js';
+import { rejectScrapingDisabled, shouldDisableScraping } from '../serverMode.js';
 
 const scrapeRouter = Router();
 const ROUTES_DIR = path.dirname(fileURLToPath(import.meta.url));
@@ -153,8 +153,8 @@ scrapeRouter.get('/status', (_request, response) => {
 });
 
 scrapeRouter.post('/start', async (request, response) => {
-  if (shouldUseReadOnlyMode()) {
-    rejectReadOnly(response);
+  if (shouldDisableScraping()) {
+    rejectScrapingDisabled(response);
     return;
   }
 

@@ -97,12 +97,12 @@ pnpm build:electron
 
 This creates a desktop viewer build from `apps/desktop/dist-electron/`. The Electron app:
 
-- builds the React UI with `VITE_READ_ONLY_MODE=true`
+- builds the React UI with `VITE_DISABLE_SCRAPING=true`
 - serves the built UI and API locally through the embedded Express server
 - bundles the current `data/banknotes.db` file and `data/images/` directory
 - copies that bundled data into the app's user-data folder on first launch so slideshows and image browsing work without modifying the packaged files
 
-The packaged viewer blocks import, note create/edit/delete, reorder, and scrape-start API calls server-side in addition to the existing read-only UI.
+The packaged viewer disables scraping while still allowing CSV import, note create/edit/delete, and manual reordering.
 
 To create Windows artifacts, run the build on Windows instead of WSL/Linux:
 
@@ -122,15 +122,15 @@ Create `apps/server/.env` (loaded automatically via Node's `--env-file` flag):
 | `PMG_BROWSER_PROFILE_DIR` | `storage/browser_profiles/pmg` | Persistent browser profile path for scraping |
 | `NOTESSHOW_DATA_DIR` | `data` | Overrides where SQLite and image files are read from |
 | `NOTESSHOW_WEB_DIST_DIR` | `apps/web/dist` | Overrides the static web build served by Express |
-| `NOTESSHOW_READ_ONLY_MODE` | `false` | Blocks mutating API routes when enabled |
+| `NOTESSHOW_DISABLE_SCRAPING` | `false` | Blocks scrape-start API routes when enabled |
 
-For the web app, Vite exposes client-side variables prefixed with `VITE_`. To enable table-and-slideshow-only mode, create `apps/web/.env` with:
+For the web app, Vite exposes client-side variables prefixed with `VITE_`. To hide scrape-only UI, create `apps/web/.env` with:
 
 ```bash
-VITE_READ_ONLY_MODE=true
+VITE_DISABLE_SCRAPING=true
 ```
 
-When `VITE_READ_ONLY_MODE` is enabled, the UI hides import, add, edit, delete, scrape, reorder, row-selection controls, and the scraped-status column, and redirects `/import` plus `/notes/:id/edit` back to `/`.
+When `VITE_DISABLE_SCRAPING` is enabled, the UI hides scrape controls and the scraped-status column while keeping CSV import, add/edit/delete, row selection, and manual reordering available.
 
 ---
 

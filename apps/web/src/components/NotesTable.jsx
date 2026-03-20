@@ -8,7 +8,7 @@ import {
   getScrapeStatus,
   startScrape,
 } from "../lib/api.js";
-import { isReadOnlyMode } from "../lib/appMode.js";
+import { isScrapingDisabled } from "../lib/appMode.js";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 
@@ -16,7 +16,7 @@ export function HomeHero() {
   return null;
 }
 
-const columns = [
+const baseColumns = [
   ["denomination", "Denomination"],
   ["issue_date", "Date"],
   ["catalog_number", "Catalog #"],
@@ -24,6 +24,10 @@ const columns = [
   ["grade", "Grade"],
   ["serial", "Serial"],
   ["tags", "Tags"],
+];
+const scrapeStatusColumn = ["scrape_status", "Scraped"];
+const columns = [
+  ...baseColumns,
   ["scrape_status", "Scraped"],
 ];
 
@@ -173,7 +177,9 @@ function NotesTable() {
     () => initialTableStateRef.current?.selectedIds ?? [],
   );
   const [selectNextCount, setSelectNextCount] = useState(10);
-  const [bulkAction, setBulkAction] = useState("scrape");
+  const [bulkAction, setBulkAction] = useState(
+    isScrapingDisabled ? "delete" : "scrape",
+  );
   const [scrapeJob, setScrapeJob] = useState(null);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -187,14 +193,11 @@ function NotesTable() {
   const [draggedNoteId, setDraggedNoteId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const selectAllRef = useRef(null);
-  const showSelection = !isReadOnlyMode;
-  const showReorder = !isReadOnlyMode;
-  const showActions = !isReadOnlyMode;
+  const showSelection = true;
+  const showReorder = true;
+  const showActions = true;
   const visibleColumns = useMemo(
-    () =>
-      isReadOnlyMode
-        ? columns.filter(([key]) => key !== "scrape_status")
-        : columns,
+    () => (isScrapingDisabled ? baseColumns : [...baseColumns, scrapeStatusColumn]),
     [],
   );
   const showScrapeStatusColumn = visibleColumns.some(
@@ -216,13 +219,23 @@ function NotesTable() {
   useEffect(() => {
     let active = true;
 
-    Promise.all([getNotes(), getScrapeStatus()])
-      .then(([notesPayload, statusPayload]) => {
-        if (active) {
-          setNotes(notesPayload.notes);
-          setScrapeJob(activeScrapeJob(statusPayload));
-        }
-      })
+    const initialLoad = isScrapingDisabled
+      ? getNotes().then((notesPayload) => {
+          if (active) {
+            setNotes(notesPayload.notes);
+            setScrapeJob(null);
+          }
+        })
+      : Promise.all([getNotes(), getScrapeStatus()]).then(
+          ([notesPayload, statusPayload]) => {
+            if (active) {
+              setNotes(notesPayload.notes);
+              setScrapeJob(activeScrapeJob(statusPayload));
+            }
+          },
+        );
+
+    initialLoad
       .catch((fetchError) => {
         if (active) {
           setLoadError(fetchError.message);
@@ -240,19 +253,13 @@ function NotesTable() {
   }, []);
 
   useEffect(() => {
-    if (isReadOnlyMode) {
-      setSelectedIds([]);
-    }
-  }, []);
-
-  useEffect(() => {
     setSelectedIds((current) =>
       current.filter((id) => notes.some((note) => note.id === id)),
     );
   }, [notes]);
 
   useEffect(() => {
-    if (!scrapeJob) {
+    if (isScrapingDisabled || !scrapeJob) {
       return undefined;
     }
 
@@ -653,6 +660,10 @@ function NotesTable() {
         return;
       }
 
+      if (isScrapingDisabled) {
+        return;
+      }
+
       const payload = await startScrape(selectedIds);
       setScrapeJob({
         status: "running",
@@ -733,7 +744,7 @@ function NotesTable() {
       ) : null}
 
       <div className="panel">
-          <div className="panel-heading panel-heading--compact">
+            <div className="panel-heading panel-heading--compact">
             <div className="panel-heading-copy">
               <p className="eyebrow">Romanian Paper Money Archive</p>
               <h2>Notes Show</h2>
@@ -744,20 +755,18 @@ function NotesTable() {
                 : ""}
             </p>
             </div>
-            {!isReadOnlyMode ? (
-              <div className="inline-actions">
-                <button
-                  className="button button-primary"
-                  onClick={openCreateNote}
-                  type="button"
-                >
-                  Add banknote
-                </button>
-                <Link className="button" to="/import">
-                  Import CSV
-                </Link>
-              </div>
-            ) : null}
+            <div className="inline-actions">
+              <button
+                className="button button-primary"
+                onClick={openCreateNote}
+                type="button"
+              >
+                Add banknote
+              </button>
+              <Link className="button" to="/import">
+                Import CSV
+              </Link>
+            </div>
           </div>
 
         {loading ? <p>Loading notes...</p> : null}
@@ -777,7 +786,7 @@ function NotesTable() {
                     Reset filters, sorting, and selection
                   </button>
                 ) : null}
-                {!isReadOnlyMode ? (
+                {!isScrapingDisabled ? (
                   <>
                     <select
                       aria-label="Select next count"
@@ -803,16 +812,14 @@ function NotesTable() {
                   </>
                 ) : null}
               </div>
-              {!isReadOnlyMode ? (
-                <p className="table-helper-text">
-                  {reorderLoading
-                    ? "Saving manual order..."
-                    : canReorder
-                      ? "Drag rows from the handle to change the default order."
-                      : "Reordering is available only in the default unfiltered view."}
-                </p>
-              ) : null}
-              {!isReadOnlyMode && selectedIds.length ? (
+              <p className="table-helper-text">
+                {reorderLoading
+                  ? "Saving manual order..."
+                  : canReorder
+                    ? "Drag rows from the handle to change the default order."
+                    : "Reordering is available only in the default unfiltered view."}
+              </p>
+              {selectedIds.length ? (
                 <div className="inline-select-group inline-select-group--bulk">
                   <select
                     aria-label="Bulk action"
@@ -820,7 +827,9 @@ function NotesTable() {
                     onChange={(event) => setBulkAction(event.target.value)}
                     value={bulkAction}
                   >
-                    <option value="scrape">Scrape selected</option>
+                    {!isScrapingDisabled ? (
+                      <option value="scrape">Scrape selected</option>
+                    ) : null}
                     <option value="delete">Delete selected</option>
                   </select>
                   <button

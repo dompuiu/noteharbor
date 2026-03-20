@@ -2,7 +2,6 @@ import { Router } from 'express';
 import multer from 'multer';
 import { parse } from 'csv-parse/sync';
 import { importNotes } from '../db.js';
-import { rejectReadOnly, shouldUseReadOnlyMode } from '../serverMode.js';
 
 const importRouter = Router();
 const upload = multer({ storage: multer.memoryStorage() });
@@ -72,11 +71,6 @@ function getCsvSource(request) {
 }
 
 importRouter.post('/', upload.single('file'), (request, response) => {
-  if (shouldUseReadOnlyMode()) {
-    rejectReadOnly(response);
-    return;
-  }
-
   const source = getCsvSource(request);
 
   if (!source) {
