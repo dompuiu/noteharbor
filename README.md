@@ -8,6 +8,7 @@ A local collection studio for managing and displaying banknote collections. Impo
 |---|---|
 | Backend | Node.js (ESM), Express 5, SQLite (better-sqlite3) |
 | Frontend | React 19, React Router 7, Vite |
+| Viewer | Flutter (read-only bundled-data viewer) |
 | Scraping | Python 3 + crawl4ai (browser automation), Playwright (persistent sessions) |
 | Package manager | pnpm 10 (monorepo workspaces) |
 
@@ -46,6 +47,12 @@ noteharbor/
 │               ├── ScrapeScreen.jsx
 │               ├── NoteEditForm.jsx
 │               └── Slideshow.jsx
+│   └── flutter_viewer/
+│       ├── pubspec.yaml
+│       ├── assets/data/          # Bundled notes.json + copied images
+│       └── lib/                  # Read-only Flutter viewer UI
+├── scripts/
+│   └── build_flutter_viewer_dataset.py
 └── data/                         # Created at runtime
     ├── banknotes.db
     └── images/scraped/           # Downloaded banknote images
@@ -111,6 +118,24 @@ pnpm build:electron:win
 ```
 
 That produces Windows installer output from `apps/desktop/dist-electron/`, including an NSIS installer and a portable `.exe` build.
+
+### Build the Flutter viewer dataset
+
+The Flutter viewer is a standalone, read-only app for web and iOS. It does not talk to the Express server at runtime; instead it bundles a converted archive as assets.
+
+1. Export a `.zip` archive from the current app.
+2. Convert that archive into Flutter assets:
+
+```bash
+pnpm build:flutter-viewer:data -- --archive /path/to/noteharbor-archive.zip
+```
+
+This generates:
+
+- `apps/flutter_viewer/assets/data/notes.json`
+- `apps/flutter_viewer/assets/data/images/...`
+
+Then, once Flutter is installed locally, build the viewer from `apps/flutter_viewer/` for `web` or `ios`.
 
 ### Environment variables
 
