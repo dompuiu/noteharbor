@@ -951,6 +951,13 @@ function NotesTable() {
                       <td colSpan={totalColumnCount} style={{ height: topSpacerHeight }} />
                     </tr>
                   ) : null}
+                  {!orderedNotes.length ? (
+                    <tr className="table-empty-row">
+                      <td className="table-empty-cell" colSpan={totalColumnCount}>
+                        No notes match the current view.
+                      </td>
+                    </tr>
+                  ) : null}
                   {virtualRows.map((virtualRow) => {
                     const note = orderedNotes[virtualRow.index];
                     const noteScrapeStatus = displayScrapeStatus(
