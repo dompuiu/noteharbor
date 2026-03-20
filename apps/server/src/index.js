@@ -4,8 +4,10 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import cors from 'cors';
 import express from 'express';
 import { IMAGES_DIR, ROOT_DIR } from './db.js';
+import { archiveRouter } from './routes/archive.js';
 import { importRouter } from './routes/import.js';
 import { notesRouter } from './routes/notes.js';
+import { operationsRouter } from './routes/operations.js';
 import { scrapeRouter } from './routes/scrape.js';
 import { slideshowRouter } from './routes/slideshow.js';
 import { tagsRouter } from './routes/tags.js';
@@ -35,9 +37,11 @@ function createApp() {
   app.use(express.json({ limit: '10mb' }));
   app.use(express.urlencoded({ extended: true }));
 
+  app.use('/api/archive', archiveRouter);
   app.use('/api/images', express.static(IMAGES_DIR));
   app.use('/api/import', importRouter);
   app.use('/api/notes', notesRouter);
+  app.use('/api/operations', operationsRouter);
   app.use('/api/tags', tagsRouter);
   app.use('/api/scrape', scrapeRouter);
   app.use('/api/slideshow', slideshowRouter);

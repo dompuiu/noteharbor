@@ -4,6 +4,7 @@ import { Link } from "react-router-dom";
 import {
   deleteNote,
   getNotes,
+  getOperationStatus,
   reorderNotes as saveNotesOrder,
   getScrapeStatus,
   startScrape,
@@ -181,6 +182,10 @@ function NotesTable() {
     isScrapingDisabled ? "delete" : "scrape",
   );
   const [scrapeJob, setScrapeJob] = useState(null);
+  const [operationStatus, setOperationStatus] = useState({
+    currentOperation: "idle",
+    isBusy: false,
+  });
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
   const [loading, setLoading] = useState(true);
@@ -220,17 +225,19 @@ function NotesTable() {
     let active = true;
 
     const initialLoad = isScrapingDisabled
-      ? getNotes().then((notesPayload) => {
+      ? Promise.all([getNotes(), getOperationStatus()]).then(([notesPayload, operationPayload]) => {
           if (active) {
             setNotes(notesPayload.notes);
             setScrapeJob(null);
+            setOperationStatus(operationPayload);
           }
         })
-      : Promise.all([getNotes(), getScrapeStatus()]).then(
-          ([notesPayload, statusPayload]) => {
+      : Promise.all([getNotes(), getScrapeStatus(), getOperationStatus()]).then(
+          ([notesPayload, statusPayload, operationPayload]) => {
             if (active) {
               setNotes(notesPayload.notes);
               setScrapeJob(activeScrapeJob(statusPayload));
+              setOperationStatus(operationPayload);
             }
           },
         );
@@ -259,27 +266,29 @@ function NotesTable() {
   }, [notes]);
 
   useEffect(() => {
-    if (isScrapingDisabled || !scrapeJob) {
+    if (isScrapingDisabled || !operationStatus.isBusy) {
       return undefined;
     }
 
     const timer = window.setInterval(async () => {
       try {
-        const [nextStatus, notesPayload] = await Promise.all([
+        const [nextStatus, notesPayload, nextOperationStatus] = await Promise.all([
           getScrapeStatus(),
           getNotes(),
+          getOperationStatus(),
         ]);
         const nextScrapeJob = activeScrapeJob(nextStatus);
 
         setNotes(notesPayload.notes);
         setScrapeJob(nextScrapeJob);
+        setOperationStatus(nextOperationStatus);
       } catch {
         // Ignore transient polling errors.
       }
     }, 2000);
 
     return () => window.clearInterval(timer);
-  }, [scrapeJob]);
+  }, [operationStatus.isBusy, scrapeJob]);
 
   useEffect(() => {
     if (!editingNoteId && !creatingNote) {
@@ -664,6 +673,12 @@ function NotesTable() {
         return;
       }
 
+      if (operationStatus.isBusy) {
+        throw new Error(
+          `Scraping is unavailable while ${String(operationStatus.currentOperation).replace(/_/g, " ")} is in progress.`,
+        );
+      }
+
       const payload = await startScrape(selectedIds);
       setScrapeJob({
         status: "running",
@@ -763,8 +778,16 @@ function NotesTable() {
               >
                 Add banknote
               </button>
-              <Link className="button" to="/import">
-                Import CSV
+              <Link
+                className={`button${operationStatus.isBusy ? " button-disabled" : ""}`}
+                onClick={(event) => {
+                  if (operationStatus.isBusy) {
+                    event.preventDefault();
+                  }
+                }}
+                to="/import"
+              >
+                Import / Export
               </Link>
             </div>
           </div>
@@ -772,6 +795,11 @@ function NotesTable() {
         {loading ? <p>Loading notes...</p> : null}
         {loadError ? <p className="error-text">{loadError}</p> : null}
         {actionError ? <p className="error-text">{actionError}</p> : null}
+        {operationStatus.isBusy ? (
+          <p className="warning-text">
+            Current operation: {String(operationStatus.currentOperation).replace(/_/g, " ")}.
+          </p>
+        ) : null}
 
         {!loading && !loadError ? (
           <>
@@ -804,6 +832,7 @@ function NotesTable() {
                     </select>
                     <button
                       className="button"
+                      disabled={operationStatus.isBusy}
                       onClick={selectNextUnscraped}
                       type="button"
                     >
@@ -834,7 +863,7 @@ function NotesTable() {
                   </select>
                   <button
                     className="button button-primary"
-                    disabled={bulkLoading || Boolean(scrapeJob)}
+                    disabled={bulkLoading || operationStatus.isBusy || Boolean(scrapeJob)}
                     onClick={handleBulkAction}
                     type="button"
                   >
