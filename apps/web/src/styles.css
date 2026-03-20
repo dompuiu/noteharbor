@@ -110,12 +110,17 @@ button {
 .nav-link,
 .button,
 .icon-link {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   border: 1px solid rgba(65, 43, 18, 0.2);
   background: rgba(255, 248, 239, 0.8);
   color: inherit;
   padding: 6px 11px;
+  height: 32px;
   border-radius: 999px;
   font-size: 0.82rem;
+  line-height: 1.2;
   text-decoration: none;
   transition:
     transform 0.2s ease,
@@ -372,11 +377,13 @@ thead {
 .tag-editor input,
 .select-input {
   width: 100%;
+  height: 32px;
   border-radius: 10px;
   border: 1px solid rgba(92, 59, 24, 0.2);
   background: rgba(255, 255, 255, 0.85);
   padding: 5px 8px;
   font-size: 0.82rem;
+  line-height: 1.2;
 }
 
 .inline-select-group {
@@ -400,6 +407,9 @@ thead {
 
 .table-helper-text {
   margin: 0;
+  display: flex;
+  align-items: center;
+  height: 32px;
   align-self: center;
   color: #6b5c4e;
   font-size: 0.78rem;
