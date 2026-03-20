@@ -294,6 +294,16 @@ td {
   font-size: 0.82rem;
 }
 
+.table-empty-row td {
+  border-bottom: 0;
+}
+
+.table-empty-cell {
+  padding: 32px 16px;
+  color: #6b5c4e;
+  text-align: center;
+}
+
 .table-thumb {
   display: block;
   width: 36px;
