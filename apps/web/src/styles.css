@@ -590,6 +590,35 @@ td.drag-cell {
   flex-wrap: wrap;
 }
 
+.import-panel {
+  gap: 20px;
+}
+
+.import-sections {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.import-card {
+  align-content: start;
+  padding: 20px;
+  border-radius: 22px;
+  border: 1px solid rgba(92, 59, 24, 0.14);
+  background: rgba(255, 255, 255, 0.5);
+}
+
+.archive-picker-row {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.archive-file-label {
+  color: #6c5847;
+}
+
 .full-span {
   grid-column: 1 / -1;
 }
@@ -640,6 +669,20 @@ button.tag {
 
 .error-text {
   color: #a42424;
+}
+
+.warning-text {
+  color: #7a5200;
+  margin: 0;
+}
+
+.button:disabled,
+.button-disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  pointer-events: none;
+  transform: none;
+  box-shadow: none;
 }
 
 .image-field-help {
@@ -734,6 +777,12 @@ button.tag {
 
 .image-slot-input {
   display: none;
+}
+
+@media (max-width: 900px) {
+  .import-sections {
+    grid-template-columns: 1fr;
+  }
 }
 
 .slideshow-screen {
