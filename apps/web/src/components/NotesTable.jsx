@@ -954,7 +954,9 @@ function NotesTable() {
                   {!orderedNotes.length ? (
                     <tr className="table-empty-row">
                       <td className="table-empty-cell" colSpan={totalColumnCount}>
-                        No notes match the current view.
+                        {notes.length
+                          ? "No notes match the current view."
+                          : "No notes are stored yet. Use Import / Export to import data or add your first banknote."}
                       </td>
                     </tr>
                   ) : null}
