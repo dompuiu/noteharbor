@@ -94,6 +94,10 @@ function createStageDir() {
   return { stageRoot, stagedDataDir };
 }
 
+function createEmptyStagedDataDir() {
+  return createStageDir();
+}
+
 function prepareStagedDataDir(sourceDataDir) {
   const { stageRoot, stagedDataDir } = createStageDir();
   const stagedImagesDir = path.join(stagedDataDir, 'images');
@@ -245,6 +249,32 @@ archiveRouter.post('/import', upload.single('file'), async (request, response) =
     removePathIfExists(stageRoot);
     removePathIfExists(extractedRoot);
     removePathIfExists(uploadPath);
+  }
+});
+
+archiveRouter.delete('/data', async (_request, response) => {
+  let stageRoot = null;
+
+  try {
+    const payload = await withExclusiveOperation('clearing_data', null, async () => {
+      const staged = createEmptyStagedDataDir();
+      stageRoot = staged.stageRoot;
+      swapInImportedData(staged.stagedDataDir);
+
+      return {
+        success: true,
+        currentOperation: 'idle'
+      };
+    });
+
+    response.json(payload);
+  } catch (error) {
+    const message = error.rollbackError
+      ? `${error.message} Rollback also failed: ${error.rollbackError.message}`
+      : error.message;
+    response.status(error.statusCode || 500).json({ error: message, currentOperation: error.currentOperation });
+  } finally {
+    removePathIfExists(stageRoot);
   }
 });
 
