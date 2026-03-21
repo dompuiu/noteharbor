@@ -129,17 +129,20 @@ def copy_image_into_assets(
         )
         return None
 
-    output_relative_path = relative_source_path.with_name(
-        f"{sanitize_asset_segment(relative_source_path.stem)}{relative_source_path.suffix.lower()}"
+    output_filename = (
+        "_".join(
+            sanitize_asset_segment(part)
+            for part in [*relative_source_path.parts[:-1], relative_source_path.stem]
+        )
+        + relative_source_path.suffix.lower()
     )
-    output_path = output_images_dir / output_relative_path
-    output_path.parent.mkdir(parents=True, exist_ok=True)
+    output_path = output_images_dir / output_filename
     shutil.copy2(source_path, output_path)
 
     return {
         "type": to_display_string(image.get("type")),
         "variant": to_display_string(image.get("variant")),
-        "assetPath": f"assets/data/images/{output_relative_path.as_posix()}",
+        "assetPath": f"assets/data/images/{output_filename}",
         "sourceUrl": to_display_string(image.get("sourceUrl")) or None,
     }
 
@@ -151,7 +154,6 @@ def build_dataset(
     images_dir = data_dir / "images"
     output_images_dir = output_dir / "images"
     output_images_dir.mkdir(parents=True, exist_ok=True)
-    (output_images_dir / ".keep").write_text("", encoding="utf-8")
 
     connection = sqlite3.connect(database_path)
     warnings: list[str] = []
