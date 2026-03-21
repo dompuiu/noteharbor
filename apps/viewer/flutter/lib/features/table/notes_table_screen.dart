@@ -7,6 +7,41 @@ import '../../models/note_record.dart';
 import '../../models/viewer_dataset.dart';
 import '../slideshow/note_slideshow_screen.dart';
 
+String formatFriendlyDatasetBuiltAt(String value) {
+  final trimmed = value.trim();
+  if (trimmed.isEmpty) {
+    return trimmed;
+  }
+
+  final parsed = DateTime.tryParse(trimmed);
+  if (parsed == null) {
+    return trimmed;
+  }
+
+  final normalized = parsed.toUtc();
+  const monthNames = <String>[
+    'Jan',
+    'Feb',
+    'Mar',
+    'Apr',
+    'May',
+    'Jun',
+    'Jul',
+    'Aug',
+    'Sep',
+    'Oct',
+    'Nov',
+    'Dec',
+  ];
+
+  final month = monthNames[normalized.month - 1];
+  final day = normalized.day.toString().padLeft(2, '0');
+  final hour = normalized.hour.toString().padLeft(2, '0');
+  final minute = normalized.minute.toString().padLeft(2, '0');
+
+  return '$month $day, ${normalized.year} at $hour:$minute UTC';
+}
+
 const double _kTableContentWidth = 1180;
 const double _kTableHorizontalPadding = 14;
 const double _kTableTotalWidth = _kTableContentWidth + (_kTableHorizontalPadding * 2);
@@ -274,7 +309,10 @@ class _Header extends StatelessWidget {
         ),
         _StatPill(label: 'Notes', value: '$visibleCount / $totalCount'),
         if (generatedAt != null && generatedAt!.trim().isNotEmpty)
-          _StatPill(label: 'Dataset built', value: generatedAt!),
+          _StatPill(
+            label: 'Dataset built',
+            value: formatFriendlyDatasetBuiltAt(generatedAt!),
+          ),
       ],
     );
   }
