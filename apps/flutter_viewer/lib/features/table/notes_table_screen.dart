@@ -5,6 +5,10 @@ import '../../models/note_record.dart';
 import '../../models/viewer_dataset.dart';
 import '../slideshow/note_slideshow_screen.dart';
 
+const double _kTableContentWidth = 1180;
+const double _kTableHorizontalPadding = 14;
+const double _kTableTotalWidth = _kTableContentWidth + (_kTableHorizontalPadding * 2);
+
 class NotesTableScreen extends StatefulWidget {
   const NotesTableScreen({super.key});
 
@@ -175,7 +179,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                     controller: _horizontalScrollController,
                                     scrollDirection: Axis.horizontal,
                                     child: SizedBox(
-                                      width: 1208,
+                                      width: _kTableTotalWidth,
                                       child: Column(
                                         children: [
                                           _TableHeader(sortKey: _sortKey, ascending: _ascending, onSort: _toggleSort),
@@ -312,7 +316,7 @@ class _TableHeader extends StatelessWidget {
     return ColoredBox(
       color: const Color(0xFFE8E1D4),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: _kTableHorizontalPadding, vertical: 12),
         child: Row(
           children: [
             _HeaderCell(width: 90, label: 'Order', sortKey: 'displayOrder', activeSortKey: sortKey, ascending: ascending, onSort: onSort),
@@ -395,7 +399,7 @@ class _TableRow extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+        padding: const EdgeInsets.symmetric(horizontal: _kTableHorizontalPadding, vertical: 12),
         child: Row(
           children: [
             _DataCell(width: 90, child: Text('${note.displayOrder}')),
