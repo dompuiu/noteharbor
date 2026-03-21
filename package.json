@@ -3,11 +3,9 @@
   "private": true,
   "packageManager": "pnpm@10.17.1",
   "scripts": {
-    "dev": "concurrently \"pnpm --filter server dev\" \"pnpm --filter web dev\"",
-    "build": "pnpm --filter web build",
-    "build:electron": "pnpm --filter desktop build",
-    "build:electron:win": "pnpm --filter desktop build:win",
-    "build:flutter-viewer:data": "python3 scripts/build_flutter_viewer_dataset.py",
+    "dev": "concurrently \"pnpm --filter editor_server dev\" \"pnpm --filter editor_web dev\"",
+    "build:editor:desktop:win": "pnpm --filter editor_desktop build:win",
+    "build:viewer:flutter:data": "python3 scripts/build_flutter_viewer_dataset.py",
     "layout": "tsps --layout layout.yml"
   },
   "devDependencies": {

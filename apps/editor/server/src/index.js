@@ -21,7 +21,7 @@ function parseBooleanEnv(value) {
 }
 
 function resolveWebDistDir() {
-  return path.resolve(process.env.NOTE_HARBOR_WEB_DIST_DIR || path.join(ROOT_DIR, 'apps/web/dist'));
+  return path.resolve(process.env.NOTE_HARBOR_WEB_DIST_DIR || path.join(ROOT_DIR, 'apps/editor/web/dist'));
 }
 
 function shouldServeWebDist() {

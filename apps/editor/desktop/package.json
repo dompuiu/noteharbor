@@ -1,8 +1,8 @@
 {
-  "name": "desktop",
+  "name": "editor_desktop",
   "private": true,
   "version": "1.0.0",
-  "description": "Electron viewer for Note Harbor with scraping disabled",
+  "description": "Electron-packaged Note Harbor Editor with scraping disabled",
   "type": "module",
   "main": "src/main.js",
   "scripts": {
@@ -27,8 +27,8 @@
     "electron-builder": "^26.0.12"
   },
   "build": {
-    "appId": "com.noteharbor.viewer",
-    "productName": "Note Harbor Viewer",
+    "appId": "com.noteharbor.editor",
+    "productName": "Note Harbor Editor",
     "directories": {
       "output": "dist-electron"
     },
