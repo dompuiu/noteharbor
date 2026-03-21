@@ -1,12 +1,12 @@
 name: viewer_flutter
-description: Read-only Flutter viewer for Note Harbor archives.
-publish_to: 'none'
+description: Note Harbor Viewer.
+publish_to: "none"
 
 version: 1.0.0+1
 
 environment:
-  sdk: '>=3.4.0 <4.0.0'
-  flutter: '>=3.22.0'
+  sdk: ">=3.4.0 <4.0.0"
+  flutter: ">=3.22.0"
 
 dependencies:
   flutter:
