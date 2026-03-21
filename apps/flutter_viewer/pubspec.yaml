@@ -22,3 +22,5 @@ flutter:
   assets:
     - assets/data/notes.json
     - assets/data/images/
+    - assets/data/images/scraped/
+    - assets/data/images/notes/
