@@ -259,7 +259,7 @@ class _Header extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              'Banknote Viewer',
+              'Romanian Paper Money Archive',
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
                     color: const Color(0xFF7A5D27),
                     letterSpacing: 1.4,
@@ -267,7 +267,7 @@ class _Header extends StatelessWidget {
             ),
             const SizedBox(height: 4),
             Text(
-              'Read-only Flutter collection browser',
+              'Note Harbor Viewew',
               style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
             ),
           ],
