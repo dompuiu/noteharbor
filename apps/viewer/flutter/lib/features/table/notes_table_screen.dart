@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../data/viewer_repository.dart';
@@ -157,65 +159,71 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                     ),
                     const SizedBox(height: 20),
                     Expanded(
-                      child: DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFCFAF5),
-                          borderRadius: BorderRadius.circular(28),
-                          boxShadow: const [
-                            BoxShadow(
-                              blurRadius: 28,
-                              offset: Offset(0, 16),
-                              color: Color(0x16000000),
+                      child: LayoutBuilder(
+                        builder: (context, constraints) {
+                          final tableWidth = math.max(_kTableTotalWidth, constraints.maxWidth);
+
+                          return DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFFCFAF5),
+                              borderRadius: BorderRadius.circular(28),
+                              boxShadow: const [
+                                BoxShadow(
+                                  blurRadius: 28,
+                                  offset: Offset(0, 16),
+                                  color: Color(0x16000000),
+                                ),
+                              ],
                             ),
-                          ],
-                        ),
-                        child: notes.isEmpty
-                            ? const Center(child: Text('No notes match the current filter.'))
-                            : ClipRRect(
-                                borderRadius: BorderRadius.circular(28),
-                                child: Scrollbar(
-                                  controller: _horizontalScrollController,
-                                  child: SingleChildScrollView(
-                                    controller: _horizontalScrollController,
-                                    scrollDirection: Axis.horizontal,
-                                    child: SizedBox(
-                                      width: _kTableTotalWidth,
-                                      child: Column(
-                                        children: [
-                                          _TableHeader(sortKey: _sortKey, ascending: _ascending, onSort: _toggleSort),
-                                          const Divider(height: 1),
-                                          Expanded(
-                                            child: Scrollbar(
-                                              controller: _verticalScrollController,
-                                              child: ListView.separated(
-                                                controller: _verticalScrollController,
-                                                itemCount: notes.length,
-                                                separatorBuilder: (context, index) => const Divider(height: 1),
-                                                itemBuilder: (context, index) {
-                                                  final note = notes[index];
-                                                  return _TableRow(
-                                                    note: note,
-                                                    onTap: () {
-                                                      Navigator.of(context).push(
-                                                        MaterialPageRoute<void>(
-                                                          builder: (context) => NoteSlideshowScreen(
-                                                            notes: notes,
-                                                            initialIndex: index,
-                                                          ),
-                                                        ),
+                            child: notes.isEmpty
+                                ? const Center(child: Text('No notes match the current filter.'))
+                                : ClipRRect(
+                                    borderRadius: BorderRadius.circular(28),
+                                    child: Scrollbar(
+                                      controller: _horizontalScrollController,
+                                      child: SingleChildScrollView(
+                                        controller: _horizontalScrollController,
+                                        scrollDirection: Axis.horizontal,
+                                        child: SizedBox(
+                                          width: tableWidth,
+                                          child: Column(
+                                            children: [
+                                              _TableHeader(sortKey: _sortKey, ascending: _ascending, onSort: _toggleSort),
+                                              const Divider(height: 1),
+                                              Expanded(
+                                                child: Scrollbar(
+                                                  controller: _verticalScrollController,
+                                                  child: ListView.separated(
+                                                    controller: _verticalScrollController,
+                                                    itemCount: notes.length,
+                                                    separatorBuilder: (context, index) => const Divider(height: 1),
+                                                    itemBuilder: (context, index) {
+                                                      final note = notes[index];
+                                                      return _TableRow(
+                                                        note: note,
+                                                        onTap: () {
+                                                          Navigator.of(context).push(
+                                                            MaterialPageRoute<void>(
+                                                              builder: (context) => NoteSlideshowScreen(
+                                                                notes: notes,
+                                                                initialIndex: index,
+                                                              ),
+                                                            ),
+                                                          );
+                                                        },
                                                       );
                                                     },
-                                                  );
-                                                },
+                                                  ),
+                                                ),
                                               ),
-                                            ),
+                                            ],
                                           ),
-                                        ],
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ),
-                              ),
+                          );
+                        },
                       ),
                     ),
                   ],
@@ -364,8 +372,9 @@ class _HeaderCell extends StatelessWidget {
       child: isSortable
           ? TextButton(
               onPressed: () => onSort(sortKey),
-              style: TextButton.styleFrom(alignment: Alignment.centerLeft),
+              style: TextButton.styleFrom(alignment: Alignment.center),
               child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Flexible(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))),
                   if (icon != null) ...[
@@ -377,7 +386,7 @@ class _HeaderCell extends StatelessWidget {
             )
           : Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700)),
+              child: Center(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))),
             ),
     );
   }
@@ -444,6 +453,9 @@ class _DataCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SizedBox(width: width, child: child);
+    return SizedBox(
+      width: width,
+      child: Center(child: child),
+    );
   }
 }
