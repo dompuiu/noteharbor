@@ -1,9 +1,8 @@
-/apps/*/node_modules
+/apps/*/*/node_modules
 /node_modules
 /.venv
 .env
-apps/*/dist/
-data/
-apps/*/.env
-apps/server/storage
-data
+apps/*/*/dist/
+/data
+apps/*/*/.env
+apps/editor/server/storage

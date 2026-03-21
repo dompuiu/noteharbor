@@ -1,15 +1,17 @@
 # Note Harbor
 
-A local collection studio for managing and displaying banknote collections. Import your collection from CSV, scrape grading company certification pages for details and images, browse your notes in a filterable table, and present them in a full-screen slideshow.
+Local collection software for managing and presenting banknote archives. This monorepo contains the editable Note Harbor Editor plus a separate read-only Flutter Viewer that consumes exported archives.
 
 ## Stack
 
 | Layer | Tech |
 |---|---|
-| Backend | Node.js (ESM), Express 5, SQLite (better-sqlite3) |
-| Frontend | React 19, React Router 7, Vite |
-| Scraping | Python 3 + crawl4ai (browser automation), Playwright (persistent sessions) |
-| Package manager | pnpm 10 (monorepo workspaces) |
+| Editor backend | Node.js (ESM), Express 5, SQLite (better-sqlite3) |
+| Editor frontend | React 19, React Router 7, Vite |
+| Desktop editor | Electron + electron-builder |
+| Viewer | Flutter (bundled-data, read-only) |
+| Scraping | Python 3 + crawl4ai + Playwright |
+| Package manager | pnpm 10 workspaces |
 
 ---
 
@@ -17,38 +19,61 @@ A local collection studio for managing and displaying banknote collections. Impo
 
 ```
 noteharbor/
-├── package.json                  # Workspace root — dev/build/start scripts
+├── package.json
 ├── pnpm-workspace.yaml
 ├── apps/
-│   ├── server/
-│   │   ├── package.json
-│   │   ├── fetch_html.py         # Python: fetches raw HTML via crawl4ai
-│   │   └── src/
-│   │       ├── index.js          # Express app setup, static serving
-│   │       ├── db.js             # SQLite schema + all query functions
-│   │       ├── routes/
-│   │       │   ├── notes.js      # GET /api/notes, GET/PUT /api/notes/:id
-│   │       │   ├── tags.js       # GET /api/tags/suggestions
-│   │       │   ├── import.js     # POST /api/import (CSV upload)
-│   │       │   └── scrape.js     # POST /api/scrape/start, /prepare-pmg, GET /status
-│   │       └── scrapers/
-│   │           ├── base.js       # BaseScraper — image download helpers
-│   │           └── pmg.js        # PMGScraper — parses PMG cert pages
-│   └── web/
-│       ├── package.json
-│       ├── vite.config.js        # Dev server on :5173, proxies /api → :3001
-│       └── src/
-│           ├── App.jsx           # Router config
-│           ├── lib/api.js        # Fetch wrapper for all API calls
-│           └── components/
-│               ├── NotesTable.jsx
-│               ├── ImportScreen.jsx
-│               ├── ScrapeScreen.jsx
-│               ├── NoteEditForm.jsx
-│               └── Slideshow.jsx
-└── data/                         # Created at runtime
+│   ├── editor/
+│   │   ├── desktop/
+│   │   │   ├── package.json
+│   │   │   ├── scripts/
+│   │   │   │   ├── build-web.mjs
+│   │   │   │   └── prepare-package.mjs
+│   │   │   └── src/
+│   │   │       └── main.js
+│   │   ├── server/
+│   │   │   ├── package.json
+│   │   │   ├── requirements.txt
+│   │   │   ├── fetch_html.py
+│   │   │   └── src/
+│   │   │       ├── index.js
+│   │   │       ├── db.js
+│   │   │       ├── operationState.js
+│   │   │       ├── serverMode.js
+│   │   │       ├── routes/
+│   │   │       │   ├── archive.js
+│   │   │       │   ├── import.js
+│   │   │       │   ├── notes.js
+│   │   │       │   ├── operations.js
+│   │   │       │   ├── scrape.js
+│   │   │       │   ├── slideshow.js
+│   │   │       │   └── tags.js
+│   │   │       └── scrapers/
+│   │   │           ├── base.js
+│   │   │           ├── pmg.js
+│   │   │           └── tqg.js
+│   │   └── web/
+│   │       ├── package.json
+│   │       ├── vite.config.js
+│   │       └── src/
+│   │           ├── App.jsx
+│   │           ├── lib/
+│   │           │   ├── api.js
+│   │           │   └── appMode.js
+│   │           └── components/
+│   │               ├── ImportScreen.jsx
+│   │               ├── NoteEditForm.jsx
+│   │               ├── NotesTable.jsx
+│   │               └── Slideshow.jsx
+│   └── viewer/
+│       └── flutter/
+│           ├── pubspec.yaml
+│           ├── assets/data/
+│           └── lib/
+├── scripts/
+│   └── build_flutter_viewer_dataset.py
+└── data/
     ├── banknotes.db
-    └── images/scraped/           # Downloaded banknote images
+    └── images/
 ```
 
 ---
@@ -57,113 +82,139 @@ noteharbor/
 
 ### Prerequisites
 
-- **Node.js** 20+
-- **pnpm** 10+ (`npm install -g pnpm`)
-- **Python** 3.9+
+- Node.js 20+
+- pnpm 10+
+- Python 3.9+
 
 ### Install
 
 ```bash
-# Node dependencies
 pnpm install
-
-# Python dependencies
-pip install crawl4ai beautifulsoup4 httpx
+pip install -r apps/editor/server/requirements.txt
 playwright install chromium
 ```
 
-### Run (development)
+### Run the editor in development
 
 ```bash
 pnpm dev
 ```
 
-Starts both the Express API server (port **3001**) and the Vite dev server (port **5173**) concurrently. Open [http://localhost:5173](http://localhost:5173).
+This starts:
 
-### Build & run (production)
+- the Express API at `http://127.0.0.1:3001`
+- the Vite app at `http://localhost:5173`
 
-```bash
-pnpm build    # builds the React app
-pnpm start    # runs Express on port 3001
-```
-
-Serve the built `apps/web/dist/` folder via your preferred static host, or extend the Express server to serve it.
-
-### Build the Electron viewer
+### Build the web editor and run the server
 
 ```bash
-pnpm build:electron
+pnpm --filter editor_web build
+NOTE_HARBOR_SERVE_WEB_DIST=true pnpm --filter editor_server start
 ```
 
-This creates a desktop viewer build from `apps/desktop/dist-electron/`. The Electron app:
+This serves `apps/editor/web/dist` from the Express server.
+
+### Build the Electron editor
+
+```bash
+pnpm --filter editor_desktop build
+```
+
+The Electron package:
 
 - builds the React UI with `VITE_DISABLE_SCRAPING=true`
-- serves the built UI and API locally through the embedded Express server
-- bundles the current `data/banknotes.db` file and `data/images/` directory
-- copies that bundled data into the app's user-data folder on first launch so slideshows and image browsing work without modifying the packaged files
+- embeds the Express server and built web app
+- bundles the current `data/` directory
+- copies bundled data into the user-data folder when the packaged app is newer
 
-The packaged viewer disables scraping while still allowing CSV import, note create/edit/delete, and manual reordering.
-
-To create Windows artifacts, run the build on Windows instead of WSL/Linux:
+For Windows artifacts, build on Windows:
 
 ```bash
-pnpm build:electron:win
+pnpm build:editor:desktop:win
 ```
 
-That produces Windows installer output from `apps/desktop/dist-electron/`, including an NSIS installer and a portable `.exe` build.
+### Run the Flutter viewer locally
+
+```bash
+pnpm dev:viewer:flutter
+```
+
+### Build the Flutter viewer dataset
+
+Export a `.zip` archive from the editor, then convert it into bundled Flutter assets:
+
+```bash
+pnpm build:viewer:flutter:data -- --archive /path/to/noteharbor-archive.zip
+```
+
+This writes:
+
+- `apps/viewer/flutter/assets/data/notes.json`
+- `apps/viewer/flutter/assets/data/images/...`
+
+Then build the viewer itself:
+
+```bash
+pnpm build:viewer:flutter
+```
 
 ### Environment variables
 
-Create `apps/server/.env` (loaded automatically via Node's `--env-file` flag):
+Create `apps/editor/server/.env` if you want to override defaults.
 
 | Variable | Default | Description |
 |---|---|---|
-| `PORT` | `3001` | Express server port |
-| `PMG_BROWSER_PROFILE_DIR` | `storage/browser_profiles/pmg` | Persistent browser profile path for scraping |
-| `NOTE_HARBOR_DATA_DIR` | `data` | Overrides where SQLite and image files are read from |
-| `NOTE_HARBOR_WEB_DIST_DIR` | `apps/web/dist` | Overrides the static web build served by Express |
-| `NOTE_HARBOR_DISABLE_SCRAPING` | `false` | Blocks scrape-start API routes when enabled |
+| `HOST` | `127.0.0.1` | Express bind host |
+| `PORT` | `3001` | Express bind port |
+| `PMG_BROWSER_PROFILE_DIR` | `apps/editor/server/storage/browser_profiles/pmg` | Persistent browser profile used by scraping |
+| `NOTE_HARBOR_DATA_DIR` | `data` | Root data directory containing `banknotes.db` and `images/` |
+| `NOTE_HARBOR_WEB_DIST_DIR` | `apps/editor/web/dist` | Static web build served by Express |
+| `NOTE_HARBOR_SERVE_WEB_DIST` | `false` | Enables serving the built web app from Express |
+| `NOTE_HARBOR_DISABLE_SCRAPING` | `false` | Disables scrape routes |
 
-For the web app, Vite exposes client-side variables prefixed with `VITE_`. To hide scrape-only UI, create `apps/web/.env` with:
+Client-side Vite flags must be prefixed with `VITE_`. To hide scrape UI in the web app:
 
 ```bash
 VITE_DISABLE_SCRAPING=true
 ```
 
-When `VITE_DISABLE_SCRAPING` is enabled, the UI hides scrape controls and the scraped-status column while keeping CSV import, add/edit/delete, row selection, and manual reordering available.
-
 ---
 
-## Database
+## Data Model
 
-SQLite at `data/banknotes.db`, created automatically on first run.
+SQLite lives at `data/banknotes.db` by default and is created automatically.
 
 ### `banknotes`
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | INTEGER PK | Auto-increment |
-| `denomination` | TEXT | e.g. `100 RON` |
-| `issue_date` | TEXT | e.g. `2000-01-01` |
+| `display_order` | INTEGER | Default table/slideshow ordering |
+| `denomination` | TEXT | Display label |
+| `issue_date` | TEXT | Free-form date text |
 | `catalog_number` | TEXT | Catalog identifier |
-| `grading_company` | TEXT | e.g. `PMG` |
+| `grading_company` | TEXT | e.g. `PMG`, `TQG` |
 | `grade` | TEXT | e.g. `65 EPQ` |
-| `watermark` | TEXT | Security feature description |
-| `serial` | TEXT | Banknote serial number |
-| `url` | TEXT | Link to grading company cert page |
-| `notes` | TEXT | Free-text user notes |
-| `scraped_data` | TEXT | JSON — raw fields from scraper |
-| `images` | TEXT | JSON array — local paths + source URLs |
-| `scrape_status` | TEXT | `pending` / `done` / `failed` |
-| `scrape_error` | TEXT | Error message if `failed` |
-| `created_at` | TEXT | ISO datetime |
-| `updated_at` | TEXT | ISO datetime |
+| `watermark` | TEXT | Watermark description |
+| `serial` | TEXT | Serial number |
+| `url` | TEXT | External grading/source URL |
+| `notes` | TEXT | User notes |
+| `scraped_data` | TEXT | JSON object |
+| `images` | TEXT | JSON array of stored images |
+| `scrape_status` | TEXT | `pending`, `done`, `failed` |
+| `scrape_error` | TEXT | Last scrape error |
+| `created_at` | TEXT | SQLite datetime |
+| `updated_at` | TEXT | SQLite datetime |
 
-Unique constraint on `(catalog_number, serial)` — prevents duplicate imports.
+There is no unique `(catalog_number, serial)` constraint anymore. CSV import matches existing notes by URL first, then by company/catalog/serial, then by a broader normalized identity.
 
-### `tags` / `banknote_tags`
+### `tags` and `banknote_tags`
 
-Tags are free-text labels. The junction table `banknote_tags` links tags to notes (many-to-many, cascade-deletes).
+Tags are stored separately and linked many-to-many through `banknote_tags`.
+
+### `slideshow_sessions`
+
+Temporary slideshow share/session tokens are stored in `slideshow_sessions` and expired after one day.
 
 ---
 
@@ -173,33 +224,73 @@ Tags are free-text labels. The junction table `banknote_tags` links tags to note
 
 ```
 GET /api/health
-→ { ok: true }
+-> { ok: true }
 ```
 
 ### Notes
 
 ```
 GET /api/notes
-→ { notes: [ NoteWithTags, ... ] }
+-> { notes: [NoteWithTags, ...] }
+
+POST /api/notes
+Content-Type: application/json or multipart/form-data
+Body: {
+  denomination,
+  issue_date,
+  catalog_number,
+  grading_company,
+  grade,
+  watermark,
+  serial,
+  url,
+  notes,
+  tags: ["tag1", "tag2"],
+  image_front_full?,
+  image_front_thumbnail?,
+  image_back_full?,
+  image_back_thumbnail?
+}
+-> 201 { note: NoteWithTags }
+
+POST /api/notes/reorder
+Body: { ids: [number, ...] }
+-> { notes: [NoteWithTags, ...] }
 
 GET /api/notes/:id
-→ { note: NoteWithTags }
-→ 404 if not found
+-> { note: NoteWithTags }
+-> 404 if not found
 
 PUT /api/notes/:id
-Body: { denomination, issue_date, catalog_number, grading_company, grade,
-        watermark, serial, url, notes, tags: ["tag1", "tag2"] }
-→ { note: NoteWithTags }
-→ 400 on validation error, 404 if not found
+Content-Type: application/json or multipart/form-data
+-> { note: NoteWithTags }
+
+DELETE /api/notes/:id
+-> { success: true }
 ```
 
-`NoteWithTags` includes all columns plus `tags: [{ id, name }]`.
+`NoteWithTags` includes the banknote fields plus `tags: [{ id, name }]`, parsed `images`, and parsed `scraped_data`.
 
 ### Tags
 
 ```
+GET /api/tags
+-> { tags: [{ id, name }, ...] }
+
 GET /api/tags/suggestions
-→ { tags: [{ id, name }, ...] }
+-> { tags: [{ id, name }, ...] }
+```
+
+### Operations
+
+```
+GET /api/operations/status
+-> {
+     currentOperation: "idle" | "importing_csv" | "importing_archive" | "exporting_archive" | "clearing_data" | "scraping",
+     isBusy: boolean,
+     startedAt: string | null,
+     details: object | null
+   }
 ```
 
 ### CSV Import
@@ -207,169 +298,150 @@ GET /api/tags/suggestions
 ```
 POST /api/import
 Content-Type: multipart/form-data
-Body: file (CSV)
-→ { imported, skipped, ignored, total }
+Body: file (CSV) or csv_text (plain text field)
+-> { imported, updated, deleted, ignored, total, ordered }
 ```
 
-**CSV column order** (no header required, but header rows are auto-detected and skipped):
+Current CSV mapping is positional:
 
 ```
-Denominatia | Data | Numar catalog | Compania grad | Grad | Marca apei | Serial | URL | Note
+Denomination | Date | Catalog no | Grading company | Grade | Watermark | Serial | URL | Tags | Notes
 ```
 
-- **imported** — rows successfully inserted
-- **skipped** — duplicates (unique constraint on catalog_number + serial)
-- **ignored** — rows missing denomination and all identifying fields
+Notes about CSV import:
 
-Non-empty `Note` values are seeded as tag suggestions.
+- header rows matching `Denomination` and `Catalog no` are skipped
+- rows after a line beginning with `Ignore after this line` are ignored
+- empty or non-banknote rows are counted as ignored
+- existing notes may be updated in place
+- notes missing from the imported ordered set are deleted
+- imported rows also define the resulting `display_order`
+
+### Archive Import and Export
+
+```
+GET /api/archive/export
+-> downloads noteharbor-archive-YYYY-MM-DD.zip
+
+POST /api/archive/import
+Content-Type: multipart/form-data
+Body: file (.zip)
+-> { success: true, currentOperation: "idle" }
+
+DELETE /api/archive/data
+-> { success: true, currentOperation: "idle" }
+```
+
+The archive contains `banknotes.db` plus `images/`. Importing an archive replaces the current data directory.
 
 ### Scraping
 
 ```
 GET /api/scrape/status
-→ {
-    status: "idle" | "running" | "done",
-    waitSeconds: number,
-    total: number,
-    completed: number,
-    currentNoteId: number | null,
-    items: [{ noteId, label, status, error }],
-    startedAt, finishedAt, error,
-    pmgPreparation: { status, startedAt, targetUrl, error }
-  }
-
-POST /api/scrape/prepare-pmg
-Body: { url?: string }         # defaults to https://www.pmgnotes.com/certlookup/
-→ { message, targetUrl, profileDir }
-→ 409 if a scrape job is running
+-> {
+     status: "idle" | "running" | "done",
+     total: number,
+     completed: number,
+     currentNoteId: number | null,
+     items: [{ noteId, label, status, error }],
+     startedAt: string | null,
+     finishedAt: string | null,
+     error: string | null,
+     currentOperation: string
+   }
 
 POST /api/scrape/start
-Body: { ids: [number], waitSeconds: number }
-→ { message, total, waitSeconds }
-→ 400 if no notes with URLs, 409 if job already running
+Body: { ids: [number, ...] }
+-> { message: "Scrape job started.", total }
 ```
 
-`/scrape/start` returns immediately; poll `/scrape/status` every few seconds to track progress.
+Supported sources currently include PMG and TQG. Unsupported notes are marked failed.
+
+### Slideshow Sessions
+
+```
+POST /api/slideshow
+Body: { ids: [number, ...] }
+-> 201 { token }
+
+GET /api/slideshow/:token
+-> { ids, created_at }
+```
 
 ---
 
 ## Scraping Architecture
 
 ```
- scrape.js (Node.js)
-      │
-      │  spawn child process
-      ▼
- fetch_html.py (Python / crawl4ai)
-      │  prints raw HTML to stdout
-      ▼
- scrape.js receives HTML
-      │
-      │  getScraperForNote(note)
-      ▼
- scrapers/pmg.js  ←── add new scrapers here
-      │  parse(html, pageUrl) → { certNumber, details, images }
-      │  downloadImages(parsed) → saves files, returns local paths
-      ▼
- db.js: updateScrapeResult(...)
+scrape.js (Node.js)
+    |
+    | spawn child process
+    v
+fetch_html.py (Python / crawl4ai)
+    |
+    | returns raw HTML
+    v
+scrapers/pmg.js or scrapers/tqg.js
+    |
+    | parse details + download images
+    v
+db.js updateScrapeResult(...)
 ```
 
 ### `fetch_html.py`
 
-A generic HTML fetcher. It knows nothing about PMG or any other site.
+Generic HTML fetcher used by the server-side scrape route.
 
 ```bash
-# Fetch a page and print HTML to stdout
-python fetch_html.py <url> --wait 30 --profile-dir storage/browser_profiles/pmg
-
-# Open a persistent browser to solve bot challenges (keeps running until closed)
-python fetch_html.py --prepare <url> --profile-dir storage/browser_profiles/pmg
+python3 fetch_html.py <url> --wait 10 --profile-dir apps/editor/server/storage/browser_profiles/pmg
+python3 fetch_html.py <url> --wait-for ".certlookup-details"
 ```
 
 | Flag | Default | Description |
 |---|---|---|
-| `--wait` | `10` | Seconds to wait after page load before capturing HTML |
-| `--profile-dir` | *(none)* | Persistent browser profile directory |
-| `--prepare` | — | Open browser for manual bot bypass instead of fetching |
+| `--wait` | `10` | Delay value accepted by the script interface |
+| `--profile-dir` | none | Persistent browser profile directory |
+| `--wait-for` | none | CSS selector to wait for before capturing HTML |
 
-The browser always runs **non-headless** so you can interact with it if a challenge appears.
-
-### Handling bot protection (Cloudflare)
-
-PMG uses Cloudflare, which can block automated browsers. The recommended flow:
-
-1. Click **"Prepare PMG browser"** in the Scrape screen (or call `POST /api/scrape/prepare-pmg`).
-2. A Chrome window opens at the PMG cert lookup page.
-3. Solve the Cloudflare challenge in that window.
-4. The session is saved to the profile directory.
-5. Start scraping — subsequent fetches reuse the saved session.
+The crawler runs non-headless so manual interaction remains possible when a target site presents anti-bot checks.
 
 ### Adding a new scraper
 
-1. Create `apps/server/src/scrapers/mysite.js` extending `BaseScraper`:
-
-```js
-import { BaseScraper } from './base.js';
-
-class MySiteScraper extends BaseScraper {
-  parse(html, pageUrl) {
-    // parse html with cheerio or whatever you prefer
-    // return { certNumber, details: { ... }, images: [{ side, fullSizeUrl, thumbnailUrl }] }
-  }
-
-  async downloadImages(parsedResult) {
-    const folder = this.getImageFolder(parsedResult.certNumber);
-    const saved = [];
-    for (const img of parsedResult.images) {
-      if (img.fullSizeUrl) {
-        const localPath = await this.downloadImage(img.fullSizeUrl, `${folder}/${img.side}.jpg`);
-        saved.push({ type: img.side, variant: 'full', localPath, sourceUrl: img.fullSizeUrl });
-      }
-    }
-    return saved;
-  }
-}
-
-export { MySiteScraper };
-```
-
-2. Register it in `getScraperForNote()` in `scrape.js`:
-
-```js
-import { MySiteScraper } from '../scrapers/mysite.js';
-
-function getScraperForNote(note) {
-  const url = note.url?.toLowerCase() ?? '';
-
-  if (url.includes('pmgnotes.com') || note.grading_company?.toLowerCase().includes('pmg')) {
-    return new PMGScraper(note);
-  }
-  if (url.includes('mysite.com')) {
-    return new MySiteScraper(note);
-  }
-
-  return null;  // unsupported — note will be marked failed
-}
-```
+1. Add a new file in `apps/editor/server/src/scrapers/` extending `BaseScraper`.
+2. Register it in `getScraperForNote()` inside `apps/editor/server/src/routes/scrape.js`.
 
 ---
 
 ## UI Screens
 
 ### Notes Table (`/`)
-Sortable, filterable view of the full collection. Click any column header to sort; type in the filter row to narrow results. Each row links to the edit form.
 
-### Import (`/import`)
-Upload a CSV file. Shows a summary of imported, skipped (duplicates), and ignored rows after upload.
+Primary editor screen with:
 
-### Scrape (`/scrape`)
-Select notes with URLs, set the wait time (seconds), optionally prepare the browser for bot bypass, then start the scrape job. Progress is shown per-note in real time.
+- filterable and sortable table view
+- thumbnail previews
+- bulk selection and bulk actions
+- drag-and-drop manual reordering in the default view
+- inline create/edit overlay
+- slideshow launch by clicking a row
+
+### Import and Export (`/import`)
+
+Handles:
+
+- CSV file import
+- pasted CSV text import
+- full archive export
+- full archive import
+- deleting current app data
 
 ### Edit (`/notes/:id/edit`)
-Edit all fields for a single note. The tag editor shows suggestions from previously imported notes; click a chip to add or remove a tag.
 
-### Slideshow (`/slideshow`)
-Full-screen image viewer. Pass `?ids=1,2,3` to restrict to specific notes, or show all. Navigate with arrow buttons or keyboard arrow keys.
+Direct route for editing or reviewing one note outside the overlay flow.
+
+### Viewer App
+
+The Flutter viewer is a separate read-only application. It loads `assets/data/notes.json`, shows a searchable notes table, and opens a slideshow/lightbox using bundled image assets only.
 
 ---
 
