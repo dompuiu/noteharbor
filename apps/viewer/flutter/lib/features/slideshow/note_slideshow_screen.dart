@@ -234,41 +234,22 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                                               ),
                                             ],
                                           ),
-                                          child: Padding(
+                                          child: SingleChildScrollView(
                                             padding: const EdgeInsets.all(24),
-                                            child: LayoutBuilder(
-                                              builder: (context, constraints) {
-                                                final showTwoColumns = constraints.maxWidth >= 980;
-
-                                                if (showTwoColumns) {
-                                                  return Row(
-                                                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                                                    children: [
-                                                      SizedBox(
-                                                        width: _kSlideshowImagesMaxWidth,
-                                                        child: SingleChildScrollView(
-                                                          child: _ImagesPanel(note: note, onTapImage: _openImageViewer),
-                                                        ),
-                                                      ),
-                                                      const SizedBox(width: 24),
-                                                      Expanded(child: _MetaPanel(note: note)),
-                                                    ],
-                                                  );
-                                                }
-
-                                                return Column(
+                                            child: Center(
+                                              child: ConstrainedBox(
+                                                constraints: const BoxConstraints(
+                                                  maxWidth: _kSlideshowContentMaxWidth,
+                                                ),
+                                                child: Column(
                                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                                   children: [
-                                                    Flexible(
-                                                      child: SingleChildScrollView(
-                                                        child: _ImagesPanel(note: note, onTapImage: _openImageViewer),
-                                                      ),
-                                                    ),
+                                                    _ImagesPanel(note: note, onTapImage: _openImageViewer),
                                                     const SizedBox(height: 24),
-                                                    Expanded(child: _MetaPanel(note: note)),
+                                                    _MetaPanel(note: note),
                                                   ],
-                                                );
-                                              },
+                                                ),
+                                              ),
                                             ),
                                           ),
                                         ),
@@ -299,6 +280,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
 
 const double _kSlideshowImagesMaxWidth = 720;
 const double _kSlideshowImageCardMaxWidth = 340;
+const double _kSlideshowContentMaxWidth = 760;
 
 class _PreviousSlideIntent extends Intent {
   const _PreviousSlideIntent();
@@ -321,10 +303,13 @@ class _ImagesPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final cardWidth = (constraints.maxWidth.clamp(0.0, _kSlideshowImageCardMaxWidth) as num).toDouble();
+        final cardWidth =
+            (constraints.maxWidth.clamp(0.0, _kSlideshowImageCardMaxWidth)
+                    as num)
+                .toDouble();
 
         return Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.center,
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
@@ -333,11 +318,15 @@ class _ImagesPanel extends StatelessWidget {
                     fontWeight: FontWeight.w700,
                     color: const Color(0xFFFFF5E9),
                   ),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 8),
             Text(
               note.gradingCompany.isEmpty ? 'Collection note' : note.gradingCompany,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(color: const Color(0xFFA3C6B2)),
+              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                color: const Color(0xFFA3C6B2),
+              ),
+              textAlign: TextAlign.center,
             ),
             const SizedBox(height: 20),
             Align(
@@ -481,11 +470,16 @@ class _MetaPanel extends StatelessWidget {
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
-        child: ListView(
-          shrinkWrap: true,
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             for (final entry in detailEntries) ...[
-              Text(entry.key, style: Theme.of(context).textTheme.labelLarge?.copyWith(color: const Color(0xFFA37037))),
+              Text(
+                entry.key,
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: const Color(0xFFA37037),
+                ),
+              ),
               const SizedBox(height: 4),
               SelectableText(
                 entry.value,
@@ -497,12 +491,25 @@ class _MetaPanel extends StatelessWidget {
               const SizedBox(height: 16),
             ],
             if (note.url.trim().isNotEmpty) ...[
-              Text('Source URL', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: const Color(0xFFA37037))),
+              Text(
+                'Source URL',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                  color: const Color(0xFFA37037),
+                ),
+              ),
               const SizedBox(height: 4),
-              SelectableText(note.url, style: const TextStyle(color: Color(0xFFA3C6B2))),
+              SelectableText(
+                note.url,
+                style: const TextStyle(color: Color(0xFFA3C6B2)),
+              ),
               const SizedBox(height: 16),
             ],
-            Text('Notes', style: Theme.of(context).textTheme.labelLarge?.copyWith(color: const Color(0xFFA37037))),
+            Text(
+              'Notes',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                color: const Color(0xFFA37037),
+              ),
+            ),
             const SizedBox(height: 4),
             Text(
               note.notes.trim().isEmpty ? 'No extra notes.' : note.notes,
