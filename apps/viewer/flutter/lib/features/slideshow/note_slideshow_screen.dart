@@ -244,12 +244,12 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                                                   return Row(
                                                     crossAxisAlignment: CrossAxisAlignment.stretch,
                                                     children: [
-                                                      Expanded(
-                                                        flex: 11,
+                                                      ConstrainedBox(
+                                                        constraints: const BoxConstraints(maxWidth: _kSlideshowImagesMaxWidth),
                                                         child: _ImagesPanel(note: note, onTapImage: _openImageViewer),
                                                       ),
                                                       const SizedBox(width: 24),
-                                                      Expanded(flex: 9, child: _MetaPanel(note: note)),
+                                                      Expanded(child: _MetaPanel(note: note)),
                                                     ],
                                                   );
                                                 }
@@ -291,6 +291,9 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   }
 }
 
+const double _kSlideshowImagesMaxWidth = 720;
+const double _kSlideshowImageCardMaxWidth = 340;
+
 class _PreviousSlideIntent extends Intent {
   const _PreviousSlideIntent();
 }
@@ -313,7 +316,9 @@ class _ImagesPanel extends StatelessWidget {
     return LayoutBuilder(
       builder: (context, constraints) {
         final twoUp = constraints.maxWidth >= 720;
-        final cardWidth = twoUp ? (constraints.maxWidth - 16) / 2 : constraints.maxWidth;
+        final cardWidth = twoUp
+            ? (((constraints.maxWidth - 16) / 2).clamp(0.0, _kSlideshowImageCardMaxWidth) as num).toDouble()
+            : constraints.maxWidth;
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
