@@ -6,3 +6,5 @@ apps/*/*/dist/
 /data
 apps/*/*/.env
 apps/editor/server/storage
+.idea
+.metadata
