@@ -202,68 +202,57 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                         ),
                       ),
                       Expanded(
-                        child: Row(
-                          children: [
-                            _ArrowButton(
-                              icon: Icons.arrow_back_rounded,
-                              onPressed: widget.notes.length > 1 ? _goPrevious : null,
-                            ),
-                            Expanded(
-                              child: PageView.builder(
-                                controller: _pageController,
-                                itemCount: widget.notes.length,
-                                onPageChanged: (value) => setState(() => _currentIndex = value),
-                                itemBuilder: (context, index) {
-                                  final note = widget.notes[index];
+                        child: PageView.builder(
+                          controller: _pageController,
+                          itemCount: widget.notes.length,
+                          onPageChanged: (value) => setState(() => _currentIndex = value),
+                          itemBuilder: (context, index) {
+                            final note = widget.notes[index];
 
-                                  return Padding(
-                                    padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-                                    child: Center(
-                                      child: ConstrainedBox(
-                                        constraints: const BoxConstraints(maxWidth: 1280),
-                                        child: DecoratedBox(
-                                          decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(28),
-                                            color: const Color(0xCC1F160F),
-                                            border: Border.all(color: const Color(0x33FFEBD4)),
-                                            boxShadow: const [
-                                              BoxShadow(
-                                                blurRadius: 32,
-                                                color: Color(0x66000000),
-                                                offset: Offset(0, 18),
-                                              ),
-                                            ],
+                            return Padding(
+                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
+                              child: Center(
+                                child: ConstrainedBox(
+                                  constraints: const BoxConstraints(maxWidth: 1280),
+                                  child: DecoratedBox(
+                                    decoration: BoxDecoration(
+                                      borderRadius: BorderRadius.circular(28),
+                                      color: const Color(0xCC1F160F),
+                                      border: Border.all(color: const Color(0x33FFEBD4)),
+                                      boxShadow: const [
+                                        BoxShadow(
+                                          blurRadius: 32,
+                                          color: Color(0x66000000),
+                                          offset: Offset(0, 18),
+                                        ),
+                                      ],
+                                    ),
+                                    child: SingleChildScrollView(
+                                      padding: const EdgeInsets.all(24),
+                                      child: Center(
+                                        child: ConstrainedBox(
+                                          constraints: const BoxConstraints(
+                                            maxWidth: _kSlideshowContentMaxWidth,
                                           ),
-                                          child: SingleChildScrollView(
-                                            padding: const EdgeInsets.all(24),
-                                            child: Center(
-                                              child: ConstrainedBox(
-                                                constraints: const BoxConstraints(
-                                                  maxWidth: _kSlideshowContentMaxWidth,
-                                                ),
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.stretch,
-                                                  children: [
-                                                    _ImagesPanel(note: note, onTapImage: _openImageViewer),
-                                                    const SizedBox(height: 24),
-                                                    _MetaPanel(note: note),
-                                                  ],
-                                                ),
+                                          child: Column(
+                                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                                            children: [
+                                              _ImagesPanel(
+                                                note: note,
+                                                onTapImage: _openImageViewer,
                                               ),
-                                            ),
+                                              const SizedBox(height: 24),
+                                              _MetaPanel(note: note),
+                                            ],
                                           ),
                                         ),
                                       ),
                                     ),
-                                  );
-                                },
+                                  ),
+                                ),
                               ),
-                            ),
-                            _ArrowButton(
-                              icon: Icons.arrow_forward_rounded,
-                              onPressed: widget.notes.length > 1 ? _goNext : null,
-                            ),
-                          ],
+                            );
+                          },
                         ),
                       ),
                     ],
@@ -516,35 +505,6 @@ class _MetaPanel extends StatelessWidget {
               style: const TextStyle(color: Color(0xFFFFF5E9)),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _ArrowButton extends StatelessWidget {
-  const _ArrowButton({
-    required this.icon,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 8),
-      child: IconButton.filledTonal(
-        onPressed: onPressed,
-        icon: Icon(icon),
-        iconSize: 30,
-        style: IconButton.styleFrom(
-          backgroundColor: const Color(0xFF24302B),
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: const Color(0xFF1A1E1C),
-          disabledForegroundColor: Colors.white24,
-          minimumSize: const Size(56, 56),
         ),
       ),
     );

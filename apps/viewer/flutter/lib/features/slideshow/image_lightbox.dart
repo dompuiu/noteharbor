@@ -148,66 +148,52 @@ class _ImageLightboxState extends State<ImageLightbox> {
                     ),
                   ),
                   Expanded(
-                    child: Row(
-                      children: [
-                        _ArrowButton(
-                          icon: Icons.arrow_back_rounded,
-                          onPressed: widget.items.length > 1 ? _goPrevious : null,
-                        ),
-                        Expanded(
-                          child: PageView.builder(
-                            controller: _controller,
-                            itemCount: widget.items.length,
-                            onPageChanged: (value) => setState(() => _currentIndex = value),
-                            itemBuilder: (context, index) {
-                              final imageItem = widget.items[index];
-                              return Padding(
-                                padding: const EdgeInsets.all(24),
-                                child: DecoratedBox(
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFF1D2320),
-                                    borderRadius: BorderRadius.circular(28),
-                                    border: Border.all(color: const Color(0xFF32443D)),
+                    child: PageView.builder(
+                      controller: _controller,
+                      itemCount: widget.items.length,
+                      onPageChanged: (value) => setState(() => _currentIndex = value),
+                      itemBuilder: (context, index) {
+                        final imageItem = widget.items[index];
+                        return Padding(
+                          padding: const EdgeInsets.all(24),
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF1D2320),
+                              borderRadius: BorderRadius.circular(28),
+                              border: Border.all(color: const Color(0xFF32443D)),
+                            ),
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(28),
+                              child: InteractiveViewer(
+                                minScale: 0.7,
+                                maxScale: 4,
+                                child: Padding(
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 24,
+                                    vertical: 16,
                                   ),
-                                  child: ClipRRect(
-                                    borderRadius: BorderRadius.circular(28),
-                                    child: InteractiveViewer(
-                                      minScale: 0.7,
-                                      maxScale: 4,
-                                      child: Padding(
-                                        padding: const EdgeInsets.symmetric(
-                                          horizontal: 24,
-                                          vertical: 16,
-                                        ),
-                                        child: Center(
-                                          child: Image.asset(
-                                            imageItem.image.assetPath,
-                                            fit: BoxFit.contain,
-                                            errorBuilder: (context, error, stackTrace) {
-                                              return const Padding(
-                                                padding: EdgeInsets.all(32),
-                                                child: Text(
-                                                  'This image asset is missing from the bundled dataset.',
-                                                  style: TextStyle(color: Colors.white70),
-                                                  textAlign: TextAlign.center,
-                                                ),
-                                              );
-                                            },
+                                  child: Center(
+                                    child: Image.asset(
+                                      imageItem.image.assetPath,
+                                      fit: BoxFit.contain,
+                                      errorBuilder: (context, error, stackTrace) {
+                                        return const Padding(
+                                          padding: EdgeInsets.all(32),
+                                          child: Text(
+                                            'This image asset is missing from the bundled dataset.',
+                                            style: TextStyle(color: Colors.white70),
+                                            textAlign: TextAlign.center,
                                           ),
-                                        ),
-                                      ),
+                                        );
+                                      },
                                     ),
                                   ),
                                 ),
-                              );
-                            },
+                              ),
+                            ),
                           ),
-                        ),
-                        _ArrowButton(
-                          icon: Icons.arrow_forward_rounded,
-                          onPressed: widget.items.length > 1 ? _goNext : null,
-                        ),
-                      ],
+                        );
+                      },
                     ),
                   ),
                 ],
@@ -226,33 +212,4 @@ class _PreviousImageIntent extends Intent {
 
 class _NextImageIntent extends Intent {
   const _NextImageIntent();
-}
-
-class _ArrowButton extends StatelessWidget {
-  const _ArrowButton({
-    required this.icon,
-    required this.onPressed,
-  });
-
-  final IconData icon;
-  final VoidCallback? onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      child: IconButton.filledTonal(
-        onPressed: onPressed,
-        icon: Icon(icon),
-        iconSize: 30,
-        style: IconButton.styleFrom(
-          backgroundColor: const Color(0xFF24302B),
-          foregroundColor: Colors.white,
-          disabledBackgroundColor: const Color(0xFF1A1E1C),
-          disabledForegroundColor: Colors.white24,
-          minimumSize: const Size(56, 56),
-        ),
-      ),
-    );
-  }
 }
