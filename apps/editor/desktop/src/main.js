@@ -3,11 +3,11 @@ import path from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { app, BrowserWindow } from 'electron';
 
-app.setName('Note Harbor Viewer');
+app.setName('Note Harbor Editor');
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const WORKSPACE_ROOT = path.resolve(__dirname, '../../..');
+const WORKSPACE_ROOT = path.resolve(__dirname, '../../../..');
 
 let mainWindow = null;
 let serverHandle = null;

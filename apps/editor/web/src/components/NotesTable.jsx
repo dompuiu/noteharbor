@@ -825,7 +825,7 @@ function NotesTable() {
             <div className="panel-heading panel-heading--compact">
             <div className="panel-heading-copy">
               <p className="eyebrow">Romanian Paper Money Archive</p>
-              <h2>Note Harbor</h2>
+              <h2>Note Harbor Editor</h2>
             <p>
               {orderedNotes.length} notes in the current view.
               {showSelection && selectedIds.length
