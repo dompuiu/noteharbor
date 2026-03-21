@@ -10,7 +10,7 @@ from pathlib import Path
 
 
 ROOT_DIR = Path(__file__).resolve().parent.parent
-DEFAULT_OUTPUT_DIR = ROOT_DIR / "apps" / "flutter_viewer" / "assets" / "data"
+DEFAULT_OUTPUT_DIR = ROOT_DIR / "apps" / "viewer" / "flutter" / "assets" / "data"
 
 
 def parse_args() -> argparse.Namespace:
@@ -23,7 +23,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--output",
         default=str(DEFAULT_OUTPUT_DIR),
-        help="Output directory for assets/data (default: apps/flutter_viewer/assets/data)",
+        help="Output directory for assets/data (default: apps/viewer/flutter/assets/data)",
     )
     return parser.parse_args()
 

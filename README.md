@@ -1,13 +1,13 @@
 # Note Harbor
 
-A local collection studio for managing and displaying banknote collections. Import your collection from CSV, scrape grading company certification pages for details and images, browse your notes in a filterable table, and present them in a full-screen slideshow.
+A local collection studio for managing and displaying banknote collections. This monorepo now separates the interactive Note Harbor Editor from the bundled Note Harbor Viewer.
 
 ## Stack
 
 | Layer | Tech |
 |---|---|
-| Backend | Node.js (ESM), Express 5, SQLite (better-sqlite3) |
-| Frontend | React 19, React Router 7, Vite |
+| Editor backend | Node.js (ESM), Express 5, SQLite (better-sqlite3) |
+| Editor frontend | React 19, React Router 7, Vite |
 | Viewer | Flutter (read-only bundled-data viewer) |
 | Scraping | Python 3 + crawl4ai (browser automation), Playwright (persistent sessions) |
 | Package manager | pnpm 10 (monorepo workspaces) |
@@ -18,44 +18,49 @@ A local collection studio for managing and displaying banknote collections. Impo
 
 ```
 noteharbor/
-├── package.json                  # Workspace root — dev/build/start scripts
+├── package.json                        # Workspace root - app-oriented scripts
 ├── pnpm-workspace.yaml
 ├── apps/
-│   ├── server/
-│   │   ├── package.json
-│   │   ├── fetch_html.py         # Python: fetches raw HTML via crawl4ai
-│   │   └── src/
-│   │       ├── index.js          # Express app setup, static serving
-│   │       ├── db.js             # SQLite schema + all query functions
-│   │       ├── routes/
-│   │       │   ├── notes.js      # GET /api/notes, GET/PUT /api/notes/:id
-│   │       │   ├── tags.js       # GET /api/tags/suggestions
-│   │       │   ├── import.js     # POST /api/import (CSV upload)
-│   │       │   └── scrape.js     # POST /api/scrape/start, /prepare-pmg, GET /status
-│   │       └── scrapers/
-│   │           ├── base.js       # BaseScraper — image download helpers
-│   │           └── pmg.js        # PMGScraper — parses PMG cert pages
-│   └── web/
-│       ├── package.json
-│       ├── vite.config.js        # Dev server on :5173, proxies /api → :3001
-│       └── src/
-│           ├── App.jsx           # Router config
-│           ├── lib/api.js        # Fetch wrapper for all API calls
-│           └── components/
-│               ├── NotesTable.jsx
-│               ├── ImportScreen.jsx
-│               ├── ScrapeScreen.jsx
-│               ├── NoteEditForm.jsx
-│               └── Slideshow.jsx
-│   └── flutter_viewer/
-│       ├── pubspec.yaml
-│       ├── assets/data/          # Bundled notes.json + copied images
-│       └── lib/                  # Read-only Flutter viewer UI
+│   ├── editor/
+│   │   ├── desktop/
+│   │   │   ├── package.json            # editor_desktop
+│   │   │   └── src/                    # Electron shell for Note Harbor Editor
+│   │   ├── server/
+│   │   │   ├── package.json            # editor_server
+│   │   │   ├── fetch_html.py           # Python: fetches raw HTML via crawl4ai
+│   │   │   └── src/
+│   │   │       ├── index.js            # Express app setup, static serving
+│   │   │       ├── db.js               # SQLite schema + all query functions
+│   │   │       ├── routes/
+│   │   │       │   ├── notes.js        # GET /api/notes, GET/PUT /api/notes/:id
+│   │   │       │   ├── tags.js         # GET /api/tags/suggestions
+│   │   │       │   ├── import.js       # POST /api/import (CSV upload)
+│   │   │       │   └── scrape.js       # POST /api/scrape/start, /prepare-pmg, GET /status
+│   │   │       └── scrapers/
+│   │   │           ├── base.js         # BaseScraper - image download helpers
+│   │   │           └── pmg.js          # PMGScraper - parses PMG cert pages
+│   │   └── web/
+│   │       ├── package.json            # editor_web
+│   │       ├── vite.config.js          # Dev server on :5173, proxies /api -> :3001
+│   │       └── src/
+│   │           ├── App.jsx             # Router config
+│   │           ├── lib/api.js          # Fetch wrapper for all API calls
+│   │           └── components/
+│   │               ├── NotesTable.jsx
+│   │               ├── ImportScreen.jsx
+│   │               ├── ScrapeScreen.jsx
+│   │               ├── NoteEditForm.jsx
+│   │               └── Slideshow.jsx
+│   └── viewer/
+│       └── flutter/
+│           ├── pubspec.yaml            # viewer_flutter
+│           ├── assets/data/            # Bundled notes.json + copied images
+│           └── lib/                    # Read-only Flutter viewer UI
 ├── scripts/
 │   └── build_flutter_viewer_dataset.py
-└── data/                         # Created at runtime
+└── data/                               # Created at runtime
     ├── banknotes.db
-    └── images/scraped/           # Downloaded banknote images
+    └── images/scraped/                 # Downloaded banknote images
 ```
 
 ---
@@ -79,77 +84,77 @@ pip install crawl4ai beautifulsoup4 httpx
 playwright install chromium
 ```
 
-### Run (development)
+### Run the editor (development)
 
 ```bash
-pnpm dev
+pnpm dev:editor
 ```
 
-Starts both the Express API server (port **3001**) and the Vite dev server (port **5173**) concurrently. Open [http://localhost:5173](http://localhost:5173).
+Starts both the Express API server (port **3001**) and the Vite dev server (port **5173**) for Note Harbor Editor. Open [http://localhost:5173](http://localhost:5173).
 
-### Build & run (production)
+### Build and run the editor
 
 ```bash
-pnpm build    # builds the React app
-pnpm start    # runs Express on port 3001
+pnpm build:editor:web
+pnpm start:editor
 ```
 
-Serve the built `apps/web/dist/` folder via your preferred static host, or extend the Express server to serve it.
+Serve the built `apps/editor/web/dist/` folder via your preferred static host, or extend the Express server to serve it.
 
-### Build the Electron viewer
+### Build the Electron editor
 
 ```bash
-pnpm build:electron
+pnpm build:editor:desktop
 ```
 
-This creates a desktop viewer build from `apps/desktop/dist-electron/`. The Electron app:
+This creates a desktop editor build from `apps/editor/desktop/dist-electron/`. The Electron app:
 
 - builds the React UI with `VITE_DISABLE_SCRAPING=true`
 - serves the built UI and API locally through the embedded Express server
 - bundles the current `data/banknotes.db` file and `data/images/` directory
 - copies that bundled data into the app's user-data folder on first launch so slideshows and image browsing work without modifying the packaged files
 
-The packaged viewer disables scraping while still allowing CSV import, note create/edit/delete, and manual reordering.
+The packaged editor disables scraping while still allowing CSV import, note create/edit/delete, and manual reordering.
 
 To create Windows artifacts, run the build on Windows instead of WSL/Linux:
 
 ```bash
-pnpm build:electron:win
+pnpm build:editor:desktop:win
 ```
 
-That produces Windows installer output from `apps/desktop/dist-electron/`, including an NSIS installer and a portable `.exe` build.
+That produces Windows installer output from `apps/editor/desktop/dist-electron/`, including an NSIS installer and a portable `.exe` build.
 
 ### Build the Flutter viewer dataset
 
 The Flutter viewer is a standalone, read-only app for web and iOS. It does not talk to the Express server at runtime; instead it bundles a converted archive as assets.
 
-1. Export a `.zip` archive from the current app.
+1. Export a `.zip` archive from Note Harbor Editor.
 2. Convert that archive into Flutter assets:
 
 ```bash
-pnpm build:flutter-viewer:data -- --archive /path/to/noteharbor-archive.zip
+pnpm build:viewer:flutter:data -- --archive /path/to/noteharbor-archive.zip
 ```
 
 This generates:
 
-- `apps/flutter_viewer/assets/data/notes.json`
-- `apps/flutter_viewer/assets/data/images/...`
+- `apps/viewer/flutter/assets/data/notes.json`
+- `apps/viewer/flutter/assets/data/images/...`
 
-Then, once Flutter is installed locally, build the viewer from `apps/flutter_viewer/` for `web` or `ios`.
+Then, once Flutter is installed locally, build the viewer from `apps/viewer/flutter/` for `web` or `ios`.
 
 ### Environment variables
 
-Create `apps/server/.env` (loaded automatically via Node's `--env-file` flag):
+Create `apps/editor/server/.env` (loaded automatically via Node's `--env-file` flag):
 
 | Variable | Default | Description |
 |---|---|---|
 | `PORT` | `3001` | Express server port |
 | `PMG_BROWSER_PROFILE_DIR` | `storage/browser_profiles/pmg` | Persistent browser profile path for scraping |
 | `NOTE_HARBOR_DATA_DIR` | `data` | Overrides where SQLite and image files are read from |
-| `NOTE_HARBOR_WEB_DIST_DIR` | `apps/web/dist` | Overrides the static web build served by Express |
+| `NOTE_HARBOR_WEB_DIST_DIR` | `apps/editor/web/dist` | Overrides the static web build served by Express |
 | `NOTE_HARBOR_DISABLE_SCRAPING` | `false` | Blocks scrape-start API routes when enabled |
 
-For the web app, Vite exposes client-side variables prefixed with `VITE_`. To hide scrape-only UI, create `apps/web/.env` with:
+For the editor web app, Vite exposes client-side variables prefixed with `VITE_`. To hide scrape-only UI, create `apps/editor/web/.env` with:
 
 ```bash
 VITE_DISABLE_SCRAPING=true
@@ -331,7 +336,7 @@ PMG uses Cloudflare, which can block automated browsers. The recommended flow:
 
 ### Adding a new scraper
 
-1. Create `apps/server/src/scrapers/mysite.js` extending `BaseScraper`:
+1. Create `apps/editor/server/src/scrapers/mysite.js` extending `BaseScraper`:
 
 ```js
 import { BaseScraper } from './base.js';
