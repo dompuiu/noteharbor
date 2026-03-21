@@ -5,7 +5,9 @@
   "scripts": {
     "dev": "concurrently \"pnpm --filter editor_server dev\" \"pnpm --filter editor_web dev\"",
     "build:editor:desktop:win": "pnpm --filter editor_desktop build:win",
+    "dev:viewer:flutter": "flutter -C apps/viewer/flutter pub get && flutter -C apps/viewer/flutter run -d chrome",
     "build:viewer:flutter:data": "python3 scripts/build_flutter_viewer_dataset.py",
+    "build:viewer:flutter": "flutter -C apps/viewer/flutter pub get && flutter -C apps/viewer/flutter build web",
     "layout": "tsps --layout layout.yml"
   },
   "devDependencies": {
