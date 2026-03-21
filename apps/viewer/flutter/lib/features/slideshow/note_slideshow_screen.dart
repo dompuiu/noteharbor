@@ -268,7 +268,6 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
 }
 
 const double _kSlideshowImagesMaxWidth = 720;
-const double _kSlideshowImageCardMaxWidth = 340;
 const double _kSlideshowContentMaxWidth = 760;
 
 class _PreviousSlideIntent extends Intent {
@@ -290,74 +289,61 @@ class _ImagesPanel extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final cardWidth =
-            (constraints.maxWidth.clamp(0.0, _kSlideshowImageCardMaxWidth)
-                    as num)
-                .toDouble();
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.center,
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              note.title,
-              style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                    fontWeight: FontWeight.w700,
-                    color: const Color(0xFFFFF5E9),
-                  ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 8),
-            Text(
-              note.gradingCompany.isEmpty ? 'Collection note' : note.gradingCompany,
-              style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                color: const Color(0xFFA3C6B2),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(
+          note.title,
+          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                fontWeight: FontWeight.w700,
+                color: const Color(0xFFFFF5E9),
               ),
-              textAlign: TextAlign.center,
-            ),
-            const SizedBox(height: 20),
-            Align(
-              alignment: Alignment.topCenter,
-              child: SizedBox(
-                width: cardWidth,
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    _ImageCard(
-                      width: cardWidth,
-                      label: 'Front',
-                      imagePath: note.previewFor('front')?.assetPath,
-                      onTap: () => onTapImage(note, 'front'),
-                    ),
-                    const SizedBox(height: 16),
-                    _ImageCard(
-                      width: cardWidth,
-                      label: 'Back',
-                      imagePath: note.previewFor('back')?.assetPath,
-                      onTap: () => onTapImage(note, 'back'),
-                    ),
-                  ],
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 8),
+        Text(
+          note.gradingCompany.isEmpty ? 'Collection note' : note.gradingCompany,
+          style: Theme.of(context).textTheme.titleMedium?.copyWith(
+            color: const Color(0xFFA3C6B2),
+          ),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 20),
+        Align(
+          alignment: Alignment.topCenter,
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: _kSlideshowImagesMaxWidth),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                _ImageCard(
+                  label: 'Front',
+                  imagePath: note.previewFor('front')?.assetPath,
+                  onTap: () => onTapImage(note, 'front'),
                 ),
-              ),
+                const SizedBox(height: 16),
+                _ImageCard(
+                  label: 'Back',
+                  imagePath: note.previewFor('back')?.assetPath,
+                  onTap: () => onTapImage(note, 'back'),
+                ),
+              ],
             ),
-          ],
-        );
-      },
+          ),
+        ),
+      ],
     );
   }
 }
 
 class _ImageCard extends StatelessWidget {
   const _ImageCard({
-    required this.width,
     required this.label,
     required this.imagePath,
     required this.onTap,
   });
 
-  final double width;
   final String label;
   final String? imagePath;
   final VoidCallback onTap;
@@ -365,7 +351,7 @@ class _ImageCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return SizedBox(
-      width: width,
+      width: double.infinity,
       child: InkWell(
         onTap: imagePath == null ? null : onTap,
         borderRadius: BorderRadius.circular(24),
@@ -421,8 +407,12 @@ class _ImageCard extends StatelessWidget {
                 ),
                 const SizedBox(height: 12),
                 Text(
-                  imagePath == null ? 'Image unavailable' : 'Tap to open full-size sequence',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: const Color(0xB3FFF5E9)),
+                  imagePath == null
+                      ? 'Image unavailable'
+                      : 'Tap to open full-size sequence',
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                    color: const Color(0xB3FFF5E9),
+                  ),
                 ),
               ],
             ),
