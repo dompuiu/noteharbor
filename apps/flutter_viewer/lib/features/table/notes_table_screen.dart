@@ -175,7 +175,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                     controller: _horizontalScrollController,
                                     scrollDirection: Axis.horizontal,
                                     child: SizedBox(
-                                      width: 1180,
+                                      width: 1208,
                                       child: Column(
                                         children: [
                                           _TableHeader(sortKey: _sortKey, ascending: _ascending, onSort: _toggleSort),
