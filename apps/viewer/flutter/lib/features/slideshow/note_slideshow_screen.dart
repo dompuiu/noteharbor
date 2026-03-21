@@ -244,9 +244,11 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                                                   return Row(
                                                     crossAxisAlignment: CrossAxisAlignment.stretch,
                                                     children: [
-                                                      ConstrainedBox(
-                                                        constraints: const BoxConstraints(maxWidth: _kSlideshowImagesMaxWidth),
-                                                        child: _ImagesPanel(note: note, onTapImage: _openImageViewer),
+                                                      SizedBox(
+                                                        width: _kSlideshowImagesMaxWidth,
+                                                        child: SingleChildScrollView(
+                                                          child: _ImagesPanel(note: note, onTapImage: _openImageViewer),
+                                                        ),
                                                       ),
                                                       const SizedBox(width: 24),
                                                       Expanded(child: _MetaPanel(note: note)),
@@ -257,7 +259,11 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                                                 return Column(
                                                   crossAxisAlignment: CrossAxisAlignment.stretch,
                                                   children: [
-                                                    _ImagesPanel(note: note, onTapImage: _openImageViewer),
+                                                    Flexible(
+                                                      child: SingleChildScrollView(
+                                                        child: _ImagesPanel(note: note, onTapImage: _openImageViewer),
+                                                      ),
+                                                    ),
                                                     const SizedBox(height: 24),
                                                     Expanded(child: _MetaPanel(note: note)),
                                                   ],
@@ -315,13 +321,11 @@ class _ImagesPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     return LayoutBuilder(
       builder: (context, constraints) {
-        final twoUp = constraints.maxWidth >= 720;
-        final cardWidth = twoUp
-            ? (((constraints.maxWidth - 16) / 2).clamp(0.0, _kSlideshowImageCardMaxWidth) as num).toDouble()
-            : constraints.maxWidth;
+        final cardWidth = (constraints.maxWidth.clamp(0.0, _kSlideshowImageCardMaxWidth) as num).toDouble();
 
         return Column(
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               note.title,
@@ -336,23 +340,29 @@ class _ImagesPanel extends StatelessWidget {
               style: Theme.of(context).textTheme.titleMedium?.copyWith(color: const Color(0xFFA3C6B2)),
             ),
             const SizedBox(height: 20),
-            Wrap(
-              spacing: 16,
-              runSpacing: 16,
-              children: [
-                _ImageCard(
-                  width: cardWidth,
-                  label: 'Front',
-                  imagePath: note.previewFor('front')?.assetPath,
-                  onTap: () => onTapImage(note, 'front'),
+            Align(
+              alignment: Alignment.topCenter,
+              child: SizedBox(
+                width: cardWidth,
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    _ImageCard(
+                      width: cardWidth,
+                      label: 'Front',
+                      imagePath: note.previewFor('front')?.assetPath,
+                      onTap: () => onTapImage(note, 'front'),
+                    ),
+                    const SizedBox(height: 16),
+                    _ImageCard(
+                      width: cardWidth,
+                      label: 'Back',
+                      imagePath: note.previewFor('back')?.assetPath,
+                      onTap: () => onTapImage(note, 'back'),
+                    ),
+                  ],
                 ),
-                _ImageCard(
-                  width: cardWidth,
-                  label: 'Back',
-                  imagePath: note.previewFor('back')?.assetPath,
-                  onTap: () => onTapImage(note, 'back'),
-                ),
-              ],
+              ),
             ),
           ],
         );
