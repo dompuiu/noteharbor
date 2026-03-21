@@ -174,20 +174,26 @@ class _ImageLightboxState extends State<ImageLightbox> {
                                     child: InteractiveViewer(
                                       minScale: 0.7,
                                       maxScale: 4,
-                                      child: Center(
-                                        child: Image.asset(
-                                          imageItem.image.assetPath,
-                                          fit: BoxFit.contain,
-                                          errorBuilder: (context, error, stackTrace) {
-                                            return const Padding(
-                                              padding: EdgeInsets.all(32),
-                                              child: Text(
-                                                'This image asset is missing from the bundled dataset.',
-                                                style: TextStyle(color: Colors.white70),
-                                                textAlign: TextAlign.center,
-                                              ),
-                                            );
-                                          },
+                                      child: Padding(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 24,
+                                          vertical: 16,
+                                        ),
+                                        child: Center(
+                                          child: Image.asset(
+                                            imageItem.image.assetPath,
+                                            fit: BoxFit.contain,
+                                            errorBuilder: (context, error, stackTrace) {
+                                              return const Padding(
+                                                padding: EdgeInsets.all(32),
+                                                child: Text(
+                                                  'This image asset is missing from the bundled dataset.',
+                                                  style: TextStyle(color: Colors.white70),
+                                                  textAlign: TextAlign.center,
+                                                ),
+                                              );
+                                            },
+                                          ),
                                         ),
                                       ),
                                     ),
