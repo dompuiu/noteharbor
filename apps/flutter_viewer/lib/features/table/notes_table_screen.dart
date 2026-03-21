@@ -15,6 +15,8 @@ class NotesTableScreen extends StatefulWidget {
 class _NotesTableScreenState extends State<NotesTableScreen> {
   final ViewerRepository _repository = const ViewerRepository();
   final TextEditingController _searchController = TextEditingController();
+  final ScrollController _horizontalScrollController = ScrollController();
+  final ScrollController _verticalScrollController = ScrollController();
   late Future<ViewerDataset> _datasetFuture;
   String _query = '';
   String _sortKey = 'displayOrder';
@@ -29,6 +31,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   @override
   void dispose() {
     _searchController.dispose();
+    _horizontalScrollController.dispose();
+    _verticalScrollController.dispose();
     super.dispose();
   }
 
@@ -166,7 +170,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                             : ClipRRect(
                                 borderRadius: BorderRadius.circular(28),
                                 child: Scrollbar(
+                                  controller: _horizontalScrollController,
                                   child: SingleChildScrollView(
+                                    controller: _horizontalScrollController,
                                     scrollDirection: Axis.horizontal,
                                     child: SizedBox(
                                       width: 1180,
@@ -175,25 +181,29 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                           _TableHeader(sortKey: _sortKey, ascending: _ascending, onSort: _toggleSort),
                                           const Divider(height: 1),
                                           Expanded(
-                                            child: ListView.separated(
-                                              itemCount: notes.length,
-                                              separatorBuilder: (context, index) => const Divider(height: 1),
-                                              itemBuilder: (context, index) {
-                                                final note = notes[index];
-                                                return _TableRow(
-                                                  note: note,
-                                                  onTap: () {
-                                                    Navigator.of(context).push(
-                                                      MaterialPageRoute<void>(
-                                                        builder: (context) => NoteSlideshowScreen(
-                                                          notes: notes,
-                                                          initialIndex: index,
+                                            child: Scrollbar(
+                                              controller: _verticalScrollController,
+                                              child: ListView.separated(
+                                                controller: _verticalScrollController,
+                                                itemCount: notes.length,
+                                                separatorBuilder: (context, index) => const Divider(height: 1),
+                                                itemBuilder: (context, index) {
+                                                  final note = notes[index];
+                                                  return _TableRow(
+                                                    note: note,
+                                                    onTap: () {
+                                                      Navigator.of(context).push(
+                                                        MaterialPageRoute<void>(
+                                                          builder: (context) => NoteSlideshowScreen(
+                                                            notes: notes,
+                                                            initialIndex: index,
+                                                          ),
                                                         ),
-                                                      ),
-                                                    );
-                                                  },
-                                                );
-                                              },
+                                                      );
+                                                    },
+                                                  );
+                                                },
+                                              ),
                                             ),
                                           ),
                                         ],
