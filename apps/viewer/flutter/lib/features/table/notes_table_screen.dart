@@ -301,8 +301,8 @@ class _Header extends StatelessWidget {
         child: Row(
           children: [
             Text(
-              'Note Harbor Viewer',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
+              'Note Harbor',
+              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(width: 16),
             _StatPill(label: 'Notes', value: '$visibleCount / $totalCount'),
