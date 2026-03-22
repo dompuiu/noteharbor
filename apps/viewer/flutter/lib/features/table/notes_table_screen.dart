@@ -127,144 +127,153 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFF3EADA), Color(0xFFE6DBC9), Color(0xFFD6E3DB)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
+      body: GestureDetector(
+        behavior: HitTestBehavior.translucent,
+        onTap: () => FocusScope.of(context).unfocus(),
+        child: DecoratedBox(
+          decoration: const BoxDecoration(
+            gradient: LinearGradient(
+              colors: [Color(0xFFF3EADA), Color(0xFFE6DBC9), Color(0xFFD6E3DB)],
+              begin: Alignment.topLeft,
+              end: Alignment.bottomRight,
+            ),
           ),
-        ),
-        child: SafeArea(
-          child: FutureBuilder<ViewerDataset>(
-            future: _datasetFuture,
-            builder: (context, snapshot) {
-              if (snapshot.connectionState != ConnectionState.done) {
-                return const Center(child: CircularProgressIndicator());
-              }
+          child: SafeArea(
+            child: FutureBuilder<ViewerDataset>(
+              future: _datasetFuture,
+              builder: (context, snapshot) {
+                if (snapshot.connectionState != ConnectionState.done) {
+                  return const Center(child: CircularProgressIndicator());
+                }
 
-              if (snapshot.hasError) {
-                return Center(
-                  child: Padding(
-                    padding: const EdgeInsets.all(24),
-                    child: Text('Failed to load bundled dataset: ${snapshot.error}'),
-                  ),
-                );
-              }
-
-              final dataset = snapshot.data!;
-              final notes = _sortedNotes(dataset.notes);
-
-              return Padding(
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _Header(
-                      totalCount: dataset.noteCount,
-                      visibleCount: notes.length,
-                      generatedAt: dataset.generatedAt,
+                if (snapshot.hasError) {
+                  return Center(
+                    child: Padding(
+                      padding: const EdgeInsets.all(24),
+                      child: Text('Failed to load bundled dataset: ${snapshot.error}'),
                     ),
-                    const SizedBox(height: 20),
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 420),
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          filled: true,
-                          fillColor: const Color(0xFFFCFAF5),
-                          hintText: 'Filter denomination, catalog, serial, tags, notes...',
-                          prefixIcon: const Icon(Icons.search_rounded),
-                          suffixIcon: _query.isEmpty
-                              ? null
-                              : IconButton(
-                                  onPressed: () {
-                                    _searchController.clear();
-                                    setState(() => _query = '');
-                                  },
-                                  icon: const Icon(Icons.close_rounded),
-                                ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(18),
-                            borderSide: BorderSide.none,
-                          ),
-                        ),
-                        onChanged: (value) => setState(() => _query = value),
+                  );
+                }
+
+                final dataset = snapshot.data!;
+                final notes = _sortedNotes(dataset.notes);
+
+                return Padding(
+                  padding: const EdgeInsets.all(12),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      _Header(
+                        totalCount: dataset.noteCount,
+                        visibleCount: notes.length,
+                        generatedAt: dataset.generatedAt,
                       ),
-                    ),
-                    const SizedBox(height: 20),
-                    Expanded(
-                      child: LayoutBuilder(
-                        builder: (context, constraints) {
-                          final tableWidth = math.max(_kTableTotalWidth, constraints.maxWidth);
-
-                          return DecoratedBox(
-                            decoration: BoxDecoration(
-                              color: const Color(0xFFFCFAF5),
-                              borderRadius: BorderRadius.circular(28),
-                              boxShadow: const [
-                                BoxShadow(
-                                  blurRadius: 28,
-                                  offset: Offset(0, 16),
-                                  color: Color(0x16000000),
-                                ),
-                              ],
+                      const SizedBox(height: 20),
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 420),
+                        child: TextField(
+                          controller: _searchController,
+                          decoration: InputDecoration(
+                            filled: true,
+                            fillColor: const Color(0xFFFCFAF5),
+                            hintText: 'Filter denomination, catalog, serial, tags, notes...',
+                            prefixIcon: const Icon(Icons.search_rounded),
+                            suffixIcon: _query.isEmpty
+                                ? null
+                                : IconButton(
+                                    onPressed: () {
+                                      _searchController.clear();
+                                      setState(() => _query = '');
+                                    },
+                                    icon: const Icon(Icons.close_rounded),
+                                  ),
+                            border: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: BorderSide.none,
                             ),
-                            child: notes.isEmpty
-                                ? const Center(child: Text('No notes match the current filter.'))
-                                : ClipRRect(
-                                    borderRadius: BorderRadius.circular(28),
-                                    child: Scrollbar(
-                                      controller: _horizontalScrollController,
-                                      child: SingleChildScrollView(
+                          ),
+                          onChanged: (value) => setState(() => _query = value),
+                        ),
+                      ),
+                      const SizedBox(height: 20),
+                      Expanded(
+                        child: LayoutBuilder(
+                          builder: (context, constraints) {
+                            final tableWidth = math.max(_kTableTotalWidth, constraints.maxWidth);
+
+                            return DecoratedBox(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFCFAF5),
+                                borderRadius: BorderRadius.circular(28),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    blurRadius: 28,
+                                    offset: Offset(0, 16),
+                                    color: Color(0x16000000),
+                                  ),
+                                ],
+                              ),
+                              child: notes.isEmpty
+                                  ? const Center(child: Text('No notes match the current filter.'))
+                                  : ClipRRect(
+                                      borderRadius: BorderRadius.circular(28),
+                                      child: Scrollbar(
                                         controller: _horizontalScrollController,
-                                        scrollDirection: Axis.horizontal,
-                                        child: SizedBox(
-                                          width: tableWidth,
-                                          child: Column(
-                                            children: [
-                                              _TableHeader(sortKey: _sortKey, ascending: _ascending, onSort: _toggleSort),
-                                              const Divider(height: 1),
-                                              Expanded(
-                                                child: Scrollbar(
-                                                  controller: _verticalScrollController,
-                                                  child: ListView.separated(
+                                        child: SingleChildScrollView(
+                                          controller: _horizontalScrollController,
+                                          scrollDirection: Axis.horizontal,
+                                          child: SizedBox(
+                                            width: tableWidth,
+                                            child: Column(
+                                              children: [
+                                                _TableHeader(
+                                                  sortKey: _sortKey,
+                                                  ascending: _ascending,
+                                                  onSort: _toggleSort,
+                                                ),
+                                                const Divider(height: 1),
+                                                Expanded(
+                                                  child: Scrollbar(
                                                     controller: _verticalScrollController,
-                                                    itemCount: notes.length,
-                                                    separatorBuilder: (context, index) => const Divider(height: 1),
-                                                    itemBuilder: (context, index) {
-                                                      final note = notes[index];
-                                                      return _TableRow(
-                                                        note: note,
-                                                        onTap: () {
-                                                          Navigator.of(context).push(
-                                                            MaterialPageRoute<void>(
-                                                              builder: (context) => NoteSlideshowScreen(
-                                                                notes: notes,
-                                                                initialIndex: index,
+                                                    child: ListView.separated(
+                                                      controller: _verticalScrollController,
+                                                      itemCount: notes.length,
+                                                      separatorBuilder: (context, index) => const Divider(height: 1),
+                                                      itemBuilder: (context, index) {
+                                                        final note = notes[index];
+
+                                                        return _TableRow(
+                                                          note: note,
+                                                          onTap: () {
+                                                            Navigator.of(context).push(
+                                                              MaterialPageRoute<void>(
+                                                                builder: (context) => NoteSlideshowScreen(
+                                                                  notes: notes,
+                                                                  initialIndex: index,
+                                                                ),
                                                               ),
-                                                            ),
-                                                          );
-                                                        },
-                                                      );
-                                                    },
+                                                            );
+                                                          },
+                                                        );
+                                                      },
+                                                    ),
                                                   ),
                                                 ),
-                                              ),
-                                            ],
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
-                    ),
-                  ],
-                ),
-              );
-            },
+                    ],
+                  ),
+                );
+              },
+            ),
           ),
         ),
       ),
@@ -285,35 +294,72 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Wrap(
-      runSpacing: 16,
-      spacing: 16,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      children: [
-        Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+    return ClipRect(
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        physics: const NeverScrollableScrollPhysics(),
+        child: Row(
           children: [
             Text(
-              'Romanian Paper Money Archive',
-              style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                    color: const Color(0xFF7A5D27),
-                    letterSpacing: 1.4,
-                  ),
+              'Note Harbor Viewer',
+              style: Theme.of(context).textTheme.labelLarge?.copyWith(fontWeight: FontWeight.w800),
             ),
-            const SizedBox(height: 4),
-            Text(
-              'Note Harbor Viewew',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
-            ),
+            const SizedBox(width: 16),
+            _StatPill(label: 'Notes', value: '$visibleCount / $totalCount'),
+            if (generatedAt != null && generatedAt!.trim().isNotEmpty) ...[
+              const SizedBox(width: 16),
+              _DatasetBuiltButton(timestamp: generatedAt!),
+            ],
           ],
         ),
-        _StatPill(label: 'Notes', value: '$visibleCount / $totalCount'),
-        if (generatedAt != null && generatedAt!.trim().isNotEmpty)
-          _StatPill(
-            label: 'Dataset built',
-            value: formatFriendlyDatasetBuiltAt(generatedAt!),
+      ),
+    );
+  }
+}
+
+class _DatasetBuiltButton extends StatelessWidget {
+  const _DatasetBuiltButton({required this.timestamp});
+
+  final String timestamp;
+
+  @override
+  Widget build(BuildContext context) {
+    final formattedTimestamp = formatFriendlyDatasetBuiltAt(timestamp);
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: const Color(0xFFFEFBF3),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFFD8CBB5)),
+      ),
+      child: PopupMenuButton<void>(
+        tooltip: 'Dataset built time',
+        padding: EdgeInsets.zero,
+        position: PopupMenuPosition.under,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        itemBuilder: (context) => [
+          PopupMenuItem<void>(
+            enabled: false,
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  'Dataset built',
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const SizedBox(height: 4),
+                Text(formattedTimestamp),
+              ],
+            ),
           ),
-      ],
+        ],
+        child: const Padding(
+          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Icon(Icons.schedule_rounded, size: 20, color: Color(0xFF7A5D27)),
+        ),
+      ),
     );
   }
 }
