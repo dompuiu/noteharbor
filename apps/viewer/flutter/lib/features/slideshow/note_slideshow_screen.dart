@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../models/note_record.dart';
 import 'image_lightbox.dart';
@@ -400,6 +401,29 @@ class _MetaPanel extends StatelessWidget {
 
   final NoteRecord note;
 
+  Uri? _parseSourceUri(String value) {
+    final trimmed = value.trim();
+    if (trimmed.isEmpty) {
+      return null;
+    }
+
+    final parsed = Uri.tryParse(trimmed);
+    if (parsed != null && parsed.hasScheme) {
+      return parsed;
+    }
+
+    return Uri.tryParse('https://$trimmed');
+  }
+
+  Future<void> _openSourceUrl() async {
+    final uri = _parseSourceUri(note.url);
+    if (uri == null) {
+      return;
+    }
+
+    await launchUrl(uri, mode: LaunchMode.externalApplication);
+  }
+
   @override
   Widget build(BuildContext context) {
     final detailEntries = <MapEntry<String, String>>[
@@ -447,9 +471,19 @@ class _MetaPanel extends StatelessWidget {
                     ),
               ),
               const SizedBox(height: 4),
-              SelectableText(
-                note.url,
-                style: const TextStyle(color: Color(0xFFA3C6B2)),
+              InkWell(
+                onTap: _openSourceUrl,
+                borderRadius: BorderRadius.circular(6),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(vertical: 2),
+                  child: Text(
+                    note.url,
+                    style: const TextStyle(
+                      color: Color(0xFFA3C6B2),
+                      decoration: TextDecoration.underline,
+                    ),
+                  ),
+                ),
               ),
               const SizedBox(height: 16),
             ],
