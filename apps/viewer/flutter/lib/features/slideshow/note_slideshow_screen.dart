@@ -311,13 +311,11 @@ class _ImagesPanel extends StatelessWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 _ImageCard(
-                  label: 'Front',
                   imagePath: note.previewFor('front')?.assetPath,
                   onTap: () => onTapImage(note, 'front'),
                 ),
                 const SizedBox(height: 16),
                 _ImageCard(
-                  label: 'Back',
                   imagePath: note.previewFor('back')?.assetPath,
                   onTap: () => onTapImage(note, 'back'),
                 ),
@@ -332,12 +330,10 @@ class _ImagesPanel extends StatelessWidget {
 
 class _ImageCard extends StatelessWidget {
   const _ImageCard({
-    required this.label,
     required this.imagePath,
     required this.onTap,
   });
 
-  final String label;
   final String? imagePath;
   final VoidCallback onTap;
 
@@ -359,14 +355,6 @@ class _ImageCard extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  label,
-                  style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                        fontWeight: FontWeight.w700,
-                        color: const Color(0xFFFFF5E9),
-                      ),
-                ),
-                const SizedBox(height: 12),
                 AspectRatio(
                   aspectRatio: 1.65,
                   child: ClipRRect(
@@ -398,15 +386,6 @@ class _ImageCard extends StatelessWidget {
                           ),
                   ),
                 ),
-                const SizedBox(height: 12),
-                Text(
-                  imagePath == null
-                      ? 'Image unavailable'
-                      : 'Tap to open full-size sequence',
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: const Color(0xB3FFF5E9),
-                      ),
-                ),
               ],
             ),
           ),
@@ -424,14 +403,12 @@ class _MetaPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final detailEntries = <MapEntry<String, String>>[
-      MapEntry('Order', '${note.displayOrder}'),
       MapEntry('Date', note.issueDate),
       MapEntry('Catalog', note.catalogNumber),
       MapEntry('Grade', note.grade),
       MapEntry('Serial', note.serial),
       MapEntry('Watermark', note.watermark),
       MapEntry('Tags', note.tagsLabel),
-      MapEntry('Scrape status', note.scrapeStatus),
     ].where((entry) => entry.value.trim().isNotEmpty).toList(growable: false);
 
     return DecoratedBox(
