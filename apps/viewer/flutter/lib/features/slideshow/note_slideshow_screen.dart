@@ -139,7 +139,11 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
             body: DecoratedBox(
               decoration: const BoxDecoration(
                 gradient: LinearGradient(
-                  colors: [Color(0xFF18120D), Color(0xFF23180F), Color(0xFF2B1D12)],
+                  colors: [
+                    Color(0xFF18120D),
+                    Color(0xFF23180F),
+                    Color(0xFF2B1D12)
+                  ],
                   begin: Alignment.topCenter,
                   end: Alignment.bottomCenter,
                 ),
@@ -153,50 +157,33 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                         padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
                         child: Row(
                           children: [
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    'Slideshow',
-                                    style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                          color: const Color(0xFFA37037),
-                                          letterSpacing: 1.2,
-                                        ),
-                                  ),
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Tap a note image to open the full viewer',
-                                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                          color: const Color(0xFFFFF5E9),
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                  ),
-                                ],
+                            FilledButton.tonal(
+                              style: FilledButton.styleFrom(
+                                backgroundColor:
+                                    Colors.white.withValues(alpha: 0.08),
+                                foregroundColor: const Color(0xFFFFF5E9),
                               ),
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('Back to table'),
                             ),
+                            const Spacer(),
                             Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
                                 color: Colors.white.withValues(alpha: 0.08),
                                 borderRadius: BorderRadius.circular(999),
                               ),
                               child: Text(
                                 '${_currentIndex + 1} / ${widget.notes.length}',
-                                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                style: Theme.of(context)
+                                    .textTheme
+                                    .titleMedium
+                                    ?.copyWith(
                                       color: const Color(0xFFFFF5E9),
                                       fontWeight: FontWeight.w600,
                                     ),
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            FilledButton.tonal(
-                              style: FilledButton.styleFrom(
-                                backgroundColor: Colors.white.withValues(alpha: 0.08),
-                                foregroundColor: const Color(0xFFFFF5E9),
-                              ),
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('Back to table'),
                             ),
                           ],
                         ),
@@ -205,7 +192,8 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                         child: PageView.builder(
                           controller: _pageController,
                           itemCount: widget.notes.length,
-                          onPageChanged: (value) => setState(() => _currentIndex = value),
+                          onPageChanged: (value) =>
+                              setState(() => _currentIndex = value),
                           itemBuilder: (context, index) {
                             final note = widget.notes[index];
 
@@ -213,12 +201,14 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                               padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
                               child: Center(
                                 child: ConstrainedBox(
-                                  constraints: const BoxConstraints(maxWidth: 1280),
+                                  constraints:
+                                      const BoxConstraints(maxWidth: 1280),
                                   child: DecoratedBox(
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(28),
                                       color: const Color(0xCC1F160F),
-                                      border: Border.all(color: const Color(0x33FFEBD4)),
+                                      border: Border.all(
+                                          color: const Color(0x33FFEBD4)),
                                       boxShadow: const [
                                         BoxShadow(
                                           blurRadius: 32,
@@ -232,10 +222,12 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                                       child: Center(
                                         child: ConstrainedBox(
                                           constraints: const BoxConstraints(
-                                            maxWidth: _kSlideshowContentMaxWidth,
+                                            maxWidth:
+                                                _kSlideshowContentMaxWidth,
                                           ),
                                           child: Column(
-                                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                                            crossAxisAlignment:
+                                                CrossAxisAlignment.stretch,
                                             children: [
                                               _ImagesPanel(
                                                 note: note,
@@ -305,15 +297,16 @@ class _ImagesPanel extends StatelessWidget {
         Text(
           note.gradingCompany.isEmpty ? 'Collection note' : note.gradingCompany,
           style: Theme.of(context).textTheme.titleMedium?.copyWith(
-            color: const Color(0xFFA3C6B2),
-          ),
+                color: const Color(0xFFA3C6B2),
+              ),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 20),
         Align(
           alignment: Alignment.topCenter,
           child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: _kSlideshowImagesMaxWidth),
+            constraints:
+                const BoxConstraints(maxWidth: _kSlideshowImagesMaxWidth),
             child: Column(
               mainAxisSize: MainAxisSize.min,
               children: [
@@ -411,8 +404,8 @@ class _ImageCard extends StatelessWidget {
                       ? 'Image unavailable'
                       : 'Tap to open full-size sequence',
                   style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xB3FFF5E9),
-                  ),
+                        color: const Color(0xB3FFF5E9),
+                      ),
                 ),
               ],
             ),
@@ -456,8 +449,8 @@ class _MetaPanel extends StatelessWidget {
               Text(
                 entry.key,
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFFA37037),
-                ),
+                      color: const Color(0xFFA37037),
+                    ),
               ),
               const SizedBox(height: 4),
               SelectableText(
@@ -473,8 +466,8 @@ class _MetaPanel extends StatelessWidget {
               Text(
                 'Source URL',
                 style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                  color: const Color(0xFFA37037),
-                ),
+                      color: const Color(0xFFA37037),
+                    ),
               ),
               const SizedBox(height: 4),
               SelectableText(
@@ -486,8 +479,8 @@ class _MetaPanel extends StatelessWidget {
             Text(
               'Notes',
               style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                color: const Color(0xFFA37037),
-              ),
+                    color: const Color(0xFFA37037),
+                  ),
             ),
             const SizedBox(height: 4),
             Text(
