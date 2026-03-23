@@ -150,12 +150,13 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                 ),
               ),
               child: SafeArea(
+                bottom: false,
                 child: Padding(
-                  padding: const EdgeInsets.all(16),
+                  padding: const EdgeInsets.fromLTRB(8, 8, 8, 0),
                   child: Column(
                     children: [
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
+                        padding: const EdgeInsets.fromLTRB(4, 0, 4, 8),
                         child: Row(
                           children: [
                             const Spacer(),
@@ -200,12 +201,16 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                             final note = widget.notes[index];
 
                             return Padding(
-                              padding: const EdgeInsets.fromLTRB(12, 8, 12, 16),
-                              child: Center(
-                                child: ConstrainedBox(
-                                  constraints:
-                                      const BoxConstraints(maxWidth: 1280),
-                                  child: DecoratedBox(
+                              padding: const EdgeInsets.fromLTRB(2, 4, 2, 16),
+                              child: LayoutBuilder(
+                                builder: (context, constraints) {
+                                  final compactLayout =
+                                      constraints.maxWidth < 700;
+                                  final cardPadding =
+                                      compactLayout ? 14.0 : 24.0;
+
+                                  return Container(
+                                    clipBehavior: Clip.antiAlias,
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(28),
                                       color: const Color(0xCC1F160F),
@@ -220,30 +225,44 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                                       ],
                                     ),
                                     child: SingleChildScrollView(
-                                      padding: const EdgeInsets.all(24),
-                                      child: Center(
-                                        child: ConstrainedBox(
-                                          constraints: const BoxConstraints(
-                                            maxWidth:
-                                                _kSlideshowContentMaxWidth,
-                                          ),
-                                          child: Column(
-                                            crossAxisAlignment:
-                                                CrossAxisAlignment.stretch,
-                                            children: [
-                                              _ImagesPanel(
-                                                note: note,
-                                                onTapImage: _openImageViewer,
-                                              ),
-                                              const SizedBox(height: 24),
-                                              _MetaPanel(note: note),
-                                            ],
+                                      padding: EdgeInsets.fromLTRB(
+                                        cardPadding,
+                                        cardPadding,
+                                        cardPadding,
+                                        cardPadding +
+                                            MediaQuery.paddingOf(context)
+                                                .bottom,
+                                      ),
+                                      child: ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          minHeight: constraints.maxHeight -
+                                              cardPadding,
+                                          maxWidth: 1280,
+                                        ),
+                                        child: Center(
+                                          child: ConstrainedBox(
+                                            constraints: const BoxConstraints(
+                                              maxWidth:
+                                                  _kSlideshowContentMaxWidth,
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.stretch,
+                                              children: [
+                                                _ImagesPanel(
+                                                  note: note,
+                                                  onTapImage: _openImageViewer,
+                                                ),
+                                                const SizedBox(height: 20),
+                                                _MetaPanel(note: note),
+                                              ],
+                                            ),
                                           ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                ),
+                                  );
+                                },
                               ),
                             );
                           },
