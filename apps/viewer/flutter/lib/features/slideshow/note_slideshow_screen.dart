@@ -136,19 +136,9 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
         child: Focus(
           autofocus: true,
           child: Scaffold(
-            backgroundColor: const Color(0xFF18120D),
+            backgroundColor: const Color(0xFF1F160F),
             body: DecoratedBox(
-              decoration: const BoxDecoration(
-                gradient: LinearGradient(
-                  colors: [
-                    Color(0xFF18120D),
-                    Color(0xFF23180F),
-                    Color(0xFF2B1D12)
-                  ],
-                  begin: Alignment.topCenter,
-                  end: Alignment.bottomCenter,
-                ),
-              ),
+              decoration: const BoxDecoration(color: Color(0xFF1F160F)),
               child: SafeArea(
                 bottom: false,
                 child: Padding(
