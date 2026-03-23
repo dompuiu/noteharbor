@@ -13,7 +13,7 @@ class ImageSequenceItem {
   final NoteRecord note;
   final NoteImage image;
 
-  String get label => '${note.title} - ${image.displayLabel}';
+  String get label => note.title;
 }
 
 class ImageLightbox extends StatefulWidget {
@@ -105,44 +105,51 @@ class _ImageLightboxState extends State<ImageLightbox> {
         child: Focus(
           autofocus: true,
           child: Scaffold(
-            backgroundColor: const Color(0xFF121514),
+            backgroundColor: const Color(0xFF1F160F),
             body: SafeArea(
               child: Column(
                 children: [
                   Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
                     child: Row(
                       children: [
                         Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              Text(
-                                'Image Viewer',
-                                style: Theme.of(context).textTheme.labelLarge?.copyWith(
-                                      color: const Color(0xFFA3C6B2),
-                                      letterSpacing: 1.1,
-                                    ),
-                              ),
-                              const SizedBox(height: 4),
-                              Text(
-                                item.label,
-                                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                                      color: Colors.white,
-                                      fontWeight: FontWeight.w700,
-                                    ),
-                              ),
-                            ],
+                          child: Text(
+                            item.label,
+                            style: const TextStyle(
+                              color: Color(0xFFFFF5E9),
+                              fontSize: 17,
+                              fontWeight: FontWeight.w700,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
                         ),
-                        Text(
-                          '${_currentIndex + 1} / ${widget.items.length}',
-                          style: Theme.of(context).textTheme.titleMedium?.copyWith(color: Colors.white70),
+                        const SizedBox(width: 12),
+                        Container(
+                          padding: const EdgeInsets.symmetric(
+                              horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.white.withValues(alpha: 0.08),
+                            borderRadius: BorderRadius.circular(999),
+                          ),
+                          child: Text(
+                            '${_currentIndex + 1} / ${widget.items.length}',
+                            style: const TextStyle(
+                              color: Color(0xFFFFF5E9),
+                              fontWeight: FontWeight.w600,
+                              fontSize: 15,
+                            ),
+                          ),
                         ),
-                        const SizedBox(width: 16),
+                        const SizedBox(width: 10),
                         FilledButton.tonal(
+                          style: FilledButton.styleFrom(
+                            backgroundColor:
+                                Colors.white.withValues(alpha: 0.08),
+                            foregroundColor: const Color(0xFFFFF5E9),
+                          ),
                           onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('Close'),
+                          child: const Text('Back'),
                         ),
                       ],
                     ),
@@ -151,42 +158,40 @@ class _ImageLightboxState extends State<ImageLightbox> {
                     child: PageView.builder(
                       controller: _controller,
                       itemCount: widget.items.length,
-                      onPageChanged: (value) => setState(() => _currentIndex = value),
+                      onPageChanged: (value) =>
+                          setState(() => _currentIndex = value),
                       itemBuilder: (context, index) {
                         final imageItem = widget.items[index];
                         return Padding(
-                          padding: const EdgeInsets.all(24),
-                          child: DecoratedBox(
+                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+                          child: Container(
                             decoration: BoxDecoration(
-                              color: const Color(0xFF1D2320),
-                              borderRadius: BorderRadius.circular(28),
-                              border: Border.all(color: const Color(0xFF32443D)),
+                              color: const Color(0xFF160E08),
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(
+                                  color: const Color(0x44FFEBD4)),
                             ),
-                            child: ClipRRect(
-                              borderRadius: BorderRadius.circular(28),
-                              child: InteractiveViewer(
-                                minScale: 0.7,
-                                maxScale: 4,
-                                child: Padding(
-                                  padding: const EdgeInsets.symmetric(
-                                    horizontal: 24,
-                                    vertical: 16,
-                                  ),
-                                  child: Center(
-                                    child: Image.asset(
-                                      imageItem.image.assetPath,
-                                      fit: BoxFit.contain,
-                                      errorBuilder: (context, error, stackTrace) {
-                                        return const Padding(
-                                          padding: EdgeInsets.all(32),
-                                          child: Text(
-                                            'This image asset is missing from the bundled dataset.',
-                                            style: TextStyle(color: Colors.white70),
-                                            textAlign: TextAlign.center,
-                                          ),
-                                        );
-                                      },
-                                    ),
+                            clipBehavior: Clip.antiAlias,
+                            child: InteractiveViewer(
+                              minScale: 0.7,
+                              maxScale: 4,
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: Center(
+                                  child: Image.asset(
+                                    imageItem.image.assetPath,
+                                    fit: BoxFit.contain,
+                                    errorBuilder: (context, error, stackTrace) {
+                                      return const Padding(
+                                        padding: EdgeInsets.all(32),
+                                        child: Text(
+                                          'This image asset is missing from the bundled dataset.',
+                                          style:
+                                              TextStyle(color: Colors.white70),
+                                          textAlign: TextAlign.center,
+                                        ),
+                                      );
+                                    },
                                   ),
                                 ),
                               ),
