@@ -205,7 +205,15 @@ class _NoteSlide extends StatelessWidget {
           border: Border.all(color: _kBorder),
         ),
         clipBehavior: Clip.antiAlias,
-        child: SingleChildScrollView(
+        child: ShaderMask(
+          shaderCallback: (bounds) => const LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [Colors.black, Colors.black, Colors.transparent],
+            stops: [0.0, 0.75, 1.0],
+          ).createShader(bounds),
+          blendMode: BlendMode.dstIn,
+          child: SingleChildScrollView(
           padding: const EdgeInsets.all(16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -241,6 +249,7 @@ class _NoteSlide extends StatelessWidget {
               _MetaPanel(note: note),
             ],
           ),
+        ),
         ),
       ),
     );
