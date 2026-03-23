@@ -158,15 +158,6 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                         padding: const EdgeInsets.fromLTRB(4, 4, 4, 12),
                         child: Row(
                           children: [
-                            FilledButton.tonal(
-                              style: FilledButton.styleFrom(
-                                backgroundColor:
-                                    Colors.white.withValues(alpha: 0.08),
-                                foregroundColor: const Color(0xFFFFF5E9),
-                              ),
-                              onPressed: () => Navigator.of(context).pop(),
-                              child: const Text('Back to table'),
-                            ),
                             const Spacer(),
                             Container(
                               padding: const EdgeInsets.symmetric(
@@ -185,6 +176,16 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                                       fontWeight: FontWeight.w600,
                                     ),
                               ),
+                            ),
+                            const SizedBox(width: 12),
+                            FilledButton.tonal(
+                              style: FilledButton.styleFrom(
+                                backgroundColor:
+                                    Colors.white.withValues(alpha: 0.08),
+                                foregroundColor: const Color(0xFFFFF5E9),
+                              ),
+                              onPressed: () => Navigator.of(context).pop(),
+                              child: const Text('Back'),
                             ),
                           ],
                         ),
