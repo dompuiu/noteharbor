@@ -188,69 +188,138 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   }
 }
 
-class _NoteSlide extends StatelessWidget {
+class _NoteSlide extends StatefulWidget {
   const _NoteSlide({required this.note, required this.onTapImage});
 
   final NoteRecord note;
   final void Function(NoteRecord, String) onTapImage;
 
   @override
+  State<_NoteSlide> createState() => _NoteSlideState();
+}
+
+class _NoteSlideState extends State<_NoteSlide> {
+  final _scrollController = ScrollController();
+  bool _atBottom = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _scrollController.addListener(_onScroll);
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  void _onScroll() {
+    final atBottom = _scrollController.position.pixels >=
+        _scrollController.position.maxScrollExtent - 1;
+    if (atBottom != _atBottom) setState(() => _atBottom = atBottom);
+  }
+
+  @override
   Widget build(BuildContext context) {
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-      child: Container(
-        decoration: BoxDecoration(
-          color: _kCardBg,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: _kBorder),
-        ),
-        clipBehavior: Clip.antiAlias,
-        child: ShaderMask(
-          shaderCallback: (bounds) => const LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [Colors.black, Colors.black, Colors.transparent],
-            stops: [0.0, 0.75, 1.0],
-          ).createShader(bounds),
-          blendMode: BlendMode.dstIn,
-          child: SingleChildScrollView(
-          padding: const EdgeInsets.all(16),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              Text(
-                note.title,
-                style: const TextStyle(
-                  color: _kTextPrimary,
-                  fontSize: 22,
-                  fontWeight: FontWeight.w700,
-                ),
-                textAlign: TextAlign.center,
+      child: Stack(
+        children: [
+          // Scrollable content clipped inside card background
+          Positioned.fill(
+            child: Container(
+              margin: const EdgeInsets.all(1),
+              decoration: BoxDecoration(
+                color: _kCardBg,
+                borderRadius: BorderRadius.circular(19),
               ),
-              if (note.gradingCompany.isNotEmpty) ...[
-                const SizedBox(height: 4),
-                Text(
-                  note.gradingCompany,
-                  style: const TextStyle(color: _kTextAccent, fontSize: 15),
-                  textAlign: TextAlign.center,
-                ),
-              ],
-              const SizedBox(height: 16),
-              _NoteImage(
-                imagePath: note.previewFor('front')?.assetPath,
-                onTap: () => onTapImage(note, 'front'),
+              clipBehavior: Clip.antiAlias,
+              child: Stack(
+                children: [
+                  SingleChildScrollView(
+                    controller: _scrollController,
+                    padding: const EdgeInsets.all(16),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        Text(
+                          widget.note.title,
+                          style: const TextStyle(
+                            color: _kTextPrimary,
+                            fontSize: 22,
+                            fontWeight: FontWeight.w700,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                        if (widget.note.gradingCompany.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            widget.note.gradingCompany,
+                            style: const TextStyle(
+                                color: _kTextAccent, fontSize: 15),
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        _NoteImage(
+                          imagePath:
+                              widget.note.previewFor('front')?.assetPath,
+                          onTap: () =>
+                              widget.onTapImage(widget.note, 'front'),
+                        ),
+                        const SizedBox(height: 12),
+                        _NoteImage(
+                          imagePath:
+                              widget.note.previewFor('back')?.assetPath,
+                          onTap: () =>
+                              widget.onTapImage(widget.note, 'back'),
+                        ),
+                        const SizedBox(height: 16),
+                        _MetaPanel(note: widget.note),
+                      ],
+                    ),
+                  ),
+                  Positioned(
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    child: AnimatedOpacity(
+                      opacity: _atBottom ? 0.0 : 1.0,
+                      duration: const Duration(milliseconds: 250),
+                      child: IgnorePointer(
+                        child: Container(
+                          height: 72,
+                          decoration: BoxDecoration(
+                            gradient: LinearGradient(
+                              begin: Alignment.topCenter,
+                              end: Alignment.bottomCenter,
+                              colors: [
+                                _kCardBg.withValues(alpha: 0),
+                                _kCardBg,
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 12),
-              _NoteImage(
-                imagePath: note.previewFor('back')?.assetPath,
-                onTap: () => onTapImage(note, 'back'),
-              ),
-              const SizedBox(height: 16),
-              _MetaPanel(note: note),
-            ],
+            ),
           ),
-        ),
-        ),
+          // Border always rendered on top
+          Positioned.fill(
+            child: IgnorePointer(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _kBorder),
+                ),
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }
