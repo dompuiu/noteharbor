@@ -196,54 +196,52 @@ class _NoteSlide extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return SingleChildScrollView(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 24),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          Container(
-            decoration: BoxDecoration(
-              color: _kCardBg,
-              borderRadius: BorderRadius.circular(20),
-              border: Border.all(color: _kBorder),
-            ),
-            padding: const EdgeInsets.all(16),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+      child: Container(
+        decoration: BoxDecoration(
+          color: _kCardBg,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(color: _kBorder),
+        ),
+        clipBehavior: Clip.antiAlias,
+        child: SingleChildScrollView(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text(
+                note.title,
+                style: const TextStyle(
+                  color: _kTextPrimary,
+                  fontSize: 22,
+                  fontWeight: FontWeight.w700,
+                ),
+                textAlign: TextAlign.center,
+              ),
+              if (note.gradingCompany.isNotEmpty) ...[
+                const SizedBox(height: 4),
                 Text(
-                  note.title,
-                  style: const TextStyle(
-                    color: _kTextPrimary,
-                    fontSize: 22,
-                    fontWeight: FontWeight.w700,
-                  ),
+                  note.gradingCompany,
+                  style: const TextStyle(color: _kTextAccent, fontSize: 15),
                   textAlign: TextAlign.center,
                 ),
-                if (note.gradingCompany.isNotEmpty) ...[
-                  const SizedBox(height: 4),
-                  Text(
-                    note.gradingCompany,
-                    style: const TextStyle(color: _kTextAccent, fontSize: 15),
-                    textAlign: TextAlign.center,
-                  ),
-                ],
-                const SizedBox(height: 16),
-                _NoteImage(
-                  imagePath: note.previewFor('front')?.assetPath,
-                  onTap: () => onTapImage(note, 'front'),
-                ),
-                const SizedBox(height: 12),
-                _NoteImage(
-                  imagePath: note.previewFor('back')?.assetPath,
-                  onTap: () => onTapImage(note, 'back'),
-                ),
               ],
-            ),
+              const SizedBox(height: 16),
+              _NoteImage(
+                imagePath: note.previewFor('front')?.assetPath,
+                onTap: () => onTapImage(note, 'front'),
+              ),
+              const SizedBox(height: 12),
+              _NoteImage(
+                imagePath: note.previewFor('back')?.assetPath,
+                onTap: () => onTapImage(note, 'back'),
+              ),
+              const SizedBox(height: 16),
+              _MetaPanel(note: note),
+            ],
           ),
-          const SizedBox(height: 12),
-          _MetaPanel(note: note),
-        ],
+        ),
       ),
     );
   }
