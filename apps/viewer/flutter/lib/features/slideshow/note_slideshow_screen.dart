@@ -203,7 +203,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                                     clipBehavior: Clip.antiAlias,
                                     decoration: BoxDecoration(
                                       borderRadius: BorderRadius.circular(28),
-                                      color: const Color(0xCC1F160F),
+                                      color: Colors.transparent,
                                       border: Border.all(
                                           color: const Color(0x33FFEBD4)),
                                       boxShadow: const [
@@ -447,9 +447,8 @@ class _MetaPanel extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: Colors.white.withValues(alpha: 0.04),
+        color: Colors.white.withValues(alpha: 0.07),
         borderRadius: BorderRadius.circular(24),
-        border: Border.all(color: const Color(0x33FFEBD4)),
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
