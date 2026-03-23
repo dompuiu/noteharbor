@@ -163,7 +163,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
                       itemBuilder: (context, index) {
                         final imageItem = widget.items[index];
                         return Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 16),
+                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
                           child: Container(
                             decoration: BoxDecoration(
                               color: const Color(0xFF160E08),
