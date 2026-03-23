@@ -13,7 +13,7 @@ class ViewerApp extends StatelessWidget {
     const secondaryColor = Color(0xFFA37037);
 
     return MaterialApp(
-      title: 'Note Harbor Viewer',
+      title: 'Note Harbor',
       debugShowCheckedModeBanner: false,
       theme: ThemeData(
         colorScheme: const ColorScheme.light(
