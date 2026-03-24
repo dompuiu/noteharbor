@@ -44,7 +44,8 @@ String formatFriendlyDatasetBuiltAt(String value) {
 
 const double _kTableContentWidth = 1180;
 const double _kTableHorizontalPadding = 14;
-const double _kTableTotalWidth = _kTableContentWidth + (_kTableHorizontalPadding * 2);
+const double _kTableTotalWidth =
+    _kTableContentWidth + (_kTableHorizontalPadding * 2);
 
 class NotesTableScreen extends StatefulWidget {
   const NotesTableScreen({super.key});
@@ -139,6 +140,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
             ),
           ),
           child: SafeArea(
+            bottom:false,
             child: FutureBuilder<ViewerDataset>(
               future: _datasetFuture,
               builder: (context, snapshot) {
@@ -150,7 +152,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
-                      child: Text('Failed to load bundled dataset: ${snapshot.error}'),
+                      child: Text(
+                          'Failed to load bundled dataset: ${snapshot.error}'),
                     ),
                   );
                 }
@@ -159,7 +162,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                 final notes = _sortedNotes(dataset.notes);
 
                 return Padding(
-                  padding: const EdgeInsets.all(12),
+                  padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -176,7 +179,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: const Color(0xFFFCFAF5),
-                            hintText: 'Filter denomination, catalog, serial, tags, notes...',
+                            hintText:
+                                'Filter denomination, catalog, serial, tags, notes...',
                             prefixIcon: const Icon(Icons.search_rounded),
                             suffixIcon: _query.isEmpty
                                 ? null
@@ -199,7 +203,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                       Expanded(
                         child: LayoutBuilder(
                           builder: (context, constraints) {
-                            final tableWidth = math.max(_kTableTotalWidth, constraints.maxWidth);
+                            final tableWidth = math.max(
+                                _kTableTotalWidth, constraints.maxWidth);
 
                             return DecoratedBox(
                               decoration: BoxDecoration(
@@ -214,13 +219,16 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                 ],
                               ),
                               child: notes.isEmpty
-                                  ? const Center(child: Text('No notes match the current filter.'))
+                                  ? const Center(
+                                      child: Text(
+                                          'No notes match the current filter.'))
                                   : ClipRRect(
                                       borderRadius: BorderRadius.circular(28),
                                       child: Scrollbar(
                                         controller: _horizontalScrollController,
                                         child: SingleChildScrollView(
-                                          controller: _horizontalScrollController,
+                                          controller:
+                                              _horizontalScrollController,
                                           scrollDirection: Axis.horizontal,
                                           child: SizedBox(
                                             width: tableWidth,
@@ -234,22 +242,35 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                 const Divider(height: 1),
                                                 Expanded(
                                                   child: Scrollbar(
-                                                    controller: _verticalScrollController,
+                                                    controller:
+                                                        _verticalScrollController,
                                                     child: ListView.separated(
-                                                      controller: _verticalScrollController,
+                                                      controller:
+                                                          _verticalScrollController,
                                                       itemCount: notes.length,
-                                                      separatorBuilder: (context, index) => const Divider(height: 1),
-                                                      itemBuilder: (context, index) {
-                                                        final note = notes[index];
+                                                      separatorBuilder:
+                                                          (context, index) =>
+                                                              const Divider(
+                                                                  height: 1),
+                                                      itemBuilder:
+                                                          (context, index) {
+                                                        final note =
+                                                            notes[index];
 
                                                         return _TableRow(
                                                           note: note,
                                                           onTap: () {
-                                                            Navigator.of(context).push(
-                                                              MaterialPageRoute<void>(
-                                                                builder: (context) => NoteSlideshowScreen(
+                                                            Navigator.of(
+                                                                    context)
+                                                                .push(
+                                                              MaterialPageRoute<
+                                                                  void>(
+                                                                builder:
+                                                                    (context) =>
+                                                                        NoteSlideshowScreen(
                                                                   notes: notes,
-                                                                  initialIndex: index,
+                                                                  initialIndex:
+                                                                      index,
                                                                 ),
                                                               ),
                                                             );
@@ -302,7 +323,10 @@ class _Header extends StatelessWidget {
           children: [
             Text(
               'Note Harbor',
-              style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800),
+              style: Theme.of(context)
+                  .textTheme
+                  .headlineSmall
+                  ?.copyWith(fontWeight: FontWeight.w800),
             ),
             const SizedBox(width: 16),
             _StatPill(label: 'Notes', value: '$visibleCount / $totalCount'),
@@ -347,7 +371,10 @@ class _DatasetBuiltButton extends StatelessWidget {
               children: [
                 Text(
                   'Dataset built',
-                  style: Theme.of(context).textTheme.labelMedium?.copyWith(fontWeight: FontWeight.w700),
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelMedium
+                      ?.copyWith(fontWeight: FontWeight.w700),
                 ),
                 const SizedBox(height: 4),
                 Text(formattedTimestamp),
@@ -357,7 +384,8 @@ class _DatasetBuiltButton extends StatelessWidget {
         ],
         child: const Padding(
           padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child: Icon(Icons.schedule_rounded, size: 20, color: Color(0xFF7A5D27)),
+          child:
+              Icon(Icons.schedule_rounded, size: 20, color: Color(0xFF7A5D27)),
         ),
       ),
     );
@@ -383,7 +411,8 @@ class _StatPill extends StatelessWidget {
         child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Text('$label: ', style: const TextStyle(fontWeight: FontWeight.w700)),
+            Text('$label: ',
+                style: const TextStyle(fontWeight: FontWeight.w700)),
             Text(value),
           ],
         ),
@@ -408,18 +437,74 @@ class _TableHeader extends StatelessWidget {
     return ColoredBox(
       color: const Color(0xFFE8E1D4),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: _kTableHorizontalPadding, vertical: 12),
+        padding: const EdgeInsets.symmetric(
+            horizontal: _kTableHorizontalPadding, vertical: 12),
         child: Row(
           children: [
-            _HeaderCell(width: 90, label: 'Order', sortKey: 'displayOrder', activeSortKey: sortKey, ascending: ascending, onSort: onSort),
-            _HeaderCell(width: 120, label: 'Front', isSortable: false, sortKey: '', activeSortKey: sortKey, ascending: ascending, onSort: onSort),
-            _HeaderCell(width: 190, label: 'Denomination', sortKey: 'denomination', activeSortKey: sortKey, ascending: ascending, onSort: onSort),
-            _HeaderCell(width: 120, label: 'Date', sortKey: 'issueDate', activeSortKey: sortKey, ascending: ascending, onSort: onSort),
-            _HeaderCell(width: 130, label: 'Catalog', sortKey: 'catalogNumber', activeSortKey: sortKey, ascending: ascending, onSort: onSort),
-            _HeaderCell(width: 120, label: 'Company', sortKey: 'gradingCompany', activeSortKey: sortKey, ascending: ascending, onSort: onSort),
-            _HeaderCell(width: 110, label: 'Grade', sortKey: 'grade', activeSortKey: sortKey, ascending: ascending, onSort: onSort),
-            _HeaderCell(width: 140, label: 'Serial', sortKey: 'serial', activeSortKey: sortKey, ascending: ascending, onSort: onSort),
-            _HeaderCell(width: 160, label: 'Tags', sortKey: 'tags', activeSortKey: sortKey, ascending: ascending, onSort: onSort),
+            _HeaderCell(
+                width: 90,
+                label: 'Order',
+                sortKey: 'displayOrder',
+                activeSortKey: sortKey,
+                ascending: ascending,
+                onSort: onSort),
+            _HeaderCell(
+                width: 120,
+                label: 'Front',
+                isSortable: false,
+                sortKey: '',
+                activeSortKey: sortKey,
+                ascending: ascending,
+                onSort: onSort),
+            _HeaderCell(
+                width: 190,
+                label: 'Denomination',
+                sortKey: 'denomination',
+                activeSortKey: sortKey,
+                ascending: ascending,
+                onSort: onSort),
+            _HeaderCell(
+                width: 120,
+                label: 'Date',
+                sortKey: 'issueDate',
+                activeSortKey: sortKey,
+                ascending: ascending,
+                onSort: onSort),
+            _HeaderCell(
+                width: 130,
+                label: 'Catalog',
+                sortKey: 'catalogNumber',
+                activeSortKey: sortKey,
+                ascending: ascending,
+                onSort: onSort),
+            _HeaderCell(
+                width: 120,
+                label: 'Company',
+                sortKey: 'gradingCompany',
+                activeSortKey: sortKey,
+                ascending: ascending,
+                onSort: onSort),
+            _HeaderCell(
+                width: 110,
+                label: 'Grade',
+                sortKey: 'grade',
+                activeSortKey: sortKey,
+                ascending: ascending,
+                onSort: onSort),
+            _HeaderCell(
+                width: 140,
+                label: 'Serial',
+                sortKey: 'serial',
+                activeSortKey: sortKey,
+                ascending: ascending,
+                onSort: onSort),
+            _HeaderCell(
+                width: 160,
+                label: 'Tags',
+                sortKey: 'tags',
+                activeSortKey: sortKey,
+                ascending: ascending,
+                onSort: onSort),
           ],
         ),
       ),
@@ -449,7 +534,11 @@ class _HeaderCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isActive = isSortable && sortKey == activeSortKey;
-    final icon = isActive ? (ascending ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded) : null;
+    final icon = isActive
+        ? (ascending
+            ? Icons.arrow_upward_rounded
+            : Icons.arrow_downward_rounded)
+        : null;
 
     return SizedBox(
       width: width,
@@ -460,7 +549,9 @@ class _HeaderCell extends StatelessWidget {
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  Flexible(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))),
+                  Flexible(
+                      child: Text(label,
+                          style: const TextStyle(fontWeight: FontWeight.w700))),
                   if (icon != null) ...[
                     const SizedBox(width: 4),
                     Icon(icon, size: 16),
@@ -470,7 +561,9 @@ class _HeaderCell extends StatelessWidget {
             )
           : Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Center(child: Text(label, style: const TextStyle(fontWeight: FontWeight.w700))),
+              child: Center(
+                  child: Text(label,
+                      style: const TextStyle(fontWeight: FontWeight.w700))),
             ),
     );
   }
@@ -492,7 +585,8 @@ class _TableRow extends StatelessWidget {
     return InkWell(
       onTap: onTap,
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: _kTableHorizontalPadding, vertical: 12),
+        padding: const EdgeInsets.symmetric(
+            horizontal: _kTableHorizontalPadding, vertical: 12),
         child: Row(
           children: [
             _DataCell(width: 90, child: Text('${note.displayOrder}')),
@@ -507,7 +601,8 @@ class _TableRow extends StatelessWidget {
                         width: 96,
                         height: 56,
                         fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) => const SizedBox(
+                        errorBuilder: (context, error, stackTrace) =>
+                            const SizedBox(
                           width: 96,
                           height: 56,
                           child: ColoredBox(color: Color(0xFFE7E0D5)),
@@ -516,12 +611,25 @@ class _TableRow extends StatelessWidget {
                     ),
             ),
             _DataCell(width: 190, child: Text(note.denomination)),
-            _DataCell(width: 120, child: Text(note.issueDate.isEmpty ? '-' : note.issueDate)),
-            _DataCell(width: 130, child: Text(note.catalogNumber.isEmpty ? '-' : note.catalogNumber)),
-            _DataCell(width: 120, child: Text(note.gradingCompany.isEmpty ? '-' : note.gradingCompany)),
-            _DataCell(width: 110, child: Text(note.grade.isEmpty ? '-' : note.grade)),
-            _DataCell(width: 140, child: Text(note.serial.isEmpty ? '-' : note.serial)),
-            _DataCell(width: 160, child: Text(note.tagsLabel.isEmpty ? '-' : note.tagsLabel)),
+            _DataCell(
+                width: 120,
+                child: Text(note.issueDate.isEmpty ? '-' : note.issueDate)),
+            _DataCell(
+                width: 130,
+                child: Text(
+                    note.catalogNumber.isEmpty ? '-' : note.catalogNumber)),
+            _DataCell(
+                width: 120,
+                child: Text(
+                    note.gradingCompany.isEmpty ? '-' : note.gradingCompany)),
+            _DataCell(
+                width: 110, child: Text(note.grade.isEmpty ? '-' : note.grade)),
+            _DataCell(
+                width: 140,
+                child: Text(note.serial.isEmpty ? '-' : note.serial)),
+            _DataCell(
+                width: 160,
+                child: Text(note.tagsLabel.isEmpty ? '-' : note.tagsLabel)),
           ],
         ),
       ),
