@@ -52,6 +52,7 @@ const Color _kTableHeaderBg = Color(0xFFDCCAAE);
 const Color _kTableDivider = Color(0xFFD6C3A8);
 const Color _kTableText = Color(0xFF251912);
 const Color _kTableMuted = Color(0xFF6A563F);
+const Color _kTableSortableHeaderText = Color(0xFF6F421F);
 const double _kHeaderBadgeHeight = 48;
 
 class NotesTableScreen extends StatefulWidget {
@@ -618,7 +619,7 @@ class _HeaderCell extends StatelessWidget {
               onPressed: () => onSort(sortKey),
               style: TextButton.styleFrom(
                 alignment: Alignment.center,
-                foregroundColor: _kTableText,
+                foregroundColor: _kTableSortableHeaderText,
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
@@ -628,7 +629,7 @@ class _HeaderCell extends StatelessWidget {
                     label,
                     style: const TextStyle(
                       fontWeight: FontWeight.w800,
-                      color: _kTableText,
+                      color: _kTableSortableHeaderText,
                     ),
                   )),
                   if (icon != null) ...[
