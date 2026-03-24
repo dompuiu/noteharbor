@@ -173,6 +173,8 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                         return _NoteSlide(
                           note: widget.notes[index],
                           onTapImage: _openImageViewer,
+                          onTagTap: (tagName) =>
+                              Navigator.of(context).pop(tagName),
                         );
                       },
                     ),
@@ -188,10 +190,15 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
 }
 
 class _NoteSlide extends StatefulWidget {
-  const _NoteSlide({required this.note, required this.onTapImage});
+  const _NoteSlide({
+    required this.note,
+    required this.onTapImage,
+    required this.onTagTap,
+  });
 
   final NoteRecord note;
   final void Function(NoteRecord, String) onTapImage;
+  final void Function(String tagName) onTagTap;
 
   @override
   State<_NoteSlide> createState() => _NoteSlideState();
@@ -271,7 +278,10 @@ class _NoteSlideState extends State<_NoteSlide> {
                           onTap: () => widget.onTapImage(widget.note, 'back'),
                         ),
                         const SizedBox(height: 16),
-                        _MetaPanel(note: widget.note),
+                        _MetaPanel(
+                          note: widget.note,
+                          onTagTap: widget.onTagTap,
+                        ),
                       ],
                     ),
                   ),
@@ -364,9 +374,10 @@ class _NoteImage extends StatelessWidget {
 }
 
 class _MetaPanel extends StatelessWidget {
-  const _MetaPanel({required this.note});
+  const _MetaPanel({required this.note, required this.onTagTap});
 
   final NoteRecord note;
+  final void Function(String tagName) onTagTap;
 
   Uri? _parseSourceUri(String value) {
     final trimmed = value.trim();
@@ -390,7 +401,6 @@ class _MetaPanel extends StatelessWidget {
       MapEntry('Grade', note.grade),
       MapEntry('Serial', note.serial),
       MapEntry('Watermark', note.watermark),
-      MapEntry('Tags', note.tagsLabel),
     ].where((e) => e.value.trim().isNotEmpty).toList(growable: false);
 
     return Container(
@@ -421,6 +431,46 @@ class _MetaPanel extends StatelessWidget {
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
               ),
+            ),
+            const SizedBox(height: 14),
+          ],
+          if (note.tags.isNotEmpty) ...[
+            const Text(
+              'Tags',
+              style: TextStyle(
+                color: _kTextLabel,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+                letterSpacing: 0.5,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: [
+                for (final tag in note.tags)
+                  GestureDetector(
+                    onTap: () => onTagTap(tag.name),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 12, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFF3A2615),
+                        borderRadius: BorderRadius.circular(20),
+                        border: Border.all(color: _kTextLabel),
+                      ),
+                      child: Text(
+                        tag.name,
+                        style: const TextStyle(
+                          color: _kTextAccent,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w600,
+                        ),
+                      ),
+                    ),
+                  ),
+              ],
             ),
             const SizedBox(height: 14),
           ],

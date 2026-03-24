@@ -287,12 +287,14 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
 
                                                         return _TableRow(
                                                           note: note,
-                                                          onTap: () {
-                                                            Navigator.of(
-                                                                    context)
-                                                                .push(
+                                                          onTap: () async {
+                                                            final tag =
+                                                                await Navigator
+                                                                    .of(context)
+                                                                    .push<
+                                                                        String>(
                                                               MaterialPageRoute<
-                                                                  void>(
+                                                                  String>(
                                                                 builder:
                                                                     (context) =>
                                                                         NoteSlideshowScreen(
@@ -302,6 +304,18 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                                 ),
                                                               ),
                                                             );
+                                                            if (!mounted) return;
+                                                            if (_horizontalScrollController
+                                                                .hasClients) {
+                                                              _horizontalScrollController
+                                                                  .jumpTo(0);
+                                                            }
+                                                            if (tag != null) {
+                                                              _searchController
+                                                                  .text = tag;
+                                                              setState(() =>
+                                                                  _query = tag);
+                                                            }
                                                           },
                                                         );
                                                       },
