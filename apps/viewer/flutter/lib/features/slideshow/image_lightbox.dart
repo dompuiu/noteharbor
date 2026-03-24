@@ -130,7 +130,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
                               horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(999),
+                            borderRadius: BorderRadius.circular(18),
                           ),
                           child: Text(
                             '${_currentIndex + 1} / ${widget.items.length}',
@@ -168,8 +168,8 @@ class _ImageLightboxState extends State<ImageLightbox> {
                             decoration: BoxDecoration(
                               color: const Color(0xFF160E08),
                               borderRadius: BorderRadius.circular(20),
-                              border: Border.all(
-                                  color: const Color(0x44FFEBD4)),
+                              border:
+                                  Border.all(color: const Color(0x44FFEBD4)),
                             ),
                             clipBehavior: Clip.antiAlias,
                             child: InteractiveViewer(
