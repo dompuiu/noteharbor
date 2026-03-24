@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 
 import '../../data/viewer_repository.dart';
 import '../../models/note_record.dart';
+import '../../models/tag.dart';
 import '../../models/viewer_dataset.dart';
 import '../slideshow/note_slideshow_screen.dart';
 
@@ -42,18 +43,84 @@ String formatFriendlyDatasetBuiltAt(String value) {
   return '$month $day, ${normalized.year} at $hour:$minute UTC';
 }
 
-const double _kTableContentWidth = 1180;
+const double _kOrderColumnWidth = 90;
+const double _kFrontColumnWidth = 120;
+const double _kDenominationColumnWidth = 190;
+const double _kDateColumnWidth = 120;
+const double _kCatalogColumnWidth = 130;
+const double _kCompanyColumnWidth = 120;
+const double _kGradeColumnWidth = 110;
+const double _kSerialColumnWidth = 140;
+const double _kDefaultTagsColumnWidth = 160;
+const double _kFixedColumnsWidth = _kOrderColumnWidth +
+    _kFrontColumnWidth +
+    _kDenominationColumnWidth +
+    _kDateColumnWidth +
+    _kCatalogColumnWidth +
+    _kCompanyColumnWidth +
+    _kGradeColumnWidth +
+    _kSerialColumnWidth;
 const double _kTableHorizontalPadding = 14;
-const double _kTableTotalWidth =
-    _kTableContentWidth + (_kTableHorizontalPadding * 2);
 const Color _kTableSurface = Color(0xFFFFFCF7);
 const Color _kTableBorder = Color(0xFFBEAA8E);
 const Color _kTableHeaderBg = Color(0xFFDCCAAE);
 const Color _kTableDivider = Color(0xFFD6C3A8);
 const Color _kTableText = Color(0xFF251912);
-const Color _kTableMuted = Color(0xFF6A563F);
 const Color _kTableSortableHeaderText = Color(0xFF6F421F);
+const Color _kTagChipBg = Color(0xFFE8D8BC);
+const Color _kTagChipBorder = Color(0xFFB08957);
+const Color _kTagChipText = Color(0xFF5C4323);
 const double _kHeaderBadgeHeight = 48;
+const double _kTagChipHorizontalPadding = 10;
+const double _kTagChipHorizontalGap = 6;
+const double _kTagsColumnSafetyPadding = 24;
+
+const TextStyle _kTagChipTextStyle = TextStyle(
+  color: _kTagChipText,
+  fontSize: 12,
+  fontWeight: FontWeight.w600,
+  height: 1,
+);
+
+double _measureTextWidth(String text, TextStyle style) {
+  final painter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    maxLines: 1,
+    textDirection: TextDirection.ltr,
+  )..layout();
+  return painter.width;
+}
+
+double _tagChipWidth(String tagName) {
+  return _measureTextWidth(tagName, _kTagChipTextStyle) +
+      (_kTagChipHorizontalPadding * 2) +
+      2;
+}
+
+double _calculateTagsColumnWidth(List<NoteRecord> notes) {
+  final headerWidth = _measureTextWidth(
+        'Tags',
+        const TextStyle(fontWeight: FontWeight.w800),
+      ) +
+      28;
+  final notesWidth = notes.fold<double>(0, (maxWidth, note) {
+    if (note.tags.isEmpty) {
+      return math.max(maxWidth, _measureTextWidth('-', const TextStyle()));
+    }
+
+    final tagNames = note.tags
+        .map((tag) => tag.name.trim())
+        .where((name) => name.isNotEmpty)
+        .toList(growable: false);
+    final rowWidth = tagNames
+        .map(_tagChipWidth)
+        .fold<double>(0, (sum, width) => sum + width);
+    final spacing = math.max(0, tagNames.length - 1) * _kTagChipHorizontalGap;
+    return math.max(maxWidth, rowWidth + spacing + _kTagsColumnSafetyPadding);
+  });
+
+  return math.max(_kDefaultTagsColumnWidth, math.max(headerWidth, notesWidth));
+}
 
 class NotesTableScreen extends StatefulWidget {
   const NotesTableScreen({super.key});
@@ -133,6 +200,14 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     });
   }
 
+  void _applyTagFilter(String tagName) {
+    _searchController.text = tagName;
+    setState(() => _query = tagName);
+    if (_horizontalScrollController.hasClients) {
+      _horizontalScrollController.jumpTo(0);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -168,6 +243,11 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
 
                 final dataset = snapshot.data!;
                 final notes = _sortedNotes(dataset.notes);
+
+                final tagsColumnWidth = _calculateTagsColumnWidth(notes);
+                final minTableWidth = _kFixedColumnsWidth +
+                    tagsColumnWidth +
+                    (_kTableHorizontalPadding * 2);
 
                 return Padding(
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
@@ -224,8 +304,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                       Expanded(
                         child: LayoutBuilder(
                           builder: (context, constraints) {
-                            final tableWidth = math.max(
-                                _kTableTotalWidth, constraints.maxWidth);
+                            final tableWidth =
+                                math.max(minTableWidth, constraints.maxWidth);
 
                             return DecoratedBox(
                               decoration: BoxDecoration(
@@ -261,6 +341,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                   sortKey: _sortKey,
                                                   ascending: _ascending,
                                                   onSort: _toggleSort,
+                                                  tagsColumnWidth:
+                                                      tagsColumnWidth,
                                                 ),
                                                 const Divider(
                                                   height: 1,
@@ -287,10 +369,14 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
 
                                                         return _TableRow(
                                                           note: note,
+                                                          tagsColumnWidth:
+                                                              tagsColumnWidth,
+                                                          onTagTap:
+                                                              _applyTagFilter,
                                                           onTap: () async {
                                                             final tag =
-                                                                await Navigator
-                                                                    .of(context)
+                                                                await Navigator.of(
+                                                                        context)
                                                                     .push<
                                                                         String>(
                                                               MaterialPageRoute<
@@ -304,7 +390,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                                 ),
                                                               ),
                                                             );
-                                                            if (!mounted) return;
+                                                            if (!mounted) {
+                                                              return;
+                                                            }
                                                             if (_horizontalScrollController
                                                                 .hasClients) {
                                                               _horizontalScrollController
@@ -373,8 +461,7 @@ class _Header extends StatelessWidget {
             ],
           ),
           child: ConstrainedBox(
-            constraints:
-                const BoxConstraints(minHeight: _kHeaderBadgeHeight),
+            constraints: const BoxConstraints(minHeight: _kHeaderBadgeHeight),
             child: Padding(
               padding: const EdgeInsets.fromLTRB(10, 6, 14, 6),
               child: Row(
@@ -392,12 +479,11 @@ class _Header extends StatelessWidget {
                   const SizedBox(width: 12),
                   Text(
                     'Note\nHarbor',
-                    style:
-                        Theme.of(context).textTheme.titleMedium?.copyWith(
-                              fontWeight: FontWeight.w800,
-                              color: _kTableText,
-                              height: 0.95,
-                            ),
+                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                          fontWeight: FontWeight.w800,
+                          color: _kTableText,
+                          height: 0.95,
+                        ),
                   ),
                 ],
               ),
@@ -506,11 +592,13 @@ class _TableHeader extends StatelessWidget {
     required this.sortKey,
     required this.ascending,
     required this.onSort,
+    required this.tagsColumnWidth,
   });
 
   final String sortKey;
   final bool ascending;
   final ValueChanged<String> onSort;
+  final double tagsColumnWidth;
 
   @override
   Widget build(BuildContext context) {
@@ -522,14 +610,14 @@ class _TableHeader extends StatelessWidget {
         child: Row(
           children: [
             _HeaderCell(
-                width: 90,
+                width: _kOrderColumnWidth,
                 label: 'Order',
                 sortKey: 'displayOrder',
                 activeSortKey: sortKey,
                 ascending: ascending,
                 onSort: onSort),
             _HeaderCell(
-                width: 120,
+                width: _kFrontColumnWidth,
                 label: 'Front',
                 isSortable: false,
                 sortKey: '',
@@ -537,49 +625,49 @@ class _TableHeader extends StatelessWidget {
                 ascending: ascending,
                 onSort: onSort),
             _HeaderCell(
-                width: 190,
+                width: _kDenominationColumnWidth,
                 label: 'Denomination',
                 sortKey: 'denomination',
                 activeSortKey: sortKey,
                 ascending: ascending,
                 onSort: onSort),
             _HeaderCell(
-                width: 120,
+                width: _kDateColumnWidth,
                 label: 'Date',
                 sortKey: 'issueDate',
                 activeSortKey: sortKey,
                 ascending: ascending,
                 onSort: onSort),
             _HeaderCell(
-                width: 130,
+                width: _kCatalogColumnWidth,
                 label: 'Catalog',
                 sortKey: 'catalogNumber',
                 activeSortKey: sortKey,
                 ascending: ascending,
                 onSort: onSort),
             _HeaderCell(
-                width: 120,
+                width: _kCompanyColumnWidth,
                 label: 'Company',
                 sortKey: 'gradingCompany',
                 activeSortKey: sortKey,
                 ascending: ascending,
                 onSort: onSort),
             _HeaderCell(
-                width: 110,
+                width: _kGradeColumnWidth,
                 label: 'Grade',
                 sortKey: 'grade',
                 activeSortKey: sortKey,
                 ascending: ascending,
                 onSort: onSort),
             _HeaderCell(
-                width: 140,
+                width: _kSerialColumnWidth,
                 label: 'Serial',
                 sortKey: 'serial',
                 activeSortKey: sortKey,
                 ascending: ascending,
                 onSort: onSort),
             _HeaderCell(
-                width: 160,
+                width: tagsColumnWidth,
                 label: 'Tags',
                 sortKey: 'tags',
                 activeSortKey: sortKey,
@@ -665,10 +753,14 @@ class _HeaderCell extends StatelessWidget {
 class _TableRow extends StatelessWidget {
   const _TableRow({
     required this.note,
+    required this.tagsColumnWidth,
+    required this.onTagTap,
     required this.onTap,
   });
 
   final NoteRecord note;
+  final double tagsColumnWidth;
+  final ValueChanged<String> onTagTap;
   final VoidCallback onTap;
 
   @override
@@ -684,9 +776,10 @@ class _TableRow extends StatelessWidget {
             horizontal: _kTableHorizontalPadding, vertical: 12),
         child: Row(
           children: [
-            _DataCell(width: 90, child: Text('${note.displayOrder}')),
             _DataCell(
-              width: 120,
+                width: _kOrderColumnWidth, child: Text('${note.displayOrder}')),
+            _DataCell(
+              width: _kFrontColumnWidth,
               child: imagePath == null
                   ? const Text('-')
                   : ClipRRect(
@@ -705,29 +798,86 @@ class _TableRow extends StatelessWidget {
                       ),
                     ),
             ),
-            _DataCell(width: 190, child: Text(note.denomination)),
             _DataCell(
-                width: 120,
+                width: _kDenominationColumnWidth,
+                child: Text(note.denomination)),
+            _DataCell(
+                width: _kDateColumnWidth,
                 child: Text(note.issueDate.isEmpty ? '-' : note.issueDate)),
             _DataCell(
-                width: 130,
+                width: _kCatalogColumnWidth,
                 child: Text(
                     note.catalogNumber.isEmpty ? '-' : note.catalogNumber)),
             _DataCell(
-                width: 120,
+                width: _kCompanyColumnWidth,
                 child: Text(
                     note.gradingCompany.isEmpty ? '-' : note.gradingCompany)),
             _DataCell(
-                width: 110, child: Text(note.grade.isEmpty ? '-' : note.grade)),
+                width: _kGradeColumnWidth,
+                child: Text(note.grade.isEmpty ? '-' : note.grade)),
             _DataCell(
-                width: 140,
+                width: _kSerialColumnWidth,
                 child: Text(note.serial.isEmpty ? '-' : note.serial)),
             _DataCell(
-                width: 160,
-                child: Text(note.tagsLabel.isEmpty ? '-' : note.tagsLabel)),
+                width: tagsColumnWidth,
+                child: _NoteTagsCell(tags: note.tags, onTagTap: onTagTap)),
           ],
         ),
       ),
+    );
+  }
+}
+
+class _NoteTagsCell extends StatelessWidget {
+  const _NoteTagsCell({required this.tags, required this.onTagTap});
+
+  final List<Tag> tags;
+  final ValueChanged<String> onTagTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final tagNames = tags
+        .map((tag) => tag.name.toString().trim())
+        .where((name) => name.isNotEmpty)
+        .toList(growable: false);
+
+    if (tagNames.isEmpty) {
+      return const Text('-');
+    }
+
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (var i = 0; i < tagNames.length; i++) ...[
+          if (i > 0) const SizedBox(width: _kTagChipHorizontalGap),
+          GestureDetector(
+            onTap: () => onTagTap(tagNames[i]),
+            child: MouseRegion(
+              cursor: SystemMouseCursors.click,
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: _kTagChipBg,
+                  borderRadius: BorderRadius.circular(20),
+                  border: Border.all(color: _kTagChipBorder),
+                ),
+                child: Padding(
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: _kTagChipHorizontalPadding,
+                    vertical: 4,
+                  ),
+                  child: Text(
+                    tagNames[i],
+                    maxLines: 1,
+                    overflow: TextOverflow.visible,
+                    softWrap: false,
+                    style: _kTagChipTextStyle,
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ],
     );
   }
 }
