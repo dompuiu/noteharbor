@@ -172,7 +172,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                 return Padding(
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                   child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _Header(
                         totalCount: dataset.noteCount,
@@ -343,66 +343,60 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return ClipRect(
-      child: SingleChildScrollView(
-        scrollDirection: Axis.horizontal,
-        physics: const NeverScrollableScrollPhysics(),
-        child: Row(
-          children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: _kTableSurface,
-                borderRadius: BorderRadius.circular(18),
-                border: Border.all(color: _kTableBorder),
-                boxShadow: const [
-                  BoxShadow(
-                    blurRadius: 18,
-                    offset: Offset(0, 10),
-                    color: Color(0x12000000),
+    return Row(
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: _kTableSurface,
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: _kTableBorder),
+            boxShadow: const [
+              BoxShadow(
+                blurRadius: 18,
+                offset: Offset(0, 10),
+                color: Color(0x12000000),
+              ),
+            ],
+          ),
+          child: ConstrainedBox(
+            constraints:
+                const BoxConstraints(minHeight: _kHeaderBadgeHeight),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(10, 6, 14, 6),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.asset(
+                      'web/icons/Icon-192.png',
+                      width: 36,
+                      height: 36,
+                      fit: BoxFit.cover,
+                    ),
+                  ),
+                  const SizedBox(width: 12),
+                  Text(
+                    'Note\nHarbor',
+                    style:
+                        Theme.of(context).textTheme.titleMedium?.copyWith(
+                              fontWeight: FontWeight.w800,
+                              color: _kTableText,
+                              height: 0.95,
+                            ),
                   ),
                 ],
               ),
-              child: ConstrainedBox(
-                constraints:
-                    const BoxConstraints(minHeight: _kHeaderBadgeHeight),
-                child: Padding(
-                  padding: const EdgeInsets.fromLTRB(10, 6, 14, 6),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.asset(
-                          'web/icons/Icon-192.png',
-                          width: 36,
-                          height: 36,
-                          fit: BoxFit.cover,
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Text(
-                        'Note\nHarbor',
-                        style:
-                            Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontWeight: FontWeight.w800,
-                                  color: _kTableText,
-                                  height: 0.95,
-                                ),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
             ),
-            const SizedBox(width: 16),
-            _StatPill(label: 'Notes', value: '$visibleCount / $totalCount'),
-            if (generatedAt != null && generatedAt!.trim().isNotEmpty) ...[
-              const SizedBox(width: 16),
-              _DatasetBuiltButton(timestamp: generatedAt!),
-            ],
-          ],
+          ),
         ),
-      ),
+        const Spacer(),
+        _StatPill(label: 'Notes', value: '$visibleCount / $totalCount'),
+        if (generatedAt != null && generatedAt!.trim().isNotEmpty) ...[
+          const SizedBox(width: 16),
+          _DatasetBuiltButton(timestamp: generatedAt!),
+        ],
+      ],
     );
   }
 }
