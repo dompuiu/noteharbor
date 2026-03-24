@@ -419,7 +419,7 @@ class _DatasetBuiltButton extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: _kTableSurface,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: _kTableBorder),
       ),
       child: PopupMenuButton<void>(
@@ -472,7 +472,7 @@ class _StatPill extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: _kTableSurface,
-        borderRadius: BorderRadius.circular(999),
+        borderRadius: BorderRadius.circular(18),
         border: Border.all(color: _kTableBorder),
       ),
       child: SizedBox(
