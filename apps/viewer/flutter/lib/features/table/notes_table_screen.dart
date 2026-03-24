@@ -46,6 +46,13 @@ const double _kTableContentWidth = 1180;
 const double _kTableHorizontalPadding = 14;
 const double _kTableTotalWidth =
     _kTableContentWidth + (_kTableHorizontalPadding * 2);
+const Color _kTableSurface = Color(0xFFFFFCF7);
+const Color _kTableBorder = Color(0xFFBEAA8E);
+const Color _kTableHeaderBg = Color(0xFFDCCAAE);
+const Color _kTableDivider = Color(0xFFD6C3A8);
+const Color _kTableText = Color(0xFF251912);
+const Color _kTableMuted = Color(0xFF6A563F);
+const double _kHeaderBadgeHeight = 48;
 
 class NotesTableScreen extends StatefulWidget {
   const NotesTableScreen({super.key});
@@ -140,7 +147,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
             ),
           ),
           child: SafeArea(
-            bottom:false,
+            bottom: false,
             child: FutureBuilder<ViewerDataset>(
               future: _datasetFuture,
               builder: (context, snapshot) {
@@ -178,7 +185,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                           controller: _searchController,
                           decoration: InputDecoration(
                             filled: true,
-                            fillColor: const Color(0xFFFCFAF5),
+                            fillColor: _kTableSurface,
                             hintText:
                                 'Filter denomination, catalog, serial, tags, notes...',
                             prefixIcon: const Icon(Icons.search_rounded),
@@ -193,7 +200,20 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                   ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(18),
-                              borderSide: BorderSide.none,
+                              borderSide:
+                                  const BorderSide(color: _kTableBorder),
+                            ),
+                            enabledBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide:
+                                  const BorderSide(color: _kTableBorder),
+                            ),
+                            focusedBorder: OutlineInputBorder(
+                              borderRadius: BorderRadius.circular(18),
+                              borderSide: const BorderSide(
+                                color: Color(0xFF7A5D27),
+                                width: 1.5,
+                              ),
                             ),
                           ),
                           onChanged: (value) => setState(() => _query = value),
@@ -208,8 +228,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
 
                             return DecoratedBox(
                               decoration: BoxDecoration(
-                                color: const Color(0xFFFCFAF5),
+                                color: _kTableSurface,
                                 borderRadius: BorderRadius.circular(28),
+                                border: Border.all(
+                                    color: _kTableBorder, width: 1.5),
                                 boxShadow: const [
                                   BoxShadow(
                                     blurRadius: 28,
@@ -239,7 +261,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                   ascending: _ascending,
                                                   onSort: _toggleSort,
                                                 ),
-                                                const Divider(height: 1),
+                                                const Divider(
+                                                  height: 1,
+                                                  color: _kTableDivider,
+                                                ),
                                                 Expanded(
                                                   child: Scrollbar(
                                                     controller:
@@ -251,7 +276,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                       separatorBuilder:
                                                           (context, index) =>
                                                               const Divider(
-                                                                  height: 1),
+                                                        height: 1,
+                                                        color: _kTableDivider,
+                                                      ),
                                                       itemBuilder:
                                                           (context, index) {
                                                         final note =
@@ -321,12 +348,50 @@ class _Header extends StatelessWidget {
         physics: const NeverScrollableScrollPhysics(),
         child: Row(
           children: [
-            Text(
-              'Note Harbor',
-              style: Theme.of(context)
-                  .textTheme
-                  .headlineSmall
-                  ?.copyWith(fontWeight: FontWeight.w800),
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: _kTableSurface,
+                borderRadius: BorderRadius.circular(18),
+                border: Border.all(color: _kTableBorder),
+                boxShadow: const [
+                  BoxShadow(
+                    blurRadius: 18,
+                    offset: Offset(0, 10),
+                    color: Color(0x12000000),
+                  ),
+                ],
+              ),
+              child: ConstrainedBox(
+                constraints:
+                    const BoxConstraints(minHeight: _kHeaderBadgeHeight),
+                child: Padding(
+                  padding: const EdgeInsets.fromLTRB(10, 6, 14, 6),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.asset(
+                          'web/icons/Icon-192.png',
+                          width: 36,
+                          height: 36,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Text(
+                        'Note\nHarbor',
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontWeight: FontWeight.w800,
+                                  color: _kTableText,
+                                  height: 0.95,
+                                ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
             ),
             const SizedBox(width: 16),
             _StatPill(label: 'Notes', value: '$visibleCount / $totalCount'),
@@ -352,9 +417,9 @@ class _DatasetBuiltButton extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFFFEFBF3),
+        color: _kTableSurface,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFD8CBB5)),
+        border: Border.all(color: _kTableBorder),
       ),
       child: PopupMenuButton<void>(
         tooltip: 'Dataset built time',
@@ -382,10 +447,13 @@ class _DatasetBuiltButton extends StatelessWidget {
             ),
           ),
         ],
-        child: const Padding(
-          padding: EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          child:
-              Icon(Icons.schedule_rounded, size: 20, color: Color(0xFF7A5D27)),
+        child: const SizedBox(
+          height: _kHeaderBadgeHeight,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: 12),
+            child: Icon(Icons.schedule_rounded,
+                size: 20, color: Color(0xFF7A5D27)),
+          ),
         ),
       ),
     );
@@ -402,19 +470,22 @@ class _StatPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFFFEFBF3),
+        color: _kTableSurface,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFFD8CBB5)),
+        border: Border.all(color: _kTableBorder),
       ),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text('$label: ',
-                style: const TextStyle(fontWeight: FontWeight.w700)),
-            Text(value),
-          ],
+      child: SizedBox(
+        height: _kHeaderBadgeHeight,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('$label: ',
+                  style: const TextStyle(fontWeight: FontWeight.w700)),
+              Text(value),
+            ],
+          ),
         ),
       ),
     );
@@ -435,7 +506,7 @@ class _TableHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: const Color(0xFFE8E1D4),
+      color: _kTableHeaderBg,
       child: Padding(
         padding: const EdgeInsets.symmetric(
             horizontal: _kTableHorizontalPadding, vertical: 12),
@@ -545,13 +616,21 @@ class _HeaderCell extends StatelessWidget {
       child: isSortable
           ? TextButton(
               onPressed: () => onSort(sortKey),
-              style: TextButton.styleFrom(alignment: Alignment.center),
+              style: TextButton.styleFrom(
+                alignment: Alignment.center,
+                foregroundColor: _kTableText,
+              ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Flexible(
-                      child: Text(label,
-                          style: const TextStyle(fontWeight: FontWeight.w700))),
+                      child: Text(
+                    label,
+                    style: const TextStyle(
+                      fontWeight: FontWeight.w800,
+                      color: _kTableText,
+                    ),
+                  )),
                   if (icon != null) ...[
                     const SizedBox(width: 4),
                     Icon(icon, size: 16),
@@ -562,8 +641,13 @@ class _HeaderCell extends StatelessWidget {
           : Padding(
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Center(
-                  child: Text(label,
-                      style: const TextStyle(fontWeight: FontWeight.w700))),
+                  child: Text(
+                label,
+                style: const TextStyle(
+                  fontWeight: FontWeight.w800,
+                  color: _kTableText,
+                ),
+              )),
             ),
     );
   }
@@ -584,6 +668,8 @@ class _TableRow extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
+      hoverColor: const Color(0x149B6330),
+      highlightColor: const Color(0x149B6330),
       child: Padding(
         padding: const EdgeInsets.symmetric(
             horizontal: _kTableHorizontalPadding, vertical: 12),
@@ -647,7 +733,13 @@ class _DataCell extends StatelessWidget {
   Widget build(BuildContext context) {
     return SizedBox(
       width: width,
-      child: Center(child: child),
+      child: DefaultTextStyle.merge(
+        style: const TextStyle(
+          color: _kTableText,
+          fontWeight: FontWeight.w600,
+        ),
+        child: Center(child: child),
+      ),
     );
   }
 }

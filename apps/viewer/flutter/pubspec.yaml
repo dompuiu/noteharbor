@@ -23,3 +23,4 @@ flutter:
   assets:
     - assets/data/notes.json
     - assets/data/images/
+    - web/icons/Icon-192.png
