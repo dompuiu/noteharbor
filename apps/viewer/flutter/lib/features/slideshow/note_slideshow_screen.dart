@@ -140,7 +140,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                               horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
                             color: Colors.white.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(999),
+                            borderRadius: BorderRadius.circular(18),
                           ),
                           child: Text(
                             '${_currentIndex + 1} / ${widget.notes.length}',
@@ -168,8 +168,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                     child: PageView.builder(
                       controller: _pageController,
                       itemCount: widget.notes.length,
-                      onPageChanged: (i) =>
-                          setState(() => _currentIndex = i),
+                      onPageChanged: (i) => setState(() => _currentIndex = i),
                       itemBuilder: (context, index) {
                         return _NoteSlide(
                           note: widget.notes[index],
@@ -263,17 +262,13 @@ class _NoteSlideState extends State<_NoteSlide> {
                         ],
                         const SizedBox(height: 16),
                         _NoteImage(
-                          imagePath:
-                              widget.note.previewFor('front')?.assetPath,
-                          onTap: () =>
-                              widget.onTapImage(widget.note, 'front'),
+                          imagePath: widget.note.previewFor('front')?.assetPath,
+                          onTap: () => widget.onTapImage(widget.note, 'front'),
                         ),
                         const SizedBox(height: 12),
                         _NoteImage(
-                          imagePath:
-                              widget.note.previewFor('back')?.assetPath,
-                          onTap: () =>
-                              widget.onTapImage(widget.note, 'back'),
+                          imagePath: widget.note.previewFor('back')?.assetPath,
+                          onTap: () => widget.onTapImage(widget.note, 'back'),
                         ),
                         const SizedBox(height: 16),
                         _MetaPanel(note: widget.note),
