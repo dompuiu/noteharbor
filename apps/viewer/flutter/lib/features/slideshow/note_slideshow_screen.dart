@@ -12,6 +12,9 @@ const _kBorder = Color(0x44FFEBD4);
 const _kTextPrimary = Color(0xFFFFF5E9);
 const _kTextAccent = Color(0xFFA3C6B2);
 const _kTextLabel = Color(0xFFA37037);
+const _kTagChipBg = Color(0xFFE8D8BC);
+const _kTagChipBorder = Color(0xFFB08957);
+const _kTagChipText = Color(0xFF5C4323);
 
 class NoteSlideshowScreen extends StatefulWidget {
   const NoteSlideshowScreen({
@@ -456,14 +459,14 @@ class _MetaPanel extends StatelessWidget {
                       padding: const EdgeInsets.symmetric(
                           horizontal: 12, vertical: 6),
                       decoration: BoxDecoration(
-                        color: const Color(0xFF3A2615),
+                        color: _kTagChipBg,
                         borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: _kTextLabel),
+                        border: Border.all(color: _kTagChipBorder),
                       ),
                       child: Text(
                         tag.name,
                         style: const TextStyle(
-                          color: _kTextAccent,
+                          color: _kTagChipText,
                           fontSize: 14,
                           fontWeight: FontWeight.w600,
                         ),
