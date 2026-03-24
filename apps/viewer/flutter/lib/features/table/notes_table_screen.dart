@@ -509,7 +509,7 @@ class _TableHeader extends StatelessWidget {
       color: _kTableHeaderBg,
       child: Padding(
         padding: const EdgeInsets.symmetric(
-            horizontal: _kTableHorizontalPadding, vertical: 12),
+            horizontal: _kTableHorizontalPadding, vertical: 4),
         child: Row(
           children: [
             _HeaderCell(
