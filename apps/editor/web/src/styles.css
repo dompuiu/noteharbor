@@ -147,6 +147,12 @@ button {
   color: #fff7f4;
 }
 
+.button-danger-soft {
+  background: rgba(180, 40, 40, 0.08);
+  color: #8b1a1a;
+  border-color: rgba(180, 40, 40, 0.18);
+}
+
 .screen-stack {
   display: flex;
   flex-direction: column;
@@ -563,6 +569,11 @@ td.drag-cell {
   color: #1e6b35;
 }
 
+.scrape-badge--manual {
+  background: rgba(37, 111, 161, 0.15);
+  color: #1f587c;
+}
+
 .scrape-badge--failed {
   background: rgba(180, 40, 40, 0.13);
   color: #8b1a1a;
@@ -766,6 +777,37 @@ button.tag {
   color: #1e6b35;
 }
 
+.image-slot-badge--danger {
+  background: rgba(180, 40, 40, 0.12);
+  color: #8b1a1a;
+}
+
+.image-slot-header-meta {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.image-slot-source {
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  background: rgba(140, 130, 120, 0.14);
+  color: #6b5c4e;
+}
+
+.image-slot-source--scraped {
+  background: rgba(60, 160, 80, 0.15);
+  color: #1e6b35;
+}
+
+.image-slot-source--uploaded,
+.image-slot-source--generated {
+  background: rgba(37, 111, 161, 0.15);
+  color: #1f587c;
+}
+
 .image-dropzone {
   display: grid;
   place-items: center;
@@ -806,6 +848,28 @@ button.tag {
 
 .image-slot-input {
   display: none;
+}
+
+.image-slot-actions--wrap {
+  align-items: stretch;
+}
+
+.image-generate-toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-size: 0.86rem;
+  color: #5d4a38;
+}
+
+.image-generate-toggle--inline {
+  white-space: nowrap;
+}
+
+.image-generate-toggle input {
+  width: 14px;
+  height: 14px;
+  margin: 0;
 }
 
 @media (max-width: 900px) {

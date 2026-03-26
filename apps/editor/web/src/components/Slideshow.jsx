@@ -54,12 +54,22 @@ function getScrapedDetailEntries(note) {
   });
 }
 
+function versionedImagePath(path, version) {
+  if (!path) {
+    return null;
+  }
+
+  const separator = path.includes("?") ? "&" : "?";
+  return version ? `${path}${separator}v=${encodeURIComponent(version)}` : path;
+}
+
 function pickImage(note, type, variant = "full") {
-  return (
+  const imagePath =
     note.images.find(
       (image) => image.type === type && image.variant === variant,
-    )?.localPath ?? null
-  );
+    )?.localPath ?? null;
+
+  return versionedImagePath(imagePath, note.updated_at);
 }
 
 function getPreviewItems(note, { includeMissingSides = false } = {}) {

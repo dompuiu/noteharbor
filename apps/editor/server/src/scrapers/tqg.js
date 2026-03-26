@@ -81,17 +81,13 @@ class TQGScraper extends BaseScraper {
   }
 
   async downloadImages(parsedResult) {
-    const folder = this.getImageFolder(parsedResult.certNumber);
     const savedImages = [];
 
     for (const image of parsedResult.images) {
-      const localPath = await this.downloadImage(image.url, `${folder}/${image.side}.jpg`);
-      savedImages.push({
-        type: image.side,
-        variant: image.variant,
-        localPath,
-        sourceUrl: image.url
-      });
+      const savedImage = await this.downloadImage(image.url, image.side, image.variant);
+      if (savedImage) {
+        savedImages.push(savedImage);
+      }
     }
 
     return savedImages;

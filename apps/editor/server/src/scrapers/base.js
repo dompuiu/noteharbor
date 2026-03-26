@@ -1,6 +1,5 @@
-import fs from 'node:fs/promises';
-import path from 'node:path';
-import { SCRAPED_IMAGES_DIR } from '../db.js';
+import { IMAGES_DIR } from '../db.js';
+import { IMAGE_ORIGINS, getExtensionForMimeType, writeSlotBuffer } from '../imageStore.js';
 
 function sanitizeSegment(value) {
   return String(value ?? 'unknown')
@@ -23,13 +22,10 @@ class BaseScraper {
     throw new Error('parse() must be implemented by subclasses');
   }
 
-  async downloadImage(imageUrl, relativePath) {
+  async downloadImage(imageUrl, type, variant) {
     if (!imageUrl) {
       return null;
     }
-
-    const targetPath = path.join(SCRAPED_IMAGES_DIR, relativePath);
-    await fs.mkdir(path.dirname(targetPath), { recursive: true });
 
     const response = await fetch(imageUrl);
     if (!response.ok) {
@@ -37,8 +33,13 @@ class BaseScraper {
     }
 
     const arrayBuffer = await response.arrayBuffer();
-    await fs.writeFile(targetPath, Buffer.from(arrayBuffer));
-    return `/api/images/scraped/${relativePath.replace(/\\/g, '/')}`;
+    const extension = getExtensionForMimeType(response.headers.get('content-type'), new URL(imageUrl).pathname);
+
+    return writeSlotBuffer(IMAGES_DIR, this.note.id, type, variant, Buffer.from(arrayBuffer), {
+      extension,
+      origin: IMAGE_ORIGINS.scraped,
+      sourceUrl: imageUrl
+    });
   }
 
   getImageFolder(certNumber) {

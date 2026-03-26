@@ -16,14 +16,51 @@ const emptyForm = {
 };
 
 const imageSlots = [
-  { key: "image_front_thumbnail", type: "front", variant: "thumbnail", label: "Front thumbnail" },
-  { key: "image_back_thumbnail", type: "back", variant: "thumbnail", label: "Back thumbnail" },
-  { key: "image_front_full", type: "front", variant: "full", label: "Front full" },
-  { key: "image_back_full", type: "back", variant: "full", label: "Back full" },
+	{ key: "image_front_full", type: "front", variant: "full", label: "Front full" },
+	{ key: "image_back_full", type: "back", variant: "full", label: "Back full" },
+	{ key: "image_front_thumbnail", type: "front", variant: "thumbnail", label: "Front thumbnail" },
+	{ key: "image_back_thumbnail", type: "back", variant: "thumbnail", label: "Back thumbnail" },
 ];
 
 function pickImage(images, type, variant) {
   return images.find((image) => image.type === type && image.variant === variant) ?? null;
+}
+
+function hasEffectiveImage({ currentImage, pendingImage, isDeleted }) {
+  if (pendingImage) {
+    return true;
+  }
+
+  return Boolean(currentImage) && !isDeleted;
+}
+
+function versionedImagePath(path, version) {
+  if (!path) {
+    return "";
+  }
+
+  const separator = path.includes("?") ? "&" : "?";
+  return version ? `${path}${separator}v=${encodeURIComponent(version)}` : path;
+}
+
+function deleteFieldForSlot(slot) {
+  return `delete_image_${slot.type}_${slot.variant}`;
+}
+
+function generateFieldForType(type) {
+  return `generate_image_${type}_thumbnail_from_full`;
+}
+
+function slotOriginLabel(origin) {
+  if (origin === "scraped") {
+    return "Scraped";
+  }
+
+  if (origin === "generated") {
+    return "Generated";
+  }
+
+  return origin === "uploaded" ? "Uploaded" : "";
 }
 
 function NoteEditForm({
@@ -44,7 +81,10 @@ function NoteEditForm({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [currentImages, setCurrentImages] = useState([]);
+  const [noteVersion, setNoteVersion] = useState("");
   const [pendingImages, setPendingImages] = useState({});
+  const [deletedSlots, setDeletedSlots] = useState({});
+  const [generatedThumbnails, setGeneratedThumbnails] = useState({ front: false, back: false });
   const [activePasteSlot, setActivePasteSlot] = useState(null);
   const inputRefs = useRef({});
 
@@ -69,7 +109,10 @@ function NoteEditForm({
     setForm(emptyForm);
     setTagInput("");
     setCurrentImages([]);
+    setNoteVersion("");
     setPendingImages({});
+    setDeletedSlots({});
+    setGeneratedThumbnails({ front: false, back: false });
 
     const dataPromise = noteId
       ? Promise.all([getNote(noteId), getTags()])
@@ -95,6 +138,7 @@ function NoteEditForm({
             tags: notePayload.note.tags.map((tag) => tag.name),
           });
           setCurrentImages(notePayload.note.images ?? []);
+          setNoteVersion(notePayload.note.updated_at ?? "");
         }
         setSuggestions(tagsPayload.tags.map((tag) => tag.name));
       })
@@ -152,28 +196,44 @@ function NoteEditForm({
     }
 
     setForm((current) => ({ ...current, tags: [...current.tags, normalized] }));
-    setTagInput('');
+    setTagInput("");
   }
 
   function removeTag(tagName) {
     setForm((current) => ({ ...current, tags: current.tags.filter((tag) => tag !== tagName) }));
   }
 
-  function setSlotFile(slotKey, file) {
+  function setSlotFile(slot, file) {
     if (!file || !file.type.startsWith("image/")) {
       return;
     }
 
-    setPendingImages((current) => ({ ...current, [slotKey]: file }));
-    setActivePasteSlot(slotKey);
+    setPendingImages((current) => ({ ...current, [slot.key]: file }));
+    setDeletedSlots((current) => ({ ...current, [slot.key]: false }));
+    if (slot.variant === "thumbnail") {
+      setGeneratedThumbnails((current) => ({ ...current, [slot.type]: false }));
+    }
+    setActivePasteSlot(slot.key);
   }
 
-  function clearSlotFile(slotKey) {
+  function clearSlotFile(slot) {
     setPendingImages((current) => {
       const nextImages = { ...current };
-      delete nextImages[slotKey];
+      delete nextImages[slot.key];
       return nextImages;
     });
+  }
+
+  function markSlotDeleted(slot) {
+    clearSlotFile(slot);
+    setDeletedSlots((current) => ({ ...current, [slot.key]: true }));
+    if (slot.variant === "thumbnail") {
+      setGeneratedThumbnails((current) => ({ ...current, [slot.type]: false }));
+    }
+  }
+
+  function undoSlotDelete(slot) {
+    setDeletedSlots((current) => ({ ...current, [slot.key]: false }));
   }
 
   function getPastedImageFile(event) {
@@ -189,6 +249,18 @@ function NoteEditForm({
 
     try {
       const payloadWithImages = { ...form, ...pendingImages };
+      imageSlots.forEach((slot) => {
+        if (deletedSlots[slot.key]) {
+          payloadWithImages[deleteFieldForSlot(slot)] = true;
+        }
+      });
+
+      ["front", "back"].forEach((type) => {
+        if (generatedThumbnails[type]) {
+          payloadWithImages[generateFieldForType(type)] = true;
+        }
+      });
+
       const payload = isCreateMode
         ? await createNote(payloadWithImages)
         : await updateNote(noteId, payloadWithImages);
@@ -280,20 +352,42 @@ function NoteEditForm({
           <div className="field-block full-span">
             <span>Pictures</span>
             <p className="muted image-field-help">
-              Existing images stay visible here. Click a slot, then drag, drop, or press Ctrl+V to replace it.
+              Scraped, uploaded, and generated pictures now share the same slots. Uploading or scraping a slot replaces what is already there.
             </p>
             <div className="image-slot-grid">
               {imageSlots.map((slot) => {
                 const currentImage = pickImage(currentImages, slot.type, slot.variant);
                 const pendingPreview = imagePreviews[slot.key];
-                const previewSrc = pendingPreview || currentImage?.localPath || "";
+                const isDeleted = Boolean(deletedSlots[slot.key]);
+                const pendingFullImage = pendingImages[`image_${slot.type}_full`];
+                const fullImage = pickImage(currentImages, slot.type, "full");
+                const isFullDeleted = Boolean(deletedSlots[`image_${slot.type}_full`]);
+                const hasFullImage = hasEffectiveImage({
+                  currentImage: fullImage,
+                  pendingImage: pendingFullImage,
+                  isDeleted: isFullDeleted,
+                });
+                const previewSrc = isDeleted
+                  ? ""
+                  : pendingPreview || versionedImagePath(currentImage?.localPath, noteVersion);
                 const hasPendingImage = Boolean(pendingPreview);
+                const hasExistingImage = Boolean(currentImage) && !isDeleted;
+                const hasThumbnailImage = Boolean(pendingImages[slot.key]) || (Boolean(currentImage) && !isDeleted);
+                const showGenerateOption = slot.variant === "thumbnail" && hasFullImage && !hasThumbnailImage;
 
                 return (
                   <div className={`image-slot-card image-slot-card--${slot.variant}`} key={slot.key}>
                     <div className="image-slot-header">
                       <strong>{slot.label}</strong>
-                      {hasPendingImage ? <span className="image-slot-badge">New image ready</span> : null}
+                      <div className="image-slot-header-meta">
+                        {hasPendingImage ? <span className="image-slot-badge">New image ready</span> : null}
+                        {!hasPendingImage && hasExistingImage && currentImage?.origin ? (
+                          <span className={`image-slot-source image-slot-source--${currentImage.origin}`}>
+                            {slotOriginLabel(currentImage.origin)}
+                          </span>
+                        ) : null}
+                        {isDeleted ? <span className="image-slot-badge image-slot-badge--danger">Will delete</span> : null}
+                      </div>
                     </div>
                     <div
                       className={`image-dropzone${activePasteSlot === slot.key ? " image-dropzone--active" : ""}`}
@@ -306,7 +400,7 @@ function NoteEditForm({
                       }}
                       onDrop={(event) => {
                         event.preventDefault();
-                        setSlotFile(slot.key, event.dataTransfer.files?.[0]);
+                        setSlotFile(slot, event.dataTransfer.files?.[0]);
                       }}
                       onFocus={() => setActivePasteSlot(slot.key)}
                       onPaste={(event) => {
@@ -316,7 +410,7 @@ function NoteEditForm({
                         }
 
                         event.preventDefault();
-                        setSlotFile(slot.key, file);
+                        setSlotFile(slot, file);
                       }}
                       role="button"
                       tabIndex={0}
@@ -331,10 +425,12 @@ function NoteEditForm({
                       {previewSrc ? (
                         <img alt={`${slot.label} preview`} className="image-dropzone-preview" src={previewSrc} />
                       ) : (
-                        <div className="image-dropzone-empty">No image yet</div>
+                        <div className="image-dropzone-empty">
+                          {isDeleted ? "Image will be removed" : "No image yet"}
+                        </div>
                       )}
                     </div>
-                    <div className="image-slot-actions">
+                    <div className="image-slot-actions image-slot-actions--wrap">
                       <button
                         className="button"
                         onClick={() => {
@@ -348,16 +444,47 @@ function NoteEditForm({
                       <button
                         className="button"
                         disabled={!pendingImages[slot.key]}
-                        onClick={() => clearSlotFile(slot.key)}
+                        onClick={() => clearSlotFile(slot)}
                         type="button"
                       >
                         Clear new file
                       </button>
+                      <button
+                        className="button button-danger-soft"
+                        disabled={!hasExistingImage && !hasPendingImage}
+                        onClick={() => markSlotDeleted(slot)}
+                        type="button"
+                      >
+                        Delete image
+                      </button>
+                      <button
+                        className="button"
+                        disabled={!isDeleted}
+                        onClick={() => undoSlotDelete(slot)}
+                        type="button"
+                      >
+                        Undo delete
+                      </button>
+                      {showGenerateOption ? (
+                        <label className="image-generate-toggle image-generate-toggle--inline">
+                          <input
+                            checked={generatedThumbnails[slot.type]}
+                            onChange={(event) =>
+                              setGeneratedThumbnails((current) => ({
+                                ...current,
+                                [slot.type]: event.target.checked,
+                              }))
+                            }
+                            type="checkbox"
+                          />
+                          <span>Generate thumbnail</span>
+                        </label>
+                      ) : null}
                     </div>
                     <input
                       accept="image/*"
                       className="image-slot-input"
-                      onChange={(event) => setSlotFile(slot.key, event.target.files?.[0])}
+                      onChange={(event) => setSlotFile(slot, event.target.files?.[0])}
                       ref={(element) => {
                         inputRefs.current[slot.key] = element;
                       }}

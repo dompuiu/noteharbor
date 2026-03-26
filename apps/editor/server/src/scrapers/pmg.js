@@ -60,21 +60,13 @@ class PMGScraper extends BaseScraper {
   }
 
   async downloadImages(parsedResult) {
-    const folder = this.getImageFolder(parsedResult.certNumber);
     const savedImages = [];
 
     for (const image of parsedResult.images) {
-      const filename = image.variant === 'thumbnail'
-        ? `${image.side}_thumb.jpg`
-        : `${image.side}.jpg`;
-
-      const localPath = await this.downloadImage(image.url, `${folder}/${filename}`);
-      savedImages.push({
-        type: image.side,
-        variant: image.variant,
-        localPath,
-        sourceUrl: image.url
-      });
+      const savedImage = await this.downloadImage(image.url, image.side, image.variant);
+      if (savedImage) {
+        savedImages.push(savedImage);
+      }
     }
 
     return savedImages;

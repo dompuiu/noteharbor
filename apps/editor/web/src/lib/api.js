@@ -8,9 +8,22 @@ const imageFieldNames = [
   'image_back_full',
   'image_back_thumbnail'
 ];
+const imageDeleteFieldNames = [
+  'delete_image_front_full',
+  'delete_image_front_thumbnail',
+  'delete_image_back_full',
+  'delete_image_back_thumbnail'
+];
+const generatedThumbnailFieldNames = [
+  'generate_image_front_thumbnail_from_full',
+  'generate_image_back_thumbnail_from_full'
+];
 
 function isFileValue(value) {
-  return typeof File !== 'undefined' && value instanceof File;
+  return (
+    (typeof File !== 'undefined' && value instanceof File) ||
+    (typeof Blob !== 'undefined' && value instanceof Blob)
+  );
 }
 
 function buildNoteRequestOptions(method, payload) {
@@ -40,8 +53,14 @@ function buildNoteRequestOptions(method, payload) {
 
     if (imageFieldNames.includes(key)) {
       if (isFileValue(value)) {
-        formData.append(key, value);
+        const fallbackName = `${key}.png`;
+        formData.append(key, value, value.name || fallbackName);
       }
+      return;
+    }
+
+    if (imageDeleteFieldNames.includes(key) || generatedThumbnailFieldNames.includes(key)) {
+      formData.append(key, value ? 'true' : 'false');
       return;
     }
 
