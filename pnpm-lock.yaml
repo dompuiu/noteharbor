@@ -14,6 +14,9 @@ importers:
 
   apps/editor/desktop:
     dependencies:
+      '@img/sharp-win32-x64':
+        specifier: 0.34.5
+        version: 0.34.5
       archiver:
         specifier: ^7.0.1
         version: 7.0.1
@@ -35,6 +38,9 @@ importers:
       multer:
         specifier: ^2.0.2
         version: 2.1.1
+      sharp:
+        specifier: ^0.34.5
+        version: 0.34.5
       unzipper:
         specifier: ^0.12.3
         version: 0.12.3
@@ -2972,8 +2978,7 @@ snapshots:
   '@img/sharp-win32-ia32@0.34.5':
     optional: true
 
-  '@img/sharp-win32-x64@0.34.5':
-    optional: true
+  '@img/sharp-win32-x64@0.34.5': {}
 
   '@isaacs/cliui@8.0.2':
     dependencies:
