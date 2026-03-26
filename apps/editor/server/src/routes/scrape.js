@@ -126,7 +126,7 @@ async function runScrapeJob(notes) {
 
       if (!scraper) {
         const errorMessage = 'No scraper is implemented for this grading company yet.';
-        updateScrapeResult({ id: note.id, scrapedData: null, images: [], scrapeStatus: 'failed', scrapeError: errorMessage });
+        updateScrapeResult({ id: note.id, scrapedData: null, images: note.images, scrapeStatus: 'failed', scrapeError: errorMessage });
         if (stateItem) { stateItem.status = 'failed'; stateItem.error = errorMessage; }
         scrapeState.completed += 1;
         continue;
@@ -140,7 +140,7 @@ async function runScrapeJob(notes) {
         updateScrapeResult({ id: note.id, scrapedData: parsed.details, images, scrapeStatus: 'done', scrapeError: null });
         if (stateItem) { stateItem.status = 'done'; stateItem.error = null; }
       } catch (error) {
-        updateScrapeResult({ id: note.id, scrapedData: null, images: [], scrapeStatus: 'failed', scrapeError: error.message });
+        updateScrapeResult({ id: note.id, scrapedData: null, images: note.images, scrapeStatus: 'failed', scrapeError: error.message });
         if (stateItem) { stateItem.status = 'failed'; stateItem.error = error.message; }
       } finally {
         scrapeState.completed += 1;

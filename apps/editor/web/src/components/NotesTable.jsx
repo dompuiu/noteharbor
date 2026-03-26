@@ -99,6 +99,8 @@ function statusIcon(status) {
   switch (status) {
     case "done":
       return "✓";
+    case "manual":
+      return "●";
     case "failed":
       return "✕";
     case "running":
@@ -116,9 +118,27 @@ function activeScrapeJob(status) {
   return status?.status === "running" ? status : null;
 }
 
+function imageStatus(note) {
+  const images = Array.isArray(note.images) ? note.images : [];
+
+  if (!images.length) {
+    return "pending";
+  }
+
+  if (images.some((image) => image.origin === "uploaded" || image.origin === "generated")) {
+    return "manual";
+  }
+
+  if (images.every((image) => image.origin === "scraped")) {
+    return "done";
+  }
+
+  return "pending";
+}
+
 function displayScrapeStatus(note, scrapeJob) {
   if (!scrapeJob) {
-    return note.scrape_status || "pending";
+    return note.scrape_status === "failed" ? "failed" : imageStatus(note);
   }
 
   if (scrapeJob.currentNoteId === note.id) {
@@ -133,7 +153,7 @@ function displayScrapeStatus(note, scrapeJob) {
     return "queued";
   }
 
-  return note.scrape_status || "pending";
+  return note.scrape_status === "failed" ? "failed" : imageStatus(note);
 }
 
 function valueToString(note, key) {
@@ -144,12 +164,33 @@ function valueToString(note, key) {
   return String(note[key] ?? "");
 }
 
+function versionedImagePath(path, version) {
+  if (!path) {
+    return null;
+  }
+
+  const separator = path.includes("?") ? "&" : "?";
+  return version ? `${path}${separator}v=${encodeURIComponent(version)}` : path;
+}
+
 function pickImage(note, type, variant = "full") {
-  return (
+  const imagePath =
     note.images.find(
       (image) => image.type === type && image.variant === variant,
-    )?.localPath ?? null
-  );
+    )?.localPath ?? null;
+
+  return versionedImagePath(imagePath, note.updated_at);
+}
+
+function pickFirstAvailableImage(note, slots) {
+  for (const [type, variant] of slots) {
+    const imagePath = pickImage(note, type, variant);
+    if (imagePath) {
+      return { path: imagePath, type, variant };
+    }
+  }
+
+  return null;
 }
 
 function NotesTable() {
@@ -268,7 +309,7 @@ function NotesTable() {
   }, [notes]);
 
   useEffect(() => {
-    if (isScrapingDisabled || !operationStatus.isBusy) {
+    if (isScrapingDisabled || (!operationStatus.isBusy && !scrapeJob)) {
       return undefined;
     }
 
@@ -291,6 +332,32 @@ function NotesTable() {
 
     return () => window.clearInterval(timer);
   }, [operationStatus.isBusy, scrapeJob]);
+
+  useEffect(() => {
+    if (!slideshowNotes.length) {
+      return;
+    }
+
+    setSlideshowNotes((current) => {
+      if (!current.length) {
+        return current;
+      }
+
+      const notesById = new Map(notes.map((note) => [note.id, note]));
+      const nextNotes = current
+        .map((note) => notesById.get(note.id))
+        .filter(Boolean);
+
+      if (
+        nextNotes.length === current.length &&
+        nextNotes.every((note, index) => note === current[index])
+      ) {
+        return current;
+      }
+
+      return nextNotes;
+    });
+  }, [notes, slideshowNotes.length]);
 
   useEffect(() => {
     if (!editingNoteId && !creatingNote) {
@@ -701,7 +768,7 @@ function NotesTable() {
 
   function selectNextUnscraped() {
     const nextIds = orderedNotes
-      .filter((note) => note.scrape_status !== "done")
+      .filter((note) => note.scrape_status === "failed" || imageStatus(note) !== "done")
       .slice(0, selectNextCount)
       .map((note) => note.id);
 
@@ -743,6 +810,14 @@ function NotesTable() {
       }
 
       const payload = await startScrape(selectedIds);
+      setOperationStatus({
+        currentOperation: "scraping",
+        isBusy: true,
+        startedAt: new Date().toISOString(),
+        details: {
+          total: payload.total,
+        },
+      });
       setScrapeJob({
         status: "running",
         total: payload.total,
@@ -1029,11 +1104,14 @@ function NotesTable() {
                       note,
                       scrapeJob,
                     );
-                    const frontThumb =
-                      pickImage(note, "front", "thumbnail") ||
-                      pickImage(note, "front", "full");
-                    const frontPreview =
-                      pickImage(note, "front", "full") || frontThumb;
+                    const displayImage = pickFirstAvailableImage(note, [
+                      ["front", "thumbnail"],
+                      ["front", "full"],
+                      ["back", "thumbnail"],
+                      ["back", "full"],
+                    ]);
+                    const frontThumb = displayImage?.path ?? null;
+                    const frontPreview = displayImage?.path ?? null;
                     const showPlaceholderBefore =
                       dropTarget?.noteId === note.id &&
                       dropTarget.placement === "before";

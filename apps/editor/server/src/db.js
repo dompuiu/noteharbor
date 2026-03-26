@@ -3,13 +3,16 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import Database from 'better-sqlite3';
 import { fileURLToPath } from 'node:url';
+import {
+  normalizeImages,
+  removeStaleManagedFiles
+} from './imageStore.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const ROOT_DIR = path.resolve(__dirname, '../../../..');
 const DATA_DIR = path.resolve(process.env.NOTE_HARBOR_DATA_DIR || path.join(ROOT_DIR, 'data'));
 const IMAGES_DIR = path.join(DATA_DIR, 'images');
-const SCRAPED_IMAGES_DIR = path.join(IMAGES_DIR, 'scraped');
 const NOTE_IMAGES_DIR = path.join(IMAGES_DIR, 'notes');
 const DB_PATH = path.join(DATA_DIR, 'banknotes.db');
 
@@ -37,7 +40,6 @@ let db = null;
 let statements = null;
 
 function ensureDataDirs() {
-  fs.mkdirSync(SCRAPED_IMAGES_DIR, { recursive: true });
   fs.mkdirSync(NOTE_IMAGES_DIR, { recursive: true });
 }
 
@@ -452,7 +454,7 @@ function rowToNote(row, tagMap) {
   return {
     ...row,
     scraped_data: parseJson(row.scraped_data, null),
-    images: parseJson(row.images, []),
+    images: normalizeImages(parseJson(row.images, [])),
     tags: tagMap.get(row.id) ?? []
   };
 }
@@ -641,26 +643,29 @@ function getNextDisplayOrder() {
 
 function updateNote(note) {
   getDatabase();
+  const normalizedImages = normalizeImages(note.images ?? []);
 
   const transaction = db.transaction((payload) => {
     statements.updateNoteStatement.run({
       ...payload,
-      images: JSON.stringify(payload.images ?? [])
+      images: JSON.stringify(normalizedImages)
     });
     replaceNoteTags(payload.id, payload.tags);
   });
 
   transaction(note);
+  removeStaleManagedFiles(IMAGES_DIR, note.id, normalizedImages);
   return getNoteById(note.id);
 }
 
 function createNote(note) {
   getDatabase();
+  const normalizedImages = normalizeImages(note.images ?? []);
 
   const transaction = db.transaction((payload) => {
     const result = statements.insertNoteStatement.run({
       ...payload,
-      images: JSON.stringify(payload.images ?? []),
+      images: JSON.stringify(normalizedImages),
       display_order: getNextDisplayOrder()
     });
     const noteId = Number(result.lastInsertRowid);
@@ -674,14 +679,17 @@ function createNote(note) {
 
 function updateScrapeResult({ id, scrapedData, images, scrapeStatus, scrapeError }) {
   getDatabase();
+  const normalizedImages = normalizeImages(images ?? []);
 
   statements.updateScrapeStatement.run({
     id,
     scraped_data: scrapedData ? JSON.stringify(scrapedData) : null,
-    images: images ? JSON.stringify(images) : JSON.stringify([]),
+    images: JSON.stringify(normalizedImages),
     scrape_status: scrapeStatus,
     scrape_error: scrapeError ?? null
   });
+
+  removeStaleManagedFiles(IMAGES_DIR, id, normalizedImages);
 
   return getNoteById(id);
 }
@@ -784,7 +792,6 @@ export {
   DB_PATH,
   IMAGES_DIR,
   ROOT_DIR,
-  SCRAPED_IMAGES_DIR,
   backupDatabase,
   closeDatabase,
   createNote,

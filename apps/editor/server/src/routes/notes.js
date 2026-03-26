@@ -1,6 +1,4 @@
 import fs from 'node:fs';
-import path from 'node:path';
-import crypto from 'node:crypto';
 import { Router } from 'express';
 import multer from 'multer';
 import {
@@ -12,6 +10,22 @@ import {
   reorderNotes,
   updateNote
 } from '../db.js';
+import {
+  IMAGE_ORIGINS,
+  IMAGE_SLOTS,
+  deleteFlagFieldName,
+  fieldNameForSlot,
+  generateFlagFieldName,
+  generateThumbnailBuffer,
+  getExtensionForMimeType,
+  imageMapFromList,
+  imageSlotKey,
+  normalizeImages,
+  parseBooleanFlag,
+  removeFileIfManaged,
+  resolveLocalPath,
+  writeSlotBuffer
+} from '../imageStore.js';
 
 const notesRouter = Router();
 const upload = multer({
@@ -20,14 +34,7 @@ const upload = multer({
     fileSize: 15 * 1024 * 1024
   }
 });
-const imageSlots = [
-  { field: 'image_front_full', type: 'front', variant: 'full' },
-  { field: 'image_front_thumbnail', type: 'front', variant: 'thumbnail' },
-  { field: 'image_back_full', type: 'back', variant: 'full' },
-  { field: 'image_back_thumbnail', type: 'back', variant: 'thumbnail' }
-];
-const slotFieldMap = new Map(imageSlots.map((slot) => [slot.field, slot]));
-const uploadFields = upload.fields(imageSlots.map((slot) => ({ name: slot.field, maxCount: 1 })));
+const uploadFields = upload.fields(IMAGE_SLOTS.map((slot) => ({ name: slot.field, maxCount: 1 })));
 
 function normalizeTags(value) {
   if (Array.isArray(value)) {
@@ -39,83 +46,6 @@ function normalizeTags(value) {
   }
 
   return [];
-}
-
-function getExtensionForMimeType(mimeType, originalName) {
-  if (mimeType === 'image/png') {
-    return '.png';
-  }
-
-  if (mimeType === 'image/webp') {
-    return '.webp';
-  }
-
-  if (mimeType === 'image/gif') {
-    return '.gif';
-  }
-
-  if (mimeType === 'image/jpeg') {
-    return '.jpg';
-  }
-
-  const parsedExtension = path.extname(originalName || '').toLowerCase();
-  return parsedExtension || '.jpg';
-}
-
-function isManagedNoteImage(noteId, image) {
-  return typeof image?.localPath === 'string' && image.localPath.startsWith(`/api/images/notes/${noteId}/`);
-}
-
-function removeManagedImageFile(noteId, image) {
-  if (!isManagedNoteImage(noteId, image)) {
-    return;
-  }
-
-  const relativePath = image.localPath.replace('/api/images/', '');
-  const filePath = path.join(IMAGES_DIR, relativePath);
-  if (fs.existsSync(filePath)) {
-    fs.unlinkSync(filePath);
-  }
-}
-
-function saveUploadedImages(noteId, existingImages, filesByField) {
-  const noteImagesDir = path.join(IMAGES_DIR, 'notes', String(noteId));
-  fs.mkdirSync(noteImagesDir, { recursive: true });
-
-  const mergedImages = new Map();
-  for (const image of existingImages ?? []) {
-    if (image?.type && image?.variant) {
-      mergedImages.set(`${image.type}:${image.variant}`, image);
-    }
-  }
-
-  for (const [fieldName, files] of Object.entries(filesByField ?? {})) {
-    const slot = slotFieldMap.get(fieldName);
-    const file = files?.[0];
-
-    if (!slot || !file || !String(file.mimetype ?? '').startsWith('image/')) {
-      continue;
-    }
-
-    const key = `${slot.type}:${slot.variant}`;
-    removeManagedImageFile(noteId, mergedImages.get(key));
-
-    const extension = getExtensionForMimeType(file.mimetype, file.originalname);
-    const filename = `${slot.type}-${slot.variant}-${Date.now()}-${crypto.randomBytes(4).toString('hex')}${extension}`;
-    const targetPath = path.join(noteImagesDir, filename);
-    fs.writeFileSync(targetPath, file.buffer);
-
-    mergedImages.set(key, {
-      type: slot.type,
-      variant: slot.variant,
-      localPath: `/api/images/notes/${noteId}/${filename}`,
-      sourceUrl: null
-    });
-  }
-
-  return imageSlots
-    .map((slot) => mergedImages.get(`${slot.type}:${slot.variant}`))
-    .filter(Boolean);
 }
 
 function sanitizeNotePayload(body) {
@@ -133,11 +63,97 @@ function sanitizeNotePayload(body) {
   };
 }
 
+function getUploadedFile(filesByField, type, variant) {
+  return filesByField?.[fieldNameForSlot(type, variant)]?.[0] ?? null;
+}
+
+function shouldDeleteSlot(body, type, variant) {
+  return parseBooleanFlag(body?.[deleteFlagFieldName(type, variant)]);
+}
+
+function shouldGenerateThumbnail(body, type) {
+  return parseBooleanFlag(body?.[generateFlagFieldName(type)]);
+}
+
+function removeImageFromMap(imagesBySlot, slot) {
+  const key = imageSlotKey(slot.type, slot.variant);
+  const existing = imagesBySlot.get(key);
+  if (existing) {
+    removeFileIfManaged(IMAGES_DIR, existing);
+    imagesBySlot.delete(key);
+  }
+}
+
+function getExistingImageBuffer(image) {
+  const filePath = resolveLocalPath(IMAGES_DIR, image?.localPath);
+  if (!filePath || !fs.existsSync(filePath)) {
+    return null;
+  }
+
+  return fs.readFileSync(filePath);
+}
+
+async function buildNextImages(noteId, existingImages, body, filesByField) {
+  const imagesBySlot = imageMapFromList(existingImages);
+
+  for (const slot of IMAGE_SLOTS) {
+    if (shouldDeleteSlot(body, slot.type, slot.variant)) {
+      removeImageFromMap(imagesBySlot, slot);
+    }
+  }
+
+  for (const slot of IMAGE_SLOTS) {
+    const file = getUploadedFile(filesByField, slot.type, slot.variant);
+
+    if (!file || !String(file.mimetype ?? '').startsWith('image/')) {
+      continue;
+    }
+
+    removeImageFromMap(imagesBySlot, slot);
+    const extension = getExtensionForMimeType(file.mimetype, file.originalname);
+    const nextImage = writeSlotBuffer(IMAGES_DIR, noteId, slot.type, slot.variant, file.buffer, {
+      extension,
+      origin: IMAGE_ORIGINS.uploaded,
+      sourceUrl: null
+    });
+    imagesBySlot.set(imageSlotKey(slot.type, slot.variant), nextImage);
+  }
+
+  for (const type of ['front', 'back']) {
+    const fullFile = getUploadedFile(filesByField, type, 'full');
+    const thumbnailFile = getUploadedFile(filesByField, type, 'thumbnail');
+    const existingFullImage = imagesBySlot.get(imageSlotKey(type, 'full'));
+
+    if (thumbnailFile || !shouldGenerateThumbnail(body, type)) {
+      continue;
+    }
+
+    const sourceBuffer = fullFile?.buffer ?? getExistingImageBuffer(existingFullImage);
+    if (!sourceBuffer) {
+      continue;
+    }
+
+    const generatedBuffer = await generateThumbnailBuffer(sourceBuffer);
+    removeImageFromMap(imagesBySlot, { type, variant: 'thumbnail' });
+    const extension = fullFile
+      ? getExtensionForMimeType(fullFile.mimetype, fullFile.originalname)
+      : getExtensionForMimeType(null, existingFullImage?.localPath);
+    const generatedImage = writeSlotBuffer(IMAGES_DIR, noteId, type, 'thumbnail', generatedBuffer, {
+      extension,
+      origin: IMAGE_ORIGINS.generated,
+      sourceUrl: null
+    });
+    imagesBySlot.set(imageSlotKey(type, 'thumbnail'), generatedImage);
+  }
+
+  return normalizeImages(Array.from(imagesBySlot.values()));
+}
+
 notesRouter.get('/', (_request, response) => {
   response.json({ notes: getAllNotes() });
 });
 
-notesRouter.post('/', uploadFields, (request, response) => {
+notesRouter.post('/', uploadFields, async (request, response) => {
   const payload = sanitizeNotePayload(request.body);
 
   if (!payload.denomination) {
@@ -151,7 +167,7 @@ notesRouter.post('/', uploadFields, (request, response) => {
       images: []
     });
 
-    const nextImages = saveUploadedImages(note.id, [], request.files);
+    const nextImages = await buildNextImages(note.id, [], request.body, request.files);
     if (nextImages.length) {
       note = updateNote({
         id: note.id,
@@ -193,7 +209,7 @@ notesRouter.get('/:id', (request, response) => {
   response.json({ note });
 });
 
-notesRouter.put('/:id', uploadFields, (request, response) => {
+notesRouter.put('/:id', uploadFields, async (request, response) => {
   const noteId = Number(request.params.id);
   const existing = getNoteById(noteId);
 
@@ -202,13 +218,13 @@ notesRouter.put('/:id', uploadFields, (request, response) => {
     return;
   }
 
-  const payload = {
-    id: noteId,
-    ...sanitizeNotePayload(request.body),
-    images: saveUploadedImages(noteId, existing.images, request.files)
-  };
-
   try {
+    const payload = {
+      id: noteId,
+      ...sanitizeNotePayload(request.body),
+      images: await buildNextImages(noteId, existing.images, request.body, request.files)
+    };
+
     const updated = updateNote(payload);
     response.json({ note: updated });
   } catch (error) {
