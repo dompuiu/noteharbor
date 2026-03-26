@@ -2,7 +2,7 @@
 workspace:
   name: "noteharbor"
   description: "layout for development"
-  directory: "/home/dompuiu/Development/notesshow"
+  directory: "."
 
 panes:
   # General terminal (bottom-left)
