@@ -1,5 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
+
+try { process.loadEnvFile(); } catch { /* no .env file, use defaults */ }
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import cors from 'cors';
 import express from 'express';
