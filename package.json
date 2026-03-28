@@ -1,6 +1,7 @@
 {
   "name": "noteharbor",
   "private": true,
+  "packageManager": "pnpm@10.28.0",
   "scripts": {
     "dev": "concurrently \"pnpm --filter editor_server dev\" \"pnpm --filter editor_web dev\"",
     "build:editor:desktop:win": "pnpm --filter editor_desktop build:win",
