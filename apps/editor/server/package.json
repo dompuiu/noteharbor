@@ -3,8 +3,8 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "node --env-file=.env --watch src/index.js",
-    "start": "node --env-file=.env src/index.js"
+    "dev": "node --watch src/index.js",
+    "start": "node src/index.js"
   },
   "dependencies": {
     "archiver": "^7.0.1",
