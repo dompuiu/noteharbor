@@ -5,9 +5,9 @@
   "scripts": {
     "dev": "concurrently \"pnpm --filter editor_server dev\" \"pnpm --filter editor_web dev\"",
     "build:editor:desktop:win": "pnpm --filter editor_desktop build:win",
-    "dev:viewer:flutter": "cd apps/viewer/flutter && flutter pub get && flutter run -d chrome",
-    "build:viewer:flutter:data": "python3 scripts/build_flutter_viewer_dataset.py",
-    "build:viewer:flutter": "cd apps/viewer/flutter && flutter pub get && flutter build web",
+    "dev:viewer:flutter": "cd apps/viewer/flutter && flutter pub get && flutter run",
+    "build:viewer:flutter:windows": "cd apps/viewer/flutter && flutter pub get && flutter build windows",
+    "build:viewer:flutter:ios": "cd apps/viewer/flutter && flutter pub get && flutter build ios",
     "layout": "tsps --layout layout.yml"
   },
   "devDependencies": {

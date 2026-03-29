@@ -2,46 +2,12 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
-import '../../data/viewer_repository.dart';
+import '../../data/dataset_controller.dart';
 import '../../models/note_record.dart';
 import '../../models/tag.dart';
-import '../../models/viewer_dataset.dart';
+import '../../widgets/note_image_provider.dart';
+import '../import/import_dataset_screen.dart';
 import '../slideshow/note_slideshow_screen.dart';
-
-String formatFriendlyDatasetBuiltAt(String value) {
-  final trimmed = value.trim();
-  if (trimmed.isEmpty) {
-    return trimmed;
-  }
-
-  final parsed = DateTime.tryParse(trimmed);
-  if (parsed == null) {
-    return trimmed;
-  }
-
-  final normalized = parsed.toUtc();
-  const monthNames = <String>[
-    'Jan',
-    'Feb',
-    'Mar',
-    'Apr',
-    'May',
-    'Jun',
-    'Jul',
-    'Aug',
-    'Sep',
-    'Oct',
-    'Nov',
-    'Dec',
-  ];
-
-  final month = monthNames[normalized.month - 1];
-  final day = normalized.day.toString().padLeft(2, '0');
-  final hour = normalized.hour.toString().padLeft(2, '0');
-  final minute = normalized.minute.toString().padLeft(2, '0');
-
-  return '$month $day, ${normalized.year} at $hour:$minute UTC';
-}
 
 const double _kOrderColumnWidth = 90;
 const double _kFrontColumnWidth = 120;
@@ -123,27 +89,21 @@ double _calculateTagsColumnWidth(List<NoteRecord> notes) {
 }
 
 class NotesTableScreen extends StatefulWidget {
-  const NotesTableScreen({super.key});
+  const NotesTableScreen({required this.controller, super.key});
+
+  final DatasetController controller;
 
   @override
   State<NotesTableScreen> createState() => _NotesTableScreenState();
 }
 
 class _NotesTableScreenState extends State<NotesTableScreen> {
-  final ViewerRepository _repository = const ViewerRepository();
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
-  late Future<ViewerDataset> _datasetFuture;
   String _query = '';
   String _sortKey = 'displayOrder';
   bool _ascending = true;
-
-  @override
-  void initState() {
-    super.initState();
-    _datasetFuture = _repository.loadDataset();
-  }
 
   @override
   void dispose() {
@@ -208,6 +168,15 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     }
   }
 
+  Future<void> _openImportScreen() async {
+    await Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (context) =>
+            ImportDatasetScreen(controller: widget.controller),
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -224,24 +193,31 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
           ),
           child: SafeArea(
             bottom: false,
-            child: FutureBuilder<ViewerDataset>(
-              future: _datasetFuture,
-              builder: (context, snapshot) {
-                if (snapshot.connectionState != ConnectionState.done) {
+            child: AnimatedBuilder(
+              animation: widget.controller,
+              builder: (context, _) {
+                if (widget.controller.isLoading &&
+                    widget.controller.dataset == null) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                if (snapshot.hasError) {
+                if (widget.controller.error != null &&
+                    widget.controller.dataset == null) {
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
                       child: Text(
-                          'Failed to load bundled dataset: ${snapshot.error}'),
+                        'Failed to load dataset: ${widget.controller.error}',
+                      ),
                     ),
                   );
                 }
 
-                final dataset = snapshot.data!;
+                final dataset = widget.controller.dataset;
+                if (dataset == null) {
+                  return const Center(child: Text('No dataset available.'));
+                }
+
                 final notes = _sortedNotes(dataset.notes);
 
                 final tagsColumnWidth = _calculateTagsColumnWidth(notes);
@@ -257,7 +233,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                       _Header(
                         totalCount: dataset.noteCount,
                         visibleCount: notes.length,
-                        generatedAt: dataset.generatedAt,
+                        onOpenImports:
+                            widget.controller.canManageImportedDatasets
+                                ? _openImportScreen
+                                : null,
                       ),
                       const SizedBox(height: 20),
                       ConstrainedBox(
@@ -436,12 +415,12 @@ class _Header extends StatelessWidget {
   const _Header({
     required this.totalCount,
     required this.visibleCount,
-    required this.generatedAt,
+    required this.onOpenImports,
   });
 
   final int totalCount;
   final int visibleCount;
-  final String? generatedAt;
+  final VoidCallback? onOpenImports;
 
   @override
   Widget build(BuildContext context) {
@@ -492,62 +471,43 @@ class _Header extends StatelessWidget {
         ),
         const Spacer(),
         _StatPill(label: 'Notes', value: '$visibleCount / $totalCount'),
-        if (generatedAt != null && generatedAt!.trim().isNotEmpty) ...[
+        if (onOpenImports != null) ...[
           const SizedBox(width: 16),
-          _DatasetBuiltButton(timestamp: generatedAt!),
+          _ImportButton(onPressed: onOpenImports!),
         ],
       ],
     );
   }
 }
 
-class _DatasetBuiltButton extends StatelessWidget {
-  const _DatasetBuiltButton({required this.timestamp});
+class _ImportButton extends StatelessWidget {
+  const _ImportButton({required this.onPressed});
 
-  final String timestamp;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
-    final formattedTimestamp = formatFriendlyDatasetBuiltAt(timestamp);
-
     return DecoratedBox(
       decoration: BoxDecoration(
         color: _kTableSurface,
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: _kTableBorder),
       ),
-      child: PopupMenuButton<void>(
-        tooltip: 'Dataset built time',
-        padding: EdgeInsets.zero,
-        position: PopupMenuPosition.under,
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        itemBuilder: (context) => [
-          PopupMenuItem<void>(
-            enabled: false,
-            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  'Dataset built',
-                  style: Theme.of(context)
-                      .textTheme
-                      .labelMedium
-                      ?.copyWith(fontWeight: FontWeight.w700),
-                ),
-                const SizedBox(height: 4),
-                Text(formattedTimestamp),
-              ],
-            ),
+      child: SizedBox(
+        height: _kHeaderBadgeHeight,
+        width: _kHeaderBadgeHeight,
+        child: IconButton(
+          tooltip: 'Manage imported archives',
+          onPressed: onPressed,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(
+            width: _kHeaderBadgeHeight,
+            height: _kHeaderBadgeHeight,
           ),
-        ],
-        child: const SizedBox(
-          height: _kHeaderBadgeHeight,
-          child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: 12),
-            child: Icon(Icons.schedule_rounded,
-                size: 20, color: Color(0xFF7A5D27)),
+          icon: const Icon(
+            Icons.file_upload_outlined,
+            size: 20,
+            color: Color(0xFF7A5D27),
           ),
         ),
       ),
@@ -765,7 +725,7 @@ class _TableRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final imagePath = note.previewFor('front')?.assetPath;
+    final image = note.previewFor('front');
 
     return InkWell(
       onTap: onTap,
@@ -780,12 +740,12 @@ class _TableRow extends StatelessWidget {
                 width: _kOrderColumnWidth, child: Text('${note.displayOrder}')),
             _DataCell(
               width: _kFrontColumnWidth,
-              child: imagePath == null
+              child: image == null
                   ? const Text('-')
                   : ClipRRect(
                       borderRadius: BorderRadius.circular(10),
-                      child: Image.asset(
-                        imagePath,
+                      child: Image(
+                        image: createNoteImageProvider(image),
                         width: 96,
                         height: 56,
                         fit: BoxFit.cover,

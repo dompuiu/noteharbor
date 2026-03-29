@@ -1,5 +1,5 @@
-name: viewer_flutter
-description: Note Harbor.
+name: note_harbor_viewer
+description: Note Harbor Viewer.
 publish_to: "none"
 
 version: 1.0.0+1
@@ -11,6 +11,12 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  archive: ^3.6.1
+  file_picker: ^10.1.9
+  path: ^1.9.1
+  path_provider: ^2.1.5
+  sqlite3: ^2.9.3
+  sqlite3_flutter_libs: ^0.5.39
   url_launcher: ^6.3.2
 
 dev_dependencies:
@@ -21,6 +27,4 @@ dev_dependencies:
 flutter:
   uses-material-design: true
   assets:
-    - assets/data/notes.json
-    - assets/data/images/
     - web/icons/Icon-192.png
