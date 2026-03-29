@@ -67,10 +67,7 @@ noteharbor/
 │   └── viewer/
 │       └── flutter/
 │           ├── pubspec.yaml
-│           ├── assets/data/
 │           └── lib/
-├── scripts/
-│   └── build_flutter_viewer_dataset.py
 └── data/
     ├── banknotes.db
     └── images/
@@ -139,23 +136,20 @@ pnpm build:editor:desktop:win
 pnpm dev:viewer:flutter
 ```
 
-### Build the Flutter viewer dataset
+This runs the native Flutter viewer on the default connected device/emulator.
 
-Export a `.zip` archive from the editor, then convert it into bundled Flutter assets:
+### Build the Flutter viewer app
 
-```bash
-pnpm build:viewer:flutter:data -- --archive /path/to/noteharbor-archive.zip
-```
-
-This writes:
-
-- `apps/viewer/flutter/assets/data/notes.json`
-- `apps/viewer/flutter/assets/data/images/...`
-
-Then build the viewer itself:
+Build the native viewer app, then import a `.zip` archive exported from the editor on first launch:
 
 ```bash
 pnpm build:viewer:flutter
+```
+
+For iOS builds:
+
+```bash
+pnpm build:viewer:flutter:ios
 ```
 
 ### Environment variables
@@ -441,7 +435,7 @@ Direct route for editing or reviewing one note outside the overlay flow.
 
 ### Viewer App
 
-The Flutter viewer is a separate read-only application. It loads `assets/data/notes.json`, shows a searchable notes table, and opens a slideshow/lightbox using bundled image assets only.
+The Flutter viewer is a separate read-only application. It starts empty, imports editor archives containing `banknotes.db` plus `images/`, then shows a searchable notes table and slideshow/lightbox using imported local files.
 
 ---
 

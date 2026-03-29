@@ -2,7 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../models/note_image.dart';
 import '../../models/note_record.dart';
+import '../../widgets/note_image_provider.dart';
 import 'image_lightbox.dart';
 
 const _kBg = Color(0xFF1F160F);
@@ -272,12 +274,12 @@ class _NoteSlideState extends State<_NoteSlide> {
                         ],
                         const SizedBox(height: 16),
                         _NoteImage(
-                          imagePath: widget.note.previewFor('front')?.assetPath,
+                          image: widget.note.previewFor('front'),
                           onTap: () => widget.onTapImage(widget.note, 'front'),
                         ),
                         const SizedBox(height: 12),
                         _NoteImage(
-                          imagePath: widget.note.previewFor('back')?.assetPath,
+                          image: widget.note.previewFor('back'),
                           onTap: () => widget.onTapImage(widget.note, 'back'),
                         ),
                         const SizedBox(height: 16),
@@ -334,20 +336,20 @@ class _NoteSlideState extends State<_NoteSlide> {
 }
 
 class _NoteImage extends StatelessWidget {
-  const _NoteImage({required this.imagePath, required this.onTap});
+  const _NoteImage({required this.image, required this.onTap});
 
-  final String? imagePath;
+  final NoteImage? image;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     return GestureDetector(
-      onTap: imagePath == null ? null : onTap,
+      onTap: image == null ? null : onTap,
       child: AspectRatio(
         aspectRatio: 1.65,
         child: ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: imagePath == null
+          child: image == null
               ? const ColoredBox(
                   color: Color(0xFF2A1A0E),
                   child: Center(
@@ -357,14 +359,14 @@ class _NoteImage extends StatelessWidget {
                     ),
                   ),
                 )
-              : Image.asset(
-                  imagePath!,
+              : Image(
+                  image: createNoteImageProvider(image!),
                   fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => const ColoredBox(
                     color: Color(0xFF2A1A0E),
                     child: Center(
                       child: Text(
-                        'Missing asset',
+                        'Missing image',
                         style: TextStyle(color: Colors.white54),
                       ),
                     ),
