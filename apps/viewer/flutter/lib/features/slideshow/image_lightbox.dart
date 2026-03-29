@@ -5,6 +5,7 @@ import 'package:flutter/services.dart';
 
 import '../../models/note_image.dart';
 import '../../models/note_record.dart';
+import '../../widgets/note_image_provider.dart';
 
 class ImageSequenceItem {
   const ImageSequenceItem({
@@ -194,9 +195,9 @@ class _ImageLightboxState extends State<ImageLightbox> {
                               padding: const EdgeInsets.all(16),
                               child: _ZoomableImagePage(
                                 key: ValueKey(
-                                  '${imageItem.image.assetPath}-$index-$_pageGeneration',
+                                  '${imageItem.image.cacheKey}-$index-$_pageGeneration',
                                 ),
-                                imagePath: imageItem.image.assetPath,
+                                image: imageItem.image,
                                 onInteractionStateChanged: (isMultiTouch) {
                                   _setPageScrollEnabled(!isMultiTouch);
                                 },
@@ -227,12 +228,12 @@ class _NextImageIntent extends Intent {
 
 class _ZoomableImagePage extends StatefulWidget {
   const _ZoomableImagePage({
-    required this.imagePath,
+    required this.image,
     required this.onInteractionStateChanged,
     super.key,
   });
 
-  final String imagePath;
+  final NoteImage image;
   final ValueChanged<bool> onInteractionStateChanged;
 
   @override
@@ -264,7 +265,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
   @override
   void didUpdateWidget(covariant _ZoomableImagePage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.imagePath != widget.imagePath) {
+    if (oldWidget.image.cacheKey != widget.image.cacheKey) {
       _removeImageListener();
       _activePointers.clear();
       _intrinsicSize = null;
@@ -286,7 +287,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
   }
 
   void _resolveImage() {
-    final provider = AssetImage(widget.imagePath);
+    final provider = createNoteImageProvider(widget.image);
     final stream = provider.resolve(const ImageConfiguration());
     _imageStream = stream;
     _imageStreamListener = ImageStreamListener((imageInfo, _) {
@@ -549,16 +550,16 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
                 child: Transform.scale(
                   scale: _scale,
                   child: SizedBox(
-                    width: contentSize.width,
-                    height: contentSize.height,
-                    child: Image.asset(
-                      widget.imagePath,
-                      fit: BoxFit.contain,
+                     width: contentSize.width,
+                     height: contentSize.height,
+                     child: Image(
+                       image: createNoteImageProvider(widget.image),
+                       fit: BoxFit.contain,
                       errorBuilder: (context, error, stackTrace) {
                         return const Padding(
                           padding: EdgeInsets.all(32),
                           child: Text(
-                            'This image asset is missing from the bundled dataset.',
+                            'This image file is missing from the current dataset.',
                             style: TextStyle(color: Colors.white70),
                             textAlign: TextAlign.center,
                           ),

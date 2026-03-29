@@ -4,24 +4,20 @@ Read-only Flutter app for the Note Harbor Viewer.
 
 ## Scope
 
-- bundled dataset only
+- native import of editor archives (`banknotes.db` + `images/`)
 - works without the Node server at runtime
 - notes table
 - slideshow level 1: note browser
 - slideshow level 2: full-size image sequence across the collection
 
-## Dataset Build
+## Runtime Data Flow
 
-Export a `.zip` archive from the current app, then run:
+Build the native viewer app, then on first launch import a `.zip` archive exported from the editor.
 
-```bash
-pnpm build:viewer:flutter:data -- --archive /path/to/noteharbor-archive.zip
-```
+The archive must contain:
 
-That writes:
-
-- `apps/viewer/flutter/assets/data/notes.json`
-- `apps/viewer/flutter/assets/data/images/...`
+- `banknotes.db`
+- `images/`
 
 ## Flutter Setup
 
@@ -31,14 +27,14 @@ Once Flutter is available, initialize platform folders inside `apps/viewer/flutt
 
 ```bash
 cd apps/viewer/flutter
-flutter create . --platforms=ios,web
+flutter create . --platforms=ios,android,macos,windows,linux
 flutter pub get
-flutter run -d chrome
+flutter run
 ```
 
-Then build with the bundled dataset:
+Then build the native viewer app:
 
 ```bash
-flutter build web
 flutter build ios
+flutter build apk
 ```

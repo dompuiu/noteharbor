@@ -1,9 +1,30 @@
 import 'package:flutter/material.dart';
 
+import '../data/dataset_controller.dart';
+import '../features/import/import_dataset_screen.dart';
 import '../features/table/notes_table_screen.dart';
 
-class ViewerApp extends StatelessWidget {
+class ViewerApp extends StatefulWidget {
   const ViewerApp({super.key});
+
+  @override
+  State<ViewerApp> createState() => _ViewerAppState();
+}
+
+class _ViewerAppState extends State<ViewerApp> {
+  late final DatasetController _controller;
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = DatasetController()..load();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -44,7 +65,16 @@ class ViewerApp extends StatelessWidget {
                   ),
             ),
       ),
-      home: const NotesTableScreen(),
+      home: AnimatedBuilder(
+        animation: _controller,
+        builder: (context, _) {
+          if (_controller.dataset == null) {
+            return ImportDatasetScreen(controller: _controller);
+          }
+
+          return NotesTableScreen(controller: _controller);
+        },
+      ),
     );
   }
 }
