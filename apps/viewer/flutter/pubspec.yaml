@@ -1,5 +1,5 @@
-name: viewer_flutter
-description: Note Harbor.
+name: note_harbor_viewer
+description: Note Harbor Viewer.
 publish_to: "none"
 
 version: 1.0.0+1

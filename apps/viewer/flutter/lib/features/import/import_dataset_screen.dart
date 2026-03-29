@@ -2,6 +2,7 @@ import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
 import '../../data/dataset_controller.dart';
+import '../../models/dataset_source.dart';
 import '../../utils/dataset_date_format.dart';
 
 class ImportDatasetScreen extends StatefulWidget {
@@ -224,7 +225,8 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                           children: [
                             _InfoPill(
                               label: 'Active source',
-                              value: dataset?.source.label ?? 'No dataset imported',
+                              value: dataset?.source.label ??
+                                  'No dataset imported',
                             ),
                             _InfoPill(
                               label: 'Dataset built',
@@ -265,11 +267,13 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                             padding: const EdgeInsets.all(16),
                             child: Row(
                               children: [
-                                const Icon(Icons.archive_outlined, color: Color(0xFF7A5D27)),
+                                const Icon(Icons.archive_outlined,
+                                    color: Color(0xFF7A5D27)),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
-                                    _selectedArchiveName ?? 'No archive selected',
+                                    _selectedArchiveName ??
+                                        'No archive selected',
                                   ),
                                 ),
                               ],
@@ -284,19 +288,27 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                             OutlinedButton.icon(
                               onPressed: isBusy ? null : _pickArchive,
                               icon: const Icon(Icons.folder_open_rounded),
-                              label: Text(_isPicking ? 'Choosing...' : 'Choose archive'),
+                              label: Text(_isPicking
+                                  ? 'Choosing...'
+                                  : 'Choose archive'),
                             ),
                             FilledButton.icon(
-                              onPressed: isBusy || _selectedArchivePath == null ? null : _importArchive,
+                              onPressed: isBusy || _selectedArchivePath == null
+                                  ? null
+                                  : _importArchive,
                               icon: const Icon(Icons.file_upload_outlined),
-                              label: Text(widget.controller.isMutating ? 'Importing...' : 'Import archive'),
+                              label: Text(widget.controller.isMutating
+                                  ? 'Importing...'
+                                  : 'Import archive'),
                             ),
                           ],
                         ),
                         const SizedBox(height: 12),
                         const Text(
                           'Import is destructive for imported data: it replaces the current imported database and pictures on this device.',
-                          style: TextStyle(color: Color(0xFF6A2E1A), fontWeight: FontWeight.w600),
+                          style: TextStyle(
+                              color: Color(0xFF6A2E1A),
+                              fontWeight: FontWeight.w600),
                         ),
                       ],
                     ),

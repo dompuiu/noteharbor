@@ -171,7 +171,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   Future<void> _openImportScreen() async {
     await Navigator.of(context).push(
       MaterialPageRoute<void>(
-        builder: (context) => ImportDatasetScreen(controller: widget.controller),
+        builder: (context) =>
+            ImportDatasetScreen(controller: widget.controller),
       ),
     );
   }
@@ -195,11 +196,13 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
             child: AnimatedBuilder(
               animation: widget.controller,
               builder: (context, _) {
-                if (widget.controller.isLoading && widget.controller.dataset == null) {
+                if (widget.controller.isLoading &&
+                    widget.controller.dataset == null) {
                   return const Center(child: CircularProgressIndicator());
                 }
 
-                if (widget.controller.error != null && widget.controller.dataset == null) {
+                if (widget.controller.error != null &&
+                    widget.controller.dataset == null) {
                   return Center(
                     child: Padding(
                       padding: const EdgeInsets.all(24),
@@ -230,9 +233,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                       _Header(
                         totalCount: dataset.noteCount,
                         visibleCount: notes.length,
-                        onOpenImports: widget.controller.canManageImportedDatasets
-                            ? _openImportScreen
-                            : null,
+                        onOpenImports:
+                            widget.controller.canManageImportedDatasets
+                                ? _openImportScreen
+                                : null,
                       ),
                       const SizedBox(height: 20),
                       ConstrainedBox(
@@ -489,12 +493,18 @@ class _ImportButton extends StatelessWidget {
         borderRadius: BorderRadius.circular(18),
         border: Border.all(color: _kTableBorder),
       ),
-      child: IconButton(
-        tooltip: 'Manage imported archives',
-        onPressed: onPressed,
-        icon: const SizedBox(
-          height: _kHeaderBadgeHeight,
-          child: Icon(
+      child: SizedBox(
+        height: _kHeaderBadgeHeight,
+        width: _kHeaderBadgeHeight,
+        child: IconButton(
+          tooltip: 'Manage imported archives',
+          onPressed: onPressed,
+          padding: EdgeInsets.zero,
+          constraints: const BoxConstraints.tightFor(
+            width: _kHeaderBadgeHeight,
+            height: _kHeaderBadgeHeight,
+          ),
+          icon: const Icon(
             Icons.file_upload_outlined,
             size: 20,
             color: Color(0xFF7A5D27),
