@@ -275,16 +275,26 @@ function NoteEditForm({
     setDeletedSlots((current) => ({ ...current, [slot.key]: false }));
   }
 
-  function inferGradingCompany(url) {
-    const lower = url.toLowerCase();
-    if (lower.includes("pmgnotes.com")) return "PMG";
-    if (lower.includes("tqggrading.com")) return "TQG";
+function inferGradingCompany(url) {
+  const lower = url.toLowerCase();
+  if (lower.includes("pmgnotes.com")) return "PMG";
+  if (lower.includes("tqggrading.com")) return "TQG";
+  return null;
+}
+
+function extractCatalogNumberFromPmNote(noteValue) {
+  const normalized = String(noteValue ?? "").trim();
+  if (!normalized) {
     return null;
   }
 
-  function mapScrapedFields(scrapedData, url) {
-    const updates = {};
-    const d = scrapedData;
+  const match = normalized.match(/(\d+)/);
+  return match ? match[1] : null;
+}
+
+function mapScrapedFields(scrapedData, url) {
+  const updates = {};
+  const d = scrapedData;
 
     const grade = d.grade;
     if (grade) updates.grade = grade;
@@ -292,8 +302,15 @@ function NoteEditForm({
     const serial = d.serial_number ?? d.serial;
     if (serial) updates.serial = serial;
 
-    const catalogNumber = d.pmg_cert ?? d.cert_no ?? d.certificate_no ?? d.certificate_number ?? d.cert;
-    if (catalogNumber) updates.catalog_number = catalogNumber;
+  const pmgNoteCatalogNumber = extractCatalogNumberFromPmNote(d.note);
+  const catalogNumber =
+    pmgNoteCatalogNumber ??
+    d.pmg_cert ??
+    d.cert_no ??
+    d.certificate_no ??
+    d.certificate_number ??
+    d.cert;
+  if (catalogNumber) updates.catalog_number = catalogNumber;
 
     const denomination = d.denomination;
     if (denomination) updates.denomination = denomination;
