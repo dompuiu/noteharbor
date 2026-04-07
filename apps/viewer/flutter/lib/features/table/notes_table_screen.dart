@@ -48,6 +48,69 @@ const TextStyle _kTagChipTextStyle = TextStyle(
   height: 1,
 );
 
+// ---------------------------------------------------------------------------
+// Field-scoped search parsing
+// ---------------------------------------------------------------------------
+
+class _ParsedQuery {
+  const _ParsedQuery({required this.allFields, required this.fields});
+
+  final String allFields;
+  final Map<String, String> fields; // canonical field name → lowercased query
+
+  bool get isEmpty => allFields.isEmpty && fields.isEmpty;
+}
+
+// Matches "fieldkeyword:" (case-insensitive, requires word boundary before).
+final _kFieldPattern = RegExp(
+  r'\b(denomination|denom|date|catalog|cat|grading|company|grade):\s*',
+  caseSensitive: false,
+);
+
+String _canonicalField(String keyword) => switch (keyword.toLowerCase()) {
+      'denomination' || 'denom' => 'denomination',
+      'date' => 'issueDate',
+      'catalog' || 'cat' => 'catalogNumber',
+      'company' || 'grading' => 'gradingCompany',
+      'grade' => 'grade',
+      _ => keyword,
+    };
+
+_ParsedQuery _parseQuery(String raw) {
+  final trimmed = raw.trim();
+  if (trimmed.isEmpty) {
+    return const _ParsedQuery(allFields: '', fields: {});
+  }
+
+  final matches = _kFieldPattern.allMatches(trimmed).toList();
+  if (matches.isEmpty) {
+    return _ParsedQuery(allFields: trimmed.toLowerCase(), fields: const {});
+  }
+
+  final fields = <String, String>{};
+  for (var i = 0; i < matches.length; i++) {
+    final match = matches[i];
+    final canonicalField = _canonicalField(match.group(1)!);
+    final valueStart = match.end;
+    final valueEnd =
+        i + 1 < matches.length ? matches[i + 1].start : trimmed.length;
+    // Strip optional trailing comma (e.g. "catalog: 123, denom: 10")
+    final segment = trimmed.substring(valueStart, valueEnd).trim();
+    final value = segment.endsWith(',')
+        ? segment.substring(0, segment.length - 1).trim().toLowerCase()
+        : segment.toLowerCase();
+    if (value.isNotEmpty) {
+      fields[canonicalField] = value;
+    }
+  }
+
+  final allFields =
+      trimmed.substring(0, matches.first.start).trim().toLowerCase();
+  return _ParsedQuery(allFields: allFields, fields: fields);
+}
+
+// ---------------------------------------------------------------------------
+
 double _measureTextWidth(String text, TextStyle style) {
   final painter = TextPainter(
     text: TextSpan(text: text, style: style),
@@ -114,24 +177,31 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   }
 
   List<NoteRecord> _sortedNotes(List<NoteRecord> notes) {
-    final loweredQuery = _query.trim().toLowerCase();
+    final parsed = _parseQuery(_query);
     final filtered = notes.where((note) {
-      if (loweredQuery.isEmpty) {
-        return true;
+      if (parsed.isEmpty) return true;
+
+      if (parsed.allFields.isNotEmpty) {
+        final haystack = [
+          note.displayOrder.toString(),
+          note.denomination,
+          note.issueDate,
+          note.catalogNumber,
+          note.gradingCompany,
+          note.grade,
+          note.serial,
+          note.tagsLabel,
+          note.notes,
+        ].join(' ').toLowerCase();
+        if (!haystack.contains(parsed.allFields)) return false;
       }
 
-      final haystack = [
-        note.displayOrder.toString(),
-        note.denomination,
-        note.issueDate,
-        note.catalogNumber,
-        note.gradingCompany,
-        note.grade,
-        note.serial,
-        note.tagsLabel,
-        note.notes,
-      ].join(' ').toLowerCase();
-      return haystack.contains(loweredQuery);
+      for (final entry in parsed.fields.entries) {
+        final fieldValue = note.valueForColumn(entry.key).toLowerCase();
+        if (!fieldValue.contains(entry.value)) return false;
+      }
+
+      return true;
     }).toList(growable: false);
 
     filtered.sort((left, right) {
@@ -247,7 +317,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                             filled: true,
                             fillColor: _kTableSurface,
                             hintText:
-                                'Filter denomination, catalog, serial, tags, notes...',
+                                'Filter... or use catalog: denom: date: company: grade:',
                             prefixIcon: const Icon(Icons.search_rounded),
                             suffixIcon: _query.isEmpty
                                 ? null
