@@ -104,8 +104,12 @@ function fetchHtml(url, waitForSelector) {
  * Returns { scraper, parsed } without writing anything to disk or DB.
  * Throws if no scraper matches the URL or if fetching/parsing fails.
  */
-async function scrapeUrl(url) {
-  const scraper = getScraperForNote({ url, grading_company: '' });
+async function scrapeUrl(noteOrUrl) {
+  const note = typeof noteOrUrl === 'string'
+    ? { url: noteOrUrl, grading_company: '' }
+    : noteOrUrl;
+  const url = note?.url;
+  const scraper = getScraperForNote(note);
 
   if (!scraper) {
     throw new Error('No scraper is implemented for this grading company yet.');
@@ -141,7 +145,7 @@ async function runScrapeJob(notes) {
       if (stateItem) stateItem.status = 'running';
 
       try {
-        const { scraper, parsed } = await scrapeUrl(note.url);
+        const { scraper, parsed } = await scrapeUrl(note);
         const images = await scraper.downloadImages(parsed);
 
         updateScrapeResult({ id: note.id, scrapedData: parsed.details, images, scrapeStatus: 'done', scrapeError: null });
