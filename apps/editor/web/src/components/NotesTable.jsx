@@ -950,7 +950,8 @@ function NotesTable() {
             </div>
             <div className="inline-actions">
               <button
-                className="button button-primary"
+                aria-label="Add banknote"
+                className="icon-link button-primary"
                 onClick={openCreateNote}
                 title="Add banknote"
                 type="button"
@@ -958,7 +959,8 @@ function NotesTable() {
                 Add banknote
               </button>
               <Link
-                className={`button${operationStatus.isBusy ? " button-disabled" : ""}`}
+                aria-label="Import or export"
+                className={`icon-link${operationStatus.isBusy ? " button-disabled" : ""}`}
                 onClick={(event) => {
                   if (operationStatus.isBusy) {
                     event.preventDefault();
