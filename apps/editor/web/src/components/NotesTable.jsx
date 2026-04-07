@@ -605,33 +605,47 @@ function NotesTable() {
     }
   }
 
-  function handleSaveEditedNote(updatedNote) {
-    setNotes((current) => {
-      const noteExists = current.some((note) => note.id === updatedNote.id);
+  function handleSaveEditedNote(updatedNote, reorderedNotes) {
+    if (reorderedNotes) {
+      setNotes(reorderedNotes);
+    } else {
+      setNotes((current) => {
+        const noteExists = current.some((note) => note.id === updatedNote.id);
 
-      if (noteExists) {
-        return current.map((note) =>
-          note.id === updatedNote.id ? updatedNote : note,
-        );
-      }
+        if (noteExists) {
+          return current.map((note) =>
+            note.id === updatedNote.id ? updatedNote : note,
+          );
+        }
 
-      return [...current, updatedNote];
-    });
+        return [...current, updatedNote];
+      });
+    }
 
     setSlideshowNotes((current) => {
       if (!current.length) {
         return current;
       }
 
-      const noteExists = current.some((note) => note.id === updatedNote.id);
+      let nextSlideshow;
 
-      if (!noteExists) {
-        return current;
+      if (reorderedNotes) {
+        const slideshowIds = new Set(current.map((note) => note.id));
+        nextSlideshow = reorderedNotes.filter((note) => slideshowIds.has(note.id));
+      } else {
+        const noteExists = current.some((note) => note.id === updatedNote.id);
+        if (!noteExists) return current;
+        nextSlideshow = current.map((note) =>
+          note.id === updatedNote.id ? updatedNote : note,
+        );
       }
 
-      return current.map((note) =>
-        note.id === updatedNote.id ? updatedNote : note,
-      );
+      const newIndex = nextSlideshow.findIndex((note) => note.id === updatedNote.id);
+      if (newIndex !== -1) {
+        setSlideshowIndex(newIndex);
+      }
+
+      return nextSlideshow;
     });
 
     closeEditor();
