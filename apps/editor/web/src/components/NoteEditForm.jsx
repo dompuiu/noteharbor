@@ -98,8 +98,8 @@ function NoteEditForm({
 
   const positionNeedsReference = positionMode === "before" || positionMode === "after";
   const positionInvalid = positionNeedsReference && positionReferenceId === null;
-  // Notes other than the one being edited (used to decide whether to show the picker section)
-  const otherNotes = allNotes.filter((n) => String(n.id) !== String(noteId));
+  // Notes other than the one being edited — used for both the visibility guard and the picker list
+  const otherNotes = allNotes.filter((n) => n.id !== Number(noteId));
 
   function handleCancel() {
     if (onCancel) {
@@ -255,9 +255,11 @@ function NoteEditForm({
   }
 
   async function applyPositionAfterSave(savedNoteId) {
-    if (positionMode === "keep") return null;
+    if (positionMode === "keep" || allNotes.length === 0) return null;
 
-    const withoutSaved = allNotes
+    // Re-fetch to avoid using a stale snapshot from form-open time
+    const { notes: freshNotes } = await getNotes();
+    const withoutSaved = freshNotes
       .filter((n) => n.id !== savedNoteId)
       .map((n) => n.id);
 
@@ -600,18 +602,18 @@ function NoteEditForm({
                 <option value="before">Before a note...</option>
                 <option value="after">After a note...</option>
               </select>
+              {positionInvalid ? (
+                <p className="error-text" style={{ margin: 0, fontSize: "0.85rem" }}>
+                  Select a reference note from the list below.
+                </p>
+              ) : null}
               {positionNeedsReference ? (
                 <PositionPicker
-                  excludeId={noteId ? Number(noteId) : null}
-                  notes={allNotes}
+                  key={positionMode}
+                  notes={otherNotes}
                   onSelect={(id) => setPositionReferenceId(id)}
                   selectedId={positionReferenceId}
                 />
-              ) : null}
-              {positionInvalid ? (
-                <p className="error-text" style={{ margin: 0, fontSize: "0.85rem" }}>
-                  Select a reference note from the list above.
-                </p>
               ) : null}
             </div>
           ) : null}

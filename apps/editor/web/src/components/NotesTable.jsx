@@ -643,6 +643,8 @@ function NotesTable() {
       const newIndex = nextSlideshow.findIndex((note) => note.id === updatedNote.id);
       if (newIndex !== -1) {
         setSlideshowIndex(newIndex);
+      } else {
+        setSlideshowIndex((current) => Math.min(current, nextSlideshow.length - 1));
       }
 
       return nextSlideshow;

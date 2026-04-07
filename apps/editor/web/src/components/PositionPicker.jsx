@@ -8,19 +8,18 @@ function pickFrontThumbnail(images) {
   );
 }
 
-function PositionPicker({ excludeId, notes, onSelect, selectedId }) {
+function PositionPicker({ notes, onSelect, selectedId }) {
   const [filter, setFilter] = useState("");
 
   const filteredNotes = useMemo(() => {
     const term = filter.trim().toLowerCase();
+    if (!term) return notes;
     return notes.filter((note) => {
-      if (note.id === excludeId) return false;
-      if (!term) return true;
       const denom = (note.denomination ?? "").toLowerCase();
       const catalog = (note.catalog_number ?? "").toLowerCase();
       return denom.includes(term) || catalog.includes(term);
     });
-  }, [notes, excludeId, filter]);
+  }, [notes, filter]);
 
   return (
     <div style={{ display: "grid", gap: "8px" }}>
