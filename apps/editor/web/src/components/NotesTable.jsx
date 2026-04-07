@@ -161,6 +161,11 @@ function valueToString(note, key) {
   return String(note[key] ?? "");
 }
 
+function noteOrderValue(note) {
+  const value = Number(note.display_order);
+  return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
+}
+
 function versionedImagePath(path, version) {
   if (!path) {
     return null;
@@ -391,7 +396,8 @@ function NotesTable() {
 
     return [...filtered].sort((left, right) => {
       if (sortKey === "id") {
-        const result = left.id - right.id;
+        const orderResult = noteOrderValue(left) - noteOrderValue(right);
+        const result = orderResult || left.id - right.id;
         return sortDirection === "asc" ? result : -result;
       }
 
