@@ -1,4 +1,5 @@
 import { useEffect, useState } from "react";
+import { copyTextToClipboard, formatNoteAsTsvRow } from "../lib/noteClipboard.js";
 
 function formatScrapedLabel(label) {
   return String(label ?? "")
@@ -214,6 +215,7 @@ function Slideshow({
   notes,
   onChangeIndex,
   onClose,
+  onCopy,
   onEdit,
 }) {
   const [previewState, setPreviewState] = useState(null);
@@ -278,6 +280,17 @@ function Slideshow({
         noteIndex: nextNoteIndex,
       };
     });
+  }
+
+  async function handleCopyNoteDetails() {
+    const clipboardValue = formatNoteAsTsvRow(note);
+
+    try {
+      await copyTextToClipboard(clipboardValue);
+      onCopy?.(null);
+    } catch {
+      onCopy?.("Could not copy note details to clipboard.");
+    }
   }
 
   useEffect(() => {
@@ -398,8 +411,21 @@ function Slideshow({
             {currentIndex + 1} / {notes.length}
           </div>
           <button
+            aria-label="Copy note details"
+            className="icon-link icon-link--on-dark"
+            onClick={handleCopyNoteDetails}
+            title="Copy note details"
+            type="button"
+          >
+            <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
+              <rect fill="none" height="10" rx="2" stroke="currentColor" strokeWidth="2" width="10" x="9" y="9" />
+              <rect fill="none" height="10" rx="2" stroke="currentColor" strokeWidth="2" width="10" x="5" y="5" />
+            </svg>
+          </button>
+          <button
             className="slideshow-exit-button"
             onClick={() => onEdit?.(note.id)}
+            title="Edit note"
             type="button"
           >
             Edit note
@@ -407,6 +433,7 @@ function Slideshow({
           <button
             className="slideshow-exit-button"
             onClick={onClose}
+            title="Close slideshow"
             type="button"
           >
             Close

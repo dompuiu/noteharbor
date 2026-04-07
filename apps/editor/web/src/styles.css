@@ -128,11 +128,27 @@ button {
     background 0.2s ease;
 }
 
+.icon-link svg {
+  display: block;
+}
+
 .nav-link:hover,
 .button:hover,
 .icon-link:hover {
   transform: translateY(-1px);
   box-shadow: 0 12px 24px rgba(73, 43, 15, 0.08);
+}
+
+.icon-link--on-dark {
+  border-color: rgba(255, 235, 212, 0.24);
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff5e9;
+}
+
+.icon-link--on-dark:hover,
+.icon-link--on-dark:focus-visible {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 235, 212, 0.3);
 }
 
 .sort-button:hover {

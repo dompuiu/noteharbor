@@ -10,6 +10,7 @@ import {
   startScrape,
 } from "../lib/api.js";
 import { isScrapingDisabled } from "../lib/appMode.js";
+import { copyTextToClipboard, formatNoteAsTsvRow } from "../lib/noteClipboard.js";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 
@@ -875,6 +876,15 @@ function NotesTable() {
     }
   }
 
+  async function handleCopyNoteDetails(note) {
+    try {
+      await copyTextToClipboard(formatNoteAsTsvRow(note));
+      setActionError("");
+    } catch {
+      setActionError("Could not copy note details to clipboard.");
+    }
+  }
+
   return (
     <section className="screen-stack">
       {slideshowNotes.length ? (
@@ -884,6 +894,7 @@ function NotesTable() {
           notes={slideshowNotes}
           onChangeIndex={setSlideshowIndex}
           onClose={closeSlideshow}
+          onCopy={setActionError}
           onEdit={openEditor}
         />
       ) : null}
@@ -925,6 +936,7 @@ function NotesTable() {
               <button
                 className="button button-primary"
                 onClick={openCreateNote}
+                title="Add banknote"
                 type="button"
               >
                 Add banknote
@@ -936,6 +948,7 @@ function NotesTable() {
                     event.preventDefault();
                   }
                 }}
+                title="Import / Export"
                 to="/import"
               >
                 Import / Export
@@ -1396,11 +1409,31 @@ function NotesTable() {
                                   className="icon-link"
                                   onClick={(event) => {
                                     event.stopPropagation();
+                                    void handleCopyNoteDetails(note);
+                                  }}
+                                  title="Copy note details"
+                                  type="button"
+                                  aria-label={`Copy ${note.denomination || `note ${note.id}`}`}
+                                >
+                                  <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
+                                    <rect fill="none" height="10" rx="2" stroke="currentColor" strokeWidth="2" width="10" x="9" y="9" />
+                                    <rect fill="none" height="10" rx="2" stroke="currentColor" strokeWidth="2" width="10" x="5" y="5" />
+                                  </svg>
+                                </button>
+                                <button
+                                  className="icon-link"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
                                     openEditor(note.id);
                                   }}
+                                  title="Edit note"
                                   type="button"
+                                  aria-label={`Edit ${note.denomination || `note ${note.id}`}`}
                                 >
-                                  Edit
+                                  <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
+                                    <path d="M4 20h4l10-10-4-4L4 16v4z" fill="none" stroke="currentColor" strokeWidth="2" />
+                                    <path d="M12 6l4 4" fill="none" stroke="currentColor" strokeWidth="2" />
+                                  </svg>
                                 </button>
                                 <button
                                   className="icon-link"
@@ -1408,9 +1441,15 @@ function NotesTable() {
                                     event.stopPropagation();
                                     void handleDeleteNote(note.id);
                                   }}
+                                  title="Delete note"
                                   type="button"
+                                  aria-label={`Delete ${note.denomination || `note ${note.id}`}`}
                                 >
-                                  Delete
+                                  <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
+                                    <path d="M5 7h14" fill="none" stroke="currentColor" strokeWidth="2" />
+                                    <path d="M9 7V5h6v2" fill="none" stroke="currentColor" strokeWidth="2" />
+                                    <path d="M8 7l1 12h6l1-12" fill="none" stroke="currentColor" strokeWidth="2" />
+                                  </svg>
                                 </button>
                               </div>
                             </td>
