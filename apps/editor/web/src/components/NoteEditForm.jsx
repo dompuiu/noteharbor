@@ -67,6 +67,8 @@ function slotOriginLabel(origin) {
 
 function NoteEditForm({
   cancelLabel = "Cancel",
+  initialPositionMode = "end",
+  initialPositionReferenceId = null,
   noteId: noteIdProp,
   onCancel,
   onSaveSuccess,
@@ -89,8 +91,8 @@ function NoteEditForm({
   const [generatedThumbnails, setGeneratedThumbnails] = useState({ front: false, back: false });
   const [activePasteSlot, setActivePasteSlot] = useState(null);
   const [allNotes, setAllNotes] = useState([]);
-  const [positionMode, setPositionMode] = useState(noteId ? "keep" : "end");
-  const [positionReferenceId, setPositionReferenceId] = useState(null);
+  const [positionMode, setPositionMode] = useState(noteId ? "keep" : initialPositionMode);
+  const [positionReferenceId, setPositionReferenceId] = useState(noteId ? null : initialPositionReferenceId);
   const [scraping, setScraping] = useState(false);
   const [scrapeToast, setScrapeToast] = useState(null);
   const [scrapeDetails, setScrapeDetails] = useState(null);
@@ -129,8 +131,8 @@ function NoteEditForm({
     setPendingImages({});
     setDeletedSlots({});
     setGeneratedThumbnails({ front: false, back: false });
-    setPositionMode(noteId ? "keep" : "end");
-    setPositionReferenceId(null);
+    setPositionMode(noteId ? "keep" : initialPositionMode);
+    setPositionReferenceId(noteId ? null : initialPositionReferenceId);
     setScraping(false);
     setScrapeToast(null);
     setScrapeDetails(null);
@@ -182,7 +184,7 @@ function NoteEditForm({
     return () => {
       active = false;
     };
-  }, [noteId]);
+  }, [initialPositionMode, initialPositionReferenceId, noteId]);
 
   const imagePreviews = useMemo(() => {
     const nextPreviews = {};

@@ -234,6 +234,8 @@ function NotesTable() {
   const [slideshowIndex, setSlideshowIndex] = useState(0);
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [creatingNote, setCreatingNote] = useState(false);
+  const [createPositionMode, setCreatePositionMode] = useState("end");
+  const [createPositionReferenceId, setCreatePositionReferenceId] = useState(null);
   const [draggedNoteId, setDraggedNoteId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const [thumbPreviewState, setThumbPreviewState] = useState(null);
@@ -577,12 +579,24 @@ function NotesTable() {
   function openCreateNote() {
     setActionError("");
     setEditingNoteId(null);
+    setCreatePositionMode("end");
+    setCreatePositionReferenceId(null);
+    setCreatingNote(true);
+  }
+
+  function openCreateNoteBefore(referenceNoteId) {
+    setActionError("");
+    setEditingNoteId(null);
+    setCreatePositionMode("before");
+    setCreatePositionReferenceId(referenceNoteId);
     setCreatingNote(true);
   }
 
   function closeEditor() {
     setEditingNoteId(null);
     setCreatingNote(false);
+    setCreatePositionMode("end");
+    setCreatePositionReferenceId(null);
   }
 
   function handleEditorOverlayMouseDown(event) {
@@ -911,6 +925,8 @@ function NotesTable() {
           >
             <NoteEditForm
               cancelLabel="Close"
+              initialPositionMode={createPositionMode}
+              initialPositionReferenceId={createPositionReferenceId}
               noteId={editingNoteId}
               onCancel={closeEditor}
               onSaveSuccess={handleSaveEditedNote}
@@ -1418,6 +1434,21 @@ function NotesTable() {
                                   <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
                                     <rect fill="none" height="10" rx="2" stroke="currentColor" strokeWidth="2" width="10" x="9" y="9" />
                                     <rect fill="none" height="10" rx="2" stroke="currentColor" strokeWidth="2" width="10" x="5" y="5" />
+                                  </svg>
+                                </button>
+                                <button
+                                  className="icon-link"
+                                  onClick={(event) => {
+                                    event.stopPropagation();
+                                    openCreateNoteBefore(note.id);
+                                  }}
+                                  title="Insert note before this"
+                                  type="button"
+                                  aria-label={`Insert note before ${note.denomination || `note ${note.id}`}`}
+                                >
+                                  <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
+                                    <path d="M12 5v14" fill="none" stroke="currentColor" strokeWidth="2" />
+                                    <path d="M5 12h14" fill="none" stroke="currentColor" strokeWidth="2" />
                                   </svg>
                                 </button>
                                 <button
