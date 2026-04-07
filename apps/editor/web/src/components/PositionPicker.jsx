@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 function pickFrontThumbnail(images) {
   return (
@@ -10,6 +10,7 @@ function pickFrontThumbnail(images) {
 
 function PositionPicker({ notes, onSelect, selectedId }) {
   const [filter, setFilter] = useState("");
+  const selectedButtonRef = useRef(null);
 
   const filteredNotes = useMemo(() => {
     const term = filter.trim().toLowerCase();
@@ -20,6 +21,17 @@ function PositionPicker({ notes, onSelect, selectedId }) {
       return denom.includes(term) || catalog.includes(term);
     });
   }, [notes, filter]);
+
+  useEffect(() => {
+    if (!selectedButtonRef.current) {
+      return;
+    }
+
+    selectedButtonRef.current.scrollIntoView({
+      block: "nearest",
+      inline: "nearest",
+    });
+  }, [filteredNotes, selectedId]);
 
   return (
     <div style={{ display: "grid", gap: "8px" }}>
@@ -58,6 +70,7 @@ function PositionPicker({ notes, onSelect, selectedId }) {
               <button
                 key={note.id}
                 onClick={() => onSelect(note.id)}
+                ref={isSelected ? selectedButtonRef : null}
                 style={{
                   display: "flex",
                   alignItems: "center",
