@@ -1205,20 +1205,6 @@ button.tag {
   box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
 }
 
-.image-popover-close {
-  padding: 6px 11px;
-  border-radius: 999px;
-  font-size: 0.82rem;
-  border: 1px solid rgba(255, 255, 255, 0.3);
-  background: rgba(30, 20, 10, 0.85);
-  color: #fff;
-  transition: background 0.15s ease;
-}
-
-.image-popover-close:hover {
-  background: rgba(60, 40, 20, 0.95);
-}
-
 .slide-meta {
   display: grid;
   gap: 18px;

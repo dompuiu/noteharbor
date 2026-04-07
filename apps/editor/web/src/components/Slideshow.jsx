@@ -163,8 +163,10 @@ function ImagePopover({
           <div className="image-popover-actions">
             <div className="counter-pill">{counterLabel}</div>
             <button
-              className="image-popover-close"
+              aria-label="Close preview"
+              className="icon-link icon-link--on-dark image-popover-close"
               onClick={onClose}
+              title="Close preview"
               type="button"
             >
               Close
@@ -423,7 +425,8 @@ function Slideshow({
             </svg>
           </button>
           <button
-            className="slideshow-exit-button"
+            aria-label="Edit note"
+            className="icon-link icon-link--on-dark"
             onClick={() => onEdit?.(note.id)}
             title="Edit note"
             type="button"
@@ -431,7 +434,8 @@ function Slideshow({
             Edit note
           </button>
           <button
-            className="slideshow-exit-button"
+            aria-label="Close slideshow"
+            className="icon-link icon-link--on-dark"
             onClick={onClose}
             title="Close slideshow"
             type="button"
