@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { createNote, getNote, getTags, updateNote } from "../lib/api.js";
+import { createNote, getNotes, getNote, getTags, reorderNotes, updateNote } from "../lib/api.js";
+import { PositionPicker } from "./PositionPicker.jsx";
 
 const emptyForm = {
   denomination: "",
@@ -86,11 +87,19 @@ function NoteEditForm({
   const [deletedSlots, setDeletedSlots] = useState({});
   const [generatedThumbnails, setGeneratedThumbnails] = useState({ front: false, back: false });
   const [activePasteSlot, setActivePasteSlot] = useState(null);
+  const [allNotes, setAllNotes] = useState([]);
+  const [positionMode, setPositionMode] = useState(noteId ? "keep" : "end");
+  const [positionReferenceId, setPositionReferenceId] = useState(null);
   const inputRefs = useRef({});
 
   const wrapperClassName = overlay
     ? "edit-note-overlay-content"
     : "screen-stack narrow-stack";
+
+  const positionNeedsReference = positionMode === "before" || positionMode === "after";
+  const positionInvalid = positionNeedsReference && positionReferenceId === null;
+  // Notes other than the one being edited (used to decide whether to show the picker section)
+  const otherNotes = allNotes.filter((n) => String(n.id) !== String(noteId));
 
   function handleCancel() {
     if (onCancel) {
@@ -113,13 +122,15 @@ function NoteEditForm({
     setPendingImages({});
     setDeletedSlots({});
     setGeneratedThumbnails({ front: false, back: false });
+    setPositionMode(noteId ? "keep" : "end");
+    setPositionReferenceId(null);
 
     const dataPromise = noteId
-      ? Promise.all([getNote(noteId), getTags()])
-      : Promise.all([Promise.resolve(null), getTags()]);
+      ? Promise.all([getNote(noteId), getTags(), getNotes()])
+      : Promise.all([Promise.resolve(null), getTags(), getNotes()]);
 
     dataPromise
-      .then(([notePayload, tagsPayload]) => {
+      .then(([notePayload, tagsPayload, notesPayload]) => {
         if (!active) {
           return;
         }
@@ -141,6 +152,7 @@ function NoteEditForm({
           setNoteVersion(notePayload.note.updated_at ?? "");
         }
         setSuggestions(tagsPayload.tags.map((tag) => tag.name));
+        setAllNotes(notesPayload.notes ?? []);
       })
       .catch((fetchError) => {
         if (active) {
@@ -242,6 +254,37 @@ function NoteEditForm({
     return imageItem?.getAsFile() ?? null;
   }
 
+  async function applyPositionAfterSave(savedNoteId) {
+    if (positionMode === "keep") return null;
+
+    const withoutSaved = allNotes
+      .filter((n) => n.id !== savedNoteId)
+      .map((n) => n.id);
+
+    let nextOrder;
+
+    if (positionMode === "start") {
+      nextOrder = [savedNoteId, ...withoutSaved];
+    } else if (positionMode === "end") {
+      nextOrder = [...withoutSaved, savedNoteId];
+    } else {
+      const refIndex = withoutSaved.indexOf(positionReferenceId);
+      if (refIndex === -1) {
+        nextOrder = [...withoutSaved, savedNoteId];
+      } else {
+        const insertAt = positionMode === "before" ? refIndex : refIndex + 1;
+        nextOrder = [
+          ...withoutSaved.slice(0, insertAt),
+          savedNoteId,
+          ...withoutSaved.slice(insertAt),
+        ];
+      }
+    }
+
+    const result = await reorderNotes(nextOrder);
+    return result.notes ?? null;
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setSaving(true);
@@ -265,8 +308,10 @@ function NoteEditForm({
         ? await createNote(payloadWithImages)
         : await updateNote(noteId, payloadWithImages);
 
+      const reorderedNotes = await applyPositionAfterSave(payload.note.id);
+
       if (onSaveSuccess) {
-        onSaveSuccess(payload.note);
+        onSaveSuccess(payload.note, reorderedNotes);
         return;
       }
 
@@ -311,7 +356,7 @@ function NoteEditForm({
             <button
               className="button button-primary"
               form="edit-note-form"
-              disabled={saving}
+              disabled={saving || positionInvalid}
               type="submit"
             >
               {saving
@@ -533,6 +578,43 @@ function NoteEditForm({
               ))}
             </div>
           </div>
+          {otherNotes.length > 0 ? (
+            <div className="field-block full-span">
+              <span>Position in collection</span>
+              <select
+                onChange={(event) => {
+                  setPositionMode(event.target.value);
+                  setPositionReferenceId(null);
+                }}
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: "8px",
+                  border: "1px solid rgba(92, 59, 24, 0.2)",
+                  background: "rgba(255, 248, 239, 0.8)",
+                }}
+                value={positionMode}
+              >
+                {!isCreateMode ? <option value="keep">Keep current position</option> : null}
+                <option value="start">Start of collection</option>
+                <option value="end">End of collection</option>
+                <option value="before">Before a note...</option>
+                <option value="after">After a note...</option>
+              </select>
+              {positionNeedsReference ? (
+                <PositionPicker
+                  excludeId={noteId ? Number(noteId) : null}
+                  notes={allNotes}
+                  onSelect={(id) => setPositionReferenceId(id)}
+                  selectedId={positionReferenceId}
+                />
+              ) : null}
+              {positionInvalid ? (
+                <p className="error-text" style={{ margin: 0, fontSize: "0.85rem" }}>
+                  Select a reference note from the list above.
+                </p>
+              ) : null}
+            </div>
+          ) : null}
         </form>
       </div>
     </section>
