@@ -27,7 +27,9 @@ function isFileValue(value) {
 }
 
 function buildNoteRequestOptions(method, payload) {
-  const shouldUseFormData = Object.values(payload).some(isFileValue);
+  const shouldUseFormData =
+    Object.values(payload).some(isFileValue) ||
+    Object.keys(payload).some((k) => k.endsWith('_url'));
 
   if (!shouldUseFormData) {
     return {
@@ -200,6 +202,16 @@ async function getTags() {
   return handleResponse(response);
 }
 
+async function scrapePreview(url) {
+  const response = await fetch('/api/scrape/preview', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ url })
+  });
+
+  return handleResponse(response);
+}
+
 async function startScrape(ids) {
   const response = await fetch('/api/scrape/start', {
     method: 'POST',
@@ -228,6 +240,7 @@ export {
   importArchive,
   importCsv,
   reorderNotes,
+  scrapePreview,
   startScrape,
   updateNote
 };

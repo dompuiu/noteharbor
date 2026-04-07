@@ -99,6 +99,24 @@ function fetchHtml(url, waitForSelector) {
   });
 }
 
+/**
+ * Fetches and parses a grading company URL using the appropriate scraper.
+ * Returns { scraper, parsed } without writing anything to disk or DB.
+ * Throws if no scraper matches the URL or if fetching/parsing fails.
+ */
+async function scrapeUrl(url) {
+  const scraper = getScraperForNote({ url, grading_company: '' });
+
+  if (!scraper) {
+    throw new Error('No scraper is implemented for this grading company yet.');
+  }
+
+  const html = await fetchHtml(url, scraper.getWaitForSelector());
+  const parsed = scraper.parse(html, url);
+
+  return { scraper, parsed };
+}
+
 async function runScrapeJob(notes) {
   beginOperation('scraping', { total: notes.length });
 
@@ -122,19 +140,8 @@ async function runScrapeJob(notes) {
 
       if (stateItem) stateItem.status = 'running';
 
-      const scraper = getScraperForNote(note);
-
-      if (!scraper) {
-        const errorMessage = 'No scraper is implemented for this grading company yet.';
-        updateScrapeResult({ id: note.id, scrapedData: null, images: note.images, scrapeStatus: 'failed', scrapeError: errorMessage });
-        if (stateItem) { stateItem.status = 'failed'; stateItem.error = errorMessage; }
-        scrapeState.completed += 1;
-        continue;
-      }
-
       try {
-        const html = await fetchHtml(note.url, scraper.getWaitForSelector());
-        const parsed = scraper.parse(html, note.url);
+        const { scraper, parsed } = await scrapeUrl(note.url);
         const images = await scraper.downloadImages(parsed);
 
         updateScrapeResult({ id: note.id, scrapedData: parsed.details, images, scrapeStatus: 'done', scrapeError: null });
@@ -199,6 +206,36 @@ scrapeRouter.post('/start', async (request, response) => {
   });
 
   response.json({ message: 'Scrape job started.', total: notes.length });
+});
+
+scrapeRouter.post('/preview', async (request, response) => {
+  if (shouldDisableScraping()) {
+    rejectScrapingDisabled(response);
+    return;
+  }
+
+  const url = typeof request.body.url === 'string' ? request.body.url.trim() : '';
+
+  if (!url) {
+    response.status(400).json({ error: 'A URL is required.' });
+    return;
+  }
+
+  try {
+    const { parsed } = await scrapeUrl(url);
+
+    response.json({
+      scraped_data: parsed.details,
+      images: parsed.images.map((img) => ({
+        type: img.side,
+        variant: img.variant,
+        sourceUrl: img.url
+      }))
+    });
+  } catch (error) {
+    const isNoScraper = error.message.includes('No scraper is implemented');
+    response.status(isNoScraper ? 400 : 500).json({ error: error.message });
+  }
 });
 
 export { scrapeRouter };

@@ -93,12 +93,68 @@ function getExistingImageBuffer(image) {
   return fs.readFileSync(filePath);
 }
 
+const ALLOWED_IMAGE_HOSTS = ['pmgnotes.com', 'tqggrading.com'];
+const MAX_IMAGE_DOWNLOAD_BYTES = 15 * 1024 * 1024; // 15 MB — matches multer upload limit
+
+function urlFieldName(type, variant) {
+  return `image_${type}_${variant}_url`;
+}
+
+function validateScrapedImageUrl(imageUrl) {
+  let parsed;
+  try {
+    parsed = new URL(imageUrl);
+  } catch {
+    throw new Error('Invalid image URL.');
+  }
+
+  if (parsed.protocol !== 'https:') {
+    throw new Error('Only HTTPS image URLs are accepted.');
+  }
+
+  const isAllowed = ALLOWED_IMAGE_HOSTS.some((host) => parsed.hostname === host || parsed.hostname.endsWith(`.${host}`));
+  if (!isAllowed) {
+    throw new Error(`Image host "${parsed.hostname}" is not an allowed grading company domain.`);
+  }
+
+  return parsed;
+}
+
+async function downloadImageUrl(noteId, type, variant, imageUrl) {
+  const parsed = validateScrapedImageUrl(imageUrl);
+
+  const response = await fetch(imageUrl);
+  if (!response.ok) {
+    throw new Error(`Failed to download image: ${response.status} ${response.statusText}`);
+  }
+
+  const contentLength = Number(response.headers.get('content-length') ?? 0);
+  if (contentLength > MAX_IMAGE_DOWNLOAD_BYTES) {
+    throw new Error(`Image exceeds maximum allowed size (${MAX_IMAGE_DOWNLOAD_BYTES / 1024 / 1024} MB).`);
+  }
+
+  const arrayBuffer = await response.arrayBuffer();
+  if (arrayBuffer.byteLength > MAX_IMAGE_DOWNLOAD_BYTES) {
+    throw new Error(`Downloaded image exceeds maximum allowed size (${MAX_IMAGE_DOWNLOAD_BYTES / 1024 / 1024} MB).`);
+  }
+
+  const extension = getExtensionForMimeType(response.headers.get('content-type'), parsed.pathname);
+
+  return writeSlotBuffer(IMAGES_DIR, noteId, type, variant, Buffer.from(arrayBuffer), {
+    extension,
+    origin: IMAGE_ORIGINS.scraped,
+    sourceUrl: imageUrl
+  });
+}
+
 async function buildNextImages(noteId, existingImages, body, filesByField) {
   const imagesBySlot = imageMapFromList(existingImages);
+  const deletedSlotKeys = new Set();
 
   for (const slot of IMAGE_SLOTS) {
     if (shouldDeleteSlot(body, slot.type, slot.variant)) {
       removeImageFromMap(imagesBySlot, slot);
+      deletedSlotKeys.add(imageSlotKey(slot.type, slot.variant));
     }
   }
 
@@ -117,6 +173,24 @@ async function buildNextImages(noteId, existingImages, body, filesByField) {
       sourceUrl: null
     });
     imagesBySlot.set(imageSlotKey(slot.type, slot.variant), nextImage);
+  }
+
+  for (const slot of IMAGE_SLOTS) {
+    const slotKey = imageSlotKey(slot.type, slot.variant);
+    const imageUrl = body[urlFieldName(slot.type, slot.variant)];
+
+    if (!imageUrl || imagesBySlot.has(slotKey) || deletedSlotKeys.has(slotKey)) {
+      continue;
+    }
+
+    try {
+      const downloaded = await downloadImageUrl(noteId, slot.type, slot.variant, imageUrl);
+      if (downloaded) {
+        imagesBySlot.set(slotKey, downloaded);
+      }
+    } catch (err) {
+      console.error(`[notes] Skipping scraped image for ${slot.type}-${slot.variant}:`, err.message);
+    }
   }
 
   for (const type of ['front', 'back']) {

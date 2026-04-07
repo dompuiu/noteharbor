@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { createNote, getNotes, getNote, getTags, reorderNotes, updateNote } from "../lib/api.js";
+import { createNote, getNotes, getNote, getTags, reorderNotes, scrapePreview, updateNote } from "../lib/api.js";
 import { PositionPicker } from "./PositionPicker.jsx";
 
 const emptyForm = {
@@ -90,7 +90,12 @@ function NoteEditForm({
   const [allNotes, setAllNotes] = useState([]);
   const [positionMode, setPositionMode] = useState(noteId ? "keep" : "end");
   const [positionReferenceId, setPositionReferenceId] = useState(null);
+  const [scraping, setScraping] = useState(false);
+  const [scrapeToast, setScrapeToast] = useState(null);
+  const [scrapeDetails, setScrapeDetails] = useState(null);
+  const [pendingScrapedImages, setPendingScrapedImages] = useState({});
   const inputRefs = useRef({});
+  const scrapeToastTimer = useRef(null);
 
   const wrapperClassName = overlay
     ? "edit-note-overlay-content"
@@ -124,6 +129,10 @@ function NoteEditForm({
     setGeneratedThumbnails({ front: false, back: false });
     setPositionMode(noteId ? "keep" : "end");
     setPositionReferenceId(null);
+    setScraping(false);
+    setScrapeToast(null);
+    setScrapeDetails(null);
+    setPendingScrapedImages({});
 
     const dataPromise = noteId
       ? Promise.all([getNote(noteId), getTags(), getNotes()])
@@ -150,6 +159,9 @@ function NoteEditForm({
           });
           setCurrentImages(notePayload.note.images ?? []);
           setNoteVersion(notePayload.note.updated_at ?? "");
+          if (notePayload.note.scraped_data) {
+            setScrapeDetails(notePayload.note.scraped_data);
+          }
         }
         setSuggestions(tagsPayload.tags.map((tag) => tag.name));
         setAllNotes(notesPayload.notes ?? []);
@@ -187,6 +199,10 @@ function NoteEditForm({
     Object.values(imagePreviews).forEach((url) => URL.revokeObjectURL(url));
   }, [imagePreviews]);
 
+  useEffect(() => () => {
+    if (scrapeToastTimer.current) clearTimeout(scrapeToastTimer.current);
+  }, []);
+
   const filteredSuggestions = useMemo(() => {
     const searchValue = tagInput.trim().toLowerCase();
     return suggestions.filter(
@@ -215,6 +231,15 @@ function NoteEditForm({
     setForm((current) => ({ ...current, tags: current.tags.filter((tag) => tag !== tagName) }));
   }
 
+  function clearScrapedImage(slotKey) {
+    setPendingScrapedImages((current) => {
+      if (!current[slotKey]) return current;
+      const next = { ...current };
+      delete next[slotKey];
+      return next;
+    });
+  }
+
   function setSlotFile(slot, file) {
     if (!file || !file.type.startsWith("image/")) {
       return;
@@ -222,6 +247,7 @@ function NoteEditForm({
 
     setPendingImages((current) => ({ ...current, [slot.key]: file }));
     setDeletedSlots((current) => ({ ...current, [slot.key]: false }));
+    clearScrapedImage(slot.key);
     if (slot.variant === "thumbnail") {
       setGeneratedThumbnails((current) => ({ ...current, [slot.type]: false }));
     }
@@ -238,6 +264,7 @@ function NoteEditForm({
 
   function markSlotDeleted(slot) {
     clearSlotFile(slot);
+    clearScrapedImage(slot.key);
     setDeletedSlots((current) => ({ ...current, [slot.key]: true }));
     if (slot.variant === "thumbnail") {
       setGeneratedThumbnails((current) => ({ ...current, [slot.type]: false }));
@@ -246,6 +273,72 @@ function NoteEditForm({
 
   function undoSlotDelete(slot) {
     setDeletedSlots((current) => ({ ...current, [slot.key]: false }));
+  }
+
+  function inferGradingCompany(url) {
+    const lower = url.toLowerCase();
+    if (lower.includes("pmgnotes.com")) return "PMG";
+    if (lower.includes("tqggrading.com")) return "TQG";
+    return null;
+  }
+
+  function mapScrapedFields(scrapedData, url) {
+    const updates = {};
+    const d = scrapedData;
+
+    const grade = d.grade;
+    if (grade) updates.grade = grade;
+
+    const serial = d.serial_number ?? d.serial;
+    if (serial) updates.serial = serial;
+
+    const catalogNumber = d.pmg_cert ?? d.cert_no ?? d.certificate_no ?? d.certificate_number ?? d.cert;
+    if (catalogNumber) updates.catalog_number = catalogNumber;
+
+    const denomination = d.denomination;
+    if (denomination) updates.denomination = denomination;
+
+    const issueDate = d.issue_date ?? d.year ?? d.date;
+    if (issueDate) updates.issue_date = issueDate;
+
+    const watermark = d.watermark;
+    if (watermark) updates.watermark = watermark;
+
+    const company = inferGradingCompany(url);
+    if (company) updates.grading_company = company;
+
+    return updates;
+  }
+
+  function showScrapeToast(message) {
+    if (scrapeToastTimer.current) {
+      clearTimeout(scrapeToastTimer.current);
+    }
+    setScrapeToast(message);
+    scrapeToastTimer.current = setTimeout(() => setScrapeToast(null), 4000);
+  }
+
+  async function handleAutoPopulate() {
+    setScraping(true);
+    setScrapeToast(null);
+
+    try {
+      const result = await scrapePreview(form.url);
+
+      setForm((current) => ({ ...current, ...mapScrapedFields(result.scraped_data, form.url) }));
+      setScrapeDetails(result.scraped_data);
+
+      const nextScrapedImages = {};
+      for (const img of result.images) {
+        const key = `image_${img.type}_${img.variant}`;
+        nextScrapedImages[key] = img.sourceUrl;
+      }
+      setPendingScrapedImages(nextScrapedImages);
+    } catch (err) {
+      showScrapeToast(err.message || "Scraping failed.");
+    } finally {
+      setScraping(false);
+    }
   }
 
   function getPastedImageFile(event) {
@@ -299,6 +392,12 @@ function NoteEditForm({
           payloadWithImages[deleteFieldForSlot(slot)] = true;
         }
       });
+
+      for (const [key, url] of Object.entries(pendingScrapedImages)) {
+        if (!pendingImages[key]) {
+          payloadWithImages[`${key}_url`] = url;
+        }
+      }
 
       ["front", "back"].forEach((type) => {
         if (generatedThumbnails[type]) {
@@ -373,6 +472,11 @@ function NoteEditForm({
         </div>
 
         {error ? <p className="error-text">{error}</p> : null}
+        {scrapeToast ? (
+          <div className="scrape-toast scrape-toast--error" role="alert">
+            {scrapeToast}
+          </div>
+        ) : null}
 
         <form className="form-grid" id="edit-note-form" onSubmit={handleSubmit}>
           {[
@@ -383,13 +487,28 @@ function NoteEditForm({
             ["grade", "Grade"],
             ["watermark", "Watermark"],
             ["serial", "Serial"],
-            ["url", "URL"],
           ].map(([name, label]) => (
             <label className="field-block" key={name}>
               <span>{label}</span>
               <input name={name} onChange={handleFieldChange} value={form[name]} />
             </label>
           ))}
+
+          <label className="field-block">
+            <span>URL</span>
+            <div className="url-field-row">
+              <input name="url" onChange={handleFieldChange} value={form.url} />
+              <button
+                className="button"
+                disabled={scraping || !form.url.trim()}
+                onClick={handleAutoPopulate}
+                title="Auto Populate fields from URL"
+                type="button"
+              >
+                {scraping ? <span className="scrape-spinner" aria-label="Loading" /> : "⬇ Auto Populate"}
+              </button>
+            </div>
+          </label>
 
           <label className="field-block full-span">
             <span>Notes</span>
@@ -414,12 +533,13 @@ function NoteEditForm({
                   pendingImage: pendingFullImage,
                   isDeleted: isFullDeleted,
                 });
+                const scrapedImageUrl = pendingScrapedImages[slot.key];
                 const previewSrc = isDeleted
                   ? ""
-                  : pendingPreview || versionedImagePath(currentImage?.localPath, noteVersion);
-                const hasPendingImage = Boolean(pendingPreview);
+                  : pendingPreview || scrapedImageUrl || versionedImagePath(currentImage?.localPath, noteVersion);
+                const hasPendingImage = Boolean(pendingPreview) || Boolean(scrapedImageUrl);
                 const hasExistingImage = Boolean(currentImage) && !isDeleted;
-                const hasThumbnailImage = Boolean(pendingImages[slot.key]) || (Boolean(currentImage) && !isDeleted);
+                const hasThumbnailImage = Boolean(pendingImages[slot.key]) || Boolean(scrapedImageUrl) || (Boolean(currentImage) && !isDeleted);
                 const showGenerateOption = slot.variant === "thumbnail" && hasFullImage && !hasThumbnailImage;
 
                 return (
@@ -496,6 +616,15 @@ function NoteEditForm({
                       >
                         Clear new file
                       </button>
+                      {scrapedImageUrl && !pendingImages[slot.key] ? (
+                        <button
+                          className="button"
+                          onClick={() => clearScrapedImage(slot.key)}
+                          type="button"
+                        >
+                          Discard scraped
+                        </button>
+                      ) : null}
                       <button
                         className="button button-danger-soft"
                         disabled={!hasExistingImage && !hasPendingImage}
@@ -618,6 +747,28 @@ function NoteEditForm({
             </div>
           ) : null}
         </form>
+
+        {scrapeDetails ? (
+          <div className="scraped-details-panel">
+            <h2 className="scraped-details-title">Scraped details</h2>
+            <dl className="scraped-details-grid">
+              {Object.entries(scrapeDetails)
+                .filter(([, v]) => v != null && v !== "")
+                .map(([key, value]) => (
+                  <div className="scraped-detail-row" key={key}>
+                    <dt>{key.replace(/_/g, " ")}</dt>
+                    <dd>
+                      {key === "source_url" ? (
+                        <a href={value} rel="noreferrer" target="_blank">{value}</a>
+                      ) : (
+                        String(value)
+                      )}
+                    </dd>
+                  </div>
+                ))}
+            </dl>
+          </div>
+        ) : null}
       </div>
     </section>
   );
