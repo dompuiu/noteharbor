@@ -64,11 +64,7 @@ function loadSavedTableState() {
       ? parsedValue.sortKey
       : "id";
     const nextSortDirection =
-      nextSortKey === "id"
-        ? "asc"
-        : parsedValue.sortDirection === "desc"
-          ? "desc"
-          : "asc";
+      parsedValue.sortDirection === "desc" ? "desc" : "asc";
     const nextSelectedIds = Array.isArray(parsedValue.selectedIds)
       ? parsedValue.selectedIds.filter(
           (value) => Number.isInteger(value) && value > 0,
@@ -390,11 +386,12 @@ function NotesTable() {
       }),
     );
 
-    if (sortKey === "id") {
-      return filtered;
-    }
-
     return [...filtered].sort((left, right) => {
+      if (sortKey === "id") {
+        const result = left.id - right.id;
+        return sortDirection === "asc" ? result : -result;
+      }
+
       const leftValue = valueToString(left, sortKey).toLowerCase();
       const rightValue = valueToString(right, sortKey).toLowerCase();
       const result = leftValue.localeCompare(rightValue, undefined, {
@@ -1047,7 +1044,18 @@ function NotesTable() {
                         />
                       </th>
                     ) : null}
-                    <th>ID</th>
+                    <th>
+                      <button
+                        className="sort-button"
+                        onClick={() => toggleSort("id")}
+                        type="button"
+                      >
+                        ID
+                        {sortKey === "id" ? (
+                          <span>{sortDirection === "asc" ? " ▲" : " ▼"}</span>
+                        ) : null}
+                      </button>
+                    </th>
                     <th>Front</th>
                     {visibleColumns.map(([key, label]) => (
                       <th

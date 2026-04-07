@@ -130,9 +130,12 @@ button {
 
 .nav-link:hover,
 .button:hover,
-.icon-link:hover,
-.sort-button:hover {
+.icon-link:hover {
   transform: translateY(-1px);
+  box-shadow: 0 12px 24px rgba(73, 43, 15, 0.08);
+}
+
+.sort-button:hover {
   box-shadow: 0 12px 24px rgba(73, 43, 15, 0.08);
 }
 
@@ -1358,4 +1361,94 @@ button.tag {
     width: 100%;
     margin-left: 0;
   }
+}
+
+/* ── Auto Populate / Scrape Preview ─────────────────────────────────────── */
+
+.url-field-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.url-field-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+.scrape-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border: 2px solid currentColor;
+  border-top-color: transparent;
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+  vertical-align: middle;
+}
+
+.scrape-toast {
+  padding: 10px 14px;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  margin-bottom: 10px;
+}
+
+.scrape-toast--error {
+  background: rgba(200, 50, 30, 0.1);
+  border: 1px solid rgba(200, 50, 30, 0.3);
+  color: #8b1a0a;
+}
+
+.scraped-details-panel {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(92, 59, 24, 0.15);
+}
+
+.scraped-details-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: rgba(92, 59, 24, 0.7);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0 0 12px;
+}
+
+.scraped-details-grid {
+  display: grid;
+  grid-template-columns: auto 1fr;
+  gap: 4px 16px;
+  margin: 0;
+}
+
+.scraped-detail-row {
+  display: contents;
+}
+
+.scraped-detail-row dt {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: rgba(92, 59, 24, 0.6);
+  text-transform: capitalize;
+  padding: 3px 0;
+  white-space: nowrap;
+}
+
+.scraped-detail-row dd {
+  font-size: 0.82rem;
+  color: rgba(40, 20, 0, 0.85);
+  padding: 3px 0;
+  margin: 0;
+  word-break: break-word;
+}
+
+.scraped-detail-row dd a {
+  color: inherit;
+  text-decoration: underline;
+  word-break: break-all;
 }
