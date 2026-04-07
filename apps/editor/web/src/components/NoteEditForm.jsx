@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { createNote, getNotes, getNote, getTags, reorderNotes, scrapePreview, updateNote } from "../lib/api.js";
+import { copyTextToClipboard, formatNoteAsTsvRow } from "../lib/noteClipboard.js";
 import { PositionPicker } from "./PositionPicker.jsx";
 
 const emptyForm = {
@@ -95,6 +96,7 @@ function NoteEditForm({
   const [scrapeDetails, setScrapeDetails] = useState(null);
   const [pendingScrapedImages, setPendingScrapedImages] = useState({});
   const inputRefs = useRef({});
+  const formElementRef = useRef(null);
   const scrapeToastTimer = useRef(null);
 
   const wrapperClassName = overlay
@@ -442,6 +444,38 @@ function mapScrapedFields(scrapedData, url) {
     }
   }
 
+  async function handleCopyNoteDetails() {
+    const formData = formElementRef.current ? new FormData(formElementRef.current) : null;
+    const fieldValue = (name, fallback = "") => {
+      if (!formData) {
+        return fallback;
+      }
+
+      const value = formData.get(name);
+      return typeof value === "string" ? value : fallback;
+    };
+
+    const clipboardValue = formatNoteAsTsvRow({
+      denomination: fieldValue("denomination", form.denomination),
+      issue_date: fieldValue("issue_date", form.issue_date),
+      catalog_number: fieldValue("catalog_number", form.catalog_number),
+      grading_company: fieldValue("grading_company", form.grading_company),
+      grade: fieldValue("grade", form.grade),
+      watermark: fieldValue("watermark", form.watermark),
+      serial: fieldValue("serial", form.serial),
+      url: fieldValue("url", form.url),
+      tags: form.tags,
+      notes: fieldValue("notes", form.notes),
+    });
+
+    try {
+      await copyTextToClipboard(clipboardValue);
+      setError("");
+    } catch {
+      setError("Could not copy note details to clipboard.");
+    }
+  }
+
   if (loading) {
     return (
       <section className="panel narrow-stack">
@@ -464,18 +498,31 @@ function mapScrapedFields(scrapedData, url) {
           </div>
           <div className="inline-actions">
             {onCancel ? (
-              <button className="button" onClick={handleCancel} type="button">
+              <button className="button" onClick={handleCancel} title={cancelLabel} type="button">
                 {cancelLabel}
               </button>
             ) : (
-              <Link className="button" to="/">
+              <Link className="button" title={cancelLabel} to="/">
                 {cancelLabel}
               </Link>
             )}
             <button
+              aria-label="Copy note details"
+              className="icon-link"
+              onClick={handleCopyNoteDetails}
+              title="Copy note details"
+              type="button"
+            >
+              <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
+                <rect fill="none" height="10" rx="2" stroke="currentColor" strokeWidth="2" width="10" x="9" y="9" />
+                <rect fill="none" height="10" rx="2" stroke="currentColor" strokeWidth="2" width="10" x="5" y="5" />
+              </svg>
+            </button>
+            <button
               className="button button-primary"
               form="edit-note-form"
               disabled={saving || positionInvalid}
+              title={isCreateMode ? "Add banknote" : "Save changes"}
               type="submit"
             >
               {saving
@@ -496,7 +543,7 @@ function mapScrapedFields(scrapedData, url) {
           </div>
         ) : null}
 
-        <form className="form-grid" id="edit-note-form" onSubmit={handleSubmit}>
+        <form className="form-grid" id="edit-note-form" onSubmit={handleSubmit} ref={formElementRef}>
           {[
             ["denomination", "Denomination"],
             ["issue_date", "Date"],
