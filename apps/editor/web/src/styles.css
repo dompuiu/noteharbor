@@ -1241,7 +1241,7 @@ button.tag {
 
 .scraped-details-grid {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 10px 16px;
   justify-items: stretch;
 }
@@ -1406,7 +1406,7 @@ button.tag {
   color: #8b1a0a;
 }
 
-.scraped-details-panel {
+.scraped-details-panel--form {
   margin-top: 24px;
   padding-top: 20px;
   border-top: 1px solid rgba(92, 59, 24, 0.15);
@@ -1421,7 +1421,7 @@ button.tag {
   margin: 0 0 12px;
 }
 
-.scraped-details-grid {
+.scraped-details-grid--form {
   display: grid;
   grid-template-columns: auto 1fr;
   gap: 4px 16px;
