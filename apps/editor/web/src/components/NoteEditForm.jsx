@@ -288,8 +288,9 @@ function extractCatalogNumberFromPmNote(noteValue) {
     return null;
   }
 
-  const match = normalized.match(/(\d+)/);
-  return match ? match[1] : null;
+  const compact = normalized.replace(/[\s_-]+/g, "");
+  const match = compact.match(/(\d+[a-z]?)/i);
+  return match ? match[1].toLowerCase() : null;
 }
 
 function mapScrapedFields(scrapedData, url) {
