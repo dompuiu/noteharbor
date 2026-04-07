@@ -816,9 +816,9 @@ function mapScrapedFields(scrapedData, url) {
         </form>
 
         {scrapeDetails ? (
-          <div className="scraped-details-panel">
+          <div className="scraped-details-panel scraped-details-panel--form">
             <h2 className="scraped-details-title">Scraped details</h2>
-            <dl className="scraped-details-grid">
+            <dl className="scraped-details-grid scraped-details-grid--form">
               {Object.entries(scrapeDetails)
                 .filter(([, v]) => v != null && v !== "")
                 .map(([key, value]) => (
