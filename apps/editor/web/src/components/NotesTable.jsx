@@ -966,12 +966,7 @@ function NotesTable() {
               </button>
               <Link
                 aria-label="Import or export"
-                className={`icon-link${operationStatus.isBusy ? " button-disabled" : ""}`}
-                onClick={(event) => {
-                  if (operationStatus.isBusy) {
-                    event.preventDefault();
-                  }
-                }}
+                className="icon-link"
                 title="Import / Export"
                 to="/import"
               >
