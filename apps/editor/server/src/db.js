@@ -248,6 +248,7 @@ function createStatements(database) {
         serial,
         url,
         notes,
+        scraped_data,
         images,
         created_at,
         updated_at
@@ -263,6 +264,7 @@ function createStatements(database) {
         @serial,
         @url,
         @notes,
+        @scraped_data,
         @images,
         datetime('now'),
         datetime('now')
@@ -279,6 +281,7 @@ function createStatements(database) {
           serial = @serial,
           url = @url,
           notes = @notes,
+          scraped_data = @scraped_data,
           images = @images,
           updated_at = datetime('now')
       WHERE id = @id
@@ -648,6 +651,7 @@ function updateNote(note) {
   const transaction = db.transaction((payload) => {
     statements.updateNoteStatement.run({
       ...payload,
+      scraped_data: payload.scraped_data ? JSON.stringify(payload.scraped_data) : null,
       images: JSON.stringify(normalizedImages)
     });
     replaceNoteTags(payload.id, payload.tags);
@@ -665,6 +669,7 @@ function createNote(note) {
   const transaction = db.transaction((payload) => {
     const result = statements.insertNoteStatement.run({
       ...payload,
+      scraped_data: payload.scraped_data ? JSON.stringify(payload.scraped_data) : null,
       images: JSON.stringify(normalizedImages),
       display_order: getNextDisplayOrder()
     });

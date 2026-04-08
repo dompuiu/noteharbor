@@ -469,7 +469,11 @@ function NoteEditForm({
     setError("");
 
     try {
-      const payloadWithImages = { ...form, ...pendingImages };
+      const payloadWithImages = {
+        ...form,
+        ...pendingImages,
+        scraped_data: scrapeDetails,
+      };
       imageSlots.forEach((slot) => {
         if (deletedSlots[slot.key]) {
           payloadWithImages[deleteFieldForSlot(slot)] = true;

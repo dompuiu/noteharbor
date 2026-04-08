@@ -49,6 +49,20 @@ function normalizeTags(value) {
 }
 
 function sanitizeNotePayload(body) {
+  let scrapedData = null;
+
+  if (body.scraped_data) {
+    if (typeof body.scraped_data === 'string') {
+      try {
+        scrapedData = JSON.parse(body.scraped_data);
+      } catch {
+        throw new Error('Invalid scraped_data payload.');
+      }
+    } else if (typeof body.scraped_data === 'object') {
+      scrapedData = body.scraped_data;
+    }
+  }
+
   return {
     denomination: String(body.denomination ?? '').trim(),
     issue_date: String(body.issue_date ?? '').trim(),
@@ -59,7 +73,8 @@ function sanitizeNotePayload(body) {
     serial: String(body.serial ?? '').trim(),
     url: String(body.url ?? '').trim(),
     notes: String(body.notes ?? '').trim(),
-    tags: normalizeTags(body.tags)
+    tags: normalizeTags(body.tags),
+    scraped_data: scrapedData
   };
 }
 
