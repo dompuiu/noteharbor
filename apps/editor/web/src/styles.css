@@ -613,9 +613,14 @@ td.drag-cell {
   gap: 8px;
 }
 
+.field-block label,
 .field-block span,
 .inline-field span {
   font-weight: 700;
+}
+
+.field-block label {
+  justify-self: start;
 }
 
 .import-submit {
