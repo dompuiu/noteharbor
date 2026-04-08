@@ -65,6 +65,10 @@ function slotOriginLabel(origin) {
   return origin === "uploaded" ? "Uploaded" : "";
 }
 
+function fieldInputId(name) {
+  return `edit-note-${name}`;
+}
+
 function NoteEditForm({
   cancelLabel = "Cancel",
   initialPositionMode = "end",
@@ -561,17 +565,21 @@ function mapScrapedFields(scrapedData, url) {
             ["grade", "Grade"],
             ["watermark", "Watermark"],
             ["serial", "Serial"],
-          ].map(([name, label]) => (
-            <label className="field-block" key={name}>
-              <span>{label}</span>
-              <input name={name} onChange={handleFieldChange} value={form[name]} />
-            </label>
-          ))}
+          ].map(([name, label]) => {
+            const inputId = fieldInputId(name);
 
-          <label className="field-block">
-            <span>URL</span>
+            return (
+              <div className="field-block" key={name}>
+                <label htmlFor={inputId}>{label}</label>
+                <input id={inputId} name={name} onChange={handleFieldChange} value={form[name]} />
+              </div>
+            );
+          })}
+
+          <div className="field-block">
+            <label htmlFor={fieldInputId("url")}>URL</label>
             <div className="url-field-row">
-              <input name="url" onChange={handleFieldChange} value={form.url} />
+              <input id={fieldInputId("url")} name="url" onChange={handleFieldChange} value={form.url} />
               <button
                 className="button"
                 disabled={scraping || !form.url.trim()}
@@ -582,12 +590,12 @@ function mapScrapedFields(scrapedData, url) {
                 {scraping ? <span className="scrape-spinner" aria-label="Loading" /> : "⬇ Auto Populate"}
               </button>
             </div>
-          </label>
+          </div>
 
-          <label className="field-block full-span">
-            <span>Notes</span>
-            <textarea name="notes" onChange={handleFieldChange} rows="4" value={form.notes} />
-          </label>
+          <div className="field-block full-span">
+            <label htmlFor={fieldInputId("notes")}>Notes</label>
+            <textarea id={fieldInputId("notes")} name="notes" onChange={handleFieldChange} rows="4" value={form.notes} />
+          </div>
 
           <div className="field-block full-span">
             <span>Pictures</span>
