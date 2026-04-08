@@ -203,7 +203,6 @@ function NotesTable() {
   const tableShellRef = useRef(null);
   const editorOverlayRef = useRef(null);
   const tagsFilterInputRef = useRef(null);
-  const shouldCloseEditorOverlayRef = useRef(false);
 
   if (initialTableStateRef.current === undefined) {
     initialTableStateRef.current = loadSavedTableState();
@@ -370,11 +369,10 @@ function NotesTable() {
     }
 
     function handleKeyDown(event) {
-        if (event.key === "Escape") {
-          setEditingNoteId(null);
-          setCreatingNote(false);
-        }
+      if (event.key === "Escape") {
+        closeEditor();
       }
+    }
 
     window.addEventListener("keydown", handleKeyDown);
 
@@ -618,24 +616,6 @@ function NotesTable() {
     setCreatingNote(false);
     setCreatePositionMode("end");
     setCreatePositionReferenceId(null);
-  }
-
-  function handleEditorOverlayMouseDown(event) {
-    shouldCloseEditorOverlayRef.current =
-      event.button === 0 && event.target === event.currentTarget;
-  }
-
-  function handleEditorOverlayClick(event) {
-    const shouldClose =
-      shouldCloseEditorOverlayRef.current &&
-      event.button === 0 &&
-      event.target === event.currentTarget;
-
-    shouldCloseEditorOverlayRef.current = false;
-
-    if (shouldClose) {
-      closeEditor();
-    }
   }
 
   function resetEditorOverlayScroll() {
@@ -943,8 +923,6 @@ function NotesTable() {
       {editingNoteId || creatingNote ? (
         <section
           className="edit-note-overlay"
-          onClick={handleEditorOverlayClick}
-          onMouseDown={handleEditorOverlayMouseDown}
           ref={editorOverlayRef}
         >
           <div
