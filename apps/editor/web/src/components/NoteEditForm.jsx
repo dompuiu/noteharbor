@@ -71,6 +71,7 @@ function NoteEditForm({
   initialPositionReferenceId = null,
   noteId: noteIdProp,
   onCancel,
+  onReady,
   onSaveSuccess,
   overlay = false,
 }) {
@@ -185,6 +186,12 @@ function NoteEditForm({
       active = false;
     };
   }, [initialPositionMode, initialPositionReferenceId, noteId]);
+
+  useEffect(() => {
+    if (!loading) {
+      onReady?.();
+    }
+  }, [loading, onReady]);
 
   const imagePreviews = useMemo(() => {
     const nextPreviews = {};

@@ -201,6 +201,7 @@ function NotesTable() {
   const thumbPreviewElementMapRef = useRef(new Map());
   const dragPreviewRef = useRef(null);
   const tableShellRef = useRef(null);
+  const editorOverlayRef = useRef(null);
   const tagsFilterInputRef = useRef(null);
   const shouldCloseEditorOverlayRef = useRef(false);
 
@@ -380,6 +381,20 @@ function NotesTable() {
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
+  }, [creatingNote, editingNoteId]);
+
+  useEffect(() => {
+    if (!editingNoteId && !creatingNote) {
+      return undefined;
+    }
+
+    const frameId = window.requestAnimationFrame(() => {
+      if (editorOverlayRef.current) {
+        editorOverlayRef.current.scrollTop = 0;
+      }
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
   }, [creatingNote, editingNoteId]);
 
   const orderedNotes = useMemo(() => {
@@ -620,6 +635,12 @@ function NotesTable() {
 
     if (shouldClose) {
       closeEditor();
+    }
+  }
+
+  function resetEditorOverlayScroll() {
+    if (editorOverlayRef.current) {
+      editorOverlayRef.current.scrollTop = 0;
     }
   }
 
@@ -924,6 +945,7 @@ function NotesTable() {
           className="edit-note-overlay"
           onClick={handleEditorOverlayClick}
           onMouseDown={handleEditorOverlayMouseDown}
+          ref={editorOverlayRef}
         >
           <div
             className="edit-note-overlay-frame"
@@ -935,6 +957,7 @@ function NotesTable() {
               initialPositionReferenceId={createPositionReferenceId}
               noteId={editingNoteId}
               onCancel={closeEditor}
+              onReady={resetEditorOverlayScroll}
               onSaveSuccess={handleSaveEditedNote}
               overlay
             />
