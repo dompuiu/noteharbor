@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Link } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   deleteNote,
   getNotes,
@@ -37,6 +37,7 @@ const selectCountOptions = [5, 10, 25, 50];
 const tableStateStorageKey = "noteharbor.notesTableState";
 const validSortKeys = new Set(["id", ...columns.map(([key]) => key)]);
 const rowHeightEstimate = 43;
+const validPreviewKinds = new Set(["front", "back"]);
 
 function loadSavedTableState() {
   if (typeof window === "undefined") {
@@ -195,14 +196,129 @@ function pickFirstAvailableImage(note, slots) {
   return null;
 }
 
+function parsePositiveInteger(value) {
+  const parsedValue = Number.parseInt(String(value ?? ""), 10);
+  return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
+}
+
+function emptyTableRoute() {
+  return {
+    beforeId: null,
+    kind: "table",
+    noteId: null,
+    overlayEdit: false,
+    previewKind: null,
+  };
+}
+
+function parseTableHash(hash) {
+  const normalizedHash = String(hash ?? "").replace(/^#/, "");
+
+  if (!normalizedHash) {
+    return emptyTableRoute();
+  }
+
+  const [rawPath, rawQuery = ""] = normalizedHash.split("?");
+  const segments = rawPath.split("/").filter(Boolean);
+  const params = new URLSearchParams(rawQuery);
+
+  if (segments[0] === "new") {
+    return {
+      ...emptyTableRoute(),
+      beforeId: parsePositiveInteger(params.get("before")),
+      kind: "create",
+    };
+  }
+
+  if (segments[0] === "edit") {
+    const noteId = parsePositiveInteger(segments[1]);
+    return noteId
+      ? {
+          ...emptyTableRoute(),
+          kind: "edit",
+          noteId,
+        }
+      : emptyTableRoute();
+  }
+
+  if (segments[0] === "slideshow") {
+    const noteId = parsePositiveInteger(segments[1]);
+
+    if (!noteId) {
+      return emptyTableRoute();
+    }
+
+    const previewKind =
+      segments[2] === "preview" && segments[3]
+        ? String(segments[3]).toLowerCase()
+        : null;
+
+    return {
+      ...emptyTableRoute(),
+      kind: "slideshow",
+      noteId,
+      overlayEdit: params.get("overlay") === "edit",
+      previewKind,
+    };
+  }
+
+  return emptyTableRoute();
+}
+
+function buildTableHash(route) {
+  if (!route || route.kind === "table") {
+    return "";
+  }
+
+  if (route.kind === "create") {
+    const params = new URLSearchParams();
+
+    if (route.beforeId) {
+      params.set("before", String(route.beforeId));
+    }
+
+    const query = params.toString();
+    return `#new${query ? `?${query}` : ""}`;
+  }
+
+  if (route.kind === "edit" && route.noteId) {
+    return `#edit/${route.noteId}`;
+  }
+
+  if (route.kind === "slideshow" && route.noteId) {
+    const params = new URLSearchParams();
+    let path = `#slideshow/${route.noteId}`;
+
+    if (route.previewKind) {
+      path += `/preview/${route.previewKind}`;
+    }
+
+    if (route.overlayEdit) {
+      params.set("overlay", "edit");
+    }
+
+    const query = params.toString();
+    return `${path}${query ? `?${query}` : ""}`;
+  }
+
+  return "";
+}
+
 function NotesTable() {
   const initialTableStateRef = useRef(undefined);
+  const initialRouteRef = useRef(
+    typeof window === "undefined"
+      ? emptyTableRoute()
+      : parseTableHash(window.location.hash),
+  );
   const rowElementMapRef = useRef(new Map());
   const thumbPreviewElementMapRef = useRef(new Map());
   const dragPreviewRef = useRef(null);
   const tableShellRef = useRef(null);
   const editorOverlayRef = useRef(null);
   const tagsFilterInputRef = useRef(null);
+  const location = useLocation();
+  const navigate = useNavigate();
 
   if (initialTableStateRef.current === undefined) {
     initialTableStateRef.current = loadSavedTableState();
@@ -236,11 +352,6 @@ function NotesTable() {
   const [bulkLoading, setBulkLoading] = useState(false);
   const [reorderLoading, setReorderLoading] = useState(false);
   const [slideshowNotes, setSlideshowNotes] = useState([]);
-  const [slideshowIndex, setSlideshowIndex] = useState(0);
-  const [editingNoteId, setEditingNoteId] = useState(null);
-  const [creatingNote, setCreatingNote] = useState(false);
-  const [createPositionMode, setCreatePositionMode] = useState("end");
-  const [createPositionReferenceId, setCreatePositionReferenceId] = useState(null);
   const [draggedNoteId, setDraggedNoteId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const [thumbPreviewState, setThumbPreviewState] = useState(null);
@@ -255,6 +366,67 @@ function NotesTable() {
   const showScrapeStatusColumn = visibleColumns.some(
     ([key]) => key === "scrape_status",
   );
+  const currentRoute = useMemo(
+    () => parseTableHash(location.hash),
+    [location.hash],
+  );
+  const orderedNotes = useMemo(() => {
+    const filtered = notes.filter((note) =>
+      visibleColumns.every(([key]) => {
+        const filterValue = (filters[key] ?? "").trim().toLowerCase();
+        if (!filterValue) {
+          return true;
+        }
+
+        return valueToString(note, key).toLowerCase().includes(filterValue);
+      }),
+    );
+
+    return [...filtered].sort((left, right) => {
+      if (sortKey === "id") {
+        const orderResult = noteOrderValue(left) - noteOrderValue(right);
+        const result = orderResult || left.id - right.id;
+        return sortDirection === "asc" ? result : -result;
+      }
+
+      const leftValue = valueToString(left, sortKey).toLowerCase();
+      const rightValue = valueToString(right, sortKey).toLowerCase();
+      const result = leftValue.localeCompare(rightValue, undefined, {
+        numeric: true,
+        sensitivity: "base",
+      });
+      return sortDirection === "asc" ? result : -result;
+    });
+  }, [filters, notes, sortDirection, sortKey, visibleColumns]);
+  const defaultOrderedNotes = useMemo(
+    () =>
+      [...notes].sort((left, right) => {
+        const orderResult = noteOrderValue(left) - noteOrderValue(right);
+        return orderResult || left.id - right.id;
+      }),
+    [notes],
+  );
+  const slideshowRouteActive = currentRoute.kind === "slideshow";
+  const creatingNote = currentRoute.kind === "create";
+  const editingNoteId =
+    currentRoute.kind === "edit" || currentRoute.overlayEdit
+      ? currentRoute.noteId
+      : null;
+  const createPositionReferenceId =
+    creatingNote && currentRoute.beforeId && notes.some((note) => note.id === currentRoute.beforeId)
+      ? currentRoute.beforeId
+      : null;
+  const createPositionMode = createPositionReferenceId ? "before" : "end";
+  const slideshowIndex = slideshowRouteActive
+    ? slideshowNotes.findIndex((note) => note.id === currentRoute.noteId)
+    : -1;
+
+  function navigateToTableRoute(nextRoute, { replace = false } = {}) {
+    const nextHash = buildTableHash(nextRoute);
+    const nextUrl = `${location.pathname}${nextHash}`;
+    navigate(nextUrl || "/", { replace });
+  }
+
   const totalColumnCount =
     visibleColumns.length +
     2 +
@@ -338,7 +510,7 @@ function NotesTable() {
   }, [operationStatus.isBusy, scrapeJob]);
 
   useEffect(() => {
-    if (!slideshowNotes.length) {
+    if (!slideshowRouteActive || !slideshowNotes.length) {
       return;
     }
 
@@ -361,7 +533,84 @@ function NotesTable() {
 
       return nextNotes;
     });
-  }, [notes, slideshowNotes.length]);
+  }, [notes, slideshowNotes.length, slideshowRouteActive]);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    if (currentRoute.kind === "table") {
+      setSlideshowNotes([]);
+      return;
+    }
+
+    if (currentRoute.kind === "create") {
+      if (currentRoute.beforeId && !notes.some((note) => note.id === currentRoute.beforeId)) {
+        navigateToTableRoute({ kind: "create" }, { replace: true });
+      }
+
+      setSlideshowNotes([]);
+      return;
+    }
+
+    if (currentRoute.kind === "edit") {
+      if (!notes.some((note) => note.id === currentRoute.noteId)) {
+        navigateToTableRoute(emptyTableRoute(), { replace: true });
+        return;
+      }
+
+      setSlideshowNotes([]);
+      return;
+    }
+
+    const hasRestoredTableState = Boolean(initialTableStateRef.current);
+    const baseNotes =
+      initialRouteRef.current.kind === "slideshow" &&
+      slideshowNotes.length === 0 &&
+      !hasRestoredTableState
+        ? defaultOrderedNotes
+        : orderedNotes;
+    const targetIndex = baseNotes.findIndex((note) => note.id === currentRoute.noteId);
+
+    if (targetIndex < 0) {
+      navigateToTableRoute(emptyTableRoute(), { replace: true });
+      return;
+    }
+
+    setSlideshowNotes((current) => {
+      if (
+        current.length === baseNotes.length &&
+        current.every((note, index) => note.id === baseNotes[index]?.id)
+      ) {
+        return current;
+      }
+
+      return baseNotes;
+    });
+
+    if (
+      currentRoute.previewKind &&
+      !validPreviewKinds.has(currentRoute.previewKind)
+    ) {
+      navigateToTableRoute(
+        {
+          kind: "slideshow",
+          noteId: currentRoute.noteId,
+          overlayEdit: currentRoute.overlayEdit,
+          previewKind: null,
+        },
+        { replace: true },
+      );
+    }
+  }, [
+    currentRoute,
+    defaultOrderedNotes,
+    loading,
+    notes,
+    orderedNotes,
+    slideshowNotes.length,
+  ]);
 
   useEffect(() => {
     if (!editingNoteId && !creatingNote) {
@@ -395,34 +644,6 @@ function NotesTable() {
     return () => window.cancelAnimationFrame(frameId);
   }, [creatingNote, editingNoteId]);
 
-  const orderedNotes = useMemo(() => {
-    const filtered = notes.filter((note) =>
-      visibleColumns.every(([key]) => {
-        const filterValue = (filters[key] ?? "").trim().toLowerCase();
-        if (!filterValue) {
-          return true;
-        }
-
-        return valueToString(note, key).toLowerCase().includes(filterValue);
-      }),
-    );
-
-    return [...filtered].sort((left, right) => {
-      if (sortKey === "id") {
-        const orderResult = noteOrderValue(left) - noteOrderValue(right);
-        const result = orderResult || left.id - right.id;
-        return sortDirection === "asc" ? result : -result;
-      }
-
-      const leftValue = valueToString(left, sortKey).toLowerCase();
-      const rightValue = valueToString(right, sortKey).toLowerCase();
-      const result = leftValue.localeCompare(rightValue, undefined, {
-        numeric: true,
-        sensitivity: "base",
-      });
-      return sortDirection === "asc" ? result : -result;
-    });
-  }, [filters, notes, sortDirection, sortKey, visibleColumns]);
   const hasActiveFilters = useMemo(
     () => Object.values(filters).some((value) => String(value).trim()),
     [filters],
@@ -575,47 +796,62 @@ function NotesTable() {
 
   function openSlideshow(startId) {
     setActionError("");
+    const noteId = startId ?? orderedNotes[0]?.id ?? null;
 
-    const nextIndex = startId
-      ? orderedNotes.findIndex((note) => note.id === startId)
-      : 0;
+    if (!noteId) {
+      return;
+    }
 
-    setSlideshowNotes(orderedNotes);
-    setSlideshowIndex(nextIndex >= 0 ? nextIndex : 0);
+    navigateToTableRoute({
+      kind: "slideshow",
+      noteId,
+      overlayEdit: false,
+      previewKind: null,
+    });
   }
 
   function closeSlideshow() {
-    setSlideshowNotes([]);
-    setSlideshowIndex(0);
+    navigateToTableRoute(emptyTableRoute(), { replace: true });
   }
 
   function openEditor(noteId) {
     setActionError("");
-    setCreatingNote(false);
-    setEditingNoteId(noteId);
+
+    if (slideshowRouteActive) {
+      navigateToTableRoute({
+        kind: "slideshow",
+        noteId,
+        overlayEdit: true,
+        previewKind: currentRoute.previewKind,
+      });
+      return;
+    }
+
+    navigateToTableRoute({ kind: "edit", noteId });
   }
 
   function openCreateNote() {
     setActionError("");
-    setEditingNoteId(null);
-    setCreatePositionMode("end");
-    setCreatePositionReferenceId(null);
-    setCreatingNote(true);
+    navigateToTableRoute({ kind: "create", beforeId: null });
   }
 
   function openCreateNoteBefore(referenceNoteId) {
     setActionError("");
-    setEditingNoteId(null);
-    setCreatePositionMode("before");
-    setCreatePositionReferenceId(referenceNoteId);
-    setCreatingNote(true);
+    navigateToTableRoute({ kind: "create", beforeId: referenceNoteId });
   }
 
   function closeEditor() {
-    setEditingNoteId(null);
-    setCreatingNote(false);
-    setCreatePositionMode("end");
-    setCreatePositionReferenceId(null);
+    if (slideshowRouteActive) {
+      navigateToTableRoute({
+        kind: "slideshow",
+        noteId: currentRoute.noteId,
+        overlayEdit: false,
+        previewKind: currentRoute.previewKind,
+      }, { replace: true });
+      return;
+    }
+
+    navigateToTableRoute(emptyTableRoute(), { replace: true });
   }
 
   function resetEditorOverlayScroll() {
@@ -659,17 +895,20 @@ function NotesTable() {
         );
       }
 
-      const newIndex = nextSlideshow.findIndex((note) => note.id === updatedNote.id);
-      if (newIndex !== -1) {
-        setSlideshowIndex(newIndex);
-      } else {
-        setSlideshowIndex((current) => Math.min(current, nextSlideshow.length - 1));
-      }
-
       return nextSlideshow;
     });
 
-    closeEditor();
+    if (slideshowRouteActive) {
+      navigateToTableRoute({
+        kind: "slideshow",
+        noteId: updatedNote.id,
+        overlayEdit: false,
+        previewKind: currentRoute.previewKind,
+      }, { replace: true });
+      return;
+    }
+
+    navigateToTableRoute(emptyTableRoute(), { replace: true });
   }
 
   function toggleNote(noteId) {
@@ -906,17 +1145,119 @@ function NotesTable() {
     }
   }
 
+  function changeSlideshowIndex(updater) {
+    if (!slideshowNotes.length || !slideshowRouteActive) {
+      return;
+    }
+
+    const currentIndexValue = slideshowNotes.findIndex(
+      (note) => note.id === currentRoute.noteId,
+    );
+    const resolvedIndex =
+      typeof updater === "function" ? updater(currentIndexValue) : updater;
+    const boundedIndex =
+      ((resolvedIndex % slideshowNotes.length) + slideshowNotes.length) %
+      slideshowNotes.length;
+    const nextNote = slideshowNotes[boundedIndex];
+
+    if (!nextNote) {
+      return;
+    }
+
+    navigateToTableRoute({
+      kind: "slideshow",
+      noteId: nextNote.id,
+      overlayEdit: false,
+      previewKind: null,
+    });
+  }
+
+  function openPreview(noteId, previewKind) {
+    if (!validPreviewKinds.has(previewKind)) {
+      return;
+    }
+
+    navigateToTableRoute({
+      kind: "slideshow",
+      noteId,
+      overlayEdit: false,
+      previewKind,
+    });
+  }
+
+  function closePreview(noteId) {
+    navigateToTableRoute({
+      kind: "slideshow",
+      noteId,
+      overlayEdit: false,
+      previewKind: null,
+    }, { replace: true });
+  }
+
+  function movePreview(offset) {
+    if (!slideshowRouteActive || !slideshowNotes.length || !currentRoute.previewKind) {
+      return;
+    }
+
+    const direction = offset >= 0 ? 1 : -1;
+    let nextNoteIndex = slideshowNotes.findIndex(
+      (note) => note.id === currentRoute.noteId,
+    );
+
+    if (nextNoteIndex < 0) {
+      return;
+    }
+
+    let nextItems = ["front", "back"].filter((kind) =>
+      validPreviewKinds.has(kind),
+    );
+    let nextItemIndex = nextItems.findIndex((kind) => kind === currentRoute.previewKind);
+
+    if (nextItemIndex < 0) {
+      nextItemIndex = direction > 0 ? -1 : nextItems.length;
+    }
+
+    let remainingSteps = Math.abs(offset);
+
+    while (remainingSteps > 0) {
+      const candidateIndex = nextItemIndex + direction;
+
+      if (candidateIndex >= 0 && candidateIndex < nextItems.length) {
+        nextItemIndex = candidateIndex;
+        remainingSteps -= 1;
+        continue;
+      }
+
+      nextNoteIndex =
+        (nextNoteIndex + direction + slideshowNotes.length) % slideshowNotes.length;
+      nextItems = ["front", "back"];
+      nextItemIndex = direction > 0 ? 0 : nextItems.length - 1;
+      remainingSteps -= 1;
+    }
+
+    navigateToTableRoute({
+      kind: "slideshow",
+      noteId: slideshowNotes[nextNoteIndex].id,
+      overlayEdit: false,
+      previewKind: nextItems[nextItemIndex],
+    });
+  }
+
   return (
     <section className="screen-stack">
-      {slideshowNotes.length ? (
+      {slideshowRouteActive && slideshowNotes.length && slideshowIndex >= 0 ? (
         <Slideshow
           currentIndex={slideshowIndex}
           keyboardDisabled={Boolean(editingNoteId || creatingNote)}
           notes={slideshowNotes}
-          onChangeIndex={setSlideshowIndex}
+          onChangeIndex={changeSlideshowIndex}
           onClose={closeSlideshow}
           onCopy={setActionError}
           onEdit={openEditor}
+          onOpenPreview={openPreview}
+          onClosePreview={closePreview}
+          onMovePreview={movePreview}
+          previewKind={currentRoute.previewKind}
         />
       ) : null}
 

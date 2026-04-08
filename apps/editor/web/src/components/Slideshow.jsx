@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { copyTextToClipboard, formatNoteAsTsvRow } from "../lib/noteClipboard.js";
 
 function formatScrapedLabel(label) {
@@ -219,69 +219,15 @@ function Slideshow({
   onClose,
   onCopy,
   onEdit,
+  onClosePreview,
+  onMovePreview,
+  onOpenPreview,
+  previewKind = null,
 }) {
-  const [previewState, setPreviewState] = useState(null);
-
-  function openPreview(noteIndex, imageKind) {
-    setPreviewState({ imageKind, noteIndex });
-  }
-
-  function closePreview() {
-    setPreviewState(null);
-  }
-
   function moveSlideshow(offset) {
     onChangeIndex(
       (current) => (current + offset + notes.length) % notes.length,
     );
-  }
-
-  function movePreview(offset) {
-    setPreviewState((currentPreview) => {
-      if (!currentPreview || !notes.length) {
-        return currentPreview;
-      }
-
-      const direction = offset >= 0 ? 1 : -1;
-      let nextNoteIndex = currentPreview.noteIndex;
-      let nextItems = getPreviewItems(notes[nextNoteIndex], {
-        includeMissingSides: true,
-      });
-      let nextItemIndex = nextItems.findIndex(
-        (item) => item.kind === currentPreview.imageKind,
-      );
-
-      if (nextItemIndex < 0) {
-        nextItemIndex = direction > 0 ? -1 : nextItems.length;
-      }
-
-      let remainingSteps = Math.abs(offset);
-
-      while (remainingSteps > 0) {
-        const candidateIndex = nextItemIndex + direction;
-
-        if (candidateIndex >= 0 && candidateIndex < nextItems.length) {
-          nextItemIndex = candidateIndex;
-          remainingSteps -= 1;
-          continue;
-        }
-
-        nextNoteIndex =
-          (nextNoteIndex + direction + notes.length) % notes.length;
-        nextItems = getPreviewItems(notes[nextNoteIndex], {
-          includeMissingSides: true,
-        });
-        nextItemIndex = direction > 0 ? 0 : nextItems.length - 1;
-        remainingSteps -= 1;
-      }
-
-      onChangeIndex(nextNoteIndex);
-
-      return {
-        imageKind: nextItems[nextItemIndex].kind,
-        noteIndex: nextNoteIndex,
-      };
-    });
   }
 
   async function handleCopyNoteDetails() {
@@ -301,7 +247,7 @@ function Slideshow({
     }
 
     function onKeyDown(event) {
-      if (previewState) {
+      if (previewKind) {
         return;
       }
 
@@ -322,35 +268,7 @@ function Slideshow({
     window.addEventListener("keydown", onKeyDown);
 
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [keyboardDisabled, notes.length, onClose, previewState]);
-
-  useEffect(() => {
-    setPreviewState((currentPreview) => {
-      if (!currentPreview || !notes.length) {
-        return currentPreview;
-      }
-
-      const boundedNoteIndex =
-        ((currentPreview.noteIndex % notes.length) + notes.length) %
-        notes.length;
-      const previewItems = getPreviewItems(notes[boundedNoteIndex], {
-        includeMissingSides: true,
-      });
-
-      if (previewItems.some((item) => item.kind === currentPreview.imageKind)) {
-        if (boundedNoteIndex === currentPreview.noteIndex) {
-          return currentPreview;
-        }
-
-        return { ...currentPreview, noteIndex: boundedNoteIndex };
-      }
-
-      return {
-        imageKind: previewItems[0].kind,
-        noteIndex: boundedNoteIndex,
-      };
-    });
-  }, [notes]);
+  }, [keyboardDisabled, notes.length, onClose, previewKind]);
 
   if (!notes.length) {
     return null;
@@ -359,24 +277,21 @@ function Slideshow({
   const note = notes[currentIndex];
   const previewItems = getPreviewItems(note, { includeMissingSides: true });
   const scrapedDetailEntries = getScrapedDetailEntries(note);
-  const previewNote =
-    previewState && notes[previewState.noteIndex]
-      ? notes[previewState.noteIndex]
-      : null;
+  const previewNote = previewKind ? note : null;
   const previewNoteItems = previewNote
     ? getPreviewItems(previewNote, { includeMissingSides: true })
     : [];
   const previewItem = previewNoteItems.find(
-    (item) => item.kind === previewState?.imageKind,
+    (item) => item.kind === previewKind,
   );
   const totalPreviewCount = notes.reduce(
     (count, entry) =>
       count + getPreviewItems(entry, { includeMissingSides: true }).length,
     0,
   );
-  const previewSequenceIndex = previewState
+  const previewSequenceIndex = previewKind
     ? notes
-        .slice(0, previewState.noteIndex)
+        .slice(0, currentIndex)
         .reduce(
           (count, entry) =>
             count +
@@ -384,7 +299,7 @@ function Slideshow({
           0,
         ) +
       previewNoteItems.findIndex(
-        (item) => item.kind === previewState.imageKind,
+        (item) => item.kind === previewKind,
       ) +
       1
     : 0;
@@ -399,9 +314,9 @@ function Slideshow({
           canGoPrevious={totalPreviewCount > 1}
           counterLabel={`${previewSequenceIndex} / ${totalPreviewCount}`}
           noteLabel={`${getNoteDisplayLabel(previewNote)} - ${previewItem.label}`}
-          onClose={closePreview}
-          onNext={() => movePreview(1)}
-          onPrevious={() => movePreview(-1)}
+          onClose={() => onClosePreview?.(note.id)}
+          onNext={() => onMovePreview?.(1)}
+          onPrevious={() => onMovePreview?.(-1)}
           placeholderText={`No scraped ${previewItem.label.toLowerCase()} image exists for this note yet.`}
           src={previewItem.src}
         />
@@ -460,7 +375,7 @@ function Slideshow({
               <button
                 key={item.kind}
                 className="slide-thumb-btn"
-                onClick={() => openPreview(currentIndex, item.kind)}
+                onClick={() => onOpenPreview?.(note.id, item.kind)}
                 title="Click to enlarge"
                 type="button"
               >
