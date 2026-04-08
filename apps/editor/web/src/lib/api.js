@@ -66,6 +66,11 @@ function buildNoteRequestOptions(method, payload) {
       return;
     }
 
+    if (key === 'scraped_data') {
+      formData.append(key, JSON.stringify(value));
+      return;
+    }
+
     formData.append(key, value);
   });
 
