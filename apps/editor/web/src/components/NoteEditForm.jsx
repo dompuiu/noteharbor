@@ -355,6 +355,16 @@ function NoteEditForm({
     return match ? match[1] : null;
   }
 
+  function extractWatermarkFromPmSignaturesVignettes(value) {
+    const normalized = String(value ?? "").trim();
+    if (!normalized) {
+      return null;
+    }
+
+    const match = normalized.match(/\bWmk:\s*(.+?)(?:\s*[;,|]\s*|$)/i);
+    return match?.[1]?.trim() || null;
+  }
+
   function mapScrapedFields(scrapedData, url) {
     const updates = {};
     const d = scrapedData;
@@ -381,7 +391,9 @@ function NoteEditForm({
     const issueDate = d.issue_date ?? d.year ?? d.date;
     if (issueDate) updates.issue_date = issueDate;
 
-    const watermark = d.watermark;
+    const watermark =
+      d.watermark ??
+      extractWatermarkFromPmSignaturesVignettes(d.signatures_vignettes);
     if (watermark) updates.watermark = watermark;
 
     const company = inferGradingCompany(url);
