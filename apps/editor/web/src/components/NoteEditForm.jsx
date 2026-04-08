@@ -1,7 +1,18 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
-import { createNote, getNotes, getNote, getTags, reorderNotes, scrapePreview, updateNote } from "../lib/api.js";
-import { copyTextToClipboard, formatNoteAsTsvRow } from "../lib/noteClipboard.js";
+import {
+  createNote,
+  getNotes,
+  getNote,
+  getTags,
+  reorderNotes,
+  scrapePreview,
+  updateNote,
+} from "../lib/api.js";
+import {
+  copyTextToClipboard,
+  formatNoteAsTsvRow,
+} from "../lib/noteClipboard.js";
 import { PositionPicker } from "./PositionPicker.jsx";
 
 const emptyForm = {
@@ -18,14 +29,32 @@ const emptyForm = {
 };
 
 const imageSlots = [
-	{ key: "image_front_full", type: "front", variant: "full", label: "Front full" },
-	{ key: "image_back_full", type: "back", variant: "full", label: "Back full" },
-	{ key: "image_front_thumbnail", type: "front", variant: "thumbnail", label: "Front thumbnail" },
-	{ key: "image_back_thumbnail", type: "back", variant: "thumbnail", label: "Back thumbnail" },
+  {
+    key: "image_front_full",
+    type: "front",
+    variant: "full",
+    label: "Front full",
+  },
+  { key: "image_back_full", type: "back", variant: "full", label: "Back full" },
+  {
+    key: "image_front_thumbnail",
+    type: "front",
+    variant: "thumbnail",
+    label: "Front thumbnail",
+  },
+  {
+    key: "image_back_thumbnail",
+    type: "back",
+    variant: "thumbnail",
+    label: "Back thumbnail",
+  },
 ];
 
 function pickImage(images, type, variant) {
-  return images.find((image) => image.type === type && image.variant === variant) ?? null;
+  return (
+    images.find((image) => image.type === type && image.variant === variant) ??
+    null
+  );
 }
 
 function hasEffectiveImage({ currentImage, pendingImage, isDeleted }) {
@@ -93,11 +122,18 @@ function NoteEditForm({
   const [noteVersion, setNoteVersion] = useState("");
   const [pendingImages, setPendingImages] = useState({});
   const [deletedSlots, setDeletedSlots] = useState({});
-  const [generatedThumbnails, setGeneratedThumbnails] = useState({ front: false, back: false });
+  const [generatedThumbnails, setGeneratedThumbnails] = useState({
+    front: false,
+    back: false,
+  });
   const [activePasteSlot, setActivePasteSlot] = useState(null);
   const [allNotes, setAllNotes] = useState([]);
-  const [positionMode, setPositionMode] = useState(noteId ? "keep" : initialPositionMode);
-  const [positionReferenceId, setPositionReferenceId] = useState(noteId ? null : initialPositionReferenceId);
+  const [positionMode, setPositionMode] = useState(
+    noteId ? "keep" : initialPositionMode,
+  );
+  const [positionReferenceId, setPositionReferenceId] = useState(
+    noteId ? null : initialPositionReferenceId,
+  );
   const [scraping, setScraping] = useState(false);
   const [scrapeToast, setScrapeToast] = useState(null);
   const [scrapeDetails, setScrapeDetails] = useState(null);
@@ -110,8 +146,10 @@ function NoteEditForm({
     ? "edit-note-overlay-content"
     : "screen-stack narrow-stack";
 
-  const positionNeedsReference = positionMode === "before" || positionMode === "after";
-  const positionInvalid = positionNeedsReference && positionReferenceId === null;
+  const positionNeedsReference =
+    positionMode === "before" || positionMode === "after";
+  const positionInvalid =
+    positionNeedsReference && positionReferenceId === null;
   // Notes other than the one being edited — used for both the visibility guard and the picker list
   const otherNotes = allNotes.filter((n) => n.id !== Number(noteId));
 
@@ -210,13 +248,19 @@ function NoteEditForm({
     return nextPreviews;
   }, [pendingImages]);
 
-  useEffect(() => () => {
-    Object.values(imagePreviews).forEach((url) => URL.revokeObjectURL(url));
-  }, [imagePreviews]);
+  useEffect(
+    () => () => {
+      Object.values(imagePreviews).forEach((url) => URL.revokeObjectURL(url));
+    },
+    [imagePreviews],
+  );
 
-  useEffect(() => () => {
-    if (scrapeToastTimer.current) clearTimeout(scrapeToastTimer.current);
-  }, []);
+  useEffect(
+    () => () => {
+      if (scrapeToastTimer.current) clearTimeout(scrapeToastTimer.current);
+    },
+    [],
+  );
 
   const filteredSuggestions = useMemo(() => {
     const searchValue = tagInput.trim().toLowerCase();
@@ -243,7 +287,10 @@ function NoteEditForm({
   }
 
   function removeTag(tagName) {
-    setForm((current) => ({ ...current, tags: current.tags.filter((tag) => tag !== tagName) }));
+    setForm((current) => ({
+      ...current,
+      tags: current.tags.filter((tag) => tag !== tagName),
+    }));
   }
 
   function clearScrapedImage(slotKey) {
@@ -290,27 +337,27 @@ function NoteEditForm({
     setDeletedSlots((current) => ({ ...current, [slot.key]: false }));
   }
 
-function inferGradingCompany(url) {
-  const lower = url.toLowerCase();
-  if (lower.includes("pmgnotes.com")) return "PMG";
-  if (lower.includes("tqggrading.com")) return "TQG";
-  return null;
-}
-
-function extractCatalogNumberFromPmNote(noteValue) {
-  const normalized = String(noteValue ?? "").trim();
-  if (!normalized) {
+  function inferGradingCompany(url) {
+    const lower = url.toLowerCase();
+    if (lower.includes("pmgnotes.com")) return "PMG";
+    if (lower.includes("tqggrading.com")) return "TQG";
     return null;
   }
 
-  const compact = normalized.replace(/[\s_-]+/g, "");
-  const match = compact.match(/(\d+[a-z]?)/i);
-  return match ? match[1].toLowerCase() : null;
-}
+  function extractCatalogNumberFromPmNote(noteValue) {
+    const normalized = String(noteValue ?? "").trim();
+    if (!normalized) {
+      return null;
+    }
 
-function mapScrapedFields(scrapedData, url) {
-  const updates = {};
-  const d = scrapedData;
+    const compact = normalized.replace(/[\s_-]+/g, "");
+    const match = compact.match(/(\d+[a-z]?)/i);
+    return match ? match[1].toLowerCase() : null;
+  }
+
+  function mapScrapedFields(scrapedData, url) {
+    const updates = {};
+    const d = scrapedData;
 
     const grade = d.grade;
     if (grade) updates.grade = grade;
@@ -318,15 +365,15 @@ function mapScrapedFields(scrapedData, url) {
     const serial = d.serial_number ?? d.serial;
     if (serial) updates.serial = serial;
 
-  const pmgNoteCatalogNumber = extractCatalogNumberFromPmNote(d.note);
-  const catalogNumber =
-    pmgNoteCatalogNumber ??
-    d.pmg_cert ??
-    d.cert_no ??
-    d.certificate_no ??
-    d.certificate_number ??
-    d.cert;
-  if (catalogNumber) updates.catalog_number = catalogNumber;
+    const pmgNoteCatalogNumber = extractCatalogNumberFromPmNote(d.note);
+    const catalogNumber =
+      pmgNoteCatalogNumber ??
+      d.pmg_cert ??
+      d.cert_no ??
+      d.certificate_no ??
+      d.certificate_number ??
+      d.cert;
+    if (catalogNumber) updates.catalog_number = catalogNumber;
 
     const denomination = d.denomination;
     if (denomination) updates.denomination = denomination;
@@ -358,7 +405,10 @@ function mapScrapedFields(scrapedData, url) {
     try {
       const result = await scrapePreview(form.url);
 
-      setForm((current) => ({ ...current, ...mapScrapedFields(result.scraped_data, form.url) }));
+      setForm((current) => ({
+        ...current,
+        ...mapScrapedFields(result.scraped_data, form.url),
+      }));
       setScrapeDetails(result.scraped_data);
 
       const nextScrapedImages = {};
@@ -458,7 +508,9 @@ function mapScrapedFields(scrapedData, url) {
   }
 
   async function handleCopyNoteDetails() {
-    const formData = formElementRef.current ? new FormData(formElementRef.current) : null;
+    const formData = formElementRef.current
+      ? new FormData(formElementRef.current)
+      : null;
     const fieldValue = (name, fallback = "") => {
       if (!formData) {
         return fallback;
@@ -511,7 +563,12 @@ function mapScrapedFields(scrapedData, url) {
           </div>
           <div className="inline-actions">
             {onCancel ? (
-              <button className="button" onClick={handleCancel} title={cancelLabel} type="button">
+              <button
+                className="button"
+                onClick={handleCancel}
+                title={cancelLabel}
+                type="button"
+              >
                 {cancelLabel}
               </button>
             ) : (
@@ -526,9 +583,32 @@ function mapScrapedFields(scrapedData, url) {
               title="Copy note details"
               type="button"
             >
-              <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
-                <rect fill="none" height="10" rx="2" stroke="currentColor" strokeWidth="2" width="10" x="9" y="9" />
-                <rect fill="none" height="10" rx="2" stroke="currentColor" strokeWidth="2" width="10" x="5" y="5" />
+              <svg
+                aria-hidden="true"
+                height="16"
+                viewBox="0 0 24 24"
+                width="16"
+              >
+                <rect
+                  fill="none"
+                  height="10"
+                  rx="2"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  width="10"
+                  x="9"
+                  y="9"
+                />
+                <rect
+                  fill="none"
+                  height="10"
+                  rx="2"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  width="10"
+                  x="5"
+                  y="5"
+                />
               </svg>
             </button>
             <button
@@ -556,7 +636,12 @@ function mapScrapedFields(scrapedData, url) {
           </div>
         ) : null}
 
-        <form className="form-grid" id="edit-note-form" onSubmit={handleSubmit} ref={formElementRef}>
+        <form
+          className="form-grid"
+          id="edit-note-form"
+          onSubmit={handleSubmit}
+          ref={formElementRef}
+        >
           {[
             ["denomination", "Denomination"],
             ["issue_date", "Date"],
@@ -571,7 +656,12 @@ function mapScrapedFields(scrapedData, url) {
             return (
               <div className="field-block" key={name}>
                 <label htmlFor={inputId}>{label}</label>
-                <input id={inputId} name={name} onChange={handleFieldChange} value={form[name]} />
+                <input
+                  id={inputId}
+                  name={name}
+                  onChange={handleFieldChange}
+                  value={form[name]}
+                />
               </div>
             );
           })}
@@ -579,37 +669,62 @@ function mapScrapedFields(scrapedData, url) {
           <div className="field-block">
             <label htmlFor={fieldInputId("url")}>URL</label>
             <div className="url-field-row">
-              <input id={fieldInputId("url")} name="url" onChange={handleFieldChange} value={form.url} />
+              <input
+                id={fieldInputId("url")}
+                name="url"
+                onChange={handleFieldChange}
+                value={form.url}
+              />
               <button
+                aria-label="Auto Populate fields from URL"
                 className="button"
                 disabled={scraping || !form.url.trim()}
                 onClick={handleAutoPopulate}
                 title="Auto Populate fields from URL"
                 type="button"
               >
-                {scraping ? <span className="scrape-spinner" aria-label="Loading" /> : "⬇ Auto Populate"}
+                {scraping ? (
+                  <span className="scrape-spinner" aria-label="Loading" />
+                ) : (
+                  <span aria-hidden="true">✦</span>
+                )}
               </button>
             </div>
           </div>
 
           <div className="field-block full-span">
             <label htmlFor={fieldInputId("notes")}>Notes</label>
-            <textarea id={fieldInputId("notes")} name="notes" onChange={handleFieldChange} rows="4" value={form.notes} />
+            <textarea
+              id={fieldInputId("notes")}
+              name="notes"
+              onChange={handleFieldChange}
+              rows="4"
+              value={form.notes}
+            />
           </div>
 
           <div className="field-block full-span">
             <span>Pictures</span>
             <p className="muted image-field-help">
-              Scraped, uploaded, and generated pictures now share the same slots. Uploading or scraping a slot replaces what is already there.
+              Scraped, uploaded, and generated pictures now share the same
+              slots. Uploading or scraping a slot replaces what is already
+              there.
             </p>
             <div className="image-slot-grid">
               {imageSlots.map((slot) => {
-                const currentImage = pickImage(currentImages, slot.type, slot.variant);
+                const currentImage = pickImage(
+                  currentImages,
+                  slot.type,
+                  slot.variant,
+                );
                 const pendingPreview = imagePreviews[slot.key];
                 const isDeleted = Boolean(deletedSlots[slot.key]);
-                const pendingFullImage = pendingImages[`image_${slot.type}_full`];
+                const pendingFullImage =
+                  pendingImages[`image_${slot.type}_full`];
                 const fullImage = pickImage(currentImages, slot.type, "full");
-                const isFullDeleted = Boolean(deletedSlots[`image_${slot.type}_full`]);
+                const isFullDeleted = Boolean(
+                  deletedSlots[`image_${slot.type}_full`],
+                );
                 const hasFullImage = hasEffectiveImage({
                   currentImage: fullImage,
                   pendingImage: pendingFullImage,
@@ -618,24 +733,48 @@ function mapScrapedFields(scrapedData, url) {
                 const scrapedImageUrl = pendingScrapedImages[slot.key];
                 const previewSrc = isDeleted
                   ? ""
-                  : pendingPreview || scrapedImageUrl || versionedImagePath(currentImage?.localPath, noteVersion);
-                const hasPendingImage = Boolean(pendingPreview) || Boolean(scrapedImageUrl);
+                  : pendingPreview ||
+                    scrapedImageUrl ||
+                    versionedImagePath(currentImage?.localPath, noteVersion);
+                const hasPendingImage =
+                  Boolean(pendingPreview) || Boolean(scrapedImageUrl);
                 const hasExistingImage = Boolean(currentImage) && !isDeleted;
-                const hasThumbnailImage = Boolean(pendingImages[slot.key]) || Boolean(scrapedImageUrl) || (Boolean(currentImage) && !isDeleted);
-                const showGenerateOption = slot.variant === "thumbnail" && hasFullImage && !hasThumbnailImage;
+                const hasThumbnailImage =
+                  Boolean(pendingImages[slot.key]) ||
+                  Boolean(scrapedImageUrl) ||
+                  (Boolean(currentImage) && !isDeleted);
+                const showGenerateOption =
+                  slot.variant === "thumbnail" &&
+                  hasFullImage &&
+                  !hasThumbnailImage;
 
                 return (
-                  <div className={`image-slot-card image-slot-card--${slot.variant}`} key={slot.key}>
+                  <div
+                    className={`image-slot-card image-slot-card--${slot.variant}`}
+                    key={slot.key}
+                  >
                     <div className="image-slot-header">
                       <strong>{slot.label}</strong>
                       <div className="image-slot-header-meta">
-                        {hasPendingImage ? <span className="image-slot-badge">New image ready</span> : null}
-                        {!hasPendingImage && hasExistingImage && currentImage?.origin ? (
-                          <span className={`image-slot-source image-slot-source--${currentImage.origin}`}>
+                        {hasPendingImage ? (
+                          <span className="image-slot-badge">
+                            New image ready
+                          </span>
+                        ) : null}
+                        {!hasPendingImage &&
+                        hasExistingImage &&
+                        currentImage?.origin ? (
+                          <span
+                            className={`image-slot-source image-slot-source--${currentImage.origin}`}
+                          >
                             {slotOriginLabel(currentImage.origin)}
                           </span>
                         ) : null}
-                        {isDeleted ? <span className="image-slot-badge image-slot-badge--danger">Will delete</span> : null}
+                        {isDeleted ? (
+                          <span className="image-slot-badge image-slot-badge--danger">
+                            Will delete
+                          </span>
+                        ) : null}
                       </div>
                     </div>
                     <div
@@ -672,7 +811,11 @@ function mapScrapedFields(scrapedData, url) {
                       }}
                     >
                       {previewSrc ? (
-                        <img alt={`${slot.label} preview`} className="image-dropzone-preview" src={previewSrc} />
+                        <img
+                          alt={`${slot.label} preview`}
+                          className="image-dropzone-preview"
+                          src={previewSrc}
+                        />
                       ) : (
                         <div className="image-dropzone-empty">
                           {isDeleted ? "Image will be removed" : "No image yet"}
@@ -742,7 +885,9 @@ function mapScrapedFields(scrapedData, url) {
                     <input
                       accept="image/*"
                       className="image-slot-input"
-                      onChange={(event) => setSlotFile(slot, event.target.files?.[0])}
+                      onChange={(event) =>
+                        setSlotFile(slot, event.target.files?.[0])
+                      }
                       ref={(element) => {
                         inputRefs.current[slot.key] = element;
                       }}
@@ -759,7 +904,12 @@ function mapScrapedFields(scrapedData, url) {
             <div className="tag-list editable-tag-list">
               {form.tags.length ? (
                 form.tags.map((tag) => (
-                  <button className="tag removable-tag" key={tag} onClick={() => removeTag(tag)} type="button">
+                  <button
+                    className="tag removable-tag"
+                    key={tag}
+                    onClick={() => removeTag(tag)}
+                    type="button"
+                  >
                     {tag} x
                   </button>
                 ))
@@ -774,7 +924,11 @@ function mapScrapedFields(scrapedData, url) {
                 placeholder="Type a suggestion and click add"
                 value={tagInput}
               />
-              <button className="button" onClick={() => addTag(tagInput)} type="button">
+              <button
+                className="button"
+                onClick={() => addTag(tagInput)}
+                type="button"
+              >
                 Add tag
               </button>
             </div>
@@ -785,7 +939,12 @@ function mapScrapedFields(scrapedData, url) {
             </datalist>
             <div className="suggestion-cloud">
               {filteredSuggestions.slice(0, 16).map((tag) => (
-                <button className="tag suggestion-tag" key={tag} onClick={() => addTag(tag)} type="button">
+                <button
+                  className="tag suggestion-tag"
+                  key={tag}
+                  onClick={() => addTag(tag)}
+                  type="button"
+                >
                   {tag}
                 </button>
               ))}
@@ -807,14 +966,19 @@ function mapScrapedFields(scrapedData, url) {
                 }}
                 value={positionMode}
               >
-                {!isCreateMode ? <option value="keep">Keep current position</option> : null}
+                {!isCreateMode ? (
+                  <option value="keep">Keep current position</option>
+                ) : null}
                 <option value="start">Start of collection</option>
                 <option value="end">End of collection</option>
                 <option value="before">Before a note...</option>
                 <option value="after">After a note...</option>
               </select>
               {positionInvalid ? (
-                <p className="error-text" style={{ margin: 0, fontSize: "0.85rem" }}>
+                <p
+                  className="error-text"
+                  style={{ margin: 0, fontSize: "0.85rem" }}
+                >
                   Select a reference note from the list below.
                 </p>
               ) : null}
@@ -841,7 +1005,9 @@ function mapScrapedFields(scrapedData, url) {
                     <dt>{key.replace(/_/g, " ")}</dt>
                     <dd>
                       {key === "source_url" ? (
-                        <a href={value} rel="noreferrer" target="_blank">{value}</a>
+                        <a href={value} rel="noreferrer" target="_blank">
+                          {value}
+                        </a>
                       ) : (
                         String(value)
                       )}
