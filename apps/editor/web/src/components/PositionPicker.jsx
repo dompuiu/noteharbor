@@ -10,7 +10,9 @@ function pickFrontThumbnail(images) {
 
 function PositionPicker({ notes, onSelect, selectedId }) {
   const [filter, setFilter] = useState("");
+  const listRef = useRef(null);
   const selectedButtonRef = useRef(null);
+  const hasAutoScrolledRef = useRef(false);
 
   const filteredNotes = useMemo(() => {
     const term = filter.trim().toLowerCase();
@@ -23,15 +25,24 @@ function PositionPicker({ notes, onSelect, selectedId }) {
   }, [notes, filter]);
 
   useEffect(() => {
-    if (!selectedButtonRef.current) {
+    const listElement = listRef.current;
+    const selectedElement = selectedButtonRef.current;
+
+    if (hasAutoScrolledRef.current || !selectedId || !listElement || !selectedElement) {
       return;
     }
 
-    selectedButtonRef.current.scrollIntoView({
-      block: "nearest",
-      inline: "nearest",
-    });
-  }, [filteredNotes, selectedId]);
+    const listRect = listElement.getBoundingClientRect();
+    const selectedRect = selectedElement.getBoundingClientRect();
+
+    if (selectedRect.top < listRect.top) {
+      listElement.scrollTop -= listRect.top - selectedRect.top;
+    } else if (selectedRect.bottom > listRect.bottom) {
+      listElement.scrollTop += selectedRect.bottom - listRect.bottom;
+    }
+
+    hasAutoScrolledRef.current = true;
+  }, [selectedId]);
 
   return (
     <div style={{ display: "grid", gap: "8px" }}>
@@ -50,6 +61,7 @@ function PositionPicker({ notes, onSelect, selectedId }) {
         value={filter}
       />
       <div
+        ref={listRef}
         style={{
           maxHeight: "280px",
           overflowY: "auto",
