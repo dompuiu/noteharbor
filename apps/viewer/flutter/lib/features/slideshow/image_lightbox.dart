@@ -14,7 +14,7 @@ class ImageSequenceItem {
   });
 
   final NoteRecord note;
-  final NoteImage image;
+  final NoteImage? image;
 
   String get label => note.title;
 }
@@ -193,15 +193,25 @@ class _ImageLightboxState extends State<ImageLightbox> {
                             clipBehavior: Clip.antiAlias,
                             child: Padding(
                               padding: const EdgeInsets.all(16),
-                              child: _ZoomableImagePage(
-                                key: ValueKey(
-                                  '${imageItem.image.cacheKey}-$index-$_pageGeneration',
-                                ),
-                                image: imageItem.image,
-                                onInteractionStateChanged: (isMultiTouch) {
-                                  _setPageScrollEnabled(!isMultiTouch);
-                                },
-                              ),
+                              child: imageItem.image == null
+                                  ? const Center(
+                                      child: Text(
+                                        'No image',
+                                        style: TextStyle(
+                                          color: Colors.white54,
+                                          fontSize: 16,
+                                        ),
+                                      ),
+                                    )
+                                  : _ZoomableImagePage(
+                                      key: ValueKey(
+                                        '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
+                                      ),
+                                      image: imageItem.image!,
+                                      onInteractionStateChanged: (isMultiTouch) {
+                                        _setPageScrollEnabled(!isMultiTouch);
+                                      },
+                                    ),
                             ),
                           ),
                         );
