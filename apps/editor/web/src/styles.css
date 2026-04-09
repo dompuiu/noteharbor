@@ -420,6 +420,12 @@ thead {
   line-height: 1.2;
 }
 
+.field-block .note-textarea {
+  min-height: 96px;
+  height: auto;
+  resize: vertical;
+}
+
 .inline-select-group {
   display: inline-flex;
   gap: 10px;
