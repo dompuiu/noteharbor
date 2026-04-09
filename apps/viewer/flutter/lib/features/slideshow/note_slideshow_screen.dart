@@ -54,10 +54,8 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   List<ImageSequenceItem> _buildImageSequence(List<NoteRecord> notes) {
     final items = <ImageSequenceItem>[];
     for (final note in notes) {
-      final front = note.fullFor('front');
-      final back = note.fullFor('back');
-      if (front != null) items.add(ImageSequenceItem(note: note, image: front));
-      if (back != null) items.add(ImageSequenceItem(note: note, image: back));
+      items.add(ImageSequenceItem(note: note, image: note.fullFor('front')));
+      items.add(ImageSequenceItem(note: note, image: note.fullFor('back')));
     }
     return items;
   }
@@ -85,7 +83,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
     if (targetImage == null || _imageSequence.isEmpty) return;
 
     final initialIndex = _imageSequence.indexWhere(
-      (item) => item.note.id == note.id && item.image.type == targetImage.type,
+      (item) => item.note.id == note.id && item.image?.type == targetImage.type,
     );
     if (initialIndex < 0) return;
 
