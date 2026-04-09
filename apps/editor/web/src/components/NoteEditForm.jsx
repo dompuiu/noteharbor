@@ -711,6 +711,7 @@ function NoteEditForm({
           <div className="field-block full-span">
             <label htmlFor={fieldInputId("notes")}>Notes</label>
             <textarea
+              className="note-textarea"
               id={fieldInputId("notes")}
               name="notes"
               onChange={handleFieldChange}
