@@ -2,6 +2,7 @@ import { Router } from 'express';
 import multer from 'multer';
 import { parse } from 'csv-parse/sync';
 import { importNotes } from '../db.js';
+import { normalizeDenomination } from '../denomination.js';
 import { withExclusiveOperation } from '../operationState.js';
 
 const importRouter = Router();
@@ -25,7 +26,7 @@ function splitTags(value) {
 
 function mapRow(rawRow) {
   return {
-    denomination: normalizeCell(rawRow[0]),
+    denomination: normalizeDenomination(rawRow[0]),
     issue_date: normalizeCell(rawRow[1]),
     catalog_number: normalizeCell(rawRow[2]),
     grading_company: normalizeCell(rawRow[3]),
@@ -137,4 +138,4 @@ importRouter.post('/', upload.single('file'), async (request, response) => {
   }
 });
 
-export { importRouter };
+export { importRouter, mapRow };
