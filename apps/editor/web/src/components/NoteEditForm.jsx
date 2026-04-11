@@ -145,6 +145,7 @@ function NoteEditForm({
   const [scrapeDetails, setScrapeDetails] = useState(null);
   const [pendingScrapedImages, setPendingScrapedImages] = useState({});
   const inputRefs = useRef({});
+  const firstFieldRef = useRef(null);
   const formElementRef = useRef(null);
   const scrapeToastTimer = useRef(null);
 
@@ -242,6 +243,14 @@ function NoteEditForm({
       onReady?.();
     }
   }, [loading, onReady]);
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    firstFieldRef.current?.focus();
+  }, [loading, noteId]);
 
   const imagePreviews = useMemo(() => {
     const nextPreviews = {};
@@ -735,6 +744,7 @@ function NoteEditForm({
                   id={inputId}
                   name={name}
                   onChange={handleFieldChange}
+                  ref={name === "denomination" ? firstFieldRef : undefined}
                   value={form[name]}
                 />
               </div>
