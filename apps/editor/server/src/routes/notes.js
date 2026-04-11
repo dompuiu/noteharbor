@@ -26,6 +26,7 @@ import {
   resolveLocalPath,
   writeSlotBuffer
 } from '../imageStore.js';
+import { normalizeDenomination } from '../denomination.js';
 
 const notesRouter = Router();
 const upload = multer({
@@ -64,7 +65,7 @@ function sanitizeNotePayload(body) {
   }
 
   return {
-    denomination: String(body.denomination ?? '').trim(),
+    denomination: normalizeDenomination(body.denomination),
     issue_date: String(body.issue_date ?? '').trim(),
     catalog_number: String(body.catalog_number ?? '').trim(),
     grading_company: String(body.grading_company ?? '').trim(),
