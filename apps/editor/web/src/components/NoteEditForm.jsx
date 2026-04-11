@@ -382,9 +382,55 @@ function NoteEditForm({
     return match?.[1]?.trim() || null;
   }
 
+  function extractPmgDescriptionFields(value) {
+    const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
+    if (!normalized) {
+      return {};
+    }
+
+    const cleaned = normalized
+      .replace(/\s*"SPECIMEN"\s*/gi, " ")
+      .replace(/\s+-\s+Wmk:\s*.+$/i, "")
+      .trim();
+
+    let issueDate = null;
+    let denominationSource = cleaned;
+    const ndMatch = cleaned.match(/\bND\s*\(([^)]+)\)\s*$/i);
+    if (ndMatch) {
+      issueDate = ndMatch[1].trim();
+      denominationSource = cleaned.slice(0, ndMatch.index).trim();
+    } else {
+      const trailingDateMatch = cleaned.match(/(\d{4}(?:\s*-\s*\d{1,4})?)\s*$/);
+      if (trailingDateMatch) {
+        issueDate = trailingDateMatch[1].replace(/\s+/g, "");
+        denominationSource = cleaned.slice(0, trailingDateMatch.index).trim();
+      }
+    }
+
+    const lastSegment = denominationSource
+      .split(",")
+      .at(-1)
+      ?.trim()
+      .replace(/\s+/g, " ") || "";
+    const denominationMatch = lastSegment.match(
+      /^(\d[\d,./]*\s+[A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){0,2})\b/,
+    );
+    const denomination = denominationMatch?.[1]?.trim() || null;
+
+    return {
+      denomination,
+      issueDate,
+    };
+  }
+
   function mapScrapedFields(scrapedData, url) {
     const updates = {};
     const d = scrapedData;
+    const company = inferGradingCompany(url);
+    const pmgDescriptionFields =
+      company === "PMG"
+        ? extractPmgDescriptionFields(d.note_description ?? d.description)
+        : {};
 
     const grade = d.grade;
     if (grade) updates.grade = grade;
@@ -402,10 +448,18 @@ function NoteEditForm({
       d.cert;
     if (catalogNumber) updates.catalog_number = catalogNumber;
 
-    const denomination = d.denomination;
+    const denomination =
+      d.denomination ??
+      (company === "TQG" ? d.face_value : null) ??
+      pmgDescriptionFields.denomination;
     if (denomination) updates.denomination = denomination;
 
-    const issueDate = d.issue_date ?? d.year ?? d.date;
+    const issueDate =
+      d.issue_date ??
+      d.year ??
+      d.date ??
+      (company === "TQG" ? d.years : null) ??
+      pmgDescriptionFields.issueDate;
     if (issueDate) updates.issue_date = issueDate;
 
     const watermark =
@@ -413,7 +467,6 @@ function NoteEditForm({
       extractWatermarkFromPmSignaturesVignettes(d.signatures_vignettes);
     if (watermark) updates.watermark = watermark;
 
-    const company = inferGradingCompany(url);
     if (company) updates.grading_company = company;
 
     return updates;
