@@ -420,6 +420,26 @@ function NotesTable() {
   const slideshowIndex = slideshowRouteActive
     ? slideshowNotes.findIndex((note) => note.id === currentRoute.noteId)
     : -1;
+  const editingNoteIndex = useMemo(() => {
+    if (!editingNoteId) {
+      return -1;
+    }
+
+    return orderedNotes.findIndex((note) => note.id === editingNoteId);
+  }, [editingNoteId, orderedNotes]);
+  const previousEditingNoteId =
+    editingNoteIndex >= 0 && orderedNotes.length > 1
+      ? orderedNotes[
+          (editingNoteIndex - 1 + orderedNotes.length) % orderedNotes.length
+        ].id
+      : null;
+  const nextEditingNoteId =
+    editingNoteIndex >= 0 && orderedNotes.length > 1
+      ? orderedNotes[(editingNoteIndex + 1) % orderedNotes.length].id
+      : null;
+  const currentEditingNotePosition =
+    editingNoteIndex >= 0 ? editingNoteIndex + 1 : null;
+  const totalNotesInTableView = orderedNotes.length;
 
   function navigateToTableRoute(nextRoute, { replace = false } = {}) {
     const nextHash = buildTableHash(nextRoute);
@@ -860,6 +880,27 @@ function NotesTable() {
     }
   }
 
+  function navigateToAdjacentEdit(nextNoteId) {
+    if (!nextNoteId) {
+      return;
+    }
+
+    if (slideshowRouteActive) {
+      navigateToTableRoute(
+        {
+          kind: "slideshow",
+          noteId: nextNoteId,
+          overlayEdit: true,
+          previewKind: currentRoute.previewKind,
+        },
+        { replace: true },
+      );
+      return;
+    }
+
+    navigateToTableRoute({ kind: "edit", noteId: nextNoteId }, { replace: true });
+  }
+
   function handleSaveEditedNote(updatedNote, reorderedNotes) {
     if (reorderedNotes) {
       setNotes(reorderedNotes);
@@ -1272,13 +1313,21 @@ function NotesTable() {
           >
             <NoteEditForm
               cancelLabel="Close"
+              currentNotePosition={currentEditingNotePosition}
               initialPositionMode={createPositionMode}
               initialPositionReferenceId={createPositionReferenceId}
+              nextNoteId={nextEditingNoteId}
               noteId={editingNoteId}
               onCancel={closeEditor}
+              onNavigateNext={() => navigateToAdjacentEdit(nextEditingNoteId)}
+              onNavigatePrevious={() =>
+                navigateToAdjacentEdit(previousEditingNoteId)
+              }
               onReady={resetEditorOverlayScroll}
               onSaveSuccess={handleSaveEditedNote}
               overlay
+              previousNoteId={previousEditingNoteId}
+              totalNotesInView={totalNotesInTableView}
             />
           </div>
         </section>
