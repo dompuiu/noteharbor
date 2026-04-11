@@ -132,6 +132,37 @@ button {
   display: block;
 }
 
+.note-nav-arrow {
+  min-width: 32px;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.note-nav-arrow svg {
+  display: block;
+}
+
+.note-nav-group {
+  display: inline-flex;
+  gap: 8px;
+  align-items: center;
+  margin-right: 14px;
+}
+
+.note-nav-counter {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 70px;
+  height: 32px;
+  padding: 0 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(65, 43, 18, 0.2);
+  background: rgba(255, 248, 239, 0.55);
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+}
+
 .nav-link:hover,
 .button:hover,
 .icon-link:hover {

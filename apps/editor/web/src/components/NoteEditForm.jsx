@@ -100,13 +100,19 @@ function fieldInputId(name) {
 
 function NoteEditForm({
   cancelLabel = "Cancel",
+  currentNotePosition = null,
   initialPositionMode = "end",
   initialPositionReferenceId = null,
+  nextNoteId = null,
   noteId: noteIdProp,
   onCancel,
+  onNavigateNext,
+  onNavigatePrevious,
   onReady,
   onSaveSuccess,
   overlay = false,
+  previousNoteId = null,
+  totalNotesInView = 0,
 }) {
   const { id: routeNoteId } = useParams();
   const navigate = useNavigate();
@@ -150,6 +156,8 @@ function NoteEditForm({
     positionMode === "before" || positionMode === "after";
   const positionInvalid =
     positionNeedsReference && positionReferenceId === null;
+  const canNavigatePrevious = !isCreateMode && Boolean(previousNoteId) && !saving;
+  const canNavigateNext = !isCreateMode && Boolean(nextNoteId) && !saving;
   // Notes other than the one being edited — used for both the visibility guard and the picker list
   const otherNotes = allNotes.filter((n) => n.id !== Number(noteId));
 
@@ -578,6 +586,57 @@ function NoteEditForm({
             </h1>
           </div>
           <div className="inline-actions">
+            {!isCreateMode ? (
+              <div className="note-nav-group">
+                <button
+                  aria-label="Edit previous note"
+                  className="icon-link note-nav-arrow"
+                  disabled={!canNavigatePrevious}
+                  onClick={onNavigatePrevious}
+                  title="Previous note"
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    width="16"
+                  >
+                    <path
+                      d="M15 6l-6 6 6 6"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    />
+                  </svg>
+                </button>
+                <span className="note-nav-counter" title="Current note in table view">
+                  {currentNotePosition ?? "-"} / {totalNotesInView}
+                </span>
+                <button
+                  aria-label="Edit next note"
+                  className="icon-link note-nav-arrow"
+                  disabled={!canNavigateNext}
+                  onClick={onNavigateNext}
+                  title="Next note"
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    height="16"
+                    viewBox="0 0 24 24"
+                    width="16"
+                  >
+                    <path
+                      d="M9 6l6 6-6 6"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    />
+                  </svg>
+                </button>
+              </div>
+            ) : null}
             {onCancel ? (
               <button
                 className="button"
