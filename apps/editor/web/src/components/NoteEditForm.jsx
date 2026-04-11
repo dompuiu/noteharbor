@@ -432,14 +432,21 @@ function NoteEditForm({
         ? extractPmgDescriptionFields(d.note_description ?? d.description)
         : {};
 
-    const grade = d.grade;
+    const grade =
+      company === "TQG"
+        ? [d.grade, d.designation].filter(Boolean).join(" ")
+        : d.grade;
     if (grade) updates.grade = grade;
 
-    const serial = d.serial_number ?? d.serial;
+    const serial =
+      (company === "TQG" ? d.serial_no : null) ??
+      d.serial_number ??
+      d.serial;
     if (serial) updates.serial = serial;
 
     const pmgNoteCatalogNumber = extractCatalogNumberFromPmNote(d.note);
     const catalogNumber =
+      (company === "TQG" ? d.world_pick : null) ??
       pmgNoteCatalogNumber ??
       d.pmg_cert ??
       d.cert_no ??
