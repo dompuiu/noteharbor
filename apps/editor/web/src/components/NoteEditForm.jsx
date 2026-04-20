@@ -294,12 +294,22 @@ function NoteEditForm({
   }
 
   function addTag(tagName) {
-    const normalized = tagName.trim();
-    if (!normalized || form.tags.includes(normalized)) {
+    const normalizedTags = String(tagName ?? "")
+      .split(",")
+      .map((value) => value.trim())
+      .filter(Boolean);
+
+    if (!normalizedTags.length) {
       return;
     }
 
-    setForm((current) => ({ ...current, tags: [...current.tags, normalized] }));
+    setForm((current) => ({
+      ...current,
+      tags: normalizedTags.reduce(
+        (nextTags, value) => (nextTags.includes(value) ? nextTags : [...nextTags, value]),
+        current.tags,
+      ),
+    }));
     setTagInput("");
   }
 

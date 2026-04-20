@@ -162,6 +162,52 @@ function valueToString(note, key) {
   return String(note[key] ?? "");
 }
 
+function parseFilterValue(rawValue) {
+  const normalized = String(rawValue ?? "").trim().toLowerCase();
+  if (!normalized) {
+    return { negated: false, value: "" };
+  }
+
+  if (!normalized.startsWith("!")) {
+    return { negated: false, value: normalized };
+  }
+
+  const value = normalized.slice(1).trim();
+  return value ? { negated: true, value } : { negated: false, value: "" };
+}
+
+function matchesFilterValue(noteValue, rawFilterValue, matchMode = "includes") {
+  const { negated, value } = parseFilterValue(rawFilterValue);
+  if (!value) {
+    return true;
+  }
+
+  const normalizedNoteValue = String(noteValue ?? "").toLowerCase();
+  const isMatch =
+    matchMode === "startsWith"
+      ? normalizedNoteValue.startsWith(value)
+      : normalizedNoteValue.includes(value);
+
+  return negated ? !isMatch : isMatch;
+}
+
+function matchesTagFilter(note, rawFilterValue) {
+  const filters = String(rawFilterValue ?? "")
+    .split(",")
+    .map((value) => parseFilterValue(value))
+    .filter(({ value }) => value);
+
+  if (!filters.length) {
+    return true;
+  }
+
+  const noteTags = new Set(note.tags.map((tag) => String(tag.name ?? "").trim().toLowerCase()));
+  return filters.every(({ negated, value }) => {
+    const hasTag = noteTags.has(value);
+    return negated ? !hasTag : hasTag;
+  });
+}
+
 function noteOrderValue(note) {
   const value = Number(note.display_order);
   return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
@@ -373,12 +419,15 @@ function NotesTable() {
   const orderedNotes = useMemo(() => {
     const filtered = notes.filter((note) =>
       visibleColumns.every(([key]) => {
-        const filterValue = (filters[key] ?? "").trim().toLowerCase();
-        if (!filterValue) {
-          return true;
+        if (key === "tags") {
+          return matchesTagFilter(note, filters[key]);
         }
 
-        return valueToString(note, key).toLowerCase().includes(filterValue);
+        return matchesFilterValue(
+          valueToString(note, key),
+          filters[key],
+          key === "catalog_number" ? "startsWith" : "includes",
+        );
       }),
     );
 
