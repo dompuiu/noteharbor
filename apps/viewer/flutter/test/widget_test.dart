@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
-import 'package:viewer_flutter/data/dataset_controller.dart';
-import 'package:viewer_flutter/data/viewer_repository.dart';
-import 'package:viewer_flutter/features/import/import_dataset_screen.dart';
-import 'package:viewer_flutter/features/table/notes_table_screen.dart';
-import 'package:viewer_flutter/models/viewer_dataset.dart';
+import 'package:note_harbor_viewer/data/dataset_controller.dart';
+import 'package:note_harbor_viewer/data/viewer_repository.dart';
+import 'package:note_harbor_viewer/features/import/import_dataset_screen.dart';
+import 'package:note_harbor_viewer/features/table/notes_table_screen.dart';
+import 'package:note_harbor_viewer/models/viewer_dataset.dart';
 
 void main() {
   testWidgets('table screen renders imported dataset controls', (
@@ -38,6 +38,31 @@ void main() {
     expect(find.text('Import data to get started'), findsOneWidget);
     expect(find.text('No dataset imported'), findsOneWidget);
     expect(find.text('Choose archive'), findsOneWidget);
+  });
+
+  testWidgets('catalog field filter excludes longer numeric prefixes', (
+    WidgetTester tester,
+  ) async {
+    final controller = DatasetController(
+      repository: _CatalogFilterViewerRepository(),
+    );
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'cat: 17');
+    await tester.pumpAndSettle();
+
+    expect(find.text('Match exact'), findsOneWidget);
+    expect(find.text('Match suffix letter'), findsOneWidget);
+    expect(find.text('Match dashed'), findsOneWidget);
+    expect(find.text('Match dotted'), findsOneWidget);
+    expect(find.text('Match slashed'), findsOneWidget);
+    expect(find.text('Exclude numeric prefix'), findsNothing);
+    expect(find.text('Exclude longer number'), findsNothing);
   });
 }
 
@@ -87,4 +112,53 @@ class _MissingViewerRepository extends ViewerRepository {
   Future<ViewerDataset> loadDataset() {
     throw StateError('No imported dataset is installed.');
   }
+}
+
+class _CatalogFilterViewerRepository extends ViewerRepository {
+  @override
+  bool get canManageImportedDatasets => true;
+
+  @override
+  Future<ViewerDataset> loadDataset() async {
+    return ViewerDataset.fromJson({
+      'generatedAt': '2026-03-28T12:00:00Z',
+      'noteCount': 7,
+      'source': 'imported',
+      'notes': [
+        _catalogFilterNote(id: 1, displayOrder: 1, denomination: 'Match exact', catalogNumber: '17'),
+        _catalogFilterNote(id: 2, displayOrder: 2, denomination: 'Match suffix letter', catalogNumber: '17a'),
+        _catalogFilterNote(id: 3, displayOrder: 3, denomination: 'Match dashed', catalogNumber: '17-1'),
+        _catalogFilterNote(id: 4, displayOrder: 4, denomination: 'Match dotted', catalogNumber: '17.1'),
+        _catalogFilterNote(id: 5, displayOrder: 5, denomination: 'Match slashed', catalogNumber: '17/1'),
+        _catalogFilterNote(id: 6, displayOrder: 6, denomination: 'Exclude numeric prefix', catalogNumber: '117'),
+        _catalogFilterNote(id: 7, displayOrder: 7, denomination: 'Exclude longer number', catalogNumber: '170'),
+      ],
+    });
+  }
+}
+
+Map<String, Object?> _catalogFilterNote({
+  required int id,
+  required int displayOrder,
+  required String denomination,
+  required String catalogNumber,
+}) {
+  return {
+    'id': id,
+    'displayOrder': displayOrder,
+    'denomination': denomination,
+    'issueDate': '1966',
+    'catalogNumber': catalogNumber,
+    'gradingCompany': '',
+    'grade': '',
+    'watermark': '',
+    'serial': '',
+    'url': '',
+    'notes': '',
+    'scrapeStatus': 'done',
+    'scrapeError': '',
+    'tags': [],
+    'images': [],
+    'scrapedData': null,
+  };
 }

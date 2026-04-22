@@ -184,11 +184,22 @@ function matchesFilterValue(noteValue, rawFilterValue, matchMode = "includes") {
 
   const normalizedNoteValue = String(noteValue ?? "").toLowerCase();
   const isMatch =
-    matchMode === "startsWith"
-      ? normalizedNoteValue.startsWith(value)
+    matchMode === "catalogPrefix"
+      ? matchesCatalogFilterValue(normalizedNoteValue, value)
+      : matchMode === "startsWith"
+        ? normalizedNoteValue.startsWith(value)
       : normalizedNoteValue.includes(value);
 
   return negated ? !isMatch : isMatch;
+}
+
+function matchesCatalogFilterValue(noteValue, filterValue) {
+  if (!noteValue.startsWith(filterValue)) {
+    return false;
+  }
+
+  const nextCharacter = noteValue.charAt(filterValue.length);
+  return !nextCharacter || !/\d/.test(nextCharacter);
 }
 
 function matchesTagFilter(note, rawFilterValue) {
@@ -426,7 +437,7 @@ function NotesTable() {
         return matchesFilterValue(
           valueToString(note, key),
           filters[key],
-          key === "catalog_number" ? "startsWith" : "includes",
+          key === "catalog_number" ? "catalogPrefix" : "includes",
         );
       }),
     );
