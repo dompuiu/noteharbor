@@ -109,6 +109,19 @@ _ParsedQuery _parseQuery(String raw) {
   return _ParsedQuery(allFields: allFields, fields: fields);
 }
 
+bool _matchesCatalogFilterValue(String noteValue, String filterValue) {
+  if (!noteValue.startsWith(filterValue)) {
+    return false;
+  }
+
+  if (noteValue.length == filterValue.length) {
+    return true;
+  }
+
+  final nextCharacter = noteValue.substring(filterValue.length, filterValue.length + 1);
+  return int.tryParse(nextCharacter) == null;
+}
+
 // ---------------------------------------------------------------------------
 
 double _measureTextWidth(String text, TextStyle style) {
@@ -198,7 +211,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
 
       for (final entry in parsed.fields.entries) {
         final fieldValue = note.valueForColumn(entry.key).toLowerCase();
-        if (!fieldValue.contains(entry.value)) return false;
+        final matches = entry.key == 'catalogNumber'
+            ? _matchesCatalogFilterValue(fieldValue, entry.value)
+            : fieldValue.contains(entry.value);
+        if (!matches) return false;
       }
 
       return true;
