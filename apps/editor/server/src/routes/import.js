@@ -3,6 +3,7 @@ import multer from 'multer';
 import { parse } from 'csv-parse/sync';
 import { importNotes } from '../db.js';
 import { normalizeDenomination } from '../denomination.js';
+import { normalizeIssueDate } from '../dateNormalization.js';
 import { withExclusiveOperation } from '../operationState.js';
 
 const importRouter = Router();
@@ -27,7 +28,7 @@ function splitTags(value) {
 function mapRow(rawRow) {
   return {
     denomination: normalizeDenomination(rawRow[0]),
-    issue_date: normalizeCell(rawRow[1]),
+    issue_date: normalizeIssueDate(rawRow[1]),
     catalog_number: normalizeCell(rawRow[2]),
     grading_company: normalizeCell(rawRow[3]),
     grade: normalizeCell(rawRow[4]),
