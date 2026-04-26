@@ -40,6 +40,8 @@ const double _kHeaderBadgeHeight = 48;
 const double _kTagChipHorizontalPadding = 10;
 const double _kTagChipHorizontalGap = 6;
 const double _kTagsColumnSafetyPadding = 24;
+const double _kTableRowHeight = 80;
+const double _kTableRowSeparatorHeight = 1;
 
 const TextStyle _kTagChipTextStyle = TextStyle(
   color: _kTagChipText,
@@ -118,7 +120,8 @@ bool _matchesCatalogFilterValue(String noteValue, String filterValue) {
     return true;
   }
 
-  final nextCharacter = noteValue.substring(filterValue.length, filterValue.length + 1);
+  final nextCharacter =
+      noteValue.substring(filterValue.length, filterValue.length + 1);
   return int.tryParse(nextCharacter) == null;
 }
 
@@ -261,6 +264,38 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
             ImportDatasetScreen(controller: widget.controller),
       ),
     );
+  }
+
+  void _revealNoteById(int noteId) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted || !_verticalScrollController.hasClients) {
+        return;
+      }
+
+      final dataset = widget.controller.dataset;
+      if (dataset == null) {
+        return;
+      }
+
+      final visibleNotes = _sortedNotes(dataset.notes);
+      final noteIndex = visibleNotes.indexWhere((note) => note.id == noteId);
+      if (noteIndex < 0) {
+        return;
+      }
+
+      final targetOffset =
+          noteIndex * (_kTableRowHeight + _kTableRowSeparatorHeight);
+      final clampedOffset = targetOffset.clamp(
+        0,
+        _verticalScrollController.position.maxScrollExtent,
+      );
+
+      _verticalScrollController.animateTo(
+        clampedOffset.toDouble(),
+        duration: const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   @override
@@ -439,13 +474,13 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                           onTagTap:
                                                               _applyTagFilter,
                                                           onTap: () async {
-                                                            final tag =
+                                                            final result =
                                                                 await Navigator.of(
                                                                         context)
                                                                     .push<
-                                                                        String>(
+                                                                        NoteSlideshowResult>(
                                                               MaterialPageRoute<
-                                                                  String>(
+                                                                  NoteSlideshowResult>(
                                                                 builder:
                                                                     (context) =>
                                                                         NoteSlideshowScreen(
@@ -463,11 +498,22 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                               _horizontalScrollController
                                                                   .jumpTo(0);
                                                             }
-                                                            if (tag != null) {
+                                                            if (result
+                                                                    ?.tagName !=
+                                                                null) {
                                                               _searchController
-                                                                  .text = tag;
+                                                                      .text =
+                                                                  result!
+                                                                      .tagName!;
                                                               setState(() =>
-                                                                  _query = tag);
+                                                                  _query = result
+                                                                      .tagName!);
+                                                            }
+                                                            if (result !=
+                                                                null) {
+                                                              _revealNoteById(
+                                                                  result
+                                                                      .noteId);
                                                             }
                                                           },
                                                         );
