@@ -427,102 +427,93 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                           'No notes match the current filter.'))
                                   : ClipRRect(
                                       borderRadius: BorderRadius.circular(28),
-                                      child: Scrollbar(
+                                      child: SingleChildScrollView(
                                         controller: _horizontalScrollController,
-                                        child: SingleChildScrollView(
-                                          controller:
-                                              _horizontalScrollController,
-                                          scrollDirection: Axis.horizontal,
-                                          child: SizedBox(
-                                            width: tableWidth,
-                                            child: Column(
-                                              children: [
-                                                _TableHeader(
-                                                  sortKey: _sortKey,
-                                                  ascending: _ascending,
-                                                  onSort: _toggleSort,
-                                                  tagsColumnWidth:
-                                                      tagsColumnWidth,
-                                                ),
-                                                const Divider(
-                                                  height: 1,
-                                                  color: _kTableDivider,
-                                                ),
-                                                Expanded(
-                                                  child: Scrollbar(
+                                        scrollDirection: Axis.horizontal,
+                                        child: SizedBox(
+                                          width: tableWidth,
+                                          child: Column(
+                                            children: [
+                                              _TableHeader(
+                                                sortKey: _sortKey,
+                                                ascending: _ascending,
+                                                onSort: _toggleSort,
+                                                tagsColumnWidth:
+                                                    tagsColumnWidth,
+                                              ),
+                                              const Divider(
+                                                height: 1,
+                                                color: _kTableDivider,
+                                              ),
+                                              Expanded(
+                                                child: Scrollbar(
+                                                  controller:
+                                                      _verticalScrollController,
+                                                  child: ListView.separated(
                                                     controller:
                                                         _verticalScrollController,
-                                                    child: ListView.separated(
-                                                      controller:
-                                                          _verticalScrollController,
-                                                      itemCount: notes.length,
-                                                      separatorBuilder:
-                                                          (context, index) =>
-                                                              const Divider(
-                                                        height: 1,
-                                                        color: _kTableDivider,
-                                                      ),
-                                                      itemBuilder:
-                                                          (context, index) {
-                                                        final note =
-                                                            notes[index];
-
-                                                        return _TableRow(
-                                                          note: note,
-                                                          tagsColumnWidth:
-                                                              tagsColumnWidth,
-                                                          onTagTap:
-                                                              _applyTagFilter,
-                                                          onTap: () async {
-                                                            final result =
-                                                                await Navigator.of(
-                                                                        context)
-                                                                    .push<
-                                                                        NoteSlideshowResult>(
-                                                              MaterialPageRoute<
-                                                                  NoteSlideshowResult>(
-                                                                builder:
-                                                                    (context) =>
-                                                                        NoteSlideshowScreen(
-                                                                  notes: notes,
-                                                                  initialIndex:
-                                                                      index,
-                                                                ),
-                                                              ),
-                                                            );
-                                                            if (!mounted) {
-                                                              return;
-                                                            }
-                                                            if (_horizontalScrollController
-                                                                .hasClients) {
-                                                              _horizontalScrollController
-                                                                  .jumpTo(0);
-                                                            }
-                                                            if (result
-                                                                    ?.tagName !=
-                                                                null) {
-                                                              _searchController
-                                                                      .text =
-                                                                  result!
-                                                                      .tagName!;
-                                                              setState(() =>
-                                                                  _query = result
-                                                                      .tagName!);
-                                                            }
-                                                            if (result !=
-                                                                null) {
-                                                              _revealNoteById(
-                                                                  result
-                                                                      .noteId);
-                                                            }
-                                                          },
-                                                        );
-                                                      },
+                                                    itemCount: notes.length,
+                                                    separatorBuilder:
+                                                        (context, index) =>
+                                                            const Divider(
+                                                      height: 1,
+                                                      color: _kTableDivider,
                                                     ),
+                                                    itemBuilder:
+                                                        (context, index) {
+                                                      final note = notes[index];
+
+                                                      return _TableRow(
+                                                        note: note,
+                                                        tagsColumnWidth:
+                                                            tagsColumnWidth,
+                                                        onTagTap:
+                                                            _applyTagFilter,
+                                                        onTap: () async {
+                                                          final result =
+                                                              await Navigator.of(
+                                                                      context)
+                                                                  .push<
+                                                                      NoteSlideshowResult>(
+                                                            MaterialPageRoute<
+                                                                NoteSlideshowResult>(
+                                                              builder: (context) =>
+                                                                  NoteSlideshowScreen(
+                                                                notes: notes,
+                                                                initialIndex:
+                                                                    index,
+                                                              ),
+                                                            ),
+                                                          );
+                                                          if (!mounted) {
+                                                            return;
+                                                          }
+                                                          if (_horizontalScrollController
+                                                              .hasClients) {
+                                                            _horizontalScrollController
+                                                                .jumpTo(0);
+                                                          }
+                                                          if (result?.tagName !=
+                                                              null) {
+                                                            _searchController
+                                                                    .text =
+                                                                result!
+                                                                    .tagName!;
+                                                            setState(() =>
+                                                                _query = result
+                                                                    .tagName!);
+                                                          }
+                                                          if (result != null) {
+                                                            _revealNoteById(
+                                                                result.noteId);
+                                                          }
+                                                        },
+                                                      );
+                                                    },
                                                   ),
                                                 ),
-                                              ],
-                                            ),
+                                              ),
+                                            ],
                                           ),
                                         ),
                                       ),
