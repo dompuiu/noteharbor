@@ -42,6 +42,11 @@ const double _kTagChipHorizontalGap = 6;
 const double _kTagsColumnSafetyPadding = 24;
 const double _kTableRowHeight = 80;
 const double _kTableRowSeparatorHeight = 1;
+const double _kTableThumbnailWidth = 96;
+const double _kTableThumbnailHeight = 56;
+const Color _kTableThumbnailPlaceholderBg = Color(0xFFF0E6D8);
+const Color _kTableThumbnailPlaceholderBorder = Color(0xFFD0B794);
+const Color _kTableThumbnailPlaceholderIcon = Color(0xFF8E6C46);
 
 const TextStyle _kTagChipTextStyle = TextStyle(
   color: _kTagChipText,
@@ -864,20 +869,16 @@ class _TableRow extends StatelessWidget {
             _DataCell(
               width: _kFrontColumnWidth,
               child: image == null
-                  ? const Text('-')
+                  ? const _TableThumbnailPlaceholder()
                   : ClipRRect(
                       borderRadius: BorderRadius.circular(10),
                       child: Image(
                         image: createNoteImageProvider(image),
-                        width: 96,
-                        height: 56,
+                        width: _kTableThumbnailWidth,
+                        height: _kTableThumbnailHeight,
                         fit: BoxFit.cover,
                         errorBuilder: (context, error, stackTrace) =>
-                            const SizedBox(
-                          width: 96,
-                          height: 56,
-                          child: ColoredBox(color: Color(0xFFE7E0D5)),
-                        ),
+                            const _TableThumbnailPlaceholder(),
                       ),
                     ),
             ),
@@ -905,6 +906,30 @@ class _TableRow extends StatelessWidget {
                 width: tagsColumnWidth,
                 child: _NoteTagsCell(tags: note.tags, onTagTap: onTagTap)),
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TableThumbnailPlaceholder extends StatelessWidget {
+  const _TableThumbnailPlaceholder();
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      width: _kTableThumbnailWidth,
+      height: _kTableThumbnailHeight,
+      decoration: BoxDecoration(
+        color: _kTableThumbnailPlaceholderBg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: _kTableThumbnailPlaceholderBorder),
+      ),
+      child: const Center(
+        child: Icon(
+          Icons.image_outlined,
+          size: 22,
+          color: _kTableThumbnailPlaceholderIcon,
         ),
       ),
     );
