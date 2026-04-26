@@ -78,7 +78,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
     _jump((_currentIndex + 1) % widget.notes.length);
   }
 
-  void _openImageViewer(NoteRecord note, String type) {
+  Future<void> _openImageViewer(NoteRecord note, String type) async {
     final targetImage = note.fullFor(type);
     if (targetImage == null || _imageSequence.isEmpty) return;
 
@@ -87,14 +87,28 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
     );
     if (initialIndex < 0) return;
 
-    Navigator.of(context).push(
-      MaterialPageRoute<void>(
+    final selectedNoteId = await Navigator.of(context).push<int>(
+      MaterialPageRoute<int>(
         builder: (context) => ImageLightbox(
           items: _imageSequence,
           initialIndex: initialIndex,
         ),
       ),
     );
+
+    if (!mounted || selectedNoteId == null) {
+      return;
+    }
+
+    final selectedNoteIndex = widget.notes.indexWhere(
+      (item) => item.id == selectedNoteId,
+    );
+    if (selectedNoteIndex < 0 || selectedNoteIndex == _currentIndex) {
+      return;
+    }
+
+    _pageController.jumpToPage(selectedNoteIndex);
+    setState(() => _currentIndex = selectedNoteIndex);
   }
 
   @override

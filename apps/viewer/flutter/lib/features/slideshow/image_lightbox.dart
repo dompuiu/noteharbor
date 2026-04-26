@@ -39,6 +39,14 @@ class _ImageLightboxState extends State<ImageLightbox> {
   bool _pageScrollEnabled = true;
   int _pageGeneration = 0;
 
+  void _closeWithCurrentNote() {
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).pop(widget.items[_currentIndex].note.id);
+  }
+
   @override
   void initState() {
     super.initState();
@@ -98,7 +106,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
         actions: <Type, Action<Intent>>{
           DismissIntent: CallbackAction<DismissIntent>(
             onInvoke: (intent) {
-              Navigator.of(context).maybePop();
+              _closeWithCurrentNote();
               return null;
             },
           ),
@@ -117,108 +125,120 @@ class _ImageLightboxState extends State<ImageLightbox> {
         },
         child: Focus(
           autofocus: true,
-          child: Scaffold(
-            backgroundColor: const Color(0xFF1F160F),
-            body: SafeArea(
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            item.label,
-                            style: const TextStyle(
-                              color: Color(0xFFFFF5E9),
-                              fontSize: 17,
-                              fontWeight: FontWeight.w700,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        const SizedBox(width: 12),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: Text(
-                            '${_currentIndex + 1} / ${widget.items.length}',
-                            style: const TextStyle(
-                              color: Color(0xFFFFF5E9),
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
+          child: PopScope<int>(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, result) {
+              if (didPop) {
+                return;
+              }
+
+              _closeWithCurrentNote();
+            },
+            child: Scaffold(
+              backgroundColor: const Color(0xFF1F160F),
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      child: Row(
+                        children: [
+                          Expanded(
+                            child: Text(
+                              item.label,
+                              style: const TextStyle(
+                                color: Color(0xFFFFF5E9),
+                                fontSize: 17,
+                                fontWeight: FontWeight.w700,
+                              ),
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        FilledButton.tonal(
-                          style: FilledButton.styleFrom(
-                            backgroundColor:
-                                Colors.white.withValues(alpha: 0.08),
-                            foregroundColor: const Color(0xFFFFF5E9),
-                          ),
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('Back'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: PageView.builder(
-                      controller: _controller,
-                      physics: _pageScrollEnabled
-                          ? const PageScrollPhysics()
-                          : const NeverScrollableScrollPhysics(),
-                      itemCount: widget.items.length,
-                      onPageChanged: (value) => setState(() {
-                        _currentIndex = value;
-                        _pageGeneration += 1;
-                        _pageScrollEnabled = true;
-                      }),
-                      itemBuilder: (context, index) {
-                        final imageItem = widget.items[index];
-                        return Padding(
-                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                          child: Container(
+                          const SizedBox(width: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
-                              color: const Color(0xFF160E08),
-                              borderRadius: BorderRadius.circular(20),
-                              border:
-                                  Border.all(color: const Color(0x44FFEBD4)),
+                              color: Colors.white.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(18),
                             ),
-                            clipBehavior: Clip.antiAlias,
-                            child: Padding(
-                              padding: const EdgeInsets.all(16),
-                              child: imageItem.image == null
-                                  ? const Center(
-                                      child: Text(
-                                        'No image',
-                                        style: TextStyle(
-                                          color: Colors.white54,
-                                          fontSize: 16,
-                                        ),
-                                      ),
-                                    )
-                                  : _ZoomableImagePage(
-                                      key: ValueKey(
-                                        '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
-                                      ),
-                                      image: imageItem.image!,
-                                      onInteractionStateChanged: (isMultiTouch) {
-                                        _setPageScrollEnabled(!isMultiTouch);
-                                      },
-                                    ),
+                            child: Text(
+                              '${_currentIndex + 1} / ${widget.items.length}',
+                              style: const TextStyle(
+                                color: Color(0xFFFFF5E9),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
                             ),
                           ),
-                        );
-                      },
+                          const SizedBox(width: 10),
+                          FilledButton.tonal(
+                            style: FilledButton.styleFrom(
+                              backgroundColor:
+                                  Colors.white.withValues(alpha: 0.08),
+                              foregroundColor: const Color(0xFFFFF5E9),
+                            ),
+                            onPressed: _closeWithCurrentNote,
+                            child: const Text('Back'),
+                          ),
+                        ],
+                      ),
                     ),
-                  ),
-                ],
+                    Expanded(
+                      child: PageView.builder(
+                        controller: _controller,
+                        physics: _pageScrollEnabled
+                            ? const PageScrollPhysics()
+                            : const NeverScrollableScrollPhysics(),
+                        itemCount: widget.items.length,
+                        onPageChanged: (value) => setState(() {
+                          _currentIndex = value;
+                          _pageGeneration += 1;
+                          _pageScrollEnabled = true;
+                        }),
+                        itemBuilder: (context, index) {
+                          final imageItem = widget.items[index];
+                          return Padding(
+                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                            child: Container(
+                              decoration: BoxDecoration(
+                                color: const Color(0xFF160E08),
+                                borderRadius: BorderRadius.circular(20),
+                                border: Border.all(
+                                  color: const Color(0x44FFEBD4),
+                                ),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: Padding(
+                                padding: const EdgeInsets.all(16),
+                                child: imageItem.image == null
+                                    ? const Center(
+                                        child: Text(
+                                          'No image',
+                                          style: TextStyle(
+                                            color: Colors.white54,
+                                            fontSize: 16,
+                                          ),
+                                        ),
+                                      )
+                                    : _ZoomableImagePage(
+                                        key: ValueKey(
+                                          '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
+                                        ),
+                                        image: imageItem.image!,
+                                        onInteractionStateChanged:
+                                            (isMultiTouch) {
+                                          _setPageScrollEnabled(!isMultiTouch);
+                                        },
+                                      ),
+                              ),
+                            ),
+                          );
+                        },
+                      ),
+                    ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -560,11 +580,11 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
                 child: Transform.scale(
                   scale: _scale,
                   child: SizedBox(
-                     width: contentSize.width,
-                     height: contentSize.height,
-                     child: Image(
-                       image: createNoteImageProvider(widget.image),
-                       fit: BoxFit.contain,
+                    width: contentSize.width,
+                    height: contentSize.height,
+                    child: Image(
+                      image: createNoteImageProvider(widget.image),
+                      fit: BoxFit.contain,
                       errorBuilder: (context, error, stackTrace) {
                         return const Padding(
                           padding: EdgeInsets.all(32),
