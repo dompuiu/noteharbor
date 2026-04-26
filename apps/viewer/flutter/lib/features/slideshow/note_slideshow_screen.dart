@@ -18,6 +18,16 @@ const _kTagChipBg = Color(0xFFE8D8BC);
 const _kTagChipBorder = Color(0xFFB08957);
 const _kTagChipText = Color(0xFF5C4323);
 
+class NoteSlideshowResult {
+  const NoteSlideshowResult({
+    required this.noteId,
+    this.tagName,
+  });
+
+  final int noteId;
+  final String? tagName;
+}
+
 class NoteSlideshowScreen extends StatefulWidget {
   const NoteSlideshowScreen({
     required this.notes,
@@ -36,6 +46,19 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   late final PageController _pageController;
   late final List<ImageSequenceItem> _imageSequence;
   late int _currentIndex;
+
+  void _close({String? tagName}) {
+    if (!mounted) {
+      return;
+    }
+
+    Navigator.of(context).pop(
+      NoteSlideshowResult(
+        noteId: widget.notes[_currentIndex].id,
+        tagName: tagName,
+      ),
+    );
+  }
 
   @override
   void initState() {
@@ -123,7 +146,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
         actions: <Type, Action<Intent>>{
           DismissIntent: CallbackAction<DismissIntent>(
             onInvoke: (_) {
-              Navigator.of(context).maybePop();
+              _close();
               return null;
             },
           ),
@@ -142,61 +165,70 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
         },
         child: Focus(
           autofocus: true,
-          child: Scaffold(
-            backgroundColor: _kBg,
-            body: SafeArea(
-              child: Column(
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                    child: Row(
-                      children: [
-                        const Spacer(),
-                        Container(
-                          padding: const EdgeInsets.symmetric(
-                              horizontal: 12, vertical: 8),
-                          decoration: BoxDecoration(
-                            color: Colors.white.withValues(alpha: 0.08),
-                            borderRadius: BorderRadius.circular(18),
-                          ),
-                          child: Text(
-                            '${_currentIndex + 1} / ${widget.notes.length}',
-                            style: const TextStyle(
-                              color: _kTextPrimary,
-                              fontWeight: FontWeight.w600,
-                              fontSize: 15,
+          child: PopScope<NoteSlideshowResult>(
+            canPop: false,
+            onPopInvokedWithResult: (didPop, result) {
+              if (didPop) {
+                return;
+              }
+
+              _close();
+            },
+            child: Scaffold(
+              backgroundColor: _kBg,
+              body: SafeArea(
+                child: Column(
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                      child: Row(
+                        children: [
+                          const Spacer(),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                                horizontal: 12, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: Colors.white.withValues(alpha: 0.08),
+                              borderRadius: BorderRadius.circular(18),
+                            ),
+                            child: Text(
+                              '${_currentIndex + 1} / ${widget.notes.length}',
+                              style: const TextStyle(
+                                color: _kTextPrimary,
+                                fontWeight: FontWeight.w600,
+                                fontSize: 15,
+                              ),
                             ),
                           ),
-                        ),
-                        const SizedBox(width: 10),
-                        FilledButton.tonal(
-                          style: FilledButton.styleFrom(
-                            backgroundColor:
-                                Colors.white.withValues(alpha: 0.08),
-                            foregroundColor: _kTextPrimary,
+                          const SizedBox(width: 10),
+                          FilledButton.tonal(
+                            style: FilledButton.styleFrom(
+                              backgroundColor:
+                                  Colors.white.withValues(alpha: 0.08),
+                              foregroundColor: _kTextPrimary,
+                            ),
+                            onPressed: _close,
+                            child: const Text('Back'),
                           ),
-                          onPressed: () => Navigator.of(context).pop(),
-                          child: const Text('Back'),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  Expanded(
-                    child: PageView.builder(
-                      controller: _pageController,
-                      itemCount: widget.notes.length,
-                      onPageChanged: (i) => setState(() => _currentIndex = i),
-                      itemBuilder: (context, index) {
-                        return _NoteSlide(
-                          note: widget.notes[index],
-                          onTapImage: _openImageViewer,
-                          onTagTap: (tagName) =>
-                              Navigator.of(context).pop(tagName),
-                        );
-                      },
+                    Expanded(
+                      child: PageView.builder(
+                        controller: _pageController,
+                        itemCount: widget.notes.length,
+                        onPageChanged: (i) => setState(() => _currentIndex = i),
+                        itemBuilder: (context, index) {
+                          return _NoteSlide(
+                            note: widget.notes[index],
+                            onTapImage: _openImageViewer,
+                            onTagTap: (tagName) => _close(tagName: tagName),
+                          );
+                        },
+                      ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),
