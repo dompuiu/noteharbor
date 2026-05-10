@@ -162,35 +162,78 @@ function valueToString(note, key) {
   return String(note[key] ?? "");
 }
 
-function parseFilterValue(rawValue) {
+function parseFilterValue(rawValue, normalizeValue) {
   const normalized = String(rawValue ?? "").trim().toLowerCase();
   if (!normalized) {
     return { negated: false, value: "" };
   }
 
-  if (!normalized.startsWith("!")) {
-    return { negated: false, value: normalized };
-  }
-
-  const value = normalized.slice(1).trim();
-  return value ? { negated: true, value } : { negated: false, value: "" };
+  const negated = normalized.startsWith("!");
+  const rawParsedValue = negated ? normalized.slice(1).trim() : normalized;
+  const value = normalizeValue ? normalizeValue(rawParsedValue) : rawParsedValue;
+  return value ? { negated, value } : { negated: false, value: "" };
 }
 
-function matchesFilterValue(noteValue, rawFilterValue, matchMode = "includes") {
-  const { negated, value } = parseFilterValue(rawFilterValue);
-  if (!value) {
+function addThousandsSeparators(value) {
+  return value.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
+}
+
+function normalizeDenominationFilterValue(value) {
+  const trimmed = String(value ?? "").trim();
+  const match = trimmed.match(/^(\d[\d,]*)(\.\d+)?(.*)$/);
+  if (!match) {
+    return trimmed;
+  }
+
+  const [, rawIntegerPart, decimalPart = "", suffix = ""] = match;
+  const integerDigits = rawIntegerPart.replace(/,/g, "");
+  if (!/^\d+$/.test(integerDigits)) {
+    return trimmed;
+  }
+
+  return `${addThousandsSeparators(integerDigits)}${decimalPart}${suffix}`;
+}
+
+function parseScalarFilters(rawFilterValue, normalizeValue) {
+  return String(rawFilterValue ?? "")
+    .split(",")
+    .map((value) => parseFilterValue(value, normalizeValue))
+    .filter(({ value }) => value);
+}
+
+function matchesSingleFilterValue(noteValue, filterValue, matchMode = "includes") {
+  return matchMode === "catalogPrefix"
+    ? matchesCatalogFilterValue(noteValue, filterValue)
+    : matchMode === "startsWith"
+      ? noteValue.startsWith(filterValue)
+      : noteValue.includes(filterValue);
+}
+
+function matchesFilterValue(noteValue, rawFilterValue, matchMode = "includes", options = {}) {
+  const normalizedNoteValue = String(noteValue ?? "").toLowerCase();
+  const filters = options.multiple
+    ? parseScalarFilters(rawFilterValue, options.normalizeFilterValue)
+    : [parseFilterValue(rawFilterValue, options.normalizeFilterValue)].filter(({ value }) => value);
+
+  if (!filters.length) {
     return true;
   }
 
-  const normalizedNoteValue = String(noteValue ?? "").toLowerCase();
-  const isMatch =
-    matchMode === "catalogPrefix"
-      ? matchesCatalogFilterValue(normalizedNoteValue, value)
-      : matchMode === "startsWith"
-        ? normalizedNoteValue.startsWith(value)
-      : normalizedNoteValue.includes(value);
+  const positiveFilters = filters.filter(({ negated }) => !negated);
+  const negativeFilters = filters.filter(({ negated }) => negated);
 
-  return negated ? !isMatch : isMatch;
+  if (positiveFilters.length) {
+    const hasPositiveMatch = positiveFilters.some(({ value }) =>
+      matchesSingleFilterValue(normalizedNoteValue, value, matchMode),
+    );
+    if (!hasPositiveMatch) {
+      return false;
+    }
+  }
+
+  return negativeFilters.every(
+    ({ value }) => !matchesSingleFilterValue(normalizedNoteValue, value, matchMode),
+  );
 }
 
 function matchesCatalogFilterValue(noteValue, filterValue) {
@@ -203,10 +246,7 @@ function matchesCatalogFilterValue(noteValue, filterValue) {
 }
 
 function matchesTagFilter(note, rawFilterValue) {
-  const filters = String(rawFilterValue ?? "")
-    .split(",")
-    .map((value) => parseFilterValue(value))
-    .filter(({ value }) => value);
+  const filters = parseScalarFilters(rawFilterValue);
 
   if (!filters.length) {
     return true;
@@ -434,10 +474,21 @@ function NotesTable() {
           return matchesTagFilter(note, filters[key]);
         }
 
+        const supportsMultipleValues =
+          key === "catalog_number" ||
+          key === "grade" ||
+          key === "issue_date" ||
+          key === "denomination";
+
         return matchesFilterValue(
           valueToString(note, key),
           filters[key],
           key === "catalog_number" ? "catalogPrefix" : "includes",
+          {
+            multiple: supportsMultipleValues,
+            normalizeFilterValue:
+              key === "denomination" ? normalizeDenominationFilterValue : undefined,
+          },
         );
       }),
     );

@@ -63,14 +63,21 @@ class _ParsedQuery {
   const _ParsedQuery({required this.allFields, required this.fields});
 
   final String allFields;
-  final Map<String, String> fields; // canonical field name → lowercased query
+  final Map<String, String> fields; // canonical field name → raw field filter
 
   bool get isEmpty => allFields.isEmpty && fields.isEmpty;
 }
 
+class _FilterToken {
+  const _FilterToken({required this.negated, required this.value});
+
+  final bool negated;
+  final String value;
+}
+
 // Matches "fieldkeyword:" (case-insensitive, requires word boundary before).
 final _kFieldPattern = RegExp(
-  r'\b(denomination|denom|date|catalog|cat|grading|company|grade):\s*',
+  r'\b(denomination|denom|date|catalog|cat|grading|company|grade|tag|tags):\s*',
   caseSensitive: false,
 );
 
@@ -80,8 +87,127 @@ String _canonicalField(String keyword) => switch (keyword.toLowerCase()) {
       'catalog' || 'cat' => 'catalogNumber',
       'company' || 'grading' => 'gradingCompany',
       'grade' => 'grade',
+      'tag' || 'tags' => 'tags',
       _ => keyword,
     };
+
+String _addThousandsSeparators(String integerPart) {
+  return integerPart.replaceAllMapped(
+    RegExp(r'\B(?=(\d{3})+(?!\d))'),
+    (_) => ',',
+  );
+}
+
+String _normalizeDenominationFilterValue(String value) {
+  final trimmed = value.trim();
+  final match = RegExp(r'^(\d[\d,]*)(\.\d+)?(.*)$').firstMatch(trimmed);
+  if (match == null) {
+    return trimmed;
+  }
+
+  final rawIntegerPart = match.group(1) ?? '';
+  final decimalPart = match.group(2) ?? '';
+  final suffix = match.group(3) ?? '';
+  final integerDigits = rawIntegerPart.replaceAll(',', '');
+  if (!RegExp(r'^\d+$').hasMatch(integerDigits)) {
+    return trimmed;
+  }
+
+  return '${_addThousandsSeparators(integerDigits)}$decimalPart$suffix';
+}
+
+_FilterToken? _parseFilterToken(
+  String rawValue, {
+  String Function(String value)? normalizeValue,
+}) {
+  final normalized = rawValue.trim().toLowerCase();
+  if (normalized.isEmpty) {
+    return null;
+  }
+
+  final negated = normalized.startsWith('!');
+  final parsedValue = negated ? normalized.substring(1).trim() : normalized;
+  final value = normalizeValue != null ? normalizeValue(parsedValue) : parsedValue;
+  if (value.isEmpty) {
+    return null;
+  }
+
+  return _FilterToken(negated: negated, value: value);
+}
+
+List<_FilterToken> _parseMultiValueFilter(
+  String rawValue, {
+  String Function(String value)? normalizeValue,
+}) {
+  return rawValue
+      .split(',')
+      .map((value) => _parseFilterToken(value, normalizeValue: normalizeValue))
+      .whereType<_FilterToken>()
+      .toList(growable: false);
+}
+
+bool _matchesCatalogFilterValue(String noteValue, String filterValue) {
+  if (!noteValue.startsWith(filterValue)) {
+    return false;
+  }
+
+  if (noteValue.length == filterValue.length) {
+    return true;
+  }
+
+  final nextCharacter =
+      noteValue.substring(filterValue.length, filterValue.length + 1);
+  return int.tryParse(nextCharacter) == null;
+}
+
+bool _matchesScalarFilter(
+  String noteValue,
+  String rawFilterValue, {
+  required bool multiple,
+  required bool Function(String noteValue, String filterValue) matcher,
+  String Function(String value)? normalizeValue,
+}) {
+  final filters = multiple
+      ? _parseMultiValueFilter(rawFilterValue, normalizeValue: normalizeValue)
+      : [
+          _parseFilterToken(rawFilterValue, normalizeValue: normalizeValue),
+        ].whereType<_FilterToken>().toList(growable: false);
+
+  if (filters.isEmpty) {
+    return true;
+  }
+
+  final positiveFilters = filters.where((filter) => !filter.negated);
+  final negativeFilters = filters.where((filter) => filter.negated);
+
+  if (positiveFilters.isNotEmpty) {
+    final hasPositiveMatch = positiveFilters.any(
+      (filter) => matcher(noteValue, filter.value),
+    );
+    if (!hasPositiveMatch) {
+      return false;
+    }
+  }
+
+  return negativeFilters.every((filter) => !matcher(noteValue, filter.value));
+}
+
+bool _matchesTagFilter(NoteRecord note, String rawFilterValue) {
+  final filters = _parseMultiValueFilter(rawFilterValue);
+  if (filters.isEmpty) {
+    return true;
+  }
+
+  final noteTags = note.tags
+      .map((tag) => tag.name.trim().toLowerCase())
+      .where((name) => name.isNotEmpty)
+      .toSet();
+
+  return filters.every((filter) {
+    final hasTag = noteTags.contains(filter.value);
+    return filter.negated ? !hasTag : hasTag;
+  });
+}
 
 _ParsedQuery _parseQuery(String raw) {
   final trimmed = raw.trim();
@@ -104,8 +230,8 @@ _ParsedQuery _parseQuery(String raw) {
     // Strip optional trailing comma (e.g. "catalog: 123, denom: 10")
     final segment = trimmed.substring(valueStart, valueEnd).trim();
     final value = segment.endsWith(',')
-        ? segment.substring(0, segment.length - 1).trim().toLowerCase()
-        : segment.toLowerCase();
+        ? segment.substring(0, segment.length - 1).trim()
+        : segment;
     if (value.isNotEmpty) {
       fields[canonicalField] = value;
     }
@@ -114,20 +240,6 @@ _ParsedQuery _parseQuery(String raw) {
   final allFields =
       trimmed.substring(0, matches.first.start).trim().toLowerCase();
   return _ParsedQuery(allFields: allFields, fields: fields);
-}
-
-bool _matchesCatalogFilterValue(String noteValue, String filterValue) {
-  if (!noteValue.startsWith(filterValue)) {
-    return false;
-  }
-
-  if (noteValue.length == filterValue.length) {
-    return true;
-  }
-
-  final nextCharacter =
-      noteValue.substring(filterValue.length, filterValue.length + 1);
-  return int.tryParse(nextCharacter) == null;
 }
 
 // ---------------------------------------------------------------------------
@@ -218,10 +330,30 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       }
 
       for (final entry in parsed.fields.entries) {
+        if (entry.key == 'tags') {
+          if (!_matchesTagFilter(note, entry.value)) {
+            return false;
+          }
+          continue;
+        }
+
         final fieldValue = note.valueForColumn(entry.key).toLowerCase();
-        final matches = entry.key == 'catalogNumber'
-            ? _matchesCatalogFilterValue(fieldValue, entry.value)
-            : fieldValue.contains(entry.value);
+        final supportsMultipleValues =
+            entry.key == 'catalogNumber' ||
+            entry.key == 'grade' ||
+            entry.key == 'issueDate' ||
+            entry.key == 'denomination';
+        final matches = _matchesScalarFilter(
+          fieldValue,
+          entry.value,
+          multiple: supportsMultipleValues,
+          matcher: entry.key == 'catalogNumber'
+              ? _matchesCatalogFilterValue
+              : (noteValue, filterValue) => noteValue.contains(filterValue),
+          normalizeValue: entry.key == 'denomination'
+              ? _normalizeDenominationFilterValue
+              : null,
+        );
         if (!matches) return false;
       }
 
@@ -255,8 +387,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   }
 
   void _applyTagFilter(String tagName) {
-    _searchController.text = tagName;
-    setState(() => _query = tagName);
+    final filterValue = 'tags: $tagName';
+    _searchController.text = filterValue;
+    setState(() => _query = filterValue);
     if (_horizontalScrollController.hasClients) {
       _horizontalScrollController.jumpTo(0);
     }
@@ -373,7 +506,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                             filled: true,
                             fillColor: _kTableSurface,
                             hintText:
-                                'Filter... or use catalog: denom: date: company: grade:',
+                                'Filter... or use catalog: denom: date: company: grade: tags:',
                             prefixIcon: const Icon(Icons.search_rounded),
                             suffixIcon: _query.isEmpty
                                 ? null
