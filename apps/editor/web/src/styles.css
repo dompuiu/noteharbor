@@ -691,10 +691,67 @@ td.drag-cell {
 }
 
 .import-panel-scroll {
+  --scroll-fade-size: 18px;
   margin: 4px;
   padding-right: 4px;
   min-height: 0;
   overflow: auto;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.import-panel-scroll--fade-both {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black var(--scroll-fade-size),
+    black calc(100% - var(--scroll-fade-size)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black var(--scroll-fade-size),
+    black calc(100% - var(--scroll-fade-size)),
+    transparent 100%
+  );
+}
+
+.import-panel-scroll--fade-top {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black var(--scroll-fade-size),
+    black 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0,
+    black var(--scroll-fade-size),
+    black 100%
+  );
+}
+
+.import-panel-scroll--fade-bottom {
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    black 0,
+    black calc(100% - var(--scroll-fade-size)),
+    transparent 100%
+  );
+  mask-image: linear-gradient(
+    to bottom,
+    black 0,
+    black calc(100% - var(--scroll-fade-size)),
+    transparent 100%
+  );
+}
+
+.import-panel-scroll::-webkit-scrollbar,
+.export-collection-list::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 .collection-admin-row {
@@ -748,6 +805,8 @@ td.drag-cell {
   border-radius: 12px;
   border: 1px solid rgba(92, 59, 24, 0.14);
   background: rgba(255, 255, 255, 0.58);
+  scrollbar-width: none;
+  -ms-overflow-style: none;
 }
 
 .export-collection-option {

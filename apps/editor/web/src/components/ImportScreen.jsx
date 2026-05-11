@@ -56,6 +56,7 @@ function ImportScreen({
   const navigate = useNavigate();
   const csvInputRef = useRef(null);
   const archiveInputRef = useRef(null);
+  const panelScrollRef = useRef(null);
   const [csvSource, setCsvSource] = useState(null);
   const [csvSourceLabel, setCsvSourceLabel] = useState('');
   const [archiveSource, setArchiveSource] = useState(null);
@@ -77,6 +78,8 @@ function ImportScreen({
   const [collectionNameDraft, setCollectionNameDraft] = useState('');
   const [collectionActionLoading, setCollectionActionLoading] = useState(false);
   const [selectedExportCollectionIds, setSelectedExportCollectionIds] = useState([]);
+  const [canScrollUp, setCanScrollUp] = useState(false);
+  const [canScrollDown, setCanScrollDown] = useState(false);
 
   const isBusy = operationStatus.isBusy;
   const busyMessage = isBusy
@@ -125,6 +128,42 @@ function ImportScreen({
       return retained;
     });
   }, [collections]);
+
+  function updatePanelScrollFades() {
+    const element = panelScrollRef.current;
+
+    if (!element) {
+      setCanScrollUp(false);
+      setCanScrollDown(false);
+      return;
+    }
+
+    const nextCanScrollUp = element.scrollTop > 1;
+    const remaining = element.scrollHeight - element.clientHeight - element.scrollTop;
+    const nextCanScrollDown = remaining > 1;
+
+    setCanScrollUp(nextCanScrollUp);
+    setCanScrollDown(nextCanScrollDown);
+  }
+
+  useEffect(() => {
+    updatePanelScrollFades();
+
+    const timer = window.setTimeout(updatePanelScrollFades, 0);
+    window.addEventListener('resize', updatePanelScrollFades);
+
+    return () => {
+      window.clearTimeout(timer);
+      window.removeEventListener('resize', updatePanelScrollFades);
+    };
+  }, [
+    archiveResult,
+    collections.length,
+    csvResult,
+    error,
+    loadingCollections,
+    selectedExportCollectionIds.length,
+  ]);
 
   useEffect(() => {
     let active = true;
@@ -344,10 +383,22 @@ function ImportScreen({
     }
   }
 
+  const scrollFadeClass = canScrollUp && canScrollDown
+    ? ' import-panel-scroll--fade-both'
+    : canScrollUp
+      ? ' import-panel-scroll--fade-top'
+      : canScrollDown
+        ? ' import-panel-scroll--fade-bottom'
+        : '';
+
   return (
     <section className="screen-stack narrow-stack import-screen">
       <div className="panel import-panel">
-        <div className="import-panel-scroll">
+        <div
+          className={`import-panel-scroll${scrollFadeClass}`}
+          onScroll={updatePanelScrollFades}
+          ref={panelScrollRef}
+        >
           <div className="panel-heading">
           <div>
             <p className="eyebrow">Import and Export</p>
