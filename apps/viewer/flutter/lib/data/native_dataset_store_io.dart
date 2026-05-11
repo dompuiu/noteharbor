@@ -373,13 +373,19 @@ void _copyPlannedImages({
   required List<({String fromRelative, String toRelative})> copyPlan,
 }) {
   for (final plan in copyPlan) {
-    final sourcePath = p.join(sourceImagesDir, ...p.posix.split(plan.fromRelative));
+    final sourcePath = p.joinAll(<String>[
+      sourceImagesDir,
+      ...p.posix.split(plan.fromRelative),
+    ]);
     final sourceFile = File(sourcePath);
     if (!sourceFile.existsSync()) {
       continue;
     }
 
-    final targetPath = p.join(stagedImagesDir, ...p.posix.split(plan.toRelative));
+    final targetPath = p.joinAll(<String>[
+      stagedImagesDir,
+      ...p.posix.split(plan.toRelative),
+    ]);
     final targetFile = File(targetPath);
     targetFile.parent.createSync(recursive: true);
     sourceFile.copySync(targetPath);

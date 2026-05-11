@@ -127,7 +127,8 @@ _FilterToken? _parseFilterToken(
 
   final negated = normalized.startsWith('!');
   final parsedValue = negated ? normalized.substring(1).trim() : normalized;
-  final value = normalizeValue != null ? normalizeValue(parsedValue) : parsedValue;
+  final value =
+      normalizeValue != null ? normalizeValue(parsedValue) : parsedValue;
   if (value.isEmpty) {
     return null;
   }
@@ -139,11 +140,100 @@ List<_FilterToken> _parseMultiValueFilter(
   String rawValue, {
   String Function(String value)? normalizeValue,
 }) {
-  return rawValue
-      .split(',')
+  return _splitFilterValues(rawValue)
       .map((value) => _parseFilterToken(value, normalizeValue: normalizeValue))
       .whereType<_FilterToken>()
       .toList(growable: false);
+}
+
+List<String> _splitFilterValues(String rawValue) {
+  final values = <String>[];
+  final buffer = StringBuffer();
+
+  for (var index = 0; index < rawValue.length; index++) {
+    final character = rawValue[index];
+    if (character == ',' && _isMultiValueSeparator(rawValue, index)) {
+      values.add(buffer.toString());
+      buffer.clear();
+      continue;
+    }
+
+    buffer.write(character);
+  }
+
+  values.add(buffer.toString());
+  return values;
+}
+
+bool _isMultiValueSeparator(String rawValue, int commaIndex) {
+  return !_isThousandsSeparator(rawValue, commaIndex) &&
+      !_isMonthDayYearDateComma(rawValue, commaIndex);
+}
+
+bool _isThousandsSeparator(String rawValue, int commaIndex) {
+  if (commaIndex <= 0 || commaIndex + 1 >= rawValue.length) {
+    return false;
+  }
+
+  if (!_isAsciiDigit(rawValue[commaIndex - 1])) {
+    return false;
+  }
+
+  if (_isWhitespace(rawValue[commaIndex + 1])) {
+    return false;
+  }
+
+  var nextIndex = commaIndex + 1;
+  var digitCount = 0;
+  while (nextIndex < rawValue.length && _isAsciiDigit(rawValue[nextIndex])) {
+    digitCount++;
+    nextIndex++;
+  }
+
+  return digitCount == 3;
+}
+
+bool _isMonthDayYearDateComma(String rawValue, int commaIndex) {
+  if (commaIndex <= 0 || commaIndex + 1 >= rawValue.length) {
+    return false;
+  }
+
+  var previousEnd = commaIndex;
+  while (previousEnd > 0 && _isWhitespace(rawValue[previousEnd - 1])) {
+    previousEnd--;
+  }
+
+  var previousStart = previousEnd;
+  while (previousStart > 0 && !_isWhitespace(rawValue[previousStart - 1])) {
+    previousStart--;
+  }
+
+  final previousToken = rawValue.substring(previousStart, previousEnd);
+  if (!RegExp(r'^\d{1,2}$').hasMatch(previousToken)) {
+    return false;
+  }
+
+  var nextStart = commaIndex + 1;
+  while (nextStart < rawValue.length && _isWhitespace(rawValue[nextStart])) {
+    nextStart++;
+  }
+
+  var nextEnd = nextStart;
+  while (nextEnd < rawValue.length && _isAsciiDigit(rawValue[nextEnd])) {
+    nextEnd++;
+  }
+
+  final nextToken = rawValue.substring(nextStart, nextEnd);
+  return RegExp(r'^\d{4}$').hasMatch(nextToken);
+}
+
+bool _isAsciiDigit(String character) {
+  final codeUnit = character.codeUnitAt(0);
+  return codeUnit >= 48 && codeUnit <= 57;
+}
+
+bool _isWhitespace(String character) {
+  return RegExp(r'\s').hasMatch(character);
 }
 
 bool _matchesCatalogFilterValue(String noteValue, String filterValue) {
@@ -387,8 +477,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         }
 
         final fieldValue = note.valueForColumn(entry.key).toLowerCase();
-        final supportsMultipleValues =
-            entry.key == 'catalogNumber' ||
+        final supportsMultipleValues = entry.key == 'catalogNumber' ||
             entry.key == 'grade' ||
             entry.key == 'issueDate' ||
             entry.key == 'denomination';
@@ -464,7 +553,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         return;
       }
 
-      final visibleNotes = _sortedNotes(widget.controller.activeCollectionNotes);
+      final visibleNotes =
+          _sortedNotes(widget.controller.activeCollectionNotes);
       final noteIndex = visibleNotes.indexWhere((note) => note.id == noteId);
       if (noteIndex < 0) {
         return;
@@ -527,7 +617,6 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                 }
 
                 final scopedNotes = widget.controller.activeCollectionNotes;
-                final activeCollection = widget.controller.activeCollection;
                 final notes = _sortedNotes(scopedNotes);
 
                 final tagsColumnWidth = _calculateTagsColumnWidth(notes);
@@ -541,7 +630,6 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _Header(
-                        activeCollectionName: activeCollection?.name ?? 'Default',
                         totalCount: scopedNotes.length,
                         visibleCount: notes.length,
                         onOpenImports:
@@ -726,13 +814,11 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
 
 class _Header extends StatelessWidget {
   const _Header({
-    required this.activeCollectionName,
     required this.totalCount,
     required this.visibleCount,
     required this.onOpenImports,
   });
 
-  final String activeCollectionName;
   final int totalCount;
   final int visibleCount;
   final VoidCallback? onOpenImports;
@@ -785,8 +871,6 @@ class _Header extends StatelessWidget {
           ),
         ),
         const Spacer(),
-        _StatPill(label: 'Collection', value: activeCollectionName),
-        const SizedBox(width: 12),
         _StatPill(label: 'Notes', value: '$visibleCount / $totalCount'),
         if (onOpenImports != null) ...[
           const SizedBox(width: 16),
