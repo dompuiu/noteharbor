@@ -401,7 +401,14 @@ function buildTableHash(route) {
   return "";
 }
 
-function NotesTable() {
+function NotesTable({
+  activeCollection,
+  activeCollectionId,
+  collections,
+  collectionsError,
+  loadingCollections,
+  onSelectCollection,
+}) {
   const initialTableStateRef = useRef(undefined);
   const initialRouteRef = useRef(
     typeof window === "undefined"
@@ -566,23 +573,40 @@ function NotesTable() {
     (showActions ? 1 : 0);
 
   async function loadNotes() {
-    const payload = await getNotes();
+    if (!Number.isInteger(activeCollectionId)) {
+      setNotes([]);
+      return [];
+    }
+
+    const payload = await getNotes(activeCollectionId);
     setNotes(payload.notes);
     return payload.notes;
   }
 
   useEffect(() => {
+    if (loadingCollections) {
+      return;
+    }
+
+    if (!Number.isInteger(activeCollectionId)) {
+      setLoading(false);
+      setNotes([]);
+      return;
+    }
+
     let active = true;
+    setLoading(true);
+    setLoadError("");
 
     const initialLoad = isScrapingDisabled
-      ? Promise.all([getNotes(), getOperationStatus()]).then(([notesPayload, operationPayload]) => {
+      ? Promise.all([getNotes(activeCollectionId), getOperationStatus()]).then(([notesPayload, operationPayload]) => {
           if (active) {
             setNotes(notesPayload.notes);
             setScrapeJob(null);
             setOperationStatus(operationPayload);
           }
         })
-      : Promise.all([getNotes(), getScrapeStatus(), getOperationStatus()]).then(
+      : Promise.all([getNotes(activeCollectionId), getScrapeStatus(), getOperationStatus()]).then(
           ([notesPayload, statusPayload, operationPayload]) => {
             if (active) {
               setNotes(notesPayload.notes);
@@ -607,13 +631,17 @@ function NotesTable() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [activeCollectionId, loadingCollections]);
 
   useEffect(() => {
     setSelectedIds((current) =>
       current.filter((id) => notes.some((note) => note.id === id)),
     );
   }, [notes]);
+
+  useEffect(() => {
+    setFilters({});
+  }, [activeCollectionId]);
 
   useEffect(() => {
     if (isScrapingDisabled || (!operationStatus.isBusy && !scrapeJob)) {
@@ -624,7 +652,7 @@ function NotesTable() {
       try {
         const [nextStatus, notesPayload, nextOperationStatus] = await Promise.all([
           getScrapeStatus(),
-          getNotes(),
+          getNotes(activeCollectionId),
           getOperationStatus(),
         ]);
         const nextScrapeJob = activeScrapeJob(nextStatus);
@@ -638,7 +666,7 @@ function NotesTable() {
     }, 2000);
 
     return () => window.clearInterval(timer);
-  }, [operationStatus.isBusy, scrapeJob]);
+  }, [activeCollectionId, operationStatus.isBusy, scrapeJob]);
 
   useEffect(() => {
     if (!slideshowRouteActive || !slideshowNotes.length) {
@@ -1182,6 +1210,7 @@ function NotesTable() {
     try {
       const payload = await saveNotesOrder(
         reorderedNotes.map((note) => note.id),
+        activeCollectionId,
       );
       setNotes(payload.notes);
     } catch (reorderError) {
@@ -1219,7 +1248,7 @@ function NotesTable() {
           return;
         }
 
-        await Promise.all(selectedIds.map((id) => deleteNote(id)));
+        await Promise.all(selectedIds.map((id) => deleteNote(id, activeCollectionId)));
         await loadNotes();
         clearSelection();
         return;
@@ -1280,7 +1309,7 @@ function NotesTable() {
     setActionError("");
 
     try {
-      await deleteNote(noteId);
+      await deleteNote(noteId, activeCollectionId);
       setNotes((current) => current.filter((entry) => entry.id !== noteId));
       setSelectedIds((current) => current.filter((id) => id !== noteId));
     } catch (deleteError) {
@@ -1423,6 +1452,7 @@ function NotesTable() {
             onClick={(event) => event.stopPropagation()}
           >
             <NoteEditForm
+              selectedCollectionId={activeCollectionId}
               cancelLabel="Close"
               currentNotePosition={currentEditingNotePosition}
               initialPositionMode={createPositionMode}
@@ -1449,14 +1479,27 @@ function NotesTable() {
             <div className="panel-heading-copy">
               <p className="eyebrow">Romanian Paper Money Archive</p>
               <h2>Note Harbor Editor</h2>
-            <p>
-              {orderedNotes.length} notes in the current view.
-              {showSelection && selectedIds.length
-                ? ` ${selectedIds.length} selected.`
-                : ""}
-            </p>
+              <p>
+                Collection: <strong>{Number(activeCollection?.is_default) === 1 ? "★ " : ""}{activeCollection?.name ?? "-"}</strong>. {orderedNotes.length} notes in the current view.
+                {showSelection && selectedIds.length
+                  ? ` ${selectedIds.length} selected.`
+                  : ""}
+              </p>
             </div>
             <div className="inline-actions">
+              <select
+                aria-label="Active collection"
+                className="select-input"
+                disabled={loadingCollections || !collections.length}
+                onChange={(event) => onSelectCollection(Number(event.target.value))}
+                value={activeCollectionId ?? ""}
+              >
+                {collections.map((collection) => (
+                  <option key={collection.id} value={collection.id}>
+                    {Number(collection.is_default) === 1 ? '★ ' : ''}{collection.name}
+                  </option>
+                ))}
+              </select>
               <button
                 aria-label="Add banknote"
                 className="icon-link button-primary"
@@ -1477,7 +1520,9 @@ function NotesTable() {
             </div>
           </div>
 
+        {loadingCollections ? <p>Loading collections...</p> : null}
         {loading ? <p>Loading notes...</p> : null}
+        {collectionsError ? <p className="error-text">{collectionsError}</p> : null}
         {loadError ? <p className="error-text">{loadError}</p> : null}
         {actionError ? <p className="error-text">{actionError}</p> : null}
         {operationStatus.isBusy ? (

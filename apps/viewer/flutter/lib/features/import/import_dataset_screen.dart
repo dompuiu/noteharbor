@@ -166,6 +166,8 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
             builder: (context, _) {
               final dataset = widget.controller.dataset;
               final generatedAt = dataset?.generatedAt?.trim();
+              final collections = dataset?.collections ?? const [];
+              final activeCollection = widget.controller.activeCollection;
               final isBusy = widget.controller.isMutating || _isPicking;
               final isInitialEmptyState = dataset == null;
 
@@ -235,8 +237,12 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                   : formatFriendlyDatasetBuiltAt(generatedAt),
                             ),
                             _InfoPill(
-                              label: 'Notes',
-                              value: '${dataset?.noteCount ?? 0}',
+                              label: 'Collections',
+                              value: '${collections.length}',
+                            ),
+                            _InfoPill(
+                              label: 'Notes (active)',
+                              value: '${activeCollection?.noteCount ?? 0}',
                             ),
                           ],
                         ),
@@ -244,6 +250,50 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
+                  if (collections.isNotEmpty) ...[
+                    _Panel(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Active collection',
+                            style: Theme.of(context).textTheme.titleLarge,
+                          ),
+                          const SizedBox(height: 8),
+                          const Text(
+                            'Select which collection is shown in the table and slideshow screens.',
+                          ),
+                          const SizedBox(height: 14),
+                          DropdownButtonFormField<int>(
+                            value: activeCollection?.id,
+                            decoration: const InputDecoration(
+                              border: OutlineInputBorder(),
+                            ),
+                            items: collections
+                                .map(
+                                  (collection) => DropdownMenuItem<int>(
+                                    value: collection.id,
+                                    child: Text(
+                                      '${collection.name}${collection.isDefault ? ' (default)' : ''} (${collection.noteCount})',
+                                    ),
+                                  ),
+                                )
+                                .toList(growable: false),
+                            onChanged: isBusy
+                                ? null
+                                : (collectionId) {
+                                    if (collectionId == null) {
+                                      return;
+                                    }
+                                    widget.controller.selectCollection(collectionId);
+                                    setState(() => _message = null);
+                                  },
+                          ),
+                        ],
+                      ),
+                    ),
+                    const SizedBox(height: 18),
+                  ],
                   _Panel(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,

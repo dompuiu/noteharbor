@@ -4,6 +4,7 @@ import 'tag.dart';
 class NoteRecord {
   const NoteRecord({
     required this.id,
+    required this.collectionId,
     required this.displayOrder,
     required this.denomination,
     required this.issueDate,
@@ -22,6 +23,7 @@ class NoteRecord {
   });
 
   final int id;
+  final int collectionId;
   final int displayOrder;
   final String denomination;
   final String issueDate;
@@ -92,6 +94,7 @@ class NoteRecord {
   factory NoteRecord.fromJson(Map<String, dynamic> json) {
     return NoteRecord(
       id: (json['id'] as num?)?.toInt() ?? 0,
+      collectionId: (json['collectionId'] as num?)?.toInt() ?? 0,
       displayOrder: (json['displayOrder'] as num?)?.toInt() ?? 0,
       denomination: '${json['denomination'] ?? ''}',
       issueDate: '${json['issueDate'] ?? ''}',

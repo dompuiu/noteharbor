@@ -1,14 +1,40 @@
 import { Router } from 'express';
 import multer from 'multer';
 import { parse } from 'csv-parse/sync';
-import { importNotes } from '../db.js';
+import {
+  getCollectionById,
+  getDefaultCollectionId,
+  importNotes
+} from '../db.js';
 import { normalizeDenomination } from '../denomination.js';
 import { normalizeIssueDate } from '../dateNormalization.js';
 import { withExclusiveOperation } from '../operationState.js';
 
-const importRouter = Router();
+const importRouter = Router({ mergeParams: true });
 const upload = multer({ storage: multer.memoryStorage() });
 const IGNORE_AFTER_MARKER = 'ignore after this line';
+
+function resolveCollectionId(request, response) {
+  const rawCollectionId = request.params.collectionId;
+
+  if (rawCollectionId == null) {
+    return getDefaultCollectionId();
+  }
+
+  const collectionId = Number(rawCollectionId);
+
+  if (!Number.isInteger(collectionId) || collectionId <= 0) {
+    response.status(400).json({ error: 'A valid collection ID is required.' });
+    return null;
+  }
+
+  if (!getCollectionById(collectionId)) {
+    response.status(404).json({ error: 'Collection not found.' });
+    return null;
+  }
+
+  return collectionId;
+}
 
 function normalizeCell(value) {
   return String(value ?? '').trim();
@@ -74,6 +100,12 @@ function getCsvSource(request) {
 }
 
 importRouter.post('/', upload.single('file'), async (request, response) => {
+  const collectionId = resolveCollectionId(request, response);
+
+  if (!collectionId) {
+    return;
+  }
+
   const source = getCsvSource(request);
 
   if (!source) {
@@ -121,7 +153,7 @@ importRouter.post('/', upload.single('file'), async (request, response) => {
         notesToImport.push(note);
       }
 
-      const { imported, updated, deleted } = importNotes(notesToImport);
+      const { imported, updated, deleted } = importNotes(notesToImport, collectionId);
 
       return {
         imported,

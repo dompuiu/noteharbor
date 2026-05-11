@@ -690,6 +690,21 @@ td.drag-cell {
   gap: 20px;
 }
 
+.collection-admin-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+  margin-bottom: 4px;
+}
+
+.collection-admin-row .inline-select-group span {
+  font-weight: 700;
+}
+
+.collection-admin-row .select-input {
+  min-width: 180px;
+}
+
 .import-sections {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

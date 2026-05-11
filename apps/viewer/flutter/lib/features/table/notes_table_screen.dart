@@ -300,13 +300,62 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   String _query = '';
   String _sortKey = 'displayOrder';
   bool _ascending = true;
+  int? _lastActiveCollectionId;
+
+  @override
+  void initState() {
+    super.initState();
+    _lastActiveCollectionId = widget.controller.activeCollectionId;
+    widget.controller.addListener(_handleControllerChange);
+  }
+
+  @override
+  void didUpdateWidget(covariant NotesTableScreen oldWidget) {
+    super.didUpdateWidget(oldWidget);
+
+    if (oldWidget.controller == widget.controller) {
+      return;
+    }
+
+    oldWidget.controller.removeListener(_handleControllerChange);
+    _lastActiveCollectionId = widget.controller.activeCollectionId;
+    widget.controller.addListener(_handleControllerChange);
+  }
 
   @override
   void dispose() {
+    widget.controller.removeListener(_handleControllerChange);
     _searchController.dispose();
     _horizontalScrollController.dispose();
     _verticalScrollController.dispose();
     super.dispose();
+  }
+
+  void _handleControllerChange() {
+    final currentCollectionId = widget.controller.activeCollectionId;
+
+    if (_lastActiveCollectionId == currentCollectionId) {
+      return;
+    }
+
+    _lastActiveCollectionId = currentCollectionId;
+
+    if (!mounted) {
+      return;
+    }
+
+    setState(() {
+      _query = '';
+      _searchController.clear();
+    });
+
+    if (_horizontalScrollController.hasClients) {
+      _horizontalScrollController.jumpTo(0);
+    }
+
+    if (_verticalScrollController.hasClients) {
+      _verticalScrollController.jumpTo(0);
+    }
   }
 
   List<NoteRecord> _sortedNotes(List<NoteRecord> notes) {
@@ -415,7 +464,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         return;
       }
 
-      final visibleNotes = _sortedNotes(dataset.notes);
+      final visibleNotes = _sortedNotes(widget.controller.activeCollectionNotes);
       final noteIndex = visibleNotes.indexWhere((note) => note.id == noteId);
       if (noteIndex < 0) {
         return;
@@ -477,7 +526,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                   return const Center(child: Text('No dataset available.'));
                 }
 
-                final notes = _sortedNotes(dataset.notes);
+                final scopedNotes = widget.controller.activeCollectionNotes;
+                final activeCollection = widget.controller.activeCollection;
+                final notes = _sortedNotes(scopedNotes);
 
                 final tagsColumnWidth = _calculateTagsColumnWidth(notes);
                 final minTableWidth = _kFixedColumnsWidth +
@@ -490,7 +541,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _Header(
-                        totalCount: dataset.noteCount,
+                        activeCollectionName: activeCollection?.name ?? 'Default',
+                        totalCount: scopedNotes.length,
                         visibleCount: notes.length,
                         onOpenImports:
                             widget.controller.canManageImportedDatasets
@@ -674,11 +726,13 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
 
 class _Header extends StatelessWidget {
   const _Header({
+    required this.activeCollectionName,
     required this.totalCount,
     required this.visibleCount,
     required this.onOpenImports,
   });
 
+  final String activeCollectionName;
   final int totalCount;
   final int visibleCount;
   final VoidCallback? onOpenImports;
@@ -731,6 +785,8 @@ class _Header extends StatelessWidget {
           ),
         ),
         const Spacer(),
+        _StatPill(label: 'Collection', value: activeCollectionName),
+        const SizedBox(width: 12),
         _StatPill(label: 'Notes', value: '$visibleCount / $totalCount'),
         if (onOpenImports != null) ...[
           const SizedBox(width: 16),

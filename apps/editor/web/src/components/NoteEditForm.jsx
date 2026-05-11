@@ -112,6 +112,7 @@ function NoteEditForm({
   onSaveSuccess,
   overlay = false,
   previousNoteId = null,
+  selectedCollectionId = null,
   totalNotesInView = 0,
 }) {
   const { id: routeNoteId } = useParams();
@@ -191,8 +192,16 @@ function NoteEditForm({
     setPendingScrapedImages({});
 
     const dataPromise = noteId
-      ? Promise.all([getNote(noteId), getTags(), getNotes()])
-      : Promise.all([Promise.resolve(null), getTags(), getNotes()]);
+      ? Promise.all([
+          getNote(noteId, selectedCollectionId),
+          getTags(selectedCollectionId),
+          getNotes(selectedCollectionId),
+        ])
+      : Promise.all([
+          Promise.resolve(null),
+          getTags(selectedCollectionId),
+          getNotes(selectedCollectionId),
+        ]);
 
     dataPromise
       .then(([notePayload, tagsPayload, notesPayload]) => {
@@ -236,7 +245,7 @@ function NoteEditForm({
     return () => {
       active = false;
     };
-  }, [initialPositionMode, initialPositionReferenceId, noteId]);
+  }, [initialPositionMode, initialPositionReferenceId, noteId, selectedCollectionId]);
 
   useEffect(() => {
     if (!loading) {
@@ -533,7 +542,7 @@ function NoteEditForm({
     if (positionMode === "keep" || allNotes.length === 0) return null;
 
     // Re-fetch to avoid using a stale snapshot from form-open time
-    const { notes: freshNotes } = await getNotes();
+    const { notes: freshNotes } = await getNotes(selectedCollectionId);
     const withoutSaved = freshNotes
       .filter((n) => n.id !== savedNoteId)
       .map((n) => n.id);
@@ -558,7 +567,7 @@ function NoteEditForm({
       }
     }
 
-    const result = await reorderNotes(nextOrder);
+    const result = await reorderNotes(nextOrder, selectedCollectionId);
     return result.notes ?? null;
   }
 
@@ -592,8 +601,8 @@ function NoteEditForm({
       });
 
       const payload = isCreateMode
-        ? await createNote(payloadWithImages)
-        : await updateNote(noteId, payloadWithImages);
+        ? await createNote(payloadWithImages, selectedCollectionId)
+        : await updateNote(noteId, payloadWithImages, selectedCollectionId);
 
       const reorderedNotes = await applyPositionAfterSave(payload.note.id);
 
