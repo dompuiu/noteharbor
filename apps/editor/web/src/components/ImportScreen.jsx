@@ -347,7 +347,8 @@ function ImportScreen({
   return (
     <section className="screen-stack narrow-stack import-screen">
       <div className="panel import-panel">
-        <div className="panel-heading">
+        <div className="import-panel-scroll">
+          <div className="panel-heading">
           <div>
             <p className="eyebrow">Import and Export</p>
             <h1>Move your collection data</h1>
@@ -661,13 +662,13 @@ function ImportScreen({
 
             <div className="field-block full-span">
               <span>Collections to export</span>
-              <div className="import-actions" style={{ flexWrap: 'wrap' }}>
+              <div className="export-collection-list" role="group" aria-label="Collections to export">
                 {collections.map((collection) => {
                   const collectionId = Number(collection.id);
                   const checked = selectedExportCollectionIds.includes(collectionId);
 
                   return (
-                    <label key={collection.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
+                    <label className="export-collection-option" key={collection.id}>
                       <input
                         checked={checked}
                         disabled={isBusy || exportingArchive}
@@ -726,6 +727,7 @@ function ImportScreen({
             <p>Downloaded: {archiveResult.exported}</p>
           </div>
         ) : null}
+        </div>
       </div>
     </section>
   );
