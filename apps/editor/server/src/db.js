@@ -100,6 +100,13 @@ function ensureDefaultCollection(database) {
     return Number(firstExisting.id);
   }
 
+  const banknotesCount = Number(database.prepare(`SELECT COUNT(*) AS value FROM banknotes`).get()?.value ?? 0);
+  const tagsCount = Number(database.prepare(`SELECT COUNT(*) AS value FROM tags`).get()?.value ?? 0);
+
+  if (banknotesCount <= 0 && tagsCount <= 0) {
+    return null;
+  }
+
   const inserted = database.prepare(`
     INSERT INTO collections (name, is_default, created_at, updated_at)
     VALUES (?, 1, datetime('now'), datetime('now'))
@@ -117,6 +124,10 @@ function ensureDefaultCollectionFlag(database, defaultCollectionId) {
   `).get();
 
   if (hasDefault) {
+    return;
+  }
+
+  if (!Number.isInteger(defaultCollectionId) || defaultCollectionId <= 0) {
     return;
   }
 
@@ -207,7 +218,9 @@ function migrateBanknotesForCollectionScope(database, defaultCollectionId) {
     database.exec(`ALTER TABLE banknotes ADD COLUMN collection_id INTEGER`);
   }
 
-  database.prepare(`UPDATE banknotes SET collection_id = ? WHERE collection_id IS NULL`).run(defaultCollectionId);
+  if (Number.isInteger(defaultCollectionId) && defaultCollectionId > 0) {
+    database.prepare(`UPDATE banknotes SET collection_id = ? WHERE collection_id IS NULL`).run(defaultCollectionId);
+  }
 }
 
 function initializeSchema(database) {
@@ -762,14 +775,18 @@ function getDefaultCollectionId() {
     return Number(first.id);
   }
 
-  const id = ensureDefaultCollection(db);
-  statements = createStatements(db);
-  return id;
+  return null;
 }
 
 function resolveCollectionId(collectionId) {
   if (collectionId == null) {
-    return getDefaultCollectionId();
+    const defaultCollectionId = getDefaultCollectionId();
+
+    if (!Number.isInteger(defaultCollectionId) || defaultCollectionId <= 0) {
+      throw new Error('No collections available.');
+    }
+
+    return defaultCollectionId;
   }
 
   const normalized = Number(collectionId);
@@ -895,12 +912,6 @@ function deleteCollectionById(id) {
   const collectionId = Number(id);
   const collection = ensureCollectionExists(collectionId);
 
-  const count = Number(statements.countCollectionsStatement.get()?.value ?? 0);
-
-  if (count <= 1) {
-    throw new Error('Cannot delete the last remaining collection.');
-  }
-
   const fallbackCollection = statements.listCollectionsStatement
     .all()
     .find((entry) => Number(entry.id) !== collectionId);
@@ -913,7 +924,7 @@ function deleteCollectionById(id) {
     statements.deleteOrphanTagLinksStatement.run();
     statements.deleteCollectionStatement.run(targetCollectionId);
 
-    if (isDeletingDefault && Number.isInteger(nextDefaultId)) {
+    if (isDeletingDefault && Number.isInteger(nextDefaultId) && nextDefaultId > 0) {
       statements.clearDefaultCollectionStatement.run();
       statements.markDefaultCollectionStatement.run({ id: nextDefaultId });
     }

@@ -1,8 +1,10 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
+import 'package:sqlite3/sqlite3.dart';
 
 class ImportedDatasetLocation {
   const ImportedDatasetLocation({
@@ -21,6 +23,7 @@ class NativeDatasetStore {
 
   static const String _containerDirName = 'noteharbor_viewer';
   static const String _currentDirName = 'imported_dataset';
+  static const String _imageApiPrefix = '/api/images/';
 
   bool get isSupported => true;
 
@@ -83,16 +86,32 @@ class NativeDatasetStore {
         );
       }
 
-      await stagedDir.create(recursive: true);
-      await File(p.join(archiveDataDir.path, 'banknotes.db')).copy(
-        p.join(stagedDir.path, 'banknotes.db'),
-      );
-      await _copyDirectory(
-        Directory(p.join(archiveDataDir.path, 'images')),
-        Directory(p.join(stagedDir.path, 'images')),
+      final archiveDbPath = p.join(archiveDataDir.path, 'banknotes.db');
+      final archiveImagesDir = Directory(p.join(archiveDataDir.path, 'images'));
+      final currentDir = await _currentDatasetDirectory();
+
+      if (currentDir.existsSync()) {
+        await _copyDirectory(currentDir, stagedDir);
+      } else {
+        await stagedDir.create(recursive: true);
+        await File(archiveDbPath).copy(p.join(stagedDir.path, 'banknotes.db'));
+        await _copyDirectory(
+          archiveImagesDir,
+          Directory(p.join(stagedDir.path, 'images')),
+        );
+      }
+
+      final stagedDatabaseFile = File(p.join(stagedDir.path, 'banknotes.db'));
+      final stagedImagesDir = Directory(p.join(stagedDir.path, 'images'));
+      await stagedImagesDir.create(recursive: true);
+
+      _mergeArchiveIntoDataset(
+        archiveDbPath: archiveDbPath,
+        archiveImagesDir: archiveImagesDir.path,
+        stagedDbPath: stagedDatabaseFile.path,
+        stagedImagesDir: stagedImagesDir.path,
       );
 
-      final currentDir = await _currentDatasetDirectory();
       final backupDir = Directory(
         p.join(containerDir.path, 'backup-${DateTime.now().microsecondsSinceEpoch}'),
       );
@@ -122,6 +141,74 @@ class NativeDatasetStore {
       if (stagedDir.existsSync()) {
         await stagedDir.delete(recursive: true);
       }
+    }
+  }
+
+  Future<void> deleteCollection(int collectionId) async {
+    final normalizedCollectionId = collectionId;
+    if (normalizedCollectionId <= 0) {
+      throw StateError('A valid collection ID is required.');
+    }
+
+    final currentDir = await _currentDatasetDirectory();
+    final databasePath = p.join(currentDir.path, 'banknotes.db');
+    if (!File(databasePath).existsSync()) {
+      throw StateError('No imported dataset is installed.');
+    }
+
+    final database = sqlite3.open(databasePath);
+
+    try {
+      database.execute('PRAGMA foreign_keys = ON');
+
+      final collectionRows = database.select(
+        'SELECT id, is_default FROM collections WHERE id = ? LIMIT 1',
+        <Object?>[normalizedCollectionId],
+      );
+      if (collectionRows.isEmpty) {
+        throw StateError('Collection not found.');
+      }
+
+      final noteIdRows = database.select(
+        'SELECT id FROM banknotes WHERE collection_id = ? ORDER BY id ASC',
+        <Object?>[normalizedCollectionId],
+      );
+      final noteIds = noteIdRows
+          .map((row) => (row['id'] as int?) ?? 0)
+          .where((id) => id > 0)
+          .toList(growable: false);
+
+      database.execute('DELETE FROM collections WHERE id = ?', <Object?>[normalizedCollectionId]);
+
+      final hasDefaultRows = database.select(
+        'SELECT id FROM collections WHERE is_default = 1 LIMIT 1',
+      );
+
+      if (hasDefaultRows.isEmpty) {
+        final fallbackRows = database.select(
+          'SELECT id FROM collections ORDER BY name COLLATE NOCASE ASC, id ASC LIMIT 1',
+        );
+
+        if (fallbackRows.isNotEmpty) {
+          final fallbackId = (fallbackRows.first['id'] as int?) ?? 0;
+          if (fallbackId > 0) {
+            database.execute('UPDATE collections SET is_default = 0 WHERE is_default = 1');
+            database.execute(
+              'UPDATE collections SET is_default = 1 WHERE id = ?',
+              <Object?>[fallbackId],
+            );
+          }
+        }
+      }
+
+      for (final noteId in noteIds) {
+        final noteImagesDir = Directory(p.join(currentDir.path, 'images', 'notes', '$noteId'));
+        if (noteImagesDir.existsSync()) {
+          noteImagesDir.deleteSync(recursive: true);
+        }
+      }
+    } finally {
+      database.dispose();
     }
   }
 
@@ -178,6 +265,358 @@ Future<void> _copyDirectory(Directory source, Directory target) async {
       await _copyDirectory(entry, Directory(destinationPath));
     }
   }
+}
+
+bool _tableExists(Database database, String tableName) {
+  final rows = database.select(
+    'SELECT name FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1',
+    <Object?>['table', tableName],
+  );
+  return rows.isNotEmpty;
+}
+
+List<Map<String, Object?>> _loadArchiveCollections(Database database) {
+  if (!_tableExists(database, 'collections')) {
+    throw StateError('Archive must include collections metadata.');
+  }
+
+  final rows = database.select('''
+    SELECT id, name, COALESCE(is_default, 0) AS is_default
+    FROM collections
+    ORDER BY id ASC
+  ''');
+
+  final normalizedRows = rows
+      .map(
+        (row) => <String, Object?>{
+          'id': (row['id'] as int?) ?? 0,
+          'name': '${row['name'] ?? ''}'.trim(),
+          'is_default': ((row['is_default'] as int?) ?? 0) == 1 ? 1 : 0,
+        },
+      )
+      .where((row) => (row['id'] as int) > 0 && ('${row['name']}'.trim().isNotEmpty))
+      .toList(growable: false);
+
+  if (normalizedRows.isEmpty) {
+    throw StateError('Archive contains no collections.');
+  }
+
+  return normalizedRows;
+}
+
+List<Map<String, Object?>> _parseImageRecords(Object? rawImages) {
+  if (rawImages == null) {
+    return const <Map<String, Object?>>[];
+  }
+
+  final raw = '$rawImages'.trim();
+  if (raw.isEmpty) {
+    return const <Map<String, Object?>>[];
+  }
+
+  try {
+    final decoded = jsonDecode(raw);
+    if (decoded is! List) {
+      return const <Map<String, Object?>>[];
+    }
+
+    return decoded
+        .whereType<Map>()
+        .map(
+          (entry) => entry.map(
+            (key, value) => MapEntry('$key', value),
+          ),
+        )
+        .toList(growable: false);
+  } catch (_) {
+    return const <Map<String, Object?>>[];
+  }
+}
+
+({List<Map<String, Object?>> images, List<({String fromRelative, String toRelative})> copyPlan})
+    _rewriteImageRecordsForImportedNote(
+  List<Map<String, Object?>> images,
+  int archiveNoteId,
+  int stagedNoteId,
+) {
+  final rewritten = <Map<String, Object?>>[];
+  final copyPlan = <({String fromRelative, String toRelative})>[];
+
+  for (final image in images) {
+    final localPath = '${image['localPath'] ?? ''}'.trim();
+    if (!localPath.startsWith(NativeDatasetStore._imageApiPrefix)) {
+      rewritten.add(image);
+      continue;
+    }
+
+    final relativePath = p.posix.normalize(
+      localPath.substring(NativeDatasetStore._imageApiPrefix.length),
+    );
+    final notePrefix = 'notes/$archiveNoteId/';
+    final targetRelativePath = relativePath.startsWith(notePrefix)
+        ? 'notes/$stagedNoteId/${relativePath.substring(notePrefix.length)}'
+        : relativePath;
+
+    copyPlan.add((fromRelative: relativePath, toRelative: targetRelativePath));
+    rewritten.add({
+      ...image,
+      'localPath': '${NativeDatasetStore._imageApiPrefix}$targetRelativePath',
+    });
+  }
+
+  return (images: rewritten, copyPlan: copyPlan);
+}
+
+void _copyPlannedImages({
+  required String sourceImagesDir,
+  required String stagedImagesDir,
+  required List<({String fromRelative, String toRelative})> copyPlan,
+}) {
+  for (final plan in copyPlan) {
+    final sourcePath = p.join(sourceImagesDir, ...p.posix.split(plan.fromRelative));
+    final sourceFile = File(sourcePath);
+    if (!sourceFile.existsSync()) {
+      continue;
+    }
+
+    final targetPath = p.join(stagedImagesDir, ...p.posix.split(plan.toRelative));
+    final targetFile = File(targetPath);
+    targetFile.parent.createSync(recursive: true);
+    sourceFile.copySync(targetPath);
+  }
+}
+
+void _mergeArchiveIntoDataset({
+  required String archiveDbPath,
+  required String archiveImagesDir,
+  required String stagedDbPath,
+  required String stagedImagesDir,
+}) {
+  final archiveDatabase = sqlite3.open(archiveDbPath, mode: OpenMode.readOnly);
+  final stagedDatabase = sqlite3.open(stagedDbPath);
+
+  final removedNoteIds = <int>[];
+  final copyPlan = <({String fromRelative, String toRelative})>[];
+
+  try {
+    stagedDatabase.execute('PRAGMA foreign_keys = ON');
+
+    final archiveCollections = _loadArchiveCollections(archiveDatabase);
+
+    final findCollectionByName = stagedDatabase.prepare('''
+      SELECT id
+      FROM collections
+      WHERE lower(name) = lower(?)
+      ORDER BY id ASC
+      LIMIT 1
+    ''');
+    final listNoteIdsByCollection = stagedDatabase.prepare('''
+      SELECT id
+      FROM banknotes
+      WHERE collection_id = ?
+      ORDER BY id ASC
+    ''');
+    final deleteCollection = stagedDatabase.prepare('DELETE FROM collections WHERE id = ?');
+    final insertCollection = stagedDatabase.prepare('''
+      INSERT INTO collections (name, is_default, created_at, updated_at)
+      VALUES (?, 0, datetime('now'), datetime('now'))
+    ''');
+    final archiveTagsByCollection = archiveDatabase.prepare('''
+      SELECT bt.banknote_id AS banknote_id, t.name AS name
+      FROM banknote_tags bt
+      INNER JOIN tags t ON t.id = bt.tag_id
+      INNER JOIN banknotes b ON b.id = bt.banknote_id
+      WHERE b.collection_id = ?
+      ORDER BY bt.banknote_id ASC, t.name COLLATE NOCASE ASC
+    ''');
+    final archiveNotesByCollection = archiveDatabase.prepare('''
+      SELECT
+        id,
+        display_order,
+        denomination,
+        issue_date,
+        catalog_number,
+        grading_company,
+        grade,
+        watermark,
+        serial,
+        url,
+        notes,
+        scraped_data,
+        images,
+        scrape_status,
+        scrape_error,
+        created_at,
+        updated_at
+      FROM banknotes
+      WHERE collection_id = ?
+      ORDER BY display_order ASC, id ASC
+    ''');
+    final insertNote = stagedDatabase.prepare('''
+      INSERT INTO banknotes (
+        collection_id,
+        display_order,
+        denomination,
+        issue_date,
+        catalog_number,
+        grading_company,
+        grade,
+        watermark,
+        serial,
+        url,
+        notes,
+        scraped_data,
+        images,
+        scrape_status,
+        scrape_error,
+        created_at,
+        updated_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))
+    ''');
+    final updateNoteImages = stagedDatabase.prepare('''
+      UPDATE banknotes
+      SET images = ?,
+          updated_at = datetime('now')
+      WHERE id = ?
+    ''');
+    final insertTag = stagedDatabase.prepare(
+      'INSERT OR IGNORE INTO tags (name, collection_id) VALUES (?, ?)',
+    );
+    final getTagByName = stagedDatabase.prepare('''
+      SELECT id
+      FROM tags
+      WHERE collection_id = ?
+        AND lower(name) = lower(?)
+      ORDER BY id ASC
+      LIMIT 1
+    ''');
+    final linkTag = stagedDatabase.prepare(
+      'INSERT OR IGNORE INTO banknote_tags (banknote_id, tag_id) VALUES (?, ?)',
+    );
+
+    final importedDefaults = <({int archiveId, int stagedId})>[];
+
+    for (final archiveCollection in archiveCollections) {
+      final archiveCollectionId = archiveCollection['id'] as int;
+      final archiveCollectionName = '${archiveCollection['name']}';
+      final archiveIsDefault = (archiveCollection['is_default'] as int?) == 1;
+
+      final existingRows = findCollectionByName.select(<Object?>[archiveCollectionName]);
+      if (existingRows.isNotEmpty) {
+        final existingCollectionId = (existingRows.first['id'] as int?) ?? 0;
+        if (existingCollectionId > 0) {
+          final noteRows = listNoteIdsByCollection.select(<Object?>[existingCollectionId]);
+          removedNoteIds.addAll(
+            noteRows
+                .map((row) => (row['id'] as int?) ?? 0)
+                .where((id) => id > 0),
+          );
+          deleteCollection.execute(<Object?>[existingCollectionId]);
+        }
+      }
+
+      insertCollection.execute(<Object?>[archiveCollectionName]);
+      final stagedCollectionId = stagedDatabase.lastInsertRowId;
+
+      if (archiveIsDefault) {
+        importedDefaults.add((archiveId: archiveCollectionId, stagedId: stagedCollectionId));
+      }
+
+      final tagsByNoteId = <int, List<String>>{};
+      for (final row in archiveTagsByCollection.select(<Object?>[archiveCollectionId])) {
+        final noteId = (row['banknote_id'] as int?) ?? 0;
+        final tagName = '${row['name'] ?? ''}'.trim();
+        if (noteId <= 0 || tagName.isEmpty) {
+          continue;
+        }
+
+        tagsByNoteId.putIfAbsent(noteId, () => <String>[]).add(tagName);
+      }
+
+      var nextDisplayOrder = 1;
+      for (final noteRow in archiveNotesByCollection.select(<Object?>[archiveCollectionId])) {
+        final archiveNoteId = (noteRow['id'] as int?) ?? 0;
+        if (archiveNoteId <= 0) {
+          continue;
+        }
+
+        insertNote.execute(<Object?>[
+          stagedCollectionId,
+          nextDisplayOrder,
+          noteRow['denomination'],
+          noteRow['issue_date'],
+          noteRow['catalog_number'],
+          noteRow['grading_company'],
+          noteRow['grade'],
+          noteRow['watermark'],
+          noteRow['serial'],
+          noteRow['url'],
+          noteRow['notes'],
+          noteRow['scraped_data'],
+          '[]',
+          noteRow['scrape_status'] ?? 'pending',
+          noteRow['scrape_error'],
+          noteRow['created_at'],
+          noteRow['updated_at'],
+        ]);
+
+        final stagedNoteId = stagedDatabase.lastInsertRowId;
+        final imageRecords = _parseImageRecords(noteRow['images']);
+        final rewrittenImages = _rewriteImageRecordsForImportedNote(
+          imageRecords,
+          archiveNoteId,
+          stagedNoteId,
+        );
+        copyPlan.addAll(rewrittenImages.copyPlan);
+        updateNoteImages.execute(<Object?>[
+          jsonEncode(rewrittenImages.images),
+          stagedNoteId,
+        ]);
+
+        final tagNames = tagsByNoteId[archiveNoteId] ?? const <String>[];
+        for (final tagName in tagNames) {
+          insertTag.execute(<Object?>[tagName, stagedCollectionId]);
+          final tagRows = getTagByName.select(<Object?>[stagedCollectionId, tagName]);
+          if (tagRows.isEmpty) {
+            continue;
+          }
+
+          final tagId = (tagRows.first['id'] as int?) ?? 0;
+          if (tagId > 0) {
+            linkTag.execute(<Object?>[stagedNoteId, tagId]);
+          }
+        }
+
+        nextDisplayOrder += 1;
+      }
+    }
+
+    if (importedDefaults.isNotEmpty) {
+      importedDefaults.sort((a, b) => a.archiveId.compareTo(b.archiveId));
+      stagedDatabase.execute('UPDATE collections SET is_default = 0 WHERE is_default = 1');
+      stagedDatabase.execute(
+        'UPDATE collections SET is_default = 1 WHERE id = ?',
+        <Object?>[importedDefaults.first.stagedId],
+      );
+    }
+  } finally {
+    archiveDatabase.dispose();
+    stagedDatabase.dispose();
+  }
+
+  for (final noteId in removedNoteIds) {
+    final noteImagesDir = Directory(p.join(stagedImagesDir, 'notes', '$noteId'));
+    if (noteImagesDir.existsSync()) {
+      noteImagesDir.deleteSync(recursive: true);
+    }
+  }
+
+  _copyPlannedImages(
+    sourceImagesDir: archiveImagesDir,
+    stagedImagesDir: stagedImagesDir,
+    copyPlan: copyPlan,
+  );
 }
 
 NativeDatasetStore createPlatformNativeDatasetStore() {

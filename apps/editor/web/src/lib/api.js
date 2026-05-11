@@ -224,8 +224,15 @@ async function importArchive(file) {
   return handleResponse(response);
 }
 
-async function downloadArchive() {
-  const response = await fetch('/api/archive/export');
+async function downloadArchive(collectionIds = null) {
+  const searchParams = new URLSearchParams();
+
+  if (Array.isArray(collectionIds) && collectionIds.length) {
+    searchParams.set('collectionIds', collectionIds.join(','));
+  }
+
+  const query = searchParams.toString();
+  const response = await fetch(query ? `/api/archive/export?${query}` : '/api/archive/export');
 
   if (!response.ok) {
     return handleResponse(response);

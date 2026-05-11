@@ -21,6 +21,10 @@ class NativeDatasetStore {
     throw UnsupportedError('Archive import is only available on native builds.');
   }
 
+  Future<void> deleteCollection(int collectionId) async {
+    throw UnsupportedError('Collection management is only available on native builds.');
+  }
+
   Future<void> deleteImportedDataset() async {}
 }
 

@@ -51,6 +51,7 @@ function ImportScreen({
   onRenameCollection,
   onSelectCollection,
   onSetDefaultCollection,
+  showBackToTable = true,
 }) {
   const navigate = useNavigate();
   const csvInputRef = useRef(null);
@@ -75,6 +76,7 @@ function ImportScreen({
   });
   const [collectionNameDraft, setCollectionNameDraft] = useState('');
   const [collectionActionLoading, setCollectionActionLoading] = useState(false);
+  const [selectedExportCollectionIds, setSelectedExportCollectionIds] = useState([]);
 
   const isBusy = operationStatus.isBusy;
   const busyMessage = isBusy
@@ -104,6 +106,25 @@ function ImportScreen({
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [navigate]);
+
+  useEffect(() => {
+    const validIds = collections.map((collection) => Number(collection.id)).filter((id) => Number.isInteger(id) && id > 0);
+
+    setSelectedExportCollectionIds((current) => {
+      const currentSet = new Set(current);
+      const retained = validIds.filter((id) => currentSet.has(id));
+
+      if (!retained.length) {
+        return validIds;
+      }
+
+      if (retained.length === current.length && retained.every((id, index) => id === current[index])) {
+        return current;
+      }
+
+      return retained;
+    });
+  }, [collections]);
 
   useEffect(() => {
     let active = true;
@@ -171,7 +192,7 @@ function ImportScreen({
       return;
     }
 
-    const confirmed = window.confirm('Importing an archive will replace the current database and pictures. Continue?');
+    const confirmed = window.confirm('Importing an archive will replace collections that exist in the archive (by name). Collections missing from the archive stay untouched. Continue?');
 
     if (!confirmed) {
       return;
@@ -204,7 +225,7 @@ function ImportScreen({
     setArchiveResult(null);
 
     try {
-      const payload = await downloadArchive();
+      const payload = await downloadArchive(selectedExportCollectionIds);
       setArchiveResult({ exported: payload.filename });
     } catch (exportError) {
       setError(exportError.message);
@@ -300,7 +321,7 @@ function ImportScreen({
   }
 
   async function handleDeleteCollection() {
-    if (!activeCollectionId || collections.length <= 1) {
+    if (!activeCollectionId) {
       return;
     }
 
@@ -331,13 +352,16 @@ function ImportScreen({
             <p className="eyebrow">Import and Export</p>
             <h1>Move your collection data</h1>
             <p>
-              CSV import updates notes from spreadsheet rows. Archive export downloads the full SQLite
-              database and pictures, and archive import replaces the current app data with that archive.
+              CSV import updates notes from spreadsheet rows. Archive export can include selected
+              collections only, and archive import replaces local collections that exist in the archive
+              (matched by name) while leaving other collections untouched.
             </p>
           </div>
-          <Link className="button" to="/">
-            Back to table
-          </Link>
+          {showBackToTable ? (
+            <Link className="button" to="/">
+              Back to table
+            </Link>
+          ) : null}
         </div>
 
         <div className="collection-admin-row">
@@ -389,7 +413,7 @@ function ImportScreen({
             </button>
             <button
               className="button button-danger"
-              disabled={isBusy || collectionActionLoading || collections.length <= 1 || !activeCollectionId}
+              disabled={isBusy || collectionActionLoading || !activeCollectionId}
               onClick={handleDeleteCollection}
               type="button"
             >
@@ -402,7 +426,7 @@ function ImportScreen({
         {collectionsError ? <p className="error-text">{collectionsError}</p> : null}
         {isBusy ? <p className="warning-text">{busyMessage}</p> : null}
         <p className="warning-text">
-          Archive import is destructive: it replaces the current database and all stored pictures.
+          Archive import is destructive for collections present in the archive: local data for those collections is replaced.
         </p>
 
         <div className="import-sections">
@@ -537,10 +561,11 @@ function ImportScreen({
           <form className="form-grid import-card" onSubmit={handleArchiveImport}>
             <div className="full-span">
               <p className="eyebrow">Archive Import and Export</p>
-              <h2>Download or replace full app data</h2>
+              <h2>Download or import archive data</h2>
               <p>
-                Export downloads a `.zip` with `banknotes.db` and the `images/` folder. Importing that
-                archive replaces the current app data and reloads the app state.
+                Export downloads a `.zip` with `banknotes.db` and only images referenced by selected
+                collections. Import always reads all collections from the archive and replaces matching
+                collection names in the current data.
               </p>
               <p className="warning-text import-card-warning">
                 You can also delete the current app data and start from an empty collection.
@@ -634,8 +659,41 @@ function ImportScreen({
               </div>
             </div>
 
+            <div className="field-block full-span">
+              <span>Collections to export</span>
+              <div className="import-actions" style={{ flexWrap: 'wrap' }}>
+                {collections.map((collection) => {
+                  const collectionId = Number(collection.id);
+                  const checked = selectedExportCollectionIds.includes(collectionId);
+
+                  return (
+                    <label key={collection.id} style={{ display: 'inline-flex', alignItems: 'center', gap: '0.45rem' }}>
+                      <input
+                        checked={checked}
+                        disabled={isBusy || exportingArchive}
+                        onChange={(event) => {
+                          setSelectedExportCollectionIds((current) => {
+                            if (event.target.checked) {
+                              if (current.includes(collectionId)) {
+                                return current;
+                              }
+                              return [...current, collectionId];
+                            }
+
+                            return current.filter((id) => id !== collectionId);
+                          });
+                        }}
+                        type="checkbox"
+                      />
+                      <span>{collection.name}</span>
+                    </label>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="import-actions full-span">
-              <button className="button" disabled={exportingArchive || isBusy} onClick={handleArchiveExport} type="button">
+              <button className="button" disabled={exportingArchive || isBusy || !selectedExportCollectionIds.length} onClick={handleArchiveExport} type="button">
                 {exportingArchive ? 'Preparing export...' : 'Download archive'}
               </button>
               <button className="button button-primary" disabled={submittingArchive || isBusy || !archiveSource} type="submit">

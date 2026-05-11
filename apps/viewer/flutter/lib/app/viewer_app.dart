@@ -68,7 +68,9 @@ class _ViewerAppState extends State<ViewerApp> {
       home: AnimatedBuilder(
         animation: _controller,
         builder: (context, _) {
-          if (_controller.dataset == null) {
+          final dataset = _controller.dataset;
+
+          if (dataset == null || dataset.collections.isEmpty) {
             return ImportDatasetScreen(controller: _controller);
           }
 
