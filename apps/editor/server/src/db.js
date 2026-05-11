@@ -77,21 +77,32 @@ function ensureCollectionsTable(database) {
 }
 
 function ensureDefaultCollection(database) {
-  const existing = database.prepare(`
-    SELECT id, name
+  const existingDefault = database.prepare(`
+    SELECT id
     FROM collections
-    WHERE lower(name) = lower(?)
+    WHERE is_default = 1
     ORDER BY id ASC
     LIMIT 1
-  `).get(DEFAULT_COLLECTION_NAME);
+  `).get();
 
-  if (existing) {
-    return Number(existing.id);
+  if (existingDefault) {
+    return Number(existingDefault.id);
+  }
+
+  const firstExisting = database.prepare(`
+    SELECT id
+    FROM collections
+    ORDER BY id ASC
+    LIMIT 1
+  `).get();
+
+  if (firstExisting) {
+    return Number(firstExisting.id);
   }
 
   const inserted = database.prepare(`
-    INSERT INTO collections (name, created_at, updated_at)
-    VALUES (?, datetime('now'), datetime('now'))
+    INSERT INTO collections (name, is_default, created_at, updated_at)
+    VALUES (?, 1, datetime('now'), datetime('now'))
   `).run(DEFAULT_COLLECTION_NAME);
 
   return Number(inserted.lastInsertRowid);
