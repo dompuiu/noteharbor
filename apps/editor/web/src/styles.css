@@ -690,6 +690,13 @@ td.drag-cell {
   gap: 20px;
 }
 
+.import-panel-scroll {
+  margin: 4px;
+  padding-right: 4px;
+  min-height: 0;
+  overflow: auto;
+}
+
 .collection-admin-row {
   display: grid;
   grid-template-columns: 1fr;
@@ -717,6 +724,7 @@ td.drag-cell {
   border-radius: 22px;
   border: 1px solid rgba(92, 59, 24, 0.14);
   background: rgba(255, 255, 255, 0.5);
+  min-height: 0;
 }
 
 .archive-picker-row {
@@ -728,6 +736,33 @@ td.drag-cell {
 
 .archive-file-label {
   color: #6c5847;
+}
+
+.export-collection-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px 14px;
+  max-height: 180px;
+  overflow: auto;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1px solid rgba(92, 59, 24, 0.14);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.export-collection-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  white-space: nowrap;
+  line-height: 1.15;
+}
+
+.export-collection-option input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  margin: 0;
+  accent-color: #6f421f;
 }
 
 .full-span {
@@ -1437,7 +1472,9 @@ button.tag {
 }
 
 @keyframes spin {
-  to { transform: rotate(360deg); }
+  to {
+    transform: rotate(360deg);
+  }
 }
 
 .scrape-spinner {
