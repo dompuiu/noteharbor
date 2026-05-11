@@ -27,6 +27,10 @@ class ViewerRepository {
     return _nativeDatasetStore.importArchive(archivePath);
   }
 
+  Future<void> deleteCollection(int collectionId) {
+    return _nativeDatasetStore.deleteCollection(collectionId);
+  }
+
   Future<void> deleteImportedDataset() {
     return _nativeDatasetStore.deleteImportedDataset();
   }

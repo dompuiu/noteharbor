@@ -61,7 +61,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
           builder: (context) => AlertDialog(
             title: const Text('Import archive?'),
             content: const Text(
-              'Importing an archive replaces the current imported dataset and pictures on this device.',
+              'Importing an archive replaces collections found in the archive (matched by name). Collections not present in the archive stay untouched on this device.',
             ),
             actions: [
               TextButton(
@@ -95,6 +95,56 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       }
       setState(() {
         _message = 'Import failed: $error';
+      });
+    }
+  }
+
+  Future<void> _deleteActiveCollection() async {
+    final activeCollection = widget.controller.activeCollection;
+    if (activeCollection == null) {
+      setState(() => _message = 'Select a collection to delete.');
+      return;
+    }
+
+    final confirmed = await showDialog<bool>(
+          context: context,
+          builder: (context) => AlertDialog(
+            title: const Text('Delete collection?'),
+            content: Text(
+              'Delete "${activeCollection.name}" and all notes/images in that collection from this device?',
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(false),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: () => Navigator.of(context).pop(true),
+                child: const Text('Delete'),
+              ),
+            ],
+          ),
+        ) ??
+        false;
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      await widget.controller.deleteCollection(activeCollection.id);
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = 'Deleted ${activeCollection.name}.';
+      });
+    } catch (error) {
+      if (!mounted) {
+        return;
+      }
+      setState(() {
+        _message = 'Delete failed: $error';
       });
     }
   }
@@ -149,7 +199,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
   Widget build(BuildContext context) {
     return Scaffold(
       appBar: AppBar(
-        automaticallyImplyLeading: widget.controller.dataset != null,
+        automaticallyImplyLeading: (widget.controller.dataset?.collections.isNotEmpty ?? false),
         title: const Text('Import Dataset'),
       ),
       body: DecoratedBox(
@@ -218,7 +268,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                         ),
                         const SizedBox(height: 10),
                         const Text(
-                          'Import a Note Harbor archive exported from the editor. Imported data stays on this device and replaces the current imported dataset only.',
+                          'Import a Note Harbor archive exported from the editor. Imported data stays on this device. Collections present in the archive replace matching local collections by name; other local collections stay untouched.',
                         ),
                         const SizedBox(height: 18),
                         Wrap(
@@ -289,6 +339,14 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                     setState(() => _message = null);
                                   },
                           ),
+                          const SizedBox(height: 14),
+                          FilledButton.tonalIcon(
+                            onPressed: isBusy || activeCollection == null
+                                ? null
+                                : _deleteActiveCollection,
+                            icon: const Icon(Icons.delete_outline_rounded),
+                            label: const Text('Delete active collection'),
+                          ),
                         ],
                       ),
                     ),
@@ -355,7 +413,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                         ),
                         const SizedBox(height: 12),
                         const Text(
-                          'Import is destructive for imported data: it replaces the current imported database and pictures on this device.',
+                          'Import is destructive for collections present in the archive: matching local collections are replaced from archive data.',
                           style: TextStyle(
                               color: Color(0xFF6A2E1A),
                               fontWeight: FontWeight.w600),

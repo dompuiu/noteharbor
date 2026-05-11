@@ -1,5 +1,6 @@
 import {
   BrowserRouter,
+  Navigate,
   Route,
   Routes,
   useLocation,
@@ -25,21 +26,27 @@ function ShellContent() {
     setDefaultCollection,
   } = useCollections();
 
+  const shouldForceImport = !loadingCollections && collections.length === 0;
+
   return (
     <div className={`app-shell${isWideLayout ? " app-shell--wide" : ""}`}>
       <main>
         <Routes>
           <Route
-            element={(
-              <NotesTable
-                activeCollection={activeCollection}
-                activeCollectionId={activeCollectionId}
-                collections={collections}
-                collectionsError={collectionsError}
-                loadingCollections={loadingCollections}
-                onSelectCollection={selectCollection}
-              />
-            )}
+            element={
+              shouldForceImport
+                ? <Navigate replace to="/import" />
+                : (
+                    <NotesTable
+                      activeCollection={activeCollection}
+                      activeCollectionId={activeCollectionId}
+                      collections={collections}
+                      collectionsError={collectionsError}
+                      loadingCollections={loadingCollections}
+                      onSelectCollection={selectCollection}
+                    />
+                  )
+            }
             path="/"
           />
           <Route
@@ -55,12 +62,17 @@ function ShellContent() {
                 onRenameCollection={renameCollection}
                 onSelectCollection={selectCollection}
                 onSetDefaultCollection={setDefaultCollection}
+                showBackToTable={!shouldForceImport}
               />
             )}
             path="/import"
           />
           <Route
-            element={<NoteEditForm selectedCollectionId={activeCollectionId} />}
+            element={
+              shouldForceImport
+                ? <Navigate replace to="/import" />
+                : <NoteEditForm selectedCollectionId={activeCollectionId} />
+            }
             path="/notes/:id/edit"
           />
         </Routes>
