@@ -15,9 +15,11 @@ const DATA_DIR = path.resolve(process.env.NOTE_HARBOR_DATA_DIR || path.join(ROOT
 const IMAGES_DIR = path.join(DATA_DIR, 'images');
 const NOTE_IMAGES_DIR = path.join(IMAGES_DIR, 'notes');
 const DB_PATH = path.join(DATA_DIR, 'banknotes.db');
+const DEFAULT_COLLECTION_NAME = 'Default';
 
 const noteFields = `
   id,
+  collection_id,
   display_order,
   denomination,
   issue_date,
@@ -43,12 +45,169 @@ function ensureDataDirs() {
   fs.mkdirSync(NOTE_IMAGES_DIR, { recursive: true });
 }
 
+function normalizeCollectionName(name) {
+  return String(name ?? '').trim().replace(/\s+/g, ' ');
+}
+
+function ensureCollectionsTable(database) {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS collections (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      is_default INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_name_nocase
+      ON collections(name COLLATE NOCASE);
+  `);
+
+  const columns = database.prepare(`PRAGMA table_info(collections)`).all();
+
+  if (!columns.some((column) => column.name === 'is_default')) {
+    database.exec(`ALTER TABLE collections ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0`);
+  }
+
+  database.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_single_default
+      ON collections(is_default)
+      WHERE is_default = 1;
+  `);
+}
+
+function ensureDefaultCollection(database) {
+  const existing = database.prepare(`
+    SELECT id, name
+    FROM collections
+    WHERE lower(name) = lower(?)
+    ORDER BY id ASC
+    LIMIT 1
+  `).get(DEFAULT_COLLECTION_NAME);
+
+  if (existing) {
+    return Number(existing.id);
+  }
+
+  const inserted = database.prepare(`
+    INSERT INTO collections (name, created_at, updated_at)
+    VALUES (?, datetime('now'), datetime('now'))
+  `).run(DEFAULT_COLLECTION_NAME);
+
+  return Number(inserted.lastInsertRowid);
+}
+
+function ensureDefaultCollectionFlag(database, defaultCollectionId) {
+  const hasDefault = database.prepare(`
+    SELECT id
+    FROM collections
+    WHERE is_default = 1
+    LIMIT 1
+  `).get();
+
+  if (hasDefault) {
+    return;
+  }
+
+  database.prepare(`UPDATE collections SET is_default = 0`).run();
+  database.prepare(`UPDATE collections SET is_default = 1 WHERE id = ?`).run(defaultCollectionId);
+}
+
+function migrateTagsForCollectionScope(database, defaultCollectionId) {
+  const tagsTableDefinition = database.prepare(`
+    SELECT sql
+    FROM sqlite_master
+    WHERE type = 'table' AND name = 'tags'
+  `).get();
+
+  const tagsColumns = database.prepare(`PRAGMA table_info(tags)`).all();
+  const hasCollectionColumn = tagsColumns.some((column) => column.name === 'collection_id');
+
+  if (!hasCollectionColumn) {
+    database.exec(`ALTER TABLE tags ADD COLUMN collection_id INTEGER`);
+    database.prepare(`UPDATE tags SET collection_id = ? WHERE collection_id IS NULL`).run(defaultCollectionId);
+  }
+
+  if (/name\s+TEXT\s+NOT\s+NULL\s+UNIQUE/i.test(tagsTableDefinition?.sql ?? '')) {
+    database.exec(`
+      PRAGMA foreign_keys = OFF;
+
+      CREATE TABLE tags_new (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE
+      );
+
+      INSERT INTO tags_new (id, name, collection_id)
+      SELECT id, name, COALESCE(collection_id, ${defaultCollectionId})
+      FROM tags;
+
+      DROP TABLE tags;
+      ALTER TABLE tags_new RENAME TO tags;
+
+      PRAGMA foreign_keys = ON;
+    `);
+  }
+
+  database.prepare(`UPDATE tags SET collection_id = ? WHERE collection_id IS NULL`).run(defaultCollectionId);
+
+  const duplicateRows = database.prepare(`
+    SELECT id, collection_id, lower(name) AS normalized_name
+    FROM tags
+    ORDER BY collection_id ASC, normalized_name ASC, id ASC
+  `).all();
+
+  const dedupeTags = database.transaction((rows) => {
+    const canonicalByKey = new Map();
+
+    for (const row of rows) {
+      const key = `${row.collection_id}:${row.normalized_name}`;
+      const canonicalId = canonicalByKey.get(key);
+
+      if (!canonicalId) {
+        canonicalByKey.set(key, row.id);
+        continue;
+      }
+
+      database.prepare(`
+        INSERT OR IGNORE INTO banknote_tags (banknote_id, tag_id)
+        SELECT banknote_id, ?
+        FROM banknote_tags
+        WHERE tag_id = ?
+      `).run(canonicalId, row.id);
+
+      database.prepare(`DELETE FROM banknote_tags WHERE tag_id = ?`).run(row.id);
+      database.prepare(`DELETE FROM tags WHERE id = ?`).run(row.id);
+    }
+  });
+
+  dedupeTags(duplicateRows);
+
+  database.exec(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_collection_name_nocase
+      ON tags(collection_id, name COLLATE NOCASE);
+  `);
+}
+
+function migrateBanknotesForCollectionScope(database, defaultCollectionId) {
+  const banknotesColumns = database.prepare(`PRAGMA table_info(banknotes)`).all();
+
+  if (!banknotesColumns.some((column) => column.name === 'collection_id')) {
+    database.exec(`ALTER TABLE banknotes ADD COLUMN collection_id INTEGER`);
+  }
+
+  database.prepare(`UPDATE banknotes SET collection_id = ? WHERE collection_id IS NULL`).run(defaultCollectionId);
+}
+
 function initializeSchema(database) {
   database.pragma('foreign_keys = ON');
+
+  ensureCollectionsTable(database);
 
   database.exec(`
     CREATE TABLE IF NOT EXISTS banknotes (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
+      collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
       display_order INTEGER,
       denomination TEXT,
       issue_date TEXT,
@@ -69,7 +228,8 @@ function initializeSchema(database) {
 
     CREATE TABLE IF NOT EXISTS tags (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
-      name TEXT NOT NULL UNIQUE
+      name TEXT NOT NULL,
+      collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE
     );
 
     CREATE TABLE IF NOT EXISTS banknote_tags (
@@ -85,6 +245,9 @@ function initializeSchema(database) {
     );
   `);
 
+  const defaultCollectionId = ensureDefaultCollection(database);
+  ensureDefaultCollectionFlag(database, defaultCollectionId);
+
   const banknotesTableDefinition = database.prepare(`
     SELECT sql
     FROM sqlite_master
@@ -97,6 +260,7 @@ function initializeSchema(database) {
 
       CREATE TABLE banknotes_new (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
+        collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
         display_order INTEGER,
         denomination TEXT,
         issue_date TEXT,
@@ -117,6 +281,7 @@ function initializeSchema(database) {
 
       INSERT INTO banknotes_new (
         id,
+        collection_id,
         display_order,
         denomination,
         issue_date,
@@ -136,6 +301,7 @@ function initializeSchema(database) {
       )
       SELECT
         id,
+        ${defaultCollectionId},
         display_order,
         denomination,
         issue_date,
@@ -161,6 +327,20 @@ function initializeSchema(database) {
     `);
   }
 
+  migrateBanknotesForCollectionScope(database, defaultCollectionId);
+  migrateTagsForCollectionScope(database, defaultCollectionId);
+
+  database.exec(`
+    CREATE INDEX IF NOT EXISTS idx_banknotes_collection_display_order
+      ON banknotes(collection_id, display_order, id);
+
+    CREATE INDEX IF NOT EXISTS idx_banknotes_collection_id
+      ON banknotes(collection_id);
+
+    CREATE INDEX IF NOT EXISTS idx_tags_collection_id
+      ON tags(collection_id);
+  `);
+
   const banknoteColumns = database.prepare(`PRAGMA table_info(banknotes)`).all();
 
   if (!banknoteColumns.some((column) => column.name === 'display_order')) {
@@ -173,55 +353,141 @@ function initializeSchema(database) {
     WHERE id = @id
   `);
 
-  const missingDisplayOrderRows = database.prepare(`
-    SELECT id
-    FROM banknotes
-    WHERE display_order IS NULL
-    ORDER BY id ASC
-  `).all();
+  const collections = database.prepare(`SELECT id FROM collections ORDER BY id ASC`).all();
 
-  if (missingDisplayOrderRows.length) {
-    const maxDisplayOrderRow = database
-      .prepare(`SELECT COALESCE(MAX(display_order), 0) AS value FROM banknotes`)
-      .get();
-    let nextDisplayOrder = Number(maxDisplayOrderRow?.value ?? 0) + 1;
+  const backfillDisplayOrder = database.transaction((collectionRows) => {
+    for (const collection of collectionRows) {
+      const missingRows = database.prepare(`
+        SELECT id
+        FROM banknotes
+        WHERE collection_id = ?
+          AND display_order IS NULL
+        ORDER BY id ASC
+      `).all(collection.id);
 
-    const backfillDisplayOrder = database.transaction((rows) => {
-      for (const row of rows) {
+      if (!missingRows.length) {
+        continue;
+      }
+
+      const maxDisplayOrderRow = database
+        .prepare(`SELECT COALESCE(MAX(display_order), 0) AS value FROM banknotes WHERE collection_id = ?`)
+        .get(collection.id);
+      let nextDisplayOrder = Number(maxDisplayOrderRow?.value ?? 0) + 1;
+
+      for (const row of missingRows) {
         assignMissingDisplayOrderStatement.run({
           id: row.id,
           display_order: nextDisplayOrder
         });
         nextDisplayOrder += 1;
       }
-    });
+    }
+  });
 
-    backfillDisplayOrder(missingDisplayOrderRows);
-  }
+  backfillDisplayOrder(collections);
 }
 
 function createStatements(database) {
   return {
-    listNotesStatement: database.prepare(`SELECT ${noteFields} FROM banknotes ORDER BY display_order ASC, id ASC`),
-    getNoteStatement: database.prepare(`SELECT ${noteFields} FROM banknotes WHERE id = ?`),
-    listTagsForNotesStatement: database.prepare(`
+    listCollectionsStatement: database.prepare(`
+      SELECT id, name, is_default, created_at, updated_at
+      FROM collections
+      ORDER BY is_default DESC, name COLLATE NOCASE ASC, id ASC
+    `),
+    getDefaultCollectionStatement: database.prepare(`
+      SELECT id, name, is_default, created_at, updated_at
+      FROM collections
+      WHERE is_default = 1
+      ORDER BY id ASC
+      LIMIT 1
+    `),
+    getCollectionStatement: database.prepare(`
+      SELECT id, name, is_default, created_at, updated_at
+      FROM collections
+      WHERE id = ?
+    `),
+    createCollectionStatement: database.prepare(`
+      INSERT INTO collections (name, is_default, created_at, updated_at)
+      VALUES (@name, 0, datetime('now'), datetime('now'))
+    `),
+    renameCollectionStatement: database.prepare(`
+      UPDATE collections
+      SET name = @name,
+          updated_at = datetime('now')
+      WHERE id = @id
+    `),
+    clearDefaultCollectionStatement: database.prepare(`
+      UPDATE collections
+      SET is_default = 0,
+          updated_at = datetime('now')
+      WHERE is_default = 1
+    `),
+    markDefaultCollectionStatement: database.prepare(`
+      UPDATE collections
+      SET is_default = 1,
+          updated_at = datetime('now')
+      WHERE id = @id
+    `),
+    deleteCollectionStatement: database.prepare(`DELETE FROM collections WHERE id = ?`),
+    countCollectionsStatement: database.prepare(`SELECT COUNT(*) AS value FROM collections`),
+
+    listNotesStatement: database.prepare(`
+      SELECT ${noteFields}
+      FROM banknotes
+      WHERE collection_id = @collection_id
+      ORDER BY display_order ASC, id ASC
+    `),
+    getNoteByIdStatement: database.prepare(`SELECT ${noteFields} FROM banknotes WHERE id = ?`),
+    getNoteByIdAndCollectionStatement: database.prepare(`
+      SELECT ${noteFields}
+      FROM banknotes
+      WHERE id = @id AND collection_id = @collection_id
+    `),
+    listNoteIdsByCollectionStatement: database.prepare(`
+      SELECT id
+      FROM banknotes
+      WHERE collection_id = ?
+      ORDER BY id ASC
+    `),
+    deleteNotesByCollectionStatement: database.prepare(`DELETE FROM banknotes WHERE collection_id = ?`),
+    deleteTagsByCollectionStatement: database.prepare(`DELETE FROM tags WHERE collection_id = ?`),
+    deleteOrphanTagLinksStatement: database.prepare(`
+      DELETE FROM banknote_tags
+      WHERE tag_id NOT IN (SELECT id FROM tags)
+         OR banknote_id NOT IN (SELECT id FROM banknotes)
+    `),
+
+    listTagsForCollectionStatement: database.prepare(`
+      SELECT DISTINCT t.id, t.name
+      FROM tags t
+      INNER JOIN banknote_tags bt ON bt.tag_id = t.id
+      INNER JOIN banknotes b ON b.id = bt.banknote_id
+      WHERE t.collection_id = @collection_id
+        AND b.collection_id = @collection_id
+      ORDER BY t.name COLLATE NOCASE ASC
+    `),
+    listTagsForNotesByCollectionStatement: database.prepare(`
+      SELECT bt.banknote_id, t.id, t.name
+      FROM banknote_tags bt
+      INNER JOIN tags t ON t.id = bt.tag_id
+      INNER JOIN banknotes b ON b.id = bt.banknote_id
+      WHERE b.collection_id = @collection_id
+      ORDER BY t.name COLLATE NOCASE ASC
+    `),
+    listTagsForAllNotesStatement: database.prepare(`
       SELECT bt.banknote_id, t.id, t.name
       FROM banknote_tags bt
       INNER JOIN tags t ON t.id = bt.tag_id
       ORDER BY t.name COLLATE NOCASE ASC
     `),
-    listAllTagsStatement: database.prepare(`
-      SELECT DISTINCT t.id, t.name
-      FROM tags t
-      INNER JOIN banknote_tags bt ON bt.tag_id = t.id
-      ORDER BY t.name COLLATE NOCASE ASC
-    `),
-    insertTagStatement: database.prepare(`INSERT OR IGNORE INTO tags (name) VALUES (?)`),
-    getTagByNameStatement: database.prepare(`SELECT id, name FROM tags WHERE name = ?`),
+    insertTagStatement: database.prepare(`INSERT OR IGNORE INTO tags (name, collection_id) VALUES (@name, @collection_id)`),
+    getTagByNameStatement: database.prepare(`SELECT id, name FROM tags WHERE collection_id = @collection_id AND lower(name) = lower(@name)`),
     clearNoteTagsStatement: database.prepare(`DELETE FROM banknote_tags WHERE banknote_id = ?`),
     insertNoteTagStatement: database.prepare(`INSERT OR IGNORE INTO banknote_tags (banknote_id, tag_id) VALUES (?, ?)`),
+
     upsertBanknoteStatement: database.prepare(`
       INSERT INTO banknotes (
+        collection_id,
         display_order,
         denomination,
         issue_date,
@@ -234,10 +500,11 @@ function createStatements(database) {
         notes,
         updated_at
       )
-      VALUES (@display_order, @denomination, @issue_date, @catalog_number, @grading_company, @grade, @watermark, @serial, @url, @notes, datetime('now'))
+      VALUES (@collection_id, @display_order, @denomination, @issue_date, @catalog_number, @grading_company, @grade, @watermark, @serial, @url, @notes, datetime('now'))
     `),
     insertNoteStatement: database.prepare(`
       INSERT INTO banknotes (
+        collection_id,
         display_order,
         denomination,
         issue_date,
@@ -254,6 +521,7 @@ function createStatements(database) {
         updated_at
       )
       VALUES (
+        @collection_id,
         @display_order,
         @denomination,
         @issue_date,
@@ -300,9 +568,14 @@ function createStatements(database) {
       UPDATE banknotes
       SET display_order = display_order - 1,
           updated_at = datetime('now')
-      WHERE display_order > ?
+      WHERE collection_id = @collection_id
+        AND display_order > @display_order
     `),
-    maxDisplayOrderStatement: database.prepare(`SELECT COALESCE(MAX(display_order), 0) AS value FROM banknotes`),
+    maxDisplayOrderStatement: database.prepare(`
+      SELECT COALESCE(MAX(display_order), 0) AS value
+      FROM banknotes
+      WHERE collection_id = ?
+    `),
     updateDisplayOrderStatement: database.prepare(`
       UPDATE banknotes
       SET display_order = @display_order,
@@ -312,6 +585,7 @@ function createStatements(database) {
     listImportRowsStatement: database.prepare(`
       SELECT
         id,
+        collection_id,
         display_order,
         denomination,
         issue_date,
@@ -323,6 +597,7 @@ function createStatements(database) {
         url,
         notes
       FROM banknotes
+      WHERE collection_id = @collection_id
       ORDER BY display_order ASC, id ASC
     `),
     updateImportedNoteStatement: database.prepare(`
@@ -462,10 +737,56 @@ function rowToNote(row, tagMap) {
   };
 }
 
-function buildTagMap() {
-  const tagMap = new Map();
+function getDefaultCollectionId() {
+  getDatabase();
+  const preferred = statements.getDefaultCollectionStatement.get();
 
-  for (const row of statements.listTagsForNotesStatement.all()) {
+  if (preferred) {
+    return Number(preferred.id);
+  }
+
+  const first = statements.listCollectionsStatement.get();
+
+  if (first) {
+    return Number(first.id);
+  }
+
+  const id = ensureDefaultCollection(db);
+  statements = createStatements(db);
+  return id;
+}
+
+function resolveCollectionId(collectionId) {
+  if (collectionId == null) {
+    return getDefaultCollectionId();
+  }
+
+  const normalized = Number(collectionId);
+  if (!Number.isInteger(normalized) || normalized <= 0) {
+    throw new Error('A valid collection ID is required.');
+  }
+
+  return normalized;
+}
+
+function ensureCollectionExists(collectionId) {
+  getDatabase();
+  const collection = statements.getCollectionStatement.get(collectionId);
+
+  if (!collection) {
+    throw new Error('Collection not found.');
+  }
+
+  return collection;
+}
+
+function buildTagMap(collectionId = null) {
+  const tagMap = new Map();
+  const rows = collectionId == null
+    ? statements.listTagsForAllNotesStatement.all()
+    : statements.listTagsForNotesByCollectionStatement.all({ collection_id: collectionId });
+
+  for (const row of rows) {
     if (!tagMap.has(row.banknote_id)) {
       tagMap.set(row.banknote_id, []);
     }
@@ -476,21 +797,163 @@ function buildTagMap() {
   return tagMap;
 }
 
-function getAllNotes() {
+function getAllCollections() {
   getDatabase();
-  const tagMap = buildTagMap();
-  return statements.listNotesStatement.all().map((row) => rowToNote(row, tagMap));
+  return statements.listCollectionsStatement.all();
 }
 
-function getNoteById(id) {
+function getCollectionById(id) {
   getDatabase();
-  const row = statements.getNoteStatement.get(id);
+  return statements.getCollectionStatement.get(Number(id)) ?? null;
+}
+
+function createCollection(name) {
+  getDatabase();
+  const normalizedName = normalizeCollectionName(name);
+
+  if (!normalizedName) {
+    throw new Error('Collection name is required.');
+  }
+
+  let collectionId;
+
+  try {
+    const result = statements.createCollectionStatement.run({ name: normalizedName });
+    collectionId = Number(result.lastInsertRowid);
+  } catch (error) {
+    if (String(error.message).includes('UNIQUE constraint failed: collections.name')) {
+      throw new Error('A collection with this name already exists.');
+    }
+
+    throw error;
+  }
+
+  return getCollectionById(collectionId);
+}
+
+function renameCollectionById(id, name) {
+  getDatabase();
+  const collectionId = Number(id);
+  const normalizedName = normalizeCollectionName(name);
+
+  if (!normalizedName) {
+    throw new Error('Collection name is required.');
+  }
+
+  ensureCollectionExists(collectionId);
+
+  try {
+    statements.renameCollectionStatement.run({ id: collectionId, name: normalizedName });
+  } catch (error) {
+    if (String(error.message).includes('UNIQUE constraint failed: collections.name')) {
+      throw new Error('A collection with this name already exists.');
+    }
+
+    throw error;
+  }
+
+  return getCollectionById(collectionId);
+}
+
+function removeManagedNoteImages(noteId) {
+  const noteImagesDir = path.join(NOTE_IMAGES_DIR, String(noteId));
+
+  if (!fs.existsSync(noteImagesDir)) {
+    return;
+  }
+
+  fs.rmSync(noteImagesDir, { recursive: true, force: true });
+}
+
+function setDefaultCollectionById(id) {
+  getDatabase();
+  const collectionId = Number(id);
+  ensureCollectionExists(collectionId);
+
+  const transaction = db.transaction((targetCollectionId) => {
+    statements.clearDefaultCollectionStatement.run();
+    statements.markDefaultCollectionStatement.run({ id: targetCollectionId });
+  });
+
+  transaction(collectionId);
+  return getCollectionById(collectionId);
+}
+
+function deleteCollectionById(id) {
+  getDatabase();
+  const collectionId = Number(id);
+  const collection = ensureCollectionExists(collectionId);
+
+  const count = Number(statements.countCollectionsStatement.get()?.value ?? 0);
+
+  if (count <= 1) {
+    throw new Error('Cannot delete the last remaining collection.');
+  }
+
+  const fallbackCollection = statements.listCollectionsStatement
+    .all()
+    .find((entry) => Number(entry.id) !== collectionId);
+
+  const noteIds = statements.listNoteIdsByCollectionStatement.all(collectionId).map((row) => Number(row.id));
+
+  const transaction = db.transaction((targetCollectionId, nextDefaultId, isDeletingDefault) => {
+    statements.deleteNotesByCollectionStatement.run(targetCollectionId);
+    statements.deleteTagsByCollectionStatement.run(targetCollectionId);
+    statements.deleteOrphanTagLinksStatement.run();
+    statements.deleteCollectionStatement.run(targetCollectionId);
+
+    if (isDeletingDefault && Number.isInteger(nextDefaultId)) {
+      statements.clearDefaultCollectionStatement.run();
+      statements.markDefaultCollectionStatement.run({ id: nextDefaultId });
+    }
+  });
+
+  transaction(
+    collectionId,
+    Number(fallbackCollection?.id ?? 0),
+    Number(collection.is_default) === 1,
+  );
+
+  for (const noteId of noteIds) {
+    removeManagedNoteImages(noteId);
+  }
+}
+
+function getAllNotes(collectionId = null) {
+  getDatabase();
+  const normalizedCollectionId = resolveCollectionId(collectionId);
+  ensureCollectionExists(normalizedCollectionId);
+
+  const tagMap = buildTagMap(normalizedCollectionId);
+  return statements.listNotesStatement.all({ collection_id: normalizedCollectionId }).map((row) => rowToNote(row, tagMap));
+}
+
+function getNoteById(id, collectionId = null) {
+  getDatabase();
+  const noteId = Number(id);
+
+  if (collectionId == null) {
+    const row = statements.getNoteByIdStatement.get(noteId);
+    if (!row) {
+      return null;
+    }
+
+    return rowToNote(row, buildTagMap());
+  }
+
+  const normalizedCollectionId = resolveCollectionId(collectionId);
+  ensureCollectionExists(normalizedCollectionId);
+
+  const row = statements.getNoteByIdAndCollectionStatement.get({
+    id: noteId,
+    collection_id: normalizedCollectionId
+  });
 
   if (!row) {
     return null;
   }
 
-  return rowToNote(row, buildTagMap());
+  return rowToNote(row, buildTagMap(normalizedCollectionId));
 }
 
 function getNotesByIds(ids) {
@@ -506,42 +969,51 @@ function getNotesByIds(ids) {
   return statement.all(placeholders).map((row) => rowToNote(row, tagMap));
 }
 
-function getAllTags() {
+function getAllTags(collectionId = null) {
   getDatabase();
-  return statements.listAllTagsStatement.all();
+  const normalizedCollectionId = resolveCollectionId(collectionId);
+  ensureCollectionExists(normalizedCollectionId);
+  return statements.listTagsForCollectionStatement.all({ collection_id: normalizedCollectionId });
 }
 
-function ensureTag(name) {
+function ensureTag(collectionId, name) {
   getDatabase();
+  const normalizedCollectionId = resolveCollectionId(collectionId);
+  ensureCollectionExists(normalizedCollectionId);
+
   const normalizedName = normalizeTagName(name);
 
   if (!normalizedName) {
     return null;
   }
 
-  statements.insertTagStatement.run(normalizedName);
-  return statements.getTagByNameStatement.get(normalizedName);
+  statements.insertTagStatement.run({
+    name: normalizedName,
+    collection_id: normalizedCollectionId
+  });
+
+  return statements.getTagByNameStatement.get({
+    collection_id: normalizedCollectionId,
+    name: normalizedName
+  });
 }
 
-function removeManagedNoteImages(noteId) {
-  const noteImagesDir = path.join(NOTE_IMAGES_DIR, String(noteId));
+function replaceNoteTags(noteId, tagNames, collectionId = null) {
+  getDatabase();
+  const existing = getNoteById(noteId);
 
-  if (!fs.existsSync(noteImagesDir)) {
-    return;
+  if (!existing) {
+    throw new Error('Note not found.');
   }
 
-  fs.rmSync(noteImagesDir, { recursive: true, force: true });
-}
-
-function replaceNoteTags(noteId, tagNames) {
-  getDatabase();
+  const normalizedCollectionId = resolveCollectionId(collectionId ?? existing.collection_id);
   const normalizedNames = [...new Set((tagNames ?? []).map(normalizeTagName).filter(Boolean))];
 
   const transaction = db.transaction(() => {
     statements.clearNoteTagsStatement.run(noteId);
 
     for (const tagName of normalizedNames) {
-      const tag = ensureTag(tagName);
+      const tag = ensureTag(normalizedCollectionId, tagName);
       if (tag) {
         statements.insertNoteTagStatement.run(noteId, tag.id);
       }
@@ -551,11 +1023,13 @@ function replaceNoteTags(noteId, tagNames) {
   transaction();
 }
 
-function importNotes(notes) {
+function importNotes(notes, collectionId = null) {
   getDatabase();
+  const normalizedCollectionId = resolveCollectionId(collectionId);
+  ensureCollectionExists(normalizedCollectionId);
 
   const transaction = db.transaction((rows) => {
-    const existingRows = statements.listImportRowsStatement.all();
+    const existingRows = statements.listImportRowsStatement.all({ collection_id: normalizedCollectionId });
     const matchedIds = new Set();
     const identityToRow = new Map();
     let importedCount = 0;
@@ -580,26 +1054,29 @@ function importNotes(notes) {
           id: existing.id,
           display_order: nextDisplayOrder
         });
-        replaceNoteTags(existing.id, note.tags);
+        replaceNoteTags(existing.id, note.tags, normalizedCollectionId);
         matchedIds.add(existing.id);
         identityToRow.set(identity, {
           ...existing,
           ...note,
           id: existing.id,
+          collection_id: normalizedCollectionId,
           display_order: nextDisplayOrder
         });
         updatedCount += 1;
       } else {
         const result = statements.upsertBanknoteStatement.run({
           ...note,
+          collection_id: normalizedCollectionId,
           display_order: nextDisplayOrder
         });
         const noteId = Number(result.lastInsertRowid);
-        replaceNoteTags(noteId, note.tags);
+        replaceNoteTags(noteId, note.tags, normalizedCollectionId);
 
         identityToRow.set(identity, {
           id: noteId,
           ...note,
+          collection_id: normalizedCollectionId,
           display_order: nextDisplayOrder
         });
         importedCount += 1;
@@ -638,14 +1115,23 @@ function importNotes(notes) {
   };
 }
 
-function getNextDisplayOrder() {
+function getNextDisplayOrder(collectionId = null) {
   getDatabase();
-  const row = statements.maxDisplayOrderStatement.get();
+  const normalizedCollectionId = resolveCollectionId(collectionId);
+  ensureCollectionExists(normalizedCollectionId);
+  const row = statements.maxDisplayOrderStatement.get(normalizedCollectionId);
   return Number(row?.value ?? 0) + 1;
 }
 
 function updateNote(note) {
   getDatabase();
+  const existing = getNoteById(note.id);
+
+  if (!existing) {
+    throw new Error('Note not found.');
+  }
+
+  const collectionId = resolveCollectionId(note.collection_id ?? existing.collection_id);
   const normalizedImages = normalizeImages(note.images ?? []);
 
   const transaction = db.transaction((payload) => {
@@ -654,32 +1140,36 @@ function updateNote(note) {
       scraped_data: payload.scraped_data ? JSON.stringify(payload.scraped_data) : null,
       images: JSON.stringify(normalizedImages)
     });
-    replaceNoteTags(payload.id, payload.tags);
+    replaceNoteTags(payload.id, payload.tags, collectionId);
   });
 
   transaction(note);
   removeStaleManagedFiles(IMAGES_DIR, note.id, normalizedImages);
-  return getNoteById(note.id);
+  return getNoteById(note.id, collectionId);
 }
 
 function createNote(note) {
   getDatabase();
+  const collectionId = resolveCollectionId(note.collection_id);
+  ensureCollectionExists(collectionId);
+
   const normalizedImages = normalizeImages(note.images ?? []);
 
   const transaction = db.transaction((payload) => {
     const result = statements.insertNoteStatement.run({
       ...payload,
+      collection_id: collectionId,
       scraped_data: payload.scraped_data ? JSON.stringify(payload.scraped_data) : null,
       images: JSON.stringify(normalizedImages),
-      display_order: getNextDisplayOrder()
+      display_order: getNextDisplayOrder(collectionId)
     });
     const noteId = Number(result.lastInsertRowid);
-    replaceNoteTags(noteId, payload.tags);
+    replaceNoteTags(noteId, payload.tags, collectionId);
     return noteId;
   });
 
   const noteId = transaction(note);
-  return getNoteById(noteId);
+  return getNoteById(noteId, collectionId);
 }
 
 function updateScrapeResult({ id, scrapedData, images, scrapeStatus, scrapeError }) {
@@ -699,27 +1189,33 @@ function updateScrapeResult({ id, scrapedData, images, scrapeStatus, scrapeError
   return getNoteById(id);
 }
 
-function deleteNote(id) {
+function deleteNote(id, collectionId = null) {
   getDatabase();
-  const existing = statements.getNoteStatement.get(id);
+  const existing = getNoteById(id, collectionId);
 
   if (!existing) {
     return;
   }
 
-  const transaction = db.transaction((noteId, displayOrder) => {
+  const transaction = db.transaction((noteId, targetCollectionId, displayOrder) => {
     statements.deleteNoteStatement.run(noteId);
-    statements.compactDisplayOrderAfterDeleteStatement.run(displayOrder);
+    statements.compactDisplayOrderAfterDeleteStatement.run({
+      collection_id: targetCollectionId,
+      display_order: displayOrder
+    });
   });
 
-  transaction(id, existing.display_order);
-  removeManagedNoteImages(id);
+  transaction(existing.id, existing.collection_id, existing.display_order);
+  removeManagedNoteImages(existing.id);
 }
 
-function reorderNotes(ids) {
+function reorderNotes(ids, collectionId = null) {
   getDatabase();
+  const normalizedCollectionId = resolveCollectionId(collectionId);
+  ensureCollectionExists(normalizedCollectionId);
+
   const normalizedIds = ids.map((id) => Number(id));
-  const allNotes = getAllNotes();
+  const allNotes = getAllNotes(normalizedCollectionId);
   const existingIds = allNotes.map((note) => note.id);
 
   if (!normalizedIds.length || normalizedIds.length !== existingIds.length) {
@@ -745,7 +1241,7 @@ function reorderNotes(ids) {
   });
 
   transaction(normalizedIds);
-  return getAllNotes();
+  return getAllNotes(normalizedCollectionId);
 }
 
 function createSlideshowSession(ids) {
@@ -799,20 +1295,27 @@ export {
   ROOT_DIR,
   backupDatabase,
   closeDatabase,
+  createCollection,
   createNote,
   createSlideshowSession,
+  deleteCollectionById,
   deleteNote,
   ensureTag,
+  getAllCollections,
   getAllNotes,
   getAllTags,
+  getCollectionById,
   getDatabase,
+  getDefaultCollectionId,
   getNoteById,
   getNotesByIds,
   getSlideshowSession,
   importNotes,
   openDatabase,
   reloadDatabase,
+  renameCollectionById,
   reorderNotes,
+  setDefaultCollectionById,
   replaceNoteTags,
   updateNote,
   updateScrapeResult,

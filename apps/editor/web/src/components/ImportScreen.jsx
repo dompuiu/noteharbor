@@ -40,7 +40,18 @@ function formatOperationLabel(operation) {
   return String(operation || 'idle').replace(/_/g, ' ');
 }
 
-function ImportScreen() {
+function ImportScreen({
+  activeCollection,
+  activeCollectionId,
+  collections,
+  collectionsError,
+  loadingCollections,
+  onCreateCollection,
+  onDeleteCollection,
+  onRenameCollection,
+  onSelectCollection,
+  onSetDefaultCollection,
+}) {
   const navigate = useNavigate();
   const csvInputRef = useRef(null);
   const archiveInputRef = useRef(null);
@@ -62,6 +73,8 @@ function ImportScreen() {
     startedAt: null,
     details: null
   });
+  const [collectionNameDraft, setCollectionNameDraft] = useState('');
+  const [collectionActionLoading, setCollectionActionLoading] = useState(false);
 
   const isBusy = operationStatus.isBusy;
   const busyMessage = isBusy
@@ -136,7 +149,7 @@ function ImportScreen() {
     setArchiveResult(null);
 
     try {
-      const payload = await importCsv(csvSource);
+      const payload = await importCsv(csvSource, activeCollectionId);
       setCsvResult(payload);
     } catch (importError) {
       setError(importError.message);
@@ -227,6 +240,89 @@ function ImportScreen() {
     }
   }
 
+  async function handleCreateCollection() {
+    const nextName = collectionNameDraft.trim();
+
+    if (!nextName) {
+      setError('Collection name is required.');
+      return;
+    }
+
+    setCollectionActionLoading(true);
+    setError('');
+
+    try {
+      await onCreateCollection(nextName);
+      setCollectionNameDraft('');
+    } catch (actionError) {
+      setError(actionError.message);
+    } finally {
+      setCollectionActionLoading(false);
+    }
+  }
+
+  async function handleRenameCollection() {
+    const nextName = collectionNameDraft.trim();
+
+    if (!nextName || !activeCollectionId) {
+      setError('Select a collection and provide a new name.');
+      return;
+    }
+
+    setCollectionActionLoading(true);
+    setError('');
+
+    try {
+      await onRenameCollection(activeCollectionId, nextName);
+      setCollectionNameDraft('');
+    } catch (actionError) {
+      setError(actionError.message);
+    } finally {
+      setCollectionActionLoading(false);
+    }
+  }
+
+  async function handleSetDefaultCollection() {
+    if (!activeCollectionId) {
+      return;
+    }
+
+    setCollectionActionLoading(true);
+    setError('');
+
+    try {
+      await onSetDefaultCollection(activeCollectionId);
+    } catch (actionError) {
+      setError(actionError.message);
+    } finally {
+      setCollectionActionLoading(false);
+    }
+  }
+
+  async function handleDeleteCollection() {
+    if (!activeCollectionId || collections.length <= 1) {
+      return;
+    }
+
+    const confirmed = window.confirm(`Delete collection "${activeCollection?.name}" and all its notes/images?`);
+
+    if (!confirmed) {
+      return;
+    }
+
+    setCollectionActionLoading(true);
+    setError('');
+
+    try {
+      await onDeleteCollection(activeCollectionId);
+      setCollectionNameDraft('');
+    } catch (actionError) {
+      setError(actionError.message);
+    } finally {
+      setCollectionActionLoading(false);
+    }
+  }
+
   return (
     <section className="screen-stack narrow-stack import-screen">
       <div className="panel import-panel">
@@ -244,6 +340,66 @@ function ImportScreen() {
           </Link>
         </div>
 
+        <div className="collection-admin-row">
+          <div className="inline-select-group">
+            <span>Active collection</span>
+            <select
+              className="select-input"
+              disabled={loadingCollections || isBusy || collectionActionLoading || !collections.length}
+              onChange={(event) => onSelectCollection(Number(event.target.value))}
+              value={activeCollectionId ?? ''}
+            >
+              {collections.map((collection) => (
+                <option key={collection.id} value={collection.id}>
+                  {Number(collection.is_default) === 1 ? '★ ' : ''}{collection.name}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div className="inline-select-group">
+            <input
+              className="select-input"
+              onChange={(event) => setCollectionNameDraft(event.target.value)}
+              placeholder="Collection name"
+              value={collectionNameDraft}
+            />
+            <button
+              className="button"
+              disabled={isBusy || collectionActionLoading}
+              onClick={handleCreateCollection}
+              type="button"
+            >
+              Create
+            </button>
+            <button
+              className="button"
+              disabled={isBusy || collectionActionLoading || !activeCollectionId}
+              onClick={handleRenameCollection}
+              type="button"
+            >
+              Rename
+            </button>
+            <button
+              className="button"
+              disabled={isBusy || collectionActionLoading || !activeCollectionId || Number(activeCollection?.is_default) === 1}
+              onClick={handleSetDefaultCollection}
+              type="button"
+            >
+              {Number(activeCollection?.is_default) === 1 ? 'Default' : 'Set default'}
+            </button>
+            <button
+              className="button button-danger"
+              disabled={isBusy || collectionActionLoading || collections.length <= 1 || !activeCollectionId}
+              onClick={handleDeleteCollection}
+              type="button"
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+
+        {loadingCollections ? <p>Loading collections...</p> : null}
+        {collectionsError ? <p className="error-text">{collectionsError}</p> : null}
         {isBusy ? <p className="warning-text">{busyMessage}</p> : null}
         <p className="warning-text">
           Archive import is destructive: it replaces the current database and all stored pictures.
@@ -253,10 +409,11 @@ function ImportScreen() {
           <form className="form-grid import-card" onSubmit={handleCsvSubmit}>
             <div className="full-span">
               <p className="eyebrow">CSV Import</p>
-              <h2>Upload a collection CSV</h2>
+              <h2>Upload CSV into active collection</h2>
               <p>
-                Existing notes are updated in place, notes missing from the CSV are deleted, tags are
-                replaced from the CSV, and rows after `Ignore after this line` are skipped.
+                Existing notes in <strong>{activeCollection?.name ?? 'selected collection'}</strong> are updated in place,
+                notes missing from the CSV are deleted, tags are replaced from the CSV, and rows after
+                `Ignore after this line` are skipped.
               </p>
             </div>
 
@@ -372,7 +529,7 @@ function ImportScreen() {
               </div>
             </div>
 
-            <button className="button button-primary import-submit" disabled={submittingCsv || isBusy} type="submit">
+            <button className="button button-primary import-submit" disabled={submittingCsv || isBusy || !activeCollectionId} type="submit">
               {submittingCsv ? 'Importing...' : 'Import CSV'}
             </button>
           </form>

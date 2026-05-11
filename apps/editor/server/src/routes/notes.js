@@ -5,6 +5,8 @@ import {
   createNote,
   deleteNote,
   getAllNotes,
+  getCollectionById,
+  getDefaultCollectionId,
   getNoteById,
   IMAGES_DIR,
   reorderNotes,
@@ -29,7 +31,7 @@ import {
 import { normalizeDenomination } from '../denomination.js';
 import { normalizeIssueDate } from '../dateNormalization.js';
 
-const notesRouter = Router();
+const notesRouter = Router({ mergeParams: true });
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: {
@@ -37,6 +39,28 @@ const upload = multer({
   }
 });
 const uploadFields = upload.fields(IMAGE_SLOTS.map((slot) => ({ name: slot.field, maxCount: 1 })));
+
+function resolveCollectionId(request, response) {
+  const rawCollectionId = request.params.collectionId;
+
+  if (rawCollectionId == null) {
+    return getDefaultCollectionId();
+  }
+
+  const collectionId = Number(rawCollectionId);
+
+  if (!Number.isInteger(collectionId) || collectionId <= 0) {
+    response.status(400).json({ error: 'A valid collection ID is required.' });
+    return null;
+  }
+
+  if (!getCollectionById(collectionId)) {
+    response.status(404).json({ error: 'Collection not found.' });
+    return null;
+  }
+
+  return collectionId;
+}
 
 function normalizeTags(value) {
   if (Array.isArray(value)) {
@@ -233,11 +257,23 @@ async function buildNextImages(noteId, existingImages, body, filesByField) {
   return normalizeImages(Array.from(imagesBySlot.values()));
 }
 
-notesRouter.get('/', (_request, response) => {
-  response.json({ notes: getAllNotes() });
+notesRouter.get('/', (request, response) => {
+  const collectionId = resolveCollectionId(request, response);
+
+  if (!collectionId) {
+    return;
+  }
+
+  response.json({ notes: getAllNotes(collectionId) });
 });
 
 notesRouter.post('/', uploadFields, async (request, response) => {
+  const collectionId = resolveCollectionId(request, response);
+
+  if (!collectionId) {
+    return;
+  }
+
   const payload = sanitizeNotePayload(request.body);
 
   if (!payload.denomination) {
@@ -248,6 +284,7 @@ notesRouter.post('/', uploadFields, async (request, response) => {
   try {
     let note = createNote({
       ...payload,
+      collection_id: collectionId,
       images: []
     });
 
@@ -255,6 +292,7 @@ notesRouter.post('/', uploadFields, async (request, response) => {
     if (nextImages.length) {
       note = updateNote({
         id: note.id,
+        collection_id: collectionId,
         ...payload,
         images: nextImages
       });
@@ -267,6 +305,12 @@ notesRouter.post('/', uploadFields, async (request, response) => {
 });
 
 notesRouter.post('/reorder', (request, response) => {
+  const collectionId = resolveCollectionId(request, response);
+
+  if (!collectionId) {
+    return;
+  }
+
   const ids = Array.isArray(request.body.ids) ? request.body.ids : null;
 
   if (!ids) {
@@ -275,7 +319,7 @@ notesRouter.post('/reorder', (request, response) => {
   }
 
   try {
-    const notes = reorderNotes(ids);
+    const notes = reorderNotes(ids, collectionId);
     response.json({ notes });
   } catch (error) {
     response.status(400).json({ error: error.message });
@@ -283,7 +327,13 @@ notesRouter.post('/reorder', (request, response) => {
 });
 
 notesRouter.get('/:id', (request, response) => {
-  const note = getNoteById(Number(request.params.id));
+  const collectionId = resolveCollectionId(request, response);
+
+  if (!collectionId) {
+    return;
+  }
+
+  const note = getNoteById(Number(request.params.id), collectionId);
 
   if (!note) {
     response.status(404).json({ error: 'Note not found.' });
@@ -294,8 +344,14 @@ notesRouter.get('/:id', (request, response) => {
 });
 
 notesRouter.put('/:id', uploadFields, async (request, response) => {
+  const collectionId = resolveCollectionId(request, response);
+
+  if (!collectionId) {
+    return;
+  }
+
   const noteId = Number(request.params.id);
-  const existing = getNoteById(noteId);
+  const existing = getNoteById(noteId, collectionId);
 
   if (!existing) {
     response.status(404).json({ error: 'Note not found.' });
@@ -305,6 +361,7 @@ notesRouter.put('/:id', uploadFields, async (request, response) => {
   try {
     const payload = {
       id: noteId,
+      collection_id: collectionId,
       ...sanitizeNotePayload(request.body),
       images: await buildNextImages(noteId, existing.images, request.body, request.files)
     };
@@ -317,15 +374,21 @@ notesRouter.put('/:id', uploadFields, async (request, response) => {
 });
 
 notesRouter.delete('/:id', (request, response) => {
+  const collectionId = resolveCollectionId(request, response);
+
+  if (!collectionId) {
+    return;
+  }
+
   const noteId = Number(request.params.id);
-  const existing = getNoteById(noteId);
+  const existing = getNoteById(noteId, collectionId);
 
   if (!existing) {
     response.status(404).json({ error: 'Note not found.' });
     return;
   }
 
-  deleteNote(noteId);
+  deleteNote(noteId, collectionId);
   response.json({ success: true });
 });
 

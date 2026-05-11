@@ -90,13 +90,72 @@ async function handleResponse(response) {
   return payload;
 }
 
-async function getNotes() {
-  const response = await fetch('/api/notes');
+function notesBasePath(collectionId) {
+  return Number.isInteger(collectionId)
+    ? `/api/collections/${collectionId}/notes`
+    : '/api/notes';
+}
+
+function tagsBasePath(collectionId) {
+  return Number.isInteger(collectionId)
+    ? `/api/collections/${collectionId}/tags`
+    : '/api/tags';
+}
+
+function importBasePath(collectionId) {
+  return Number.isInteger(collectionId)
+    ? `/api/collections/${collectionId}/import`
+    : '/api/import';
+}
+
+async function getCollections() {
+  const response = await fetch('/api/collections');
   return handleResponse(response);
 }
 
-async function reorderNotes(ids) {
-  const response = await fetch('/api/notes/reorder', {
+async function createCollection(name) {
+  const response = await fetch('/api/collections', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ name })
+  });
+
+  return handleResponse(response);
+}
+
+async function renameCollection(collectionId, name) {
+  const response = await fetch(`/api/collections/${collectionId}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ name })
+  });
+
+  return handleResponse(response);
+}
+
+async function deleteCollection(collectionId) {
+  const response = await fetch(`/api/collections/${collectionId}`, {
+    method: 'DELETE'
+  });
+
+  return handleResponse(response);
+}
+
+async function setDefaultCollection(collectionId) {
+  const response = await fetch(`/api/collections/${collectionId}/default`, {
+    method: 'PUT'
+  });
+
+  return handleResponse(response);
+}
+
+async function getNotes(collectionId) {
+  const response = await fetch(notesBasePath(collectionId));
+  return handleResponse(response);
+}
+
+async function reorderNotes(ids, collectionId) {
+  const response = await fetch(`${notesBasePath(collectionId)}/reorder`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ ids })
@@ -105,32 +164,32 @@ async function reorderNotes(ids) {
   return handleResponse(response);
 }
 
-async function getNote(id) {
-  const response = await fetch(`/api/notes/${id}`);
+async function getNote(id, collectionId) {
+  const response = await fetch(`${notesBasePath(collectionId)}/${id}`);
   return handleResponse(response);
 }
 
-async function createNote(payload) {
-  const response = await fetch('/api/notes', buildNoteRequestOptions('POST', payload));
-
-  return handleResponse(response);
-}
-
-async function updateNote(id, payload) {
-  const response = await fetch(`/api/notes/${id}`, buildNoteRequestOptions('PUT', payload));
+async function createNote(payload, collectionId) {
+  const response = await fetch(notesBasePath(collectionId), buildNoteRequestOptions('POST', payload));
 
   return handleResponse(response);
 }
 
-async function deleteNote(id) {
-  const response = await fetch(`/api/notes/${id}`, {
+async function updateNote(id, payload, collectionId) {
+  const response = await fetch(`${notesBasePath(collectionId)}/${id}`, buildNoteRequestOptions('PUT', payload));
+
+  return handleResponse(response);
+}
+
+async function deleteNote(id, collectionId) {
+  const response = await fetch(`${notesBasePath(collectionId)}/${id}`, {
     method: 'DELETE'
   });
 
   return handleResponse(response);
 }
 
-async function importCsv(source) {
+async function importCsv(source, collectionId) {
   const formData = new FormData();
 
   if (isFileValue(source)) {
@@ -141,7 +200,7 @@ async function importCsv(source) {
     throw new Error('Choose a CSV file or paste CSV text before importing.');
   }
 
-  const response = await fetch('/api/import', {
+  const response = await fetch(importBasePath(collectionId), {
     method: 'POST',
     body: formData
   });
@@ -202,8 +261,8 @@ async function clearAppData() {
   return handleResponse(response);
 }
 
-async function getTags() {
-  const response = await fetch('/api/tags/suggestions');
+async function getTags(collectionId) {
+  const response = await fetch(`${tagsBasePath(collectionId)}/suggestions`);
   return handleResponse(response);
 }
 
@@ -234,9 +293,12 @@ async function getScrapeStatus() {
 
 export {
   clearAppData,
+  createCollection,
   createNote,
+  deleteCollection,
   deleteNote,
   downloadArchive,
+  getCollections,
   getNote,
   getNotes,
   getOperationStatus,
@@ -244,8 +306,10 @@ export {
   getTags,
   importArchive,
   importCsv,
+  renameCollection,
   reorderNotes,
   scrapePreview,
+  setDefaultCollection,
   startScrape,
   updateNote
 };
