@@ -13,6 +13,7 @@ import {
   copyTextToClipboard,
   formatNoteAsTsvRow,
 } from "../lib/noteClipboard.js";
+import { isScrapingDisabled } from "../lib/appMode.js";
 import { PositionPicker } from "./PositionPicker.jsx";
 
 const emptyForm = {
@@ -839,20 +840,22 @@ function NoteEditForm({
                 onChange={handleFieldChange}
                 value={form.url}
               />
-              <button
-                aria-label="Auto Populate fields from URL"
-                className="button"
-                disabled={scraping || !form.url.trim()}
-                onClick={handleAutoPopulate}
-                title="Auto Populate fields from URL"
-                type="button"
-              >
-                {scraping ? (
-                  <span className="scrape-spinner" aria-label="Loading" />
-                ) : (
-                  <span aria-hidden="true">✦</span>
-                )}
-              </button>
+              {!isScrapingDisabled ? (
+                <button
+                  aria-label="Auto Populate fields from URL"
+                  className="button"
+                  disabled={scraping || !form.url.trim()}
+                  onClick={handleAutoPopulate}
+                  title="Auto Populate fields from URL"
+                  type="button"
+                >
+                  {scraping ? (
+                    <span className="scrape-spinner" aria-label="Loading" />
+                  ) : (
+                    <span aria-hidden="true">✦</span>
+                  )}
+                </button>
+              ) : null}
             </div>
           </div>
 
