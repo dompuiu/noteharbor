@@ -265,7 +265,7 @@ function ImportScreen({
 
     try {
       const payload = await downloadArchive(selectedExportCollectionIds);
-      setArchiveResult({ exported: payload.filename });
+      setArchiveResult({ exported: payload.filename, selectedCount: selectedExportCollectionIds.length });
     } catch (exportError) {
       setError(exportError.message);
     } finally {
@@ -776,6 +776,7 @@ function ImportScreen({
           <div className="result-card">
             <h2>Archive export started</h2>
             <p>Downloaded: {archiveResult.exported}</p>
+            <p>Collections included: {archiveResult.selectedCount ?? collections.length}</p>
           </div>
         ) : null}
         </div>

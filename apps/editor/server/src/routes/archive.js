@@ -332,8 +332,22 @@ function buildFilteredExportSnapshot(snapshotDbPath, selectedCollectionIds, temp
 
     if (unselectedCollectionIds.length) {
       const placeholders = unselectedCollectionIds.map(() => '?').join(', ');
+
+      // Delete scoped rows explicitly so filtering works even on legacy snapshots
+      // where collection_id may exist without FK cascade constraints.
+      snapshotDatabase.prepare(`DELETE FROM banknotes WHERE collection_id IN (${placeholders})`).run(...unselectedCollectionIds);
+      snapshotDatabase.prepare(`DELETE FROM tags WHERE collection_id IN (${placeholders})`).run(...unselectedCollectionIds);
+      snapshotDatabase.prepare(`
+        DELETE FROM banknote_tags
+        WHERE banknote_id NOT IN (SELECT id FROM banknotes)
+           OR tag_id NOT IN (SELECT id FROM tags)
+      `).run();
+
       snapshotDatabase.prepare(`DELETE FROM collections WHERE id IN (${placeholders})`).run(...unselectedCollectionIds);
     }
+
+    // Compact filtered snapshot so the exported DB size reflects selected collections only.
+    snapshotDatabase.exec('VACUUM');
 
     const referencedImages = collectReferencedImageRelativePaths(snapshotDatabase);
     const exportImagesDir = path.join(tempRoot, 'images');
@@ -616,6 +630,9 @@ archiveRouter.get('/export', async (request, response) => {
       const filteredSnapshot = buildFilteredExportSnapshot(snapshotDbPath, selectedCollectionIds, tempRoot);
 
       response.setHeader('Content-Type', 'application/zip');
+      response.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+      response.setHeader('Pragma', 'no-cache');
+      response.setHeader('Expires', '0');
       response.setHeader('Content-Disposition', `attachment; filename="noteharbor-archive-${new Date().toISOString().slice(0, 10)}.zip"`);
 
       const archive = archiver('zip', { zlib: { level: 9 } });

@@ -231,8 +231,12 @@ async function downloadArchive(collectionIds = null) {
     searchParams.set('collectionIds', collectionIds.join(','));
   }
 
+  searchParams.set('_ts', String(Date.now()));
+
   const query = searchParams.toString();
-  const response = await fetch(query ? `/api/archive/export?${query}` : '/api/archive/export');
+  const response = await fetch(`/api/archive/export?${query}`, {
+    cache: 'no-store'
+  });
 
   if (!response.ok) {
     return handleResponse(response);
