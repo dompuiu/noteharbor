@@ -1,8 +1,6 @@
-import path from "node:path";
-import { fileURLToPath } from "node:url";
-import { spawn } from "node:child_process";
 import { Router } from "express";
 import { getNotesByIds, updateScrapeResult } from "../db.js";
+import { fetchHtml } from "../fetchHtml.js";
 import {
   beginOperation,
   createOperationConflictError,
@@ -17,8 +15,6 @@ import {
 } from "../serverMode.js";
 
 const scrapeRouter = Router();
-const ROUTES_DIR = path.dirname(fileURLToPath(import.meta.url));
-const FETCH_SCRIPT = path.resolve(ROUTES_DIR, "../../fetch_html.py");
 const DEFAULT_WAIT_SECONDS = 2;
 const DEFAULT_BROWSER_CDP_URL = "http://localhost:9222";
 
@@ -70,48 +66,6 @@ function getScraperForNote(note) {
 }
 
 /**
- * Spawns fetch_html.py to open the page with crawl4ai and return the raw HTML.
- * The browser runs headless=False so the user can interact with bot challenges.
- */
-function fetchHtml(url) {
-  return new Promise((resolve, reject) => {
-    const cdpUrl = getBrowserCdpUrl();
-
-    const args = [
-      FETCH_SCRIPT,
-      url,
-      "--wait",
-      String(DEFAULT_WAIT_SECONDS),
-      "--cdp-url",
-      cdpUrl,
-    ];
-
-    const proc = spawn("python3", args);
-    const chunks = [];
-    let stderr = "";
-
-    proc.stdout.on("data", (data) => chunks.push(data));
-    proc.stderr.on("data", (data) => {
-      stderr += data;
-      const msg = data.toString().trim();
-      if (msg) console.error("[fetch_html]", msg);
-    });
-
-    proc.on("close", (code) => {
-      if (code === 0) {
-        resolve(Buffer.concat(chunks).toString("utf8"));
-      } else {
-        reject(
-          new Error(stderr.trim() || `fetch_html.py exited with code ${code}`),
-        );
-      }
-    });
-
-    proc.on("error", (err) => reject(err));
-  });
-}
-
-/**
  * Fetches and parses a grading company URL using the appropriate scraper.
  * Returns { scraper, parsed } without writing anything to disk or DB.
  * Throws if no scraper matches the URL or if fetching/parsing fails.
@@ -128,7 +82,11 @@ async function scrapeUrl(noteOrUrl) {
     throw new Error("No scraper is implemented for this grading company yet.");
   }
 
-  const html = await fetchHtml(url);
+  const html = await fetchHtml({
+    url,
+    cdpUrl: getBrowserCdpUrl(),
+    waitSeconds: DEFAULT_WAIT_SECONDS
+  });
   const parsed = scraper.parse(html, url);
 
   return { scraper, parsed };
