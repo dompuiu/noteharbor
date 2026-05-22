@@ -31,6 +31,10 @@ class ViewerRepository {
     return _nativeDatasetStore.deleteCollection(collectionId);
   }
 
+  Future<void> setDefaultCollection(int collectionId) {
+    return _nativeDatasetStore.setDefaultCollection(collectionId);
+  }
+
   Future<void> deleteImportedDataset() {
     return _nativeDatasetStore.deleteImportedDataset();
   }

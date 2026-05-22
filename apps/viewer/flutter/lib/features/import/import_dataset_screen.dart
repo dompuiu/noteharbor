@@ -99,6 +99,12 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
     }
   }
 
+  Future<void> _setDefaultCollection() async {
+    final activeCollection = widget.controller.activeCollection;
+    if (activeCollection == null) return;
+    await widget.controller.setDefaultCollection(activeCollection.id);
+  }
+
   Future<void> _deleteActiveCollection() async {
     final activeCollection = widget.controller.activeCollection;
     if (activeCollection == null) {
@@ -340,12 +346,18 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                   },
                           ),
                           const SizedBox(height: 14),
-                          FilledButton.tonalIcon(
+                          FilledButton.tonal(
+                            onPressed: isBusy || activeCollection == null || activeCollection.isDefault
+                                ? null
+                                : _setDefaultCollection,
+                            child: const Text('Set as default collection'),
+                          ),
+                          const SizedBox(height: 8),
+                          FilledButton.tonal(
                             onPressed: isBusy || activeCollection == null
                                 ? null
                                 : _deleteActiveCollection,
-                            icon: const Icon(Icons.delete_outline_rounded),
-                            label: const Text('Delete active collection'),
+                            child: const Text('Delete active collection'),
                           ),
                         ],
                       ),

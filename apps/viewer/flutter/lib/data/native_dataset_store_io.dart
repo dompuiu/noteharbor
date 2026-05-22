@@ -212,6 +212,22 @@ class NativeDatasetStore {
     }
   }
 
+  Future<void> setDefaultCollection(int collectionId) async {
+    final currentDir = await _currentDatasetDirectory();
+    final databasePath = p.join(currentDir.path, 'banknotes.db');
+    if (!File(databasePath).existsSync()) {
+      throw StateError('No imported dataset is installed.');
+    }
+
+    final database = sqlite3.open(databasePath);
+    try {
+      database.execute('UPDATE collections SET is_default = 0 WHERE is_default = 1');
+      database.execute('UPDATE collections SET is_default = 1 WHERE id = ?', <Object?>[collectionId]);
+    } finally {
+      database.dispose();
+    }
+  }
+
   Future<void> deleteImportedDataset() async {
     final currentDir = await _currentDatasetDirectory();
     if (currentDir.existsSync()) {

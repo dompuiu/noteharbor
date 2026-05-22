@@ -25,6 +25,10 @@ class NativeDatasetStore {
     throw UnsupportedError('Collection management is only available on native builds.');
   }
 
+  Future<void> setDefaultCollection(int collectionId) async {
+    throw UnsupportedError('Collection management is only available on native builds.');
+  }
+
   Future<void> deleteImportedDataset() async {}
 }
 

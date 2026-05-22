@@ -110,6 +110,24 @@ class DatasetController extends ChangeNotifier {
     }
   }
 
+  Future<void> setDefaultCollection(int collectionId) async {
+    _isMutating = true;
+    _error = null;
+    notifyListeners();
+
+    try {
+      await _repository.setDefaultCollection(collectionId);
+      _dataset = await _repository.loadDataset();
+      _syncActiveCollectionId();
+    } catch (error) {
+      _error = error;
+      rethrow;
+    } finally {
+      _isMutating = false;
+      notifyListeners();
+    }
+  }
+
   Future<void> deleteImportedDataset() async {
     _isMutating = true;
     _error = null;
