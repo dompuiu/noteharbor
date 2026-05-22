@@ -102,6 +102,43 @@ This starts:
 - the Express API at `http://127.0.0.1:3001`
 - the Vite app at `http://localhost:5173`
 
+### Use a Windows Chrome from WSL via CDP
+
+If you run the editor server in WSL but want to see and interact with a Windows Chrome window for bot checks, launch Chrome on Windows with remote debugging enabled and point the server at it. The scraper reads the current HTML from the already open tab whose URL matches the requested note URL.
+
+1. Start Chrome on Windows with a dedicated profile:
+
+```powershell
+chrome.exe --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 --user-data-dir="C:\temp\noteharbor-cdp"
+```
+
+2. Verify the CDP endpoint is up:
+
+```text
+http://localhost:9222/json/version
+```
+
+3. Start the editor server in WSL. By default it uses `http://localhost:9222`:
+
+```bash
+pnpm dev
+```
+
+To override the CDP URL:
+
+```bash
+NOTE_HARBOR_BROWSER_CDP_URL=http://localhost:9222 pnpm dev
+```
+
+If `localhost:9222` is not reachable from WSL, use the Windows host IP instead. In many WSL setups this is the `nameserver` value from `/etc/resolv.conf`.
+
+Workflow:
+
+1. Open the target note page manually in the CDP browser.
+2. Solve any challenge manually.
+3. Trigger scrape or preview in Note Harbor.
+4. The server reads the current DOM from the matching open tab.
+
 ### Build the web editor and run the server
 
 ```bash
@@ -160,7 +197,7 @@ Create `apps/editor/server/.env` if you want to override defaults.
 |---|---|---|
 | `HOST` | `127.0.0.1` | Express bind host |
 | `PORT` | `3001` | Express bind port |
-| `PMG_BROWSER_PROFILE_DIR` | `apps/editor/server/storage/browser_profiles/pmg` | Persistent browser profile used by scraping |
+| `NOTE_HARBOR_BROWSER_CDP_URL` | `http://localhost:9222` | CDP endpoint for the browser that already has the target page open |
 | `NOTE_HARBOR_DATA_DIR` | `data` | Root data directory containing `banknotes.db` and `images/` |
 | `NOTE_HARBOR_WEB_DIST_DIR` | `apps/editor/web/dist` | Static web build served by Express |
 | `NOTE_HARBOR_SERVE_WEB_DIST` | `false` | Enables serving the built web app from Express |
@@ -384,20 +421,18 @@ db.js updateScrapeResult(...)
 
 ### `fetch_html.py`
 
-Generic HTML fetcher used by the server-side scrape route.
+Reads the current HTML from a matching open tab on a CDP-connected browser.
 
 ```bash
-python3 fetch_html.py <url> --wait 10 --profile-dir apps/editor/server/storage/browser_profiles/pmg
-python3 fetch_html.py <url> --wait-for ".certlookup-details"
+python3 fetch_html.py <url> --cdp-url http://localhost:9222 --wait 10
 ```
 
 | Flag | Default | Description |
 |---|---|---|
 | `--wait` | `10` | Delay value accepted by the script interface |
-| `--profile-dir` | none | Persistent browser profile directory |
-| `--wait-for` | none | CSS selector to wait for before capturing HTML |
+| `--cdp-url` | required | CDP endpoint for the browser that already has the page open |
 
-The crawler runs non-headless so manual interaction remains possible when a target site presents anti-bot checks.
+The script does not open a new tab or navigate. It requires an already open tab whose URL matches the requested URL.
 
 ### Adding a new scraper
 
