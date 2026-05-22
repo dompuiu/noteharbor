@@ -10,7 +10,7 @@ Local collection software for managing and presenting banknote archives. This mo
 | Editor frontend | React 19, React Router 7, Vite |
 | Desktop editor | Electron + electron-builder |
 | Viewer | Flutter (bundled-data, read-only) |
-| Scraping | Python 3 + crawl4ai + Playwright |
+| Scraping | Node.js + Playwright (CDP attach to an existing browser) |
 | Package manager | pnpm 10 workspaces |
 
 ---
@@ -32,11 +32,10 @@ noteharbor/
 │   │   │       └── main.js
 │   │   ├── server/
 │   │   │   ├── package.json
-│   │   │   ├── requirements.txt
-│   │   │   ├── fetch_html.py
 │   │   │   └── src/
 │   │   │       ├── index.js
 │   │   │       ├── db.js
+│   │   │       ├── fetchHtml.js
 │   │   │       ├── operationState.js
 │   │   │       ├── serverMode.js
 │   │   │       ├── routes/
@@ -87,8 +86,7 @@ noteharbor/
 
 ```bash
 pnpm install
-pip install -r apps/editor/server/requirements.txt
-playwright install chromium
+pnpm --filter editor_server exec playwright install chromium
 ```
 
 ### Run the editor in development
@@ -406,9 +404,9 @@ GET /api/slideshow/:token
 ```
 scrape.js (Node.js)
     |
-    | spawn child process
+    | read matching open tab over CDP
     v
-fetch_html.py (Python / crawl4ai)
+fetchHtml.js (Node.js / Playwright)
     |
     | returns raw HTML
     v
@@ -419,20 +417,20 @@ scrapers/pmg.js or scrapers/tqg.js
 db.js updateScrapeResult(...)
 ```
 
-### `fetch_html.py`
+### `src/fetchHtml.js`
 
 Reads the current HTML from a matching open tab on a CDP-connected browser.
 
 ```bash
-python3 fetch_html.py <url> --cdp-url http://localhost:9222 --wait 10
+node -e "import('./apps/editor/server/src/fetchHtml.js').then(async ({ fetchHtml }) => console.log(await fetchHtml({ url: 'https://example.com', cdpUrl: 'http://localhost:9222', waitSeconds: 2 })))"
 ```
 
-| Flag | Default | Description |
+| Option | Default | Description |
 |---|---|---|
-| `--wait` | `10` | Delay value accepted by the script interface |
-| `--cdp-url` | required | CDP endpoint for the browser that already has the page open |
+| `waitSeconds` | `2` | Delay before reading the matching open tab |
+| `cdpUrl` | `http://localhost:9222` in the route | CDP endpoint for the browser that already has the page open |
 
-The script does not open a new tab or navigate. It requires an already open tab whose URL matches the requested URL.
+The helper does not open a new tab or navigate. It requires an already open tab whose URL matches the requested URL.
 
 ### Adding a new scraper
 
