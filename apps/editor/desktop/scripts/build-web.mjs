@@ -14,7 +14,7 @@ if (!pnpmExecPath) {
 const result = spawnSync(process.execPath, [pnpmExecPath, '--dir', webDir, 'run', 'build'], {
   env: {
     ...process.env,
-    VITE_DISABLE_SCRAPING: 'true'
+    VITE_DESKTOP_RUNTIME: 'true'
   },
   stdio: 'inherit'
 });

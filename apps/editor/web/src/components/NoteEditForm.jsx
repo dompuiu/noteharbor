@@ -13,8 +13,28 @@ import {
   copyTextToClipboard,
   formatNoteAsTsvRow,
 } from "../lib/noteClipboard.js";
-import { isScrapingDisabled } from "../lib/appMode.js";
+import { isDesktopRuntime, isScrapingDisabled } from "../lib/appMode.js";
 import { PositionPicker } from "./PositionPicker.jsx";
+
+const SCRAPE_BROWSER_POLL_INTERVAL_MS = 500;
+const SCRAPE_BROWSER_POLL_TIMEOUT_MS = 10000;
+
+function getDesktopBridge() {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  const bridge = window.noteHarborDesktop;
+  if (
+    !bridge ||
+    typeof bridge.getScrapeBrowserStatus !== "function" ||
+    typeof bridge.openScrapeBrowser !== "function"
+  ) {
+    return null;
+  }
+
+  return bridge;
+}
 
 const emptyForm = {
   denomination: "",
@@ -146,10 +166,19 @@ function NoteEditForm({
   const [scrapeToast, setScrapeToast] = useState(null);
   const [scrapeDetails, setScrapeDetails] = useState(null);
   const [pendingScrapedImages, setPendingScrapedImages] = useState({});
+  const [scrapeBrowserStatus, setScrapeBrowserStatus] = useState({
+    supported: false,
+    available: !isScrapingDisabled,
+    launching: false,
+    error: null,
+  });
   const inputRefs = useRef({});
   const firstFieldRef = useRef(null);
   const formElementRef = useRef(null);
   const scrapeToastTimer = useRef(null);
+  const scrapeBrowserPollTimer = useRef(null);
+  const desktopBridge = getDesktopBridge();
+  const hasDesktopScrapeLauncher = isDesktopRuntime;
 
   const wrapperClassName = overlay
     ? "edit-note-overlay-content"
@@ -161,8 +190,71 @@ function NoteEditForm({
     positionNeedsReference && positionReferenceId === null;
   const canNavigatePrevious = !isCreateMode && Boolean(previousNoteId) && !saving;
   const canNavigateNext = !isCreateMode && Boolean(nextNoteId) && !saving;
+  const canScrapeUrl =
+    !scraping &&
+    Boolean(form.url.trim()) &&
+    (isScrapingDisabled ? false : hasDesktopScrapeLauncher ? scrapeBrowserStatus.available : true);
   // Notes other than the one being edited — used for both the visibility guard and the picker list
   const otherNotes = allNotes.filter((n) => n.id !== Number(noteId));
+
+  async function loadScrapeBrowserStatus() {
+    if (!desktopBridge) {
+      setScrapeBrowserStatus({
+        supported: hasDesktopScrapeLauncher,
+        available: !isScrapingDisabled,
+        launching: false,
+        error: null,
+      });
+      return null;
+    }
+
+    try {
+      const status = await desktopBridge.getScrapeBrowserStatus();
+      setScrapeBrowserStatus(status);
+      return status;
+    } catch (statusError) {
+      const nextStatus = {
+        supported: true,
+        available: false,
+        launching: false,
+        error: statusError.message || "Could not check Chrome scrape status.",
+      };
+      setScrapeBrowserStatus(nextStatus);
+      return nextStatus;
+    }
+  }
+
+  function clearScrapeBrowserPollTimer() {
+    if (scrapeBrowserPollTimer.current) {
+      clearTimeout(scrapeBrowserPollTimer.current);
+      scrapeBrowserPollTimer.current = null;
+    }
+  }
+
+  async function pollForScrapeBrowserAvailability(startedAt = Date.now()) {
+    const status = await loadScrapeBrowserStatus();
+
+    if (status?.available) {
+      return true;
+    }
+
+    if (Date.now() - startedAt >= SCRAPE_BROWSER_POLL_TIMEOUT_MS) {
+      setScrapeBrowserStatus((current) => ({
+        ...current,
+        launching: false,
+        error:
+          current.error ||
+          "Chrome opened, but the CDP endpoint on port 9222 did not become ready in time.",
+      }));
+      return false;
+    }
+
+    await new Promise((resolve) => {
+      scrapeBrowserPollTimer.current = setTimeout(resolve, SCRAPE_BROWSER_POLL_INTERVAL_MS);
+    });
+
+    return pollForScrapeBrowserAvailability(startedAt);
+  }
 
   function handleCancel() {
     if (onCancel) {
@@ -191,6 +283,7 @@ function NoteEditForm({
     setScrapeToast(null);
     setScrapeDetails(null);
     setPendingScrapedImages({});
+    clearScrapeBrowserPollTimer();
 
     const dataPromise = noteId
       ? Promise.all([
@@ -245,8 +338,13 @@ function NoteEditForm({
 
     return () => {
       active = false;
+      clearScrapeBrowserPollTimer();
     };
   }, [initialPositionMode, initialPositionReferenceId, noteId, selectedCollectionId]);
+
+  useEffect(() => {
+    loadScrapeBrowserStatus();
+  }, [desktopBridge, hasDesktopScrapeLauncher]);
 
   useEffect(() => {
     if (!loading) {
@@ -285,6 +383,7 @@ function NoteEditForm({
   useEffect(
     () => () => {
       if (scrapeToastTimer.current) clearTimeout(scrapeToastTimer.current);
+      clearScrapeBrowserPollTimer();
     },
     [],
   );
@@ -530,6 +629,48 @@ function NoteEditForm({
       showScrapeToast(err.message || "Scraping failed.");
     } finally {
       setScraping(false);
+    }
+  }
+
+  async function handleOpenScrapeBrowser() {
+    if (!desktopBridge) {
+      showScrapeToast("The Electron desktop bridge is not available in this window.");
+      return;
+    }
+
+    setScrapeBrowserStatus((current) => ({
+      ...current,
+      launching: true,
+      error: null,
+    }));
+    setScrapeToast(null);
+    clearScrapeBrowserPollTimer();
+
+    try {
+      const status = await desktopBridge.openScrapeBrowser();
+      setScrapeBrowserStatus(status);
+
+      if (status.error) {
+        showScrapeToast(status.error);
+        return;
+      }
+
+      if (!status.available) {
+        const becameAvailable = await pollForScrapeBrowserAvailability();
+        if (!becameAvailable) {
+          showScrapeToast(
+            "Chrome opened, but remote debugging on port 9222 is not ready yet.",
+          );
+        }
+      }
+    } catch (launchError) {
+      setScrapeBrowserStatus((current) => ({
+        ...current,
+        launching: false,
+        available: false,
+        error: launchError.message || "Could not open Chrome for scraping.",
+      }));
+      showScrapeToast(launchError.message || "Could not open Chrome for scraping.");
     }
   }
 
@@ -833,31 +974,46 @@ function NoteEditForm({
 
           <div className="field-block">
             <label htmlFor={fieldInputId("url")}>URL</label>
-            <div className="url-field-row">
-              <input
-                id={fieldInputId("url")}
-                name="url"
-                onChange={handleFieldChange}
-                value={form.url}
-              />
-              {!isScrapingDisabled ? (
-                <button
-                  aria-label="Auto Populate fields from URL"
-                  className="button"
-                  disabled={scraping || !form.url.trim()}
-                  onClick={handleAutoPopulate}
-                  title="Auto Populate fields from URL"
-                  type="button"
-                >
-                  {scraping ? (
-                    <span className="scrape-spinner" aria-label="Loading" />
+              <div className="url-field-row">
+                <input
+                  id={fieldInputId("url")}
+                  name="url"
+                  onChange={handleFieldChange}
+                  value={form.url}
+                />
+                {hasDesktopScrapeLauncher ? (
+                  <button
+                    className="button"
+                    disabled={scrapeBrowserStatus.launching}
+                    onClick={handleOpenScrapeBrowser}
+                    title="Open Chrome for scraping"
+                    type="button"
+                  >
+                    {scrapeBrowserStatus.launching ? "Opening..." : "Open Chrome"}
+                  </button>
+                ) : null}
+                {!isScrapingDisabled ? (
+                  <button
+                    aria-label="Auto Populate fields from URL"
+                    className="button"
+                    disabled={!canScrapeUrl}
+                    onClick={handleAutoPopulate}
+                    title={
+                      hasDesktopScrapeLauncher && !scrapeBrowserStatus.available
+                        ? scrapeBrowserStatus.error || "Open Chrome for scraping first"
+                        : "Auto Populate fields from URL"
+                    }
+                    type="button"
+                  >
+                    {scraping ? (
+                      <span className="scrape-spinner" aria-label="Loading" />
                   ) : (
                     <span aria-hidden="true">✦</span>
                   )}
-                </button>
-              ) : null}
+                  </button>
+                ) : null}
+              </div>
             </div>
-          </div>
 
           <div className="field-block full-span">
             <label htmlFor={fieldInputId("notes")}>Notes</label>
