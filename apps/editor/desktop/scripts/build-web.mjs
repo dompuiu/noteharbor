@@ -12,10 +12,7 @@ if (!pnpmExecPath) {
 }
 
 const result = spawnSync(process.execPath, [pnpmExecPath, '--dir', webDir, 'run', 'build'], {
-  env: {
-    ...process.env,
-    VITE_DISABLE_SCRAPING: 'true'
-  },
+  env: process.env,
   stdio: 'inherit'
 });
 
