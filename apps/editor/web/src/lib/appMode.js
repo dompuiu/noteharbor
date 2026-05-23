@@ -6,6 +6,19 @@ function parseBooleanEnv(value) {
   return ["1", "true", "yes", "on"].includes(normalized);
 }
 
-const isScrapingDisabled = parseBooleanEnv(import.meta.env.VITE_DISABLE_SCRAPING);
+function detectDesktopRuntime() {
+  if (typeof window !== "undefined" && window.noteHarborDesktop) {
+    return true;
+  }
 
-export { isScrapingDisabled };
+  if (typeof navigator === "undefined") {
+    return false;
+  }
+
+  return navigator.userAgent.includes("note-harbor-desktop");
+}
+
+const isScrapingDisabled = parseBooleanEnv(import.meta.env.VITE_DISABLE_SCRAPING);
+const isDesktopRuntime = detectDesktopRuntime();
+
+export { isDesktopRuntime, isScrapingDisabled };

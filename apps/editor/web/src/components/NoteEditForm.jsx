@@ -13,7 +13,7 @@ import {
   copyTextToClipboard,
   formatNoteAsTsvRow,
 } from "../lib/noteClipboard.js";
-import { isScrapingDisabled } from "../lib/appMode.js";
+import { isDesktopRuntime, isScrapingDisabled } from "../lib/appMode.js";
 import { PositionPicker } from "./PositionPicker.jsx";
 
 const SCRAPE_BROWSER_POLL_INTERVAL_MS = 500;
@@ -178,7 +178,7 @@ function NoteEditForm({
   const scrapeToastTimer = useRef(null);
   const scrapeBrowserPollTimer = useRef(null);
   const desktopBridge = getDesktopBridge();
-  const hasDesktopScrapeLauncher = Boolean(desktopBridge);
+  const hasDesktopScrapeLauncher = isDesktopRuntime;
 
   const wrapperClassName = overlay
     ? "edit-note-overlay-content"
@@ -200,7 +200,7 @@ function NoteEditForm({
   async function loadScrapeBrowserStatus() {
     if (!desktopBridge) {
       setScrapeBrowserStatus({
-        supported: false,
+        supported: hasDesktopScrapeLauncher,
         available: !isScrapingDisabled,
         launching: false,
         error: null,
@@ -344,7 +344,7 @@ function NoteEditForm({
 
   useEffect(() => {
     loadScrapeBrowserStatus();
-  }, [desktopBridge]);
+  }, [desktopBridge, hasDesktopScrapeLauncher]);
 
   useEffect(() => {
     if (!loading) {
@@ -634,6 +634,7 @@ function NoteEditForm({
 
   async function handleOpenScrapeBrowser() {
     if (!desktopBridge) {
+      showScrapeToast("The Electron desktop bridge is not available in this window.");
       return;
     }
 

@@ -248,6 +248,7 @@ async function createMainWindow() {
     autoHideMenuBar: true,
     backgroundColor: '#f4efe6',
     webPreferences: {
+      additionalArguments: ['--note-harbor-desktop=1'],
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true,
