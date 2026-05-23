@@ -7,15 +7,15 @@ function parseBooleanEnv(value) {
 }
 
 function detectDesktopRuntime() {
+  if (parseBooleanEnv(import.meta.env.VITE_DESKTOP_RUNTIME)) {
+    return true;
+  }
+
   if (typeof window !== "undefined" && window.noteHarborDesktop) {
     return true;
   }
 
-  if (typeof navigator === "undefined") {
-    return false;
-  }
-
-  return navigator.userAgent.includes("note-harbor-desktop");
+  return false;
 }
 
 const isScrapingDisabled = parseBooleanEnv(import.meta.env.VITE_DISABLE_SCRAPING);
