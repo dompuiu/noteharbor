@@ -1,4 +1,4 @@
-import { contextBridge, ipcRenderer } from 'electron';
+const { contextBridge, ipcRenderer } = require('electron');
 
 contextBridge.exposeInMainWorld('noteHarborDesktop', {
   getScrapeBrowserStatus: () => ipcRenderer.invoke('note-harbor:get-scrape-browser-status'),

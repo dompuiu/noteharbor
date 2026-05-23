@@ -10,7 +10,7 @@ app.setName('Note Harbor Editor');
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const WORKSPACE_ROOT = path.resolve(__dirname, '../../../..');
-const preloadPath = path.join(__dirname, 'preload.js');
+const preloadPath = path.join(__dirname, 'preload.cjs');
 const DEFAULT_CHROME_CDP_URL = 'http://127.0.0.1:9222';
 const DEFAULT_CHROME_CDP_PORT = '9222';
 const DEFAULT_CHROME_CDP_ADDRESS = '0.0.0.0';
