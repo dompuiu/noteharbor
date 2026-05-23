@@ -1000,7 +1000,7 @@ function NoteEditForm({
                     onClick={handleAutoPopulate}
                     title={
                       hasDesktopScrapeLauncher && !scrapeBrowserStatus.available
-                        ? "Open Chrome for scraping first"
+                        ? scrapeBrowserStatus.error || "Open Chrome for scraping first"
                         : "Auto Populate fields from URL"
                     }
                     type="button"
@@ -1013,11 +1013,6 @@ function NoteEditForm({
                   </button>
                 ) : null}
               </div>
-              {hasDesktopScrapeLauncher && !scrapeBrowserStatus.available ? (
-                <p className="muted image-field-help">
-                  {scrapeBrowserStatus.error || "Open Chrome for scraping first."}
-                </p>
-              ) : null}
             </div>
 
           <div className="field-block full-span">
