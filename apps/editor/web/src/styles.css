@@ -1107,6 +1107,84 @@ button.tag {
   box-shadow: 0 28px 60px rgba(62, 39, 16, 0.14);
 }
 
+.scrape-conflict-overlay {
+  z-index: 120;
+}
+
+.scrape-conflict-overlay-frame {
+  max-width: 1120px;
+}
+
+.scrape-conflict-overlay-content {
+  width: min(100%, 1120px);
+}
+
+.scrape-conflict-panel {
+  display: grid;
+  gap: 24px;
+}
+
+.scrape-conflict-list {
+  display: grid;
+  gap: 16px;
+}
+
+.scrape-conflict-card {
+  display: grid;
+  gap: 16px;
+  padding: 20px;
+  border-radius: 18px;
+  border: 1px solid rgba(92, 59, 24, 0.14);
+  background: linear-gradient(180deg, rgba(255, 250, 242, 0.98), rgba(247, 239, 227, 0.96));
+}
+
+.scrape-conflict-card-header h2 {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.scrape-conflict-values {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+}
+
+.scrape-conflict-value-block {
+  padding: 14px 16px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.72);
+  border: 1px solid rgba(92, 59, 24, 0.1);
+}
+
+.scrape-conflict-value-block p {
+  margin: 8px 0 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.scrape-conflict-choice-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.scrape-conflict-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(92, 59, 24, 0.14);
+  background: rgba(255, 255, 255, 0.72);
+  cursor: pointer;
+}
+
+.scrape-conflict-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
 .slideshow-topbar {
   display: flex;
   justify-content: flex-end;
@@ -1495,6 +1573,15 @@ button.tag {
   .edit-note-overlay-frame {
     max-width: none;
     padding-bottom: 20px;
+  }
+
+  .scrape-conflict-values {
+    grid-template-columns: 1fr;
+  }
+
+  .scrape-conflict-footer {
+    flex-direction: column-reverse;
+    align-items: stretch;
   }
 
   .app-shell {

@@ -20,6 +20,15 @@ import { PositionPicker } from "./PositionPicker.jsx";
 
 const SCRAPE_BROWSER_POLL_INTERVAL_MS = 500;
 const SCRAPE_BROWSER_POLL_TIMEOUT_MS = 10000;
+const SCRAPE_FIELD_LABELS = {
+  denomination: "Denomination",
+  issue_date: "Date",
+  catalog_number: "Catalog #",
+  grading_company: "Grading Company",
+  grade: "Grade",
+  watermark: "Watermark",
+  serial: "Serial",
+};
 
 function getDesktopBridge() {
   if (typeof window === "undefined") {
@@ -167,6 +176,10 @@ function NoteEditForm({
   const [scraping, setScraping] = useState(false);
   const [scrapeToast, setScrapeToast] = useState(null);
   const [scrapeDetails, setScrapeDetails] = useState(null);
+  const [scrapeConflicts, setScrapeConflicts] = useState([]);
+  const [scrapeConflictSelections, setScrapeConflictSelections] = useState({});
+  const [scrapeConflictOverlayOpen, setScrapeConflictOverlayOpen] = useState(false);
+  const [scrapeFilledCount, setScrapeFilledCount] = useState(0);
   const [pendingScrapedImages, setPendingScrapedImages] = useState({});
   const [scrapeBrowserStatus, setScrapeBrowserStatus] = useState({
     supported: false,
@@ -284,6 +297,10 @@ function NoteEditForm({
     setScraping(false);
     setScrapeToast(null);
     setScrapeDetails(null);
+    setScrapeConflicts([]);
+    setScrapeConflictSelections({});
+    setScrapeConflictOverlayOpen(false);
+    setScrapeFilledCount(0);
     setPendingScrapedImages({});
     clearScrapeBrowserPollTimer();
 
@@ -608,17 +625,81 @@ function NoteEditForm({
     scrapeToastTimer.current = setTimeout(() => setScrapeToast(null), 4000);
   }
 
+  function resolveScrapeUpdates(currentForm, scrapedUpdates) {
+    return Object.entries(scrapedUpdates).reduce(
+      (result, [fieldName, scrapedValue]) => {
+        const nextValue = String(scrapedValue ?? "").trim();
+
+        if (!nextValue) {
+          return result;
+        }
+
+        const currentValue = String(currentForm[fieldName] ?? "").trim();
+
+        if (!currentValue) {
+          result.autoFillUpdates[fieldName] = nextValue;
+          return result;
+        }
+
+        if (currentValue === nextValue) {
+          return result;
+        }
+
+        result.conflicts.push({
+          fieldName,
+          label: SCRAPE_FIELD_LABELS[fieldName] ?? fieldName,
+          currentValue,
+          scrapedValue: nextValue,
+        });
+        return result;
+      },
+      { autoFillUpdates: {}, conflicts: [] },
+    );
+  }
+
+  function openScrapeConflictOverlay(conflicts) {
+    setScrapeConflicts(conflicts);
+    setScrapeConflictSelections(
+      conflicts.reduce((selections, conflict) => {
+        selections[conflict.fieldName] = "keep";
+        return selections;
+      }, {}),
+    );
+    setScrapeConflictOverlayOpen(true);
+  }
+
+  function closeScrapeConflictOverlay() {
+    setScrapeConflicts([]);
+    setScrapeConflictSelections({});
+    setScrapeConflictOverlayOpen(false);
+  }
+
   async function handleAutoPopulate() {
     setScraping(true);
     setScrapeToast(null);
 
     try {
       const result = await scrapePreview(form.url);
+      const mappedUpdates = mapScrapedFields(result.scraped_data, form.url);
 
-      setForm((current) => ({
-        ...current,
-        ...mapScrapedFields(result.scraped_data, form.url),
-      }));
+      setForm((current) => {
+        const { autoFillUpdates, conflicts } = resolveScrapeUpdates(
+          current,
+          mappedUpdates,
+        );
+
+        setScrapeFilledCount(Object.keys(autoFillUpdates).length);
+
+        if (conflicts.length) {
+          openScrapeConflictOverlay(conflicts);
+        } else {
+          closeScrapeConflictOverlay();
+        }
+
+        return Object.keys(autoFillUpdates).length
+          ? { ...current, ...autoFillUpdates }
+          : current;
+      });
       setScrapeDetails(result.scraped_data);
 
       const nextScrapedImages = {};
@@ -632,6 +713,47 @@ function NoteEditForm({
     } finally {
       setScraping(false);
     }
+  }
+
+  function handleScrapeConflictSelection(fieldName, decision) {
+    setScrapeConflictSelections((current) => ({
+      ...current,
+      [fieldName]: decision,
+    }));
+  }
+
+  function handleKeepAllScrapedConflictsCurrent() {
+    setScrapeConflictSelections(
+      scrapeConflicts.reduce((selections, conflict) => {
+        selections[conflict.fieldName] = "keep";
+        return selections;
+      }, {}),
+    );
+  }
+
+  function handleUseAllScrapedConflicts() {
+    setScrapeConflictSelections(
+      scrapeConflicts.reduce((selections, conflict) => {
+        selections[conflict.fieldName] = "replace";
+        return selections;
+      }, {}),
+    );
+  }
+
+  function handleApplyScrapeConflictSelections() {
+    const selectedUpdates = scrapeConflicts.reduce((updates, conflict) => {
+      if (scrapeConflictSelections[conflict.fieldName] === "replace") {
+        updates[conflict.fieldName] = conflict.scrapedValue;
+      }
+
+      return updates;
+    }, {});
+
+    if (Object.keys(selectedUpdates).length) {
+      setForm((current) => ({ ...current, ...selectedUpdates }));
+    }
+
+    closeScrapeConflictOverlay();
   }
 
   async function handleOpenScrapeBrowser() {
@@ -841,6 +963,119 @@ function NoteEditForm({
 
   return (
     <section className={wrapperClassName}>
+      {scrapeConflictOverlayOpen ? (
+        <section className="edit-note-overlay scrape-conflict-overlay">
+          <div
+            className="edit-note-overlay-frame scrape-conflict-overlay-frame"
+            onClick={(event) => event.stopPropagation()}
+          >
+            <div className="edit-note-overlay-content scrape-conflict-overlay-content">
+              <div className="panel scrape-conflict-panel">
+                <div className="panel-heading">
+                  <div>
+                    <p className="eyebrow">Scrape review</p>
+                    <h1>Review scraped conflicts</h1>
+                    <p>
+                      {scrapeConflicts.length} conflicting field
+                      {scrapeConflicts.length === 1 ? "" : "s"} need a decision.
+                    </p>
+                    {scrapeFilledCount ? (
+                      <p className="muted">
+                        {scrapeFilledCount} empty field
+                        {scrapeFilledCount === 1 ? " was" : "s were"} filled automatically.
+                      </p>
+                    ) : null}
+                  </div>
+                  <div className="inline-actions">
+                    <button
+                      className="button"
+                      onClick={handleKeepAllScrapedConflictsCurrent}
+                      type="button"
+                    >
+                      Keep all current
+                    </button>
+                    <button
+                      className="button"
+                      onClick={handleUseAllScrapedConflicts}
+                      type="button"
+                    >
+                      Use all scraped
+                    </button>
+                  </div>
+                </div>
+
+                <div className="scrape-conflict-list">
+                  {scrapeConflicts.map((conflict) => {
+                    const inputName = `scrape-conflict-${conflict.fieldName}`;
+                    const selection =
+                      scrapeConflictSelections[conflict.fieldName] ?? "keep";
+
+                    return (
+                      <div className="scrape-conflict-card" key={conflict.fieldName}>
+                        <div className="scrape-conflict-card-header">
+                          <h2>{conflict.label}</h2>
+                        </div>
+                        <div className="scrape-conflict-values">
+                          <div className="scrape-conflict-value-block">
+                            <span className="eyebrow">Current</span>
+                            <p>{conflict.currentValue}</p>
+                          </div>
+                          <div className="scrape-conflict-value-block">
+                            <span className="eyebrow">Scraped</span>
+                            <p>{conflict.scrapedValue}</p>
+                          </div>
+                        </div>
+                        <div className="scrape-conflict-choice-row" role="radiogroup" aria-label={`${conflict.label} scrape decision`}>
+                          <label className="scrape-conflict-choice">
+                            <input
+                              checked={selection === "keep"}
+                              name={inputName}
+                              onChange={() =>
+                                handleScrapeConflictSelection(conflict.fieldName, "keep")
+                              }
+                              type="radio"
+                            />
+                            <span>Keep current</span>
+                          </label>
+                          <label className="scrape-conflict-choice">
+                            <input
+                              checked={selection === "replace"}
+                              name={inputName}
+                              onChange={() =>
+                                handleScrapeConflictSelection(conflict.fieldName, "replace")
+                              }
+                              type="radio"
+                            />
+                            <span>Use scraped</span>
+                          </label>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+
+                <div className="scrape-conflict-footer">
+                  <button
+                    className="button"
+                    onClick={closeScrapeConflictOverlay}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                  <button
+                    className="button button-primary"
+                    onClick={handleApplyScrapeConflictSelections}
+                    type="button"
+                  >
+                    Apply selected changes
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+      ) : null}
+
       <div className="panel">
         <div className="panel-heading">
           <div>
