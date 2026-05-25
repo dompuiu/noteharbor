@@ -7,6 +7,7 @@ import {
   endOperation,
   getOperationStatus,
 } from "../operationState.js";
+import { PCGSScraper } from "../scrapers/pcgs.js";
 import { PMGScraper } from "../scrapers/pmg.js";
 import { TQGScraper } from "../scrapers/tqg.js";
 import {
@@ -56,6 +57,10 @@ function getScraperForNote(note) {
 
   if (url.includes("pmgnotes.com") || company.includes("pmg")) {
     return new PMGScraper(note);
+  }
+
+  if (url.includes("pcgs.com/banknotes/cert/")) {
+    return new PCGSScraper(note);
   }
 
   if (url.includes("tqggrading.com") || company.includes("tqg")) {

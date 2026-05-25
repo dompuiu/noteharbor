@@ -28,6 +28,7 @@ const SCRAPE_FIELD_LABELS = {
   grade: "Grade",
   watermark: "Watermark",
   serial: "Serial",
+  notes: "Notes",
 };
 
 function getDesktopBridge() {
@@ -495,8 +496,33 @@ function NoteEditForm({
   function inferGradingCompany(url) {
     const lower = url.toLowerCase();
     if (lower.includes("pmgnotes.com")) return "PMG";
+    if (lower.includes("pcgs.com/banknotes/cert/")) return "PCGS";
     if (lower.includes("tqggrading.com")) return "TQG";
     return null;
+  }
+
+  function normalizePcgsGrade(scrapedData) {
+    const displayGrade = String(scrapedData.display_grade ?? "").trim();
+    const explicitGrade = String(scrapedData.grade ?? "").trim();
+    const hasPpq =
+      String(scrapedData.grade_desc ?? "").includes("PPQ") ||
+      explicitGrade.includes("PPQ") ||
+      scrapedData.opq === true;
+
+    if (displayGrade) {
+      return [displayGrade, hasPpq ? "PPQ" : null].filter(Boolean).join(" ");
+    }
+
+    if (!explicitGrade) {
+      return null;
+    }
+
+    const numericGrade = explicitGrade.match(/\b(\d{1,3})\b/)?.[1] ?? null;
+    if (!numericGrade) {
+      return explicitGrade;
+    }
+
+    return [numericGrade, hasPpq ? "PPQ" : null].filter(Boolean).join(" ");
   }
 
   function extractCatalogNumberFromPmNote(noteValue) {
@@ -571,12 +597,14 @@ function NoteEditForm({
         : {};
 
     const grade =
-      company === "TQG"
+      (company === "PCGS" ? normalizePcgsGrade(d) : null) ??
+      (company === "TQG"
         ? [d.grade, d.designation].filter(Boolean).join(" ")
-        : d.grade;
+        : d.grade);
     if (grade) updates.grade = grade;
 
     const serial =
+      (company === "PCGS" ? d.serial_number : null) ??
       (company === "TQG" ? d.serial_no : null) ??
       d.serial_number ??
       d.serial;
@@ -584,6 +612,7 @@ function NoteEditForm({
 
     const pmgNoteCatalogNumber = extractCatalogNumberFromPmNote(d.note);
     const catalogNumber =
+      (company === "PCGS" ? d.catalog_number : null) ??
       (company === "TQG" ? d.world_pick : null) ??
       pmgNoteCatalogNumber ??
       d.pmg_cert ??
@@ -600,6 +629,7 @@ function NoteEditForm({
     if (denomination) updates.denomination = denomination;
 
     const issueDate =
+      (company === "PCGS" ? d.date : null) ??
       d.issue_date ??
       d.year ??
       d.date ??
@@ -611,6 +641,10 @@ function NoteEditForm({
       d.watermark ??
       extractWatermarkFromPmSignaturesVignettes(d.signatures_vignettes);
     if (watermark) updates.watermark = watermark;
+
+    const notes =
+      (company === "PCGS" ? d.banknote_details ?? d.details : null) ?? null;
+    if (notes) updates.notes = notes;
 
     if (company) updates.grading_company = company;
 
@@ -1383,14 +1417,8 @@ function NoteEditForm({
                 const hasPendingImage =
                   Boolean(pendingPreview) || Boolean(scrapedImageUrl);
                 const hasExistingImage = Boolean(currentImage) && !isDeleted;
-                const hasThumbnailImage =
-                  Boolean(pendingImages[slot.key]) ||
-                  Boolean(scrapedImageUrl) ||
-                  (Boolean(currentImage) && !isDeleted);
                 const showGenerateOption =
-                  slot.variant === "thumbnail" &&
-                  hasFullImage &&
-                  !hasThumbnailImage;
+                  slot.variant === "thumbnail" && hasFullImage;
 
                 return (
                   <div
