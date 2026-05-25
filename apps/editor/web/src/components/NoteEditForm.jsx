@@ -12,6 +12,8 @@ import {
 import {
   copyTextToClipboard,
   formatNoteAsTsvRow,
+  parseNoteDetailsFromClipboardText,
+  readTextFromClipboard,
 } from "../lib/noteClipboard.js";
 import { isDesktopRuntime, isScrapingDisabled } from "../lib/appMode.js";
 import { PositionPicker } from "./PositionPicker.jsx";
@@ -795,6 +797,40 @@ function NoteEditForm({
     }
   }
 
+  async function handlePasteNoteDetails() {
+    try {
+      const clipboardValue = await readTextFromClipboard();
+      const pastedDetails = parseNoteDetailsFromClipboardText(clipboardValue);
+
+      setForm((current) => ({
+        ...current,
+        denomination: pastedDetails.denomination,
+        issue_date: pastedDetails.issue_date,
+        catalog_number: pastedDetails.catalog_number,
+        grading_company: pastedDetails.grading_company,
+        grade: pastedDetails.grade,
+        watermark: pastedDetails.watermark,
+        serial: pastedDetails.serial,
+        url: pastedDetails.url,
+        notes: pastedDetails.notes,
+        tags: pastedDetails.tags,
+      }));
+      setTagInput("");
+      setError("");
+    } catch (pasteError) {
+      if (
+        pasteError instanceof Error &&
+        pasteError.message ===
+          "Clipboard does not contain note details in the expected format."
+      ) {
+        setError(pasteError.message);
+        return;
+      }
+
+      setError("Could not read note details from clipboard.");
+    }
+  }
+
   if (loading) {
     return (
       <section className="panel narrow-stack">
@@ -881,6 +917,55 @@ function NoteEditForm({
                 {cancelLabel}
               </Link>
             )}
+            <button
+              aria-label="Paste note details"
+              className="icon-link"
+              onClick={handlePasteNoteDetails}
+              title="Paste note details"
+              type="button"
+            >
+              <svg
+                aria-hidden="true"
+                height="16"
+                viewBox="0 0 24 24"
+                width="16"
+              >
+                <path
+                  d="M9 5h6"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="2"
+                />
+                <path
+                  d="M9 3h6a2 2 0 012 2v1H7V5a2 2 0 012-2z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                />
+                <path
+                  d="M8 6H6a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V8a2 2 0 00-2-2h-2"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                />
+                <path
+                  d="M12 10v6"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="2"
+                />
+                <path
+                  d="M9.5 13.5L12 16l2.5-2.5"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                />
+              </svg>
+            </button>
             <button
               aria-label="Copy note details"
               className="icon-link"
