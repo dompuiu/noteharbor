@@ -208,7 +208,7 @@ class NativeDatasetStore {
         }
       }
     } finally {
-      database.dispose();
+      database.close();
     }
   }
 
@@ -224,7 +224,7 @@ class NativeDatasetStore {
       database.execute('UPDATE collections SET is_default = 0 WHERE is_default = 1');
       database.execute('UPDATE collections SET is_default = 1 WHERE id = ?', <Object?>[collectionId]);
     } finally {
-      database.dispose();
+      database.close();
     }
   }
 
@@ -416,6 +416,7 @@ void _mergeArchiveIntoDataset({
 }) {
   final archiveDatabase = sqlite3.open(archiveDbPath, mode: OpenMode.readOnly);
   final stagedDatabase = sqlite3.open(stagedDbPath);
+  final statements = <PreparedStatement>[];
 
   final removedNoteIds = <int>[];
   final copyPlan = <({String fromRelative, String toRelative})>[];
@@ -425,33 +426,35 @@ void _mergeArchiveIntoDataset({
 
     final archiveCollections = _loadArchiveCollections(archiveDatabase);
 
-    final findCollectionByName = stagedDatabase.prepare('''
+    final findCollectionByName = statements._track(stagedDatabase.prepare('''
       SELECT id
       FROM collections
       WHERE lower(name) = lower(?)
       ORDER BY id ASC
       LIMIT 1
-    ''');
-    final listNoteIdsByCollection = stagedDatabase.prepare('''
+    '''));
+    final listNoteIdsByCollection = statements._track(stagedDatabase.prepare('''
       SELECT id
       FROM banknotes
       WHERE collection_id = ?
       ORDER BY id ASC
-    ''');
-    final deleteCollection = stagedDatabase.prepare('DELETE FROM collections WHERE id = ?');
-    final insertCollection = stagedDatabase.prepare('''
+    '''));
+    final deleteCollection = statements._track(
+      stagedDatabase.prepare('DELETE FROM collections WHERE id = ?'),
+    );
+    final insertCollection = statements._track(stagedDatabase.prepare('''
       INSERT INTO collections (name, is_default, created_at, updated_at)
       VALUES (?, 0, datetime('now'), datetime('now'))
-    ''');
-    final archiveTagsByCollection = archiveDatabase.prepare('''
+    '''));
+    final archiveTagsByCollection = statements._track(archiveDatabase.prepare('''
       SELECT bt.banknote_id AS banknote_id, t.name AS name
       FROM banknote_tags bt
       INNER JOIN tags t ON t.id = bt.tag_id
       INNER JOIN banknotes b ON b.id = bt.banknote_id
       WHERE b.collection_id = ?
       ORDER BY bt.banknote_id ASC, t.name COLLATE NOCASE ASC
-    ''');
-    final archiveNotesByCollection = archiveDatabase.prepare('''
+    '''));
+    final archiveNotesByCollection = statements._track(archiveDatabase.prepare('''
       SELECT
         id,
         display_order,
@@ -473,8 +476,8 @@ void _mergeArchiveIntoDataset({
       FROM banknotes
       WHERE collection_id = ?
       ORDER BY display_order ASC, id ASC
-    ''');
-    final insertNote = stagedDatabase.prepare('''
+    '''));
+    final insertNote = statements._track(stagedDatabase.prepare('''
       INSERT INTO banknotes (
         collection_id,
         display_order,
@@ -495,27 +498,27 @@ void _mergeArchiveIntoDataset({
         updated_at
       )
       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))
-    ''');
-    final updateNoteImages = stagedDatabase.prepare('''
+    '''));
+    final updateNoteImages = statements._track(stagedDatabase.prepare('''
       UPDATE banknotes
       SET images = ?,
           updated_at = datetime('now')
       WHERE id = ?
-    ''');
-    final insertTag = stagedDatabase.prepare(
+    '''));
+    final insertTag = statements._track(stagedDatabase.prepare(
       'INSERT OR IGNORE INTO tags (name, collection_id) VALUES (?, ?)',
-    );
-    final getTagByName = stagedDatabase.prepare('''
+    ));
+    final getTagByName = statements._track(stagedDatabase.prepare('''
       SELECT id
       FROM tags
       WHERE collection_id = ?
         AND lower(name) = lower(?)
       ORDER BY id ASC
       LIMIT 1
-    ''');
-    final linkTag = stagedDatabase.prepare(
+    '''));
+    final linkTag = statements._track(stagedDatabase.prepare(
       'INSERT OR IGNORE INTO banknote_tags (banknote_id, tag_id) VALUES (?, ?)',
-    );
+    ));
 
     final importedDefaults = <({int archiveId, int stagedId})>[];
 
@@ -623,8 +626,11 @@ void _mergeArchiveIntoDataset({
       );
     }
   } finally {
-    archiveDatabase.dispose();
-    stagedDatabase.dispose();
+    for (final statement in statements.reversed) {
+      statement.close();
+    }
+    archiveDatabase.close();
+    stagedDatabase.close();
   }
 
   for (final noteId in removedNoteIds) {
@@ -643,4 +649,11 @@ void _mergeArchiveIntoDataset({
 
 NativeDatasetStore createPlatformNativeDatasetStore() {
   return const NativeDatasetStore();
+}
+
+extension on List<PreparedStatement> {
+  PreparedStatement _track(PreparedStatement statement) {
+    add(statement);
+    return statement;
+  }
 }

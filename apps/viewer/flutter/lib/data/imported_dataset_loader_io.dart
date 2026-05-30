@@ -146,7 +146,7 @@ class ImportedDatasetLoader {
         source: DatasetSource.imported,
       );
     } finally {
-      database.dispose();
+      database.close();
     }
   }
 }

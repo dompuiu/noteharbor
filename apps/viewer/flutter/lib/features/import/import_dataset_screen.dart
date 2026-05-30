@@ -321,7 +321,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                           ),
                           const SizedBox(height: 14),
                           DropdownButtonFormField<int>(
-                            value: activeCollection?.id,
+                            initialValue: activeCollection?.id,
                             decoration: const InputDecoration(
                               border: OutlineInputBorder(),
                             ),
