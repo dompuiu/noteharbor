@@ -99,6 +99,73 @@ void main() {
     expect(find.text('10 Lei'), findsNothing);
     expect(find.text('20 Lei'), findsNothing);
   });
+
+  testWidgets('plain search matches denomination numeric formatting variants', (
+    WidgetTester tester,
+  ) async {
+    final controller = DatasetController(
+      repository: _NormalizedDenominationSearchViewerRepository(),
+    );
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), '10000');
+    await tester.pumpAndSettle();
+
+    expect(find.text('10,000 Lei'), findsOneWidget);
+    expect(find.text('1,000 Lei'), findsNothing);
+    expect(find.text('110,000 Lei'), findsNothing);
+
+    await tester.enterText(find.byType(TextField), '10000 lei');
+    await tester.pumpAndSettle();
+
+    expect(find.text('10,000 Lei'), findsOneWidget);
+    expect(find.text('1,000 Lei'), findsNothing);
+    expect(find.text('110,000 Lei'), findsNothing);
+
+    await tester.enterText(find.byType(TextField), '1000');
+    await tester.pumpAndSettle();
+
+    expect(find.text('1,000 Lei'), findsOneWidget);
+    expect(find.text('10,000 Lei'), findsNothing);
+    expect(find.text('110,000 Lei'), findsNothing);
+  });
+
+  testWidgets('denomination filter matches normalized exact amounts', (
+    WidgetTester tester,
+  ) async {
+    final controller = DatasetController(
+      repository: _NormalizedDenominationSearchViewerRepository(),
+    );
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'den: 10000');
+    await tester.pumpAndSettle();
+
+    expect(find.text('10,000 Lei'), findsOneWidget);
+    expect(find.text('10.000 Lei'), findsOneWidget);
+    expect(find.text('10 000 Lei'), findsOneWidget);
+    expect(find.text('110,000 Lei'), findsNothing);
+    expect(find.text('1,000 Lei'), findsNothing);
+
+    await tester.enterText(find.byType(TextField), 'den: !10000');
+    await tester.pumpAndSettle();
+
+    expect(find.text('10,000 Lei'), findsNothing);
+    expect(find.text('10.000 Lei'), findsNothing);
+    expect(find.text('10 000 Lei'), findsNothing);
+    expect(find.text('110,000 Lei'), findsOneWidget);
+    expect(find.text('1,000 Lei'), findsOneWidget);
+  });
 }
 
 class _FakeViewerRepository extends ViewerRepository {
@@ -234,6 +301,52 @@ class _MultiValueFieldFilterViewerRepository extends ViewerRepository {
           displayOrder: 4,
           denomination: '20 Lei',
           issueDate: 'July 8, 1970',
+        ),
+      ],
+    });
+  }
+}
+
+class _NormalizedDenominationSearchViewerRepository extends ViewerRepository {
+  @override
+  bool get canManageImportedDatasets => true;
+
+  @override
+  Future<ViewerDataset> loadDataset() async {
+    return ViewerDataset.fromJson({
+      'generatedAt': '2026-03-28T12:00:00Z',
+      'noteCount': 5,
+      'source': 'imported',
+      'notes': [
+        _filterableNote(
+          id: 1,
+          displayOrder: 1,
+          denomination: '10,000 Lei',
+          issueDate: '1966',
+        ),
+        _filterableNote(
+          id: 2,
+          displayOrder: 2,
+          denomination: '1,000 Lei',
+          issueDate: '1967',
+        ),
+        _filterableNote(
+          id: 3,
+          displayOrder: 3,
+          denomination: '110,000 Lei',
+          issueDate: '1968',
+        ),
+        _filterableNote(
+          id: 4,
+          displayOrder: 4,
+          denomination: '10.000 Lei',
+          issueDate: '1969',
+        ),
+        _filterableNote(
+          id: 5,
+          displayOrder: 5,
+          denomination: '10 000 Lei',
+          issueDate: '1970',
         ),
       ],
     });

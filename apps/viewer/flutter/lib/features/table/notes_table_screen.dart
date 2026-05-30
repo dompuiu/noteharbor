@@ -91,29 +91,83 @@ String _canonicalField(String keyword) => switch (keyword.toLowerCase()) {
       _ => keyword,
     };
 
-String _addThousandsSeparators(String integerPart) {
-  return integerPart.replaceAllMapped(
-    RegExp(r'\B(?=(\d{3})+(?!\d))'),
-    (_) => ',',
-  );
+List<String> _splitSearchTerms(String rawValue) {
+  return RegExp(r'\d(?:[\d,. ]*\d)?|[^\s]+')
+      .allMatches(rawValue.trim().toLowerCase())
+      .map((match) => match.group(0) ?? '')
+      .where((value) => value.isNotEmpty)
+      .toList(growable: false);
 }
 
-String _normalizeDenominationFilterValue(String value) {
-  final trimmed = value.trim();
-  final match = RegExp(r'^(\d[\d,]*)(\.\d+)?(.*)$').firstMatch(trimmed);
-  if (match == null) {
-    return trimmed;
+String? _normalizedDenominationAmount(String value) {
+  if (!RegExp(r'\d').hasMatch(value)) {
+    return null;
   }
 
-  final rawIntegerPart = match.group(1) ?? '';
-  final decimalPart = match.group(2) ?? '';
-  final suffix = match.group(3) ?? '';
-  final integerDigits = rawIntegerPart.replaceAll(',', '');
-  if (!RegExp(r'^\d+$').hasMatch(integerDigits)) {
-    return trimmed;
+  final normalized = value.replaceAll(RegExp(r'[^\d]'), '');
+  return normalized.isEmpty ? null : normalized;
+}
+
+Iterable<String> _denominationAmounts(String value) sync* {
+  final matches = RegExp(r'\d(?:[\d,. ]*\d)?').allMatches(value);
+  for (final match in matches) {
+    final amount = _normalizedDenominationAmount(match.group(0) ?? '');
+    if (amount != null) {
+      yield amount;
+    }
+  }
+}
+
+bool _matchesDenominationTerm(String noteValue, String term) {
+  if (noteValue.contains(term)) {
+    return true;
   }
 
-  return '${_addThousandsSeparators(integerDigits)}$decimalPart$suffix';
+  final normalizedAmount = _normalizedDenominationAmount(term);
+  if (normalizedAmount == null) {
+    return false;
+  }
+
+  return _denominationAmounts(noteValue).contains(normalizedAmount);
+}
+
+bool _matchesDenominationFilterValue(String noteValue, String filterValue) {
+  final normalizedAmount = _normalizedDenominationAmount(filterValue);
+  if (normalizedAmount != null &&
+      !_denominationAmounts(noteValue).contains(normalizedAmount)) {
+    return false;
+  }
+
+  final textOnlyFilter = filterValue.replaceAll(RegExp(r'\d(?:[\d,. ]*\d)?'), ' ');
+  final textTerms = _splitSearchTerms(textOnlyFilter);
+  return textTerms.every((term) => noteValue.contains(term));
+}
+
+bool _matchesAllFieldsSearch(
+  NoteRecord note,
+  String allFields,
+) {
+  final searchTerms = _splitSearchTerms(allFields);
+  if (searchTerms.isEmpty) {
+    return true;
+  }
+
+  final haystack = [
+    note.displayOrder.toString(),
+    note.denomination,
+    note.issueDate,
+    note.catalogNumber,
+    note.gradingCompany,
+    note.grade,
+    note.serial,
+    note.tagsLabel,
+    note.notes,
+  ].join(' ').toLowerCase();
+  final denomination = note.denomination.toLowerCase();
+
+  return searchTerms.every(
+    (term) => haystack.contains(term) || _matchesDenominationTerm(denomination, term),
+  );
 }
 
 _FilterToken? _parseFilterToken(
@@ -454,18 +508,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       if (parsed.isEmpty) return true;
 
       if (parsed.allFields.isNotEmpty) {
-        final haystack = [
-          note.displayOrder.toString(),
-          note.denomination,
-          note.issueDate,
-          note.catalogNumber,
-          note.gradingCompany,
-          note.grade,
-          note.serial,
-          note.tagsLabel,
-          note.notes,
-        ].join(' ').toLowerCase();
-        if (!haystack.contains(parsed.allFields)) return false;
+        if (!_matchesAllFieldsSearch(note, parsed.allFields)) return false;
       }
 
       for (final entry in parsed.fields.entries) {
@@ -485,12 +528,11 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
           fieldValue,
           entry.value,
           multiple: supportsMultipleValues,
-          matcher: entry.key == 'catalogNumber'
-              ? _matchesCatalogFilterValue
-              : (noteValue, filterValue) => noteValue.contains(filterValue),
-          normalizeValue: entry.key == 'denomination'
-              ? _normalizeDenominationFilterValue
-              : null,
+          matcher: switch (entry.key) {
+            'catalogNumber' => _matchesCatalogFilterValue,
+            'denomination' => _matchesDenominationFilterValue,
+            _ => (noteValue, filterValue) => noteValue.contains(filterValue),
+          },
         );
         if (!matches) return false;
       }
