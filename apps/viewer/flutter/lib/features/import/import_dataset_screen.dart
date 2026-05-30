@@ -27,7 +27,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
     });
 
     try {
-      final result = await FilePicker.platform.pickFiles(
+      final result = await FilePicker.pickFiles(
         dialogTitle: 'Choose Note Harbor archive',
         type: FileType.custom,
         allowedExtensions: const ['zip'],
