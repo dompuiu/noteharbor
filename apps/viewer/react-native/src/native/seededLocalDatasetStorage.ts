@@ -18,7 +18,22 @@ function fileSystemUnavailableError() {
   return new Error('Local filesystem storage is not available on this platform.');
 }
 
+function currentPlatform() {
+  try {
+    const reactNative = require('react-native') as {
+      Platform?: { OS?: string };
+    };
+    return reactNative.Platform?.OS ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 function resolveFileSystem() {
+  if (currentPlatform() === 'windows') {
+    return null;
+  }
+
   try {
     const module = require('react-native-fs') as FileSystemModule | null;
     return module && module.DocumentDirectoryPath ? module : null;
@@ -50,6 +65,11 @@ export class SeededLocalDatasetStorage implements LocalDatasetStorage {
       return this.snapshot ? cloneSnapshot(this.snapshot) : null;
     }
 
+    if (!this.getPaths()) {
+      this.snapshot = cloneSnapshot(mockDataset);
+      return cloneSnapshot(this.snapshot);
+    }
+
     const diskSnapshot = await this.readFromDisk();
     if (diskSnapshot != null) {
       this.snapshot = diskSnapshot;
@@ -63,6 +83,10 @@ export class SeededLocalDatasetStorage implements LocalDatasetStorage {
 
   async writeImportedDataset(snapshot: LocalDatasetSnapshot): Promise<void> {
     this.snapshot = cloneSnapshot(snapshot);
+    if (!this.getPaths()) {
+      return;
+    }
+
     await this.writeToDisk(this.snapshot);
   }
 

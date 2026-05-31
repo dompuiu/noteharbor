@@ -23,7 +23,22 @@ interface FileSystemModule {
   writeFile(path: string, contents: string, encoding: string): Promise<void>;
 }
 
+function currentPlatform() {
+  try {
+    const reactNative = require('react-native') as {
+      Platform?: { OS?: string };
+    };
+    return reactNative.Platform?.OS ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
 function resolveFileSystem() {
+  if (currentPlatform() === 'windows') {
+    return null;
+  }
+
   try {
     const module = require('react-native-fs') as FileSystemModule | null;
     return module && module.DocumentDirectoryPath ? module : null;
