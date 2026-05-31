@@ -1,7 +1,14 @@
-import RNFS from 'react-native-fs';
-
 import { mockDataset } from '../data/mockDataset';
 import type { LocalDatasetSnapshot, LocalDatasetStorage } from './localDatasetStorage';
+
+interface FileSystemModule {
+  DocumentDirectoryPath?: string;
+  exists(path: string): Promise<boolean>;
+  mkdir(path: string): Promise<void>;
+  readFile(path: string, encoding: string): Promise<string>;
+  unlink(path: string): Promise<void>;
+  writeFile(path: string, contents: string, encoding: string): Promise<void>;
+}
 
 function cloneSnapshot(snapshot: LocalDatasetSnapshot): LocalDatasetSnapshot {
   return JSON.parse(JSON.stringify(snapshot)) as LocalDatasetSnapshot;
@@ -12,7 +19,12 @@ function fileSystemUnavailableError() {
 }
 
 function resolveFileSystem() {
-  return RNFS && RNFS.DocumentDirectoryPath ? RNFS : null;
+  try {
+    const module = require('react-native-fs') as FileSystemModule | null;
+    return module && module.DocumentDirectoryPath ? module : null;
+  } catch {
+    return null;
+  }
 }
 
 export class SeededLocalDatasetStorage implements LocalDatasetStorage {
@@ -89,10 +101,6 @@ export class SeededLocalDatasetStorage implements LocalDatasetStorage {
   private async writeToDisk(snapshot: LocalDatasetSnapshot) {
     const paths = this.getPaths();
     if (!paths) {
-      if (resolveFileSystem() == null) {
-        return;
-      }
-
       throw fileSystemUnavailableError();
     }
 

@@ -1,6 +1,5 @@
 import { decode as decodeBase64, encode as encodeBase64 } from 'base-64';
 import { unzipSync } from 'fflate';
-import RNFS from 'react-native-fs';
 
 import { mockDataset } from '../data/mockDataset';
 import type { LocalDatasetSnapshot } from './localDatasetStorage';
@@ -9,8 +8,28 @@ import {
   nativeImportedDatasetReader,
 } from './nativeImportedDatasetReader';
 
+interface FileSystemDirectoryEntry {
+  isDirectory(): boolean;
+  path: string;
+}
+
+interface FileSystemModule {
+  DocumentDirectoryPath?: string;
+  exists(path: string): Promise<boolean>;
+  mkdir(path: string): Promise<void>;
+  readDir(path: string): Promise<FileSystemDirectoryEntry[]>;
+  readFile(path: string, encoding: string): Promise<string>;
+  unlink(path: string): Promise<void>;
+  writeFile(path: string, contents: string, encoding: string): Promise<void>;
+}
+
 function resolveFileSystem() {
-  return RNFS && RNFS.DocumentDirectoryPath ? RNFS : null;
+  try {
+    const module = require('react-native-fs') as FileSystemModule | null;
+    return module && module.DocumentDirectoryPath ? module : null;
+  } catch {
+    return null;
+  }
 }
 
 function getImportRootDirectoryPath() {
