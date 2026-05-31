@@ -7,11 +7,31 @@ function cloneSnapshot(snapshot: LocalDatasetSnapshot): LocalDatasetSnapshot {
   return JSON.parse(JSON.stringify(snapshot)) as LocalDatasetSnapshot;
 }
 
+function fileSystemUnavailableError() {
+  return new Error('Local filesystem storage is not available on this platform.');
+}
+
+function resolveFileSystem() {
+  return RNFS && RNFS.DocumentDirectoryPath ? RNFS : null;
+}
+
 export class SeededLocalDatasetStorage implements LocalDatasetStorage {
-  private readonly rootDirectoryPath = `${RNFS.DocumentDirectoryPath}/noteharbor-viewer`;
-  private readonly snapshotPath = `${this.rootDirectoryPath}/dataset.json`;
-  private readonly importsDirectoryPath = `${this.rootDirectoryPath}/imports`;
   private snapshot: LocalDatasetSnapshot | null | undefined;
+
+  private getPaths() {
+    const fileSystem = resolveFileSystem();
+    if (!fileSystem) {
+      return null;
+    }
+
+    const rootDirectoryPath = `${fileSystem.DocumentDirectoryPath}/noteharbor-viewer`;
+    return {
+      fileSystem,
+      rootDirectoryPath,
+      snapshotPath: `${rootDirectoryPath}/dataset.json`,
+      importsDirectoryPath: `${rootDirectoryPath}/imports`,
+    };
+  }
 
   async readImportedDataset(): Promise<LocalDatasetSnapshot | null> {
     if (this.snapshot !== undefined) {
@@ -37,25 +57,46 @@ export class SeededLocalDatasetStorage implements LocalDatasetStorage {
   async deleteImportedDataset(): Promise<void> {
     this.snapshot = null;
 
-    if (await RNFS.exists(this.importsDirectoryPath)) {
-      await RNFS.unlink(this.importsDirectoryPath);
+    const paths = this.getPaths();
+    if (!paths) {
+      return;
     }
 
-    await RNFS.mkdir(this.rootDirectoryPath);
-    await RNFS.writeFile(this.snapshotPath, 'null', 'utf8');
+    if (await paths.fileSystem.exists(paths.importsDirectoryPath)) {
+      await paths.fileSystem.unlink(paths.importsDirectoryPath);
+    }
+
+    await paths.fileSystem.mkdir(paths.rootDirectoryPath);
+    await paths.fileSystem.writeFile(paths.snapshotPath, 'null', 'utf8');
   }
 
   private async readFromDisk() {
-    if (!(await RNFS.exists(this.snapshotPath))) {
+    const paths = this.getPaths();
+    if (!paths) {
       return null;
     }
 
-    const parsed = JSON.parse(await RNFS.readFile(this.snapshotPath, 'utf8')) as LocalDatasetSnapshot | null;
+    if (!(await paths.fileSystem.exists(paths.snapshotPath))) {
+      return null;
+    }
+
+    const parsed = JSON.parse(
+      await paths.fileSystem.readFile(paths.snapshotPath, 'utf8'),
+    ) as LocalDatasetSnapshot | null;
     return parsed;
   }
 
   private async writeToDisk(snapshot: LocalDatasetSnapshot) {
-    await RNFS.mkdir(this.rootDirectoryPath);
-    await RNFS.writeFile(this.snapshotPath, JSON.stringify(snapshot), 'utf8');
+    const paths = this.getPaths();
+    if (!paths) {
+      if (resolveFileSystem() == null) {
+        return;
+      }
+
+      throw fileSystemUnavailableError();
+    }
+
+    await paths.fileSystem.mkdir(paths.rootDirectoryPath);
+    await paths.fileSystem.writeFile(paths.snapshotPath, JSON.stringify(snapshot), 'utf8');
   }
 }

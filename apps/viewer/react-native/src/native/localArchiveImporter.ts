@@ -9,8 +9,18 @@ import {
   nativeImportedDatasetReader,
 } from './nativeImportedDatasetReader';
 
-const viewerRootDirectoryPath = `${RNFS.DocumentDirectoryPath}/noteharbor-viewer`;
-const importRootDirectoryPath = `${viewerRootDirectoryPath}/imports`;
+function resolveFileSystem() {
+  return RNFS && RNFS.DocumentDirectoryPath ? RNFS : null;
+}
+
+function getImportRootDirectoryPath() {
+  const fileSystem = resolveFileSystem();
+  if (!fileSystem) {
+    throw new Error('Archive import is not available because react-native-fs is unavailable.');
+  }
+
+  return `${fileSystem.DocumentDirectoryPath}/noteharbor-viewer/imports`;
+}
 
 function cloneSnapshot(snapshot: LocalDatasetSnapshot): LocalDatasetSnapshot {
   return JSON.parse(JSON.stringify(snapshot)) as LocalDatasetSnapshot;
@@ -66,15 +76,25 @@ function directoryName(relativePath: string) {
 }
 
 async function ensureParentDirectory(targetPath: string) {
+  const fileSystem = resolveFileSystem();
+  if (!fileSystem) {
+    throw new Error('Archive import is not available because react-native-fs is unavailable.');
+  }
+
   const lastSlashIndex = targetPath.lastIndexOf('/');
   if (lastSlashIndex <= 0) {
     return;
   }
 
-  await RNFS.mkdir(targetPath.slice(0, lastSlashIndex));
+  await fileSystem.mkdir(targetPath.slice(0, lastSlashIndex));
 }
 
 async function writeArchiveEntries(outputDir: string, archiveBytes: Uint8Array) {
+  const fileSystem = resolveFileSystem();
+  if (!fileSystem) {
+    throw new Error('Archive import is not available because react-native-fs is unavailable.');
+  }
+
   const archive = unzipSync(archiveBytes);
 
   for (const [entryName, entryBytes] of Object.entries(archive)) {
@@ -82,22 +102,27 @@ async function writeArchiveEntries(outputDir: string, archiveBytes: Uint8Array) 
     const entryOutputPath = `${outputDir}/${normalizedEntryPath}`;
 
     if (entryName.endsWith('/')) {
-      await RNFS.mkdir(entryOutputPath);
+      await fileSystem.mkdir(entryOutputPath);
       continue;
     }
 
     const entryDirectory = directoryName(normalizedEntryPath);
     if (entryDirectory.length > 0) {
-      await RNFS.mkdir(`${outputDir}/${entryDirectory}`);
+      await fileSystem.mkdir(`${outputDir}/${entryDirectory}`);
     } else {
       await ensureParentDirectory(entryOutputPath);
     }
 
-    await RNFS.writeFile(entryOutputPath, bytesToBase64(entryBytes), 'base64');
+    await fileSystem.writeFile(entryOutputPath, bytesToBase64(entryBytes), 'base64');
   }
 }
 
 async function findArchiveDataDir(rootDir: string): Promise<string | null> {
+  const fileSystem = resolveFileSystem();
+  if (!fileSystem) {
+    throw new Error('Archive import is not available because react-native-fs is unavailable.');
+  }
+
   const queue = [rootDir];
   const visited = new Set<string>();
 
@@ -110,15 +135,15 @@ async function findArchiveDataDir(rootDir: string): Promise<string | null> {
     visited.add(currentDir);
 
     const [dbExists, imagesExists] = await Promise.all([
-      RNFS.exists(`${currentDir}/banknotes.db`),
-      RNFS.exists(`${currentDir}/images`),
+      fileSystem.exists(`${currentDir}/banknotes.db`),
+      fileSystem.exists(`${currentDir}/images`),
     ]);
 
     if (dbExists && imagesExists) {
       return currentDir;
     }
 
-    const entries = await RNFS.readDir(currentDir);
+    const entries = await fileSystem.readDir(currentDir);
     for (const entry of entries) {
       if (entry.isDirectory()) {
         queue.push(entry.path);
@@ -133,22 +158,27 @@ async function importArchiveSnapshot(
   archivePath: string,
   reader: NativeImportedDatasetReader,
 ): Promise<LocalDatasetSnapshot> {
+  const fileSystem = resolveFileSystem();
+  if (!fileSystem) {
+    throw new Error('Archive import is not available because react-native-fs is unavailable.');
+  }
+
   if (!archivePath.trim().toLowerCase().endsWith('.zip')) {
     throw new Error('Archive must be a .zip file.');
   }
 
-  const archiveExists = await RNFS.exists(archivePath);
+  const archiveExists = await fileSystem.exists(archivePath);
   if (!archiveExists) {
     throw new Error('The selected archive file no longer exists.');
   }
 
-  const extractionDir = `${importRootDirectoryPath}/import-${Date.now()}`;
+  const extractionDir = `${getImportRootDirectoryPath()}/import-${Date.now()}`;
 
-  await RNFS.mkdir(importRootDirectoryPath);
-  await RNFS.mkdir(extractionDir);
+  await fileSystem.mkdir(getImportRootDirectoryPath());
+  await fileSystem.mkdir(extractionDir);
 
   try {
-    const archiveBytes = base64ToBytes(await RNFS.readFile(archivePath, 'base64'));
+    const archiveBytes = base64ToBytes(await fileSystem.readFile(archivePath, 'base64'));
     await writeArchiveEntries(extractionDir, archiveBytes);
 
     const archiveDataDir = await findArchiveDataDir(extractionDir);
@@ -161,7 +191,7 @@ async function importArchiveSnapshot(
       imagesDirectoryPath: `${archiveDataDir}/images`,
     });
   } catch (error) {
-    await RNFS.unlink(extractionDir).catch(() => undefined);
+    await fileSystem.unlink(extractionDir).catch(() => undefined);
     throw error;
   }
 }
