@@ -1,9 +1,7 @@
-/apps/*/*/node_modules
-/node_modules
-/.venv
+node_modules
+.venv
 .env
 apps/*/*/dist/
 /data
-apps/*/*/.env
 .idea
 .metadata

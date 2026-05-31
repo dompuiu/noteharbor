@@ -8,6 +8,9 @@
     "dev:viewer:flutter": "cd apps/viewer/flutter && flutter pub get && flutter run",
     "build:viewer:flutter:windows": "cd apps/viewer/flutter && flutter pub get && flutter build windows",
     "build:viewer:flutter:ios": "cd apps/viewer/flutter && flutter pub get && flutter build ios",
+    "start:viewer:react-native": "pnpm --filter viewer_react_native start",
+    "dev:viewer:react-native:ios": "pnpm --filter viewer_react_native ios",
+    "test:viewer:react-native": "pnpm --filter viewer_react_native test",
     "layout": "tsps --layout layout.yml"
   },
   "devDependencies": {
