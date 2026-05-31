@@ -6,6 +6,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <cstdlib>
 #include <cstring>
 #include <optional>
 #include <sstream>
@@ -282,6 +283,361 @@ std::vector<std::string> SplitJsonObjects(const std::string &jsonArrayText) {
   }
 
   return objects;
+}
+
+void SkipJsonWhitespace(const std::string &jsonText, size_t &index) {
+  while (index < jsonText.size() && std::isspace(static_cast<unsigned char>(jsonText[index])) != 0) {
+    index += 1;
+  }
+}
+
+void AppendUtf8CodePoint(std::string &result, uint32_t codePoint) {
+  if (codePoint <= 0x7F) {
+    result.push_back(static_cast<char>(codePoint));
+    return;
+  }
+
+  if (codePoint <= 0x7FF) {
+    result.push_back(static_cast<char>(0xC0 | (codePoint >> 6)));
+    result.push_back(static_cast<char>(0x80 | (codePoint & 0x3F)));
+    return;
+  }
+
+  if (codePoint <= 0xFFFF) {
+    result.push_back(static_cast<char>(0xE0 | (codePoint >> 12)));
+    result.push_back(static_cast<char>(0x80 | ((codePoint >> 6) & 0x3F)));
+    result.push_back(static_cast<char>(0x80 | (codePoint & 0x3F)));
+    return;
+  }
+
+  result.push_back(static_cast<char>(0xF0 | (codePoint >> 18)));
+  result.push_back(static_cast<char>(0x80 | ((codePoint >> 12) & 0x3F)));
+  result.push_back(static_cast<char>(0x80 | ((codePoint >> 6) & 0x3F)));
+  result.push_back(static_cast<char>(0x80 | (codePoint & 0x3F)));
+}
+
+std::optional<uint32_t> ParseHexCodeUnit(const std::string &jsonText, size_t &index) {
+  if (index + 4 > jsonText.size()) {
+    return std::nullopt;
+  }
+
+  uint32_t codeUnit = 0;
+  for (size_t offset = 0; offset < 4; offset += 1) {
+    const char current = jsonText[index + offset];
+    codeUnit <<= 4;
+    if (current >= '0' && current <= '9') {
+      codeUnit |= static_cast<uint32_t>(current - '0');
+      continue;
+    }
+
+    if (current >= 'a' && current <= 'f') {
+      codeUnit |= static_cast<uint32_t>(current - 'a' + 10);
+      continue;
+    }
+
+    if (current >= 'A' && current <= 'F') {
+      codeUnit |= static_cast<uint32_t>(current - 'A' + 10);
+      continue;
+    }
+
+    return std::nullopt;
+  }
+
+  index += 4;
+  return codeUnit;
+}
+
+std::optional<std::string> ParseJsonString(const std::string &jsonText, size_t &index) {
+  if (index >= jsonText.size() || jsonText[index] != '"') {
+    return std::nullopt;
+  }
+
+  index += 1;
+  std::string result;
+  while (index < jsonText.size()) {
+    const char current = jsonText[index++];
+    if (current == '"') {
+      return result;
+    }
+
+    if (current != '\\') {
+      result.push_back(current);
+      continue;
+    }
+
+    if (index >= jsonText.size()) {
+      return std::nullopt;
+    }
+
+    const char escaped = jsonText[index++];
+    switch (escaped) {
+      case '"':
+      case '\\':
+      case '/':
+        result.push_back(escaped);
+        break;
+      case 'b':
+        result.push_back('\b');
+        break;
+      case 'f':
+        result.push_back('\f');
+        break;
+      case 'n':
+        result.push_back('\n');
+        break;
+      case 'r':
+        result.push_back('\r');
+        break;
+      case 't':
+        result.push_back('\t');
+        break;
+      case 'u': {
+        auto codeUnit = ParseHexCodeUnit(jsonText, index);
+        if (!codeUnit.has_value()) {
+          return std::nullopt;
+        }
+
+        uint32_t codePoint = *codeUnit;
+        if (codePoint >= 0xD800 && codePoint <= 0xDBFF) {
+          if (index + 2 > jsonText.size() || jsonText[index] != '\\' || jsonText[index + 1] != 'u') {
+            return std::nullopt;
+          }
+
+          index += 2;
+          auto trailingCodeUnit = ParseHexCodeUnit(jsonText, index);
+          if (!trailingCodeUnit.has_value() || *trailingCodeUnit < 0xDC00 || *trailingCodeUnit > 0xDFFF) {
+            return std::nullopt;
+          }
+
+          codePoint = 0x10000 + ((codePoint - 0xD800) << 10) + (*trailingCodeUnit - 0xDC00);
+        }
+
+        AppendUtf8CodePoint(result, codePoint);
+        break;
+      }
+      default:
+        return std::nullopt;
+    }
+  }
+
+  return std::nullopt;
+}
+
+std::optional<JSValue> ParseJsonValue(const std::string &jsonText, size_t &index);
+
+std::optional<JSValue> ParseJsonArray(const std::string &jsonText, size_t &index) {
+  if (index >= jsonText.size() || jsonText[index] != '[') {
+    return std::nullopt;
+  }
+
+  index += 1;
+  SkipJsonWhitespace(jsonText, index);
+
+  JSValueArray array;
+  if (index < jsonText.size() && jsonText[index] == ']') {
+    index += 1;
+    return JSValue{std::move(array)};
+  }
+
+  while (index < jsonText.size()) {
+    auto value = ParseJsonValue(jsonText, index);
+    if (!value.has_value()) {
+      return std::nullopt;
+    }
+
+    array.push_back(std::move(*value));
+    SkipJsonWhitespace(jsonText, index);
+
+    if (index >= jsonText.size()) {
+      return std::nullopt;
+    }
+
+    if (jsonText[index] == ']') {
+      index += 1;
+      return JSValue{std::move(array)};
+    }
+
+    if (jsonText[index] != ',') {
+      return std::nullopt;
+    }
+
+    index += 1;
+    SkipJsonWhitespace(jsonText, index);
+  }
+
+  return std::nullopt;
+}
+
+std::optional<JSValue> ParseJsonObject(const std::string &jsonText, size_t &index) {
+  if (index >= jsonText.size() || jsonText[index] != '{') {
+    return std::nullopt;
+  }
+
+  index += 1;
+  SkipJsonWhitespace(jsonText, index);
+
+  JSValueObject object;
+  if (index < jsonText.size() && jsonText[index] == '}') {
+    index += 1;
+    return JSValue{std::move(object)};
+  }
+
+  while (index < jsonText.size()) {
+    auto key = ParseJsonString(jsonText, index);
+    if (!key.has_value()) {
+      return std::nullopt;
+    }
+
+    SkipJsonWhitespace(jsonText, index);
+    if (index >= jsonText.size() || jsonText[index] != ':') {
+      return std::nullopt;
+    }
+
+    index += 1;
+    SkipJsonWhitespace(jsonText, index);
+
+    auto value = ParseJsonValue(jsonText, index);
+    if (!value.has_value()) {
+      return std::nullopt;
+    }
+
+    object.emplace(*key, std::move(*value));
+    SkipJsonWhitespace(jsonText, index);
+
+    if (index >= jsonText.size()) {
+      return std::nullopt;
+    }
+
+    if (jsonText[index] == '}') {
+      index += 1;
+      return JSValue{std::move(object)};
+    }
+
+    if (jsonText[index] != ',') {
+      return std::nullopt;
+    }
+
+    index += 1;
+    SkipJsonWhitespace(jsonText, index);
+  }
+
+  return std::nullopt;
+}
+
+std::optional<JSValue> ParseJsonNumber(const std::string &jsonText, size_t &index) {
+  const size_t start = index;
+  if (index < jsonText.size() && jsonText[index] == '-') {
+    index += 1;
+  }
+
+  if (index >= jsonText.size()) {
+    return std::nullopt;
+  }
+
+  if (jsonText[index] == '0') {
+    index += 1;
+  } else {
+    if (!std::isdigit(static_cast<unsigned char>(jsonText[index]))) {
+      return std::nullopt;
+    }
+
+    while (index < jsonText.size() && std::isdigit(static_cast<unsigned char>(jsonText[index])) != 0) {
+      index += 1;
+    }
+  }
+
+  if (index < jsonText.size() && jsonText[index] == '.') {
+    index += 1;
+    if (index >= jsonText.size() || std::isdigit(static_cast<unsigned char>(jsonText[index])) == 0) {
+      return std::nullopt;
+    }
+
+    while (index < jsonText.size() && std::isdigit(static_cast<unsigned char>(jsonText[index])) != 0) {
+      index += 1;
+    }
+  }
+
+  if (index < jsonText.size() && (jsonText[index] == 'e' || jsonText[index] == 'E')) {
+    index += 1;
+    if (index < jsonText.size() && (jsonText[index] == '+' || jsonText[index] == '-')) {
+      index += 1;
+    }
+
+    if (index >= jsonText.size() || std::isdigit(static_cast<unsigned char>(jsonText[index])) == 0) {
+      return std::nullopt;
+    }
+
+    while (index < jsonText.size() && std::isdigit(static_cast<unsigned char>(jsonText[index])) != 0) {
+      index += 1;
+    }
+  }
+
+  const auto numberText = jsonText.substr(start, index - start);
+  char *parseEnd = nullptr;
+  const double value = std::strtod(numberText.c_str(), &parseEnd);
+  if (parseEnd == nullptr || *parseEnd != '\0') {
+    return std::nullopt;
+  }
+
+  return JSValue{value};
+}
+
+std::optional<JSValue> ParseJsonValue(const std::string &jsonText, size_t &index) {
+  SkipJsonWhitespace(jsonText, index);
+  if (index >= jsonText.size()) {
+    return std::nullopt;
+  }
+
+  const char current = jsonText[index];
+  if (current == '{') {
+    return ParseJsonObject(jsonText, index);
+  }
+
+  if (current == '[') {
+    return ParseJsonArray(jsonText, index);
+  }
+
+  if (current == '"') {
+    auto value = ParseJsonString(jsonText, index);
+    return value.has_value() ? std::optional<JSValue>{JSValue{*value}} : std::nullopt;
+  }
+
+  if (current == 't' && jsonText.compare(index, 4, "true") == 0) {
+    index += 4;
+    return JSValue{true};
+  }
+
+  if (current == 'f' && jsonText.compare(index, 5, "false") == 0) {
+    index += 5;
+    return JSValue{false};
+  }
+
+  if (current == 'n' && jsonText.compare(index, 4, "null") == 0) {
+    index += 4;
+    return JSValue{};
+  }
+
+  if (current == '-' || std::isdigit(static_cast<unsigned char>(current)) != 0) {
+    return ParseJsonNumber(jsonText, index);
+  }
+
+  return std::nullopt;
+}
+
+JSValue ParseJson(const std::string &jsonText) {
+  const auto trimmed = Trim(jsonText);
+  if (trimmed.empty()) {
+    return JSValue{};
+  }
+
+  size_t index = 0;
+  auto value = ParseJsonValue(trimmed, index);
+  if (!value.has_value()) {
+    return JSValue{};
+  }
+
+  SkipJsonWhitespace(trimmed, index);
+  return index == trimmed.size() ? std::move(*value) : JSValue{};
 }
 
 JSValueArray ParseImageArray(const std::string &jsonText, const std::string &imagesDirectoryPath) {
