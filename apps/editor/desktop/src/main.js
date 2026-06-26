@@ -93,6 +93,44 @@ function requestJson(url) {
   });
 }
 
+function focusOwnedScrapeBrowserWindow() {
+  const userDataDir = getChromeUserDataDir().replaceAll('\\', '\\\\');
+  const script = [
+    '$process = Get-CimInstance Win32_Process |',
+    `  Where-Object { $_.CommandLine -and $_.CommandLine -like '*--remote-debugging-port=${getChromeCdpPort()}*' -and $_.CommandLine -like '*--user-data-dir=${userDataDir}*' } |`,
+    '  Select-Object -First 1',
+    'if (-not $process) { exit 1 }',
+    'Add-Type @"',
+    'using System;',
+    'using System.Runtime.InteropServices;',
+    'public static class NoteHarborUser32 {',
+    '  [DllImport("user32.dll")] public static extern bool SetForegroundWindow(IntPtr hWnd);',
+    '  [DllImport("user32.dll")] public static extern bool ShowWindowAsync(IntPtr hWnd, int nCmdShow);',
+    '}',
+    '"@',
+    '$windowProcess = Get-Process -Id $process.ProcessId -ErrorAction SilentlyContinue',
+    'if (-not $windowProcess -or $windowProcess.MainWindowHandle -eq 0) { exit 1 }',
+    '[NoteHarborUser32]::ShowWindowAsync($windowProcess.MainWindowHandle, 9) | Out-Null',
+    'if ([NoteHarborUser32]::SetForegroundWindow($windowProcess.MainWindowHandle)) { exit 0 }',
+    'exit 1'
+  ].join('; ');
+  const child = spawn('powershell.exe', [
+    '-NoProfile',
+    '-NonInteractive',
+    '-ExecutionPolicy',
+    'Bypass',
+    '-Command',
+    script
+  ], {
+    stdio: 'ignore'
+  });
+
+  return new Promise((resolve) => {
+    child.once('error', () => resolve(false));
+    child.once('exit', (code) => resolve(code === 0));
+  });
+}
+
 async function isScrapeBrowserAvailable() {
   try {
     const jsonVersionUrl = new URL('/json/version', getChromeCdpUrl()).toString();
@@ -132,6 +170,7 @@ async function openScrapeBrowser() {
   }
 
   if (await isScrapeBrowserAvailable()) {
+    await focusOwnedScrapeBrowserWindow();
     return {
       supported: true,
       available: true,
