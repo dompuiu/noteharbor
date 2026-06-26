@@ -3,7 +3,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 
 app.setName('Note Harbor Editor');
 
@@ -229,6 +229,33 @@ async function openScrapeBrowser() {
   return scrapeBrowserLaunchPromise;
 }
 
+function isExternalUrl(url, appUrl) {
+  try {
+    const parsedUrl = new URL(url);
+    const parsedAppUrl = new URL(appUrl);
+
+    if (parsedUrl.origin === parsedAppUrl.origin) {
+      return false;
+    }
+
+    return !['about:', 'data:', 'javascript:'].includes(parsedUrl.protocol);
+  } catch {
+    return false;
+  }
+}
+
+function openExternalUrl(url, appUrl) {
+  if (!isExternalUrl(url, appUrl)) {
+    return false;
+  }
+
+  void shell.openExternal(url).catch((error) => {
+    console.error(error);
+  });
+
+  return true;
+}
+
 function resolveBundledDataDir() {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'bundled-data');
@@ -279,6 +306,8 @@ async function createMainWindow() {
     serverHandle = await startEmbeddedServer();
   }
 
+  const appUrl = `http://${serverHandle.host}:${serverHandle.port}`;
+
   mainWindow = new BrowserWindow({
     width: 1480,
     height: 960,
@@ -295,7 +324,21 @@ async function createMainWindow() {
     }
   });
 
-  await mainWindow.loadURL(`http://${serverHandle.host}:${serverHandle.port}`);
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    if (openExternalUrl(url, appUrl)) {
+      return { action: 'deny' };
+    }
+
+    return { action: 'allow' };
+  });
+
+  mainWindow.webContents.on('will-navigate', (event, url) => {
+    if (openExternalUrl(url, appUrl)) {
+      event.preventDefault();
+    }
+  });
+
+  await mainWindow.loadURL(appUrl);
 
   mainWindow.on('closed', () => {
     mainWindow = null;
