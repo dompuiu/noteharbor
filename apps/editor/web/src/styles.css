@@ -336,7 +336,8 @@ button {
 
 table {
   width: 100%;
-  border-collapse: collapse;
+  border-collapse: separate;
+  border-spacing: 0;
   min-width: 1200px;
 }
 
@@ -420,6 +421,16 @@ thead {
   position: sticky;
   top: 0;
   z-index: 1;
+  isolation: isolate;
+  box-shadow: 0 1px 0 rgb(231, 212, 187);
+}
+
+thead th {
+  background: rgb(231, 212, 187);
+}
+
+thead tr:first-child th {
+  border-bottom-color: #fff;
 }
 
 .table-spacer-row td {
