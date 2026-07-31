@@ -333,6 +333,14 @@ button {
   border: 1px solid rgba(86, 56, 24, 0.14);
   flex: 1 1 auto;
   min-height: 0;
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.table-shell::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+  display: none;
 }
 
 table {
