@@ -189,6 +189,20 @@ async function deleteNote(id, collectionId) {
   return handleResponse(response);
 }
 
+async function moveNote(id, collectionId, targetCollectionId, position) {
+  const response = await fetch(`${notesBasePath(collectionId)}/${id}/move`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      target_collection_id: targetCollectionId,
+      position_mode: position?.mode,
+      position_reference_id: position?.referenceId ?? null
+    })
+  });
+
+  return handleResponse(response);
+}
+
 async function importCsv(source, collectionId) {
   const formData = new FormData();
 
@@ -317,6 +331,7 @@ export {
   getTags,
   importArchive,
   importCsv,
+  moveNote,
   renameCollection,
   reorderNotes,
   scrapePreview,

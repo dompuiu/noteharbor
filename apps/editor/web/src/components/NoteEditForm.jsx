@@ -5,10 +5,12 @@ import {
   getNotes,
   getNote,
   getTags,
+  moveNote,
   reorderNotes,
   scrapePreview,
   updateNote,
 } from "../lib/api.js";
+import { useCollections } from "../lib/collections.jsx";
 import {
   copyTextToClipboard,
   formatNoteAsTsvRow,
@@ -174,6 +176,12 @@ function NoteEditForm({
   const [positionReferenceId, setPositionReferenceId] = useState(
     noteId ? null : initialPositionReferenceId,
   );
+  const { collections } = useCollections();
+  const [destinationCollectionId, setDestinationCollectionId] = useState(
+    selectedCollectionId,
+  );
+  const [destinationNotesOverride, setDestinationNotesOverride] = useState(null);
+  const destinationRequestRef = useRef(0);
   const [scraping, setScraping] = useState(false);
   const [scrapeToast, setScrapeToast] = useState(null);
   const [scrapeDetails, setScrapeDetails] = useState(null);
@@ -210,8 +218,42 @@ function NoteEditForm({
     !scraping &&
     Boolean(form.url.trim()) &&
     (isScrapingDisabled ? false : hasDesktopScrapeLauncher ? scrapeBrowserStatus.available : true);
+  const movingToDifferentCollection =
+    !isCreateMode && destinationCollectionId !== selectedCollectionId;
+  // While moving to a different collection, the position picker reflects that
+  // collection's notes instead of the ones the form originally loaded.
+  const positionSourceNotes = destinationNotesOverride ?? allNotes;
   // Notes other than the one being edited — used for both the visibility guard and the picker list
-  const otherNotes = allNotes.filter((n) => n.id !== Number(noteId));
+  const otherNotes = positionSourceNotes.filter((n) => n.id !== Number(noteId));
+
+  function handleDestinationCollectionChange(rawCollectionId) {
+    const nextCollectionId = Number(rawCollectionId);
+    const requestId = ++destinationRequestRef.current;
+
+    setDestinationCollectionId(nextCollectionId);
+    setPositionReferenceId(null);
+
+    if (nextCollectionId === selectedCollectionId) {
+      setDestinationNotesOverride(null);
+      setPositionMode(isCreateMode ? initialPositionMode : "keep");
+      return;
+    }
+
+    setDestinationNotesOverride(null);
+    setPositionMode("before");
+
+    getNotes(nextCollectionId)
+      .then((payload) => {
+        if (destinationRequestRef.current !== requestId) return;
+        const notes = payload.notes ?? [];
+        setDestinationNotesOverride(notes);
+        setPositionMode(notes.length > 0 ? "before" : "end");
+      })
+      .catch((fetchError) => {
+        if (destinationRequestRef.current !== requestId) return;
+        setError(fetchError.message);
+      });
+  }
 
   async function loadScrapeBrowserStatus() {
     if (!desktopBridge) {
@@ -295,6 +337,9 @@ function NoteEditForm({
     setGeneratedThumbnails({ front: false, back: false });
     setPositionMode(noteId ? "keep" : initialPositionMode);
     setPositionReferenceId(noteId ? null : initialPositionReferenceId);
+    setDestinationCollectionId(selectedCollectionId);
+    setDestinationNotesOverride(null);
+    destinationRequestRef.current += 1;
     setScraping(false);
     setScrapeToast(null);
     setScrapeDetails(null);
@@ -903,6 +948,26 @@ function NoteEditForm({
       const payload = isCreateMode
         ? await createNote(payloadWithImages, selectedCollectionId)
         : await updateNote(noteId, payloadWithImages, selectedCollectionId);
+
+      if (movingToDifferentCollection) {
+        const movedPayload = await moveNote(
+          payload.note.id,
+          selectedCollectionId,
+          destinationCollectionId,
+          { mode: positionMode, referenceId: positionReferenceId },
+        );
+
+        if (onSaveSuccess) {
+          const movedToCollection = collections.find(
+            (collection) => collection.id === destinationCollectionId,
+          );
+          onSaveSuccess(movedPayload.note, null, movedToCollection ?? null);
+          return;
+        }
+
+        navigate("/");
+        return;
+      }
 
       const reorderedNotes = await applyPositionAfterSave(payload.note.id);
 
@@ -1622,6 +1687,29 @@ function NoteEditForm({
               ))}
             </div>
           </div>
+          {!isCreateMode && collections.length > 1 ? (
+            <div className="field-block full-span">
+              <span>Collection</span>
+              <select
+                onChange={(event) =>
+                  handleDestinationCollectionChange(event.target.value)
+                }
+                style={{
+                  padding: "6px 10px",
+                  borderRadius: "8px",
+                  border: "1px solid rgba(92, 59, 24, 0.2)",
+                  background: "rgba(255, 248, 239, 0.8)",
+                }}
+                value={destinationCollectionId ?? ""}
+              >
+                {collections.map((collection) => (
+                  <option key={collection.id} value={collection.id}>
+                    {collection.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+          ) : null}
           {otherNotes.length > 0 ? (
             <div className="field-block full-span">
               <span>Position in collection</span>
@@ -1638,7 +1726,7 @@ function NoteEditForm({
                 }}
                 value={positionMode}
               >
-                {!isCreateMode ? (
+                {!isCreateMode && !movingToDifferentCollection ? (
                   <option value="keep">Keep current position</option>
                 ) : null}
                 <option value="start">Start of collection</option>
@@ -1663,6 +1751,10 @@ function NoteEditForm({
                 />
               ) : null}
             </div>
+          ) : movingToDifferentCollection ? (
+            <p className="muted field-block full-span" style={{ margin: 0 }}>
+              This note will be the only one in the destination collection.
+            </p>
           ) : null}
         </form>
 

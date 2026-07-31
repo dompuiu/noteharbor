@@ -1658,6 +1658,12 @@ button.tag {
   color: #8b1a0a;
 }
 
+.scrape-toast--success {
+  background: rgba(70, 130, 80, 0.1);
+  border: 1px solid rgba(70, 130, 80, 0.3);
+  color: #1f5c34;
+}
+
 .scraped-details-panel--form {
   margin-top: 24px;
   padding-top: 20px;

@@ -452,6 +452,8 @@ function NotesTable({
   });
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
+  const [moveToast, setMoveToast] = useState("");
+  const moveToastTimerRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [bulkLoading, setBulkLoading] = useState(false);
   const [reorderLoading, setReorderLoading] = useState(false);
@@ -460,6 +462,15 @@ function NotesTable({
   const [dropTarget, setDropTarget] = useState(null);
   const [thumbPreviewState, setThumbPreviewState] = useState(null);
   const selectAllRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (moveToastTimerRef.current) {
+        clearTimeout(moveToastTimerRef.current);
+      }
+    };
+  }, []);
+
   const showSelection = true;
   const showReorder = true;
   const showActions = true;
@@ -1040,9 +1051,34 @@ function NotesTable({
     navigateToTableRoute({ kind: "edit", noteId: nextNoteId }, { replace: true });
   }
 
-  function handleSaveEditedNote(updatedNote, reorderedNotes) {
-    if (reorderedNotes) {
+  function showMoveToast(message) {
+    setMoveToast(message);
+
+    if (moveToastTimerRef.current) {
+      clearTimeout(moveToastTimerRef.current);
+    }
+
+    moveToastTimerRef.current = setTimeout(() => setMoveToast(""), 4000);
+  }
+
+  function handleSaveEditedNote(updatedNote, reorderedNotes, movedToCollection) {
+    if (movedToCollection) {
+      // The note now belongs to a different collection — it no longer
+      // belongs in this view, so drop it instead of merging it in.
+      setNotes((current) => current.filter((note) => note.id !== updatedNote.id));
+      setSelectedIds((current) => current.filter((id) => id !== updatedNote.id));
+      setSlideshowNotes((current) => current.filter((note) => note.id !== updatedNote.id));
+      showMoveToast(`Moved to ${movedToCollection.name}.`);
+    } else if (reorderedNotes) {
       setNotes(reorderedNotes);
+      setSlideshowNotes((current) => {
+        if (!current.length) {
+          return current;
+        }
+
+        const slideshowIds = new Set(current.map((note) => note.id));
+        return reorderedNotes.filter((note) => slideshowIds.has(note.id));
+      });
     } else {
       setNotes((current) => {
         const noteExists = current.some((note) => note.id === updatedNote.id);
@@ -1055,30 +1091,21 @@ function NotesTable({
 
         return [...current, updatedNote];
       });
-    }
+      setSlideshowNotes((current) => {
+        if (!current.length) {
+          return current;
+        }
 
-    setSlideshowNotes((current) => {
-      if (!current.length) {
-        return current;
-      }
-
-      let nextSlideshow;
-
-      if (reorderedNotes) {
-        const slideshowIds = new Set(current.map((note) => note.id));
-        nextSlideshow = reorderedNotes.filter((note) => slideshowIds.has(note.id));
-      } else {
         const noteExists = current.some((note) => note.id === updatedNote.id);
         if (!noteExists) return current;
-        nextSlideshow = current.map((note) =>
+
+        return current.map((note) =>
           note.id === updatedNote.id ? updatedNote : note,
         );
-      }
+      });
+    }
 
-      return nextSlideshow;
-    });
-
-    if (slideshowRouteActive) {
+    if (!movedToCollection && slideshowRouteActive) {
       navigateToTableRoute({
         kind: "slideshow",
         noteId: updatedNote.id,
@@ -1525,6 +1552,11 @@ function NotesTable({
         {collectionsError ? <p className="error-text">{collectionsError}</p> : null}
         {loadError ? <p className="error-text">{loadError}</p> : null}
         {actionError ? <p className="error-text">{actionError}</p> : null}
+        {moveToast ? (
+          <div className="scrape-toast scrape-toast--success" role="status">
+            {moveToast}
+          </div>
+        ) : null}
         {operationStatus.isBusy ? (
           <p className="warning-text">
             Current operation: {String(operationStatus.currentOperation).replace(/_/g, " ")}.

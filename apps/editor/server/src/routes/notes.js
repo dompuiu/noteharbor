@@ -9,6 +9,7 @@ import {
   getDefaultCollectionId,
   getNoteById,
   IMAGES_DIR,
+  moveNoteToCollection,
   reorderNotes,
   updateNote
 } from '../db.js';
@@ -390,6 +391,63 @@ notesRouter.delete('/:id', (request, response) => {
 
   deleteNote(noteId, collectionId);
   response.json({ success: true });
+});
+
+notesRouter.post('/:id/move', (request, response) => {
+  const collectionId = resolveCollectionId(request, response);
+
+  if (!collectionId) {
+    return;
+  }
+
+  const noteId = Number(request.params.id);
+  const existing = getNoteById(noteId, collectionId);
+
+  if (!existing) {
+    response.status(404).json({ error: 'Note not found.' });
+    return;
+  }
+
+  const targetCollectionId = Number(request.body.target_collection_id);
+
+  if (!Number.isInteger(targetCollectionId) || targetCollectionId <= 0) {
+    response.status(400).json({ error: 'A valid target collection ID is required.' });
+    return;
+  }
+
+  if (targetCollectionId === collectionId) {
+    response.status(400).json({ error: 'Note is already in this collection.' });
+    return;
+  }
+
+  if (!getCollectionById(targetCollectionId)) {
+    response.status(404).json({ error: 'Target collection not found.' });
+    return;
+  }
+
+  const mode = request.body.position_mode;
+  const allowedModes = new Set(['start', 'end', 'before', 'after']);
+
+  if (!allowedModes.has(mode)) {
+    response.status(400).json({ error: 'A valid position mode is required.' });
+    return;
+  }
+
+  const referenceId = request.body.position_reference_id != null
+    ? Number(request.body.position_reference_id)
+    : null;
+
+  if ((mode === 'before' || mode === 'after') && !Number.isInteger(referenceId)) {
+    response.status(400).json({ error: 'A reference note is required for this position.' });
+    return;
+  }
+
+  try {
+    const note = moveNoteToCollection(noteId, collectionId, targetCollectionId, { mode, referenceId });
+    response.json({ note });
+  } catch (error) {
+    response.status(400).json({ error: error.message });
+  }
 });
 
 export { notesRouter };

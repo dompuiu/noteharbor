@@ -606,6 +606,12 @@ function createStatements(database) {
           updated_at = datetime('now')
       WHERE id = @id
     `),
+    moveNoteCollectionStatement: database.prepare(`
+      UPDATE banknotes
+      SET collection_id = @collection_id,
+          updated_at = datetime('now')
+      WHERE id = @id
+    `),
     listImportRowsStatement: database.prepare(`
       SELECT
         id,
@@ -1266,6 +1272,70 @@ function reorderNotes(ids, collectionId = null) {
   return getAllNotes(normalizedCollectionId);
 }
 
+function moveNoteToCollection(noteId, sourceCollectionId, targetCollectionId, position = {}) {
+  getDatabase();
+
+  const normalizedSourceId = resolveCollectionId(sourceCollectionId);
+  const normalizedTargetId = resolveCollectionId(targetCollectionId);
+  ensureCollectionExists(normalizedTargetId);
+
+  if (normalizedSourceId === normalizedTargetId) {
+    throw new Error('Note is already in this collection.');
+  }
+
+  const existing = getNoteById(noteId, normalizedSourceId);
+
+  if (!existing) {
+    throw new Error('Note not found.');
+  }
+
+  const { mode = 'end', referenceId = null } = position;
+  const tagNames = (existing.tags ?? []).map((tag) => tag.name);
+  const targetIds = getAllNotes(normalizedTargetId).map((note) => note.id);
+
+  let nextOrder;
+
+  if (mode === 'start') {
+    nextOrder = [noteId, ...targetIds];
+  } else if (mode === 'before' || mode === 'after') {
+    const refIndex = targetIds.indexOf(Number(referenceId));
+
+    if (refIndex === -1) {
+      nextOrder = [...targetIds, noteId];
+    } else {
+      const insertAt = mode === 'before' ? refIndex : refIndex + 1;
+      nextOrder = [...targetIds.slice(0, insertAt), noteId, ...targetIds.slice(insertAt)];
+    }
+  } else {
+    nextOrder = [...targetIds, noteId];
+  }
+
+  const transaction = db.transaction(() => {
+    statements.moveNoteCollectionStatement.run({
+      id: noteId,
+      collection_id: normalizedTargetId
+    });
+
+    nextOrder.forEach((id, index) => {
+      statements.updateDisplayOrderStatement.run({
+        id,
+        display_order: index + 1
+      });
+    });
+
+    replaceNoteTags(noteId, tagNames, normalizedTargetId);
+
+    statements.compactDisplayOrderAfterDeleteStatement.run({
+      collection_id: normalizedSourceId,
+      display_order: existing.display_order
+    });
+  });
+
+  transaction();
+
+  return getNoteById(noteId, normalizedTargetId);
+}
+
 function createSlideshowSession(ids) {
   getDatabase();
   const normalizedIds = [...new Set((ids ?? []).map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
@@ -1333,6 +1403,7 @@ export {
   getNotesByIds,
   getSlideshowSession,
   importNotes,
+  moveNoteToCollection,
   openDatabase,
   reloadDatabase,
   renameCollectionById,
