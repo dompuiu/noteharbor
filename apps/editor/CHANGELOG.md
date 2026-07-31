@@ -2,6 +2,13 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.1.0] - 2026-07-31
+
+### Added
+- Added keyboard navigation across the notes table and slideshow: `/` focuses the first filter field, `↑`/`↓` (or `j`/`k`) move focus between rows, and `Enter`/`↓` opens the image preview from the slideshow. `Esc` steps back up one level at a time (filter → table, preview → slideshow, slideshow → table), restoring focus to the row you came from.
+- Added a `?` keyboard-shortcuts help overlay, plus a "Shortcuts" button in the table toolbar and instant hover/focus tooltips on the relevant buttons, so the new shortcuts are discoverable without memorizing them.
+- Added an option to move notes to a different collection from the note edit form.
+
 ## [1.0.1] - 2026-07-31
 
 ### Fixed
