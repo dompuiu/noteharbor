@@ -2,6 +2,11 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.1.1] - 2026-07-31
+
+### Added
+- Added macOS support for launching the scrape browser (Chrome), which was previously limited to Windows. The desktop app now looks for Google Chrome under `/Applications` and `~/Applications`, in addition to honoring the `NOTE_HARBOR_CHROME_PATH` override.
+
 ## [1.1.0] - 2026-07-31
 
 ### Added

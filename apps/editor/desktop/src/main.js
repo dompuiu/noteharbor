@@ -14,10 +14,25 @@ const preloadPath = path.join(__dirname, 'preload.cjs');
 const DEFAULT_CHROME_CDP_URL = 'http://127.0.0.1:9222';
 const DEFAULT_CHROME_CDP_PORT = '9222';
 const DEFAULT_CHROME_CDP_ADDRESS = '0.0.0.0';
-const CHROME_CANDIDATE_PATHS = [
-  'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
-  'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
-];
+const SCRAPE_BROWSER_SUPPORTED_PLATFORMS = new Set(['win32', 'darwin']);
+const CHROME_CANDIDATE_PATHS_BY_PLATFORM = {
+  win32: [
+    'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
+    'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe'
+  ],
+  darwin: [
+    '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
+    path.join(app.getPath('home'), 'Applications/Google Chrome.app/Contents/MacOS/Google Chrome')
+  ]
+};
+
+function getChromeCandidatePaths() {
+  return CHROME_CANDIDATE_PATHS_BY_PLATFORM[process.platform] ?? [];
+}
+
+function isScrapeBrowserSupported() {
+  return SCRAPE_BROWSER_SUPPORTED_PLATFORMS.has(process.platform);
+}
 
 let mainWindow = null;
 let serverHandle = null;
@@ -42,8 +57,9 @@ function getChromeUserDataDir() {
 
 function resolveChromeExecutablePath() {
   const configuredPath = process.env.NOTE_HARBOR_CHROME_PATH?.trim();
+  const candidatePaths = getChromeCandidatePaths();
 
-  for (const candidate of CHROME_CANDIDATE_PATHS) {
+  for (const candidate of candidatePaths) {
     if (fs.existsSync(candidate)) {
       return candidate;
     }
@@ -57,7 +73,7 @@ function resolveChromeExecutablePath() {
     [
       'Chrome could not be found.',
       'Checked:',
-      ...CHROME_CANDIDATE_PATHS.map((candidate) => `- ${candidate}`),
+      ...candidatePaths.map((candidate) => `- ${candidate}`),
       configuredPath ? `- ${configuredPath} (NOTE_HARBOR_CHROME_PATH)` : 'Set NOTE_HARBOR_CHROME_PATH to override the executable path.'
     ].join('\n')
   );
@@ -104,12 +120,12 @@ async function isScrapeBrowserAvailable() {
 }
 
 async function getScrapeBrowserStatus() {
-  if (process.platform !== 'win32') {
+  if (!isScrapeBrowserSupported()) {
     return {
       supported: false,
       available: false,
       launching: false,
-      error: 'Launching the scrape browser is currently supported only on Windows.'
+      error: 'Launching the scrape browser is currently supported only on Windows and macOS.'
     };
   }
 
@@ -122,12 +138,12 @@ async function getScrapeBrowserStatus() {
 }
 
 async function openScrapeBrowser() {
-  if (process.platform !== 'win32') {
+  if (!isScrapeBrowserSupported()) {
     return {
       supported: false,
       available: false,
       launching: false,
-      error: 'Launching the scrape browser is currently supported only on Windows.'
+      error: 'Launching the scrape browser is currently supported only on Windows and macOS.'
     };
   }
 
