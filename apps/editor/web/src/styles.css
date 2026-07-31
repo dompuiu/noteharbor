@@ -110,6 +110,7 @@ button {
 .nav-link,
 .button,
 .icon-link {
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -1291,6 +1292,7 @@ button.tag {
 }
 
 .slide-thumb-btn {
+  position: relative;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 235, 212, 0.18);
   border-radius: 16px;
@@ -1711,4 +1713,131 @@ button.tag {
   color: inherit;
   text-decoration: underline;
   word-break: break-all;
+}
+
+/* ── Keyboard shortcut hints ─────────────────────────────────────────────── */
+
+kbd {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 5px;
+  border-radius: 5px;
+  border: 1px solid rgba(92, 59, 24, 0.28);
+  background: rgba(255, 255, 255, 0.75);
+  font-family: inherit;
+  font-size: 0.74rem;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.table-helper-text kbd {
+  margin: 0 1px;
+}
+
+.filter-shortcut-cell {
+  position: relative;
+}
+
+[data-shortcut]::after {
+  content: attr(data-shortcut);
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  padding: 4px 8px;
+  border-radius: 6px;
+  background: rgba(20, 14, 9, 0.92);
+  color: #fff5e9;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.12s ease,
+    transform 0.12s ease;
+  z-index: 60;
+}
+
+[data-shortcut]:hover::after,
+[data-shortcut]:focus-visible::after {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+/* ── Keyboard shortcuts help overlay ────────────────────────────────────── */
+
+.shortcuts-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(24, 18, 13, 0.5);
+}
+
+.shortcuts-panel {
+  width: min(640px, 100%);
+  max-height: min(80vh, 640px);
+  overflow: auto;
+  padding: 24px;
+  border-radius: 24px;
+  background: rgba(255, 252, 247, 0.98);
+  border: 1px solid rgba(92, 59, 24, 0.16);
+  box-shadow: 0 32px 80px rgba(62, 39, 16, 0.28);
+}
+
+.shortcuts-panel-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  margin-bottom: 16px;
+}
+
+.shortcuts-panel-header .eyebrow {
+  margin: 0;
+}
+
+.shortcuts-groups {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+
+.shortcuts-group h3 {
+  margin: 0 0 10px;
+  font-size: 0.92rem;
+}
+
+.shortcuts-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+
+.shortcuts-group li {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.84rem;
+}
+
+.shortcuts-keys {
+  display: inline-flex;
+  gap: 4px;
+  flex-shrink: 0;
+  min-width: 64px;
+}
+
+@media (max-width: 640px) {
+  .shortcuts-groups {
+    grid-template-columns: 1fr;
+  }
 }

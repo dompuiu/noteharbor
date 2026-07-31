@@ -11,6 +11,7 @@ import {
 } from "../lib/api.js";
 import { isScrapingDisabled } from "../lib/appMode.js";
 import { copyTextToClipboard, formatNoteAsTsvRow } from "../lib/noteClipboard.js";
+import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 
@@ -421,6 +422,10 @@ function NotesTable({
   const tableShellRef = useRef(null);
   const editorOverlayRef = useRef(null);
   const tagsFilterInputRef = useRef(null);
+  const firstFilterInputRef = useRef(null);
+  const focusedRowIdRef = useRef(null);
+  const pendingRowFocusNoteIdRef = useRef(null);
+  const focusRestoreNoteIdRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -461,6 +466,7 @@ function NotesTable({
   const [draggedNoteId, setDraggedNoteId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const [thumbPreviewState, setThumbPreviewState] = useState(null);
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const selectAllRef = useRef(null);
 
   useEffect(() => {
@@ -921,6 +927,81 @@ function NotesTable({
     };
   }, [thumbPreviewState]);
 
+  useEffect(() => {
+    if (!slideshowRouteActive && focusRestoreNoteIdRef.current != null) {
+      const noteId = focusRestoreNoteIdRef.current;
+      focusRestoreNoteIdRef.current = null;
+      focusRowByNoteId(noteId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [slideshowRouteActive]);
+
+  useEffect(() => {
+    function handleGlobalKeyDown(event) {
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
+      if (showShortcutsHelp) {
+        return;
+      }
+
+      const editable =
+        event.target instanceof HTMLElement &&
+        (event.target.tagName === "INPUT" ||
+          event.target.tagName === "TEXTAREA" ||
+          event.target.tagName === "SELECT" ||
+          event.target.isContentEditable);
+
+      if (event.key === "?" && !editable) {
+        event.preventDefault();
+        setShowShortcutsHelp(true);
+        return;
+      }
+
+      if (slideshowRouteActive || editingNoteId || creatingNote) {
+        return;
+      }
+
+      if (event.key === "/" && !editable) {
+        event.preventDefault();
+        firstFilterInputRef.current?.focus();
+        firstFilterInputRef.current?.select();
+        return;
+      }
+
+      if (editable) {
+        if (event.key === "Escape" && event.target.closest("thead")) {
+          event.preventDefault();
+          event.target.blur();
+          focusLastOrFirstRow();
+        }
+        return;
+      }
+
+      if (event.key === "ArrowDown" || event.key === "j") {
+        event.preventDefault();
+        moveRowFocus(1);
+        return;
+      }
+
+      if (event.key === "ArrowUp" || event.key === "k") {
+        event.preventDefault();
+        moveRowFocus(-1);
+      }
+    }
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [
+    creatingNote,
+    editingNoteId,
+    orderedNotes,
+    rowVirtualizer,
+    slideshowRouteActive,
+    showShortcutsHelp,
+  ]);
+
   function resetTableState() {
     setFilters({});
     setSortKey("id");
@@ -981,7 +1062,60 @@ function NotesTable({
   }
 
   function closeSlideshow() {
+    focusRestoreNoteIdRef.current = currentRoute.noteId;
     navigateToTableRoute(emptyTableRoute(), { replace: true });
+  }
+
+  function focusRowByNoteId(noteId) {
+    if (noteId == null) {
+      return;
+    }
+
+    const element = rowElementMapRef.current.get(noteId);
+
+    if (element) {
+      element.focus();
+      focusedRowIdRef.current = noteId;
+      return;
+    }
+
+    const index = orderedNotes.findIndex((note) => note.id === noteId);
+
+    if (index < 0) {
+      return;
+    }
+
+    pendingRowFocusNoteIdRef.current = noteId;
+    rowVirtualizer.scrollToIndex(index, { align: "auto" });
+  }
+
+  function moveRowFocus(offset) {
+    if (!orderedNotes.length) {
+      return;
+    }
+
+    const currentIndex = orderedNotes.findIndex(
+      (note) => note.id === focusedRowIdRef.current,
+    );
+    const baseIndex = currentIndex >= 0 ? currentIndex : offset > 0 ? -1 : 0;
+    const nextIndex = Math.min(
+      Math.max(baseIndex + offset, 0),
+      orderedNotes.length - 1,
+    );
+
+    focusRowByNoteId(orderedNotes[nextIndex].id);
+  }
+
+  function focusLastOrFirstRow() {
+    if (!orderedNotes.length) {
+      return;
+    }
+
+    const lastId = focusedRowIdRef.current;
+    const stillPresent =
+      lastId != null && orderedNotes.some((note) => note.id === lastId);
+
+    focusRowByNoteId(stillPresent ? lastId : orderedNotes[0].id);
   }
 
   function openEditor(noteId) {
@@ -1453,6 +1587,10 @@ function NotesTable({
 
   return (
     <section className="screen-stack">
+      {showShortcutsHelp ? (
+        <KeyboardShortcutsHelp onClose={() => setShowShortcutsHelp(false)} />
+      ) : null}
+
       {slideshowRouteActive && slideshowNotes.length && slideshowIndex >= 0 ? (
         <Slideshow
           currentIndex={slideshowIndex}
@@ -1544,6 +1682,16 @@ function NotesTable({
               >
                 Import / Export
               </Link>
+              <button
+                aria-label="Keyboard shortcuts"
+                className="icon-link"
+                data-shortcut="?"
+                onClick={() => setShowShortcutsHelp(true)}
+                title="Keyboard shortcuts (?)"
+                type="button"
+              >
+                Shortcuts
+              </button>
             </div>
           </div>
 
@@ -1609,6 +1757,8 @@ function NotesTable({
                   : canReorder
                     ? "Drag rows from the handle to change the default order."
                     : "Reordering is available only in the default unfiltered view."}
+                {" "}Press <kbd>/</kbd> to filter, <kbd>&uarr;</kbd>/<kbd>&darr;</kbd> to browse rows, or{" "}
+                <kbd>?</kbd> for shortcuts.
               </p>
               {selectedIds.length ? (
                 <div className="inline-select-group inline-select-group--bulk">
@@ -1694,17 +1844,29 @@ function NotesTable({
                     {showSelection ? <th /> : null}
                     <th />
                     <th />
-                    {visibleColumns.map(([key, label]) => (
+                    {visibleColumns.map(([key, label], columnIndex) => (
                       <th
                         className={
-                          key === "scrape_status" ? "scrape-status-column" : undefined
+                          [
+                            key === "scrape_status" ? "scrape-status-column" : null,
+                            columnIndex === 0 ? "filter-shortcut-cell" : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" ") || undefined
                         }
+                        data-shortcut={columnIndex === 0 ? "/" : undefined}
                         key={`${key}-filter`}
                       >
                         <input
                           aria-label={`Filter ${label}`}
                           className="filter-input"
-                          ref={key === "tags" ? tagsFilterInputRef : undefined}
+                          ref={
+                            key === "tags"
+                              ? tagsFilterInputRef
+                              : columnIndex === 0
+                                ? firstFilterInputRef
+                                : undefined
+                          }
                           value={filters[key] ?? ""}
                           onChange={(event) =>
                             setFilters((current) => ({
@@ -1777,9 +1939,18 @@ function NotesTable({
                             if (element) {
                               rowElementMapRef.current.set(note.id, element);
                               rowVirtualizer.measureElement(element);
+
+                              if (pendingRowFocusNoteIdRef.current === note.id) {
+                                pendingRowFocusNoteIdRef.current = null;
+                                element.focus();
+                                focusedRowIdRef.current = note.id;
+                              }
                             } else {
                               rowElementMapRef.current.delete(note.id);
                             }
+                          }}
+                          onFocus={() => {
+                            focusedRowIdRef.current = note.id;
                           }}
                           onDragLeave={(event) => {
                             if (

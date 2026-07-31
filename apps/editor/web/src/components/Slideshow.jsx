@@ -165,6 +165,7 @@ function ImagePopover({
             <button
               aria-label="Close preview"
               className="icon-link icon-link--on-dark image-popover-close"
+              data-shortcut="Esc"
               onClick={onClose}
               title="Close preview"
               type="button"
@@ -178,6 +179,7 @@ function ImagePopover({
           <button
             aria-label="Show previous image"
             className="arrow-button image-popover-arrow"
+            data-shortcut={canGoPrevious ? "←" : undefined}
             disabled={!canGoPrevious}
             onClick={onPrevious}
             type="button"
@@ -199,6 +201,7 @@ function ImagePopover({
           <button
             aria-label="Show next image"
             className="arrow-button image-popover-arrow"
+            data-shortcut={canGoNext ? "→" : undefined}
             disabled={!canGoNext}
             onClick={onNext}
             type="button"
@@ -224,6 +227,8 @@ function Slideshow({
   onOpenPreview,
   previewKind = null,
 }) {
+  const note = notes[currentIndex];
+
   function moveSlideshow(offset) {
     onChangeIndex(
       (current) => (current + offset + notes.length) % notes.length,
@@ -251,6 +256,10 @@ function Slideshow({
         return;
       }
 
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
       if (event.key === "Escape") {
         onClose();
         return;
@@ -258,23 +267,35 @@ function Slideshow({
 
       if (event.key === "ArrowRight") {
         moveSlideshow(1);
+        return;
       }
 
       if (event.key === "ArrowLeft") {
         moveSlideshow(-1);
+        return;
+      }
+
+      if ((event.key === "Enter" || event.key === "ArrowDown") && note) {
+        event.preventDefault();
+        const openableItem = getPreviewItems(note, {
+          includeMissingSides: true,
+        }).find((item) => item.kind === "front" || item.kind === "back");
+
+        if (openableItem) {
+          onOpenPreview?.(note.id, openableItem.kind);
+        }
       }
     }
 
     window.addEventListener("keydown", onKeyDown);
 
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [keyboardDisabled, notes.length, onClose, previewKind]);
+  }, [keyboardDisabled, note, notes.length, onClose, onOpenPreview, previewKind]);
 
   if (!notes.length) {
     return null;
   }
 
-  const note = notes[currentIndex];
   const previewItems = getPreviewItems(note, { includeMissingSides: true });
   const scrapedDetailEntries = getScrapedDetailEntries(note);
   const previewNote = previewKind ? note : null;
@@ -351,6 +372,7 @@ function Slideshow({
           <button
             aria-label="Close slideshow"
             className="icon-link icon-link--on-dark"
+            data-shortcut="Esc"
             onClick={onClose}
             title="Close slideshow"
             type="button"
@@ -362,8 +384,11 @@ function Slideshow({
 
       <div className="slideshow-layout">
         <button
+          aria-label="Previous note"
           className="arrow-button"
+          data-shortcut="←"
           onClick={() => moveSlideshow(-1)}
+          title="Previous note (←)"
           type="button"
         >
           <span aria-hidden="true">&larr;</span>
@@ -371,10 +396,12 @@ function Slideshow({
 
         <div className="slide-card">
           <div className="slide-images">
-            {previewItems.map((item) => (
+            {previewItems.map((item, itemIndex) => (
               <button
                 key={item.kind}
+                aria-label={`Enlarge ${item.label.toLowerCase()} image`}
                 className="slide-thumb-btn"
+                data-shortcut={itemIndex === 0 ? "Enter" : undefined}
                 onClick={() => onOpenPreview?.(note.id, item.kind)}
                 title="Click to enlarge"
                 type="button"
@@ -446,8 +473,11 @@ function Slideshow({
         </div>
 
         <button
+          aria-label="Next note"
           className="arrow-button"
+          data-shortcut="→"
           onClick={() => moveSlideshow(1)}
+          title="Next note (→)"
           type="button"
         >
           <span aria-hidden="true">&rarr;</span>
