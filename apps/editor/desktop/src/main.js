@@ -309,7 +309,20 @@ async function createMainWindow() {
 ipcMain.handle('note-harbor:get-scrape-browser-status', async () => getScrapeBrowserStatus());
 ipcMain.handle('note-harbor:open-scrape-browser', async () => openScrapeBrowser());
 
+function resolveAboutIconPath() {
+  return app.isPackaged
+    ? path.join(process.resourcesPath, 'icon.icns')
+    : path.resolve(__dirname, '../build/icon.icns');
+}
+
 app.whenReady().then(async () => {
+  app.setAboutPanelOptions({
+    applicationName: 'Note Harbor Editor',
+    applicationVersion: app.getVersion(),
+    version: app.getVersion(),
+    iconPath: resolveAboutIconPath()
+  });
+
   await createMainWindow();
 
   app.on('activate', async () => {
