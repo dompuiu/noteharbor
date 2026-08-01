@@ -18,7 +18,6 @@ function detectDesktopRuntime() {
   return false;
 }
 
-const isScrapingDisabled = parseBooleanEnv(import.meta.env.VITE_DISABLE_SCRAPING);
 const isDesktopRuntime = detectDesktopRuntime();
 
-export { isDesktopRuntime, isScrapingDisabled };
+export { isDesktopRuntime };

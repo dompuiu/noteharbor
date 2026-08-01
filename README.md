@@ -7,70 +7,26 @@ Local collection software for managing and presenting banknote archives. This mo
 | Layer | Tech |
 |---|---|
 | Editor backend | Node.js (ESM), Express 5, SQLite (better-sqlite3) |
-| Editor frontend | React 19, React Router 7, Vite |
+| Editor frontend | React, React Router, Vite |
 | Desktop editor | Electron + electron-builder |
 | Viewer | Flutter (bundled-data, read-only) |
-| Scraping | Node.js + Playwright (CDP attach to an existing browser) |
-| Package manager | pnpm 10 workspaces |
+| Scraping | Node.js + `playwright-core` (CDP attach to an already-running browser, no managed browser install) |
+| Package manager | pnpm workspaces (version pinned via `packageManager` in `package.json`) |
 
 ---
 
-## Project Structure
+## Workspace Layout
 
-```
-noteharbor/
-├── package.json
-├── pnpm-workspace.yaml
-├── apps/
-│   ├── editor/
-│   │   ├── desktop/
-│   │   │   ├── package.json
-│   │   │   ├── scripts/
-│   │   │   │   ├── build-web.mjs
-│   │   │   │   └── prepare-package.mjs
-│   │   │   └── src/
-│   │   │       └── main.js
-│   │   ├── server/
-│   │   │   ├── package.json
-│   │   │   └── src/
-│   │   │       ├── index.js
-│   │   │       ├── db.js
-│   │   │       ├── fetchHtml.js
-│   │   │       ├── operationState.js
-│   │   │       ├── serverMode.js
-│   │   │       ├── routes/
-│   │   │       │   ├── archive.js
-│   │   │       │   ├── import.js
-│   │   │       │   ├── notes.js
-│   │   │       │   ├── operations.js
-│   │   │       │   ├── scrape.js
-│   │   │       │   ├── slideshow.js
-│   │   │       │   └── tags.js
-│   │   │       └── scrapers/
-│   │   │           ├── base.js
-│   │   │           ├── pmg.js
-│   │   │           └── tqg.js
-│   │   └── web/
-│   │       ├── package.json
-│   │       ├── vite.config.js
-│   │       └── src/
-│   │           ├── App.jsx
-│   │           ├── lib/
-│   │           │   ├── api.js
-│   │           │   └── appMode.js
-│   │           └── components/
-│   │               ├── ImportScreen.jsx
-│   │               ├── NoteEditForm.jsx
-│   │               ├── NotesTable.jsx
-│   │               └── Slideshow.jsx
-│   └── viewer/
-│       └── flutter/
-│           ├── pubspec.yaml
-│           └── lib/
-└── data/
-    ├── banknotes.db
-    └── images/
-```
+This is a pnpm workspace with apps under `apps/`:
+
+- **`apps/editor/server`** — Express + SQLite backend (routes, scrapers, DB access)
+- **`apps/editor/web`** — React + Vite frontend for the editor
+- **`apps/editor/desktop`** — Electron shell that packages the server and web build
+- **`apps/viewer/flutter`** — the read-only Flutter viewer
+
+Local data (SQLite DB + images) lives in `data/` by default; see [Environment variables](#environment-variables) to override the location.
+
+For current file-level structure, browse the repo directly rather than relying on a tree snapshot here.
 
 ---
 
@@ -79,15 +35,15 @@ noteharbor/
 ### Prerequisites
 
 - Node.js 20+
-- pnpm 10+
-- Python 3.9+
+- pnpm (run `corepack enable`, which picks up the version pinned in `package.json`'s `packageManager` field)
 
 ### Install
 
 ```bash
 pnpm install
-pnpm --filter editor_server exec playwright install chromium
 ```
+
+No browser install step is needed: the scraper only attaches to an already-running browser over CDP (see [Use a Windows Chrome from WSL via CDP](#use-a-windows-chrome-from-wsl-via-cdp)); it never launches a Playwright-managed browser.
 
 ### Run the editor in development
 
@@ -154,7 +110,7 @@ pnpm --filter editor_desktop build
 
 The Electron package:
 
-- builds the React UI with `VITE_DISABLE_SCRAPING=true`
+- builds the React UI
 - embeds the Express server and built web app
 - bundles the current `data/` directory
 - copies bundled data into the user-data folder when the packaged app is newer
@@ -199,13 +155,6 @@ Create `apps/editor/server/.env` if you want to override defaults.
 | `NOTE_HARBOR_DATA_DIR` | `data` | Root data directory containing `banknotes.db` and `images/` |
 | `NOTE_HARBOR_WEB_DIST_DIR` | `apps/editor/web/dist` | Static web build served by Express |
 | `NOTE_HARBOR_SERVE_WEB_DIST` | `false` | Enables serving the built web app from Express |
-| `NOTE_HARBOR_DISABLE_SCRAPING` | `false` | Disables scrape routes |
-
-Client-side Vite flags must be prefixed with `VITE_`. To hide scrape UI in the web app:
-
-```bash
-VITE_DISABLE_SCRAPING=true
-```
 
 ---
 

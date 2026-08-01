@@ -2,7 +2,7 @@
   "name": "editor_desktop",
   "private": true,
   "version": "1.2.0",
-  "description": "Electron-packaged Note Harbor Editor with scraping disabled",
+  "description": "Electron-packaged Note Harbor Editor",
   "type": "module",
   "main": "src/main.js",
   "scripts": {

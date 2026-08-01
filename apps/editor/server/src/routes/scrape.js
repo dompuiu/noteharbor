@@ -10,10 +10,6 @@ import {
 import { PCGSScraper } from "../scrapers/pcgs.js";
 import { PMGScraper } from "../scrapers/pmg.js";
 import { TQGScraper } from "../scrapers/tqg.js";
-import {
-  rejectScrapingDisabled,
-  shouldDisableScraping,
-} from "../serverMode.js";
 
 const scrapeRouter = Router();
 const DEFAULT_WAIT_SECONDS = 2;
@@ -170,11 +166,6 @@ scrapeRouter.get("/status", (_request, response) => {
 });
 
 scrapeRouter.post("/start", async (request, response) => {
-  if (shouldDisableScraping()) {
-    rejectScrapingDisabled(response);
-    return;
-  }
-
   try {
     if (scrapeState.status === "running") {
       throw createOperationConflictError("Scraping");
@@ -215,11 +206,6 @@ scrapeRouter.post("/start", async (request, response) => {
 });
 
 scrapeRouter.post("/preview", async (request, response) => {
-  if (shouldDisableScraping()) {
-    rejectScrapingDisabled(response);
-    return;
-  }
-
   const url =
     typeof request.body.url === "string" ? request.body.url.trim() : "";
 

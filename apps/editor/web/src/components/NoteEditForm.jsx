@@ -17,7 +17,7 @@ import {
   parseNoteDetailsFromClipboardText,
   readTextFromClipboard,
 } from "../lib/noteClipboard.js";
-import { isDesktopRuntime, isScrapingDisabled } from "../lib/appMode.js";
+import { isDesktopRuntime } from "../lib/appMode.js";
 import { PositionPicker } from "./PositionPicker.jsx";
 
 const SCRAPE_BROWSER_POLL_INTERVAL_MS = 500;
@@ -192,7 +192,7 @@ function NoteEditForm({
   const [pendingScrapedImages, setPendingScrapedImages] = useState({});
   const [scrapeBrowserStatus, setScrapeBrowserStatus] = useState({
     supported: false,
-    available: !isScrapingDisabled,
+    available: true,
     launching: false,
     error: null,
   });
@@ -217,7 +217,7 @@ function NoteEditForm({
   const canScrapeUrl =
     !scraping &&
     Boolean(form.url.trim()) &&
-    (isScrapingDisabled ? false : hasDesktopScrapeLauncher ? scrapeBrowserStatus.available : true);
+    (hasDesktopScrapeLauncher ? scrapeBrowserStatus.available : true);
   const movingToDifferentCollection =
     !isCreateMode && destinationCollectionId !== selectedCollectionId;
   // While moving to a different collection, the position picker reflects that
@@ -259,7 +259,7 @@ function NoteEditForm({
     if (!desktopBridge) {
       setScrapeBrowserStatus({
         supported: hasDesktopScrapeLauncher,
-        available: !isScrapingDisabled,
+        available: true,
         launching: false,
         error: null,
       });
@@ -1411,26 +1411,24 @@ function NoteEditForm({
                     {scrapeBrowserStatus.launching ? "Opening..." : "Open Chrome"}
                   </button>
                 ) : null}
-                {!isScrapingDisabled ? (
-                  <button
-                    aria-label="Auto Populate fields from URL"
-                    className="button"
-                    disabled={!canScrapeUrl}
-                    onClick={handleAutoPopulate}
-                    title={
-                      hasDesktopScrapeLauncher && !scrapeBrowserStatus.available
-                        ? scrapeBrowserStatus.error || "Open Chrome for scraping first"
-                        : "Auto Populate fields from URL"
-                    }
-                    type="button"
-                  >
-                    {scraping ? (
-                      <span className="scrape-spinner" aria-label="Loading" />
-                  ) : (
-                    <span aria-hidden="true">✦</span>
-                  )}
-                  </button>
-                ) : null}
+                <button
+                  aria-label="Auto Populate fields from URL"
+                  className="button"
+                  disabled={!canScrapeUrl}
+                  onClick={handleAutoPopulate}
+                  title={
+                    hasDesktopScrapeLauncher && !scrapeBrowserStatus.available
+                      ? scrapeBrowserStatus.error || "Open Chrome for scraping first"
+                      : "Auto Populate fields from URL"
+                  }
+                  type="button"
+                >
+                  {scraping ? (
+                    <span className="scrape-spinner" aria-label="Loading" />
+                ) : (
+                  <span aria-hidden="true">✦</span>
+                )}
+                </button>
               </div>
             </div>
 

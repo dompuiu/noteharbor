@@ -19,7 +19,6 @@ import {
   getScrapeStatus,
   startScrape,
 } from "../lib/api.js";
-import { isScrapingDisabled } from "../lib/appMode.js";
 import { copyTextToClipboard, formatNoteAsTsvRow } from "../lib/noteClipboard.js";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
@@ -1151,9 +1150,7 @@ function NotesTable({
     () => initialTableStateRef.current?.selectedIds ?? [],
   );
   const [selectNextCount, setSelectNextCount] = useState(10);
-  const [bulkAction, setBulkAction] = useState(
-    isScrapingDisabled ? "delete" : "scrape",
-  );
+  const [bulkAction, setBulkAction] = useState("scrape");
   const [scrapeJob, setScrapeJob] = useState(null);
   const [operationStatus, setOperationStatus] = useState({
     currentOperation: "idle",
@@ -1186,7 +1183,7 @@ function NotesTable({
   const showReorder = true;
   const showActions = true;
   const visibleColumns = useMemo(
-    () => (isScrapingDisabled ? baseColumns : [...baseColumns, scrapeStatusColumn]),
+    () => [...baseColumns, scrapeStatusColumn],
     [],
   );
   const showScrapeStatusColumn = visibleColumns.some(
@@ -1347,23 +1344,17 @@ function NotesTable({
     setLoading(true);
     setLoadError("");
 
-    const initialLoad = isScrapingDisabled
-      ? Promise.all([getNotes(activeCollectionId), getOperationStatus()]).then(([notesPayload, operationPayload]) => {
-          if (active) {
-            setNotes(notesPayload.notes);
-            setScrapeJob(null);
-            setOperationStatus(operationPayload);
-          }
-        })
-      : Promise.all([getNotes(activeCollectionId), getScrapeStatus(), getOperationStatus()]).then(
-          ([notesPayload, statusPayload, operationPayload]) => {
-            if (active) {
-              setNotes(notesPayload.notes);
-              setScrapeJob(activeScrapeJob(statusPayload));
-              setOperationStatus(operationPayload);
-            }
-          },
-        );
+    const initialLoad = Promise.all([
+      getNotes(activeCollectionId),
+      getScrapeStatus(),
+      getOperationStatus(),
+    ]).then(([notesPayload, statusPayload, operationPayload]) => {
+      if (active) {
+        setNotes(notesPayload.notes);
+        setScrapeJob(activeScrapeJob(statusPayload));
+        setOperationStatus(operationPayload);
+      }
+    });
 
     initialLoad
       .catch((fetchError) => {
@@ -1393,7 +1384,7 @@ function NotesTable({
   }, [activeCollectionId]);
 
   useEffect(() => {
-    if (isScrapingDisabled || (!operationStatus.isBusy && !scrapeJob)) {
+    if (!operationStatus.isBusy && !scrapeJob) {
       return undefined;
     }
 
@@ -2215,10 +2206,6 @@ function NotesTable({
         return;
       }
 
-      if (isScrapingDisabled) {
-        return;
-      }
-
       if (operationStatus.isBusy) {
         throw new Error(
           `Scraping is unavailable while ${String(operationStatus.currentOperation).replace(/_/g, " ")} is in progress.`,
@@ -2524,32 +2511,28 @@ function NotesTable({
                     Reset filters, sorting, and selection
                   </button>
                 ) : null}
-                {!isScrapingDisabled ? (
-                  <>
-                    <select
-                      aria-label="Select next count"
-                      className="select-input"
-                      onChange={(event) =>
-                        setSelectNextCount(Number(event.target.value))
-                      }
-                      value={selectNextCount}
-                    >
-                      {selectCountOptions.map((count) => (
-                        <option key={count} value={count}>
-                          {count}
-                        </option>
-                      ))}
-                    </select>
-                    <button
-                      className="button"
-                      disabled={operationStatus.isBusy}
-                      onClick={selectNextUnscraped}
-                      type="button"
-                    >
-                      Select next unscraped
-                    </button>
-                  </>
-                ) : null}
+                <select
+                  aria-label="Select next count"
+                  className="select-input"
+                  onChange={(event) =>
+                    setSelectNextCount(Number(event.target.value))
+                  }
+                  value={selectNextCount}
+                >
+                  {selectCountOptions.map((count) => (
+                    <option key={count} value={count}>
+                      {count}
+                    </option>
+                  ))}
+                </select>
+                <button
+                  className="button"
+                  disabled={operationStatus.isBusy}
+                  onClick={selectNextUnscraped}
+                  type="button"
+                >
+                  Select next unscraped
+                </button>
               </div>
               <p className="table-helper-text">
                 {reorderLoading
@@ -2568,9 +2551,7 @@ function NotesTable({
                     onChange={(event) => setBulkAction(event.target.value)}
                     value={bulkAction}
                   >
-                    {!isScrapingDisabled ? (
-                      <option value="scrape">Scrape selected</option>
-                    ) : null}
+                    <option value="scrape">Scrape selected</option>
                     <option value="delete">Delete selected</option>
                   </select>
                   <button
