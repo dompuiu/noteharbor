@@ -1,4 +1,14 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react";
+import {
+  Fragment,
+  forwardRef,
+  useEffect,
+  useImperativeHandle,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
@@ -39,6 +49,697 @@ const tableStateStorageKey = "noteharbor.notesTableState";
 const validSortKeys = new Set(["id", ...columns.map(([key]) => key)]);
 const rowHeightEstimate = 43;
 const validPreviewKinds = new Set(["front", "back"]);
+const tagChipHorizontalPadding = 20;
+const tagListGap = 8;
+const tagChipMeasureSafetyMargin = 2;
+const tagsPopoverWidth = 280;
+const tagsPopoverMaxHeight = 320;
+const tagsPopoverOpenDelay = 300;
+const tagsPopoverCloseDelay = 150;
+
+let tagTextMeasureContext = null;
+
+function getTagTextMeasureContext() {
+  if (tagTextMeasureContext || typeof document === "undefined") {
+    return tagTextMeasureContext;
+  }
+
+  const probe = document.createElement("button");
+  probe.className = "tag";
+  probe.style.position = "absolute";
+  probe.style.visibility = "hidden";
+  probe.style.pointerEvents = "none";
+  probe.textContent = "x";
+  document.body.appendChild(probe);
+  const computed = window.getComputedStyle(probe);
+  const canvas = document.createElement("canvas");
+  const context = canvas.getContext("2d");
+  context.font = `${computed.fontStyle} ${computed.fontWeight} ${computed.fontSize} ${computed.fontFamily}`;
+  document.body.removeChild(probe);
+
+  tagTextMeasureContext = context;
+  return tagTextMeasureContext;
+}
+
+function measureTagChipWidth(text) {
+  const context = getTagTextMeasureContext();
+
+  if (!context) {
+    return text.length * 8 + tagChipHorizontalPadding;
+  }
+
+  return (
+    Math.ceil(context.measureText(text).width) +
+    tagChipHorizontalPadding +
+    tagChipMeasureSafetyMargin
+  );
+}
+
+function computeVisibleTagPlan(tags, availableWidth) {
+  if (!tags.length) {
+    return { visibleTags: [], hiddenTags: [] };
+  }
+
+  const chipWidths = tags.map((tag) => measureTagChipWidth(tag.name));
+  const fullWidth = chipWidths.reduce(
+    (sum, width, index) => sum + width + (index > 0 ? tagListGap : 0),
+    0,
+  );
+
+  if (fullWidth <= availableWidth) {
+    return { visibleTags: tags, hiddenTags: [] };
+  }
+
+  for (let visibleCount = tags.length - 1; visibleCount >= 0; visibleCount -= 1) {
+    const hiddenCount = tags.length - visibleCount;
+    let width = measureTagChipWidth(`+${hiddenCount}`);
+
+    for (let i = 0; i < visibleCount; i += 1) {
+      width += chipWidths[i] + tagListGap;
+    }
+
+    // At visibleCount 0 we always accept, so the "+N" counter is never
+    // itself pushed out of view with no indicator left behind.
+    if (width <= availableWidth || visibleCount === 0) {
+      return {
+        visibleTags: tags.slice(0, visibleCount),
+        hiddenTags: tags.slice(visibleCount),
+      };
+    }
+  }
+}
+
+// Anchors the popover under `bounds` (the trigger's rect), flipping above it
+// when there isn't room below, given the popover's (real or estimated) height.
+function computePopoverTop(bounds, height) {
+  const spaceBelow = window.innerHeight - bounds.bottom - 6;
+  const spaceAbove = bounds.top - 6;
+
+  return spaceBelow >= height || spaceBelow >= spaceAbove
+    ? Math.min(bounds.bottom + 6, window.innerHeight - height - 8)
+    : Math.max(8, bounds.top - height - 6);
+}
+
+function TagsCell({ onApplyFilter, tags }) {
+  const containerRef = useRef(null);
+  const triggerRef = useRef(null);
+  const popoverRef = useRef(null);
+  const openTimeoutRef = useRef(null);
+  const closeTimeoutRef = useRef(null);
+  const [availableWidth, setAvailableWidth] = useState(null);
+  const [isOpen, setIsOpen] = useState(false);
+  const [popoverPosition, setPopoverPosition] = useState(null);
+  const popoverHeightRef = useRef(null);
+
+  useLayoutEffect(() => {
+    const element = containerRef.current;
+
+    if (!element) {
+      return undefined;
+    }
+
+    setAvailableWidth(element.clientWidth);
+
+    const observer = new ResizeObserver((entries) => {
+      const entry = entries[0];
+
+      if (entry) {
+        setAvailableWidth(entry.contentRect.width);
+      }
+    });
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, []);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setPopoverPosition(null);
+      popoverHeightRef.current = null;
+      return undefined;
+    }
+
+    function updatePosition() {
+      const trigger = triggerRef.current;
+
+      if (!trigger) {
+        setIsOpen(false);
+        return;
+      }
+
+      const bounds = trigger.getBoundingClientRect();
+      const maxLeft = window.innerWidth - tagsPopoverWidth - 8;
+      const left = Math.max(8, Math.min(bounds.left, maxLeft));
+
+      // Before the popover has mounted (and given us a real height to
+      // measure), fall back to its max possible height so the first paint
+      // still avoids running off-screen; the layout effect below corrects
+      // `top` using the real height as soon as it's known.
+      const height =
+        popoverHeightRef.current ?? Math.min(tagsPopoverMaxHeight, window.innerHeight - 16);
+      const top = computePopoverTop(bounds, height);
+
+      setPopoverPosition({ top, left });
+    }
+
+    updatePosition();
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+
+    return () => {
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [isOpen]);
+
+  // The first pass above has to guess the popover's height, since it hasn't
+  // rendered yet. Once it has, re-derive `top` from its actual height so a
+  // short tag list doesn't get positioned as if it were the max height.
+  useLayoutEffect(() => {
+    if (!isOpen || !popoverPosition || !popoverRef.current) {
+      return;
+    }
+
+    const measuredHeight = popoverRef.current.getBoundingClientRect().height;
+
+    if (popoverHeightRef.current === measuredHeight) {
+      return;
+    }
+
+    popoverHeightRef.current = measuredHeight;
+
+    const trigger = triggerRef.current;
+
+    if (!trigger) {
+      return;
+    }
+
+    const bounds = trigger.getBoundingClientRect();
+    const top = computePopoverTop(bounds, measuredHeight);
+
+    setPopoverPosition((current) => (current ? { ...current, top } : current));
+  }, [isOpen, popoverPosition]);
+
+  useEffect(() => {
+    return () => {
+      if (openTimeoutRef.current) {
+        clearTimeout(openTimeoutRef.current);
+      }
+
+      if (closeTimeoutRef.current) {
+        clearTimeout(closeTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  function cancelScheduledOpen() {
+    if (openTimeoutRef.current) {
+      clearTimeout(openTimeoutRef.current);
+      openTimeoutRef.current = null;
+    }
+  }
+
+  function cancelScheduledClose() {
+    if (closeTimeoutRef.current) {
+      clearTimeout(closeTimeoutRef.current);
+      closeTimeoutRef.current = null;
+    }
+  }
+
+  function handleTriggerMouseEnter() {
+    cancelScheduledClose();
+    cancelScheduledOpen();
+    openTimeoutRef.current = setTimeout(() => {
+      setIsOpen(true);
+    }, tagsPopoverOpenDelay);
+  }
+
+  function handleMouseLeave() {
+    cancelScheduledOpen();
+    cancelScheduledClose();
+    closeTimeoutRef.current = setTimeout(() => {
+      setIsOpen(false);
+    }, tagsPopoverCloseDelay);
+  }
+
+  function handleMouseEnterAgain() {
+    cancelScheduledClose();
+  }
+
+  function handleTriggerFocus() {
+    cancelScheduledOpen();
+    cancelScheduledClose();
+    setIsOpen(true);
+  }
+
+  function handleTriggerMouseDown(event) {
+    // Clicking an unfocused button fires a native focus event before click.
+    // Without this, handleTriggerFocus's setIsOpen(true) and this same
+    // click's toggle in handleTriggerClick cancel each other out.
+    event.preventDefault();
+  }
+
+  function handleTriggerClick(event) {
+    event.stopPropagation();
+    cancelScheduledOpen();
+    cancelScheduledClose();
+    setIsOpen((current) => !current);
+  }
+
+  function handleTriggerKeyDown(event) {
+    if (event.key === "Tab" && !event.shiftKey && isOpen) {
+      const firstButton = popoverRef.current?.querySelector("button");
+
+      if (firstButton) {
+        event.preventDefault();
+        firstButton.focus();
+      }
+    }
+  }
+
+  function handlePopoverFocus() {
+    cancelScheduledClose();
+  }
+
+  function handlePopoverKeyDown(event) {
+    if (event.key === "Escape") {
+      event.stopPropagation();
+      setIsOpen(false);
+      triggerRef.current?.focus();
+      return;
+    }
+
+    if (event.key === "Tab") {
+      const buttons = Array.from(popoverRef.current?.querySelectorAll("button") ?? []);
+      const atLast = !event.shiftKey && document.activeElement === buttons[buttons.length - 1];
+      const atFirst = event.shiftKey && document.activeElement === buttons[0];
+
+      if (atLast || atFirst) {
+        event.preventDefault();
+        setIsOpen(false);
+        triggerRef.current?.focus();
+      }
+    }
+  }
+
+  const { visibleTags, hiddenTags } = !tags.length
+    ? { visibleTags: [], hiddenTags: [] }
+    : availableWidth == null
+      ? { visibleTags: tags, hiddenTags: [] }
+      : computeVisibleTagPlan(tags, availableWidth);
+
+  return (
+    <div className="tag-list tag-list-clip" ref={containerRef}>
+      {!tags.length ? <span className="muted">-</span> : null}
+      {visibleTags.map((tag) => (
+        <button
+          className="tag"
+          key={tag.id || tag.name}
+          onClick={(event) => {
+            event.stopPropagation();
+            onApplyFilter(tag.name, { replace: event.shiftKey });
+          }}
+          title={tag.name}
+          type="button"
+        >
+          {tag.name}
+        </button>
+      ))}
+      {hiddenTags.length ? (
+        <span className="tag-more-wrap">
+          <button
+            aria-label={`${hiddenTags.length} more tags`}
+            className="tag tag-more"
+            onBlur={handleMouseLeave}
+            onClick={handleTriggerClick}
+            onFocus={handleTriggerFocus}
+            onKeyDown={handleTriggerKeyDown}
+            onMouseDown={handleTriggerMouseDown}
+            onMouseEnter={handleTriggerMouseEnter}
+            onMouseLeave={handleMouseLeave}
+            ref={triggerRef}
+            type="button"
+          >
+            +{hiddenTags.length}
+          </button>
+          {isOpen && popoverPosition
+            ? createPortal(
+                <div
+                  className="tag-popover"
+                  onBlur={handleMouseLeave}
+                  onFocus={handlePopoverFocus}
+                  onKeyDown={handlePopoverKeyDown}
+                  onMouseEnter={handleMouseEnterAgain}
+                  onMouseLeave={handleMouseLeave}
+                  ref={popoverRef}
+                  style={{ top: popoverPosition.top, left: popoverPosition.left }}
+                >
+                  {hiddenTags.map((tag) => (
+                    <button
+                      className="tag"
+                      key={tag.id || tag.name}
+                      onClick={(event) => {
+                        event.stopPropagation();
+                        onApplyFilter(tag.name, { replace: event.shiftKey });
+                        setIsOpen(false);
+                      }}
+                      title={tag.name}
+                      type="button"
+                    >
+                      {tag.name}
+                    </button>
+                  ))}
+                </div>,
+                document.body,
+              )
+            : null}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+const MultiValueFilterCombobox = forwardRef(function MultiValueFilterCombobox(
+  {
+    columnLabel,
+    matchMode = "startsWith",
+    onChange,
+    onHeightChange,
+    options,
+    value,
+  },
+  forwardedRef,
+) {
+  const [inputValue, setInputValue] = useState("");
+  const [isOpen, setIsOpen] = useState(false);
+  const [highlightedIndex, setHighlightedIndex] = useState(-1);
+  const [dropdownPosition, setDropdownPosition] = useState(null);
+  const containerRef = useRef(null);
+  const dropdownRef = useRef(null);
+  const inputRef = useRef(null);
+  const optionElementMapRef = useRef(new Map());
+
+  useLayoutEffect(() => {
+    const element = containerRef.current;
+
+    if (!element || !onHeightChange) {
+      return undefined;
+    }
+
+    const observer = new ResizeObserver(() => {
+      onHeightChange(element.offsetHeight);
+    });
+
+    observer.observe(element);
+    return () => observer.disconnect();
+  }, [onHeightChange]);
+
+  useImperativeHandle(forwardedRef, () => ({
+    focus: () => inputRef.current?.focus(),
+    select: () => inputRef.current?.select(),
+  }));
+
+  const selectedValues = useMemo(
+    () =>
+      String(value ?? "")
+        .split(",")
+        .map((token) => token.trim())
+        .filter(Boolean),
+    [value],
+  );
+
+  const selectedLookup = useMemo(
+    () => new Set(selectedValues.map((item) => item.toLowerCase())),
+    [selectedValues],
+  );
+
+  const suggestions = useMemo(() => {
+    const query = inputValue.trim().toLowerCase();
+
+    return options.filter((option) => {
+      if (selectedLookup.has(option.toLowerCase())) {
+        return false;
+      }
+
+      if (!query) {
+        return true;
+      }
+
+      const normalizedOption = option.toLowerCase();
+      return matchMode === "includes"
+        ? normalizedOption.includes(query)
+        : normalizedOption.startsWith(query);
+    });
+  }, [inputValue, matchMode, options, selectedLookup]);
+
+  useEffect(() => {
+    setHighlightedIndex(-1);
+  }, [suggestions]);
+
+  useEffect(() => {
+    if (highlightedIndex < 0) {
+      return;
+    }
+
+    optionElementMapRef.current
+      .get(highlightedIndex)
+      ?.scrollIntoView({ block: "nearest" });
+  }, [highlightedIndex, isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setHighlightedIndex(-1);
+      return undefined;
+    }
+
+    function handlePointerDown(event) {
+      if (
+        !containerRef.current?.contains(event.target) &&
+        !dropdownRef.current?.contains(event.target)
+      ) {
+        setIsOpen(false);
+      }
+    }
+
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [isOpen]);
+
+  useEffect(() => {
+    if (!isOpen) {
+      setDropdownPosition(null);
+      return undefined;
+    }
+
+    function updatePosition() {
+      const element = containerRef.current;
+
+      if (!element) {
+        return;
+      }
+
+      const bounds = element.getBoundingClientRect();
+      setDropdownPosition({ top: bounds.bottom + 4, left: bounds.left, width: bounds.width });
+    }
+
+    updatePosition();
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+
+    return () => {
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [isOpen]);
+
+  function commitValues(nextValues) {
+    onChange(nextValues.join(","));
+  }
+
+  function selectSuggestion(option) {
+    commitValues([...selectedValues, option]);
+    setInputValue("");
+    inputRef.current?.focus();
+  }
+
+  function commitTypedValue() {
+    const trimmed = inputValue.trim();
+
+    if (!trimmed) {
+      return;
+    }
+
+    const alreadySelected = selectedValues.some(
+      (item) => item.toLowerCase() === trimmed.toLowerCase(),
+    );
+
+    if (!alreadySelected) {
+      commitValues([...selectedValues, trimmed]);
+    }
+
+    setInputValue("");
+    inputRef.current?.focus();
+  }
+
+  function removeValue(option) {
+    commitValues(
+      selectedValues.filter((item) => item.toLowerCase() !== option.toLowerCase()),
+    );
+    inputRef.current?.focus();
+  }
+
+  function clearAllValues() {
+    commitValues([]);
+    setInputValue("");
+    setIsOpen(false);
+    inputRef.current?.focus();
+  }
+
+  function handleKeyDown(event) {
+    if (event.key === "Backspace" && !inputValue && selectedValues.length) {
+      removeValue(selectedValues[selectedValues.length - 1]);
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      setIsOpen(true);
+      setHighlightedIndex((current) => {
+        if (!suggestions.length) {
+          return -1;
+        }
+
+        return current < 0 ? 0 : (current + 1) % suggestions.length;
+      });
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+      setIsOpen(true);
+      setHighlightedIndex((current) => {
+        if (!suggestions.length) {
+          return -1;
+        }
+
+        return current < 0
+          ? suggestions.length - 1
+          : (current - 1 + suggestions.length) % suggestions.length;
+      });
+      return;
+    }
+
+    if (event.key === "Enter") {
+      if (highlightedIndex >= 0 && suggestions[highlightedIndex]) {
+        event.preventDefault();
+        selectSuggestion(suggestions[highlightedIndex]);
+        setIsOpen(false);
+        return;
+      }
+
+      if (inputValue.trim()) {
+        event.preventDefault();
+        commitTypedValue();
+        setIsOpen(false);
+      }
+      return;
+    }
+
+    if (event.key === "Escape") {
+      if (isOpen) {
+        setIsOpen(false);
+
+        // Only swallow the key when the dropdown is actually visible, so an
+        // Escape press with no suggestions on screen still reaches the
+        // table's own "blur and focus a row" shortcut on the first press.
+        if (suggestions.length) {
+          event.stopPropagation();
+        }
+      }
+      return;
+    }
+  }
+
+  return (
+    <div className="tags-filter-combobox" ref={containerRef}>
+      <div className="tags-filter-chips-scroll">
+        {selectedValues.map((item) => (
+          <button
+            aria-label={`Remove ${item} filter`}
+            className="tags-filter-chip"
+            key={item}
+            onClick={() => removeValue(item)}
+            type="button"
+          >
+            {item} ×
+          </button>
+        ))}
+        {selectedValues.length >= 2 ? (
+          <button
+            aria-label={`Clear all ${columnLabel} filters`}
+            className="tags-filter-clear-all"
+            onClick={clearAllValues}
+            title={`Clear all ${columnLabel} filters`}
+            type="button"
+          >
+            Clear all
+          </button>
+        ) : null}
+        <input
+          aria-expanded={isOpen}
+          aria-label={`Filter ${columnLabel}`}
+          className="filter-input tags-filter-input"
+          onChange={(event) => {
+            setInputValue(event.target.value);
+            setIsOpen(true);
+          }}
+          onDoubleClick={() => setIsOpen(true)}
+          onKeyDown={handleKeyDown}
+          ref={inputRef}
+          role="combobox"
+          value={inputValue}
+        />
+      </div>
+      {isOpen && suggestions.length && dropdownPosition
+        ? createPortal(
+            <div
+              className="tags-filter-dropdown"
+              ref={dropdownRef}
+              role="listbox"
+              style={{
+                top: dropdownPosition.top,
+                left: dropdownPosition.left,
+                width: dropdownPosition.width,
+              }}
+            >
+              {suggestions.map((option, index) => (
+                <button
+                  className={`tags-filter-option${
+                    index === highlightedIndex ? " is-highlighted" : ""
+                  }`}
+                  key={option}
+                  onClick={() => selectSuggestion(option)}
+                  onMouseEnter={() => setHighlightedIndex(index)}
+                  ref={(element) => {
+                    if (element) {
+                      optionElementMapRef.current.set(index, element);
+                    } else {
+                      optionElementMapRef.current.delete(index);
+                    }
+                  }}
+                  role="option"
+                  type="button"
+                >
+                  {option}
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
+    </div>
+  );
+});
 
 function loadSavedTableState() {
   if (typeof window === "undefined") {
@@ -253,10 +954,12 @@ function matchesTagFilter(note, rawFilterValue) {
     return true;
   }
 
-  const noteTags = new Set(note.tags.map((tag) => String(tag.name ?? "").trim().toLowerCase()));
+  const noteTagNames = note.tags.map((tag) =>
+    String(tag.name ?? "").trim().toLowerCase(),
+  );
   return filters.every(({ negated, value }) => {
-    const hasTag = noteTags.has(value);
-    return negated ? !hasTag : hasTag;
+    const hasMatch = noteTagNames.some((tagName) => tagName.startsWith(value));
+    return negated ? !hasMatch : hasMatch;
   });
 }
 
@@ -424,6 +1127,7 @@ function NotesTable({
   const tagsFilterInputRef = useRef(null);
   const firstFilterInputRef = useRef(null);
   const focusedRowIdRef = useRef(null);
+  const tableFocusAnchorRef = useRef(null);
   const pendingRowFocusNoteIdRef = useRef(null);
   const focusRestoreNoteIdRef = useRef(null);
   const location = useLocation();
@@ -467,6 +1171,7 @@ function NotesTable({
   const [dropTarget, setDropTarget] = useState(null);
   const [thumbPreviewState, setThumbPreviewState] = useState(null);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  const [columnFilterHeights, setColumnFilterHeights] = useState({});
   const selectAllRef = useRef(null);
 
   useEffect(() => {
@@ -487,6 +1192,25 @@ function NotesTable({
   const showScrapeStatusColumn = visibleColumns.some(
     ([key]) => key === "scrape_status",
   );
+  const filterRowHeight = Object.keys(columnFilterHeights).length
+    ? Math.max(32, ...Object.values(columnFilterHeights))
+    : null;
+  const allTagNames = useMemo(() => {
+    const seen = new Map();
+
+    notes.forEach((note) => {
+      note.tags.forEach((tag) => {
+        const name = String(tag.name ?? "").trim();
+        const key = name.toLowerCase();
+
+        if (name && !seen.has(key)) {
+          seen.set(key, name);
+        }
+      });
+    });
+
+    return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
+  }, [notes]);
   const currentRoute = useMemo(
     () => parseTableHash(location.hash),
     [location.hash],
@@ -496,6 +1220,14 @@ function NotesTable({
       visibleColumns.every(([key]) => {
         if (key === "tags") {
           return matchesTagFilter(note, filters[key]);
+        }
+
+        if (key === "scrape_status") {
+          return matchesFilterValue(
+            displayScrapeStatus(note, scrapeJob),
+            filters[key],
+            "includes",
+          );
         }
 
         const supportsMultipleValues =
@@ -532,7 +1264,7 @@ function NotesTable({
       });
       return sortDirection === "asc" ? result : -result;
     });
-  }, [filters, notes, sortDirection, sortKey, visibleColumns]);
+  }, [filters, notes, scrapeJob, sortDirection, sortKey, visibleColumns]);
   const defaultOrderedNotes = useMemo(
     () =>
       [...notes].sort((left, right) => {
@@ -973,8 +1705,11 @@ function NotesTable({
       if (editable) {
         if (event.key === "Escape" && event.target.closest("thead")) {
           event.preventDefault();
-          event.target.blur();
-          focusLastOrFirstRow();
+          // Land on the invisible anchor rather than jumping straight into
+          // the table, so the user can then press the down arrow to enter
+          // it themselves.
+          tableFocusAnchorRef.current?.focus();
+          focusedRowIdRef.current = null;
         }
         return;
       }
@@ -988,6 +1723,61 @@ function NotesTable({
       if (event.key === "ArrowUp" || event.key === "k") {
         event.preventDefault();
         moveRowFocus(-1);
+        return;
+      }
+
+      if (
+        event.key === "Escape" &&
+        event.target instanceof HTMLElement &&
+        event.target.classList.contains("table-row-link")
+      ) {
+        event.preventDefault();
+        // Focus the anchor right before the table (instead of just calling
+        // blur()) so a following Tab press lands on the header's "select
+        // all" checkbox rather than wherever the browser's default tab
+        // order would otherwise resume from.
+        tableFocusAnchorRef.current?.focus();
+        focusedRowIdRef.current = null;
+        return;
+      }
+
+      const focusedRowElement = focusedRowIdRef.current
+        ? rowElementMapRef.current.get(focusedRowIdRef.current)
+        : null;
+
+      if (!focusedRowElement || document.activeElement !== focusedRowElement) {
+        return;
+      }
+
+      const focusedNote = orderedNotes.find(
+        (note) => note.id === focusedRowIdRef.current,
+      );
+
+      if (!focusedNote) {
+        return;
+      }
+
+      if (event.key === "e") {
+        event.preventDefault();
+        openEditor(focusedNote.id);
+        return;
+      }
+
+      if (event.key === "d") {
+        event.preventDefault();
+        void handleDeleteNote(focusedNote.id);
+        return;
+      }
+
+      if (event.key === "c") {
+        event.preventDefault();
+        void handleCopyNoteDetails(focusedNote);
+        return;
+      }
+
+      if (event.key === "a") {
+        event.preventDefault();
+        openCreateNoteBefore(focusedNote.id);
       }
     }
 
@@ -1011,15 +1801,37 @@ function NotesTable({
     }
   }
 
-  function applyTagFilter(tagName) {
-    setFilters((current) => ({
-      ...current,
-      tags: tagName,
-    }));
+  function reportColumnFilterHeight(key, height) {
+    setColumnFilterHeights((current) =>
+      current[key] === height ? current : { ...current, [key]: height },
+    );
+  }
+
+  function applyTagFilter(tagName, { replace = false } = {}) {
+    setFilters((current) => {
+      if (replace) {
+        return { ...current, tags: tagName };
+      }
+
+      const existingTags = String(current.tags ?? "")
+        .split(",")
+        .map((token) => token.trim())
+        .filter(Boolean);
+      const alreadyIncluded = existingTags.some(
+        (tag) => tag.toLowerCase() === tagName.toLowerCase(),
+      );
+      const nextTags = alreadyIncluded
+        ? existingTags
+        : [...existingTags, tagName];
+
+      return {
+        ...current,
+        tags: nextTags.join(","),
+      };
+    });
 
     window.requestAnimationFrame(() => {
       tagsFilterInputRef.current?.focus();
-      tagsFilterInputRef.current?.select();
     });
   }
 
@@ -1104,18 +1916,6 @@ function NotesTable({
     );
 
     focusRowByNoteId(orderedNotes[nextIndex].id);
-  }
-
-  function focusLastOrFirstRow() {
-    if (!orderedNotes.length) {
-      return;
-    }
-
-    const lastId = focusedRowIdRef.current;
-    const stillPresent =
-      lastId != null && orderedNotes.some((note) => note.id === lastId);
-
-    focusRowByNoteId(stillPresent ? lastId : orderedNotes[0].id);
   }
 
   function openEditor(noteId) {
@@ -1790,6 +2590,12 @@ function NotesTable({
               onDragOver={autoScrollTableShell}
               ref={tableShellRef}
             >
+              <span
+                aria-hidden="true"
+                className="table-focus-anchor"
+                ref={tableFocusAnchorRef}
+                tabIndex={-1}
+              />
               <table>
                 <thead>
                   <tr>
@@ -1821,7 +2627,11 @@ function NotesTable({
                     {visibleColumns.map(([key, label]) => (
                       <th
                         className={
-                          key === "scrape_status" ? "scrape-status-column" : undefined
+                          key === "scrape_status"
+                            ? "scrape-status-column"
+                            : key === "tags"
+                              ? "tags-column"
+                              : undefined
                         }
                         key={key}
                       >
@@ -1844,39 +2654,65 @@ function NotesTable({
                     {showSelection ? <th /> : null}
                     <th />
                     <th />
-                    {visibleColumns.map(([key, label], columnIndex) => (
-                      <th
-                        className={
-                          [
-                            key === "scrape_status" ? "scrape-status-column" : null,
-                            columnIndex === 0 ? "filter-shortcut-cell" : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" ") || undefined
-                        }
-                        data-shortcut={columnIndex === 0 ? "/" : undefined}
-                        key={`${key}-filter`}
-                      >
-                        <input
-                          aria-label={`Filter ${label}`}
-                          className="filter-input"
-                          ref={
-                            key === "tags"
-                              ? tagsFilterInputRef
-                              : columnIndex === 0
-                                ? firstFilterInputRef
-                                : undefined
+                    {visibleColumns.map(([key, label], columnIndex) => {
+                      const isTagsColumn = key === "tags";
+                      const comboboxRef =
+                        key === "tags"
+                          ? tagsFilterInputRef
+                          : columnIndex === 0
+                            ? firstFilterInputRef
+                            : undefined;
+
+                      return (
+                        <th
+                          className={
+                            [
+                              key === "scrape_status" ? "scrape-status-column" : null,
+                              isTagsColumn ? "tags-column" : null,
+                            ]
+                              .filter(Boolean)
+                              .join(" ") || undefined
                           }
-                          value={filters[key] ?? ""}
-                          onChange={(event) =>
-                            setFilters((current) => ({
-                              ...current,
-                              [key]: event.target.value,
-                            }))
-                          }
-                        />
-                      </th>
-                    ))}
+                          key={`${key}-filter`}
+                        >
+                          {isTagsColumn ? (
+                            <MultiValueFilterCombobox
+                              columnLabel={label}
+                              onChange={(nextValue) =>
+                                setFilters((current) => ({
+                                  ...current,
+                                  [key]: nextValue,
+                                }))
+                              }
+                              onHeightChange={(height) =>
+                                reportColumnFilterHeight(key, height)
+                              }
+                              options={allTagNames}
+                              ref={comboboxRef}
+                              value={filters[key] ?? ""}
+                            />
+                          ) : (
+                            <input
+                              aria-label={`Filter ${label}`}
+                              className="filter-input"
+                              ref={columnIndex === 0 ? firstFilterInputRef : undefined}
+                              style={
+                                filterRowHeight
+                                  ? { height: filterRowHeight }
+                                  : undefined
+                              }
+                              value={filters[key] ?? ""}
+                              onChange={(event) =>
+                                setFilters((current) => ({
+                                  ...current,
+                                  [key]: event.target.value,
+                                }))
+                              }
+                            />
+                          )}
+                        </th>
+                      );
+                    })}
                     {showActions ? <th /> : null}
                   </tr>
                 </thead>
@@ -2138,26 +2974,8 @@ function NotesTable({
                           <td>{note.grading_company}</td>
                           <td>{note.grade}</td>
                           <td>{note.serial}</td>
-                          <td>
-                            <div className="tag-list">
-                              {note.tags.length ? (
-                                note.tags.map((tag) => (
-                                  <button
-                                    className="tag"
-                                    key={tag.id || tag.name}
-                                    onClick={(event) => {
-                                      event.stopPropagation();
-                                      applyTagFilter(tag.name);
-                                    }}
-                                    type="button"
-                                  >
-                                    {tag.name}
-                                  </button>
-                                ))
-                              ) : (
-                                <span className="muted">-</span>
-                              )}
-                            </div>
+                          <td className="tags-column">
+                            <TagsCell onApplyFilter={applyTagFilter} tags={note.tags} />
                           </td>
                           {showScrapeStatusColumn ? (
                             <td className="scrape-status-column">
