@@ -1,6 +1,6 @@
 # Note Harbor
 
-Local collection software for managing and presenting banknote archives. This monorepo contains the editable Note Harbor Editor plus a separate read-only Flutter Viewer that consumes exported archives.
+Local collection software for managing and presenting banknote archives. This monorepo contains the editable Note Harbor Editor plus separate read-only viewers (Flutter, and an experimental React Native viewer) that consume exported archives.
 
 ## Stack
 
@@ -22,7 +22,8 @@ This is a pnpm workspace with apps under `apps/`:
 - **`apps/editor/server`** — Express + SQLite backend (routes, scrapers, DB access)
 - **`apps/editor/web`** — React + Vite frontend for the editor
 - **`apps/editor/desktop`** — Electron shell that packages the server and web build
-- **`apps/viewer/flutter`** — the read-only Flutter viewer
+- **`apps/viewer/flutter`** — the read-only Flutter viewer (mature, primary viewer)
+- **`apps/viewer/react-native`** — an experimental read-only viewer built with React Native, targeting iOS/Android/macOS/Windows from one codebase
 
 Local data (SQLite DB + images) lives in `data/` by default; see [Environment variables](#environment-variables) to override the location.
 
@@ -57,6 +58,8 @@ This starts:
 - the Vite app at `http://localhost:5173`
 
 ### Use a Windows Chrome from WSL via CDP
+
+The packaged desktop app (Windows and macOS) has its own "Open Chrome" button that launches a CDP-enabled Chrome for you — see [Build the Electron editor](#build-the-electron-editor). The steps below are for running the editor server directly (e.g. `pnpm dev` in WSL), where nothing launches Chrome automatically.
 
 If you run the editor server in WSL but want to see and interact with a Windows Chrome window for bot checks, launch Chrome on Windows with remote debugging enabled and point the server at it. The scraper reads the current HTML from the already open tab whose URL matches the requested note URL.
 
@@ -115,6 +118,8 @@ The Electron package:
 - bundles the current `data/` directory
 - copies bundled data into the user-data folder when the packaged app is newer
 
+On Windows and macOS, the packaged app can launch its own CDP-enabled Chrome via the "Open Chrome" button next to the URL field, so no manual CDP setup is needed for scraping there. See `NOTE_HARBOR_CHROME_PATH` in [Environment variables](#environment-variables) if Chrome isn't found at its standard install location.
+
 For Windows artifacts, build on Windows:
 
 ```bash
@@ -134,13 +139,33 @@ This runs the native Flutter viewer on the default connected device/emulator.
 Build the native viewer app, then import a `.zip` archive exported from the editor on first launch:
 
 ```bash
-pnpm build:viewer:flutter
+pnpm build:viewer:flutter:windows
 ```
 
 For iOS builds:
 
 ```bash
 pnpm build:viewer:flutter:ios
+```
+
+### Run the React Native viewer (experimental)
+
+An alternative read-only viewer under active development, covering iOS, Android, macOS, and Windows from one codebase. See [`apps/viewer/react-native/README.md`](apps/viewer/react-native/README.md) for native toolchain setup (Xcode/CocoaPods, Android Studio, etc.).
+
+```bash
+pnpm start:viewer:react-native
+```
+
+Then, in another terminal, run a target platform, e.g.:
+
+```bash
+pnpm dev:viewer:react-native:ios
+```
+
+Run its tests:
+
+```bash
+pnpm test:viewer:react-native
 ```
 
 ### Environment variables
@@ -156,17 +181,36 @@ Create `apps/editor/server/.env` if you want to override defaults.
 | `NOTE_HARBOR_WEB_DIST_DIR` | `apps/editor/web/dist` | Static web build served by Express |
 | `NOTE_HARBOR_SERVE_WEB_DIST` | `false` | Enables serving the built web app from Express |
 
+The desktop (Electron) app additionally reads these from its own process environment, not from `.env`:
+
+| Variable | Default | Description |
+|---|---|---|
+| `NOTE_HARBOR_CHROME_PATH` | _(auto-detected)_ | Overrides the Chrome executable path used when launching the scrape browser, if it isn't found at the standard install location |
+
 ---
 
 ## Data Model
 
 SQLite lives at `data/banknotes.db` by default and is created automatically.
 
+### `collections`
+
+Notes support multiple, independent collections (separate archives within one database). A single collection is marked as the default and is used whenever a request doesn't target a specific collection.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PK | Auto-increment |
+| `name` | TEXT | Unique, case-insensitive |
+| `is_default` | INTEGER | `1` for the default collection; at most one row can have this set |
+| `created_at` | TEXT | SQLite datetime |
+| `updated_at` | TEXT | SQLite datetime |
+
 ### `banknotes`
 
 | Column | Type | Notes |
 |---|---|---|
 | `id` | INTEGER PK | Auto-increment |
+| `collection_id` | INTEGER | FK to `collections.id`, cascades on delete |
 | `display_order` | INTEGER | Default table/slideshow ordering |
 | `denomination` | TEXT | Display label |
 | `issue_date` | TEXT | Free-form date text |
@@ -188,7 +232,7 @@ There is no unique `(catalog_number, serial)` constraint anymore. CSV import mat
 
 ### `tags` and `banknote_tags`
 
-Tags are stored separately and linked many-to-many through `banknote_tags`.
+Tags are stored separately (scoped to a `collection_id`, unique per collection case-insensitively) and linked many-to-many through `banknote_tags`.
 
 ### `slideshow_sessions`
 
@@ -197,6 +241,31 @@ Temporary slideshow share/session tokens are stored in `slideshow_sessions` and 
 ---
 
 ## API Reference
+
+Notes, tags, and CSV import are scoped per collection. `GET/POST/PUT/DELETE /api/notes`, `/api/tags`, and `/api/import` operate on the default collection. To target a specific collection, use the `/api/collections/:collectionId/...` prefixed equivalents instead (same routes, same request/response shapes).
+
+### Collections
+
+```
+GET /api/collections
+-> { collections: [{ id, name, is_default, created_at, updated_at }, ...] }
+
+POST /api/collections
+Body: { name }
+-> 201 { collection }
+
+PUT /api/collections/:collectionId
+Body: { name }
+-> { collection }
+
+PUT /api/collections/:collectionId/default
+-> { collection }
+
+DELETE /api/collections/:collectionId
+-> { success: true }
+```
+
+Deleting a collection deletes its notes and tags. If it was the default, another remaining collection is promoted to default.
 
 ### Health
 
@@ -245,6 +314,14 @@ Content-Type: application/json or multipart/form-data
 
 DELETE /api/notes/:id
 -> { success: true }
+
+POST /api/notes/:id/move
+Body: {
+  target_collection_id,
+  position_mode: "start" | "end" | "before" | "after",
+  position_reference_id? // required for "before" / "after"
+}
+-> { note: NoteWithTags }
 ```
 
 `NoteWithTags` includes the banknote fields plus `tags: [{ id, name }]`, parsed `images`, and parsed `scraped_data`.
@@ -298,7 +375,7 @@ Notes about CSV import:
 ### Archive Import and Export
 
 ```
-GET /api/archive/export
+GET /api/archive/export?collectionIds=1,2
 -> downloads noteharbor-archive-YYYY-MM-DD.zip
 
 POST /api/archive/import
@@ -310,7 +387,7 @@ DELETE /api/archive/data
 -> { success: true, currentOperation: "idle" }
 ```
 
-The archive contains `banknotes.db` plus `images/`. Importing an archive replaces the current data directory.
+`collectionIds` is optional; omit it to export every collection. The archive contains `banknotes.db` (with its `collections` rows) plus `images/`. Importing an archive replaces the current data directory.
 
 ### Scraping
 
@@ -333,7 +410,7 @@ Body: { ids: [number, ...] }
 -> { message: "Scrape job started.", total }
 ```
 
-Supported sources currently include PMG and TQG. Unsupported notes are marked failed.
+Supported sources currently include PMG, PCGS, and TQG. Unsupported notes are marked failed.
 
 ### Slideshow Sessions
 
@@ -359,7 +436,7 @@ fetchHtml.js (Node.js / Playwright)
     |
     | returns raw HTML
     v
-scrapers/pmg.js or scrapers/tqg.js
+scrapers/pmg.js, pcgs.js, or tqg.js
     |
     | parse details + download images
     v
@@ -394,12 +471,14 @@ The helper does not open a new tab or navigate. It requires an already open tab 
 
 Primary editor screen with:
 
-- filterable and sortable table view
+- filterable and sortable table view, including an autocompleting tags filter and a "+N" overflow popover for rows with many tags
 - thumbnail previews
 - bulk selection and bulk actions
 - drag-and-drop manual reordering in the default view
 - inline create/edit overlay
 - slideshow launch by clicking a row
+- collection switcher (create, rename, delete, and set default collection)
+- row-level keyboard shortcuts (`e` edit, `d` delete, `c` copy, `a` add) plus table/slideshow navigation shortcuts — press `?` for the full list
 
 ### Import and Export (`/import`)
 
@@ -407,7 +486,7 @@ Handles:
 
 - CSV file import
 - pasted CSV text import
-- full archive export
+- archive export, with a per-collection selector
 - full archive import
 - deleting current app data
 
@@ -415,9 +494,11 @@ Handles:
 
 Direct route for editing or reviewing one note outside the overlay flow.
 
-### Viewer App
+### Viewer Apps
 
-The Flutter viewer is a separate read-only application. It starts empty, imports editor archives containing `banknotes.db` plus `images/`, then shows a searchable notes table and slideshow/lightbox using imported local files.
+The Flutter viewer (`apps/viewer/flutter`) is the primary read-only viewer. It starts empty, imports editor archives containing `banknotes.db` plus `images/`, then shows a searchable notes table and slideshow/lightbox using imported local files.
+
+The React Native viewer (`apps/viewer/react-native`) is an experimental alternative aiming for the same read-only experience across iOS, Android, macOS, and Windows from a single codebase.
 
 ---
 
