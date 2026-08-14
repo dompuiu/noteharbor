@@ -3,7 +3,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { app, BrowserWindow, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, Menu, MenuItem, dialog, ipcMain, shell } from 'electron';
 
 app.setName('Note Harbor Editor');
 
@@ -331,6 +331,58 @@ function resolveAboutIconPath() {
     : path.resolve(__dirname, '../build/icon.icns');
 }
 
+function showAboutWindow() {
+  if (process.platform === 'darwin') {
+    app.showAboutPanel();
+    return;
+  }
+
+  const parentWindow = BrowserWindow.getFocusedWindow() ?? mainWindow;
+  const messageBoxOptions = {
+    type: 'info',
+    title: 'About Note Harbor Editor',
+    message: 'Note Harbor Editor',
+    detail: `Version ${app.getVersion()}`,
+    buttons: ['OK']
+  };
+
+  if (parentWindow) {
+    void dialog.showMessageBox(parentWindow, messageBoxOptions);
+    return;
+  }
+
+  void dialog.showMessageBox(messageBoxOptions);
+}
+
+function addHelpAboutMenuItem() {
+  const appMenu = Menu.getApplicationMenu();
+  const aboutItemOptions = {
+    id: 'about-note-harbor-editor',
+    label: 'About Note Harbor Editor',
+    click: () => showAboutWindow()
+  };
+
+  if (!appMenu) {
+    Menu.setApplicationMenu(Menu.buildFromTemplate([{ role: 'help', submenu: [aboutItemOptions] }]));
+    return;
+  }
+
+  let helpMenu = appMenu.items.find((item) => item.role === 'help' || item.label === 'Help');
+
+  if (!helpMenu) {
+    helpMenu = new MenuItem({ role: 'help', submenu: [] });
+    appMenu.append(helpMenu);
+  }
+
+  const helpSubmenu = helpMenu.submenu;
+  if (!helpSubmenu || helpSubmenu.items.some((item) => item.id === 'about-note-harbor-editor')) {
+    return;
+  }
+
+  helpSubmenu.append(new MenuItem(aboutItemOptions));
+  Menu.setApplicationMenu(appMenu);
+}
+
 app.whenReady().then(async () => {
   app.setAboutPanelOptions({
     applicationName: 'Note Harbor Editor',
@@ -338,6 +390,7 @@ app.whenReady().then(async () => {
     version: app.getVersion(),
     iconPath: resolveAboutIconPath()
   });
+  addHelpAboutMenuItem();
 
   await createMainWindow();
 
