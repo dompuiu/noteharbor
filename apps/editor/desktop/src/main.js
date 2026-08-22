@@ -233,6 +233,34 @@ function openExternalUrl(url, appUrl) {
   return true;
 }
 
+function showNoteEditorTextMenu(window, options = {}) {
+  const menu = Menu.buildFromTemplate([
+    {
+      label: 'Cut',
+      role: 'cut',
+      enabled: Boolean(options.hasSelection)
+    },
+    {
+      label: 'Copy',
+      role: 'copy',
+      enabled: Boolean(options.hasSelection)
+    },
+    {
+      label: 'Paste',
+      role: 'paste'
+    },
+    {
+      type: 'separator'
+    },
+    {
+      label: 'Select All',
+      role: 'selectAll'
+    }
+  ]);
+
+  menu.popup({ window });
+}
+
 function resolveBundledDataDir() {
   if (app.isPackaged) {
     return path.join(process.resourcesPath, 'bundled-data');
@@ -324,6 +352,15 @@ async function createMainWindow() {
 
 ipcMain.handle('note-harbor:get-scrape-browser-status', async () => getScrapeBrowserStatus());
 ipcMain.handle('note-harbor:open-scrape-browser', async () => openScrapeBrowser());
+ipcMain.on('note-harbor:show-note-editor-text-menu', (event, options) => {
+  const window = BrowserWindow.fromWebContents(event.sender);
+
+  if (!window) {
+    return;
+  }
+
+  showNoteEditorTextMenu(window, options);
+});
 
 function resolveAboutIconPath() {
   return app.isPackaged

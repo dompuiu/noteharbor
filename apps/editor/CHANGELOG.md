@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.4.0] - 2026-08-21
+
+### Added
+
+- Added a native desktop right-click menu for Note editor text fields in the Electron app, with Cut, Copy, Paste, and Select All actions.
+
 ## [1.3.0] - 2026-08-21
 
 ### Added

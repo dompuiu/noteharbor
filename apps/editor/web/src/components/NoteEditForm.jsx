@@ -50,6 +50,20 @@ function getDesktopBridge() {
   return bridge;
 }
 
+function handleNoteEditorTextContextMenu(event) {
+  const bridge = getDesktopBridge();
+
+  if (!bridge || typeof bridge.showNoteEditorTextMenu !== "function") {
+    return;
+  }
+
+  event.preventDefault();
+  bridge.showNoteEditorTextMenu({
+    hasSelection:
+      event.currentTarget.selectionStart !== event.currentTarget.selectionEnd,
+  });
+}
+
 const emptyForm = {
   denomination: "",
   issue_date: "",
@@ -1381,9 +1395,11 @@ function NoteEditForm({
               <div className="field-block" key={name}>
                 <label htmlFor={inputId}>{label}</label>
                 <input
+                  data-note-editor-context-field="true"
                   id={inputId}
                   name={name}
                   onChange={handleFieldChange}
+                  onContextMenu={handleNoteEditorTextContextMenu}
                   ref={name === "denomination" ? firstFieldRef : undefined}
                   value={form[name]}
                 />
@@ -1395,9 +1411,11 @@ function NoteEditForm({
             <label htmlFor={fieldInputId("url")}>URL</label>
               <div className="url-field-row">
                 <input
+                  data-note-editor-context-field="true"
                   id={fieldInputId("url")}
                   name="url"
                   onChange={handleFieldChange}
+                  onContextMenu={handleNoteEditorTextContextMenu}
                   value={form.url}
                 />
                 {hasDesktopScrapeLauncher ? (
@@ -1436,9 +1454,11 @@ function NoteEditForm({
             <label htmlFor={fieldInputId("notes")}>Notes</label>
             <textarea
               className="note-textarea"
+              data-note-editor-context-field="true"
               id={fieldInputId("notes")}
               name="notes"
               onChange={handleFieldChange}
+              onContextMenu={handleNoteEditorTextContextMenu}
               rows="4"
               value={form.notes}
             />
@@ -1655,8 +1675,10 @@ function NoteEditForm({
             <div className="tag-editor">
               <input
                 autoComplete="off"
+                data-note-editor-context-field="true"
                 list="tag-suggestions"
                 onChange={(event) => setTagInput(event.target.value)}
+                onContextMenu={handleNoteEditorTextContextMenu}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
