@@ -40,8 +40,12 @@ A full-screen overlay that presents one note at a time — its images, metadata,
 _Avoid_: Detail view, presentation mode
 
 **Image popover**:
-The enlarged, single-image view opened from a note's image in the Note slideshow, navigable over that note's images.
+The enlarged, single-image view opened from a note's image in the Note slideshow, navigable over that note's images. Shown in fit view by default, or in **Zoom view** on command.
 _Avoid_: Lightbox, 2nd level slideshow
+
+**Zoom view**:
+The Image popover's rendering of a note image at its natural pixel size (1:1), only when that size exceeds the available space; the image is pannable within the stage but never shown smaller than the fit view.
+_Avoid_: Full size, 100% zoom, lightbox zoom
 
 ## Viewer screens
 
