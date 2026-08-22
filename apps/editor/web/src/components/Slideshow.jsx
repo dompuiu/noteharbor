@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { copyTextToClipboard, formatNoteAsTsvRow } from "../lib/noteClipboard.js";
 
 function formatScrapedLabel(label) {
@@ -116,6 +116,8 @@ function getPreviewItems(note, { includeMissingSides = false } = {}) {
   return items;
 }
 
+const POPOVER_ZOOM_LEVELS = [1, 1.25, 1.5, 2, 3, 4];
+
 function ImagePopover({
   alt,
   canGoNext,
@@ -128,26 +130,319 @@ function ImagePopover({
   placeholderText,
   src,
 }) {
+  const imageRef = useRef(null);
+  const dragRef = useRef(null);
+  const [isDragging, setIsDragging] = useState(false);
+  const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
+  const [offset, setOffset] = useState({ x: 0, y: 0 });
+  const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
+  const [zoomScale, setZoomScale] = useState(0);
+
+  const zoomed = zoomScale > 0;
+  const scaledSize = {
+    width: naturalSize.width * zoomScale,
+    height: naturalSize.height * zoomScale,
+  };
+  const overflowX = Math.max(0, scaledSize.width - viewportSize.width);
+  const overflowY = Math.max(0, scaledSize.height - viewportSize.height);
+  const pannable = zoomed && (overflowX > 0 || overflowY > 0);
+
+  function clampOffset(nextOffset, scale = zoomScale) {
+    const scaledWidth = naturalSize.width * scale;
+    const scaledHeight = naturalSize.height * scale;
+    const maxX = Math.max(0, scaledWidth - viewportSize.width) / 2;
+    const maxY = Math.max(0, scaledHeight - viewportSize.height) / 2;
+
+    return {
+      x: Math.min(maxX, Math.max(-maxX, nextOffset.x)),
+      y: Math.min(maxY, Math.max(-maxY, nextOffset.y)),
+    };
+  }
+
+  function measureImage() {
+    const image = imageRef.current;
+
+    if (!image) {
+      return;
+    }
+
+    const imageRect = image.getBoundingClientRect();
+    setNaturalSize({
+      width: image.naturalWidth || 0,
+      height: image.naturalHeight || 0,
+    });
+
+    if (!zoomScale && imageRect.width && imageRect.height) {
+      setViewportSize({ width: imageRect.width, height: imageRect.height });
+    }
+  }
+
+  function resetZoom() {
+    setZoomScale(0);
+    setOffset({ x: 0, y: 0 });
+    setIsDragging(false);
+    dragRef.current = null;
+  }
+
+  function getNextZoomScale(direction) {
+    if (direction > 0) {
+      return (
+        POPOVER_ZOOM_LEVELS.find((scale) => scale > zoomScale) ??
+        POPOVER_ZOOM_LEVELS[POPOVER_ZOOM_LEVELS.length - 1]
+      );
+    }
+
+    const lowerScale = [...POPOVER_ZOOM_LEVELS]
+      .reverse()
+      .find((scale) => scale < zoomScale);
+
+    return lowerScale ?? 0;
+  }
+
+  function changeZoom(direction, anchor = null) {
+    if (!src) {
+      return;
+    }
+
+    measureImage();
+    const nextScale = getNextZoomScale(direction);
+
+    if (!nextScale) {
+      resetZoom();
+      return;
+    }
+
+    if (!zoomScale || !anchor) {
+      setZoomScale(nextScale);
+      setOffset((currentOffset) => clampOffset(currentOffset, nextScale));
+      return;
+    }
+
+    const scaleRatio = nextScale / zoomScale;
+    const nextOffset = {
+      x: anchor.x - viewportSize.width / 2 + (offset.x - anchor.x + viewportSize.width / 2) * scaleRatio,
+      y: anchor.y - viewportSize.height / 2 + (offset.y - anchor.y + viewportSize.height / 2) * scaleRatio,
+    };
+
+    setZoomScale(nextScale);
+    setOffset(clampOffset(nextOffset, nextScale));
+  }
+
+  function zoomIn() {
+    changeZoom(1);
+  }
+
+  function zoomOut() {
+    changeZoom(-1);
+  }
+
+  function toggleZoom() {
+    if (zoomed) {
+      resetZoom();
+      return;
+    }
+
+    changeZoom(1);
+  }
+
+  function moveToNextImage() {
+    resetZoom();
+    onNext();
+  }
+
+  function moveToPreviousImage() {
+    resetZoom();
+    onPrevious();
+  }
+
+  function panBy(deltaX, deltaY) {
+    if (!pannable) {
+      return;
+    }
+
+    setOffset((currentOffset) =>
+      clampOffset({
+        x: currentOffset.x + deltaX,
+        y: currentOffset.y + deltaY,
+      }),
+    );
+  }
+
+  function onImagePointerDown(e) {
+    if (!pannable) {
+      return;
+    }
+
+    e.preventDefault();
+    e.currentTarget.setPointerCapture(e.pointerId);
+    dragRef.current = {
+      offset,
+      pointerId: e.pointerId,
+      x: e.clientX,
+      y: e.clientY,
+    };
+    setIsDragging(true);
+  }
+
+  function onImagePointerMove(e) {
+    const drag = dragRef.current;
+
+    if (!drag || drag.pointerId !== e.pointerId) {
+      return;
+    }
+
+    setOffset(
+      clampOffset({
+        x: drag.offset.x + e.clientX - drag.x,
+        y: drag.offset.y + e.clientY - drag.y,
+      }),
+    );
+  }
+
+  function onImagePointerUp(e) {
+    const drag = dragRef.current;
+
+    if (!drag || drag.pointerId !== e.pointerId) {
+      return;
+    }
+
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId);
+    }
+    dragRef.current = null;
+    setIsDragging(false);
+  }
+
+  function onImageWheel(e) {
+    if (!src) {
+      return;
+    }
+
+    e.preventDefault();
+    const wrapRect = e.currentTarget.parentElement.getBoundingClientRect();
+    const anchor = {
+      x: e.clientX - wrapRect.left,
+      y: e.clientY - wrapRect.top,
+    };
+    changeZoom(e.deltaY < 0 ? 1 : -1, anchor);
+  }
+
+  useEffect(() => {
+    resetZoom();
+  }, [src]);
+
+  useLayoutEffect(() => {
+    if (!src || zoomScale) {
+      return undefined;
+    }
+
+    measureImage();
+
+    const image = imageRef.current;
+
+    if (!image || typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+
+    const resizeObserver = new ResizeObserver(measureImage);
+    resizeObserver.observe(image);
+
+    return () => resizeObserver.disconnect();
+  }, [src, zoomScale]);
+
+  useEffect(() => {
+    if (!zoomScale) {
+      return;
+    }
+
+    setOffset((currentOffset) => clampOffset(currentOffset));
+  }, [overflowX, overflowY, zoomScale]);
+
   useEffect(() => {
     function onKeyDown(e) {
       if (e.key === "Escape") {
+        if (zoomed) {
+          resetZoom();
+          return;
+        }
+
         onClose();
         return;
       }
 
+      if (e.key === "+") {
+        e.preventDefault();
+        zoomIn();
+        return;
+      }
+
+      if (e.key === "-" || e.key === "_") {
+        e.preventDefault();
+        zoomOut();
+        return;
+      }
+
+      if (pannable && e.shiftKey && e.key === "ArrowRight") {
+        e.preventDefault();
+        panBy(-overflowX * 0.05, 0);
+        return;
+      }
+
+      if (pannable && e.shiftKey && e.key === "ArrowLeft") {
+        e.preventDefault();
+        panBy(overflowX * 0.05, 0);
+        return;
+      }
+
+      if (pannable && e.shiftKey && e.key === "ArrowDown") {
+        e.preventDefault();
+        panBy(0, -overflowY * 0.05);
+        return;
+      }
+
+      if (pannable && e.shiftKey && e.key === "ArrowUp") {
+        e.preventDefault();
+        panBy(0, overflowY * 0.05);
+        return;
+      }
+
       if (e.key === "ArrowRight") {
-        onNext();
+        moveToNextImage();
       }
 
       if (e.key === "ArrowLeft") {
-        onPrevious();
+        moveToPreviousImage();
       }
     }
 
     window.addEventListener("keydown", onKeyDown);
 
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose, onNext, onPrevious]);
+  }, [onClose, onNext, onPrevious, overflowX, overflowY, pannable, zoomScale]);
+
+  const imageWrapClassName = [
+    "image-popover-image-wrap",
+    zoomed ? "image-popover-image-wrap--zoomed" : null,
+    pannable ? "image-popover-image-wrap--pannable" : null,
+    isDragging ? "image-popover-image-wrap--dragging" : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+  const imageWrapStyle =
+    zoomed && viewportSize.width && viewportSize.height
+      ? {
+          height: `${viewportSize.height}px`,
+          width: `${viewportSize.width}px`,
+        }
+      : undefined;
+  const imageStyle =
+    zoomed && scaledSize.width && scaledSize.height
+      ? {
+          height: `${scaledSize.height}px`,
+          transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`,
+          width: `${scaledSize.width}px`,
+        }
+      : undefined;
 
   return (
     <div className="image-popover-overlay" onClick={onClose}>
@@ -181,15 +476,28 @@ function ImagePopover({
             className="arrow-button image-popover-arrow"
             data-shortcut={canGoPrevious ? "←" : undefined}
             disabled={!canGoPrevious}
-            onClick={onPrevious}
+            onClick={moveToPreviousImage}
             type="button"
           >
             <span aria-hidden="true">&larr;</span>
           </button>
 
-          <div className="image-popover-image-wrap">
+          <div className={imageWrapClassName} style={imageWrapStyle}>
             {src ? (
-              <img alt={alt} src={src} />
+              <img
+                alt={alt}
+                onDoubleClick={toggleZoom}
+                onDragStart={(e) => e.preventDefault()}
+                onLoad={measureImage}
+                onPointerCancel={onImagePointerUp}
+                onPointerDown={onImagePointerDown}
+                onPointerMove={onImagePointerMove}
+                onPointerUp={onImagePointerUp}
+                onWheel={onImageWheel}
+                ref={imageRef}
+                src={src}
+                style={imageStyle}
+              />
             ) : (
               <div className="image-popover-empty-state">
                 <p className="eyebrow">No preview</p>
@@ -203,7 +511,7 @@ function ImagePopover({
             className="arrow-button image-popover-arrow"
             data-shortcut={canGoNext ? "→" : undefined}
             disabled={!canGoNext}
-            onClick={onNext}
+            onClick={moveToNextImage}
             type="button"
           >
             <span aria-hidden="true">&rarr;</span>

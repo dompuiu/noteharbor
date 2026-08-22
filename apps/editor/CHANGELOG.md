@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.3.0] - 2026-08-21
+
+### Added
+
+- Added Zoom view to the Note slideshow's Image popover in the Editor app: double-click or press `+` to enter natural-size viewing, use further `+`/`-` steps or the mouse wheel to zoom up to 400%, drag or use `Shift` + arrow keys to pan, and press `Esc` once to return to fit view before closing.
+
 ## [1.2.0] - 2026-08-01
 
 ### Added
