@@ -1,7 +1,7 @@
 import 'dart:convert';
 import 'dart:io';
 
-import 'package:archive/archive.dart';
+import 'package:archive/archive_io.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3/sqlite3.dart';
@@ -59,24 +59,33 @@ class NativeDatasetStore {
     await extractionDir.create(recursive: true);
 
     try {
-      final archive = ZipDecoder().decodeBytes(await sourceArchive.readAsBytes());
-      for (final entry in archive) {
-        final normalizedPath = p.normalize(entry.name);
-        if (p.isAbsolute(normalizedPath) ||
-            normalizedPath == '..' ||
-            normalizedPath.startsWith('../') ||
-            normalizedPath.startsWith('..\\')) {
-          throw StateError('Archive contains invalid file paths.');
-        }
+      final inputStream = InputFileStream(sourceArchive.path);
+      try {
+        final archive = ZipDecoder().decodeStream(inputStream);
+        for (final entry in archive) {
+          final normalizedPath = p.normalize(entry.name);
+          if (p.isAbsolute(normalizedPath) ||
+              normalizedPath == '..' ||
+              normalizedPath.startsWith('../') ||
+              normalizedPath.startsWith('..\\')) {
+            throw StateError('Archive contains invalid file paths.');
+          }
 
-        final outputPath = p.join(extractionDir.path, normalizedPath);
-        if (entry.isFile) {
-          File(outputPath)
-            ..parent.createSync(recursive: true)
-            ..writeAsBytesSync(entry.content as List<int>);
-        } else {
-          Directory(outputPath).createSync(recursive: true);
+          final outputPath = p.join(extractionDir.path, normalizedPath);
+          if (entry.isFile) {
+            Directory(p.dirname(outputPath)).createSync(recursive: true);
+            final outputStream = OutputFileStream(outputPath);
+            try {
+              entry.writeContent(outputStream);
+            } finally {
+              outputStream.closeSync();
+            }
+          } else {
+            Directory(outputPath).createSync(recursive: true);
+          }
         }
+      } finally {
+        inputStream.closeSync();
       }
 
       final archiveDataDir = _findArchiveDataDir(extractionDir);
