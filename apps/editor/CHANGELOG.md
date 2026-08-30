@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.4.1] - 2026-08-29
+
+### Fixed
+
+- Zoom view in the Image popover now fills the responsive space available between its controls instead of inheriting the fitted Note image's dimensions. The point clicked or scrolled over remains visible when entering Zoom view, and resizing the window keeps the pannable area in sync.
+
 ## [1.4.0] - 2026-08-21
 
 ### Added

@@ -131,7 +131,9 @@ function ImagePopover({
   src,
 }) {
   const imageRef = useRef(null);
+  const imageWrapRef = useRef(null);
   const dragRef = useRef(null);
+  const zoomAnchorRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -147,16 +149,20 @@ function ImagePopover({
   const overflowY = Math.max(0, scaledSize.height - viewportSize.height);
   const pannable = zoomed && (overflowX > 0 || overflowY > 0);
 
-  function clampOffset(nextOffset, scale = zoomScale) {
+  function clampOffsetForViewport(nextOffset, scale, size) {
     const scaledWidth = naturalSize.width * scale;
     const scaledHeight = naturalSize.height * scale;
-    const maxX = Math.max(0, scaledWidth - viewportSize.width) / 2;
-    const maxY = Math.max(0, scaledHeight - viewportSize.height) / 2;
+    const maxX = Math.max(0, scaledWidth - size.width);
+    const maxY = Math.max(0, scaledHeight - size.height);
 
     return {
-      x: Math.min(maxX, Math.max(-maxX, nextOffset.x)),
-      y: Math.min(maxY, Math.max(-maxY, nextOffset.y)),
+      x: Math.min(0, Math.max(-maxX, nextOffset.x)),
+      y: Math.min(0, Math.max(-maxY, nextOffset.y)),
     };
+  }
+
+  function clampOffset(nextOffset, scale = zoomScale) {
+    return clampOffsetForViewport(nextOffset, scale, viewportSize);
   }
 
   function measureImage() {
@@ -177,7 +183,56 @@ function ImagePopover({
     }
   }
 
+  function measureViewport() {
+    const imageWrap = imageWrapRef.current;
+
+    if (!imageWrap) {
+      return;
+    }
+
+    const imageWrapRect = imageWrap.getBoundingClientRect();
+
+    if (imageWrapRect.width && imageWrapRect.height) {
+      const nextViewportSize = {
+        width: imageWrapRect.width,
+        height: imageWrapRect.height,
+      };
+      const zoomAnchor = zoomAnchorRef.current;
+
+      setViewportSize(nextViewportSize);
+
+      if (zoomAnchor) {
+        zoomAnchorRef.current = null;
+        setOffset(
+          clampOffsetForViewport(
+            {
+              x: nextViewportSize.width / 2 - zoomAnchor.x * zoomScale,
+              y: nextViewportSize.height / 2 - zoomAnchor.y * zoomScale,
+            },
+            zoomScale,
+            nextViewportSize,
+          ),
+        );
+      }
+    }
+  }
+
+  function rememberZoomAnchor(e) {
+    const image = e.currentTarget;
+    const imageRect = image.getBoundingClientRect();
+
+    if (!imageRect.width || !imageRect.height) {
+      return;
+    }
+
+    zoomAnchorRef.current = {
+      x: ((e.clientX - imageRect.left) / imageRect.width) * image.naturalWidth,
+      y: ((e.clientY - imageRect.top) / imageRect.height) * image.naturalHeight,
+    };
+  }
+
   function resetZoom() {
+    zoomAnchorRef.current = null;
     setZoomScale(0);
     setOffset({ x: 0, y: 0 });
     setIsDragging(false);
@@ -220,8 +275,8 @@ function ImagePopover({
 
     const scaleRatio = nextScale / zoomScale;
     const nextOffset = {
-      x: anchor.x - viewportSize.width / 2 + (offset.x - anchor.x + viewportSize.width / 2) * scaleRatio,
-      y: anchor.y - viewportSize.height / 2 + (offset.y - anchor.y + viewportSize.height / 2) * scaleRatio,
+      x: anchor.x - (anchor.x - offset.x) * scaleRatio,
+      y: anchor.y - (anchor.y - offset.y) * scaleRatio,
     };
 
     setZoomScale(nextScale);
@@ -236,12 +291,13 @@ function ImagePopover({
     changeZoom(-1);
   }
 
-  function toggleZoom() {
+  function toggleZoom(e) {
     if (zoomed) {
       resetZoom();
       return;
     }
 
+    rememberZoomAnchor(e);
     changeZoom(1);
   }
 
@@ -319,6 +375,13 @@ function ImagePopover({
     }
 
     e.preventDefault();
+
+    if (!zoomScale) {
+      rememberZoomAnchor(e);
+      changeZoom(e.deltaY < 0 ? 1 : -1);
+      return;
+    }
+
     const wrapRect = e.currentTarget.parentElement.getBoundingClientRect();
     const anchor = {
       x: e.clientX - wrapRect.left,
@@ -332,20 +395,21 @@ function ImagePopover({
   }, [src]);
 
   useLayoutEffect(() => {
-    if (!src || zoomScale) {
+    if (!src) {
       return undefined;
     }
 
-    measureImage();
+    const target = zoomScale ? imageWrapRef.current : imageRef.current;
 
-    const image = imageRef.current;
-
-    if (!image || typeof ResizeObserver === "undefined") {
+    if (!target || typeof ResizeObserver === "undefined") {
       return undefined;
     }
 
-    const resizeObserver = new ResizeObserver(measureImage);
-    resizeObserver.observe(image);
+    const measure = zoomScale ? measureViewport : measureImage;
+    measure();
+
+    const resizeObserver = new ResizeObserver(measure);
+    resizeObserver.observe(target);
 
     return () => resizeObserver.disconnect();
   }, [src, zoomScale]);
@@ -428,18 +492,11 @@ function ImagePopover({
   ]
     .filter(Boolean)
     .join(" ");
-  const imageWrapStyle =
-    zoomed && viewportSize.width && viewportSize.height
-      ? {
-          height: `${viewportSize.height}px`,
-          width: `${viewportSize.width}px`,
-        }
-      : undefined;
   const imageStyle =
     zoomed && scaledSize.width && scaledSize.height
       ? {
           height: `${scaledSize.height}px`,
-          transform: `translate(calc(-50% + ${offset.x}px), calc(-50% + ${offset.y}px))`,
+          transform: `translate(${offset.x}px, ${offset.y}px)`,
           width: `${scaledSize.width}px`,
         }
       : undefined;
@@ -447,7 +504,7 @@ function ImagePopover({
   return (
     <div className="image-popover-overlay" onClick={onClose}>
       <div
-        className="image-popover-content"
+        className={`image-popover-content${zoomed ? " image-popover-content--zoomed" : ""}`}
         onClick={(e) => e.stopPropagation()}
       >
         <div className="image-popover-topbar">
@@ -482,7 +539,7 @@ function ImagePopover({
             <span aria-hidden="true">&larr;</span>
           </button>
 
-          <div className={imageWrapClassName} style={imageWrapStyle}>
+          <div className={imageWrapClassName} ref={imageWrapRef}>
             {src ? (
               <img
                 alt={alt}
