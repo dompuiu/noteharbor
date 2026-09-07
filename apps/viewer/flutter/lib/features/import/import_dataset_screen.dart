@@ -21,6 +21,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
   String? _selectedArchiveName;
   String? _message;
   bool _isPicking = false;
+  bool _isImporting = false;
 
   Future<void> _pickArchive() async {
     setState(() {
@@ -86,6 +87,11 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       return;
     }
 
+    setState(() {
+      _isImporting = true;
+      _message = null;
+    });
+
     try {
       await widget.controller.importArchive(archivePath);
       if (!mounted) {
@@ -101,6 +107,10 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       setState(() {
         _message = 'Import failed: $error';
       });
+    } finally {
+      if (mounted) {
+        setState(() => _isImporting = false);
+      }
     }
   }
 
@@ -216,12 +226,17 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        automaticallyImplyLeading: (widget.controller.dataset?.collections.isNotEmpty ?? false),
-        title: const Text('Import Dataset'),
-      ),
-      body: DecoratedBox(
+    return PopScope(
+      canPop: !_isImporting,
+      child: Stack(
+        children: [
+          Scaffold(
+            appBar: AppBar(
+              automaticallyImplyLeading:
+                  !_isImporting && (widget.controller.dataset?.collections.isNotEmpty ?? false),
+              title: const Text('Import Dataset'),
+            ),
+            body: DecoratedBox(
         decoration: const BoxDecoration(
           color: ViewerPalette.pageBackground,
         ),
@@ -233,7 +248,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
               final generatedAt = dataset?.generatedAt?.trim();
               final collections = dataset?.collections ?? const [];
               final activeCollection = widget.controller.activeCollection;
-              final isBusy = widget.controller.isMutating || _isPicking;
+              final isBusy = widget.controller.isMutating || _isPicking || _isImporting;
               final isInitialEmptyState = dataset == null;
 
               return ListView(
@@ -498,6 +513,33 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
             },
           ),
         ),
+      ),
+          ),
+          if (_isImporting)
+            const ModalBarrier(
+              dismissible: false,
+              color: Colors.black54,
+            ),
+          if (_isImporting)
+            Center(
+              child: Card(
+                child: Padding(
+                  padding: EdgeInsets.all(24),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircularProgressIndicator(),
+                      SizedBox(height: 16),
+                      Text(
+                        'Importing archive...',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
