@@ -1,6 +1,7 @@
 import {
   Fragment,
   forwardRef,
+  useCallback,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
@@ -19,7 +20,10 @@ import {
   getScrapeStatus,
   startScrape,
 } from "../lib/api.js";
-import { copyTextToClipboard, formatNoteAsTsvRow } from "../lib/noteClipboard.js";
+import {
+  copyTextToClipboard,
+  formatNoteAsTsvRow,
+} from "../lib/noteClipboard.js";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { Slideshow } from "./Slideshow.jsx";
@@ -38,10 +42,7 @@ const baseColumns = [
   ["tags", "Tags"],
 ];
 const scrapeStatusColumn = ["scrape_status", "Scraped"];
-const columns = [
-  ...baseColumns,
-  ["scrape_status", "Scraped"],
-];
+const columns = [...baseColumns, ["scrape_status", "Scraped"]];
 
 const selectCountOptions = [5, 10, 25, 50];
 const tableStateStorageKey = "noteharbor.notesTableState";
@@ -109,7 +110,11 @@ function computeVisibleTagPlan(tags, availableWidth) {
     return { visibleTags: tags, hiddenTags: [] };
   }
 
-  for (let visibleCount = tags.length - 1; visibleCount >= 0; visibleCount -= 1) {
+  for (
+    let visibleCount = tags.length - 1;
+    visibleCount >= 0;
+    visibleCount -= 1
+  ) {
     const hiddenCount = tags.length - visibleCount;
     let width = measureTagChipWidth(`+${hiddenCount}`);
 
@@ -195,7 +200,8 @@ function TagsCell({ onApplyFilter, tags }) {
       // still avoids running off-screen; the layout effect below corrects
       // `top` using the real height as soon as it's known.
       const height =
-        popoverHeightRef.current ?? Math.min(tagsPopoverMaxHeight, window.innerHeight - 16);
+        popoverHeightRef.current ??
+        Math.min(tagsPopoverMaxHeight, window.innerHeight - 16);
       const top = computePopoverTop(bounds, height);
 
       setPopoverPosition({ top, left });
@@ -329,8 +335,12 @@ function TagsCell({ onApplyFilter, tags }) {
     }
 
     if (event.key === "Tab") {
-      const buttons = Array.from(popoverRef.current?.querySelectorAll("button") ?? []);
-      const atLast = !event.shiftKey && document.activeElement === buttons[buttons.length - 1];
+      const buttons = Array.from(
+        popoverRef.current?.querySelectorAll("button") ?? [],
+      );
+      const atLast =
+        !event.shiftKey &&
+        document.activeElement === buttons[buttons.length - 1];
       const atFirst = event.shiftKey && document.activeElement === buttons[0];
 
       if (atLast || atFirst) {
@@ -391,7 +401,10 @@ function TagsCell({ onApplyFilter, tags }) {
                   onMouseEnter={handleMouseEnterAgain}
                   onMouseLeave={handleMouseLeave}
                   ref={popoverRef}
-                  style={{ top: popoverPosition.top, left: popoverPosition.left }}
+                  style={{
+                    top: popoverPosition.top,
+                    left: popoverPosition.left,
+                  }}
                 >
                   {hiddenTags.map((tag) => (
                     <button
@@ -538,7 +551,11 @@ const MultiValueFilterCombobox = forwardRef(function MultiValueFilterCombobox(
       }
 
       const bounds = element.getBoundingClientRect();
-      setDropdownPosition({ top: bounds.bottom + 4, left: bounds.left, width: bounds.width });
+      setDropdownPosition({
+        top: bounds.bottom + 4,
+        left: bounds.left,
+        width: bounds.width,
+      });
     }
 
     updatePosition();
@@ -582,7 +599,9 @@ const MultiValueFilterCombobox = forwardRef(function MultiValueFilterCombobox(
 
   function removeValue(option) {
     commitValues(
-      selectedValues.filter((item) => item.toLowerCase() !== option.toLowerCase()),
+      selectedValues.filter(
+        (item) => item.toLowerCase() !== option.toLowerCase(),
+      ),
     );
     inputRef.current?.focus();
   }
@@ -824,7 +843,11 @@ function imageStatus(note) {
     return "pending";
   }
 
-  if (images.some((image) => image.origin === "uploaded" || image.origin === "generated")) {
+  if (
+    images.some(
+      (image) => image.origin === "uploaded" || image.origin === "generated",
+    )
+  ) {
     return "manual";
   }
 
@@ -864,14 +887,18 @@ function valueToString(note, key) {
 }
 
 function parseFilterValue(rawValue, normalizeValue) {
-  const normalized = String(rawValue ?? "").trim().toLowerCase();
+  const normalized = String(rawValue ?? "")
+    .trim()
+    .toLowerCase();
   if (!normalized) {
     return { negated: false, value: "" };
   }
 
   const negated = normalized.startsWith("!");
   const rawParsedValue = negated ? normalized.slice(1).trim() : normalized;
-  const value = normalizeValue ? normalizeValue(rawParsedValue) : rawParsedValue;
+  const value = normalizeValue
+    ? normalizeValue(rawParsedValue)
+    : rawParsedValue;
   return value ? { negated, value } : { negated: false, value: "" };
 }
 
@@ -902,7 +929,11 @@ function parseScalarFilters(rawFilterValue, normalizeValue) {
     .filter(({ value }) => value);
 }
 
-function matchesSingleFilterValue(noteValue, filterValue, matchMode = "includes") {
+function matchesSingleFilterValue(
+  noteValue,
+  filterValue,
+  matchMode = "includes",
+) {
   return matchMode === "catalogPrefix"
     ? matchesCatalogFilterValue(noteValue, filterValue)
     : matchMode === "startsWith"
@@ -910,11 +941,18 @@ function matchesSingleFilterValue(noteValue, filterValue, matchMode = "includes"
       : noteValue.includes(filterValue);
 }
 
-function matchesFilterValue(noteValue, rawFilterValue, matchMode = "includes", options = {}) {
+function matchesFilterValue(
+  noteValue,
+  rawFilterValue,
+  matchMode = "includes",
+  options = {},
+) {
   const normalizedNoteValue = String(noteValue ?? "").toLowerCase();
   const filters = options.multiple
     ? parseScalarFilters(rawFilterValue, options.normalizeFilterValue)
-    : [parseFilterValue(rawFilterValue, options.normalizeFilterValue)].filter(({ value }) => value);
+    : [parseFilterValue(rawFilterValue, options.normalizeFilterValue)].filter(
+        ({ value }) => value,
+      );
 
   if (!filters.length) {
     return true;
@@ -933,7 +971,8 @@ function matchesFilterValue(noteValue, rawFilterValue, matchMode = "includes", o
   }
 
   return negativeFilters.every(
-    ({ value }) => !matchesSingleFilterValue(normalizedNoteValue, value, matchMode),
+    ({ value }) =>
+      !matchesSingleFilterValue(normalizedNoteValue, value, matchMode),
   );
 }
 
@@ -954,7 +993,9 @@ function matchesTagFilter(note, rawFilterValue) {
   }
 
   const noteTagNames = note.tags.map((tag) =>
-    String(tag.name ?? "").trim().toLowerCase(),
+    String(tag.name ?? "")
+      .trim()
+      .toLowerCase(),
   );
   return filters.every(({ negated, value }) => {
     const hasMatch = noteTagNames.some((tagName) => tagName.startsWith(value));
@@ -1122,6 +1163,10 @@ function NotesTable({
   const thumbPreviewElementMapRef = useRef(new Map());
   const dragPreviewRef = useRef(null);
   const tableShellRef = useRef(null);
+  const tableScrollXRef = useRef(null);
+  const tableScrollYRef = useRef(null);
+  const vMetricsRef = useRef({ max: 0, range: 0, thumbHeight: 0 });
+  const vThumbDragRef = useRef(null);
   const editorOverlayRef = useRef(null);
   const tagsFilterInputRef = useRef(null);
   const firstFilterInputRef = useRef(null);
@@ -1169,6 +1214,14 @@ function NotesTable({
   const [thumbPreviewState, setThumbPreviewState] = useState(null);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [columnFilterHeights, setColumnFilterHeights] = useState({});
+  const [vScroll, setVScroll] = useState({
+    bottom: 4,
+    thumbHeight: 0,
+    thumbTop: 0,
+    top: 0,
+    valueNow: 0,
+    visible: false,
+  });
   const selectAllRef = useRef(null);
 
   useEffect(() => {
@@ -1240,7 +1293,9 @@ function NotesTable({
           {
             multiple: supportsMultipleValues,
             normalizeFilterValue:
-              key === "denomination" ? normalizeDenominationFilterValue : undefined,
+              key === "denomination"
+                ? normalizeDenominationFilterValue
+                : undefined,
           },
         );
       }),
@@ -1277,7 +1332,9 @@ function NotesTable({
       ? currentRoute.noteId
       : null;
   const createPositionReferenceId =
-    creatingNote && currentRoute.beforeId && notes.some((note) => note.id === currentRoute.beforeId)
+    creatingNote &&
+    currentRoute.beforeId &&
+    notes.some((note) => note.id === currentRoute.beforeId)
       ? currentRoute.beforeId
       : null;
   const createPositionMode = createPositionReferenceId ? "before" : "end";
@@ -1316,7 +1373,10 @@ function NotesTable({
     2 +
     (showSelection ? 1 : 0) +
     (showReorder ? 1 : 0) +
-    (showActions ? 1 : 0);
+    (showActions ? 1 : 0) +
+    // Trailing gutter column in the header that the rows stop before, so
+    // the overlay scrollbar never covers row content.
+    (vScroll.visible ? 1 : 0);
 
   async function loadNotes() {
     if (!Number.isInteger(activeCollectionId)) {
@@ -1390,11 +1450,12 @@ function NotesTable({
 
     const timer = window.setInterval(async () => {
       try {
-        const [nextStatus, notesPayload, nextOperationStatus] = await Promise.all([
-          getScrapeStatus(),
-          getNotes(activeCollectionId),
-          getOperationStatus(),
-        ]);
+        const [nextStatus, notesPayload, nextOperationStatus] =
+          await Promise.all([
+            getScrapeStatus(),
+            getNotes(activeCollectionId),
+            getOperationStatus(),
+          ]);
         const nextScrapeJob = activeScrapeJob(nextStatus);
 
         setNotes(notesPayload.notes);
@@ -1445,7 +1506,10 @@ function NotesTable({
     }
 
     if (currentRoute.kind === "create") {
-      if (currentRoute.beforeId && !notes.some((note) => note.id === currentRoute.beforeId)) {
+      if (
+        currentRoute.beforeId &&
+        !notes.some((note) => note.id === currentRoute.beforeId)
+      ) {
         navigateToTableRoute({ kind: "create" }, { replace: true });
       }
 
@@ -1470,7 +1534,9 @@ function NotesTable({
       !hasRestoredTableState
         ? defaultOrderedNotes
         : orderedNotes;
-    const targetIndex = baseNotes.findIndex((note) => note.id === currentRoute.noteId);
+    const targetIndex = baseNotes.findIndex(
+      (note) => note.id === currentRoute.noteId,
+    );
 
     if (targetIndex < 0) {
       navigateToTableRoute(emptyTableRoute(), { replace: true });
@@ -1572,7 +1638,7 @@ function NotesTable({
   const rowVirtualizer = useVirtualizer({
     count: orderedNotes.length,
     estimateSize: () => rowHeightEstimate,
-    getScrollElement: () => tableShellRef.current,
+    getScrollElement: () => tableScrollYRef.current,
     overscan: 10,
   });
   const virtualRows = rowVirtualizer.getVirtualItems();
@@ -1599,12 +1665,230 @@ function NotesTable({
     rowVirtualizer.scrollToOffset(0);
   }, [filters, rowVirtualizer, sortDirection, sortKey]);
 
+  // The vertical scrollbar is custom-drawn so its track spans only the rows
+  // area below the sticky header (a native scrollbar would always run the
+  // full height of the scroll container, header included). These metrics
+  // keep the custom thumb in sync with the inner vertical scroller.
+  const updateVScroll = useCallback(() => {
+    const scroller = tableScrollYRef.current;
+    const xScroller = tableScrollXRef.current;
+
+    if (!scroller || !xScroller) {
+      return;
+    }
+
+    const max = scroller.scrollHeight - scroller.clientHeight;
+
+    if (max <= 1) {
+      vMetricsRef.current = { max: 0, range: 0, thumbHeight: 0 };
+      setVScroll((current) =>
+        current.visible ? { ...current, visible: false } : current,
+      );
+      return;
+    }
+
+    const headerHeight = scroller.querySelector("thead")?.offsetHeight ?? 0;
+    const hasHorizontalBar = xScroller.scrollWidth > xScroller.clientWidth + 1;
+    const top = headerHeight + 4;
+    const bottom = hasHorizontalBar ? 14 : 4;
+    const trackHeight = Math.max(0, xScroller.clientHeight - top - bottom);
+
+    if (trackHeight <= 40) {
+      vMetricsRef.current = { max: 0, range: 0, thumbHeight: 0 };
+      setVScroll((current) =>
+        current.visible ? { ...current, visible: false } : current,
+      );
+      return;
+    }
+
+    const thumbHeight = Math.max(
+      24,
+      Math.min(
+        trackHeight,
+        (scroller.clientHeight / scroller.scrollHeight) * trackHeight,
+      ),
+    );
+    const range = Math.max(1, trackHeight - thumbHeight);
+    const ratio = Math.min(1, Math.max(0, scroller.scrollTop / max));
+    vMetricsRef.current = { max, range, thumbHeight };
+
+    const next = {
+      bottom,
+      thumbHeight,
+      thumbTop: ratio * range,
+      top,
+      valueNow: Math.round(ratio * 100),
+      visible: true,
+    };
+
+    setVScroll((current) =>
+      current.visible === next.visible &&
+      current.top === next.top &&
+      current.bottom === next.bottom &&
+      current.thumbHeight === next.thumbHeight &&
+      current.thumbTop === next.thumbTop &&
+      current.valueNow === next.valueNow
+        ? current
+        : next,
+    );
+  }, []);
+
+  useEffect(() => {
+    const scroller = tableScrollYRef.current;
+    const xScroller = tableScrollXRef.current;
+
+    if (!scroller) {
+      return undefined;
+    }
+
+    let frameId = 0;
+
+    function scheduleUpdate() {
+      cancelAnimationFrame(frameId);
+      frameId = requestAnimationFrame(updateVScroll);
+    }
+
+    updateVScroll();
+    scroller.addEventListener("scroll", scheduleUpdate, { passive: true });
+    xScroller?.addEventListener("scroll", scheduleUpdate, { passive: true });
+    window.addEventListener("resize", scheduleUpdate);
+
+    const observer = new ResizeObserver(scheduleUpdate);
+    observer.observe(scroller);
+
+    if (xScroller) {
+      observer.observe(xScroller);
+    }
+
+    const header = scroller.querySelector("thead");
+
+    if (header) {
+      observer.observe(header);
+    }
+
+    return () => {
+      cancelAnimationFrame(frameId);
+      observer.disconnect();
+      scroller.removeEventListener("scroll", scheduleUpdate);
+      xScroller?.removeEventListener("scroll", scheduleUpdate);
+      window.removeEventListener("resize", scheduleUpdate);
+    };
+  }, [filterRowHeight, loading, orderedNotes.length, updateVScroll]);
+
+  function handleVThumbPointerDown(event) {
+    event.preventDefault();
+    event.stopPropagation();
+
+    const scroller = tableScrollYRef.current;
+
+    if (!scroller) {
+      return;
+    }
+
+    vThumbDragRef.current = {
+      startScrollTop: scroller.scrollTop,
+      startY: event.clientY,
+    };
+    event.currentTarget.setPointerCapture(event.pointerId);
+  }
+
+  function handleVThumbPointerMove(event) {
+    const drag = vThumbDragRef.current;
+    const scroller = tableScrollYRef.current;
+    const metrics = vMetricsRef.current;
+
+    if (
+      !drag ||
+      !scroller ||
+      !metrics ||
+      metrics.max <= 0 ||
+      metrics.range <= 0
+    ) {
+      return;
+    }
+
+    scroller.scrollTop =
+      drag.startScrollTop +
+      ((event.clientY - drag.startY) * metrics.max) / metrics.range;
+  }
+
+  function handleVThumbPointerEnd() {
+    vThumbDragRef.current = null;
+  }
+
+  function handleVTrackPointerDown(event) {
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+
+    const scroller = tableScrollYRef.current;
+    const metrics = vMetricsRef.current;
+
+    if (!scroller || !metrics || metrics.max <= 0 || metrics.range <= 0) {
+      return;
+    }
+
+    const trackBounds = event.currentTarget.getBoundingClientRect();
+    const ratio = Math.min(
+      1,
+      Math.max(
+        0,
+        (event.clientY - trackBounds.top - metrics.thumbHeight / 2) /
+          metrics.range,
+      ),
+    );
+    scroller.scrollTop = ratio * metrics.max;
+  }
+
+  function handleVThumbKeyDown(event) {
+    const scroller = tableScrollYRef.current;
+
+    if (!scroller) {
+      return;
+    }
+
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      scroller.scrollTop += rowHeightEstimate;
+    } else if (event.key === "ArrowUp") {
+      event.preventDefault();
+      scroller.scrollTop -= rowHeightEstimate;
+    } else if (event.key === "PageDown") {
+      event.preventDefault();
+      // Stop the key from reaching the table's global handler, which would
+      // page a second time.
+      event.stopPropagation();
+      pageTable(1);
+    } else if (event.key === "PageUp") {
+      event.preventDefault();
+      // Stop the key from reaching the table's global handler, which would
+      // page a second time.
+      event.stopPropagation();
+      pageTable(-1);
+    } else if (event.key === "Home") {
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (orderedNotes[0]) {
+        focusRowByNoteId(orderedNotes[0].id);
+      }
+    } else if (event.key === "End") {
+      event.preventDefault();
+      event.stopPropagation();
+      const lastNote = orderedNotes[orderedNotes.length - 1];
+
+      if (lastNote) {
+        focusRowByNoteId(lastNote.id);
+      }
+    }
+  }
+
   useEffect(() => {
     if (!thumbPreviewState) {
       return undefined;
     }
 
-    const shell = tableShellRef.current;
+    const shell = tableScrollYRef.current;
 
     if (!shell) {
       return undefined;
@@ -1623,9 +1907,11 @@ function NotesTable({
       const shellBounds = shell.getBoundingClientRect();
       const thumbBounds = thumbElement.getBoundingClientRect();
       const headerBottom =
-        shell.querySelector("thead")?.getBoundingClientRect().bottom ?? shellBounds.top;
+        shell.querySelector("thead")?.getBoundingClientRect().bottom ??
+        shellBounds.top;
       const previewHeight = 138;
-      const desiredTop = thumbBounds.top + thumbBounds.height / 2 - previewHeight / 2;
+      const desiredTop =
+        thumbBounds.top + thumbBounds.height / 2 - previewHeight / 2;
       const minTop = Math.max(shellBounds.top + 8, headerBottom + 8);
       const maxTop = shellBounds.bottom - previewHeight - 8;
       const clampedTop = Math.min(Math.max(desiredTop, minTop), maxTop);
@@ -1641,7 +1927,9 @@ function NotesTable({
     }
 
     updateThumbPreviewPosition();
-    shell.addEventListener("scroll", updateThumbPreviewPosition, { passive: true });
+    shell.addEventListener("scroll", updateThumbPreviewPosition, {
+      passive: true,
+    });
     window.addEventListener("resize", updateThumbPreviewPosition);
 
     return () => {
@@ -1714,6 +2002,25 @@ function NotesTable({
       if (event.key === "ArrowUp" || event.key === "k") {
         event.preventDefault();
         moveRowFocus(-1);
+        return;
+      }
+
+      if (event.key === "PageDown" || event.key === "PageUp") {
+        event.preventDefault();
+        pageTable(event.key === "PageDown" ? 1 : -1);
+        return;
+      }
+
+      if (event.key === "Home" || event.key === "End") {
+        event.preventDefault();
+        const note =
+          event.key === "Home"
+            ? orderedNotes[0]
+            : orderedNotes[orderedNotes.length - 1];
+
+        if (note) {
+          focusRowByNoteId(note.id);
+        }
         return;
       }
 
@@ -1877,8 +2184,12 @@ function NotesTable({
     const element = rowElementMapRef.current.get(noteId);
 
     if (element) {
-      element.focus();
+      // Native focus scrolling ignores the sticky header and can leave
+      // the row hidden underneath it, so suppress it and reveal the row
+      // explicitly instead.
+      element.focus({ preventScroll: true });
       focusedRowIdRef.current = noteId;
+      ensureRowVisible(element);
       return;
     }
 
@@ -1909,6 +2220,54 @@ function NotesTable({
     focusRowByNoteId(orderedNotes[nextIndex].id);
   }
 
+  function ensureRowVisible(element) {
+    const scroller = tableScrollYRef.current;
+
+    if (!scroller) {
+      return;
+    }
+
+    const headerBottom =
+      scroller.querySelector("thead")?.getBoundingClientRect().bottom ?? 0;
+    const scrollerBox = scroller.getBoundingClientRect();
+    const rowBox = element.getBoundingClientRect();
+
+    if (rowBox.top < headerBottom) {
+      scroller.scrollTop -= headerBottom - rowBox.top;
+    } else if (rowBox.bottom > scrollerBox.bottom) {
+      scroller.scrollTop += rowBox.bottom - scrollerBox.bottom;
+    }
+  }
+
+  function pageTable(direction) {
+    const scroller = tableScrollYRef.current;
+
+    if (!scroller || !orderedNotes.length) {
+      return;
+    }
+
+    scroller.scrollTop += direction * scroller.clientHeight;
+
+    // Focus the top row of the new viewport so a following ↑/↓ continues
+    // from what's on screen instead of jumping back to the previously
+    // focused (now off-screen) row.
+    const headerBottom =
+      scroller.querySelector("thead")?.getBoundingClientRect().bottom ?? 0;
+    const rows = scroller.querySelectorAll("tbody tr.table-row-link");
+
+    for (const row of rows) {
+      if (row.getBoundingClientRect().top >= headerBottom - 1) {
+        const note = orderedNotes[Number(row.getAttribute("data-index"))];
+
+        if (note) {
+          focusRowByNoteId(note.id);
+        }
+
+        break;
+      }
+    }
+  }
+
   function openEditor(noteId) {
     setActionError("");
 
@@ -1937,12 +2296,15 @@ function NotesTable({
 
   function closeEditor() {
     if (slideshowRouteActive) {
-      navigateToTableRoute({
-        kind: "slideshow",
-        noteId: currentRoute.noteId,
-        overlayEdit: false,
-        previewKind: currentRoute.previewKind,
-      }, { replace: true });
+      navigateToTableRoute(
+        {
+          kind: "slideshow",
+          noteId: currentRoute.noteId,
+          overlayEdit: false,
+          previewKind: currentRoute.previewKind,
+        },
+        { replace: true },
+      );
       return;
     }
 
@@ -1973,7 +2335,10 @@ function NotesTable({
       return;
     }
 
-    navigateToTableRoute({ kind: "edit", noteId: nextNoteId }, { replace: true });
+    navigateToTableRoute(
+      { kind: "edit", noteId: nextNoteId },
+      { replace: true },
+    );
   }
 
   function showMoveToast(message) {
@@ -1986,13 +2351,23 @@ function NotesTable({
     moveToastTimerRef.current = setTimeout(() => setMoveToast(""), 4000);
   }
 
-  function handleSaveEditedNote(updatedNote, reorderedNotes, movedToCollection) {
+  function handleSaveEditedNote(
+    updatedNote,
+    reorderedNotes,
+    movedToCollection,
+  ) {
     if (movedToCollection) {
       // The note now belongs to a different collection — it no longer
       // belongs in this view, so drop it instead of merging it in.
-      setNotes((current) => current.filter((note) => note.id !== updatedNote.id));
-      setSelectedIds((current) => current.filter((id) => id !== updatedNote.id));
-      setSlideshowNotes((current) => current.filter((note) => note.id !== updatedNote.id));
+      setNotes((current) =>
+        current.filter((note) => note.id !== updatedNote.id),
+      );
+      setSelectedIds((current) =>
+        current.filter((id) => id !== updatedNote.id),
+      );
+      setSlideshowNotes((current) =>
+        current.filter((note) => note.id !== updatedNote.id),
+      );
       showMoveToast(`Moved to ${movedToCollection.name}.`);
     } else if (reorderedNotes) {
       setNotes(reorderedNotes);
@@ -2031,12 +2406,15 @@ function NotesTable({
     }
 
     if (!movedToCollection && slideshowRouteActive) {
-      navigateToTableRoute({
-        kind: "slideshow",
-        noteId: updatedNote.id,
-        overlayEdit: false,
-        previewKind: currentRoute.previewKind,
-      }, { replace: true });
+      navigateToTableRoute(
+        {
+          kind: "slideshow",
+          noteId: updatedNote.id,
+          overlayEdit: false,
+          previewKind: currentRoute.previewKind,
+        },
+        { replace: true },
+      );
       return;
     }
 
@@ -2082,8 +2460,9 @@ function NotesTable({
 
   function autoScrollTableShell(event) {
     const shell = tableShellRef.current;
+    const scroller = tableScrollYRef.current;
 
-    if (!shell || draggedNoteId === null) {
+    if (!shell || !scroller || draggedNoteId === null) {
       return;
     }
 
@@ -2093,10 +2472,10 @@ function NotesTable({
 
     if (event.clientY < bounds.top + threshold) {
       const ratio = (bounds.top + threshold - event.clientY) / threshold;
-      shell.scrollTop -= Math.ceil(maxStep * Math.min(1, ratio));
+      scroller.scrollTop -= Math.ceil(maxStep * Math.min(1, ratio));
     } else if (event.clientY > bounds.bottom - threshold) {
       const ratio = (event.clientY - (bounds.bottom - threshold)) / threshold;
-      shell.scrollTop += Math.ceil(maxStep * Math.min(1, ratio));
+      scroller.scrollTop += Math.ceil(maxStep * Math.min(1, ratio));
     }
   }
 
@@ -2175,7 +2554,10 @@ function NotesTable({
 
   function selectNextUnscraped() {
     const nextIds = orderedNotes
-      .filter((note) => note.scrape_status === "failed" || imageStatus(note) !== "done")
+      .filter(
+        (note) =>
+          note.scrape_status === "failed" || imageStatus(note) !== "done",
+      )
       .slice(0, selectNextCount)
       .map((note) => note.id);
 
@@ -2200,7 +2582,9 @@ function NotesTable({
           return;
         }
 
-        await Promise.all(selectedIds.map((id) => deleteNote(id, activeCollectionId)));
+        await Promise.all(
+          selectedIds.map((id) => deleteNote(id, activeCollectionId)),
+        );
         await loadNotes();
         clearSelection();
         return;
@@ -2315,16 +2699,23 @@ function NotesTable({
   }
 
   function closePreview(noteId) {
-    navigateToTableRoute({
-      kind: "slideshow",
-      noteId,
-      overlayEdit: false,
-      previewKind: null,
-    }, { replace: true });
+    navigateToTableRoute(
+      {
+        kind: "slideshow",
+        noteId,
+        overlayEdit: false,
+        previewKind: null,
+      },
+      { replace: true },
+    );
   }
 
   function movePreview(offset) {
-    if (!slideshowRouteActive || !slideshowNotes.length || !currentRoute.previewKind) {
+    if (
+      !slideshowRouteActive ||
+      !slideshowNotes.length ||
+      !currentRoute.previewKind
+    ) {
       return;
     }
 
@@ -2340,7 +2731,9 @@ function NotesTable({
     let nextItems = ["front", "back"].filter((kind) =>
       validPreviewKinds.has(kind),
     );
-    let nextItemIndex = nextItems.findIndex((kind) => kind === currentRoute.previewKind);
+    let nextItemIndex = nextItems.findIndex(
+      (kind) => kind === currentRoute.previewKind,
+    );
 
     if (nextItemIndex < 0) {
       nextItemIndex = direction > 0 ? -1 : nextItems.length;
@@ -2358,7 +2751,8 @@ function NotesTable({
       }
 
       nextNoteIndex =
-        (nextNoteIndex + direction + slideshowNotes.length) % slideshowNotes.length;
+        (nextNoteIndex + direction + slideshowNotes.length) %
+        slideshowNotes.length;
       nextItems = ["front", "back"];
       nextItemIndex = direction > 0 ? 0 : nextItems.length - 1;
       remainingSteps -= 1;
@@ -2395,10 +2789,7 @@ function NotesTable({
       ) : null}
 
       {editingNoteId || creatingNote ? (
-        <section
-          className="edit-note-overlay"
-          ref={editorOverlayRef}
-        >
+        <section className="edit-note-overlay" ref={editorOverlayRef}>
           <div
             className="edit-note-overlay-frame"
             onClick={(event) => event.stopPropagation()}
@@ -2427,64 +2818,73 @@ function NotesTable({
       ) : null}
 
       <div className="panel">
-            <div className="panel-heading panel-heading--compact">
-            <div className="panel-heading-copy">
-              <p className="eyebrow">Romanian Paper Money Archive</p>
-              <h2>Note Harbor Editor</h2>
-              <p>
-                Collection: <strong>{Number(activeCollection?.is_default) === 1 ? "★ " : ""}{activeCollection?.name ?? "-"}</strong>. {orderedNotes.length} notes in the current view.
-                {showSelection && selectedIds.length
-                  ? ` ${selectedIds.length} selected.`
-                  : ""}
-              </p>
-            </div>
-            <div className="inline-actions">
-              <select
-                aria-label="Active collection"
-                className="select-input"
-                disabled={loadingCollections || !collections.length}
-                onChange={(event) => onSelectCollection(Number(event.target.value))}
-                value={activeCollectionId ?? ""}
-              >
-                {collections.map((collection) => (
-                  <option key={collection.id} value={collection.id}>
-                    {Number(collection.is_default) === 1 ? '★ ' : ''}{collection.name}
-                  </option>
-                ))}
-              </select>
-              <button
-                aria-label="Add banknote"
-                className="icon-link button-primary"
-                onClick={openCreateNote}
-                title="Add banknote"
-                type="button"
-              >
-                Add banknote
-              </button>
-              <Link
-                aria-label="Import or export"
-                className="icon-link"
-                title="Import / Export"
-                to="/import"
-              >
-                Import / Export
-              </Link>
-              <button
-                aria-label="Keyboard shortcuts"
-                className="icon-link"
-                data-shortcut="?"
-                onClick={() => setShowShortcutsHelp(true)}
-                title="Keyboard shortcuts (?)"
-                type="button"
-              >
-                Shortcuts
-              </button>
-            </div>
+        <div className="panel-heading panel-heading--compact">
+          <div className="panel-heading-copy">
+            <h2>Note Harbor Editor</h2>
+            <p>
+              Collection:{" "}
+              <strong>
+                {Number(activeCollection?.is_default) === 1 ? "★ " : ""}
+                {activeCollection?.name ?? "-"}
+              </strong>
+              . {orderedNotes.length} notes in the current view.
+              {showSelection && selectedIds.length
+                ? ` ${selectedIds.length} selected.`
+                : ""}
+            </p>
           </div>
+          <div className="inline-actions">
+            <select
+              aria-label="Active collection"
+              className="select-input"
+              disabled={loadingCollections || !collections.length}
+              onChange={(event) =>
+                onSelectCollection(Number(event.target.value))
+              }
+              value={activeCollectionId ?? ""}
+            >
+              {collections.map((collection) => (
+                <option key={collection.id} value={collection.id}>
+                  {Number(collection.is_default) === 1 ? "★ " : ""}
+                  {collection.name}
+                </option>
+              ))}
+            </select>
+            <button
+              aria-label="Add banknote"
+              className="icon-link button-primary"
+              onClick={openCreateNote}
+              title="Add banknote"
+              type="button"
+            >
+              Add banknote
+            </button>
+            <Link
+              aria-label="Import or export"
+              className="icon-link"
+              title="Import / Export"
+              to="/import"
+            >
+              Import / Export
+            </Link>
+            <button
+              aria-label="Keyboard shortcuts"
+              className="icon-link"
+              data-shortcut="?"
+              onClick={() => setShowShortcutsHelp(true)}
+              title="Keyboard shortcuts (?)"
+              type="button"
+            >
+              Shortcuts
+            </button>
+          </div>
+        </div>
 
         {loadingCollections ? <p>Loading collections...</p> : null}
         {loading ? <p>Loading notes...</p> : null}
-        {collectionsError ? <p className="error-text">{collectionsError}</p> : null}
+        {collectionsError ? (
+          <p className="error-text">{collectionsError}</p>
+        ) : null}
         {loadError ? <p className="error-text">{loadError}</p> : null}
         {actionError ? <p className="error-text">{actionError}</p> : null}
         {moveToast ? (
@@ -2494,7 +2894,8 @@ function NotesTable({
         ) : null}
         {operationStatus.isBusy ? (
           <p className="warning-text">
-            Current operation: {String(operationStatus.currentOperation).replace(/_/g, " ")}.
+            Current operation:{" "}
+            {String(operationStatus.currentOperation).replace(/_/g, " ")}.
           </p>
         ) : null}
 
@@ -2539,9 +2940,9 @@ function NotesTable({
                   ? "Saving manual order..."
                   : canReorder
                     ? "Drag rows from the handle to change the default order."
-                    : "Reordering is available only in the default unfiltered view."}
-                {" "}Press <kbd>/</kbd> to filter, <kbd>&uarr;</kbd>/<kbd>&darr;</kbd> to browse rows, or{" "}
-                <kbd>?</kbd> for shortcuts.
+                    : "Reordering is available only in the default unfiltered view."}{" "}
+                Press <kbd>/</kbd> to filter, <kbd>&uarr;</kbd>/
+                <kbd>&darr;</kbd> to browse rows, or <kbd>?</kbd> for shortcuts.
               </p>
               {selectedIds.length ? (
                 <div className="inline-select-group inline-select-group--bulk">
@@ -2556,7 +2957,11 @@ function NotesTable({
                   </select>
                   <button
                     className="button button-primary"
-                    disabled={bulkLoading || operationStatus.isBusy || Boolean(scrapeJob)}
+                    disabled={
+                      bulkLoading ||
+                      operationStatus.isBusy ||
+                      Boolean(scrapeJob)
+                    }
                     onClick={handleBulkAction}
                     type="button"
                   >
@@ -2577,490 +2982,661 @@ function NotesTable({
                 ref={tableFocusAnchorRef}
                 tabIndex={-1}
               />
-              <table>
-                <thead>
-                  <tr>
-                    {showReorder ? <th className="drag-cell" /> : null}
-                    {showSelection ? (
-                      <th>
-                        <input
-                          aria-label="Select all visible rows"
-                          checked={allVisibleSelected}
-                          onChange={toggleAllVisible}
-                          ref={selectAllRef}
-                          type="checkbox"
-                        />
-                      </th>
-                    ) : null}
-                    <th>
-                      <button
-                        className="sort-button"
-                        onClick={() => toggleSort("id")}
-                        type="button"
-                      >
-                        ID
-                        {sortKey === "id" ? (
-                          <span>{sortDirection === "asc" ? " ▲" : " ▼"}</span>
-                        ) : null}
-                      </button>
-                    </th>
-                    <th>Front</th>
-                    {visibleColumns.map(([key, label]) => (
-                      <th
-                        className={
-                          key === "scrape_status"
-                            ? "scrape-status-column"
-                            : key === "tags"
-                              ? "tags-column"
-                              : undefined
-                        }
-                        key={key}
-                      >
-                        <button
-                          className="sort-button"
-                          onClick={() => toggleSort(key)}
-                          type="button"
-                        >
-                          {label}
-                          {sortKey === key ? (
-                            <span>{sortDirection === "asc" ? " ▲" : " ▼"}</span>
-                          ) : null}
-                        </button>
-                      </th>
-                    ))}
-                    {showActions ? <th>Actions</th> : null}
-                  </tr>
-                  <tr>
-                    {showReorder ? <th className="drag-cell" /> : null}
-                    {showSelection ? <th /> : null}
-                    <th />
-                    <th />
-                    {visibleColumns.map(([key, label], columnIndex) => {
-                      const isTagsColumn = key === "tags";
-                      const comboboxRef =
-                        key === "tags"
-                          ? tagsFilterInputRef
-                          : columnIndex === 0
-                            ? firstFilterInputRef
-                            : undefined;
-
-                      return (
-                        <th
-                          className={
-                            [
-                              key === "scrape_status" ? "scrape-status-column" : null,
-                              isTagsColumn ? "tags-column" : null,
-                            ]
-                              .filter(Boolean)
-                              .join(" ") || undefined
-                          }
-                          key={`${key}-filter`}
-                        >
-                          {isTagsColumn ? (
-                            <MultiValueFilterCombobox
-                              columnLabel={label}
-                              onChange={(nextValue) =>
-                                setFilters((current) => ({
-                                  ...current,
-                                  [key]: nextValue,
-                                }))
-                              }
-                              onHeightChange={(height) =>
-                                reportColumnFilterHeight(key, height)
-                              }
-                              options={allTagNames}
-                              ref={comboboxRef}
-                              value={filters[key] ?? ""}
-                            />
-                          ) : (
+              <div className="table-scroll-x" ref={tableScrollXRef}>
+                <div className="table-scroll-y" ref={tableScrollYRef}>
+                  <table>
+                    <thead>
+                      <tr>
+                        {showReorder ? <th className="drag-cell" /> : null}
+                        {showSelection ? (
+                          <th>
                             <input
-                              aria-label={`Filter ${label}`}
-                              className="filter-input"
-                              ref={columnIndex === 0 ? firstFilterInputRef : undefined}
-                              style={
-                                filterRowHeight
-                                  ? { height: filterRowHeight }
-                                  : undefined
-                              }
-                              value={filters[key] ?? ""}
-                              onChange={(event) =>
-                                setFilters((current) => ({
-                                  ...current,
-                                  [key]: event.target.value,
-                                }))
-                              }
+                              aria-label="Select all visible rows"
+                              checked={allVisibleSelected}
+                              onChange={toggleAllVisible}
+                              ref={selectAllRef}
+                              type="checkbox"
                             />
-                          )}
-                        </th>
-                      );
-                    })}
-                    {showActions ? <th /> : null}
-                  </tr>
-                </thead>
-                <tbody>
-                  {topSpacerHeight ? (
-                    <tr aria-hidden="true" className="table-spacer-row">
-                      <td colSpan={totalColumnCount} style={{ height: topSpacerHeight }} />
-                    </tr>
-                  ) : null}
-                  {!orderedNotes.length ? (
-                    <tr className="table-empty-row">
-                      <td className="table-empty-cell" colSpan={totalColumnCount}>
-                        {notes.length
-                          ? "No notes match the current view."
-                          : "No notes are stored yet. Use Import / Export to import data or add your first banknote."}
-                      </td>
-                    </tr>
-                  ) : null}
-                  {virtualRows.map((virtualRow) => {
-                    const note = orderedNotes[virtualRow.index];
-                    const noteScrapeStatus = displayScrapeStatus(
-                      note,
-                      scrapeJob,
-                    );
-                    const displayImage = pickFirstAvailableImage(note, [
-                      ["front", "thumbnail"],
-                      ["front", "full"],
-                      ["back", "thumbnail"],
-                      ["back", "full"],
-                    ]);
-                    const frontThumb = displayImage?.path ?? null;
-                    const frontPreview = displayImage?.path ?? null;
-                    const showPlaceholderBefore =
-                      dropTarget?.noteId === note.id &&
-                      dropTarget.placement === "before";
-                    const showPlaceholderAfter =
-                      dropTarget?.noteId === note.id &&
-                      dropTarget.placement === "after";
-
-                    return (
-                      <Fragment key={note.id}>
-                        {showPlaceholderBefore ? (
-                          <tr
-                            className="table-drop-placeholder-row"
-                            aria-hidden="true"
-                          >
-                            <td
-                              className="table-drop-placeholder-cell"
-                              colSpan={totalColumnCount}
-                            >
-                              <span className="table-drop-placeholder-line" />
-                            </td>
-                          </tr>
+                          </th>
                         ) : null}
-                        <tr
-                          className={`table-row-link${draggedNoteId === note.id ? " table-row-link--dragging" : ""}`}
-                          data-index={virtualRow.index}
-                          key={note.id}
-                          ref={(element) => {
-                            if (element) {
-                              rowElementMapRef.current.set(note.id, element);
-                              rowVirtualizer.measureElement(element);
-
-                              if (pendingRowFocusNoteIdRef.current === note.id) {
-                                pendingRowFocusNoteIdRef.current = null;
-                                element.focus();
-                                focusedRowIdRef.current = note.id;
-                              }
-                            } else {
-                              rowElementMapRef.current.delete(note.id);
+                        <th>
+                          <button
+                            className="sort-button"
+                            onClick={() => toggleSort("id")}
+                            type="button"
+                          >
+                            ID
+                            {sortKey === "id" ? (
+                              <span>
+                                {sortDirection === "asc" ? " ▲" : " ▼"}
+                              </span>
+                            ) : null}
+                          </button>
+                        </th>
+                        <th>Front</th>
+                        {visibleColumns.map(([key, label]) => (
+                          <th
+                            className={
+                              key === "scrape_status"
+                                ? "scrape-status-column"
+                                : key === "tags"
+                                  ? "tags-column"
+                                  : undefined
                             }
-                          }}
-                          onFocus={() => {
-                            focusedRowIdRef.current = note.id;
-                          }}
-                          onDragLeave={(event) => {
-                            if (
-                              !event.currentTarget.contains(event.relatedTarget)
-                            ) {
-                              setDropTarget((current) =>
-                                current?.noteId === note.id ? null : current,
-                              );
-                            }
-                          }}
-                          onDragOver={(event) => {
-                            if (!canReorder || draggedNoteId === null) {
-                              return;
-                            }
-
-                            event.preventDefault();
-                            updateDropTarget(note.id, event);
-                          }}
-                          onDrop={(event) => {
-                            event.preventDefault();
-                            const nextPlacement =
-                              dropTarget?.noteId === note.id
-                                ? dropTarget.placement
-                                : event.clientY <
-                                    event.currentTarget.getBoundingClientRect()
-                                      .top +
-                                      event.currentTarget.getBoundingClientRect()
-                                        .height /
-                                        2
-                                  ? "before"
-                                  : "after";
-                            void handleReorder(note.id, nextPlacement);
-                          }}
-                          onClick={() => {
-                            openSlideshow(note.id);
-                          }}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter" || event.key === " ") {
-                              event.preventDefault();
-                              openSlideshow(note.id);
-                            }
-                          }}
-                          role="button"
-                          tabIndex={0}
-                        >
-                          {showReorder ? (
-                            <td
-                              className={`drag-cell${canReorder ? " drag-cell--enabled" : ""}`}
-                              onClick={(event) => event.stopPropagation()}
+                            key={key}
+                          >
+                            <button
+                              className="sort-button"
+                              onClick={() => toggleSort(key)}
+                              type="button"
                             >
-                              {canReorder ? (
-                                <button
-                                  aria-label={`Move ${note.denomination}`}
-                                  className="drag-handle"
-                                  draggable={canReorder}
-                                  onClick={(event) => event.stopPropagation()}
-                                  onDragEnd={clearDragState}
-                                  onDragStart={(event) => {
-                                    const row = rowElementMapRef.current.get(
-                                      note.id,
-                                    );
-
-                                    clearDragPreview();
-                                    event.stopPropagation();
-                                    event.dataTransfer.effectAllowed = "move";
-                                    event.dataTransfer.setData(
-                                      "text/plain",
-                                      String(note.id),
-                                    );
-
-                                    if (row) {
-                                      const preview = row.cloneNode(true);
-                                      preview.classList.add("table-drag-preview");
-                                      preview.style.width = `${row.getBoundingClientRect().width}px`;
-                                      document.body.appendChild(preview);
-                                      dragPreviewRef.current = preview;
-                                      event.dataTransfer.setDragImage(
-                                        preview,
-                                        24,
-                                        24,
-                                      );
-                                    }
-
-                                    setDraggedNoteId(note.id);
-                                    setDropTarget({
-                                      noteId: note.id,
-                                      placement: "before",
-                                    });
-                                  }}
-                                  type="button"
-                                >
-                                  <span
-                                    className="drag-handle-dots"
-                                    aria-hidden="true"
-                                  >
-                                    <span />
-                                    <span />
-                                    <span />
-                                    <span />
-                                    <span />
-                                    <span />
-                                  </span>
-                                </button>
+                              {label}
+                              {sortKey === key ? (
+                                <span>
+                                  {sortDirection === "asc" ? " ▲" : " ▼"}
+                                </span>
                               ) : null}
-                            </td>
-                          ) : null}
-                          {showSelection ? (
-                            <td onClick={(event) => event.stopPropagation()}>
-                              <input
-                                aria-label={`Select ${note.denomination}`}
-                                checked={selectedIds.includes(note.id)}
-                                onChange={() => toggleNote(note.id)}
-                                type="checkbox"
-                              />
-                            </td>
-                          ) : null}
-                          <td>{note.display_order ?? "-"}</td>
-                          <td>
-                            {frontThumb ? (
-                              <span
-                                className="table-thumb-wrap"
-                                onBlur={(event) => {
-                                  if (!event.currentTarget.contains(event.relatedTarget)) {
-                                    hideThumbPreview(note.id);
+                            </button>
+                          </th>
+                        ))}
+                        {showActions ? <th>Actions</th> : null}
+                        {vScroll.visible ? (
+                          <th
+                            aria-hidden="true"
+                            className="table-gutter-cell"
+                          />
+                        ) : null}
+                      </tr>
+                      <tr>
+                        {showReorder ? <th className="drag-cell" /> : null}
+                        {showSelection ? <th /> : null}
+                        <th />
+                        <th />
+                        {visibleColumns.map(([key, label], columnIndex) => {
+                          const isTagsColumn = key === "tags";
+                          const comboboxRef =
+                            key === "tags"
+                              ? tagsFilterInputRef
+                              : columnIndex === 0
+                                ? firstFilterInputRef
+                                : undefined;
+
+                          return (
+                            <th
+                              className={
+                                [
+                                  key === "scrape_status"
+                                    ? "scrape-status-column"
+                                    : null,
+                                  isTagsColumn ? "tags-column" : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ") || undefined
+                              }
+                              key={`${key}-filter`}
+                            >
+                              {isTagsColumn ? (
+                                <MultiValueFilterCombobox
+                                  columnLabel={label}
+                                  onChange={(nextValue) =>
+                                    setFilters((current) => ({
+                                      ...current,
+                                      [key]: nextValue,
+                                    }))
                                   }
-                                }}
-                                onFocus={() => showThumbPreview(note.id)}
-                                onMouseEnter={() => showThumbPreview(note.id)}
-                                onMouseLeave={() => hideThumbPreview(note.id)}
-                                ref={(element) => {
-                                  if (element) {
-                                    thumbPreviewElementMapRef.current.set(note.id, element);
-                                  } else {
-                                    thumbPreviewElementMapRef.current.delete(note.id);
+                                  onHeightChange={(height) =>
+                                    reportColumnFilterHeight(key, height)
                                   }
-                                }}
-                              >
-                                <img
-                                  alt={`${note.denomination} front`}
-                                  className="table-thumb"
-                                  src={frontThumb}
+                                  options={allTagNames}
+                                  ref={comboboxRef}
+                                  value={filters[key] ?? ""}
                                 />
-                                {frontPreview ? (
+                              ) : (
+                                <input
+                                  aria-label={`Filter ${label}`}
+                                  className="filter-input"
+                                  ref={
+                                    columnIndex === 0
+                                      ? firstFilterInputRef
+                                      : undefined
+                                  }
+                                  style={
+                                    filterRowHeight
+                                      ? { height: filterRowHeight }
+                                      : undefined
+                                  }
+                                  value={filters[key] ?? ""}
+                                  onChange={(event) =>
+                                    setFilters((current) => ({
+                                      ...current,
+                                      [key]: event.target.value,
+                                    }))
+                                  }
+                                />
+                              )}
+                            </th>
+                          );
+                        })}
+                        {showActions ? <th /> : null}
+                        {vScroll.visible ? (
+                          <th
+                            aria-hidden="true"
+                            className="table-gutter-cell"
+                          />
+                        ) : null}
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {topSpacerHeight ? (
+                        <tr aria-hidden="true" className="table-spacer-row">
+                          <td
+                            colSpan={totalColumnCount}
+                            style={{ height: topSpacerHeight }}
+                          />
+                        </tr>
+                      ) : null}
+                      {!orderedNotes.length ? (
+                        <tr className="table-empty-row">
+                          <td
+                            className="table-empty-cell"
+                            colSpan={totalColumnCount}
+                          >
+                            {notes.length
+                              ? "No notes match the current view."
+                              : "No notes are stored yet. Use Import / Export to import data or add your first banknote."}
+                          </td>
+                        </tr>
+                      ) : null}
+                      {virtualRows.map((virtualRow) => {
+                        const note = orderedNotes[virtualRow.index];
+                        const noteScrapeStatus = displayScrapeStatus(
+                          note,
+                          scrapeJob,
+                        );
+                        const displayImage = pickFirstAvailableImage(note, [
+                          ["front", "thumbnail"],
+                          ["front", "full"],
+                          ["back", "thumbnail"],
+                          ["back", "full"],
+                        ]);
+                        const frontThumb = displayImage?.path ?? null;
+                        const frontPreview = displayImage?.path ?? null;
+                        const showPlaceholderBefore =
+                          dropTarget?.noteId === note.id &&
+                          dropTarget.placement === "before";
+                        const showPlaceholderAfter =
+                          dropTarget?.noteId === note.id &&
+                          dropTarget.placement === "after";
+
+                        return (
+                          <Fragment key={note.id}>
+                            {showPlaceholderBefore ? (
+                              <tr
+                                className="table-drop-placeholder-row"
+                                aria-hidden="true"
+                              >
+                                <td
+                                  className="table-drop-placeholder-cell"
+                                  colSpan={totalColumnCount}
+                                >
+                                  <span className="table-drop-placeholder-line" />
+                                </td>
+                              </tr>
+                            ) : null}
+                            <tr
+                              className={`table-row-link${draggedNoteId === note.id ? " table-row-link--dragging" : ""}`}
+                              data-index={virtualRow.index}
+                              key={note.id}
+                              ref={(element) => {
+                                if (element) {
+                                  rowElementMapRef.current.set(
+                                    note.id,
+                                    element,
+                                  );
+                                  rowVirtualizer.measureElement(element);
+
+                                  if (
+                                    pendingRowFocusNoteIdRef.current === note.id
+                                  ) {
+                                    pendingRowFocusNoteIdRef.current = null;
+                                    element.focus({ preventScroll: true });
+                                    focusedRowIdRef.current = note.id;
+                                    ensureRowVisible(element);
+                                  }
+                                } else {
+                                  rowElementMapRef.current.delete(note.id);
+                                }
+                              }}
+                              onFocus={() => {
+                                focusedRowIdRef.current = note.id;
+                              }}
+                              onDragLeave={(event) => {
+                                if (
+                                  !event.currentTarget.contains(
+                                    event.relatedTarget,
+                                  )
+                                ) {
+                                  setDropTarget((current) =>
+                                    current?.noteId === note.id
+                                      ? null
+                                      : current,
+                                  );
+                                }
+                              }}
+                              onDragOver={(event) => {
+                                if (!canReorder || draggedNoteId === null) {
+                                  return;
+                                }
+
+                                event.preventDefault();
+                                updateDropTarget(note.id, event);
+                              }}
+                              onDrop={(event) => {
+                                event.preventDefault();
+                                const nextPlacement =
+                                  dropTarget?.noteId === note.id
+                                    ? dropTarget.placement
+                                    : event.clientY <
+                                        event.currentTarget.getBoundingClientRect()
+                                          .top +
+                                          event.currentTarget.getBoundingClientRect()
+                                            .height /
+                                            2
+                                      ? "before"
+                                      : "after";
+                                void handleReorder(note.id, nextPlacement);
+                              }}
+                              onClick={() => {
+                                openSlideshow(note.id);
+                              }}
+                              onKeyDown={(event) => {
+                                if (
+                                  event.key === "Enter" ||
+                                  event.key === " "
+                                ) {
+                                  event.preventDefault();
+                                  openSlideshow(note.id);
+                                }
+                              }}
+                              role="button"
+                              tabIndex={0}
+                            >
+                              {showReorder ? (
+                                <td
+                                  className={`drag-cell${canReorder ? " drag-cell--enabled" : ""}`}
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  {canReorder ? (
+                                    <button
+                                      aria-label={`Move ${note.denomination}`}
+                                      className="drag-handle"
+                                      draggable={canReorder}
+                                      onClick={(event) =>
+                                        event.stopPropagation()
+                                      }
+                                      onDragEnd={clearDragState}
+                                      onDragStart={(event) => {
+                                        const row =
+                                          rowElementMapRef.current.get(note.id);
+
+                                        clearDragPreview();
+                                        event.stopPropagation();
+                                        event.dataTransfer.effectAllowed =
+                                          "move";
+                                        event.dataTransfer.setData(
+                                          "text/plain",
+                                          String(note.id),
+                                        );
+
+                                        if (row) {
+                                          const preview = row.cloneNode(true);
+                                          preview.classList.add(
+                                            "table-drag-preview",
+                                          );
+                                          preview.style.width = `${row.getBoundingClientRect().width}px`;
+                                          document.body.appendChild(preview);
+                                          dragPreviewRef.current = preview;
+                                          event.dataTransfer.setDragImage(
+                                            preview,
+                                            24,
+                                            24,
+                                          );
+                                        }
+
+                                        setDraggedNoteId(note.id);
+                                        setDropTarget({
+                                          noteId: note.id,
+                                          placement: "before",
+                                        });
+                                      }}
+                                      type="button"
+                                    >
+                                      <span
+                                        className="drag-handle-dots"
+                                        aria-hidden="true"
+                                      >
+                                        <span />
+                                        <span />
+                                        <span />
+                                        <span />
+                                        <span />
+                                        <span />
+                                      </span>
+                                    </button>
+                                  ) : null}
+                                </td>
+                              ) : null}
+                              {showSelection ? (
+                                <td
+                                  onClick={(event) => event.stopPropagation()}
+                                >
+                                  <input
+                                    aria-label={`Select ${note.denomination}`}
+                                    checked={selectedIds.includes(note.id)}
+                                    onChange={() => toggleNote(note.id)}
+                                    type="checkbox"
+                                  />
+                                </td>
+                              ) : null}
+                              <td>{note.display_order ?? "-"}</td>
+                              <td>
+                                {frontThumb ? (
                                   <span
-                                    className={`table-thumb-preview${
-                                      thumbPreviewState?.noteId === note.id
-                                        ? " is-visible"
-                                        : ""
-                                    }`}
-                                    style={{
-                                      "--table-thumb-preview-offset": `${
-                                        thumbPreviewState?.noteId === note.id
-                                          ? thumbPreviewState.offsetY
-                                          : 0
-                                      }px`,
+                                    className="table-thumb-wrap"
+                                    onBlur={(event) => {
+                                      if (
+                                        !event.currentTarget.contains(
+                                          event.relatedTarget,
+                                        )
+                                      ) {
+                                        hideThumbPreview(note.id);
+                                      }
+                                    }}
+                                    onFocus={() => showThumbPreview(note.id)}
+                                    onMouseEnter={() =>
+                                      showThumbPreview(note.id)
+                                    }
+                                    onMouseLeave={() =>
+                                      hideThumbPreview(note.id)
+                                    }
+                                    ref={(element) => {
+                                      if (element) {
+                                        thumbPreviewElementMapRef.current.set(
+                                          note.id,
+                                          element,
+                                        );
+                                      } else {
+                                        thumbPreviewElementMapRef.current.delete(
+                                          note.id,
+                                        );
+                                      }
                                     }}
                                   >
                                     <img
-                                      alt={`${note.denomination} preview`}
-                                      src={frontPreview}
+                                      alt={`${note.denomination} front`}
+                                      className="table-thumb"
+                                      src={frontThumb}
                                     />
+                                    {frontPreview ? (
+                                      <span
+                                        className={`table-thumb-preview${
+                                          thumbPreviewState?.noteId === note.id
+                                            ? " is-visible"
+                                            : ""
+                                        }`}
+                                        style={{
+                                          "--table-thumb-preview-offset": `${
+                                            thumbPreviewState?.noteId ===
+                                            note.id
+                                              ? thumbPreviewState.offsetY
+                                              : 0
+                                          }px`,
+                                        }}
+                                      >
+                                        <img
+                                          alt={`${note.denomination} preview`}
+                                          src={frontPreview}
+                                        />
+                                      </span>
+                                    ) : null}
                                   </span>
-                                ) : null}
-                              </span>
-                            ) : (
-                              <span className="muted">-</span>
-                            )}
-                          </td>
-                          <td>
-                            {note.url ? (
-                              <a
-                                href={note.url}
-                                onClick={(event) => event.stopPropagation()}
-                                rel="noreferrer"
-                                target="_blank"
+                                ) : (
+                                  <span className="muted">-</span>
+                                )}
+                              </td>
+                              <td>
+                                {note.url ? (
+                                  <a
+                                    href={note.url}
+                                    onClick={(event) => event.stopPropagation()}
+                                    rel="noreferrer"
+                                    target="_blank"
+                                  >
+                                    {note.denomination}
+                                  </a>
+                                ) : (
+                                  note.denomination
+                                )}
+                              </td>
+                              <td>{note.issue_date}</td>
+                              <td>{note.catalog_number}</td>
+                              <td>{note.grading_company}</td>
+                              <td>{note.grade}</td>
+                              <td>{note.serial}</td>
+                              <td className="tags-column">
+                                <TagsCell
+                                  onApplyFilter={applyTagFilter}
+                                  tags={note.tags}
+                                />
+                              </td>
+                              {showScrapeStatusColumn ? (
+                                <td className="scrape-status-column">
+                                  <span
+                                    aria-label={statusLabel(noteScrapeStatus)}
+                                    className={`scrape-badge scrape-badge--${noteScrapeStatus}`}
+                                    role="img"
+                                    title={statusLabel(noteScrapeStatus)}
+                                  >
+                                    {statusIcon(noteScrapeStatus)}
+                                  </span>
+                                </td>
+                              ) : null}
+                              {showActions ? (
+                                <td>
+                                  <div className="inline-actions">
+                                    <button
+                                      className="icon-link"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        void handleCopyNoteDetails(note);
+                                      }}
+                                      title="Copy note details"
+                                      type="button"
+                                      aria-label={`Copy ${note.denomination || `note ${note.id}`}`}
+                                    >
+                                      <svg
+                                        aria-hidden="true"
+                                        height="16"
+                                        viewBox="0 0 24 24"
+                                        width="16"
+                                      >
+                                        <rect
+                                          fill="none"
+                                          height="10"
+                                          rx="2"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                          width="10"
+                                          x="9"
+                                          y="9"
+                                        />
+                                        <rect
+                                          fill="none"
+                                          height="10"
+                                          rx="2"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                          width="10"
+                                          x="5"
+                                          y="5"
+                                        />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      className="icon-link"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        openCreateNoteBefore(note.id);
+                                      }}
+                                      title="Insert note before this"
+                                      type="button"
+                                      aria-label={`Insert note before ${note.denomination || `note ${note.id}`}`}
+                                    >
+                                      <svg
+                                        aria-hidden="true"
+                                        height="16"
+                                        viewBox="0 0 24 24"
+                                        width="16"
+                                      >
+                                        <path
+                                          d="M12 5v14"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                        />
+                                        <path
+                                          d="M5 12h14"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                        />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      className="icon-link"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        openEditor(note.id);
+                                      }}
+                                      title="Edit note"
+                                      type="button"
+                                      aria-label={`Edit ${note.denomination || `note ${note.id}`}`}
+                                    >
+                                      <svg
+                                        aria-hidden="true"
+                                        height="16"
+                                        viewBox="0 0 24 24"
+                                        width="16"
+                                      >
+                                        <path
+                                          d="M4 20h4l10-10-4-4L4 16v4z"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                        />
+                                        <path
+                                          d="M12 6l4 4"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                        />
+                                      </svg>
+                                    </button>
+                                    <button
+                                      className="icon-link"
+                                      onClick={(event) => {
+                                        event.stopPropagation();
+                                        void handleDeleteNote(note.id);
+                                      }}
+                                      title="Delete note"
+                                      type="button"
+                                      aria-label={`Delete ${note.denomination || `note ${note.id}`}`}
+                                    >
+                                      <svg
+                                        aria-hidden="true"
+                                        height="16"
+                                        viewBox="0 0 24 24"
+                                        width="16"
+                                      >
+                                        <path
+                                          d="M5 7h14"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                        />
+                                        <path
+                                          d="M9 7V5h6v2"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                        />
+                                        <path
+                                          d="M8 7l1 12h6l1-12"
+                                          fill="none"
+                                          stroke="currentColor"
+                                          strokeWidth="2"
+                                        />
+                                      </svg>
+                                    </button>
+                                  </div>
+                                </td>
+                              ) : null}
+                            </tr>
+                            {showPlaceholderAfter ? (
+                              <tr
+                                className="table-drop-placeholder-row"
+                                aria-hidden="true"
                               >
-                                {note.denomination}
-                              </a>
-                            ) : (
-                              note.denomination
-                            )}
-                          </td>
-                          <td>{note.issue_date}</td>
-                          <td>{note.catalog_number}</td>
-                          <td>{note.grading_company}</td>
-                          <td>{note.grade}</td>
-                          <td>{note.serial}</td>
-                          <td className="tags-column">
-                            <TagsCell onApplyFilter={applyTagFilter} tags={note.tags} />
-                          </td>
-                          {showScrapeStatusColumn ? (
-                            <td className="scrape-status-column">
-                              <span
-                                aria-label={statusLabel(noteScrapeStatus)}
-                                className={`scrape-badge scrape-badge--${noteScrapeStatus}`}
-                                role="img"
-                                title={statusLabel(noteScrapeStatus)}
-                              >
-                                {statusIcon(noteScrapeStatus)}
-                              </span>
-                            </td>
-                          ) : null}
-                          {showActions ? (
-                            <td>
-                              <div className="inline-actions">
-                                <button
-                                  className="icon-link"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    void handleCopyNoteDetails(note);
-                                  }}
-                                  title="Copy note details"
-                                  type="button"
-                                  aria-label={`Copy ${note.denomination || `note ${note.id}`}`}
+                                <td
+                                  className="table-drop-placeholder-cell"
+                                  colSpan={totalColumnCount}
                                 >
-                                  <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
-                                    <rect fill="none" height="10" rx="2" stroke="currentColor" strokeWidth="2" width="10" x="9" y="9" />
-                                    <rect fill="none" height="10" rx="2" stroke="currentColor" strokeWidth="2" width="10" x="5" y="5" />
-                                  </svg>
-                                </button>
-                                <button
-                                  className="icon-link"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    openCreateNoteBefore(note.id);
-                                  }}
-                                  title="Insert note before this"
-                                  type="button"
-                                  aria-label={`Insert note before ${note.denomination || `note ${note.id}`}`}
-                                >
-                                  <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
-                                    <path d="M12 5v14" fill="none" stroke="currentColor" strokeWidth="2" />
-                                    <path d="M5 12h14" fill="none" stroke="currentColor" strokeWidth="2" />
-                                  </svg>
-                                </button>
-                                <button
-                                  className="icon-link"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    openEditor(note.id);
-                                  }}
-                                  title="Edit note"
-                                  type="button"
-                                  aria-label={`Edit ${note.denomination || `note ${note.id}`}`}
-                                >
-                                  <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
-                                    <path d="M4 20h4l10-10-4-4L4 16v4z" fill="none" stroke="currentColor" strokeWidth="2" />
-                                    <path d="M12 6l4 4" fill="none" stroke="currentColor" strokeWidth="2" />
-                                  </svg>
-                                </button>
-                                <button
-                                  className="icon-link"
-                                  onClick={(event) => {
-                                    event.stopPropagation();
-                                    void handleDeleteNote(note.id);
-                                  }}
-                                  title="Delete note"
-                                  type="button"
-                                  aria-label={`Delete ${note.denomination || `note ${note.id}`}`}
-                                >
-                                  <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
-                                    <path d="M5 7h14" fill="none" stroke="currentColor" strokeWidth="2" />
-                                    <path d="M9 7V5h6v2" fill="none" stroke="currentColor" strokeWidth="2" />
-                                    <path d="M8 7l1 12h6l1-12" fill="none" stroke="currentColor" strokeWidth="2" />
-                                  </svg>
-                                </button>
-                              </div>
-                            </td>
-                          ) : null}
+                                  <span className="table-drop-placeholder-line" />
+                                </td>
+                              </tr>
+                            ) : null}
+                          </Fragment>
+                        );
+                      })}
+                      {bottomSpacerHeight ? (
+                        <tr aria-hidden="true" className="table-spacer-row">
+                          <td
+                            colSpan={totalColumnCount}
+                            style={{ height: bottomSpacerHeight }}
+                          />
                         </tr>
-                        {showPlaceholderAfter ? (
-                          <tr
-                            className="table-drop-placeholder-row"
-                            aria-hidden="true"
-                          >
-                            <td
-                              className="table-drop-placeholder-cell"
-                              colSpan={totalColumnCount}
-                            >
-                              <span className="table-drop-placeholder-line" />
-                            </td>
-                          </tr>
-                        ) : null}
-                      </Fragment>
-                    );
-                  })}
-                  {bottomSpacerHeight ? (
-                    <tr aria-hidden="true" className="table-spacer-row">
-                      <td colSpan={totalColumnCount} style={{ height: bottomSpacerHeight }} />
-                    </tr>
-                  ) : null}
-                </tbody>
-              </table>
+                      ) : null}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+              {vScroll.visible ? (
+                <div
+                  className="table-vtrack"
+                  onPointerDown={handleVTrackPointerDown}
+                  style={{ bottom: vScroll.bottom, top: vScroll.top }}
+                >
+                  <button
+                    aria-label="Scroll notes table vertically"
+                    aria-orientation="vertical"
+                    aria-valuemax={100}
+                    aria-valuemin={0}
+                    aria-valuenow={vScroll.valueNow}
+                    className="table-vthumb"
+                    onKeyDown={handleVThumbKeyDown}
+                    onPointerCancel={handleVThumbPointerEnd}
+                    onPointerDown={handleVThumbPointerDown}
+                    onPointerMove={handleVThumbPointerMove}
+                    onPointerUp={handleVThumbPointerEnd}
+                    role="scrollbar"
+                    style={{
+                      height: vScroll.thumbHeight,
+                      transform: `translateY(${vScroll.thumbTop}px)`,
+                    }}
+                    type="button"
+                  />
+                </div>
+              ) : null}
             </div>
           </>
         ) : null}

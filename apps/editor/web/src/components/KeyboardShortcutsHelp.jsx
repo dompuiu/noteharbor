@@ -7,6 +7,8 @@ const shortcutGroups = [
       { keys: ["/"], description: "Focus the first filter field" },
       { keys: ["↑", "↓"], description: "Move focus between rows" },
       { keys: ["j", "k"], description: "Move focus between rows (alternative)" },
+      { keys: ["PgUp", "PgDn"], description: "Scroll the table by one page" },
+      { keys: ["Home", "End"], description: "Focus the first / last row" },
       { keys: ["Enter", "Space"], description: "Open the focused note" },
       { keys: ["e"], description: "Edit the focused note" },
       { keys: ["d"], description: "Delete the focused note" },

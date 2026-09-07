@@ -2,6 +2,25 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.5.0] - 2026-09-07
+
+### Added
+
+- Added a visible vertical scrollbar to the Table screen that runs alongside the rows only, below the sticky header. It can be dragged, paged by clicking the track, and operated from the keyboard, and it stays in sync with the virtualized rows.
+- Added `PgUp`/`PgDn` keyboard scrolling for the Table screen: they move by one page and focus the top visible row, so a following `↑`/`↓` continues from what's on screen. Both keys are listed in the `?` shortcuts help.
+- Added `Home`/`End` keyboard navigation for the Table screen: they focus the first and last rows respectively, from anywhere on the screen except while typing in a filter field. Both keys are listed in the `?` shortcuts help.
+
+### Changed
+
+- Table rows now stop before the scrollbar instead of sliding underneath it: the header carries a gutter column over the bar while body content ends at the last content cell, and the row hover tint and focus ring are painted on the cells so the focused row's rectangle stays fully visible.
+- The table scrollbar is now opaque (same hues as before), always shows its track, and sits flush against the shell border.
+
+### Fixed
+
+- Fixed keyboard focus landing on rows hidden underneath the sticky header: moving focus with `↑`/`↓`, `Home`/`End`, or paging now scrolls the focused row fully into view below the header.
+- Fixed `PgUp`/`PgDn` on the scrollbar thumb paging twice (once from the thumb, once from the table's global handler).
+- Replaced the browser's default full-row focus outline with the cell-painted focus ring so no extra rectangle spans the scrollbar gutter.
+
 ## [1.4.1] - 2026-08-29
 
 ### Fixed
