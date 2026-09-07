@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.6.1] - 2026-09-07
+
+### Fixed
+
+- Fixed the Table screen's sort headers wrapping the sort arrow underneath the column label in narrow columns (most visible on the ID header in the desktop app): the label and arrow now stay on one line and the column widens to fit them instead.
+
 ## [1.6.0] - 2026-09-07
 
 ### Added
