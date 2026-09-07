@@ -92,6 +92,11 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       _message = null;
     });
 
+    // Let the confirm dialog finish dismissing and give the framework a
+    // chance to paint the blocking import overlay before the import below
+    // monopolizes the UI thread with synchronous disk work.
+    await Future<void>.delayed(const Duration(milliseconds: 150));
+
     try {
       await widget.controller.importArchive(archivePath);
       if (!mounted) {

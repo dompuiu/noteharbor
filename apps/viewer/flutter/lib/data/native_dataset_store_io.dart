@@ -62,6 +62,7 @@ class NativeDatasetStore {
       final inputStream = InputFileStream(sourceArchive.path);
       try {
         final archive = ZipDecoder().decodeStream(inputStream);
+        final progress = _UiYieldCounter(20);
         for (final entry in archive) {
           final normalizedPath = p.normalize(entry.name);
           if (p.isAbsolute(normalizedPath) ||
@@ -83,6 +84,7 @@ class NativeDatasetStore {
           } else {
             Directory(outputPath).createSync(recursive: true);
           }
+          await progress.tick();
         }
       } finally {
         inputStream.closeSync();
@@ -100,13 +102,14 @@ class NativeDatasetStore {
       final currentDir = await _currentDatasetDirectory();
 
       if (currentDir.existsSync()) {
-        await _copyDirectory(currentDir, stagedDir);
+        await _copyDirectory(currentDir, stagedDir, _UiYieldCounter(50));
       } else {
         await stagedDir.create(recursive: true);
         await File(archiveDbPath).copy(p.join(stagedDir.path, 'banknotes.db'));
         await _copyDirectory(
           archiveImagesDir,
           Directory(p.join(stagedDir.path, 'images')),
+          _UiYieldCounter(50),
         );
       }
 
@@ -114,7 +117,7 @@ class NativeDatasetStore {
       final stagedImagesDir = Directory(p.join(stagedDir.path, 'images'));
       await stagedImagesDir.create(recursive: true);
 
-      _mergeArchiveIntoDataset(
+      await _mergeArchiveIntoDataset(
         archiveDbPath: archiveDbPath,
         archiveImagesDir: archiveImagesDir.path,
         stagedDbPath: stagedDatabaseFile.path,
@@ -279,7 +282,27 @@ Directory? _findArchiveDataDir(Directory rootDir) {
   return null;
 }
 
-Future<void> _copyDirectory(Directory source, Directory target) async {
+/// Yields to the event loop every [every] ticks so the UI thread can pump
+/// frames while an import does long stretches of synchronous disk work.
+class _UiYieldCounter {
+  _UiYieldCounter(this.every);
+
+  final int every;
+  int _count = 0;
+
+  Future<void> tick() async {
+    _count++;
+    if (_count % every == 0) {
+      await Future<void>.delayed(Duration.zero);
+    }
+  }
+}
+
+Future<void> _copyDirectory(
+  Directory source,
+  Directory target, [
+  _UiYieldCounter? progress,
+]) async {
   await target.create(recursive: true);
 
   for (final entry in source.listSync(followLinks: false)) {
@@ -287,7 +310,10 @@ Future<void> _copyDirectory(Directory source, Directory target) async {
     if (entry is File) {
       await entry.copy(destinationPath);
     } else if (entry is Directory) {
-      await _copyDirectory(entry, Directory(destinationPath));
+      await _copyDirectory(entry, Directory(destinationPath), progress);
+    }
+    if (progress != null) {
+      await progress.tick();
     }
   }
 }
@@ -392,11 +418,12 @@ List<Map<String, Object?>> _parseImageRecords(Object? rawImages) {
   return (images: rewritten, copyPlan: copyPlan);
 }
 
-void _copyPlannedImages({
+Future<void> _copyPlannedImages({
   required String sourceImagesDir,
   required String stagedImagesDir,
   required List<({String fromRelative, String toRelative})> copyPlan,
-}) {
+}) async {
+  final progress = _UiYieldCounter(20);
   for (final plan in copyPlan) {
     final sourcePath = p.joinAll(<String>[
       sourceImagesDir,
@@ -414,21 +441,23 @@ void _copyPlannedImages({
     final targetFile = File(targetPath);
     targetFile.parent.createSync(recursive: true);
     sourceFile.copySync(targetPath);
+    await progress.tick();
   }
 }
 
-void _mergeArchiveIntoDataset({
+Future<void> _mergeArchiveIntoDataset({
   required String archiveDbPath,
   required String archiveImagesDir,
   required String stagedDbPath,
   required String stagedImagesDir,
-}) {
+}) async {
   final archiveDatabase = sqlite3.open(archiveDbPath, mode: OpenMode.readOnly);
   final stagedDatabase = sqlite3.open(stagedDbPath);
   final statements = <PreparedStatement>[];
 
   final removedNoteIds = <int>[];
   final copyPlan = <({String fromRelative, String toRelative})>[];
+  final progress = _UiYieldCounter(20);
 
   try {
     stagedDatabase.execute('PRAGMA foreign_keys = ON');
@@ -623,6 +652,7 @@ void _mergeArchiveIntoDataset({
         }
 
         nextDisplayOrder += 1;
+        await progress.tick();
       }
     }
 
@@ -647,9 +677,10 @@ void _mergeArchiveIntoDataset({
     if (noteImagesDir.existsSync()) {
       noteImagesDir.deleteSync(recursive: true);
     }
+    await progress.tick();
   }
 
-  _copyPlannedImages(
+  await _copyPlannedImages(
     sourceImagesDir: archiveImagesDir,
     stagedImagesDir: stagedImagesDir,
     copyPlan: copyPlan,
