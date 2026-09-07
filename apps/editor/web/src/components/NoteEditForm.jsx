@@ -1724,15 +1724,10 @@ function NoteEditForm({
             <div className="field-block full-span">
               <span>Collection</span>
               <select
+                className="select-input"
                 onChange={(event) =>
                   handleDestinationCollectionChange(event.target.value)
                 }
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: "8px",
-                  border: "1px solid rgba(92, 59, 24, 0.2)",
-                  background: "rgba(255, 248, 239, 0.8)",
-                }}
                 value={destinationCollectionId ?? ""}
               >
                 {collections.map((collection) => (
@@ -1747,15 +1742,10 @@ function NoteEditForm({
             <div className="field-block full-span">
               <span>Position in collection</span>
               <select
+                className="select-input"
                 onChange={(event) => {
                   setPositionMode(event.target.value);
                   setPositionReferenceId(null);
-                }}
-                style={{
-                  padding: "6px 10px",
-                  borderRadius: "8px",
-                  border: "1px solid rgba(92, 59, 24, 0.2)",
-                  background: "rgba(255, 248, 239, 0.8)",
                 }}
                 value={positionMode}
               >
@@ -1768,10 +1758,7 @@ function NoteEditForm({
                 <option value="after">After a note...</option>
               </select>
               {positionInvalid ? (
-                <p
-                  className="error-text"
-                  style={{ margin: 0, fontSize: "0.85rem" }}
-                >
+                <p className="error-text">
                   Select a reference note from the list below.
                 </p>
               ) : null}
@@ -1785,7 +1772,7 @@ function NoteEditForm({
               ) : null}
             </div>
           ) : movingToDifferentCollection ? (
-            <p className="muted field-block full-span" style={{ margin: 0 }}>
+            <p className="muted field-block full-span">
               This note will be the only one in the destination collection.
             </p>
           ) : null}

@@ -2,6 +2,23 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.6.0] - 2026-09-07
+
+### Added
+
+- Changing a Table screen filter or sort order now resets keyboard row focus, so the next `↓` starts at the first row of the new order instead of continuing from the previously focused row's position.
+
+### Changed
+
+- Reworked the Editor web theme into a warm professional palette: flat warm surfaces, a single honey-bronze accent, system sans throughout, unified buttons, inputs, tags, and badges, and a CSS token system (`--bg`, `--surface`, `--accent`, `--scroll-*`, `--on-dark-*`) so future palette tweaks are one-line changes.
+- Brought the Note slideshow and Image popover into the same warm theme: warm espresso surfaces, honey accent hovers and links, unified corner radii, and flat border-highlight hovers on image buttons instead of the lift effect.
+- Import/Export collection checkboxes are now smaller (13px) to match the label text; Table screen and Note editor checkboxes stay larger for touch use.
+- Removed the arrow-key shortcut hints from the slideshow and Image popover navigation buttons.
+
+### Fixed
+
+- Fixed the Table screen's horizontal scrollbar showing the old bronze on hover: the vertical and horizontal bars now share the `--scroll-*` tokens so both stay in sync.
+
 ## [1.5.1] - 2026-09-07
 
 ### Fixed

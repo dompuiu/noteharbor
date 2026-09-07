@@ -45,91 +45,41 @@ function PositionPicker({ notes, onSelect, selectedId }) {
   }, [selectedId]);
 
   return (
-    <div style={{ display: "grid", gap: "8px" }}>
+    <div className="position-picker">
       <input
+        className="filter-input"
         onChange={(event) => setFilter(event.target.value)}
         placeholder="Filter by denomination or catalog number"
-        style={{
-          padding: "6px 10px",
-          borderRadius: "8px",
-          border: "1px solid rgba(92, 59, 24, 0.2)",
-          background: "rgba(255, 248, 239, 0.8)",
-          width: "100%",
-          boxSizing: "border-box",
-        }}
         type="text"
         value={filter}
       />
-      <div
-        ref={listRef}
-        style={{
-          maxHeight: "280px",
-          overflowY: "auto",
-          display: "grid",
-          gap: "6px",
-          padding: "2px",
-        }}
-      >
+      <div className="position-picker-list" ref={listRef}>
         {filteredNotes.length === 0 ? (
-          <p className="muted" style={{ margin: "8px 0" }}>
-            No notes match.
-          </p>
+          <p className="muted position-picker-empty">No notes match.</p>
         ) : (
           filteredNotes.map((note) => {
             const thumb = pickFrontThumbnail(note.images ?? []);
             const isSelected = note.id === selectedId;
             return (
               <button
+                className={`position-picker-item${isSelected ? " is-selected" : ""}`}
                 key={note.id}
                 onClick={() => onSelect(note.id)}
                 ref={isSelected ? selectedButtonRef : null}
-                style={{
-                  display: "flex",
-                  alignItems: "center",
-                  gap: "12px",
-                  padding: "8px 10px",
-                  borderRadius: "10px",
-                  border: isSelected
-                    ? "1.5px solid rgba(111, 66, 31, 0.6)"
-                    : "1px solid rgba(92, 59, 24, 0.14)",
-                  background: isSelected
-                    ? "rgba(111, 66, 31, 0.08)"
-                    : "rgba(255, 255, 255, 0.56)",
-                  cursor: "pointer",
-                  textAlign: "left",
-                  font: "inherit",
-                  width: "100%",
-                }}
                 type="button"
               >
-                <div
-                  style={{
-                    width: "48px",
-                    height: "32px",
-                    flexShrink: 0,
-                    borderRadius: "6px",
-                    overflow: "hidden",
-                    background: "rgba(92, 59, 24, 0.08)",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
+                <div className="position-picker-thumb">
                   {thumb ? (
-                    <img
-                      alt=""
-                      src={thumb.localPath}
-                      style={{ width: "100%", height: "100%", objectFit: "cover" }}
-                    />
+                    <img alt="" src={thumb.localPath} />
                   ) : (
-                    <span style={{ fontSize: "0.6rem", color: "#8b7b68" }}>—</span>
+                    <span aria-hidden="true">—</span>
                   )}
                 </div>
-                <div style={{ display: "grid", gap: "2px", minWidth: 0 }}>
-                  <span style={{ fontWeight: 600, fontSize: "0.88rem", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
+                <div className="position-picker-label">
+                  <span className="position-picker-title">
                     {note.denomination || <span className="muted">No denomination</span>}
                   </span>
-                  <span style={{ fontSize: "0.78rem", color: "#8b7b68" }}>
+                  <span className="position-picker-subtitle">
                     {[note.catalog_number, note.grade].filter(Boolean).join(" · ") || <span className="muted">—</span>}
                   </span>
                 </div>

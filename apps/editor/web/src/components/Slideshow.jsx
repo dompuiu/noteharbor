@@ -534,7 +534,6 @@ function ImagePopover({
           <button
             aria-label="Show previous image"
             className="arrow-button image-popover-arrow"
-            data-shortcut={canGoPrevious ? "←" : undefined}
             disabled={!canGoPrevious}
             onClick={moveToPreviousImage}
             type="button"
@@ -569,7 +568,6 @@ function ImagePopover({
           <button
             aria-label="Show next image"
             className="arrow-button image-popover-arrow"
-            data-shortcut={canGoNext ? "→" : undefined}
             disabled={!canGoNext}
             onClick={moveToNextImage}
             type="button"
@@ -777,7 +775,6 @@ function Slideshow({
         <button
           aria-label="Previous note"
           className="arrow-button"
-          data-shortcut="←"
           onClick={() => moveSlideshow(-1)}
           title="Previous note (←)"
           type="button"
@@ -867,7 +864,6 @@ function Slideshow({
         <button
           aria-label="Next note"
           className="arrow-button"
-          data-shortcut="→"
           onClick={() => moveSlideshow(1)}
           title="Next note (→)"
           type="button"

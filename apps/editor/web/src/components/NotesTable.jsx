@@ -1665,6 +1665,15 @@ function NotesTable({
     rowVirtualizer.scrollToOffset(0);
   }, [filters, rowVirtualizer, sortDirection, sortKey]);
 
+  useEffect(() => {
+    // A changed filter or sort produces a new row order: drop any keyboard
+    // focus target from the previous order (including a not-yet-landed
+    // virtualized focus) so the next ArrowDown starts at the first row of
+    // the new order.
+    focusedRowIdRef.current = null;
+    pendingRowFocusNoteIdRef.current = null;
+  }, [filters, sortDirection, sortKey]);
+
   // The vertical scrollbar is custom-drawn so its track spans only the rows
   // area below the sticky header (a native scrollbar would always run the
   // full height of the scroll container, header included). These metrics
