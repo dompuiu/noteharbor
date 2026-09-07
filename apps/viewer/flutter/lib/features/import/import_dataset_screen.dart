@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../app/viewer_palette.dart';
 import '../../data/dataset_controller.dart';
 import '../../models/dataset_source.dart';
 import '../../utils/dataset_date_format.dart';
@@ -210,11 +211,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       ),
       body: DecoratedBox(
         decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            colors: [Color(0xFFF3EADA), Color(0xFFE9DFCF), Color(0xFFDCE6DD)],
-            begin: Alignment.topLeft,
-            end: Alignment.bottomRight,
-          ),
+          color: ViewerPalette.pageBackground,
         ),
         child: SafeArea(
           child: AnimatedBuilder(
@@ -237,7 +234,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                         children: [
                           const Icon(
                             Icons.info_outline_rounded,
-                            color: Color(0xFF7A5D27),
+                            color: ViewerPalette.accent,
                             size: 28,
                           ),
                           const SizedBox(width: 14),
@@ -379,16 +376,16 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                         const SizedBox(height: 18),
                         DecoratedBox(
                           decoration: BoxDecoration(
-                            color: const Color(0xFFFFF9F0),
+                            color: ViewerPalette.surface,
                             borderRadius: BorderRadius.circular(18),
-                            border: Border.all(color: const Color(0xFFBEAA8E)),
+                            border: Border.all(color: ViewerPalette.border),
                           ),
                           child: Padding(
                             padding: const EdgeInsets.all(16),
                             child: Row(
                               children: [
                                 const Icon(Icons.archive_outlined,
-                                    color: Color(0xFF7A5D27)),
+                                    color: ViewerPalette.accent),
                                 const SizedBox(width: 12),
                                 Expanded(
                                   child: Text(
@@ -427,7 +424,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                         const Text(
                           'Import is destructive for collections present in the archive: matching local collections are replaced from archive data.',
                           style: TextStyle(
-                              color: Color(0xFF6A2E1A),
+                              color: ViewerPalette.danger,
                               fontWeight: FontWeight.w600),
                         ),
                       ],
@@ -485,14 +482,14 @@ class _Panel extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFFFFFCF7),
+        color: ViewerPalette.surface,
         borderRadius: BorderRadius.circular(28),
-        border: Border.all(color: const Color(0xFFBEAA8E), width: 1.5),
+        border: Border.all(color: ViewerPalette.border, width: 1.5),
         boxShadow: const [
           BoxShadow(
             blurRadius: 24,
             offset: Offset(0, 14),
-            color: Color(0x12000000),
+            color: ViewerPalette.shadow,
           ),
         ],
       ),
@@ -514,9 +511,9 @@ class _InfoPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: const Color(0xFFF5ECDE),
+        color: ViewerPalette.surfaceContainer,
         borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: const Color(0xFFBEAA8E)),
+        border: Border.all(color: ViewerPalette.border),
       ),
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),

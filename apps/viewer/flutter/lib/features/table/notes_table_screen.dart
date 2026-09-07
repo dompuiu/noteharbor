@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
 
+import '../../app/viewer_palette.dart';
 import '../../data/dataset_controller.dart';
 import '../../models/note_record.dart';
 import '../../models/tag.dart';
@@ -27,15 +28,15 @@ const double _kFixedColumnsWidth = _kOrderColumnWidth +
     _kGradeColumnWidth +
     _kSerialColumnWidth;
 const double _kTableHorizontalPadding = 14;
-const Color _kTableSurface = Color(0xFFFFFCF7);
-const Color _kTableBorder = Color(0xFFBEAA8E);
-const Color _kTableHeaderBg = Color(0xFFDCCAAE);
-const Color _kTableDivider = Color(0xFFD6C3A8);
-const Color _kTableText = Color(0xFF251912);
-const Color _kTableSortableHeaderText = Color(0xFF6F421F);
-const Color _kTagChipBg = Color(0xFFE8D8BC);
-const Color _kTagChipBorder = Color(0xFFB08957);
-const Color _kTagChipText = Color(0xFF5C4323);
+const Color _kTableSurface = ViewerPalette.surface;
+const Color _kTableBorder = ViewerPalette.border;
+const Color _kTableHeaderBg = ViewerPalette.surfaceContainer;
+const Color _kTableDivider = ViewerPalette.borderSoft;
+const Color _kTableText = ViewerPalette.text;
+const Color _kTableSortableHeaderText = ViewerPalette.accentStrong;
+const Color _kTagChipBg = ViewerPalette.tagBackground;
+const Color _kTagChipBorder = ViewerPalette.tagBorder;
+const Color _kTagChipText = ViewerPalette.tagText;
 const double _kHeaderBadgeHeight = 48;
 const double _kTagChipHorizontalPadding = 10;
 const double _kTagChipHorizontalGap = 6;
@@ -44,9 +45,9 @@ const double _kTableRowHeight = 80;
 const double _kTableRowSeparatorHeight = 1;
 const double _kTableThumbnailWidth = 96;
 const double _kTableThumbnailHeight = 56;
-const Color _kTableThumbnailPlaceholderBg = Color(0xFFF0E6D8);
-const Color _kTableThumbnailPlaceholderBorder = Color(0xFFD0B794);
-const Color _kTableThumbnailPlaceholderIcon = Color(0xFF8E6C46);
+const Color _kTableThumbnailPlaceholderBg = ViewerPalette.surfaceContainer;
+const Color _kTableThumbnailPlaceholderBorder = ViewerPalette.border;
+const Color _kTableThumbnailPlaceholderIcon = ViewerPalette.textMuted;
 
 const TextStyle _kTagChipTextStyle = TextStyle(
   color: _kTagChipText,
@@ -625,11 +626,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         onTap: () => FocusScope.of(context).unfocus(),
         child: DecoratedBox(
           decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              colors: [Color(0xFFF3EADA), Color(0xFFE6DBC9), Color(0xFFD6E3DB)],
-              begin: Alignment.topLeft,
-              end: Alignment.bottomRight,
-            ),
+            color: ViewerPalette.pageBackground,
           ),
           child: SafeArea(
             bottom: false,
@@ -712,7 +709,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                             focusedBorder: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(18),
                               borderSide: const BorderSide(
-                                color: Color(0xFF7A5D27),
+                                color: ViewerPalette.accent,
                                 width: 1.5,
                               ),
                             ),
@@ -737,7 +734,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                   BoxShadow(
                                     blurRadius: 28,
                                     offset: Offset(0, 16),
-                                    color: Color(0x16000000),
+                                    color: ViewerPalette.shadow,
                                   ),
                                 ],
                               ),
@@ -878,7 +875,7 @@ class _Header extends StatelessWidget {
               BoxShadow(
                 blurRadius: 18,
                 offset: Offset(0, 10),
-                color: Color(0x12000000),
+                color: ViewerPalette.shadow,
               ),
             ],
           ),
@@ -950,7 +947,7 @@ class _ImportButton extends StatelessWidget {
           icon: const Icon(
             Icons.file_upload_outlined,
             size: 20,
-            color: Color(0xFF7A5D27),
+            color: ViewerPalette.accent,
           ),
         ),
       ),
@@ -1172,8 +1169,8 @@ class _TableRow extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      hoverColor: const Color(0x149B6330),
-      highlightColor: const Color(0x149B6330),
+      hoverColor: ViewerPalette.accentSoft,
+      highlightColor: ViewerPalette.accentSoft,
       child: Padding(
         padding: const EdgeInsets.symmetric(
             horizontal: _kTableHorizontalPadding, vertical: 12),

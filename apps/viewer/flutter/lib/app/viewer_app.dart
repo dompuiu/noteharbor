@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../data/dataset_controller.dart';
 import '../features/import/import_dataset_screen.dart';
 import '../features/table/notes_table_screen.dart';
+import 'viewer_palette.dart';
 
 class ViewerApp extends StatefulWidget {
   const ViewerApp({super.key});
@@ -28,10 +29,10 @@ class _ViewerAppState extends State<ViewerApp> {
 
   @override
   Widget build(BuildContext context) {
-    const backgroundColor = Color(0xFFF0E3D1);
-    const surfaceColor = Color(0xFFFFFAF2);
-    const primaryColor = Color(0xFF6F421F);
-    const secondaryColor = Color(0xFFA37037);
+    const backgroundColor = ViewerPalette.pageBackground;
+    const surfaceColor = ViewerPalette.surface;
+    const primaryColor = ViewerPalette.accentStrong;
+    const secondaryColor = ViewerPalette.accent;
 
     return MaterialApp(
       title: 'Note Harbor',
@@ -47,18 +48,18 @@ class _ViewerAppState extends State<ViewerApp> {
         textTheme: ThemeData.light().textTheme.copyWith(
               headlineSmall: ThemeData.light().textTheme.headlineSmall?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: const Color(0xFF241912),
+                    color: ViewerPalette.text,
                   ),
               headlineMedium: ThemeData.light().textTheme.headlineMedium?.copyWith(
                     fontWeight: FontWeight.w800,
-                    color: const Color(0xFF241912),
+                    color: ViewerPalette.text,
                   ),
               titleLarge: ThemeData.light().textTheme.titleLarge?.copyWith(
                     fontWeight: FontWeight.w700,
-                    color: const Color(0xFF241912),
+                    color: ViewerPalette.text,
                   ),
               bodyMedium: ThemeData.light().textTheme.bodyMedium?.copyWith(
-                    color: const Color(0xFF241912),
+                    color: ViewerPalette.text,
                   ),
               labelLarge: ThemeData.light().textTheme.labelLarge?.copyWith(
                     fontWeight: FontWeight.w700,

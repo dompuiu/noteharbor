@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../../app/viewer_palette.dart';
 import '../../models/note_image.dart';
 import '../../models/note_record.dart';
 import '../../widgets/note_image_provider.dart';
@@ -135,7 +136,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
               _closeWithCurrentNote();
             },
             child: Scaffold(
-              backgroundColor: const Color(0xFF1F160F),
+              backgroundColor: ViewerPalette.darkBackground,
               body: SafeArea(
                 child: Column(
                   children: [
@@ -147,7 +148,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
                             child: Text(
                               item.label,
                               style: const TextStyle(
-                                color: Color(0xFFFFF5E9),
+                                color: ViewerPalette.darkText,
                                 fontSize: 17,
                                 fontWeight: FontWeight.w700,
                               ),
@@ -159,13 +160,13 @@ class _ImageLightboxState extends State<ImageLightbox> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.08),
+                              color: ViewerPalette.darkScrim,
                               borderRadius: BorderRadius.circular(18),
                             ),
                             child: Text(
                               '${_currentIndex + 1} / ${widget.items.length}',
                               style: const TextStyle(
-                                color: Color(0xFFFFF5E9),
+                                color: ViewerPalette.darkText,
                                 fontWeight: FontWeight.w600,
                                 fontSize: 15,
                               ),
@@ -175,8 +176,8 @@ class _ImageLightboxState extends State<ImageLightbox> {
                           FilledButton.tonal(
                             style: FilledButton.styleFrom(
                               backgroundColor:
-                                  Colors.white.withValues(alpha: 0.08),
-                              foregroundColor: const Color(0xFFFFF5E9),
+                                  ViewerPalette.darkScrim,
+                              foregroundColor: ViewerPalette.darkText,
                             ),
                             onPressed: _closeWithCurrentNote,
                             child: const Text('Back'),
@@ -202,10 +203,10 @@ class _ImageLightboxState extends State<ImageLightbox> {
                             padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
                             child: Container(
                               decoration: BoxDecoration(
-                                color: const Color(0xFF160E08),
+                                color: ViewerPalette.darkSurface,
                                 borderRadius: BorderRadius.circular(20),
                                 border: Border.all(
-                                  color: const Color(0x44FFEBD4),
+                                  color: ViewerPalette.darkBorder,
                                 ),
                               ),
                               clipBehavior: Clip.antiAlias,
@@ -216,7 +217,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
                                         child: Text(
                                           'No image',
                                           style: TextStyle(
-                                            color: Colors.white54,
+                                            color: ViewerPalette.darkMuted,
                                             fontSize: 16,
                                           ),
                                         ),
@@ -590,7 +591,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
                           padding: EdgeInsets.all(32),
                           child: Text(
                             'This image file is missing from the current dataset.',
-                            style: TextStyle(color: Colors.white70),
+                            style: TextStyle(color: ViewerPalette.darkMuted),
                             textAlign: TextAlign.center,
                           ),
                         );

@@ -2,21 +2,22 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../app/viewer_palette.dart';
 import '../../models/note_image.dart';
 import '../../models/note_record.dart';
 import '../../widgets/note_image_provider.dart';
 import 'image_lightbox.dart';
 
-const _kBg = Color(0xFF1F160F);
-const _kCardBg = Color(0xFF160E08);
-const _kDetailsBg = Color(0xFF2A1A0E);
-const _kBorder = Color(0x44FFEBD4);
-const _kTextPrimary = Color(0xFFFFF5E9);
-const _kTextAccent = Color(0xFFA3C6B2);
-const _kTextLabel = Color(0xFFA37037);
-const _kTagChipBg = Color(0xFFE8D8BC);
-const _kTagChipBorder = Color(0xFFB08957);
-const _kTagChipText = Color(0xFF5C4323);
+const _kBg = ViewerPalette.darkBackground;
+const _kCardBg = ViewerPalette.darkSurface;
+const _kDetailsBg = ViewerPalette.darkRaised;
+const _kBorder = ViewerPalette.darkBorder;
+const _kTextPrimary = ViewerPalette.darkText;
+const _kTextAccent = ViewerPalette.darkAccent;
+const _kTextLabel = ViewerPalette.darkMuted;
+const _kTagChipBg = ViewerPalette.tagBackground;
+const _kTagChipBorder = ViewerPalette.tagBorder;
+const _kTagChipText = ViewerPalette.tagText;
 
 class NoteSlideshowResult {
   const NoteSlideshowResult({
@@ -188,7 +189,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                             padding: const EdgeInsets.symmetric(
                                 horizontal: 12, vertical: 8),
                             decoration: BoxDecoration(
-                              color: Colors.white.withValues(alpha: 0.08),
+                              color: ViewerPalette.darkScrim,
                               borderRadius: BorderRadius.circular(18),
                             ),
                             child: Text(
@@ -204,7 +205,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                           FilledButton.tonal(
                             style: FilledButton.styleFrom(
                               backgroundColor:
-                                  Colors.white.withValues(alpha: 0.08),
+                                  ViewerPalette.darkScrim,
                               foregroundColor: _kTextPrimary,
                             ),
                             onPressed: _close,
@@ -395,11 +396,11 @@ class _NoteImage extends StatelessWidget {
           borderRadius: BorderRadius.circular(12),
           child: image == null
               ? const ColoredBox(
-                  color: Color(0xFF2A1A0E),
+                  color: _kDetailsBg,
                   child: Center(
                     child: Text(
                       'No image',
-                      style: TextStyle(color: Colors.white54),
+                      style: const TextStyle(color: ViewerPalette.darkMuted),
                     ),
                   ),
                 )
@@ -407,11 +408,11 @@ class _NoteImage extends StatelessWidget {
                   image: createNoteImageProvider(image!),
                   fit: BoxFit.contain,
                   errorBuilder: (_, __, ___) => const ColoredBox(
-                    color: Color(0xFF2A1A0E),
+                    color: _kDetailsBg,
                     child: Center(
                       child: Text(
                         'Missing image',
-                        style: TextStyle(color: Colors.white54),
+                        style: const TextStyle(color: ViewerPalette.darkMuted),
                       ),
                     ),
                   ),
