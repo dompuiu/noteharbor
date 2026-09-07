@@ -21,6 +21,10 @@ abstract final class ViewerPalette {
   /// `rgba(120, 86, 50, 0.32)` pre-blended onto [surface].
   static const Color borderControl = Color(0xFFD4C6B4);
 
+  /// Table header band: darker warm taupe for contrast against
+  /// [pageBackground] and [surface]. Keeps [text] and [accentStrong] AAA.
+  static const Color tableHeaderBackground = Color(0xFFDDC9A8);
+
   // ── Light text ────────────────────────────────────────────────────
   static const Color text = Color(0xFF2E2318);
   static const Color textMuted = Color(0xFF8A755A);
