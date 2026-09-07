@@ -346,6 +346,9 @@ button {
   overflow-y: hidden;
   scrollbar-width: thin;
   scrollbar-color: rgba(111, 66, 31, 0.45) transparent;
+  /* Query container for the table's width below. Sizing is inline-size
+     only, so the scroller's flex stretching is unaffected. */
+  container-type: inline-size;
 }
 
 .table-scroll-x::-webkit-scrollbar {
@@ -445,8 +448,17 @@ th.table-gutter-cell {
   border: 0;
 }
 
+/* The inner vertical scroller is `width: max-content`, so it shrink-wraps
+   its contents and a plain `width: 100%` here would resolve against that
+   shrink-wrapped box instead of the visible viewport (fixed-width columns
+   and a premature horizontal scrollbar). `100cqw` resolves against the
+   outer horizontal scroller instead, in the same layout pass, so the
+   auto-layout columns stay adaptive with no resize flicker. The plain
+   `width: 100%` above remains as a fallback for browsers without
+   container query units. */
 table {
   width: 100%;
+  width: 100cqw;
   border-collapse: separate;
   border-spacing: 0;
   min-width: 1200px;

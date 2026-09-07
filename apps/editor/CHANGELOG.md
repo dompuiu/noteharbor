@@ -2,6 +2,13 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.5.1] - 2026-09-07
+
+### Fixed
+
+- Restored the Table screen's adaptive columns after the scrollbar change: columns again shrink and stretch with the window width instead of staying fixed-width, and the bottom scrollbar only appears once the table reaches its minimum width.
+- Fixed the Table screen's bottom scrollbar flickering on and off while resizing the window near the point where it hides.
+
 ## [1.5.0] - 2026-09-07
 
 ### Added
