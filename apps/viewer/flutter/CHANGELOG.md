@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
+## [1.0.4] - 2026-09-07
+
+### Fixed
+
+- Table screen: soften the table header background to reuse `surfaceContainer` (`#EFE5D2`) for a more polished, lower-contrast separation from the table rows while keeping header text highly legible.
+
 ## [1.0.3] - 2026-09-07
 
 ### Fixed
