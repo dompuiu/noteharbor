@@ -1011,7 +1011,7 @@ class _TableHeader extends StatelessWidget {
           children: [
             _HeaderCell(
                 width: _kOrderColumnWidth,
-                label: 'Order',
+                label: 'ID',
                 sortKey: 'displayOrder',
                 activeSortKey: sortKey,
                 ascending: ascending,
