@@ -1,3 +1,10 @@
+analyzer:
+  exclude:
+    - build/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
 include: package:flutter_lints/flutter.yaml
 
 linter:

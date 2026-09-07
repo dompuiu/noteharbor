@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
+## [1.0.1] - 2026-09-06
+
+### Fixed
+
+- Archive import: fix build break after upgrading `file_picker` to 12.x, whose `pickFiles` API returns the file list directly instead of a `FilePickerResult`.
+
 ## [1.0.0] - 2026-09-07
 
 ### Added

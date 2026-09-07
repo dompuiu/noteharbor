@@ -35,8 +35,11 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
         allowedExtensions: const ['zip'],
       );
 
-      final file = result?.files.single;
-      if (file == null || file.path == null) {
+      if (result.isEmpty) {
+        return;
+      }
+      final file = result.single;
+      if (file.path == null) {
         return;
       }
 
