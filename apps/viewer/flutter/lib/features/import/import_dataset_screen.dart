@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 
+import '../../app/app_info.dart';
 import '../../app/viewer_palette.dart';
 import '../../data/dataset_controller.dart';
 import '../../models/dataset_source.dart';
@@ -479,6 +480,16 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                       ),
                     ),
                   ],
+                  const SizedBox(height: 24),
+                  const Center(
+                    child: Text(
+                      'Note Harbor Viewer v${AppInfo.version}',
+                      style: TextStyle(
+                        color: ViewerPalette.textMuted,
+                        fontSize: 12,
+                      ),
+                    ),
+                  ),
                 ],
               );
             },
