@@ -534,6 +534,16 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                         'Importing archive...',
                         style: TextStyle(fontWeight: FontWeight.w700),
                       ),
+                      if (_selectedArchiveName != null) ...[
+                        SizedBox(height: 8),
+                        Text(
+                          _selectedArchiveName!,
+                          textAlign: TextAlign.center,
+                          style: TextStyle(
+                            color: ViewerPalette.textMuted,
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
