@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:archive/archive_io.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3/sqlite3.dart';
@@ -48,111 +49,19 @@ class NativeDatasetStore {
       throw StateError('The selected archive file no longer exists.');
     }
 
+    // path_provider must run on the main isolate. Everything heavy below
+    // runs in a background isolate so the import overlay keeps animating,
+    // no matter how large the archive is.
     final containerDir = await _containerDirectory();
-    final extractionDir = Directory(
-      p.join(containerDir.path, 'extract-${DateTime.now().microsecondsSinceEpoch}'),
+    final result = await compute(
+      _importArchiveInBackground,
+      <String, String>{
+        'archivePath': sourceArchive.path,
+        'containerPath': containerDir.path,
+      },
     );
-    final stagedDir = Directory(
-      p.join(containerDir.path, 'stage-${DateTime.now().microsecondsSinceEpoch}'),
-    );
-
-    await extractionDir.create(recursive: true);
-
-    try {
-      final inputStream = InputFileStream(sourceArchive.path);
-      try {
-        final archive = ZipDecoder().decodeStream(inputStream);
-        final progress = _UiYieldCounter(20);
-        for (final entry in archive) {
-          final normalizedPath = p.normalize(entry.name);
-          if (p.isAbsolute(normalizedPath) ||
-              normalizedPath == '..' ||
-              normalizedPath.startsWith('../') ||
-              normalizedPath.startsWith('..\\')) {
-            throw StateError('Archive contains invalid file paths.');
-          }
-
-          final outputPath = p.join(extractionDir.path, normalizedPath);
-          if (entry.isFile) {
-            Directory(p.dirname(outputPath)).createSync(recursive: true);
-            final outputStream = OutputFileStream(outputPath);
-            try {
-              entry.writeContent(outputStream);
-            } finally {
-              outputStream.closeSync();
-            }
-          } else {
-            Directory(outputPath).createSync(recursive: true);
-          }
-          await progress.tick();
-        }
-      } finally {
-        inputStream.closeSync();
-      }
-
-      final archiveDataDir = _findArchiveDataDir(extractionDir);
-      if (archiveDataDir == null) {
-        throw StateError(
-          'Archive must contain a banknotes.db file and an images directory.',
-        );
-      }
-
-      final archiveDbPath = p.join(archiveDataDir.path, 'banknotes.db');
-      final archiveImagesDir = Directory(p.join(archiveDataDir.path, 'images'));
-      final currentDir = await _currentDatasetDirectory();
-
-      if (currentDir.existsSync()) {
-        await _copyDirectory(currentDir, stagedDir, _UiYieldCounter(50));
-      } else {
-        await stagedDir.create(recursive: true);
-        await File(archiveDbPath).copy(p.join(stagedDir.path, 'banknotes.db'));
-        await _copyDirectory(
-          archiveImagesDir,
-          Directory(p.join(stagedDir.path, 'images')),
-          _UiYieldCounter(50),
-        );
-      }
-
-      final stagedDatabaseFile = File(p.join(stagedDir.path, 'banknotes.db'));
-      final stagedImagesDir = Directory(p.join(stagedDir.path, 'images'));
-      await stagedImagesDir.create(recursive: true);
-
-      await _mergeArchiveIntoDataset(
-        archiveDbPath: archiveDbPath,
-        archiveImagesDir: archiveImagesDir.path,
-        stagedDbPath: stagedDatabaseFile.path,
-        stagedImagesDir: stagedImagesDir.path,
-      );
-
-      final backupDir = Directory(
-        p.join(containerDir.path, 'backup-${DateTime.now().microsecondsSinceEpoch}'),
-      );
-
-      if (currentDir.existsSync()) {
-        await currentDir.rename(backupDir.path);
-      }
-
-      try {
-        await stagedDir.rename(currentDir.path);
-        if (backupDir.existsSync()) {
-          await backupDir.delete(recursive: true);
-        }
-      } catch (_) {
-        if (currentDir.existsSync()) {
-          await currentDir.delete(recursive: true);
-        }
-        if (backupDir.existsSync()) {
-          await backupDir.rename(currentDir.path);
-        }
-        rethrow;
-      }
-    } finally {
-      if (extractionDir.existsSync()) {
-        await extractionDir.delete(recursive: true);
-      }
-      if (stagedDir.existsSync()) {
-        await stagedDir.delete(recursive: true);
-      }
+    if (result['ok'] != 'true') {
+      throw StateError(result['error'] ?? 'Import failed.');
     }
   }
 
@@ -257,6 +166,154 @@ class NativeDatasetStore {
   Future<Directory> _currentDatasetDirectory() async {
     final containerDir = await _containerDirectory();
     return Directory(p.join(containerDir.path, _currentDirName));
+  }
+}
+
+/// Runs the whole archive import off the UI thread.
+///
+/// Only plain strings cross the isolate boundary: [params] carries the
+/// source archive and container paths, and the returned map reports success
+/// or a plain-text error. All SQLite handles are opened, used, and closed
+/// inside this isolate.
+@pragma('vm:entry-point')
+Future<Map<String, String>> _importArchiveInBackground(
+  Map<String, String> params,
+) async {
+  try {
+    final archivePath = params['archivePath'] ?? '';
+    final containerPath = params['containerPath'] ?? '';
+    if (archivePath.isEmpty || containerPath.isEmpty) {
+      return const <String, String>{
+        'ok': 'false',
+        'error': 'Import is missing required paths.',
+      };
+    }
+    await _runArchiveImport(
+      archivePath: archivePath,
+      containerPath: containerPath,
+    );
+    return const <String, String>{'ok': 'true'};
+  } catch (error) {
+    return <String, String>{'ok': 'false', 'error': '$error'};
+  }
+}
+
+Future<void> _runArchiveImport({
+  required String archivePath,
+  required String containerPath,
+}) async {
+  final sourceArchive = File(archivePath);
+  if (!sourceArchive.existsSync()) {
+    throw StateError('The selected archive file no longer exists.');
+  }
+
+  final containerDir = Directory(containerPath);
+  final extractionDir = Directory(
+    p.join(containerDir.path, 'extract-${DateTime.now().microsecondsSinceEpoch}'),
+  );
+  final stagedDir = Directory(
+    p.join(containerDir.path, 'stage-${DateTime.now().microsecondsSinceEpoch}'),
+  );
+
+  await extractionDir.create(recursive: true);
+
+  try {
+    final inputStream = InputFileStream(sourceArchive.path);
+    try {
+      final archive = ZipDecoder().decodeStream(inputStream);
+      final progress = _UiYieldCounter(20);
+      for (final entry in archive) {
+        final normalizedPath = p.normalize(entry.name);
+        if (p.isAbsolute(normalizedPath) ||
+            normalizedPath == '..' ||
+            normalizedPath.startsWith('../') ||
+            normalizedPath.startsWith('..\\')) {
+          throw StateError('Archive contains invalid file paths.');
+        }
+
+        final outputPath = p.join(extractionDir.path, normalizedPath);
+        if (entry.isFile) {
+          Directory(p.dirname(outputPath)).createSync(recursive: true);
+          final outputStream = OutputFileStream(outputPath);
+          try {
+            entry.writeContent(outputStream);
+          } finally {
+            outputStream.closeSync();
+          }
+        } else {
+          Directory(outputPath).createSync(recursive: true);
+        }
+        await progress.tick();
+      }
+    } finally {
+      inputStream.closeSync();
+    }
+
+    final archiveDataDir = _findArchiveDataDir(extractionDir);
+    if (archiveDataDir == null) {
+      throw StateError(
+        'Archive must contain a banknotes.db file and an images directory.',
+      );
+    }
+
+    final archiveDbPath = p.join(archiveDataDir.path, 'banknotes.db');
+    final archiveImagesDir = Directory(p.join(archiveDataDir.path, 'images'));
+    final currentDir = Directory(
+      p.join(containerDir.path, NativeDatasetStore._currentDirName),
+    );
+
+    if (currentDir.existsSync()) {
+      await _copyDirectory(currentDir, stagedDir, _UiYieldCounter(50));
+    } else {
+      await stagedDir.create(recursive: true);
+      await File(archiveDbPath).copy(p.join(stagedDir.path, 'banknotes.db'));
+      await _copyDirectory(
+        archiveImagesDir,
+        Directory(p.join(stagedDir.path, 'images')),
+        _UiYieldCounter(50),
+      );
+    }
+
+    final stagedDatabaseFile = File(p.join(stagedDir.path, 'banknotes.db'));
+    final stagedImagesDir = Directory(p.join(stagedDir.path, 'images'));
+    await stagedImagesDir.create(recursive: true);
+
+    await _mergeArchiveIntoDataset(
+      archiveDbPath: archiveDbPath,
+      archiveImagesDir: archiveImagesDir.path,
+      stagedDbPath: stagedDatabaseFile.path,
+      stagedImagesDir: stagedImagesDir.path,
+    );
+
+    final backupDir = Directory(
+      p.join(containerDir.path, 'backup-${DateTime.now().microsecondsSinceEpoch}'),
+    );
+
+    if (currentDir.existsSync()) {
+      await currentDir.rename(backupDir.path);
+    }
+
+    try {
+      await stagedDir.rename(currentDir.path);
+      if (backupDir.existsSync()) {
+        await backupDir.delete(recursive: true);
+      }
+    } catch (_) {
+      if (currentDir.existsSync()) {
+        await currentDir.delete(recursive: true);
+      }
+      if (backupDir.existsSync()) {
+        await backupDir.rename(currentDir.path);
+      }
+      rethrow;
+    }
+  } finally {
+    if (extractionDir.existsSync()) {
+      await extractionDir.delete(recursive: true);
+    }
+    if (stagedDir.existsSync()) {
+      await stagedDir.delete(recursive: true);
+    }
   }
 }
 

@@ -80,6 +80,10 @@ class ImportedDatasetLoader {
 
       final notes = <NoteRecord>[];
       for (var index = 0; index < noteRows.length; index += 1) {
+        if (index % 50 == 0) {
+          // Keep the UI thread responsive while parsing large collections.
+          await Future<void>.delayed(Duration.zero);
+        }
         final row = noteRows[index];
         final noteId = (row['id'] as int?) ?? 0;
         final parsedImages = _parseJsonList(row['images']);
