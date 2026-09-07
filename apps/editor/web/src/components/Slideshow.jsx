@@ -1,5 +1,8 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
-import { copyTextToClipboard, formatNoteAsTsvRow } from "../lib/noteClipboard.js";
+import {
+  copyTextToClipboard,
+  formatNoteAsTsvRow,
+} from "../lib/noteClipboard.js";
 
 function formatScrapedLabel(label) {
   return String(label ?? "")
@@ -655,7 +658,14 @@ function Slideshow({
     window.addEventListener("keydown", onKeyDown);
 
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [keyboardDisabled, note, notes.length, onClose, onOpenPreview, previewKind]);
+  }, [
+    keyboardDisabled,
+    note,
+    notes.length,
+    onClose,
+    onOpenPreview,
+    previewKind,
+  ]);
 
   if (!notes.length) {
     return null;
@@ -684,9 +694,7 @@ function Slideshow({
             getPreviewItems(entry, { includeMissingSides: true }).length,
           0,
         ) +
-      previewNoteItems.findIndex(
-        (item) => item.kind === previewKind,
-      ) +
+      previewNoteItems.findIndex((item) => item.kind === previewKind) +
       1
     : 0;
   const scrapePanelTitle = getScrapePanelTitle(note);
@@ -721,8 +729,26 @@ function Slideshow({
             type="button"
           >
             <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
-              <rect fill="none" height="10" rx="2" stroke="currentColor" strokeWidth="2" width="10" x="9" y="9" />
-              <rect fill="none" height="10" rx="2" stroke="currentColor" strokeWidth="2" width="10" x="5" y="5" />
+              <rect
+                fill="none"
+                height="10"
+                rx="2"
+                stroke="currentColor"
+                strokeWidth="2"
+                width="10"
+                x="9"
+                y="9"
+              />
+              <rect
+                fill="none"
+                height="10"
+                rx="2"
+                stroke="currentColor"
+                strokeWidth="2"
+                width="10"
+                x="5"
+                y="5"
+              />
             </svg>
           </button>
           <button
@@ -766,7 +792,6 @@ function Slideshow({
                 key={item.kind}
                 aria-label={`Enlarge ${item.label.toLowerCase()} image`}
                 className="slide-thumb-btn"
-                data-shortcut={itemIndex === 0 ? "Enter" : undefined}
                 onClick={() => onOpenPreview?.(note.id, item.kind)}
                 title="Click to enlarge"
                 type="button"
@@ -774,7 +799,9 @@ function Slideshow({
                 {item.thumb ? (
                   <img alt={item.alt} src={item.thumb} />
                 ) : (
-                  <div className="slide-thumb-placeholder">No scraped image yet</div>
+                  <div className="slide-thumb-placeholder">
+                    No scraped image yet
+                  </div>
                 )}
                 <span className="slide-thumb-label">{item.label}</span>
               </button>
