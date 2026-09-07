@@ -127,6 +127,10 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
               ),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: ViewerPalette.danger,
+                  foregroundColor: ViewerPalette.onDanger,
+                ),
                 child: const Text('Delete'),
               ),
             ],
@@ -171,6 +175,10 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
               ),
               FilledButton(
                 onPressed: () => Navigator.of(context).pop(true),
+                style: FilledButton.styleFrom(
+                  backgroundColor: ViewerPalette.danger,
+                  foregroundColor: ViewerPalette.onDanger,
+                ),
                 child: const Text('Delete'),
               ),
             ],
@@ -354,6 +362,10 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                             onPressed: isBusy || activeCollection == null
                                 ? null
                                 : _deleteActiveCollection,
+                            style: FilledButton.styleFrom(
+                              backgroundColor: ViewerPalette.dangerSoft,
+                              foregroundColor: ViewerPalette.danger,
+                            ),
                             child: const Text('Delete active collection'),
                           ),
                         ],
@@ -448,6 +460,10 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                           onPressed: isBusy || dataset == null
                               ? null
                               : _deleteImportedData,
+                          style: FilledButton.styleFrom(
+                            backgroundColor: ViewerPalette.dangerSoft,
+                            foregroundColor: ViewerPalette.danger,
+                          ),
                           icon: const Icon(Icons.delete_outline_rounded),
                           label: const Text('Delete imported data'),
                         ),

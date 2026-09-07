@@ -36,6 +36,10 @@ abstract final class ViewerPalette {
   // ── Status ────────────────────────────────────────────────────────
   static const Color success = Color(0xFF2F6B3C);
   static const Color danger = Color(0xFFA02A22);
+
+  /// `rgba(160, 42, 34, 0.10)` pre-blended onto [surface].
+  static const Color dangerSoft = Color(0xFFF6E5DC);
+  static const Color onDanger = Color(0xFFFFFAF1);
   static const Color warning = Color(0xFF8A5A00);
   static const Color info = Color(0xFF40667C);
 
