@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
+## [1.0.5] - 2026-09-07
+
+### Fixed
+
+- Table screen: switch the table header background to Subtle Plus (`#E6D9BE`) so the card-top edge stays visible against the page background on iPhone, and strengthen the divider below the header to 2px `borderControl` (`#D4C6B4`).
+
 ## [1.0.4] - 2026-09-07
 
 ### Fixed

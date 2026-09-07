@@ -31,7 +31,7 @@ const double _kTableHorizontalPadding = 14;
 const Color _kTableSurface = ViewerPalette.surface;
 const Color _kTableBorder = ViewerPalette.border;
 const Color _kTableHeaderBg = ViewerPalette.tableHeaderBackground;
-const Color _kTableHeaderDivider = ViewerPalette.border;
+const Color _kTableHeaderDivider = ViewerPalette.borderControl;
 const Color _kTableDivider = ViewerPalette.borderSoft;
 const Color _kTableText = ViewerPalette.text;
 const Color _kTableSortableHeaderText = ViewerPalette.accentStrong;
@@ -760,7 +760,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                     tagsColumnWidth,
                                               ),
                                               const Divider(
-                                                height: 1,
+                                                height: 2,
+                                                thickness: 2,
                                                 color: _kTableHeaderDivider,
                                               ),
                                               Expanded(
