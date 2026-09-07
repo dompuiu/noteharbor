@@ -2,6 +2,14 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
+## [1.0.2] - 2026-09-07
+
+### Fixed
+
+- Archive import: show a blocking progress popup with a spinner, the `Importing archive...` message, and the archive name while an import runs. Back navigation is blocked until the import finishes.
+- Archive import: run the whole import (extraction, staging copy, database merge) in a background isolate, so importing large archives no longer freezes the interface.
+- Archive import: parse the dataset in chunks after importing, keeping the progress popup animated until the new data is ready.
+
 ## [1.0.1] - 2026-09-06
 
 ### Fixed
