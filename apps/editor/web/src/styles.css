@@ -769,6 +769,12 @@ thead tr:first-child th {
   text-align: left;
 }
 
+.filter-input.tags-filter-input:focus,
+.filter-input.tags-filter-input:focus-visible {
+  border: 0;
+  outline: none;
+}
+
 .tags-filter-dropdown {
   position: fixed;
   z-index: 30;
