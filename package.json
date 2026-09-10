@@ -1,9 +1,8 @@
 {
   "name": "noteharbor",
   "private": true,
-  "packageManager": "pnpm@11.18.0",
   "scripts": {
-    "predev": "pnpm --filter editor_server rebuild better-sqlite3 --verbose",
+    "predev": "pnpm --filter editor_server rebuild better-sqlite3",
     "dev": "concurrently \"pnpm --filter editor_server dev\" \"pnpm --filter editor_web dev\"",
     "build:editor:desktop:win": "pnpm --filter editor_desktop build:win",
     "dev:viewer:flutter": "cd apps/viewer/flutter && flutter pub get && flutter run",
