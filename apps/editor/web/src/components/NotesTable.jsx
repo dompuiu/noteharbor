@@ -434,7 +434,6 @@ function TagsCell({ onApplyFilter, tags }) {
 const MultiValueFilterCombobox = forwardRef(function MultiValueFilterCombobox(
   {
     columnLabel,
-    matchMode = "startsWith",
     onChange,
     onHeightChange,
     options,
@@ -488,7 +487,7 @@ const MultiValueFilterCombobox = forwardRef(function MultiValueFilterCombobox(
   const suggestions = useMemo(() => {
     const query = inputValue.trim().toLowerCase();
 
-    return options.filter((option) => {
+    const matches = options.filter((option) => {
       if (selectedLookup.has(option.toLowerCase())) {
         return false;
       }
@@ -497,12 +496,19 @@ const MultiValueFilterCombobox = forwardRef(function MultiValueFilterCombobox(
         return true;
       }
 
-      const normalizedOption = option.toLowerCase();
-      return matchMode === "includes"
-        ? normalizedOption.includes(query)
-        : normalizedOption.startsWith(query);
+      return option.toLowerCase().includes(query);
     });
-  }, [inputValue, matchMode, options, selectedLookup]);
+
+    if (!query) {
+      return matches;
+    }
+
+    return matches.sort((a, b) => {
+      const aStarts = a.toLowerCase().startsWith(query) ? 0 : 1;
+      const bStarts = b.toLowerCase().startsWith(query) ? 0 : 1;
+      return aStarts - bStarts || a.localeCompare(b);
+    });
+  }, [inputValue, options, selectedLookup]);
 
   useEffect(() => {
     setHighlightedIndex(-1);
