@@ -1676,19 +1676,12 @@ function NoteEditForm({
               <input
                 autoComplete="off"
                 data-note-editor-context-field="true"
-                list="tag-suggestions"
                 onChange={(event) => setTagInput(event.target.value)}
                 onContextMenu={handleNoteEditorTextContextMenu}
                 onKeyDown={(event) => {
                   if (event.key === "Enter") {
                     event.preventDefault();
-                    // Read the live DOM value, not the React state: in
-                    // Firefox/legacy Edge, arrow-key navigation through the
-                    // <datalist> suggestions updates the input's value as a
-                    // preview without firing a React-observable input event,
-                    // so `tagInput` state can be stale relative to what's
-                    // actually shown (and about to be committed by default).
-                    addTag(event.target.value);
+                    addTag(tagInput);
                   }
                 }}
                 placeholder="Type a suggestion and press Enter or click add"
@@ -1702,11 +1695,6 @@ function NoteEditForm({
                 Add tag
               </button>
             </div>
-            <datalist id="tag-suggestions">
-              {filteredSuggestions.map((tag) => (
-                <option key={tag} value={tag} />
-              ))}
-            </datalist>
             <div className="suggestion-cloud">
               {filteredSuggestions.slice(0, 16).map((tag) => (
                 <button
