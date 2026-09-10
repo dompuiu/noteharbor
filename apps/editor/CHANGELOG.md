@@ -2,6 +2,13 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.6.2] - 2026-09-10
+
+### Changed
+
+- Removed the focus highlight border on the Table screen's tags filter field; other filter fields keep their highlight.
+- The tags filter suggestions now match anywhere in the tag name instead of prefix-only, with tags starting with the typed text ranked above tags containing it elsewhere (e.g. typing `digits` suggests `2 digits` and `3 digits`).
+
 ## [1.6.1] - 2026-09-07
 
 ### Fixed
