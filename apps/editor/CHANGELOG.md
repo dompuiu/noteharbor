@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.6.3] - 2026-09-11
+
+### Changed
+
+- Simplified the Note editor's tags field by removing the native suggestion dropdown; tags are now added from the suggestion cloud via `Enter` or Add.
+
 ## [1.6.2] - 2026-09-10
 
 ### Changed
