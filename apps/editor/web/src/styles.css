@@ -746,12 +746,13 @@ thead tr:first-child th {
 
 .tags-filter-clear-all {
   border: 0;
+  border-radius: var(--radius-pill);
   background: transparent;
   color: var(--text-muted);
   font-size: 0.72rem;
   text-decoration: underline;
   white-space: nowrap;
-  padding: 2px 4px;
+  padding: 2px 8px;
 }
 
 .tags-filter-clear-all:hover {

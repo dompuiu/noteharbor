@@ -2,6 +2,7 @@ import {
   Fragment,
   forwardRef,
   useCallback,
+  useDeferredValue,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -713,6 +714,13 @@ function noteOrderValue(note) {
   return Number.isFinite(value) ? value : Number.MAX_SAFE_INTEGER;
 }
 
+// One shared collator: same result as String.localeCompare with these
+// options, without rebuilding the collator on every comparison.
+const rowSortCollator = new Intl.Collator(undefined, {
+  numeric: true,
+  sensitivity: "base",
+});
+
 function versionedImagePath(path, version) {
   if (!path) {
     return null;
@@ -1015,13 +1023,16 @@ function NotesTable({
 
       const leftValue = valueToString(left, sortKey).toLowerCase();
       const rightValue = valueToString(right, sortKey).toLowerCase();
-      const result = leftValue.localeCompare(rightValue, undefined, {
-        numeric: true,
-        sensitivity: "base",
-      });
+      const result = rowSortCollator.compare(leftValue, rightValue);
       return sortDirection === "asc" ? result : -result;
     });
   }, [filters, notes, scrapeJob, sortDirection, sortKey, visibleColumns]);
+  // The painted row list lags one step behind the filter state: inputs,
+  // chips, and counts stay instant while the heavy row re-mount happens in
+  // a background render. Everything that reads note *identity* (selection,
+  // nav, slideshow) keeps using the urgent list.
+  const deferredOrderedNotes = useDeferredValue(orderedNotes);
+  const rowsPending = deferredOrderedNotes !== orderedNotes;
   const defaultOrderedNotes = useMemo(
     () =>
       [...notes].sort((left, right) => {
@@ -1322,15 +1333,16 @@ function NotesTable({
   const canReorder =
     showReorder && !hasActiveFilters && isDefaultOrder && !reorderLoading;
 
+  const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const allVisibleSelected = useMemo(
     () =>
       orderedNotes.length > 0 &&
-      orderedNotes.every((note) => selectedIds.includes(note.id)),
-    [orderedNotes, selectedIds],
+      orderedNotes.every((note) => selectedIdSet.has(note.id)),
+    [orderedNotes, selectedIdSet],
   );
   const someVisibleSelected = useMemo(
-    () => orderedNotes.some((note) => selectedIds.includes(note.id)),
-    [orderedNotes, selectedIds],
+    () => orderedNotes.some((note) => selectedIdSet.has(note.id)),
+    [orderedNotes, selectedIdSet],
   );
   const hasSavedTableState = useMemo(
     () =>
@@ -1341,7 +1353,7 @@ function NotesTable({
     [hasActiveFilters, selectedIds, sortDirection, sortKey],
   );
   const rowVirtualizer = useVirtualizer({
-    count: orderedNotes.length,
+    count: deferredOrderedNotes.length,
     estimateSize: () => rowHeightEstimate,
     getScrollElement: () => tableScrollYRef.current,
     overscan: 10,
@@ -1487,7 +1499,7 @@ function NotesTable({
       xScroller?.removeEventListener("scroll", scheduleUpdate);
       window.removeEventListener("resize", scheduleUpdate);
     };
-  }, [filterRowHeight, loading, orderedNotes.length, updateVScroll]);
+  }, [filterRowHeight, loading, deferredOrderedNotes.length, updateVScroll]);
 
   function handleVThumbPointerDown(event) {
     event.preventDefault();
@@ -1956,7 +1968,7 @@ function NotesTable({
   function pageTable(direction) {
     const scroller = tableScrollYRef.current;
 
-    if (!scroller || !orderedNotes.length) {
+    if (!scroller || !deferredOrderedNotes.length) {
       return;
     }
 
@@ -1971,7 +1983,8 @@ function NotesTable({
 
     for (const row of rows) {
       if (row.getBoundingClientRect().top >= headerBottom - 1) {
-        const note = orderedNotes[Number(row.getAttribute("data-index"))];
+        const note =
+          deferredOrderedNotes[Number(row.getAttribute("data-index"))];
 
         if (note) {
           focusRowByNoteId(note.id);
@@ -2698,7 +2711,7 @@ function NotesTable({
               />
               <div className="table-scroll-x" ref={tableScrollXRef}>
                 <div className="table-scroll-y" ref={tableScrollYRef}>
-                  <table>
+                  <table aria-busy={rowsPending || undefined}>
                     <thead>
                       <tr>
                         {showReorder ? <th className="drag-cell" /> : null}
@@ -2862,7 +2875,7 @@ function NotesTable({
                         </tr>
                       ) : null}
                       {virtualRows.map((virtualRow) => {
-                        const note = orderedNotes[virtualRow.index];
+                        const note = deferredOrderedNotes[virtualRow.index];
                         const noteScrapeStatus = displayScrapeStatus(
                           note,
                           scrapeJob,
@@ -3046,7 +3059,7 @@ function NotesTable({
                                 >
                                   <input
                                     aria-label={`Select ${note.denomination}`}
-                                    checked={selectedIds.includes(note.id)}
+                                    checked={selectedIdSet.has(note.id)}
                                     onChange={() => toggleNote(note.id)}
                                     type="checkbox"
                                   />
@@ -3089,6 +3102,8 @@ function NotesTable({
                                     <img
                                       alt={`${note.denomination} front`}
                                       className="table-thumb"
+                                      decoding="async"
+                                      loading="lazy"
                                       src={frontThumb}
                                     />
                                     {frontPreview ? (
@@ -3107,10 +3122,13 @@ function NotesTable({
                                           }px`,
                                         }}
                                       >
-                                        <img
-                                          alt={`${note.denomination} preview`}
-                                          src={frontPreview}
-                                        />
+                                        {thumbPreviewState?.noteId ===
+                                        note.id ? (
+                                          <img
+                                            alt={`${note.denomination} preview`}
+                                            src={frontPreview}
+                                          />
+                                        ) : null}
                                       </span>
                                     ) : null}
                                   </span>
