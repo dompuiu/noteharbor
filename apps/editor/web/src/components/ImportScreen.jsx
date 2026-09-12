@@ -711,38 +711,40 @@ function ImportScreen({
               </div>
             </div>
 
-            <div className="field-block full-span">
-              <span>Collections to export</span>
-              <div className="export-collection-list" role="group" aria-label="Collections to export">
-                {collections.map((collection) => {
-                  const collectionId = Number(collection.id);
-                  const checked = selectedExportCollectionIds.includes(collectionId);
+            {collections.length ? (
+              <div className="field-block full-span">
+                <span>Collections to export</span>
+                <div className="export-collection-list" role="group" aria-label="Collections to export">
+                  {collections.map((collection) => {
+                    const collectionId = Number(collection.id);
+                    const checked = selectedExportCollectionIds.includes(collectionId);
 
-                  return (
-                    <label className="export-collection-option" key={collection.id}>
-                      <input
-                        checked={checked}
-                        disabled={isBusy || exportingArchive}
-                        onChange={(event) => {
-                          setSelectedExportCollectionIds((current) => {
-                            if (event.target.checked) {
-                              if (current.includes(collectionId)) {
-                                return current;
+                    return (
+                      <label className="export-collection-option" key={collection.id}>
+                        <input
+                          checked={checked}
+                          disabled={isBusy || exportingArchive}
+                          onChange={(event) => {
+                            setSelectedExportCollectionIds((current) => {
+                              if (event.target.checked) {
+                                if (current.includes(collectionId)) {
+                                  return current;
+                                }
+                                return [...current, collectionId];
                               }
-                              return [...current, collectionId];
-                            }
 
-                            return current.filter((id) => id !== collectionId);
-                          });
-                        }}
-                        type="checkbox"
-                      />
-                      <span>{collection.name}</span>
-                    </label>
-                  );
-                })}
+                              return current.filter((id) => id !== collectionId);
+                            });
+                          }}
+                          type="checkbox"
+                        />
+                        <span>{collection.name}</span>
+                      </label>
+                    );
+                  })}
+                </div>
               </div>
-            </div>
+            ) : null}
 
             <div className="import-actions full-span">
               <button className="button" disabled={exportingArchive || isBusy || !selectedExportCollectionIds.length} onClick={handleArchiveExport} type="button">
