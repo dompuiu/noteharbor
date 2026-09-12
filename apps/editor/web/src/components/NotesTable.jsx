@@ -3,7 +3,6 @@ import {
   forwardRef,
   useCallback,
   useEffect,
-  useImperativeHandle,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -27,6 +26,7 @@ import {
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { Slideshow } from "./Slideshow.jsx";
+import { TagsField } from "./TagsField.jsx";
 
 export function HomeHero() {
   return null;
@@ -441,35 +441,6 @@ const MultiValueFilterCombobox = forwardRef(function MultiValueFilterCombobox(
   },
   forwardedRef,
 ) {
-  const [inputValue, setInputValue] = useState("");
-  const [isOpen, setIsOpen] = useState(false);
-  const [highlightedIndex, setHighlightedIndex] = useState(-1);
-  const [dropdownPosition, setDropdownPosition] = useState(null);
-  const containerRef = useRef(null);
-  const dropdownRef = useRef(null);
-  const inputRef = useRef(null);
-  const optionElementMapRef = useRef(new Map());
-
-  useLayoutEffect(() => {
-    const element = containerRef.current;
-
-    if (!element || !onHeightChange) {
-      return undefined;
-    }
-
-    const observer = new ResizeObserver(() => {
-      onHeightChange(element.offsetHeight);
-    });
-
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, [onHeightChange]);
-
-  useImperativeHandle(forwardedRef, () => ({
-    focus: () => inputRef.current?.focus(),
-    select: () => inputRef.current?.select(),
-  }));
-
   const selectedValues = useMemo(
     () =>
       String(value ?? "")
@@ -479,289 +450,17 @@ const MultiValueFilterCombobox = forwardRef(function MultiValueFilterCombobox(
     [value],
   );
 
-  const selectedLookup = useMemo(
-    () => new Set(selectedValues.map((item) => item.toLowerCase())),
-    [selectedValues],
-  );
-
-  const suggestions = useMemo(() => {
-    const query = inputValue.trim().toLowerCase();
-
-    const matches = options.filter((option) => {
-      if (selectedLookup.has(option.toLowerCase())) {
-        return false;
-      }
-
-      if (!query) {
-        return true;
-      }
-
-      return option.toLowerCase().includes(query);
-    });
-
-    if (!query) {
-      return matches;
-    }
-
-    return matches.sort((a, b) => {
-      const aStarts = a.toLowerCase().startsWith(query) ? 0 : 1;
-      const bStarts = b.toLowerCase().startsWith(query) ? 0 : 1;
-      return aStarts - bStarts || a.localeCompare(b);
-    });
-  }, [inputValue, options, selectedLookup]);
-
-  useEffect(() => {
-    setHighlightedIndex(-1);
-  }, [suggestions]);
-
-  useEffect(() => {
-    if (highlightedIndex < 0) {
-      return;
-    }
-
-    optionElementMapRef.current
-      .get(highlightedIndex)
-      ?.scrollIntoView({ block: "nearest" });
-  }, [highlightedIndex, isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setHighlightedIndex(-1);
-      return undefined;
-    }
-
-    function handlePointerDown(event) {
-      if (
-        !containerRef.current?.contains(event.target) &&
-        !dropdownRef.current?.contains(event.target)
-      ) {
-        setIsOpen(false);
-      }
-    }
-
-    document.addEventListener("mousedown", handlePointerDown);
-    return () => document.removeEventListener("mousedown", handlePointerDown);
-  }, [isOpen]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setDropdownPosition(null);
-      return undefined;
-    }
-
-    function updatePosition() {
-      const element = containerRef.current;
-
-      if (!element) {
-        return;
-      }
-
-      const bounds = element.getBoundingClientRect();
-      setDropdownPosition({
-        top: bounds.bottom + 4,
-        left: bounds.left,
-        width: bounds.width,
-      });
-    }
-
-    updatePosition();
-    window.addEventListener("scroll", updatePosition, true);
-    window.addEventListener("resize", updatePosition);
-
-    return () => {
-      window.removeEventListener("scroll", updatePosition, true);
-      window.removeEventListener("resize", updatePosition);
-    };
-  }, [isOpen]);
-
-  function commitValues(nextValues) {
-    onChange(nextValues.join(","));
-  }
-
-  function selectSuggestion(option) {
-    commitValues([...selectedValues, option]);
-    setInputValue("");
-    inputRef.current?.focus();
-  }
-
-  function commitTypedValue() {
-    const trimmed = inputValue.trim();
-
-    if (!trimmed) {
-      return;
-    }
-
-    const alreadySelected = selectedValues.some(
-      (item) => item.toLowerCase() === trimmed.toLowerCase(),
-    );
-
-    if (!alreadySelected) {
-      commitValues([...selectedValues, trimmed]);
-    }
-
-    setInputValue("");
-    inputRef.current?.focus();
-  }
-
-  function removeValue(option) {
-    commitValues(
-      selectedValues.filter(
-        (item) => item.toLowerCase() !== option.toLowerCase(),
-      ),
-    );
-    inputRef.current?.focus();
-  }
-
-  function clearAllValues() {
-    commitValues([]);
-    setInputValue("");
-    setIsOpen(false);
-    inputRef.current?.focus();
-  }
-
-  function handleKeyDown(event) {
-    if (event.key === "Backspace" && !inputValue && selectedValues.length) {
-      removeValue(selectedValues[selectedValues.length - 1]);
-      return;
-    }
-
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      setIsOpen(true);
-      setHighlightedIndex((current) => {
-        if (!suggestions.length) {
-          return -1;
-        }
-
-        return current < 0 ? 0 : (current + 1) % suggestions.length;
-      });
-      return;
-    }
-
-    if (event.key === "ArrowUp") {
-      event.preventDefault();
-      setIsOpen(true);
-      setHighlightedIndex((current) => {
-        if (!suggestions.length) {
-          return -1;
-        }
-
-        return current < 0
-          ? suggestions.length - 1
-          : (current - 1 + suggestions.length) % suggestions.length;
-      });
-      return;
-    }
-
-    if (event.key === "Enter") {
-      if (highlightedIndex >= 0 && suggestions[highlightedIndex]) {
-        event.preventDefault();
-        selectSuggestion(suggestions[highlightedIndex]);
-        setIsOpen(false);
-        return;
-      }
-
-      if (inputValue.trim()) {
-        event.preventDefault();
-        commitTypedValue();
-        setIsOpen(false);
-      }
-      return;
-    }
-
-    if (event.key === "Escape") {
-      if (isOpen) {
-        setIsOpen(false);
-
-        // Only swallow the key when the dropdown is actually visible, so an
-        // Escape press with no suggestions on screen still reaches the
-        // table's own "blur and focus a row" shortcut on the first press.
-        if (suggestions.length) {
-          event.stopPropagation();
-        }
-      }
-      return;
-    }
-  }
-
   return (
-    <div className="tags-filter-combobox" ref={containerRef}>
-      <div className="tags-filter-chips-scroll">
-        {selectedValues.map((item) => (
-          <button
-            aria-label={`Remove ${item} filter`}
-            className="tags-filter-chip"
-            key={item}
-            onClick={() => removeValue(item)}
-            type="button"
-          >
-            {item} ×
-          </button>
-        ))}
-        {selectedValues.length >= 2 ? (
-          <button
-            aria-label={`Clear all ${columnLabel} filters`}
-            className="tags-filter-clear-all"
-            onClick={clearAllValues}
-            title={`Clear all ${columnLabel} filters`}
-            type="button"
-          >
-            Clear all
-          </button>
-        ) : null}
-        <input
-          aria-expanded={isOpen}
-          aria-label={`Filter ${columnLabel}`}
-          className="filter-input tags-filter-input"
-          onChange={(event) => {
-            setInputValue(event.target.value);
-            setIsOpen(true);
-          }}
-          onDoubleClick={() => setIsOpen(true)}
-          onKeyDown={handleKeyDown}
-          ref={inputRef}
-          role="combobox"
-          value={inputValue}
-        />
-      </div>
-      {isOpen && suggestions.length && dropdownPosition
-        ? createPortal(
-            <div
-              className="tags-filter-dropdown"
-              ref={dropdownRef}
-              role="listbox"
-              style={{
-                top: dropdownPosition.top,
-                left: dropdownPosition.left,
-                width: dropdownPosition.width,
-              }}
-            >
-              {suggestions.map((option, index) => (
-                <button
-                  className={`tags-filter-option${
-                    index === highlightedIndex ? " is-highlighted" : ""
-                  }`}
-                  key={option}
-                  onClick={() => selectSuggestion(option)}
-                  onMouseEnter={() => setHighlightedIndex(index)}
-                  ref={(element) => {
-                    if (element) {
-                      optionElementMapRef.current.set(index, element);
-                    } else {
-                      optionElementMapRef.current.delete(index);
-                    }
-                  }}
-                  role="option"
-                  type="button"
-                >
-                  {option}
-                </button>
-              ))}
-            </div>,
-            document.body,
-          )
-        : null}
-    </div>
+    <TagsField
+      ref={forwardedRef}
+      value={selectedValues}
+      vocabulary={options}
+      onChange={(nextValues) => onChange(nextValues.join(","))}
+      ariaLabel={`Filter ${columnLabel}`}
+      emptyText=""
+      placeholder=""
+      onHeightChange={onHeightChange}
+    />
   );
 });
 

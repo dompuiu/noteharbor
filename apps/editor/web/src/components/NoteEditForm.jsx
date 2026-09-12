@@ -19,6 +19,7 @@ import {
 } from "../lib/noteClipboard.js";
 import { isDesktopRuntime } from "../lib/appMode.js";
 import { PositionPicker } from "./PositionPicker.jsx";
+import { TagsField } from "./TagsField.jsx";
 
 const SCRAPE_BROWSER_POLL_INTERVAL_MS = 500;
 const SCRAPE_BROWSER_POLL_TIMEOUT_MS = 10000;
@@ -147,6 +148,37 @@ function fieldInputId(name) {
   return `edit-note-${name}`;
 }
 
+function TagSuggestionCloud({ limit = 16, onSelect, query = "", selected = [], vocabulary = [] }) {
+  const items = useMemo(() => {
+    const selectedKeys = new Set(selected.map((tag) => tag.toLowerCase()));
+    const searchValue = query.trim().toLowerCase();
+    return vocabulary.filter(
+      (tag) =>
+        !selectedKeys.has(tag.toLowerCase()) &&
+        (!searchValue || tag.toLowerCase().includes(searchValue)),
+    ).slice(0, limit);
+  }, [limit, query, selected, vocabulary]);
+
+  if (!items.length) {
+    return null;
+  }
+
+  return (
+    <div className="suggestion-cloud">
+      {items.map((tag) => (
+        <button
+          className="tag suggestion-tag"
+          key={tag}
+          onClick={() => onSelect(tag)}
+          type="button"
+        >
+          {tag}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 function NoteEditForm({
   cancelLabel = "Cancel",
   currentNotePosition = null,
@@ -170,7 +202,8 @@ function NoteEditForm({
   const isCreateMode = !noteId;
   const [form, setForm] = useState(emptyForm);
   const [suggestions, setSuggestions] = useState([]);
-  const [tagInput, setTagInput] = useState("");
+  const [tagCloudQuery, setTagCloudQuery] = useState("");
+  const tagsFieldRef = useRef(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -343,7 +376,6 @@ function NoteEditForm({
     setLoading(true);
     setError("");
     setForm(emptyForm);
-    setTagInput("");
     setCurrentImages([]);
     setNoteVersion("");
     setPendingImages({});
@@ -467,45 +499,9 @@ function NoteEditForm({
     [],
   );
 
-  const filteredSuggestions = useMemo(() => {
-    const searchValue = tagInput.trim().toLowerCase();
-    return suggestions.filter(
-      (tag) =>
-        !form.tags.includes(tag) &&
-        (!searchValue || tag.toLowerCase().includes(searchValue)),
-    );
-  }, [form.tags, suggestions, tagInput]);
-
   function handleFieldChange(event) {
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value }));
-  }
-
-  function addTag(tagName) {
-    const normalizedTags = String(tagName ?? "")
-      .split(",")
-      .map((value) => value.trim())
-      .filter(Boolean);
-
-    if (!normalizedTags.length) {
-      return;
-    }
-
-    setForm((current) => ({
-      ...current,
-      tags: normalizedTags.reduce(
-        (nextTags, value) => (nextTags.includes(value) ? nextTags : [...nextTags, value]),
-        current.tags,
-      ),
-    }));
-    setTagInput("");
-  }
-
-  function removeTag(tagName) {
-    setForm((current) => ({
-      ...current,
-      tags: current.tags.filter((tag) => tag !== tagName),
-    }));
   }
 
   function clearScrapedImage(slotKey) {
@@ -1050,7 +1046,6 @@ function NoteEditForm({
         notes: pastedDetails.notes,
         tags: pastedDetails.tags,
       }));
-      setTagInput("");
       setError("");
     } catch (pasteError) {
       if (
@@ -1655,58 +1650,25 @@ function NoteEditForm({
           </div>
 
           <div className="field-block full-span">
-            <span>Tags</span>
-            <div className="tag-list editable-tag-list">
-              {form.tags.length ? (
-                form.tags.map((tag) => (
-                  <button
-                    className="tag removable-tag"
-                    key={tag}
-                    onClick={() => removeTag(tag)}
-                    type="button"
-                  >
-                    {tag} x
-                  </button>
-                ))
-              ) : (
-                <span className="muted">No tags selected yet.</span>
-              )}
-            </div>
-            <div className="tag-editor">
-              <input
-                autoComplete="off"
-                data-note-editor-context-field="true"
-                onChange={(event) => setTagInput(event.target.value)}
-                onContextMenu={handleNoteEditorTextContextMenu}
-                onKeyDown={(event) => {
-                  if (event.key === "Enter") {
-                    event.preventDefault();
-                    addTag(tagInput);
-                  }
-                }}
-                placeholder="Type a suggestion and press Enter or click add"
-                value={tagInput}
-              />
-              <button
-                className="button"
-                onClick={() => addTag(tagInput)}
-                type="button"
-              >
-                Add tag
-              </button>
-            </div>
-            <div className="suggestion-cloud">
-              {filteredSuggestions.slice(0, 16).map((tag) => (
-                <button
-                  className="tag suggestion-tag"
-                  key={tag}
-                  onClick={() => addTag(tag)}
-                  type="button"
-                >
-                  {tag}
-                </button>
-              ))}
-            </div>
+            <TagsField
+              ref={tagsFieldRef}
+              value={form.tags}
+              vocabulary={suggestions}
+              onChange={(tags) =>
+                setForm((current) => ({ ...current, tags }))}
+              onSearch={(query) => setTagCloudQuery(query)}
+              label="Tags"
+              inputProps={{
+                "data-note-editor-context-field": "true",
+                onContextMenu: handleNoteEditorTextContextMenu,
+              }}
+            />
+            <TagSuggestionCloud
+              vocabulary={suggestions}
+              selected={form.tags}
+              query={tagCloudQuery}
+              onSelect={(tag) => tagsFieldRef.current?.add(tag)}
+            />
           </div>
           {!isCreateMode && collections.length > 1 ? (
             <div className="field-block full-span">
