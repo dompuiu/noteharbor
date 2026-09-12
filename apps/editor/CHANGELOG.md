@@ -2,6 +2,27 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.7.0] - 2026-09-12
+
+### Added
+
+- Added one shared tags field for the Table screen filter and the Note editor: chips with an inline input, a suggestion list anchored under the field, arrow-key navigation with `Enter` to pick, comma to commit, `Backspace` on empty input to remove the last tag, and duplicate/limit hints instead of silent ignores.
+- Added a separate suggestion list under the Tags field in the Note editor; picking a suggestion adds it through the same path as typing.
+- The Table screen now stays responsive while filters change: inputs, chips, and counts update instantly and the rows follow a beat later.
+
+### Changed
+
+- The tags filter field now looks like the other filter fields: `--surface` background with the accent focus ring instead of hardcoded white with no focus treatment.
+- `Tab` in the tags field moves focus to the next element instead of committing the typed text.
+- The Clear all control in the tags field is pill-shaped, so its focus ring matches the chips beside it.
+- Row thumbnails now lazy-load with async decoding and the hover preview loads on demand, halving the image requests on filter changes.
+- Non-ID sorts reuse one cached collator and selection checks use `Set` lookups, keeping filter and sort commits fast as collections grow.
+- The Import screen hides the "Collections to export" section when the database has no collections.
+
+### Fixed
+
+- Fixed the tags suggestion list rendering underneath the edit overlay where it could not be seen; it now paints above the overlay while staying below the modal dialogs.
+
 ## [1.6.3] - 2026-09-11
 
 ### Changed
