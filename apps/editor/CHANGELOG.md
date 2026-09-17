@@ -2,6 +2,17 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.8.0] - 2026-09-17
+
+### Changed
+
+- The Table screen's `PgDn`/`PgUp` keys now scroll one page (viewport minus the sticky header) and focus the first row in the new view in both directions, clamping to the first/last row; the `?` shortcuts help describes this.
+- The Table screen's focused-row ring is now 1px painted with an inset shadow instead of 2px borders, so focusing a row never shifts its text; the sticky header no longer paints a strip underneath itself, so the first row's top ring stays visible.
+
+### Fixed
+
+- Fixed `PgDn` appearing not to scroll the Table screen: the old scroll-then-scan approach read stale rows before the virtualized list re-rendered and scrolled right back to where it started.
+
 ## [1.7.0] - 2026-09-12
 
 ### Added

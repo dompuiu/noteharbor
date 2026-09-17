@@ -1902,7 +1902,7 @@ function NotesTable({
     navigateToTableRoute(emptyTableRoute(), { replace: true });
   }
 
-  function focusRowByNoteId(noteId) {
+  function focusRowByNoteId(noteId, options = {}) {
     if (noteId == null) {
       return;
     }
@@ -1915,7 +1915,12 @@ function NotesTable({
       // explicitly instead.
       element.focus({ preventScroll: true });
       focusedRowIdRef.current = noteId;
-      ensureRowVisible(element);
+
+      if (options.pinToTop) {
+        pinRowToTop(element);
+      } else {
+        ensureRowVisible(element);
+      }
       return;
     }
 
@@ -1926,7 +1931,9 @@ function NotesTable({
     }
 
     pendingRowFocusNoteIdRef.current = noteId;
-    rowVirtualizer.scrollToIndex(index, { align: "auto" });
+    rowVirtualizer.scrollToIndex(index, {
+      align: options.pinToTop ? "start" : "auto",
+    });
   }
 
   function moveRowFocus(offset) {
@@ -1965,33 +1972,58 @@ function NotesTable({
     }
   }
 
-  function pageTable(direction) {
+  function pinRowToTop(element) {
     const scroller = tableScrollYRef.current;
 
-    if (!scroller || !deferredOrderedNotes.length) {
+    if (!scroller) {
       return;
     }
 
-    scroller.scrollTop += direction * scroller.clientHeight;
-
-    // Focus the top row of the new viewport so a following ↑/↓ continues
-    // from what's on screen instead of jumping back to the previously
-    // focused (now off-screen) row.
     const headerBottom =
       scroller.querySelector("thead")?.getBoundingClientRect().bottom ?? 0;
-    const rows = scroller.querySelectorAll("tbody tr.table-row-link");
+    scroller.scrollTop += element.getBoundingClientRect().top - headerBottom;
+  }
 
-    for (const row of rows) {
-      if (row.getBoundingClientRect().top >= headerBottom - 1) {
-        const note =
-          deferredOrderedNotes[Number(row.getAttribute("data-index"))];
+  function pageTable(direction) {
+    const scroller = tableScrollYRef.current;
 
-        if (note) {
-          focusRowByNoteId(note.id);
-        }
+    if (!scroller || !orderedNotes.length) {
+      return;
+    }
 
-        break;
-      }
+    const headerHeight =
+      scroller.querySelector("thead")?.offsetHeight ?? 0;
+    const measuredRowHeight =
+      scroller.querySelector("tbody tr.table-row-link")?.offsetHeight ??
+      rowHeightEstimate;
+    const pageSize = Math.max(
+      1,
+      Math.floor((scroller.clientHeight - headerHeight) / measuredRowHeight),
+    );
+    const currentIndex = orderedNotes.findIndex(
+      (note) => note.id === focusedRowIdRef.current,
+    );
+    // No focus yet (fresh load, Esc to the anchor): anchor on the current
+    // first visible row so the first press already jumps a full page.
+    const firstVisibleIndex =
+      rowVirtualizer.getVirtualItems()[0]?.index ?? 0;
+    const baseIndex =
+      currentIndex >= 0
+        ? currentIndex
+        : Math.min(Math.max(firstVisibleIndex, 0), orderedNotes.length - 1);
+    const targetIndex = Math.min(
+      Math.max(baseIndex + direction * pageSize, 0),
+      orderedNotes.length - 1,
+    );
+    const target = orderedNotes[targetIndex];
+
+    // focusRowByNoteId drives the scrolling (scrollToIndex for virtualized
+    // rows, top-pin for mounted ones) so the target lands as the first row
+    // below the sticky header. Never set scrollTop here: the previous
+    // scroll-then-scan-DOM version read stale rows before the virtualizer
+    // re-rendered and scrolled right back to where it started.
+    if (target) {
+      focusRowByNoteId(target.id, { pinToTop: true });
     }
   }
 
