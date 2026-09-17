@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.9.0] - 2026-09-17
+
+### Added
+
+- The desktop app now remembers its window state between launches: size, position, maximized, and fullscreen are restored on start (kept in `window-state.json` under the app's user data directory).
+
 ## [1.8.0] - 2026-09-17
 
 ### Changed

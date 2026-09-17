@@ -3,7 +3,7 @@ import http from 'node:http';
 import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { app, BrowserWindow, Menu, MenuItem, dialog, ipcMain, shell } from 'electron';
+import { app, BrowserWindow, Menu, MenuItem, dialog, ipcMain, screen, shell } from 'electron';
 
 app.setName('Note Harbor Editor');
 
@@ -306,20 +306,130 @@ async function startEmbeddedServer() {
   return startServer({ host: '127.0.0.1', port: 0 });
 }
 
+const WINDOW_STATE_FILENAME = 'window-state.json';
+const DEFAULT_WINDOW_WIDTH = 1480;
+const DEFAULT_WINDOW_HEIGHT = 960;
+const MIN_WINDOW_WIDTH = 1100;
+const MIN_WINDOW_HEIGHT = 720;
+
+function getWindowStatePath() {
+  return path.join(app.getPath('userData'), WINDOW_STATE_FILENAME);
+}
+
+function isWindowVisibleOnAnyDisplay(bounds) {
+  const { x, y, width, height } = bounds;
+
+  return screen.getAllDisplays().some(({ workArea }) => (
+    x + width > workArea.x
+    && x < workArea.x + workArea.width
+    && y + height > workArea.y
+    && y < workArea.y + workArea.height
+  ));
+}
+
+function loadWindowState() {
+  try {
+    const raw = fs.readFileSync(getWindowStatePath(), 'utf8');
+    const parsed = JSON.parse(raw);
+
+    const width = Number(parsed.width);
+    const height = Number(parsed.height);
+    if (!Number.isFinite(width) || !Number.isFinite(height)) {
+      return null;
+    }
+
+    const state = {
+      width: Math.max(Math.round(width), MIN_WINDOW_WIDTH),
+      height: Math.max(Math.round(height), MIN_WINDOW_HEIGHT),
+      isMaximized: parsed.isMaximized === true,
+      isFullScreen: parsed.isFullScreen === true
+    };
+
+    const x = Number(parsed.x);
+    const y = Number(parsed.y);
+    if (Number.isFinite(x) && Number.isFinite(y)) {
+      const bounds = { x: Math.round(x), y: Math.round(y), width: state.width, height: state.height };
+      if (isWindowVisibleOnAnyDisplay(bounds)) {
+        state.x = bounds.x;
+        state.y = bounds.y;
+      }
+    }
+
+    return state;
+  } catch {
+    return null;
+  }
+}
+
+function saveWindowState(window) {
+  if (window.isDestroyed()) {
+    return;
+  }
+
+  try {
+    const isMaximized = window.isMaximized();
+    const isFullScreen = window.isFullScreen();
+    const bounds = (isMaximized || isFullScreen) && typeof window.getNormalBounds === 'function'
+      ? window.getNormalBounds()
+      : window.getBounds();
+
+    fs.writeFileSync(
+      getWindowStatePath(),
+      JSON.stringify({
+        x: Math.round(bounds.x),
+        y: Math.round(bounds.y),
+        width: Math.round(bounds.width),
+        height: Math.round(bounds.height),
+        isMaximized,
+        isFullScreen
+      })
+    );
+  } catch (error) {
+    console.error(error);
+  }
+}
+
+function trackWindowState(window) {
+  let saveTimeout = null;
+  const scheduleSave = () => {
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+    }
+    saveTimeout = setTimeout(() => {
+      saveTimeout = null;
+      saveWindowState(window);
+    }, 300);
+  };
+
+  for (const event of ['resize', 'move', 'maximize', 'unmaximize', 'enter-full-screen', 'leave-full-screen']) {
+    window.on(event, scheduleSave);
+  }
+  window.on('close', () => {
+    if (saveTimeout) {
+      clearTimeout(saveTimeout);
+      saveTimeout = null;
+    }
+    saveWindowState(window);
+  });
+}
+
 async function createMainWindow() {
   if (!serverHandle) {
     serverHandle = await startEmbeddedServer();
   }
 
   const appUrl = `http://${serverHandle.host}:${serverHandle.port}`;
+  const savedState = loadWindowState();
 
   mainWindow = new BrowserWindow({
-    width: 1480,
-    height: 960,
-    minWidth: 1100,
-    minHeight: 720,
+    width: savedState?.width ?? DEFAULT_WINDOW_WIDTH,
+    height: savedState?.height ?? DEFAULT_WINDOW_HEIGHT,
+    ...(savedState?.x !== undefined && savedState?.y !== undefined ? { x: savedState.x, y: savedState.y } : {}),
+    minWidth: MIN_WINDOW_WIDTH,
+    minHeight: MIN_WINDOW_HEIGHT,
     autoHideMenuBar: true,
     backgroundColor: '#f4efe6',
+    show: false,
     webPreferences: {
       additionalArguments: ['--note-harbor-desktop=1'],
       contextIsolation: true,
@@ -327,6 +437,18 @@ async function createMainWindow() {
       sandbox: true,
       preload: preloadPath
     }
+  });
+
+  trackWindowState(mainWindow);
+
+  if (savedState?.isFullScreen) {
+    mainWindow.setFullScreen(true);
+  } else if (savedState?.isMaximized) {
+    mainWindow.maximize();
+  }
+
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
   });
 
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
