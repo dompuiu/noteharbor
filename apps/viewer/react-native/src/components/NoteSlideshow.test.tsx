@@ -329,23 +329,18 @@ test('image tap opens the popover and the return jumps the slideshow', async () 
   expect(textContent(tree, 'slideshow-counter')).toBe('1 / 2');
 });
 
-test('footer prev/next page with wrap-around', () => {
+test('matches Flutter: no footer buttons, pager snaps full pages', () => {
   const tree = renderSlideshow();
 
-  act(() => {
-    byTestId(tree, 'slideshow-next').props.onPress();
-  });
-  expect(textContent(tree, 'slideshow-counter')).toBe('2 / 2');
+  // Flutter's slideshow has no Prev/Next buttons (swipe + arrow keys only).
+  absentTestId(tree, 'slideshow-prev');
+  absentTestId(tree, 'slideshow-next');
 
-  act(() => {
-    byTestId(tree, 'slideshow-next').props.onPress();
-  });
-  expect(textContent(tree, 'slideshow-counter')).toBe('1 / 2');
-
-  act(() => {
-    byTestId(tree, 'slideshow-prev').props.onPress();
-  });
-  expect(textContent(tree, 'slideshow-counter')).toBe('2 / 2');
+  const pager = byTestId(tree, 'slideshow-pager');
+  expect(pager.props.pagingEnabled).toBe(true);
+  expect(pager.props.snapToAlignment).toBe('center');
+  expect(pager.props.disableIntervalMomentum).toBe(true);
+  expect(pager.props.showsHorizontalScrollIndicator).toBe(false);
 });
 
 test('bottom fade hides at scroll bottom', () => {

@@ -291,6 +291,12 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
             ref={pagerRef}
             horizontal
             pagingEnabled
+            // Hard snap like Flutter's PageView: a drag always settles on a
+            // full page, never resting between notes.
+            snapToInterval={pageWidth}
+            snapToAlignment="center"
+            decelerationRate="fast"
+            disableIntervalMomentum
             showsHorizontalScrollIndicator={false}
             style={styles.pager}
             onMomentumScrollEnd={(event) => {
@@ -315,24 +321,6 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
             ))}
           </ScrollView>
         )}
-        {notes.length > 0 ? (
-          <View style={styles.footer}>
-            <Pressable
-              testID="slideshow-prev"
-              accessibilityLabel={`Previous note, ${currentIndex + 1} of ${notes.length}`}
-              onPress={() => goPrevious()}
-              style={styles.navButton}>
-              <Text style={styles.navText}>‹ Prev</Text>
-            </Pressable>
-            <Pressable
-              testID="slideshow-next"
-              accessibilityLabel={`Next note, ${currentIndex + 1} of ${notes.length}`}
-              onPress={() => goNext()}
-              style={styles.navButton}>
-              <Text style={styles.navText}>Next ›</Text>
-            </Pressable>
-          </View>
-        ) : null}
       </View>
   );
 });
@@ -370,6 +358,7 @@ function NoteSlide({
           testID={`slide-scroll-${note.id}`}
           style={styles.slideScroll}
           contentContainerStyle={styles.slideContent}
+          showsVerticalScrollIndicator={false}
           onScroll={(event) => {
             const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
             setAtBottom(
@@ -389,11 +378,11 @@ function NoteSlide({
               {note.gradingCompany}
             </Text>
           ) : null}
-          <View style={styles.imagesGap} />
+          <View style={styles.sectionGap} />
           <SlideImage note={note} face="front" imageWidth={imageWidth} onImageTap={onImageTap} />
           <View style={styles.imagesGap} />
           <SlideImage note={note} face="back" imageWidth={imageWidth} onImageTap={onImageTap} />
-          <View style={styles.imagesGap} />
+          <View style={styles.sectionGap} />
           <View style={styles.metaPanel}>
             {rows.map((row) => (
               <View key={row.label}>
@@ -484,7 +473,8 @@ function SlideImage({
       <Pressable
         testID={`slideshow-image-tap-${face}-${note.id}`}
         accessibilityLabel={`Open ${face} image fullscreen`}
-        onPress={() => onImageTap(face)}>
+        onPress={() => onImageTap(face)}
+        style={styles.imageClip}>
         <View testID={`slideshow-image-placeholder-${face}-${note.id}`}>
           <NoteImageView
             uri={null}
@@ -502,7 +492,8 @@ function SlideImage({
     <Pressable
       testID={`slideshow-image-tap-${face}-${note.id}`}
       accessibilityLabel={`Open ${face} image fullscreen`}
-      onPress={() => onImageTap(face)}>
+      onPress={() => onImageTap(face)}
+      style={styles.imageClip}>
       <NoteImageView
         uri={uri}
         tone="dark"
@@ -605,6 +596,13 @@ const styles = StyleSheet.create({
   imagesGap: {
     height: 12,
   },
+  sectionGap: {
+    height: 16,
+  },
+  imageClip: {
+    borderRadius: viewerRadii.sm,
+    overflow: 'hidden',
+  },
   metaPanel: {
     backgroundColor: viewerDark.raised,
     borderRadius: viewerRadii.lg,
@@ -670,26 +668,5 @@ const styles = StyleSheet.create({
   },
   fadeStrip: {
     flex: 1,
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 12,
-    gap: 12,
-  },
-  navButton: {
-    flex: 1,
-    alignItems: 'center',
-    paddingHorizontal: 16,
-    paddingVertical: 10,
-    backgroundColor: viewerDark.scrim,
-    borderRadius: viewerRadii.md,
-  },
-  navText: {
-    color: viewerDark.text,
-    fontSize: 14,
-    fontWeight: '600',
   },
 });
