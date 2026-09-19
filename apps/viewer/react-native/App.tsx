@@ -1,18 +1,21 @@
 import {
   describeViewerCore,
   viewerCoreVersion,
+  type NoteRecord,
 } from './src/shared/viewer-core';
 import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
 import { StatusBar, StyleSheet, Text } from 'react-native';
+import { useCallback, useState } from 'react';
 import { viewerLight } from './src/theme/viewerTheme';
 
 import { Card, ScreenFrame } from './src/components/AppFrame';
 import { ImportBlockingOverlay } from './src/components/ImportBlockingOverlay';
 import { ManagePanel } from './src/components/ManagePanel';
-import { NotesTableScreen } from './src/components/NotesTableScreen';
+import { NotesTableScreen, type OpenSlideshow, type SlideshowReturn } from './src/components/NotesTableScreen';
+import { NoteSlideshow } from './src/components/NoteSlideshow';
 import { useViewerController } from './src/state/useViewerController';
 
 function App() {
@@ -27,6 +30,27 @@ function App() {
 function AppShell() {
   const insets = useSafeAreaInsets();
   const controller = useViewerController();
+  const [slideshow, setSlideshow] = useState<{
+    notes: NoteRecord[];
+    initialIndex: number;
+    resolve: (result: SlideshowReturn | null) => void;
+  } | null>(null);
+
+  const openSlideshow: OpenSlideshow = useCallback(
+    (notes: NoteRecord[], initialIndex: number) =>
+      new Promise<SlideshowReturn | null>((resolve) => {
+        setSlideshow({ notes, initialIndex, resolve });
+      }),
+    [],
+  );
+
+  const closeSlideshow = useCallback(
+    (result: SlideshowReturn | null) => {
+      slideshow?.resolve(result);
+      setSlideshow(null);
+    },
+    [slideshow],
+  );
 
   if (controller.isLoading) {
     return (
@@ -55,11 +79,18 @@ function AppShell() {
   return (
     <ScreenFrame topInset={insets.top} bottomInset={insets.bottom}>
       <Card>
-        <NotesTableScreen controller={controller} />
+        <NotesTableScreen controller={controller} onOpenSlideshow={openSlideshow} />
         <ManagePanel controller={controller} />
         <Text style={styles.meta}>{describeViewerCore()}</Text>
         <Text style={styles.meta}>viewer-core {viewerCoreVersion}</Text>
       </Card>
+      {slideshow ? (
+        <NoteSlideshow
+          notes={slideshow.notes}
+          initialIndex={slideshow.initialIndex}
+          onClose={closeSlideshow}
+        />
+      ) : null}
       <ImportBlockingOverlay visible={controller.isMutating} />
     </ScreenFrame>
   );
@@ -90,6 +121,6 @@ const styles = StyleSheet.create({
   },
 });
 
-// ponytail: NotesTableScreen renders without onOpenSlideshow/onOpenImport
-// until tickets 10 (slideshow) and 12 (import screen) provide those targets.
+// ponytail: NotesTableScreen renders without onOpenImport until ticket 12
+// (import screen) provides that target.
 export default App;

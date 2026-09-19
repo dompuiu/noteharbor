@@ -9,6 +9,7 @@ export function NoteImageView({
   height,
   label,
   tone = 'light',
+  errorLabel = 'No image',
 }: {
   uri: string | null;
   fallbackSource?: ImageRequireSource | null;
@@ -16,11 +17,12 @@ export function NoteImageView({
   height: number;
   label?: string;
   tone?: 'light' | 'dark';
+  errorLabel?: string;
 }) {
   const [failed, setFailed] = useState(false);
   const tokens = tone === 'dark' ? viewerDark : viewerLight;
 
-  if (!uri || failed) {
+  const renderPlaceholder = (copy: string) => {
     if (fallbackSource) {
       return (
         <Image
@@ -44,10 +46,20 @@ export function NoteImageView({
           },
         ]}>
         <Text style={[styles.placeholderText, { color: tokens.tagText }]}>
-          No image
+          {copy}
         </Text>
       </View>
     );
+  };
+
+  // Null stays `No image`; load failure shows errorLabel (`Missing image` in
+  // the slideshow) unless a bundled fallback asset was provided (ticket 08).
+  if (!uri) {
+    return renderPlaceholder('No image');
+  }
+
+  if (failed) {
+    return renderPlaceholder(errorLabel);
   }
 
   return (

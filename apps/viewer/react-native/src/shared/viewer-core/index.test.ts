@@ -11,6 +11,7 @@ import {
   noteFullImage,
   noteImageUri,
   notePreviewImage,
+  normalizeSourceUrl,
   noteTagsLabel,
   noteTitle,
   noteValueForColumn,
@@ -199,6 +200,21 @@ describe('pipeline foundation', () => {
     );
     expect(noteImageUri(noteFullImage(dataset.notes[0], 'front'))).toBe(
       'file:///tmp/front-full.jpg',
+    );
+  });
+
+  it('normalizes source URLs like Flutter', () => {
+    expect(normalizeSourceUrl('')).toBeNull();
+    expect(normalizeSourceUrl('   ')).toBeNull();
+    expect(normalizeSourceUrl('not a url')).toBeNull();
+    expect(normalizeSourceUrl('example.com/note/1')).toBe(
+      'https://example.com/note/1',
+    );
+    expect(normalizeSourceUrl('https://example.com/note/1')).toBe(
+      'https://example.com/note/1',
+    );
+    expect(normalizeSourceUrl('http://example.com')).toBe(
+      'http://example.com',
     );
   });
 });

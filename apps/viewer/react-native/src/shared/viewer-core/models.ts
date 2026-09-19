@@ -65,6 +65,22 @@ export function datasetSourceLabel(source: DatasetSource) {
     : 'Using bundled dataset';
 }
 
+// Port of Flutter's _parseSourceUri (note_slideshow_screen.dart): trim,
+// keep when a scheme is present, otherwise prepend https://. Null when empty
+// or unparseable (whitespace can never be a valid URL).
+export function normalizeSourceUrl(value: string): string | null {
+  const trimmed = value.trim();
+  if (!trimmed || /\s/.test(trimmed)) {
+    return null;
+  }
+
+  if (/^[a-zA-Z][a-zA-Z0-9+.-]*:/.test(trimmed)) {
+    return trimmed;
+  }
+
+  return `https://${trimmed}`;
+}
+
 export function noteTitle(note: NoteRecord) {
   if (note.denomination && note.catalogNumber) {
     return `${note.denomination} - ${note.catalogNumber}`;
