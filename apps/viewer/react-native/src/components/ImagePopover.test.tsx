@@ -1,5 +1,5 @@
 import React from 'react';
-import { ActivityIndicator, Image, Modal, Text } from 'react-native';
+import { ActivityIndicator, Image, Text } from 'react-native';
 import ReactTestRenderer, { act } from 'react-test-renderer';
 
 import type { NoteRecord } from '../shared/viewer-core';
@@ -172,11 +172,10 @@ test('initial index resolves the face target', () => {
   expect(popoverInitialIndex(baseNotes, 999, 'front')).toBe(0);
 });
 
-test('renders a dark modal with positional counter, title, and Back', () => {
+test('renders inline with positional counter, title, and Back', () => {
   mockImageSize(2000, 1200);
   const tree = renderPopover();
 
-  expect(tree.root.findByType(Modal).props.visible).toBe(true);
   expect(textContent(tree, 'popover-counter')).toBe('1 / 4');
   expect(textContent(tree, 'popover-title')).toBe('5 Lei - P-98');
   expect(textContent(tree, 'popover-back')).toBe('Back');
@@ -297,23 +296,6 @@ test('Back and system dismiss paths return the current note identity', () => {
     byTestId(tree, 'popover-back').props.onPress();
   });
   expect(onClose).toHaveBeenCalledWith(2);
-});
-
-test('request-close and dismiss route through the same note-identity path', () => {
-  mockImageSize(2000, 1200);
-  const onClose = jest.fn();
-  const tree = renderPopover({ onClose });
-
-  act(() => {
-    tree.root.findByType(Modal).props.onRequestClose();
-  });
-  expect(onClose).toHaveBeenCalledWith(1);
-
-  const second = renderPopover({ onClose });
-  act(() => {
-    second.root.findByType(Modal).props.onDismiss();
-  });
-  expect(onClose).toHaveBeenCalledWith(1);
 });
 
 test('Escape closes; arrows page with wrap on desktop-like targets only', () => {

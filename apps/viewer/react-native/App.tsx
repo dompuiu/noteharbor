@@ -7,7 +7,7 @@ import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
-import { StatusBar, Modal, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
+import { StatusBar, StyleSheet, Text } from 'react-native';
 import { useCallback, useState } from 'react';
 import { viewerLight } from './src/theme/viewerTheme';
 
@@ -30,7 +30,6 @@ function App() {
 
 function AppShell() {
   const insets = useSafeAreaInsets();
-  const { height: windowHeight } = useWindowDimensions();
   const controller = useViewerController();
   const [showImport, setShowImport] = useState(false);
   const [slideshow, setSlideshow] = useState<{
@@ -122,52 +121,48 @@ function AppShell() {
     );
   }
 
+  // All screens render inside the same Card/window so table, slideshow,
+  // popover, and import share dimensions and stay resizable. Modals open a
+  // separate native window on Windows/macOS that fills the screen.
   return (
     <ScreenFrame topInset={insets.top} bottomInset={insets.bottom}>
       <Card>
-        <NotesTableScreen
-          controller={controller}
-          onOpenSlideshow={openSlideshow}
-          onOpenImport={() => setShowImport(true)}
-        />
-        <Text style={styles.meta}>{describeViewerCore()}</Text>
-        <Text style={styles.meta}>viewer-core {viewerCoreVersion}</Text>
-      </Card>
-      {slideshow ? (
-        <NoteSlideshow
-          notes={slideshow.notes}
-          initialIndex={slideshow.initialIndex}
-          onClose={closeSlideshow}
-          onOpenPopover={openPopover}
-        />
-      ) : null}
-      {slideshow && popover ? (
-        <ImagePopover
-          notes={popover.notes}
-          initialNoteId={popover.noteId}
-          initialFace={popover.face}
-          onClose={closePopover}
-        />
-      ) : null}
-      <Modal
-        visible={showImport}
-        animationType="slide"
-        onRequestClose={() => {
-          // Block back while mutating (Flutter PopScope canPop:!_isImporting).
-          if (!controller.isMutating) {
-            setShowImport(false);
-          }
-        }}>
-        {/* Bounded height so the Modal can't size to its content on Windows
-            and grow past the screen. */}
-        <View style={[styles.importModalWrap, { height: windowHeight }]}>
+        {slideshow && popover ? (
+          <ImagePopover
+            notes={popover.notes}
+            initialNoteId={popover.noteId}
+            initialFace={popover.face}
+            onClose={closePopover}
+          />
+        ) : slideshow ? (
+          <NoteSlideshow
+            notes={slideshow.notes}
+            initialIndex={slideshow.initialIndex}
+            onClose={closeSlideshow}
+            onOpenPopover={openPopover}
+          />
+        ) : showImport ? (
           <ImportScreen
             controller={controller}
             isFirstRun={false}
-            onClose={() => setShowImport(false)}
+            onClose={() => {
+              if (!controller.isMutating) {
+                setShowImport(false);
+              }
+            }}
           />
-        </View>
-      </Modal>
+        ) : (
+          <>
+            <NotesTableScreen
+              controller={controller}
+              onOpenSlideshow={openSlideshow}
+              onOpenImport={() => setShowImport(true)}
+            />
+            <Text style={styles.meta}>{describeViewerCore()}</Text>
+            <Text style={styles.meta}>viewer-core {viewerCoreVersion}</Text>
+          </>
+        )}
+      </Card>
       <ImportBlockingOverlay visible={controller.isMutating} />
     </ScreenFrame>
   );
@@ -195,9 +190,6 @@ const styles = StyleSheet.create({
     color: '#7a6247',
     fontSize: 13,
     fontWeight: '600',
-  },
-  importModalWrap: {
-    backgroundColor: viewerLight.pageBackground,
   },
 });
 

@@ -2,7 +2,6 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Image,
-  Modal,
   PixelRatio,
   Platform,
   Pressable,
@@ -252,7 +251,7 @@ export function ImagePopover({
   isDesktopLike?: boolean;
 }) {
   const items = useMemo(() => buildPopoverSequence(notes), [notes]);
-  const { width: pageWidth, height: windowHeight } = useWindowDimensions();
+  const { width: pageWidth } = useWindowDimensions();
   const pagerRef = useRef<ScrollView | null>(null);
   const [currentIndex, setCurrentIndex] = useState(() =>
     popoverInitialIndex(notes, initialNoteId, initialFace),
@@ -342,14 +341,8 @@ export function ImagePopover({
   const currentItem = items[currentIndex];
 
   return (
-    <Modal
-      visible
-      animationType="slide"
-      onRequestClose={() => close()}
-      onDismiss={() => close()}>
-      {/* Same bounded-height reason as NoteSlideshow: keep the Modal from
-          sizing to its content on Windows. */}
-      <View style={[styles.screen, { height: windowHeight }]}>
+    // Inline (no Modal): same window as the table/slideshow, same size.
+    <View style={styles.screen}>
         <View style={styles.header}>
           <Text
             testID="popover-title"
@@ -426,7 +419,6 @@ export function ImagePopover({
           </View>
         ) : null}
       </View>
-    </Modal>
   );
 }
 

@@ -1,7 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   Linking,
-  Modal,
   Platform,
   Pressable,
   ScrollView,
@@ -142,7 +141,7 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
   },
   ref: React.Ref<NoteSlideshowHandle>,
 ) {
-  const { width: pageWidth, height: windowHeight } = useWindowDimensions();
+  const { width: pageWidth } = useWindowDimensions();
   const pagerRef = useRef<ScrollView | null>(null);
   const [currentIndex, setCurrentIndex] = useState(() =>
     clampSlideshowIndex(notes.length, initialIndex),
@@ -252,14 +251,10 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
   );
 
   return (
-    <Modal
-      visible
-      animationType="slide"
-      onRequestClose={() => close()}
-      onDismiss={() => close()}>
-      {/* Explicit window height: on Windows the Modal host sizes to its
-          content, so flex:1 alone grows past the screen and can't be moved. */}
-      <View style={[styles.screen, { height: windowHeight }]}>
+    // Inline (no Modal): shares the main window with the table, so it keeps
+    // the same dimensions and stays resizable. A Modal opens a separate
+    // native window on Windows/macOS that fills the screen.
+    <View style={styles.screen}>
         <View style={styles.header}>
           <View style={styles.spacer} />
           <View style={styles.counterPill}>
@@ -310,7 +305,6 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
           </ScrollView>
         )}
       </View>
-    </Modal>
   );
 });
 

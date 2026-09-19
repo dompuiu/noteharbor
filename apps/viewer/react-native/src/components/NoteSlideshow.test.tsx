@@ -1,5 +1,5 @@
 import React from 'react';
-import { Linking, Modal, Text } from 'react-native';
+import { Linking, Text } from 'react-native';
 import ReactTestRenderer, { act } from 'react-test-renderer';
 
 import type { NoteRecord } from '../shared/viewer-core';
@@ -128,10 +128,9 @@ function captureKeyListeners() {
   };
 }
 
-test('renders a dark modal with the position counter and Back', () => {
+test('renders inline with the position counter and Back', () => {
   const tree = renderSlideshow();
 
-  expect(tree.root.findByType(Modal).props.visible).toBe(true);
   expect(textContent(tree, 'slideshow-counter')).toBe('1 / 2');
   expect(textContent(tree, 'slideshow-back')).toBe('Back');
 });
@@ -212,17 +211,6 @@ test('Back closes returning the current noteId', () => {
   expect(onClose).toHaveBeenCalledWith({ noteId: 1 });
 });
 
-test('request-close routes through the same close-with-note path', () => {
-  const onClose = jest.fn();
-  const tree = renderSlideshow({ onClose });
-
-  act(() => {
-    tree.root.findByType(Modal).props.onRequestClose();
-  });
-
-  expect(onClose).toHaveBeenCalledWith({ noteId: 1 });
-});
-
 test('Escape closes with the current note', () => {
   const onClose: jest.Mock<void, [SlideshowReturn | null]> = jest.fn();
   const { added, restore } = captureKeyListeners();
@@ -278,17 +266,6 @@ test('swiping the pager updates the position counter', () => {
   });
 
   expect(textContent(tree, 'slideshow-counter')).toBe('2 / 2');
-});
-
-test('modal dismiss routes through the same close-with-note path', () => {
-  const onClose = jest.fn();
-  const tree = renderSlideshow({ onClose });
-
-  act(() => {
-    tree.root.findByType(Modal).props.onDismiss();
-  });
-
-  expect(onClose).toHaveBeenCalledWith({ noteId: 1 });
 });
 
 test('source URL opens externally with scheme normalization', async () => {
