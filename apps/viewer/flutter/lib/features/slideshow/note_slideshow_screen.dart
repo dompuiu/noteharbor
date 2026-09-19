@@ -319,12 +319,12 @@ class _NoteSlideState extends State<_NoteSlide> {
                         ],
                         const SizedBox(height: 16),
                         _NoteImage(
-                          image: widget.note.previewFor('front'),
+                          image: widget.note.fullFor('front'),
                           onTap: () => widget.onTapImage(widget.note, 'front'),
                         ),
                         const SizedBox(height: 12),
                         _NoteImage(
-                          image: widget.note.previewFor('back'),
+                          image: widget.note.fullFor('back'),
                           onTap: () => widget.onTapImage(widget.note, 'back'),
                         ),
                         const SizedBox(height: 16),
