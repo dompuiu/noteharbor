@@ -9,6 +9,8 @@ import App from '../App';
 jest.mock('react-native', () => ({
   Platform: {OS: 'ios'},
   Pressable: 'Pressable',
+  Image: 'Image',
+  ScrollView: 'ScrollView',
   StatusBar: 'StatusBar',
   Text: 'Text',
   TextInput: 'TextInput',

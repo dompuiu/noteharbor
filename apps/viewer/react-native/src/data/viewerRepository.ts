@@ -1,6 +1,7 @@
 import type { ViewerDataset } from '../shared/viewer-core';
 
 export interface ViewerRepository {
+  readonly canManageImportedDatasets?: boolean;
   loadDataset(): Promise<ViewerDataset>;
   importArchive(archivePath: string): Promise<ViewerDataset>;
   deleteCollection(collectionId: number): Promise<ViewerDataset>;

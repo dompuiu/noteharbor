@@ -6,15 +6,13 @@ import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
-import { Platform, StatusBar, StyleSheet, Text, useWindowDimensions } from 'react-native';
+import { StatusBar, StyleSheet, Text } from 'react-native';
+import { viewerLight } from './src/theme/viewerTheme';
 
 import { Card, ScreenFrame } from './src/components/AppFrame';
-import { DesktopViewerShell } from './src/components/DesktopViewerShell';
 import { ImportBlockingOverlay } from './src/components/ImportBlockingOverlay';
 import { ManagePanel } from './src/components/ManagePanel';
-import { MobileViewerShell } from './src/components/MobileViewerShell';
-import { ViewerFilter } from './src/components/ViewerFilter';
-import { ViewerHeader } from './src/components/ViewerHeader';
+import { NotesTableScreen } from './src/components/NotesTableScreen';
 import { useViewerController } from './src/state/useViewerController';
 
 function App() {
@@ -28,9 +26,7 @@ function App() {
 
 function AppShell() {
   const insets = useSafeAreaInsets();
-  const { width } = useWindowDimensions();
   const controller = useViewerController();
-  const isDesktopLike = Platform.OS === 'macos' || Platform.OS === 'windows' || width >= 900;
 
   if (controller.isLoading) {
     return (
@@ -59,14 +55,8 @@ function AppShell() {
   return (
     <ScreenFrame topInset={insets.top} bottomInset={insets.bottom}>
       <Card>
-        <ViewerHeader sourceLabel={controller.sourceLabel} />
+        <NotesTableScreen controller={controller} />
         <ManagePanel controller={controller} />
-        <ViewerFilter query={controller.query} setQuery={controller.setQuery} />
-        {isDesktopLike ? (
-          <DesktopViewerShell controller={controller} />
-        ) : (
-          <MobileViewerShell controller={controller} />
-        )}
         <Text style={styles.meta}>{describeViewerCore()}</Text>
         <Text style={styles.meta}>viewer-core {viewerCoreVersion}</Text>
       </Card>
@@ -76,6 +66,23 @@ function AppShell() {
 }
 
 const styles = StyleSheet.create({
+  eyebrow: {
+    color: viewerLight.accent,
+    fontSize: 14,
+    fontWeight: '700',
+    letterSpacing: 0.8,
+    textTransform: 'uppercase',
+  },
+  title: {
+    color: viewerLight.text,
+    fontSize: 30,
+    fontWeight: '800',
+  },
+  body: {
+    color: viewerLight.text,
+    fontSize: 16,
+    lineHeight: 24,
+  },
   meta: {
     color: '#7a6247',
     fontSize: 13,
@@ -83,4 +90,6 @@ const styles = StyleSheet.create({
   },
 });
 
+// ponytail: NotesTableScreen renders without onOpenSlideshow/onOpenImport
+// until tickets 10 (slideshow) and 12 (import screen) provide those targets.
 export default App;
