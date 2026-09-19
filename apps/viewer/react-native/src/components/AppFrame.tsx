@@ -30,9 +30,9 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 20,
     backgroundColor: viewerLight.pageBackground,
-    justifyContent: 'center',
   },
   card: {
+    flex: 1,
     borderRadius: 24,
     padding: 24,
     backgroundColor: viewerLight.surface,

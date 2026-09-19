@@ -251,8 +251,10 @@ export function ImagePopover({
   isDesktopLike?: boolean;
 }) {
   const items = useMemo(() => buildPopoverSequence(notes), [notes]);
-  const { width: pageWidth } = useWindowDimensions();
+  const { width: windowWidth } = useWindowDimensions();
   const pagerRef = useRef<ScrollView | null>(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const pageWidth = containerWidth > 0 ? containerWidth : windowWidth;
   const [currentIndex, setCurrentIndex] = useState(() =>
     popoverInitialIndex(notes, initialNoteId, initialFace),
   );
@@ -342,7 +344,14 @@ export function ImagePopover({
 
   return (
     // Inline (no Modal): same window as the table/slideshow, same size.
-    <View style={styles.screen}>
+    <View
+      style={styles.screen}
+      onLayout={(event) => {
+        const { width } = event.nativeEvent.layout;
+        if (width > 0 && Math.abs(width - containerWidth) > 1) {
+          setContainerWidth(width);
+        }
+      }}>
         <View style={styles.header}>
           <Text
             testID="popover-title"

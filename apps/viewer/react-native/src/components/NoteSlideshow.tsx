@@ -141,8 +141,12 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
   },
   ref: React.Ref<NoteSlideshowHandle>,
 ) {
-  const { width: pageWidth } = useWindowDimensions();
+  const { width: windowWidth } = useWindowDimensions();
   const pagerRef = useRef<ScrollView | null>(null);
+  // Inline in the shared Card: measure our own width so pages match the
+  // visible column instead of overflowing past the Card padding.
+  const [containerWidth, setContainerWidth] = useState(0);
+  const pageWidth = containerWidth > 0 ? containerWidth : windowWidth;
   const [currentIndex, setCurrentIndex] = useState(() =>
     clampSlideshowIndex(notes.length, initialIndex),
   );
@@ -254,7 +258,14 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
     // Inline (no Modal): shares the main window with the table, so it keeps
     // the same dimensions and stays resizable. A Modal opens a separate
     // native window on Windows/macOS that fills the screen.
-    <View style={styles.screen}>
+    <View
+      style={styles.screen}
+      onLayout={(event) => {
+        const { width } = event.nativeEvent.layout;
+        if (width > 0 && Math.abs(width - containerWidth) > 1) {
+          setContainerWidth(width);
+        }
+      }}>
         <View style={styles.header}>
           <View style={styles.spacer} />
           <View style={styles.counterPill}>
