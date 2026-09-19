@@ -21,6 +21,10 @@ React Native Viewer reaches visual + behavioral parity with Flutter Viewer 1.0.5
 - [Image popover + Zoom view](issues/04-image-popover-parity.md): collection-wide 2N wrap + Back returns `noteId` + fit default / 1:1-gated zoom capped ~12x, built-ins only, always-dark.
 - [Image popover build](issues/11-image-popover-build.md): `ImagePopover` over the slideshow's filtered notes with 2N positional counter, hand-rolled double-tap/pinch zoom, note-identity return on every exit, App-bridged via `onOpenPopover`.
 - [Import screen parity](issues/05-import-screen-parity.md): navigator-free conditional + `showImport` Modal; delete `ManagePanel` for header import button; picker + verbatim confirms + `isMutating` blocking overlay; 4 pills + dropdown + ported date format; `Alert` ×3 + `app.json` footer.
+- [Pipeline foundation build](issues/08-pipeline-foundation.md): picker dep + `noteImageUri`/`NoteImageView` + date-format port + blocking overlay + sort-key state; harness fixed.
+- [Table parity build](issues/09-table-parity-build.md): `NotesTableScreen` 9-col + header pill/badge/import + tag/row-tap + h-scroll narrow; owns Table→slideshow contract.
+- [Slideshow parity build](issues/10-slideshow-parity-build.md): dark full-screen pager + meta panel + `1/N` pill + Back/keyboard/Source URL + popover handoff with jump-back sync.
+- [Import screen build](issues/12-import-screen-build.md): `ImportScreen` first-run + modal entry, picker-to-confirm-to-blocking-import, verbatim collection controls/confirms/messages, 4 pills + manifest footer; `ManagePanel` deleted.
 
 ## Not yet specified
 
