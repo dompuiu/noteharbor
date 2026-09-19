@@ -10,6 +10,7 @@
     "build:viewer:flutter:ios": "cd apps/viewer/flutter && flutter pub get && flutter build ios",
     "start:viewer:react-native": "pnpm --filter viewer_react_native start",
     "dev:viewer:react-native:ios": "pnpm --filter viewer_react_native ios",
+    "dev:viewer:react-native:windows": "pnpm --filter viewer_react_native windows",
     "test:viewer:react-native": "pnpm --filter viewer_react_native test",
     "layout": "tsps --layout layout.yml"
   },
