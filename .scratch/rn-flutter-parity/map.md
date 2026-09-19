@@ -19,6 +19,7 @@ React Native Viewer reaches visual + behavioral parity with Flutter Viewer 1.0.5
 - [Palette + theme tokens](issues/06-palette-theme-tokens.md): flat `viewerTheme` module, wired into all 7 components; unblocks 02–05.
 - [Table parity](issues/02-table-parity.md): 9-col sortable table + header pill/badge/import + tag/row-tap + scroll-reveal + h-scroll narrow + thumbs; search chrome in, syntax out (07).
 - [Image popover + Zoom view](issues/04-image-popover-parity.md): collection-wide 2N wrap + Back returns `noteId` + fit default / 1:1-gated zoom capped ~12x, built-ins only, always-dark.
+- [Image popover build](issues/11-image-popover-build.md): `ImagePopover` over the slideshow's filtered notes with 2N positional counter, hand-rolled double-tap/pinch zoom, note-identity return on every exit, App-bridged via `onOpenPopover`.
 - [Import screen parity](issues/05-import-screen-parity.md): navigator-free conditional + `showImport` Modal; delete `ManagePanel` for header import button; picker + verbatim confirms + `isMutating` blocking overlay; 4 pills + dropdown + ported date format; `Alert` ×3 + `app.json` footer.
 
 ## Not yet specified

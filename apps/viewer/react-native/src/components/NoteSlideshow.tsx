@@ -26,8 +26,9 @@ declare const window: unknown | undefined;
 
 export type SlideshowImageFace = 'front' | 'back';
 
-// Ticket 11 provides the Image popover behind this contract; until then the
-// prop stays optional and image taps are inert (mirrors Flutter's null guard).
+// Image popover contract (ticket 11: ImagePopover over the filtered notes,
+// returning the current Note identity for jump-back sync). Optional mirrors
+// Flutter's null guard; App.tsx wires it.
 export type OpenImagePopover = (
   note: NoteRecord,
   face: SlideshowImageFace,

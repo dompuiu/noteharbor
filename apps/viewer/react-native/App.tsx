@@ -12,10 +12,11 @@ import { useCallback, useState } from 'react';
 import { viewerLight } from './src/theme/viewerTheme';
 
 import { Card, ScreenFrame } from './src/components/AppFrame';
+import { ImagePopover } from './src/components/ImagePopover';
 import { ImportBlockingOverlay } from './src/components/ImportBlockingOverlay';
 import { ManagePanel } from './src/components/ManagePanel';
 import { NotesTableScreen, type OpenSlideshow, type SlideshowReturn } from './src/components/NotesTableScreen';
-import { NoteSlideshow } from './src/components/NoteSlideshow';
+import { NoteSlideshow, type OpenImagePopover } from './src/components/NoteSlideshow';
 import { useViewerController } from './src/state/useViewerController';
 
 function App() {
@@ -35,6 +36,12 @@ function AppShell() {
     initialIndex: number;
     resolve: (result: SlideshowReturn | null) => void;
   } | null>(null);
+  const [popover, setPopover] = useState<{
+    notes: NoteRecord[];
+    noteId: number;
+    face: 'front' | 'back';
+    resolve: (noteId: number | null) => void;
+  } | null>(null);
 
   const openSlideshow: OpenSlideshow = useCallback(
     (notes: NoteRecord[], initialIndex: number) =>
@@ -50,6 +57,30 @@ function AppShell() {
       setSlideshow(null);
     },
     [slideshow],
+  );
+
+  // Slideshow image-tap handoff: the popover pages the slideshow's filtered
+  // notes and returns the current Note identity, which the slideshow jumps
+  // to (its own openPopover already syncs; resolve here only unblocks it).
+  const openPopover: OpenImagePopover = useCallback(
+    (note: NoteRecord, face: 'front' | 'back') =>
+      new Promise<number | null>((resolve) => {
+        setPopover({
+          notes: slideshow?.notes ?? [note],
+          noteId: note.id,
+          face,
+          resolve,
+        });
+      }),
+    [slideshow],
+  );
+
+  const closePopover = useCallback(
+    (noteId: number | null) => {
+      popover?.resolve(noteId);
+      setPopover(null);
+    },
+    [popover],
   );
 
   if (controller.isLoading) {
@@ -89,6 +120,15 @@ function AppShell() {
           notes={slideshow.notes}
           initialIndex={slideshow.initialIndex}
           onClose={closeSlideshow}
+          onOpenPopover={openPopover}
+        />
+      ) : null}
+      {slideshow && popover ? (
+        <ImagePopover
+          notes={popover.notes}
+          initialNoteId={popover.noteId}
+          initialFace={popover.face}
+          onClose={closePopover}
         />
       ) : null}
       <ImportBlockingOverlay visible={controller.isMutating} />
