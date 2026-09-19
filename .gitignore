@@ -5,3 +5,4 @@ apps/*/*/dist/
 /data
 .idea
 .metadata
+.scratch
