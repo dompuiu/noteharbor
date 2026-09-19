@@ -181,12 +181,20 @@ test('notes text falls back to No extra notes.', () => {
   expect(textContent(withNotes, 'slide-notes-1')).toBe('Kept in a sleeve.');
 });
 
-test('missing images render as positional placeholders', () => {
-  const tree = renderSlideshow();
+test('missing images render as positional placeholders that still open the popover', async () => {
+  const onOpenPopover = jest.fn(() => Promise.resolve<number | null>(null));
+  const tree = renderSlideshow({ onOpenPopover });
 
   byTestId(tree, 'slideshow-image-placeholder-front-1');
   byTestId(tree, 'slideshow-image-placeholder-back-2');
-  absentTestId(tree, 'slideshow-image-tap-front-1');
+
+  await act(async () => {
+    await byTestId(tree, 'slideshow-image-tap-front-1').props.onPress();
+  });
+  expect(onOpenPopover).toHaveBeenCalledWith(
+    expect.objectContaining({ id: 1 }),
+    'front',
+  );
 });
 
 test('tag tap closes returning noteId and tagName', () => {
@@ -319,6 +327,25 @@ test('image tap opens the popover and the return jumps the slideshow', async () 
     ref.current?.jumpToNoteId(999);
   });
   expect(textContent(tree, 'slideshow-counter')).toBe('1 / 2');
+});
+
+test('footer prev/next page with wrap-around', () => {
+  const tree = renderSlideshow();
+
+  act(() => {
+    byTestId(tree, 'slideshow-next').props.onPress();
+  });
+  expect(textContent(tree, 'slideshow-counter')).toBe('2 / 2');
+
+  act(() => {
+    byTestId(tree, 'slideshow-next').props.onPress();
+  });
+  expect(textContent(tree, 'slideshow-counter')).toBe('1 / 2');
+
+  act(() => {
+    byTestId(tree, 'slideshow-prev').props.onPress();
+  });
+  expect(textContent(tree, 'slideshow-counter')).toBe('2 / 2');
 });
 
 test('bottom fade hides at scroll bottom', () => {

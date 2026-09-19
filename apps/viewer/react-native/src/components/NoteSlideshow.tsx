@@ -315,6 +315,24 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
             ))}
           </ScrollView>
         )}
+        {notes.length > 0 ? (
+          <View style={styles.footer}>
+            <Pressable
+              testID="slideshow-prev"
+              accessibilityLabel={`Previous note, ${currentIndex + 1} of ${notes.length}`}
+              onPress={() => goPrevious()}
+              style={styles.navButton}>
+              <Text style={styles.navText}>‹ Prev</Text>
+            </Pressable>
+            <Pressable
+              testID="slideshow-next"
+              accessibilityLabel={`Next note, ${currentIndex + 1} of ${notes.length}`}
+              onPress={() => goNext()}
+              style={styles.navButton}>
+              <Text style={styles.navText}>Next ›</Text>
+            </Pressable>
+          </View>
+        ) : null}
       </View>
   );
 });
@@ -460,16 +478,23 @@ function SlideImage({
   const label = `${face} image of ${noteTitle(note)}`;
 
   if (!uri) {
+    // Placeholder stays tappable so the popover is reachable even with no
+    // image (popover keeps nulls as positional "No image" pages).
     return (
-      <View testID={`slideshow-image-placeholder-${face}-${note.id}`}>
-        <NoteImageView
-          uri={null}
-          tone="dark"
-          width={imageWidth}
-          height={imageHeight}
-          label={label}
-        />
-      </View>
+      <Pressable
+        testID={`slideshow-image-tap-${face}-${note.id}`}
+        accessibilityLabel={`Open ${face} image fullscreen`}
+        onPress={() => onImageTap(face)}>
+        <View testID={`slideshow-image-placeholder-${face}-${note.id}`}>
+          <NoteImageView
+            uri={null}
+            tone="dark"
+            width={imageWidth}
+            height={imageHeight}
+            label={label}
+          />
+        </View>
+      </Pressable>
     );
   }
 
@@ -645,5 +670,26 @@ const styles = StyleSheet.create({
   },
   fadeStrip: {
     flex: 1,
+  },
+  footer: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingTop: 8,
+    paddingBottom: 12,
+    gap: 12,
+  },
+  navButton: {
+    flex: 1,
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    backgroundColor: viewerDark.scrim,
+    borderRadius: viewerRadii.md,
+  },
+  navText: {
+    color: viewerDark.text,
+    fontSize: 14,
+    fontWeight: '600',
   },
 });
