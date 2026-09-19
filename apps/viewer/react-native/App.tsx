@@ -7,14 +7,14 @@ import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
-import { StatusBar, StyleSheet, Text } from 'react-native';
+import { StatusBar, Modal, StyleSheet, Text } from 'react-native';
 import { useCallback, useState } from 'react';
 import { viewerLight } from './src/theme/viewerTheme';
 
 import { Card, ScreenFrame } from './src/components/AppFrame';
 import { ImagePopover } from './src/components/ImagePopover';
 import { ImportBlockingOverlay } from './src/components/ImportBlockingOverlay';
-import { ManagePanel } from './src/components/ManagePanel';
+import { ImportScreen } from './src/components/ImportScreen';
 import { NotesTableScreen, type OpenSlideshow, type SlideshowReturn } from './src/components/NotesTableScreen';
 import { NoteSlideshow, type OpenImagePopover } from './src/components/NoteSlideshow';
 import { useViewerController } from './src/state/useViewerController';
@@ -31,6 +31,7 @@ function App() {
 function AppShell() {
   const insets = useSafeAreaInsets();
   const controller = useViewerController();
+  const [showImport, setShowImport] = useState(false);
   const [slideshow, setSlideshow] = useState<{
     notes: NoteRecord[];
     initialIndex: number;
@@ -107,11 +108,27 @@ function AppShell() {
     );
   }
 
+  const needsImport =
+    controller.dataset == null ||
+    controller.dataset.collections.length === 0;
+
+  if (needsImport) {
+    return (
+      <ScreenFrame topInset={insets.top} bottomInset={insets.bottom}>
+        <ImportScreen controller={controller} isFirstRun />
+        <ImportBlockingOverlay visible={controller.isMutating} />
+      </ScreenFrame>
+    );
+  }
+
   return (
     <ScreenFrame topInset={insets.top} bottomInset={insets.bottom}>
       <Card>
-        <NotesTableScreen controller={controller} onOpenSlideshow={openSlideshow} />
-        <ManagePanel controller={controller} />
+        <NotesTableScreen
+          controller={controller}
+          onOpenSlideshow={openSlideshow}
+          onOpenImport={() => setShowImport(true)}
+        />
         <Text style={styles.meta}>{describeViewerCore()}</Text>
         <Text style={styles.meta}>viewer-core {viewerCoreVersion}</Text>
       </Card>
@@ -131,6 +148,21 @@ function AppShell() {
           onClose={closePopover}
         />
       ) : null}
+      <Modal
+        visible={showImport}
+        animationType="slide"
+        onRequestClose={() => {
+          // Block back while mutating (Flutter PopScope canPop:!_isImporting).
+          if (!controller.isMutating) {
+            setShowImport(false);
+          }
+        }}>
+        <ImportScreen
+          controller={controller}
+          isFirstRun={false}
+          onClose={() => setShowImport(false)}
+        />
+      </Modal>
       <ImportBlockingOverlay visible={controller.isMutating} />
     </ScreenFrame>
   );
@@ -161,6 +193,4 @@ const styles = StyleSheet.create({
   },
 });
 
-// ponytail: NotesTableScreen renders without onOpenImport until ticket 12
-// (import screen) provides that target.
 export default App;

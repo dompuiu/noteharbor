@@ -4,9 +4,11 @@ import { viewerLight } from '../theme/viewerTheme';
 export function ImportBlockingOverlay({
   visible,
   archiveName,
+  testID,
 }: {
   visible: boolean;
   archiveName?: string | null;
+  testID?: string;
 }) {
   if (!visible) {
     return null;
@@ -18,7 +20,7 @@ export function ImportBlockingOverlay({
       transparent
       animationType="fade"
       onRequestClose={() => {}}>
-      <View style={styles.barrier}>
+      <View testID={testID} style={styles.barrier}>
         <View style={styles.card}>
           <ActivityIndicator size="large" color={viewerLight.accent} />
           <Text style={styles.title}>Importing archive...</Text>

@@ -7,6 +7,9 @@ import ReactTestRenderer from 'react-test-renderer';
 import App from '../App';
 
 jest.mock('react-native', () => ({
+  ActivityIndicator: 'ActivityIndicator',
+  Alert: {alert: jest.fn()},
+  Modal: 'Modal',
   Platform: {OS: 'ios'},
   Pressable: 'Pressable',
   Image: 'Image',
