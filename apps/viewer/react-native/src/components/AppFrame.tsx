@@ -1,4 +1,5 @@
 import { StyleSheet, View } from 'react-native';
+import { viewerLight } from '../theme/viewerTheme';
 
 export function ScreenFrame({
   children,
@@ -28,15 +29,15 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     paddingHorizontal: 20,
-    backgroundColor: '#f1e4d4',
+    backgroundColor: viewerLight.pageBackground,
     justifyContent: 'center',
   },
   card: {
     borderRadius: 24,
     padding: 24,
-    backgroundColor: '#fffaf2',
+    backgroundColor: viewerLight.surface,
     borderWidth: 1,
-    borderColor: '#d5bea0',
+    borderColor: viewerLight.borderControl,
     gap: 16,
   },
 });

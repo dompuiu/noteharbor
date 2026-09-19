@@ -131,6 +131,9 @@ async function writeArchiveEntries(outputDir: string, archiveBytes: Uint8Array) 
 
   const archive = unzipSync(archiveBytes);
 
+  // Yield to the event loop every few writes so the blocking overlay paints.
+  const yieldEveryEntries = 8;
+  let writtenEntries = 0;
   for (const [entryName, entryBytes] of Object.entries(archive)) {
     const normalizedEntryPath = ensureSafeArchivePath(entryName);
     const entryOutputPath = `${outputDir}/${normalizedEntryPath}`;
@@ -148,6 +151,11 @@ async function writeArchiveEntries(outputDir: string, archiveBytes: Uint8Array) 
     }
 
     await fileSystem.writeFile(entryOutputPath, bytesToBase64(entryBytes), 'base64');
+
+    writtenEntries += 1;
+    if (writtenEntries % yieldEveryEntries === 0) {
+      await new Promise<void>((resolve) => setTimeout(resolve, 0));
+    }
   }
 }
 

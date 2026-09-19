@@ -1,5 +1,6 @@
 import { noteTagsLabel, noteTitle } from '../shared/viewer-core';
 import { StyleSheet, Text, View } from 'react-native';
+import { viewerLight } from '../theme/viewerTheme';
 
 import type { ViewerControllerState } from '../state/useViewerController';
 
@@ -36,12 +37,12 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionTitle: {
-    color: '#3f2a1d',
+    color: viewerLight.text,
     fontSize: 17,
     fontWeight: '700',
   },
   meta: {
-    color: '#7a6247',
+    color: viewerLight.textMuted,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -49,22 +50,22 @@ const styles = StyleSheet.create({
     gap: 6,
     borderRadius: 18,
     padding: 16,
-    backgroundColor: '#f7efe3',
+    backgroundColor: viewerLight.pageBackground,
     borderWidth: 1,
-    borderColor: '#e0ccb1',
+    borderColor: viewerLight.border,
   },
   noteTitle: {
-    color: '#241912',
+    color: viewerLight.text,
     fontSize: 18,
     fontWeight: '700',
   },
   noteMeta: {
-    color: '#73573a',
+    color: viewerLight.textMuted,
     fontSize: 13,
     fontWeight: '600',
   },
   noteBody: {
-    color: '#4f3925',
+    color: viewerLight.text,
     fontSize: 14,
     lineHeight: 20,
   },

@@ -1,5 +1,6 @@
 import { activeCollectionNotes } from '../shared/viewer-core';
 import { StyleSheet, Text, View } from 'react-native';
+import { viewerLight } from '../theme/viewerTheme';
 
 import { DesktopNotesTable } from './DesktopNotesTable';
 import type { ViewerControllerState } from '../state/useViewerController';
@@ -49,12 +50,12 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionTitle: {
-    color: '#3f2a1d',
+    color: viewerLight.text,
     fontSize: 17,
     fontWeight: '700',
   },
   meta: {
-    color: '#7a6247',
+    color: viewerLight.textMuted,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -64,15 +65,15 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   collectionChip: {
-    color: '#5d4328',
-    backgroundColor: '#efe1ce',
+    color: viewerLight.accentStrong,
+    backgroundColor: viewerLight.surfaceContainer,
     borderRadius: 999,
     paddingHorizontal: 12,
     paddingVertical: 8,
     overflow: 'hidden',
   },
   collectionChipActive: {
-    color: '#fffaf2',
-    backgroundColor: '#8b5a2b',
+    color: viewerLight.surface,
+    backgroundColor: viewerLight.accent,
   },
 });

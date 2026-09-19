@@ -58,7 +58,11 @@ Object.defineProperties(global, {
   window: {
     configurable: true,
     enumerable: true,
-    value: global,
+    value: Object.assign(global, {
+      addEventListener: () => undefined,
+      dispatchEvent: () => false,
+      removeEventListener: () => undefined,
+    }),
     writable: true,
   },
 });

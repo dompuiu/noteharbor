@@ -23,6 +23,9 @@ export interface ViewerControllerState {
   activeCollectionId: number | null;
   activeCollection: ViewerCollection | null;
   selectCollection: (collectionId: number) => void;
+  sortKey: string;
+  ascending: boolean;
+  setSort: (key: string) => void;
   filteredNotes: ViewerDataset['notes'];
   sourceLabel: string;
   importArchive: (archivePath: string) => Promise<void>;
@@ -43,6 +46,20 @@ export function useViewerController(
   const [query, setQuery] = useState('');
   const [selectedCollectionId, setSelectedCollectionId] = useState<number | null>(
     null,
+  );
+  const [sortKey, setSortKey] = useState('displayOrder');
+  const [ascending, setAscending] = useState(true);
+
+  const setSort = useCallback(
+    (key: string) => {
+      if (key === sortKey) {
+        setAscending((current) => !current);
+      } else {
+        setSortKey(key);
+        setAscending(true);
+      }
+    },
+    [sortKey],
   );
 
   const loadDataset = useCallback(async () => {
@@ -140,8 +157,8 @@ export function useViewerController(
   );
   const filteredNotes = useMemo(() => {
     const notes = activeCollectionNotes(dataset, activeCollectionId);
-    return sortViewerNotes(filterViewerNotes(notes, query), 'displayOrder', true);
-  }, [dataset, activeCollectionId, query]);
+    return sortViewerNotes(filterViewerNotes(notes, query), sortKey, ascending);
+  }, [dataset, activeCollectionId, query, sortKey, ascending]);
 
   return {
     dataset,
@@ -153,6 +170,9 @@ export function useViewerController(
     activeCollectionId,
     activeCollection,
     selectCollection: setSelectedCollectionId,
+    sortKey,
+    ascending,
+    setSort,
     filteredNotes,
     sourceLabel: dataset ? datasetSourceLabel(dataset.source) : 'No dataset loaded',
     importArchive: async (archivePath: string) => {

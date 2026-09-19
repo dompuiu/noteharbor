@@ -5,8 +5,11 @@ import {
   activeCollectionIdForDataset,
   activeCollectionNotes,
   datasetSourceLabel,
+  describeDatasetBuiltAt,
   filterViewerNotes,
+  formatFriendlyDatasetBuiltAt,
   noteFullImage,
+  noteImageUri,
   notePreviewImage,
   noteTagsLabel,
   noteTitle,
@@ -152,5 +155,50 @@ describe('viewer core dataset rules', () => {
 
     const sortedByCatalog = sortViewerNotes(dataset.notes, 'catalogNumber', true);
     expect(sortedByCatalog.map((note) => note.id)).toEqual([2, 1]);
+  });
+});
+
+describe('pipeline foundation', () => {
+  it('formats dataset built dates like Flutter', () => {
+    expect(formatFriendlyDatasetBuiltAt('2026-05-30T00:00:00.000Z')).toBe(
+      'May 30, 2026 at 00:00 UTC',
+    );
+    expect(formatFriendlyDatasetBuiltAt('not-a-date')).toBe('not-a-date');
+    expect(formatFriendlyDatasetBuiltAt('  ')).toBe('');
+  });
+
+  it('falls back when no dataset built date exists', () => {
+    expect(describeDatasetBuiltAt(null)).toBe('Not available yet');
+    expect(describeDatasetBuiltAt(undefined)).toBe('Not available yet');
+    expect(describeDatasetBuiltAt('')).toBe('Not available yet');
+    expect(describeDatasetBuiltAt('2026-05-30T00:00:00.000Z')).toBe(
+      'May 30, 2026 at 00:00 UTC',
+    );
+  });
+
+  it('resolves local file URIs for note images', () => {    expect(
+      noteImageUri({ type: 'front', variant: 'thumbnail', filePath: '/tmp/a.jpg' }),
+    ).toBe('file:///tmp/a.jpg');
+    expect(
+      noteImageUri({
+        type: 'front',
+        variant: 'full',
+        filePath: 'file:///tmp/a.jpg',
+      }),
+    ).toBe('file:///tmp/a.jpg');
+    expect(
+      noteImageUri({ type: 'front', variant: 'full', assetPath: 'bundled-front' }),
+    ).toBe('bundled-front');
+    expect(noteImageUri({ type: 'front', variant: 'full' })).toBeNull();
+    expect(noteImageUri(undefined)).toBeNull();
+  });
+
+  it('composes preview/full variant selection with uri resolution', () => {
+    expect(noteImageUri(notePreviewImage(dataset.notes[0], 'front'))).toBe(
+      'file:///tmp/front-thumb.jpg',
+    );
+    expect(noteImageUri(noteFullImage(dataset.notes[0], 'front'))).toBe(
+      'file:///tmp/front-full.jpg',
+    );
   });
 });

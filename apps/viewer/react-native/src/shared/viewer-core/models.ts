@@ -116,3 +116,17 @@ export function notePreviewImage(note: NoteRecord, type: string) {
 export function noteFullImage(note: NoteRecord, type: string) {
   return noteImageFor(note, type, 'full') ?? noteImageFor(note, type, 'thumbnail');
 }
+
+export function noteImageUri(image: NoteImage | null | undefined): string | null {
+  if (!image) {
+    return null;
+  }
+
+  if (image.filePath) {
+    return image.filePath.startsWith('file://')
+      ? image.filePath
+      : `file://${image.filePath}`;
+  }
+
+  return image.assetPath ?? null;
+}

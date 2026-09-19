@@ -115,6 +115,9 @@ importers:
 
   apps/viewer/react-native:
     dependencies:
+      '@react-native-documents/picker':
+        specifier: 12.0.2
+        version: 12.0.2(react-native@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(@react-native-community/cli@19.1.0(supports-color@8.1.1)(typescript@5.9.3))(@react-native/metro-config@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.1.4)(supports-color@8.1.1))(react@19.1.4)
       base-64:
         specifier: ^1.0.0
         version: 1.0.0
@@ -1521,6 +1524,12 @@ packages:
     resolution: {integrity: sha512-L9GL4YtgvoaS7DXcBuHZ1WtH+D2wV6G33THpxVmBEaJQp/vgRQg9Z4bb+9Mj/rBcATgbUu4Sd7H3xJE2qCd93w==}
     engines: {node: '>=18'}
     hasBin: true
+
+  '@react-native-documents/picker@12.0.2':
+    resolution: {integrity: sha512-tiaPQjSdsaCkKw/N8XB+DXfhOJ+KJ1OYDliBGoBHEqLI7AhUsSPhn8fRI/gHs7hpYzqOBKf+em9MUrPIA9mlWA==}
+    peerDependencies:
+      react: '*'
+      react-native: '>=0.79.0'
 
   '@react-native-macos/virtualized-lists@0.81.7':
     resolution: {integrity: sha512-kD+MdpS+pLG2c4ghX5lD5a9GR0N/fKx77d2+fimTJMoJXp0qXwp1xJriZj8ZkL/Xqb3HgpxVcp0e5esgG3nBwg==}
@@ -7602,6 +7611,11 @@ snapshots:
       - typescript
       - utf-8-validate
 
+  '@react-native-documents/picker@12.0.2(react-native@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(@react-native-community/cli@19.1.0(supports-color@8.1.1)(typescript@5.9.3))(@react-native/metro-config@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.1.4)(supports-color@8.1.1))(react@19.1.4)':
+    dependencies:
+      react: 19.1.4
+      react-native: 0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(@react-native-community/cli@19.1.0(supports-color@8.1.1)(typescript@5.9.3))(@react-native/metro-config@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.1.4)(supports-color@8.1.1)
+
   '@react-native-macos/virtualized-lists@0.81.7(@types/react@19.2.15)(react-native@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(@react-native-community/cli@19.1.0(supports-color@8.1.1)(typescript@5.9.3))(@react-native/metro-config@0.81.6(@babel/core@7.29.7(supports-color@8.1.1))(supports-color@8.1.1))(@types/react@19.2.15)(react@19.1.4)(supports-color@8.1.1))(react@19.1.4)':
     dependencies:
       invariant: 2.2.4
@@ -11055,7 +11069,7 @@ snapshots:
       '@babel/types': 7.29.7
       flow-enums-runtime: 0.0.6
       invariant: 2.2.4
-      metro-symbolicate: 0.83.7(supports-color@8.1.1)
+      metro-symbolicate: 0.83.7
       nullthrows: 1.1.1
       ob1: 0.83.7
       source-map: 0.5.7
@@ -11063,7 +11077,7 @@ snapshots:
     transitivePeerDependencies:
       - supports-color
 
-  metro-symbolicate@0.83.7(supports-color@8.1.1):
+  metro-symbolicate@0.83.7:
     dependencies:
       flow-enums-runtime: 0.0.6
       invariant: 2.2.4
@@ -11071,8 +11085,6 @@ snapshots:
       nullthrows: 1.1.1
       source-map: 0.5.7
       vlq: 1.0.1
-    transitivePeerDependencies:
-      - supports-color
 
   metro-transform-plugins@0.83.7(supports-color@8.1.1):
     dependencies:
@@ -11136,7 +11148,7 @@ snapshots:
       metro-resolver: 0.83.7
       metro-runtime: 0.83.7
       metro-source-map: 0.83.7(supports-color@8.1.1)
-      metro-symbolicate: 0.83.7(supports-color@8.1.1)
+      metro-symbolicate: 0.83.7
       metro-transform-plugins: 0.83.7(supports-color@8.1.1)
       metro-transform-worker: 0.83.7(supports-color@8.1.1)
       mime-types: 3.0.2

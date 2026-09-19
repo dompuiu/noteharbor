@@ -1,5 +1,45 @@
 import type { ViewerDataset } from './models';
 
+const monthNames = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
+
+// Exact port of Flutter's formatFriendlyDatasetBuiltAt
+// (apps/viewer/flutter/lib/utils/dataset_date_format.dart).
+export function formatFriendlyDatasetBuiltAt(value: string) {
+  const trimmed = value.trim();
+  if (!trimmed) {
+    return trimmed;
+  }
+
+  const parsed = new Date(trimmed);
+  if (Number.isNaN(parsed.getTime())) {
+    return trimmed;
+  }
+
+  const pad = (part: number) => `${part}`.padStart(2, '0');
+  return `${monthNames[parsed.getUTCMonth()]} ${pad(parsed.getUTCDate())}, ${parsed.getUTCFullYear()} at ${pad(parsed.getUTCHours())}:${pad(parsed.getUTCMinutes())} UTC`;
+}
+
+export function describeDatasetBuiltAt(generatedAt: string | null | undefined) {
+  if (!generatedAt?.trim()) {
+    return 'Not available yet';
+  }
+
+  return formatFriendlyDatasetBuiltAt(generatedAt);
+}
+
 export function activeCollectionIdForDataset(
   dataset: ViewerDataset | null | undefined,
   currentCollectionId?: number | null,

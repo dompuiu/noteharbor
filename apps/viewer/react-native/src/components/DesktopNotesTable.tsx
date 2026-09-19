@@ -1,5 +1,6 @@
 import { noteTagsLabel, noteTitle } from '../shared/viewer-core';
 import { StyleSheet, Text, View } from 'react-native';
+import { viewerLight } from '../theme/viewerTheme';
 
 import type { ViewerControllerState } from '../state/useViewerController';
 
@@ -37,22 +38,22 @@ const styles = StyleSheet.create({
     gap: 10,
     paddingVertical: 8,
     borderBottomWidth: 1,
-    borderBottomColor: '#dcc9af',
+    borderBottomColor: viewerLight.border,
   },
   headerText: {
     fontWeight: '800',
-    color: '#3f2a1d',
+    color: viewerLight.text,
   },
   row: {
     flexDirection: 'row',
     gap: 10,
     paddingVertical: 10,
     borderBottomWidth: 1,
-    borderBottomColor: '#eee1cf',
+    borderBottomColor: viewerLight.borderSoft,
   },
   cell: {
     flex: 1,
-    color: '#4f3925',
+    color: viewerLight.text,
     fontSize: 13,
   },
 });

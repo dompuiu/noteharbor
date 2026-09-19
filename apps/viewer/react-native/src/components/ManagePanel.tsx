@@ -1,4 +1,5 @@
 import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { viewerLight } from '../theme/viewerTheme';
 
 import type { ViewerControllerState } from '../state/useViewerController';
 
@@ -78,12 +79,12 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionTitle: {
-    color: '#3f2a1d',
+    color: viewerLight.text,
     fontSize: 17,
     fontWeight: '700',
   },
   meta: {
-    color: '#7a6247',
+    color: viewerLight.textMuted,
     fontSize: 13,
     fontWeight: '600',
   },
@@ -96,21 +97,21 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 10,
-    backgroundColor: '#8b5a2b',
+    backgroundColor: viewerLight.accent,
   },
   buttonDisabled: {
-    backgroundColor: '#d4c1a7',
+    backgroundColor: viewerLight.borderControl,
   },
   buttonText: {
-    color: '#fffaf2',
+    color: viewerLight.surface,
     fontSize: 13,
     fontWeight: '700',
   },
   buttonTextDisabled: {
-    color: '#7c6951',
+    color: viewerLight.textMuted,
   },
   errorText: {
-    color: '#8c2d1f',
+    color: viewerLight.danger,
     fontSize: 13,
     fontWeight: '700',
   },

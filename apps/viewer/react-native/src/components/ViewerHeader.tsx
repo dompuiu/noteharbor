@@ -1,4 +1,5 @@
 import { StyleSheet, Text, View } from 'react-native';
+import { viewerLight } from '../theme/viewerTheme';
 
 export function ViewerHeader({ sourceLabel }: { sourceLabel: string }) {
   return (
@@ -18,24 +19,24 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   eyebrow: {
-    color: '#8b5a2b',
+    color: viewerLight.accent,
     fontSize: 14,
     fontWeight: '700',
     letterSpacing: 0.8,
     textTransform: 'uppercase',
   },
   title: {
-    color: '#241912',
+    color: viewerLight.text,
     fontSize: 30,
     fontWeight: '800',
   },
   body: {
-    color: '#4f3925',
+    color: viewerLight.text,
     fontSize: 16,
     lineHeight: 24,
   },
   meta: {
-    color: '#7a6247',
+    color: viewerLight.textMuted,
     fontSize: 13,
     fontWeight: '600',
   },

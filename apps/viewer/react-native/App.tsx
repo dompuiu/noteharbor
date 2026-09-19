@@ -10,6 +10,7 @@ import { Platform, StatusBar, StyleSheet, Text, useWindowDimensions } from 'reac
 
 import { Card, ScreenFrame } from './src/components/AppFrame';
 import { DesktopViewerShell } from './src/components/DesktopViewerShell';
+import { ImportBlockingOverlay } from './src/components/ImportBlockingOverlay';
 import { ManagePanel } from './src/components/ManagePanel';
 import { MobileViewerShell } from './src/components/MobileViewerShell';
 import { ViewerFilter } from './src/components/ViewerFilter';
@@ -69,6 +70,7 @@ function AppShell() {
         <Text style={styles.meta}>{describeViewerCore()}</Text>
         <Text style={styles.meta}>viewer-core {viewerCoreVersion}</Text>
       </Card>
+      <ImportBlockingOverlay visible={controller.isMutating} />
     </ScreenFrame>
   );
 }

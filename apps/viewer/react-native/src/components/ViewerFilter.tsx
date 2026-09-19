@@ -1,4 +1,5 @@
 import { StyleSheet, Text, TextInput, View } from 'react-native';
+import { viewerLight } from '../theme/viewerTheme';
 
 export function ViewerFilter({
   query,
@@ -14,7 +15,7 @@ export function ViewerFilter({
         value={query}
         onChangeText={setQuery}
         placeholder="Try tags: romania or catalog: p-98"
-        placeholderTextColor="#9c8469"
+        placeholderTextColor={viewerLight.textFaint}
         style={styles.input}
       />
     </View>
@@ -26,17 +27,17 @@ const styles = StyleSheet.create({
     gap: 10,
   },
   sectionTitle: {
-    color: '#3f2a1d',
+    color: viewerLight.text,
     fontSize: 17,
     fontWeight: '700',
   },
   input: {
     borderWidth: 1,
-    borderColor: '#d5bea0',
+    borderColor: viewerLight.borderControl,
     borderRadius: 14,
     paddingHorizontal: 14,
     paddingVertical: 12,
-    color: '#241912',
-    backgroundColor: '#fffdf9',
+    color: viewerLight.text,
+    backgroundColor: viewerLight.surface,
   },
 });
