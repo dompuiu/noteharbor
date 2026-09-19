@@ -385,6 +385,7 @@ export function ImagePopover({
             pagingEnabled
             scrollEnabled={pagerEnabled}
             showsHorizontalScrollIndicator={false}
+            style={styles.pager}
             onMomentumScrollEnd={(event) => {
               const measured = event.nativeEvent.layoutMeasurement.width;
               const page = measured > 0 ? measured : pageWidth;
@@ -881,6 +882,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingTop: 4,
     paddingBottom: 8,
+  },
+  pager: {
+    flex: 1,
   },
   card: {
     flex: 1,

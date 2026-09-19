@@ -286,6 +286,7 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
             horizontal
             pagingEnabled
             showsHorizontalScrollIndicator={false}
+            style={styles.pager}
             onMomentumScrollEnd={(event) => {
               const measured = event.nativeEvent.layoutMeasurement.width;
               const page = measured > 0 ? measured : pageWidth;
@@ -344,6 +345,7 @@ function NoteSlide({
       <View style={styles.slideCard}>
         <ScrollView
           testID={`slide-scroll-${note.id}`}
+          style={styles.slideScroll}
           contentContainerStyle={styles.slideContent}
           onScroll={(event) => {
             const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
@@ -535,6 +537,12 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingHorizontal: 12,
     paddingTop: 4,
+  },
+  pager: {
+    flex: 1,
+  },
+  slideScroll: {
+    flex: 1,
   },
   slideCard: {
     flex: 1,
