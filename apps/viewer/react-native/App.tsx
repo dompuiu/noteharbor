@@ -7,7 +7,7 @@ import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
-import { StatusBar, Modal, StyleSheet, Text } from 'react-native';
+import { StatusBar, Modal, StyleSheet, Text, useWindowDimensions, View } from 'react-native';
 import { useCallback, useState } from 'react';
 import { viewerLight } from './src/theme/viewerTheme';
 
@@ -30,6 +30,7 @@ function App() {
 
 function AppShell() {
   const insets = useSafeAreaInsets();
+  const { height: windowHeight } = useWindowDimensions();
   const controller = useViewerController();
   const [showImport, setShowImport] = useState(false);
   const [slideshow, setSlideshow] = useState<{
@@ -157,11 +158,15 @@ function AppShell() {
             setShowImport(false);
           }
         }}>
-        <ImportScreen
-          controller={controller}
-          isFirstRun={false}
-          onClose={() => setShowImport(false)}
-        />
+        {/* Bounded height so the Modal can't size to its content on Windows
+            and grow past the screen. */}
+        <View style={[styles.importModalWrap, { height: windowHeight }]}>
+          <ImportScreen
+            controller={controller}
+            isFirstRun={false}
+            onClose={() => setShowImport(false)}
+          />
+        </View>
       </Modal>
       <ImportBlockingOverlay visible={controller.isMutating} />
     </ScreenFrame>
@@ -190,6 +195,9 @@ const styles = StyleSheet.create({
     color: '#7a6247',
     fontSize: 13,
     fontWeight: '600',
+  },
+  importModalWrap: {
+    backgroundColor: viewerLight.pageBackground,
   },
 });
 

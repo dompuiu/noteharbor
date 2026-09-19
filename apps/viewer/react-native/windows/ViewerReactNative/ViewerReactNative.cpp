@@ -74,7 +74,9 @@ _Use_decl_annotations_ int CALLBACK WinMain(HINSTANCE instance, HINSTANCE, PSTR 
   // Get the AppWindow so we can configure its initial title and size
   auto appWindow{reactNativeWin32App.AppWindow()};
   appWindow.Title(L"ViewerReactNative");
-  appWindow.Resize({1000, 1000});
+  // Default height fits 768p laptop screens; the Modals size to the
+  // window, so starting taller than the screen strands the title bar.
+  appWindow.Resize({1000, 700});
 
   // Get the ReactViewOptions so we can set the initial RN component to load
   auto viewOptions{reactNativeWin32App.ReactViewOptions()};

@@ -142,7 +142,7 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
   },
   ref: React.Ref<NoteSlideshowHandle>,
 ) {
-  const { width: pageWidth } = useWindowDimensions();
+  const { width: pageWidth, height: windowHeight } = useWindowDimensions();
   const pagerRef = useRef<ScrollView | null>(null);
   const [currentIndex, setCurrentIndex] = useState(() =>
     clampSlideshowIndex(notes.length, initialIndex),
@@ -257,7 +257,9 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
       animationType="slide"
       onRequestClose={() => close()}
       onDismiss={() => close()}>
-      <View style={styles.screen}>
+      {/* Explicit window height: on Windows the Modal host sizes to its
+          content, so flex:1 alone grows past the screen and can't be moved. */}
+      <View style={[styles.screen, { height: windowHeight }]}>
         <View style={styles.header}>
           <View style={styles.spacer} />
           <View style={styles.counterPill}>

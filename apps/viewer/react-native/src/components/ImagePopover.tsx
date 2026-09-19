@@ -252,7 +252,7 @@ export function ImagePopover({
   isDesktopLike?: boolean;
 }) {
   const items = useMemo(() => buildPopoverSequence(notes), [notes]);
-  const { width: pageWidth } = useWindowDimensions();
+  const { width: pageWidth, height: windowHeight } = useWindowDimensions();
   const pagerRef = useRef<ScrollView | null>(null);
   const [currentIndex, setCurrentIndex] = useState(() =>
     popoverInitialIndex(notes, initialNoteId, initialFace),
@@ -347,7 +347,9 @@ export function ImagePopover({
       animationType="slide"
       onRequestClose={() => close()}
       onDismiss={() => close()}>
-      <View style={styles.screen}>
+      {/* Same bounded-height reason as NoteSlideshow: keep the Modal from
+          sizing to its content on Windows. */}
+      <View style={[styles.screen, { height: windowHeight }]}>
         <View style={styles.header}>
           <Text
             testID="popover-title"
