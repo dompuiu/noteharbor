@@ -234,10 +234,6 @@ There is no unique `(catalog_number, serial)` constraint anymore. CSV import mat
 
 Tags are stored separately (scoped to a `collection_id`, unique per collection case-insensitively) and linked many-to-many through `banknote_tags`.
 
-### `slideshow_sessions`
-
-Temporary slideshow share/session tokens are stored in `slideshow_sessions` and expired after one day.
-
 ---
 
 ## API Reference
@@ -411,17 +407,6 @@ Body: { ids: [number, ...] }
 ```
 
 Supported sources currently include PMG, PCGS, and TQG. Unsupported notes are marked failed.
-
-### Slideshow Sessions
-
-```
-POST /api/slideshow
-Body: { ids: [number, ...] }
--> 201 { token }
-
-GET /api/slideshow/:token
--> { ids, created_at }
-```
 
 ---
 

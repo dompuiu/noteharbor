@@ -12,7 +12,6 @@ import { importRouter } from './routes/import.js';
 import { notesRouter } from './routes/notes.js';
 import { operationsRouter } from './routes/operations.js';
 import { scrapeRouter } from './routes/scrape.js';
-import { slideshowRouter } from './routes/slideshow.js';
 import { tagsRouter } from './routes/tags.js';
 
 const DEFAULT_HOST = '127.0.0.1';
@@ -51,7 +50,6 @@ function createApp() {
   app.use('/api/operations', operationsRouter);
   app.use('/api/tags', tagsRouter);
   app.use('/api/scrape', scrapeRouter);
-  app.use('/api/slideshow', slideshowRouter);
 
   app.get('/api/health', (_request, response) => {
     response.json({ ok: true });

@@ -50,6 +50,8 @@ const tableStateStorageKey = "noteharbor.notesTableState";
 const validSortKeys = new Set(["id", ...columns.map(([key]) => key)]);
 const rowHeightEstimate = 43;
 const validPreviewKinds = new Set(["front", "back"]);
+const slideshowFilterParamPrefix = "f_";
+const slideshowFilterKeys = columns.map(([key]) => key);
 const tagChipHorizontalPadding = 20;
 const tagListGap = 8;
 const tagChipMeasureSafetyMargin = 2;
@@ -721,6 +723,69 @@ const rowSortCollator = new Intl.Collator(undefined, {
   sensitivity: "base",
 });
 
+function filterNotesByFilters(noteList, filterObj, scrapeJob) {
+  const activeFilters = filterObj ?? {};
+  return noteList.filter((note) =>
+    columns.every(([key]) => {
+      if (key === "tags") {
+        return matchesTagFilter(note, activeFilters[key]);
+      }
+
+      if (key === "scrape_status") {
+        return matchesFilterValue(
+          displayScrapeStatus(note, scrapeJob),
+          activeFilters[key],
+          "includes",
+        );
+      }
+
+      const supportsMultipleValues =
+        key === "catalog_number" ||
+        key === "grade" ||
+        key === "issue_date" ||
+        key === "denomination";
+
+      return matchesFilterValue(
+        valueToString(note, key),
+        activeFilters[key],
+        key === "catalog_number" ? "catalogPrefix" : "includes",
+        {
+          multiple: supportsMultipleValues,
+          normalizeFilterValue:
+            key === "denomination"
+              ? normalizeDenominationFilterValue
+              : undefined,
+        },
+      );
+    }),
+  );
+}
+
+function sortNotesBySort(noteList, key, direction) {
+  const sortKey = validSortKeys.has(key) ? key : "id";
+  const sortDirection = direction === "desc" ? "desc" : "asc";
+  return [...noteList].sort((left, right) => {
+    if (sortKey === "id") {
+      const orderResult = noteOrderValue(left) - noteOrderValue(right);
+      const result = orderResult || left.id - right.id;
+      return sortDirection === "asc" ? result : -result;
+    }
+
+    const leftValue = valueToString(left, sortKey).toLowerCase();
+    const rightValue = valueToString(right, sortKey).toLowerCase();
+    const result = rowSortCollator.compare(leftValue, rightValue);
+    return sortDirection === "asc" ? result : -result;
+  });
+}
+
+function applyTableView(noteList, filterObj, key, direction, scrapeJob) {
+  return sortNotesBySort(
+    filterNotesByFilters(noteList, filterObj, scrapeJob),
+    key,
+    direction,
+  );
+}
+
 function versionedImagePath(path, version) {
   if (!path) {
     return null;
@@ -762,7 +827,57 @@ function emptyTableRoute() {
     noteId: null,
     overlayEdit: false,
     previewKind: null,
+    slideshowCollectionId: null,
+    slideshowFilters: null,
+    slideshowSortDirection: null,
+    slideshowSortKey: null,
   };
+}
+
+function hasSlideshowContext(route) {
+  return Boolean(
+    route &&
+      route.kind === "slideshow" &&
+      (route.slideshowCollectionId != null ||
+        route.slideshowFilters != null ||
+        route.slideshowSortKey != null ||
+        route.slideshowSortDirection != null),
+  );
+}
+
+function parseSlideshowFilters(params) {
+  let hasFilterParam = false;
+  const filters = {};
+
+  for (const key of slideshowFilterKeys) {
+    if (!params.has(`${slideshowFilterParamPrefix}${key}`)) {
+      continue;
+    }
+
+    hasFilterParam = true;
+    const value = String(
+      params.get(`${slideshowFilterParamPrefix}${key}`) ?? "",
+    );
+
+    if (value.trim()) {
+      filters[key] = value;
+    }
+  }
+
+  return hasFilterParam ? filters : null;
+}
+
+function parseSlideshowSortKey(value) {
+  const normalized = String(value ?? "").trim();
+  return validSortKeys.has(normalized) ? normalized : null;
+}
+
+function parseSlideshowSortDirection(value) {
+  const normalized = String(value ?? "").trim().toLowerCase();
+  if (normalized === "asc" || normalized === "desc") {
+    return normalized;
+  }
+  return null;
 }
 
 function parseTableHash(hash) {
@@ -813,6 +928,10 @@ function parseTableHash(hash) {
       noteId,
       overlayEdit: params.get("overlay") === "edit",
       previewKind,
+      slideshowCollectionId: parsePositiveInteger(params.get("collection")),
+      slideshowFilters: parseSlideshowFilters(params),
+      slideshowSortDirection: parseSlideshowSortDirection(params.get("dir")),
+      slideshowSortKey: parseSlideshowSortKey(params.get("sort")),
     };
   }
 
@@ -851,6 +970,27 @@ function buildTableHash(route) {
       params.set("overlay", "edit");
     }
 
+    if (Number.isInteger(route.slideshowCollectionId)) {
+      params.set("collection", String(route.slideshowCollectionId));
+    }
+
+    if (route.slideshowFilters) {
+      for (const key of slideshowFilterKeys) {
+        const value = route.slideshowFilters[key];
+        if (value != null && String(value).trim()) {
+          params.set(`${slideshowFilterParamPrefix}${key}`, String(value));
+        }
+      }
+    }
+
+    if (route.slideshowSortKey) {
+      params.set("sort", String(route.slideshowSortKey));
+    }
+
+    if (route.slideshowSortDirection) {
+      params.set("dir", String(route.slideshowSortDirection));
+    }
+
     const query = params.toString();
     return `${path}${query ? `?${query}` : ""}`;
   }
@@ -885,7 +1025,8 @@ function NotesTable({
   const firstFilterInputRef = useRef(null);
   const focusedRowIdRef = useRef(null);
   const tableFocusAnchorRef = useRef(null);
-  const pendingRowFocusNoteIdRef = useRef(null);
+  const currentRouteRef = useRef(null);
+  const skipFilterResetOnCollectionChangeRef = useRef(false);  const pendingRowFocusNoteIdRef = useRef(null);
   const focusRestoreNoteIdRef = useRef(null);
   const location = useLocation();
   const navigate = useNavigate();
@@ -895,15 +1036,40 @@ function NotesTable({
   }
 
   const [notes, setNotes] = useState([]);
-  const [filters, setFilters] = useState(
-    () => initialTableStateRef.current?.filters ?? {},
-  );
-  const [sortKey, setSortKey] = useState(
-    () => initialTableStateRef.current?.sortKey ?? "id",
-  );
-  const [sortDirection, setSortDirection] = useState(
-    () => initialTableStateRef.current?.sortDirection ?? "asc",
-  );
+  // When landing directly on a slideshow URL carrying filter+sort context,
+  // seed the table behind the slideshow from the URL so closing the
+  // slideshow returns to the same filtered view.
+  const [filters, setFilters] = useState(() => {
+    if (initialRouteRef.current?.kind === "slideshow") {
+      const routeFilters = initialRouteRef.current.slideshowFilters;
+      if (routeFilters) {
+        return { ...routeFilters };
+      }
+    }
+    return initialTableStateRef.current?.filters ?? {};
+  });
+  const [sortKey, setSortKey] = useState(() => {
+    if (initialRouteRef.current?.kind === "slideshow") {
+      const routeSortKey = initialRouteRef.current.slideshowSortKey;
+      if (routeSortKey && validSortKeys.has(routeSortKey)) {
+        return routeSortKey;
+      }
+    }
+    return initialTableStateRef.current?.sortKey ?? "id";
+  });
+  const [sortDirection, setSortDirection] = useState(() => {
+    if (initialRouteRef.current?.kind === "slideshow") {
+      const routeSortDirection =
+        initialRouteRef.current.slideshowSortDirection;
+      if (
+        routeSortDirection === "asc" ||
+        routeSortDirection === "desc"
+      ) {
+        return routeSortDirection;
+      }
+    }
+    return initialTableStateRef.current?.sortDirection ?? "asc";
+  });
   const [selectedIds, setSelectedIds] = useState(
     () => initialTableStateRef.current?.selectedIds ?? [],
   );
@@ -978,55 +1144,13 @@ function NotesTable({
     () => parseTableHash(location.hash),
     [location.hash],
   );
-  const orderedNotes = useMemo(() => {
-    const filtered = notes.filter((note) =>
-      visibleColumns.every(([key]) => {
-        if (key === "tags") {
-          return matchesTagFilter(note, filters[key]);
-        }
-
-        if (key === "scrape_status") {
-          return matchesFilterValue(
-            displayScrapeStatus(note, scrapeJob),
-            filters[key],
-            "includes",
-          );
-        }
-
-        const supportsMultipleValues =
-          key === "catalog_number" ||
-          key === "grade" ||
-          key === "issue_date" ||
-          key === "denomination";
-
-        return matchesFilterValue(
-          valueToString(note, key),
-          filters[key],
-          key === "catalog_number" ? "catalogPrefix" : "includes",
-          {
-            multiple: supportsMultipleValues,
-            normalizeFilterValue:
-              key === "denomination"
-                ? normalizeDenominationFilterValue
-                : undefined,
-          },
-        );
-      }),
-    );
-
-    return [...filtered].sort((left, right) => {
-      if (sortKey === "id") {
-        const orderResult = noteOrderValue(left) - noteOrderValue(right);
-        const result = orderResult || left.id - right.id;
-        return sortDirection === "asc" ? result : -result;
-      }
-
-      const leftValue = valueToString(left, sortKey).toLowerCase();
-      const rightValue = valueToString(right, sortKey).toLowerCase();
-      const result = rowSortCollator.compare(leftValue, rightValue);
-      return sortDirection === "asc" ? result : -result;
-    });
-  }, [filters, notes, scrapeJob, sortDirection, sortKey, visibleColumns]);
+  // Latest route for effects that must not re-run on route changes (e.g.
+  // the filter reset below, which answers only to collection changes).
+  currentRouteRef.current = currentRoute;
+  const orderedNotes = useMemo(
+    () => applyTableView(notes, filters, sortKey, sortDirection, scrapeJob),
+    [filters, notes, scrapeJob, sortDirection, sortKey],
+  );
   // The painted row list lags one step behind the filter state: inputs,
   // chips, and counts stay instant while the heavy row re-mount happens in
   // a background render. Everything that reads note *identity* (selection,
@@ -1078,10 +1202,67 @@ function NotesTable({
     editingNoteIndex >= 0 ? editingNoteIndex + 1 : null;
   const totalNotesInTableView = orderedNotes.length;
 
+  // The note list encoded in a slideshow URL (filter + sort snapshot taken
+  // when the slideshow was opened). Recomputed live so a cold-opened tab
+  // (new tab, refresh, bookmark) rebuilds the same 1/6-style list instead
+  // of falling back to the unfiltered collection order.
+  const slideshowContextNotes = useMemo(() => {
+    if (currentRoute.kind !== "slideshow") {
+      return null;
+    }
+
+    if (!hasSlideshowContext(currentRoute)) {
+      return null;
+    }
+
+    const contextFilters = currentRoute.slideshowFilters ?? {};
+    const contextSortKey =
+      currentRoute.slideshowSortKey &&
+      validSortKeys.has(currentRoute.slideshowSortKey)
+        ? currentRoute.slideshowSortKey
+        : "id";
+    const contextSortDirection =
+      currentRoute.slideshowSortDirection === "desc" ? "desc" : "asc";
+
+    return applyTableView(
+      notes,
+      contextFilters,
+      contextSortKey,
+      contextSortDirection,
+      scrapeJob,
+    );
+  }, [currentRoute, notes, scrapeJob]);
+
   function navigateToTableRoute(nextRoute, { replace = false } = {}) {
     const nextHash = buildTableHash(nextRoute);
     const nextUrl = `${location.pathname}${nextHash}`;
     navigate(nextUrl || "/", { replace });
+  }
+
+  // Context carried on every slideshow URL: the filter+sort snapshot the
+  // list was opened with. In-slideshow moves reuse the route's snapshot so
+  // the list stays frozen; a fresh open snapshots the live table instead.
+  function slideshowRouteContext() {
+    if (
+      currentRoute.kind === "slideshow" &&
+      hasSlideshowContext(currentRoute)
+    ) {
+      return {
+        slideshowCollectionId: currentRoute.slideshowCollectionId,
+        slideshowFilters: currentRoute.slideshowFilters,
+        slideshowSortDirection: currentRoute.slideshowSortDirection,
+        slideshowSortKey: currentRoute.slideshowSortKey,
+      };
+    }
+
+    return {
+      slideshowCollectionId: Number.isInteger(activeCollectionId)
+        ? activeCollectionId
+        : null,
+      slideshowFilters: { ...filters },
+      slideshowSortDirection: sortDirection,
+      slideshowSortKey: sortKey,
+    };
   }
 
   const totalColumnCount =
@@ -1155,7 +1336,56 @@ function NotesTable({
     );
   }, [notes]);
 
+  // A slideshow URL names its collection: switch to it so a cold-opened
+  // tab lands on the same notes even when another collection is active.
   useEffect(() => {
+    if (currentRoute.kind !== "slideshow") {
+      return;
+    }
+
+    const targetCollectionId = currentRoute.slideshowCollectionId;
+
+    if (!Number.isInteger(targetCollectionId)) {
+      return;
+    }
+
+    if (targetCollectionId === activeCollectionId) {
+      return;
+    }
+
+    if (loadingCollections) {
+      return;
+    }
+
+    if (!collections.some((entry) => entry.id === targetCollectionId)) {
+      return;
+    }
+
+    skipFilterResetOnCollectionChangeRef.current = true;
+    onSelectCollection(targetCollectionId);
+  }, [
+    activeCollectionId,
+    collections,
+    currentRoute,
+    loadingCollections,
+    onSelectCollection,
+  ]);
+
+  // Filters reset only when the active collection actually changes. Route
+  // changes (opening/closing the slideshow) leave them alone, and while a
+  // slideshow URL with filter+sort context is open the URL owns them.
+  useEffect(() => {
+    if (skipFilterResetOnCollectionChangeRef.current) {
+      skipFilterResetOnCollectionChangeRef.current = false;
+      return;
+    }
+
+    const route = currentRouteRef.current;
+
+    if (route?.kind === "slideshow" && hasSlideshowContext(route)) {
+      return;
+    }
+
     setFilters({});
   }, [activeCollectionId]);
 
@@ -1243,13 +1473,33 @@ function NotesTable({
       return;
     }
 
-    const hasRestoredTableState = Boolean(initialTableStateRef.current);
-    const baseNotes =
-      initialRouteRef.current.kind === "slideshow" &&
-      slideshowNotes.length === 0 &&
-      !hasRestoredTableState
-        ? defaultOrderedNotes
-        : orderedNotes;
+    const hasSlideshowUrlContext = hasSlideshowContext(currentRoute);
+    // A slideshow URL carrying filter+sort context rebuilds that exact list,
+    // so a new tab, refresh, or bookmark keeps the same 1/N position.
+    // Legacy URLs without context keep the previous behavior below.
+    let baseNotes = null;
+
+    if (hasSlideshowUrlContext) {
+      // While the collection switch is still landing, notes belong to the
+      // wrong collection: wait instead of bouncing back to the table.
+      if (
+        Number.isInteger(currentRoute.slideshowCollectionId) &&
+        currentRoute.slideshowCollectionId !== activeCollectionId
+      ) {
+        return;
+      }
+
+      baseNotes = slideshowContextNotes ?? [];
+    } else {
+      const hasRestoredTableState = Boolean(initialTableStateRef.current);
+      baseNotes =
+        initialRouteRef.current.kind === "slideshow" &&
+        slideshowNotes.length === 0 &&
+        !hasRestoredTableState
+          ? defaultOrderedNotes
+          : orderedNotes;
+    }
+
     const targetIndex = baseNotes.findIndex(
       (note) => note.id === currentRoute.noteId,
     );
@@ -1280,16 +1530,22 @@ function NotesTable({
           noteId: currentRoute.noteId,
           overlayEdit: currentRoute.overlayEdit,
           previewKind: null,
+          slideshowCollectionId: currentRoute.slideshowCollectionId,
+          slideshowFilters: currentRoute.slideshowFilters,
+          slideshowSortDirection: currentRoute.slideshowSortDirection,
+          slideshowSortKey: currentRoute.slideshowSortKey,
         },
         { replace: true },
       );
     }
   }, [
+    activeCollectionId,
     currentRoute,
     defaultOrderedNotes,
     loading,
     notes,
     orderedNotes,
+    slideshowContextNotes,
     slideshowNotes.length,
   ]);
 
@@ -1894,6 +2150,7 @@ function NotesTable({
       noteId,
       overlayEdit: false,
       previewKind: null,
+      ...slideshowRouteContext(),
     });
   }
 
@@ -2036,6 +2293,7 @@ function NotesTable({
         noteId,
         overlayEdit: true,
         previewKind: currentRoute.previewKind,
+        ...slideshowRouteContext(),
       });
       return;
     }
@@ -2061,6 +2319,7 @@ function NotesTable({
           noteId: currentRoute.noteId,
           overlayEdit: false,
           previewKind: currentRoute.previewKind,
+          ...slideshowRouteContext(),
         },
         { replace: true },
       );
@@ -2088,6 +2347,7 @@ function NotesTable({
           noteId: nextNoteId,
           overlayEdit: true,
           previewKind: currentRoute.previewKind,
+          ...slideshowRouteContext(),
         },
         { replace: true },
       );
@@ -2441,6 +2701,7 @@ function NotesTable({
       noteId: nextNote.id,
       overlayEdit: false,
       previewKind: null,
+      ...slideshowRouteContext(),
     });
   }
 
@@ -2454,6 +2715,7 @@ function NotesTable({
       noteId,
       overlayEdit: false,
       previewKind,
+      ...slideshowRouteContext(),
     });
   }
 
@@ -2464,6 +2726,7 @@ function NotesTable({
         noteId,
         overlayEdit: false,
         previewKind: null,
+        ...slideshowRouteContext(),
       },
       { replace: true },
     );
@@ -2522,6 +2785,7 @@ function NotesTable({
       noteId: slideshowNotes[nextNoteIndex].id,
       overlayEdit: false,
       previewKind: nextItems[nextItemIndex],
+      ...slideshowRouteContext(),
     });
   }
 

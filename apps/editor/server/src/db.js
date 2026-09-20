@@ -1,6 +1,5 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import crypto from 'node:crypto';
 import Database from 'better-sqlite3';
 import { fileURLToPath } from 'node:url';
 import {
@@ -331,12 +330,6 @@ function initializeSchema(database) {
       tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
       PRIMARY KEY (banknote_id, tag_id)
     );
-
-    CREATE TABLE IF NOT EXISTS slideshow_sessions (
-      token TEXT PRIMARY KEY,
-      ids TEXT NOT NULL,
-      created_at TEXT DEFAULT (datetime('now'))
-    );
   `);
 
   const defaultCollectionId = ensureDefaultCollection(database);
@@ -435,6 +428,10 @@ function initializeSchema(database) {
     CREATE INDEX IF NOT EXISTS idx_tags_collection_id
       ON tags(collection_id);
   `);
+
+  // Drop the legacy share-token table if it exists. Slideshow context is now
+  // encoded in the URL (filter + sort), so no server-side sessions remain.
+  database.exec(`DROP TABLE IF EXISTS slideshow_sessions`);
 
   const banknoteColumns = database.prepare(`PRAGMA table_info(banknotes)`).all();
 
@@ -714,15 +711,6 @@ function createStatements(database) {
           notes = @notes,
           updated_at = datetime('now')
       WHERE id = @id
-    `),
-    insertSlideshowSessionStatement: database.prepare(`
-      INSERT INTO slideshow_sessions (token, ids, created_at)
-      VALUES (@token, @ids, datetime('now'))
-    `),
-    getSlideshowSessionStatement: database.prepare(`SELECT token, ids, created_at FROM slideshow_sessions WHERE token = ?`),
-    deleteExpiredSlideshowSessionsStatement: database.prepare(`
-      DELETE FROM slideshow_sessions
-      WHERE created_at < datetime('now', '-1 day')
     `)
   };
 }
@@ -1407,48 +1395,6 @@ function moveNoteToCollection(noteId, sourceCollectionId, targetCollectionId, po
   return getNoteById(noteId, normalizedTargetId);
 }
 
-function createSlideshowSession(ids) {
-  getDatabase();
-  const normalizedIds = [...new Set((ids ?? []).map((id) => Number(id)).filter((id) => Number.isInteger(id) && id > 0))];
-
-  if (!normalizedIds.length) {
-    throw new Error('A slideshow session requires at least one valid note ID.');
-  }
-
-  statements.deleteExpiredSlideshowSessionsStatement.run();
-
-  const token = crypto.randomUUID();
-  statements.insertSlideshowSessionStatement.run({
-    token,
-    ids: JSON.stringify(normalizedIds)
-  });
-
-  return { token, ids: normalizedIds };
-}
-
-function getSlideshowSession(token) {
-  getDatabase();
-  const normalizedToken = String(token ?? '').trim();
-
-  if (!normalizedToken) {
-    return null;
-  }
-
-  statements.deleteExpiredSlideshowSessionsStatement.run();
-
-  const row = statements.getSlideshowSessionStatement.get(normalizedToken);
-
-  if (!row) {
-    return null;
-  }
-
-  return {
-    token: row.token,
-    ids: parseJson(row.ids, []),
-    created_at: row.created_at
-  };
-}
-
 openDatabase();
 
 export {
@@ -1460,7 +1406,6 @@ export {
   closeDatabase,
   createCollection,
   createNote,
-  createSlideshowSession,
   deleteCollectionById,
   deleteNote,
   ensureTag,
@@ -1472,7 +1417,6 @@ export {
   getDefaultCollectionId,
   getNoteById,
   getNotesByIds,
-  getSlideshowSession,
   importNotes,
   migrateBanknotesForeignKey,
   moveNoteToCollection,

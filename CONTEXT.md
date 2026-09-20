@@ -65,10 +65,6 @@ _Avoid_: Album, group
 The collection a note lands in when none is specified and the fallback active collection; at most one collection is designated default.
 _Avoid_: Primary collection
 
-**Slideshow session**:
-A shareable, token-identified list of notes the Editor has prepared for a Viewer to present.
-_Avoid_: Share link, presentation
-
 **Scrape status**:
 The progress of a note's Scrape: pending, in progress, succeeded, or failed with an error.
 _Avoid_: Fetch state
