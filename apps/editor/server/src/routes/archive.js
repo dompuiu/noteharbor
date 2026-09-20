@@ -17,6 +17,7 @@ import {
   verifyDatabaseFile
 } from '../db.js';
 import { withExclusiveOperation } from '../operationState.js';
+import { normalizeImages } from '../imageStore.js';
 
 const archiveRouter = Router();
 const upload = multer({ dest: os.tmpdir() });
@@ -282,40 +283,180 @@ function parseSelectedCollectionIds(rawValue) {
   return values;
 }
 
-function collectReferencedImageRelativePaths(database) {
-  const rows = database.prepare(`SELECT images FROM banknotes`).all();
-  const relativePaths = new Set();
+function sanitizeSnapshotImages(database) {
+  const rows = database.prepare(`SELECT id, images FROM banknotes`).all();
+  const updateStatement = database.prepare(`UPDATE banknotes SET images = ? WHERE id = ?`);
 
   for (const row of rows) {
     const images = parseImageRecords(row.images);
+    const cleaned = images.filter((image) => {
+      if (!image || typeof image !== 'object') {
+        return false;
+      }
 
-    for (const image of images) {
-      const localPath = String(image?.localPath ?? '');
-      if (!localPath.startsWith(IMAGE_API_PREFIX)) {
+      if (isThumbnailRecord(image)) {
+        return false;
+      }
+
+      const localPath = String(image.localPath ?? '');
+
+      if (localPath.startsWith(IMAGE_API_PREFIX)) {
+        const relativePath = toPosixPath(localPath.slice(IMAGE_API_PREFIX.length));
+
+        if (!relativePath || isThumbnailRelativePath(relativePath)) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+
+    updateStatement.run(JSON.stringify(normalizeImages(cleaned)), row.id);
+  }
+}
+
+function remapNoteImagePath(localPath, oldNoteId, newNoteId) {
+  const prefix = `${IMAGE_API_PREFIX}notes/${oldNoteId}/`;
+
+  if (localPath.startsWith(prefix)) {
+    return `${IMAGE_API_PREFIX}notes/${newNoteId}/${localPath.slice(prefix.length)}`;
+  }
+
+  return localPath;
+}
+
+function renumberSnapshot(database) {
+  const collectionRows = database.prepare(`SELECT id FROM collections ORDER BY id ASC`).all();
+  const collectionMap = new Map();
+  collectionRows.forEach((row, index) => collectionMap.set(Number(row.id), index + 1));
+
+  const noteRows = database.prepare(`
+    SELECT id, collection_id, images
+    FROM banknotes
+    ORDER BY collection_id ASC, display_order ASC, id ASC
+  `).all();
+  const noteMap = new Map();
+  noteRows.forEach((row, index) => noteMap.set(Number(row.id), index + 1));
+
+  const tagRows = database.prepare(`SELECT id, collection_id FROM tags ORDER BY collection_id ASC, id ASC`).all();
+  const tagMap = new Map();
+  tagRows.forEach((row, index) => tagMap.set(Number(row.id), index + 1));
+
+  const linkRows = database.prepare(`SELECT banknote_id, tag_id FROM banknote_tags`).all();
+
+  database.pragma('foreign_keys = OFF');
+
+  try {
+    // Negate PKs first so remapping to 1..N never collides with existing IDs.
+    database.prepare(`UPDATE collections SET id = -id`).run();
+    database.prepare(`UPDATE banknotes SET id = -id`).run();
+    database.prepare(`UPDATE tags SET id = -id`).run();
+
+    const updateCollectionStatement = database.prepare(`UPDATE collections SET id = ? WHERE id = ?`);
+
+    for (const [oldId, newId] of collectionMap) {
+      updateCollectionStatement.run(newId, -oldId);
+    }
+
+    const updateNoteStatement = database.prepare(`
+      UPDATE banknotes
+      SET id = ?, collection_id = ?, display_order = ?, images = ?
+      WHERE id = ?
+    `);
+    const copyPlan = [];
+    const seenCopyTargets = new Set();
+    const nextDisplayOrderByCollection = new Map();
+
+    for (const row of noteRows) {
+      const oldId = Number(row.id);
+      const newId = noteMap.get(oldId);
+      const newCollectionId = collectionMap.get(Number(row.collection_id));
+      const images = parseImageRecords(row.images);
+      const rewritten = images.map((image) => {
+        if (!image || typeof image !== 'object') {
+          return image;
+        }
+
+        const localPath = String(image.localPath ?? '');
+
+        if (!localPath.startsWith(IMAGE_API_PREFIX)) {
+          return image;
+        }
+
+        const newLocalPath = remapNoteImagePath(localPath, oldId, newId);
+        const oldRelativePath = toPosixPath(localPath.slice(IMAGE_API_PREFIX.length));
+        const newRelativePath = toPosixPath(newLocalPath.slice(IMAGE_API_PREFIX.length));
+
+        if (oldRelativePath && newRelativePath && !seenCopyTargets.has(newRelativePath)) {
+          seenCopyTargets.add(newRelativePath);
+          copyPlan.push({ fromRelativePath: oldRelativePath, toRelativePath: newRelativePath });
+        }
+
+        return { ...image, localPath: newLocalPath };
+      });
+
+      const nextDisplayOrder = (nextDisplayOrderByCollection.get(newCollectionId) ?? 0) + 1;
+      nextDisplayOrderByCollection.set(newCollectionId, nextDisplayOrder);
+      updateNoteStatement.run(newId, newCollectionId, nextDisplayOrder, JSON.stringify(rewritten), -oldId);
+    }
+
+    const updateTagStatement = database.prepare(`UPDATE tags SET id = ?, collection_id = ? WHERE id = ?`);
+
+    for (const row of tagRows) {
+      const oldId = Number(row.id);
+      updateTagStatement.run(tagMap.get(oldId), collectionMap.get(Number(row.collection_id)), -oldId);
+    }
+
+    database.prepare(`DELETE FROM banknote_tags`).run();
+
+    const insertLinkStatement = database.prepare(`
+      INSERT OR IGNORE INTO banknote_tags (banknote_id, tag_id)
+      VALUES (?, ?)
+    `);
+
+    for (const link of linkRows) {
+      const newNoteId = noteMap.get(Number(link.banknote_id));
+      const newTagId = tagMap.get(Number(link.tag_id));
+
+      if (newNoteId && newTagId) {
+        insertLinkStatement.run(newNoteId, newTagId);
+      }
+    }
+
+    for (const [table, map] of [['collections', collectionMap], ['banknotes', noteMap], ['tags', tagMap]]) {
+      if (!map.size) {
+        database.prepare(`DELETE FROM sqlite_sequence WHERE name = ?`).run(table);
         continue;
       }
 
-      const relativePath = toPosixPath(localPath.slice(IMAGE_API_PREFIX.length));
-      if (relativePath) {
-        relativePaths.add(relativePath);
+      const updated = database.prepare(`UPDATE sqlite_sequence SET seq = ? WHERE name = ?`).run(map.size, table);
+
+      if (!updated.changes) {
+        database.prepare(`INSERT INTO sqlite_sequence (name, seq) VALUES (?, ?)`).run(table, map.size);
       }
     }
-  }
 
-  return relativePaths;
+    return { copyPlan, collectionMap, noteMap, tagMap };
+  } finally {
+    database.pragma('foreign_keys = ON');
+  }
 }
 
-function copyReferencedImagesForExport(relativePaths, targetImagesDir) {
+function copyImagePlanForExport(copyPlan, targetImagesDir) {
   fs.mkdirSync(targetImagesDir, { recursive: true });
 
-  for (const relativePath of relativePaths) {
-    const sourcePath = toFsPath(IMAGES_DIR, relativePath);
+  for (const plannedCopy of copyPlan) {
+    if (isThumbnailRelativePath(plannedCopy.fromRelativePath) || isThumbnailRelativePath(plannedCopy.toRelativePath)) {
+      continue;
+    }
+
+    const sourcePath = toFsPath(IMAGES_DIR, plannedCopy.fromRelativePath);
 
     if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) {
       continue;
     }
 
-    const targetPath = toFsPath(targetImagesDir, relativePath);
+    const targetPath = toFsPath(targetImagesDir, plannedCopy.toRelativePath);
     fs.mkdirSync(path.dirname(targetPath), { recursive: true });
     fs.copyFileSync(sourcePath, targetPath);
   }
@@ -359,12 +500,23 @@ function buildFilteredExportSnapshot(snapshotDbPath, selectedCollectionIds, temp
       snapshotDatabase.prepare(`DELETE FROM collections WHERE id IN (${placeholders})`).run(...unselectedCollectionIds);
     }
 
+    // Sanitize legacy payloads so the Archive copy never carries thumbnail
+    // records, then renumber PKs from 1 and rewrite image paths to match.
+    sanitizeSnapshotImages(snapshotDatabase);
+
+    const { copyPlan } = renumberSnapshot(snapshotDatabase);
+
+    const foreignKeyErrors = snapshotDatabase.prepare(`PRAGMA foreign_key_check`).all();
+
+    if (foreignKeyErrors.length) {
+      throw new Error('Export snapshot has invalid collection references.');
+    }
+
     // Compact filtered snapshot so the exported DB size reflects selected collections only.
     snapshotDatabase.exec('VACUUM');
 
-    const referencedImages = collectReferencedImageRelativePaths(snapshotDatabase);
     const exportImagesDir = path.join(tempRoot, 'images');
-    copyReferencedImagesForExport(referencedImages, exportImagesDir);
+    copyImagePlanForExport(copyPlan, exportImagesDir);
 
     return {
       imagesDir: exportImagesDir,
@@ -791,4 +943,4 @@ archiveRouter.delete('/data', async (_request, response) => {
   }
 });
 
-export { archiveRouter, mergeArchiveIntoStagedData };
+export { archiveRouter, buildFilteredExportSnapshot, mergeArchiveIntoStagedData, renumberSnapshot, sanitizeSnapshotImages };
