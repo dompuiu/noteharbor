@@ -89,29 +89,6 @@ function ImportScreen({
     ? `This action is unavailable while ${formatOperationLabel(operationStatus.currentOperation)} is in progress.`
     : '';
 
-  function formatUploadStatus(progress, verb) {
-    if (!progress) {
-      return null;
-    }
-
-    if (progress.phase === 'processing') {
-      return 'Upload complete. Processing on server...';
-    }
-
-    if (Number.isInteger(progress.percent)) {
-      return `${verb} ${progress.percent}%`;
-    }
-
-    return `${verb}...`;
-  }
-
-  const csvBusyLabel = submittingCsv
-    ? (formatUploadStatus(csvUploadProgress, 'Uploading') ?? 'Importing...')
-    : null;
-  const archiveBusyLabel = submittingArchive
-    ? (formatUploadStatus(archiveUploadProgress, 'Uploading') ?? 'Importing archive...')
-    : null;
-
   function setCsvImportSource(nextSource, label) {
     setCsvSource(nextSource);
     setCsvSourceLabel(label);
@@ -639,16 +616,10 @@ function ImportScreen({
               {submittingCsv ? (
                 <>
                   <span className="scrape-spinner button-spinner" aria-hidden="true" />
-                  <span>{csvBusyLabel}</span>
+                  <span>Importing...</span>
                 </>
               ) : 'Import CSV'}
             </button>
-            {submittingCsv && csvUploadProgress?.phase === 'uploading' && Number.isInteger(csvUploadProgress.percent) ? (
-              <div className="full-span import-upload-progress" role="status" aria-live="polite">
-                <progress value={csvUploadProgress.percent} max="100" aria-label="CSV upload progress" />
-                <span className="muted">{csvUploadProgress.percent}% uploaded</span>
-              </div>
-            ) : null}
           </form>
 
           <form className="form-grid import-card" onSubmit={handleArchiveImport}>
@@ -788,32 +759,16 @@ function ImportScreen({
             ) : null}
 
             <div className="import-actions full-span">
-              <button className="button" disabled={exportingArchive || isBusy || !selectedExportCollectionIds.length} onClick={handleArchiveExport} type="button" aria-busy={exportingArchive}>
-                {exportingArchive ? (
-                  <>
-                    <span className="scrape-spinner button-spinner" aria-hidden="true" />
-                    <span>Preparing export...</span>
-                  </>
-                ) : 'Download archive'}
+              <button className="button" disabled={exportingArchive || isBusy || !selectedExportCollectionIds.length} onClick={handleArchiveExport} type="button">
+                Download archive
               </button>
-              <button className="button button-primary" disabled={submittingArchive || isBusy || !archiveSource} type="submit" aria-busy={submittingArchive}>
-                {submittingArchive ? (
-                  <>
-                    <span className="scrape-spinner button-spinner" aria-hidden="true" />
-                    <span>{archiveBusyLabel}</span>
-                  </>
-                ) : 'Import archive'}
+              <button className="button button-primary" disabled={submittingArchive || isBusy || !archiveSource} type="submit">
+                Import archive
               </button>
               <button className="button button-danger" disabled={clearingData || isBusy} onClick={handleClearData} type="button">
                 {clearingData ? 'Deleting data...' : 'Delete current data'}
               </button>
             </div>
-            {submittingArchive && archiveUploadProgress?.phase === 'uploading' && Number.isInteger(archiveUploadProgress.percent) ? (
-              <div className="full-span import-upload-progress" role="status" aria-live="polite">
-                <progress value={archiveUploadProgress.percent} max="100" aria-label="Archive upload progress" />
-                <span className="muted">{archiveUploadProgress.percent}% uploaded</span>
-              </div>
-            ) : null}
           </form>
         </div>
 

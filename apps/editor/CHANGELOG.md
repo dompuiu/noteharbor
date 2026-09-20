@@ -2,6 +2,23 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.10.0] - 2026-09-20
+
+### Added
+
+- The Note slideshow URL now carries its Table screen context (collection, `f_*` filter values, sort key and direction), so refresh, bookmark, or new-tab open rebuilds the same note list instead of falling back to unfiltered collection order; closing the slideshow returns to the same filtered view.
+- The Import screen now reports CSV and archive upload progress (percent label plus progress bar) and shows a blocking progress overlay with a spinner for CSV import, archive import, and archive export; `Esc` no longer leaves the screen mid-transfer and operation status polls faster while transferring.
+
+### Changed
+
+- Removed the server-side slideshow sessions (`/api/slideshow` and the `slideshow_sessions` table, dropped on startup); slideshow context is encoded in the URL.
+- Exported archives are now cleaned before zipping: image records are sanitized, collection/note/tag IDs are renumbered from 1 with note image paths rewritten to match, only referenced images are copied, sequences are reset, and the snapshot is foreign-key checked and vacuumed.
+
+### Fixed
+
+- Legacy databases whose notes table was created via `ALTER TABLE` now gain the missing `banknotes → collections` cascade foreign key through a migration that preserves existing rows.
+- Re-importing an archive over a same-named collection no longer leaves orphaned notes, tags, or tag links behind, and the replaced collection's staged images are removed.
+
 ## [1.9.0] - 2026-09-17
 
 ### Added
