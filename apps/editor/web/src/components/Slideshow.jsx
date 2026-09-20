@@ -80,20 +80,22 @@ function getPreviewItems(note, { includeMissingSides = false } = {}) {
   const items = [];
   const frontFull = pickImage(note, "front", "full");
   const backFull = pickImage(note, "back", "full");
+  const frontThumb = pickImage(note, "front", "thumbnail") || frontFull;
+  const backThumb = pickImage(note, "back", "thumbnail") || backFull;
 
   const frontItem = {
     alt: `${note.denomination} front`,
     kind: "front",
     label: "Front",
-    src: frontFull,
-    thumb: frontFull,
+    src: frontFull || frontThumb,
+    thumb: frontThumb || frontFull,
   };
   const backItem = {
     alt: `${note.denomination} back`,
     kind: "back",
     label: "Back",
-    src: backFull,
-    thumb: backFull,
+    src: backFull || backThumb,
+    thumb: backThumb || backFull,
   };
 
   if (frontItem.src || includeMissingSides) {

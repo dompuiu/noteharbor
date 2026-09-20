@@ -23,15 +23,6 @@ const archiveRouter = Router();
 const upload = multer({ dest: os.tmpdir() });
 const IMAGE_API_PREFIX = '/api/images/';
 
-function isThumbnailRecord(image) {
-  return image?.variant === 'thumbnail';
-}
-
-function isThumbnailRelativePath(relativePath) {
-  const fileName = String(relativePath ?? '').split('/').at(-1) ?? '';
-  return /^(front|back)-thumbnail\./.test(fileName);
-}
-
 function removePathIfExists(targetPath) {
   if (targetPath && fs.existsSync(targetPath)) {
     fs.rmSync(targetPath, { recursive: true, force: true });
@@ -75,10 +66,6 @@ function rewriteImageRecordsForImportedNote(images, archiveNoteId, stagedNoteId)
 
   for (const image of images) {
     if (!image || typeof image !== 'object') {
-      continue;
-    }
-
-    if (isThumbnailRecord(image)) {
       continue;
     }
 
@@ -294,16 +281,12 @@ function sanitizeSnapshotImages(database) {
         return false;
       }
 
-      if (isThumbnailRecord(image)) {
-        return false;
-      }
-
       const localPath = String(image.localPath ?? '');
 
       if (localPath.startsWith(IMAGE_API_PREFIX)) {
         const relativePath = toPosixPath(localPath.slice(IMAGE_API_PREFIX.length));
 
-        if (!relativePath || isThumbnailRelativePath(relativePath)) {
+        if (!relativePath) {
           return false;
         }
       }
@@ -446,10 +429,6 @@ function copyImagePlanForExport(copyPlan, targetImagesDir) {
   fs.mkdirSync(targetImagesDir, { recursive: true });
 
   for (const plannedCopy of copyPlan) {
-    if (isThumbnailRelativePath(plannedCopy.fromRelativePath) || isThumbnailRelativePath(plannedCopy.toRelativePath)) {
-      continue;
-    }
-
     const sourcePath = toFsPath(IMAGES_DIR, plannedCopy.fromRelativePath);
 
     if (!fs.existsSync(sourcePath) || !fs.statSync(sourcePath).isFile()) {
@@ -500,8 +479,7 @@ function buildFilteredExportSnapshot(snapshotDbPath, selectedCollectionIds, temp
       snapshotDatabase.prepare(`DELETE FROM collections WHERE id IN (${placeholders})`).run(...unselectedCollectionIds);
     }
 
-    // Sanitize legacy payloads so the Archive copy never carries thumbnail
-    // records, then renumber PKs from 1 and rewrite image paths to match.
+    // Normalize image records, then renumber PKs from 1 and rewrite image paths to match.
     sanitizeSnapshotImages(snapshotDatabase);
 
     const { copyPlan } = renumberSnapshot(snapshotDatabase);
@@ -785,9 +763,6 @@ function mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir) {
     }
 
     for (const plannedCopy of imageCopyPlan) {
-      if (isThumbnailRelativePath(plannedCopy.fromRelativePath) || isThumbnailRelativePath(plannedCopy.toRelativePath)) {
-        continue;
-      }
       copyReferencedImage(
         archiveImagesDir,
         stagedImagesDir,

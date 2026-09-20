@@ -199,14 +199,14 @@ function createDirtySnapshotDatabase() {
   return db;
 }
 
-test('export sanitize drops thumbnail records and renumbers PKs from 1', () => {
+test('export sanitize preserves thumbnail records and renumbers PKs from 1', () => {
   const db = createDirtySnapshotDatabase();
 
   try {
     sanitizeSnapshotImages(db);
 
     const dirtyImages = db.prepare(`SELECT images FROM banknotes WHERE id = 100`).get().images;
-    assert.ok(!String(dirtyImages).includes('thumbnail'));
+    assert.ok(String(dirtyImages).includes('thumbnail'));
 
     const { copyPlan } = renumberSnapshot(db);
 
@@ -232,13 +232,14 @@ test('export sanitize drops thumbnail records and renumbers PKs from 1', () => {
     const noteImages = db.prepare(`SELECT images FROM banknotes ORDER BY id`).all().map((row) => row.images);
     assert.ok(noteImages[0].includes('/api/images/notes/1/back-full.jpg'));
     assert.ok(noteImages[1].includes('/api/images/notes/2/front-full.jpg'));
+    assert.ok(noteImages[1].includes('/api/images/notes/2/front-thumbnail.jpg'));
     assert.ok(noteImages[2].includes('/api/images/notes/3/front-full.jpg'));
-    assert.ok(noteImages.every((images) => !images.includes('thumbnail')));
 
     const copyTargets = copyPlan.map((entry) => entry.toRelativePath).sort();
     assert.deepEqual(copyTargets, [
       'notes/1/back-full.jpg',
       'notes/2/front-full.jpg',
+      'notes/2/front-thumbnail.jpg',
       'notes/3/front-full.jpg'
     ]);
 
@@ -248,7 +249,7 @@ test('export sanitize drops thumbnail records and renumbers PKs from 1', () => {
   }
 });
 
-test('importing a legacy archive with thumbnails stores only full images', () => {
+test('importing a legacy archive with thumbnails preserves all images', () => {
   const stageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'nh-thumb-stage-'));
   const stagedDataDir = path.join(stageRoot, 'data');
   fs.mkdirSync(path.join(stagedDataDir, 'images'), { recursive: true });
@@ -308,7 +309,7 @@ test('importing a legacy archive with thumbnails stores only full images', () =>
     try {
       const images = db.prepare(`SELECT images FROM banknotes`).get().images;
       assert.ok(images.includes('front-full'));
-      assert.ok(!images.includes('thumbnail'));
+      assert.ok(images.includes('thumbnail'));
     } finally {
       db.close();
     }
@@ -317,7 +318,7 @@ test('importing a legacy archive with thumbnails stores only full images', () =>
     assert.equal(stagedNoteDirs.length, 1);
     const stagedFiles = fs.readdirSync(path.join(stagedDataDir, 'images', 'notes', stagedNoteDirs[0]));
     assert.ok(stagedFiles.some((name) => name.startsWith('front-full.')));
-    assert.ok(!stagedFiles.some((name) => name.includes('thumbnail')));
+    assert.ok(stagedFiles.some((name) => name.includes('thumbnail')));
   } finally {
     fs.rmSync(stageRoot, { recursive: true, force: true });
     fs.rmSync(archiveRoot, { recursive: true, force: true });

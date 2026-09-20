@@ -4,11 +4,19 @@ const headers = {
 
 const imageFieldNames = [
   'image_front_full',
-  'image_back_full'
+  'image_front_thumbnail',
+  'image_back_full',
+  'image_back_thumbnail'
 ];
 const imageDeleteFieldNames = [
   'delete_image_front_full',
-  'delete_image_back_full'
+  'delete_image_front_thumbnail',
+  'delete_image_back_full',
+  'delete_image_back_thumbnail'
+];
+const generatedThumbnailFieldNames = [
+  'generate_image_front_thumbnail_from_full',
+  'generate_image_back_thumbnail_from_full'
 ];
 
 function isFileValue(value) {
@@ -53,7 +61,7 @@ function buildNoteRequestOptions(method, payload) {
       return;
     }
 
-    if (imageDeleteFieldNames.includes(key)) {
+    if (imageDeleteFieldNames.includes(key) || generatedThumbnailFieldNames.includes(key)) {
       formData.append(key, value ? 'true' : 'false');
       return;
     }

@@ -83,9 +83,21 @@ const imageSlots = [
     key: "image_front_full",
     type: "front",
     variant: "full",
-    label: "Front",
+    label: "Front full",
   },
-  { key: "image_back_full", type: "back", variant: "full", label: "Back" },
+  { key: "image_back_full", type: "back", variant: "full", label: "Back full" },
+  {
+    key: "image_front_thumbnail",
+    type: "front",
+    variant: "thumbnail",
+    label: "Front thumbnail",
+  },
+  {
+    key: "image_back_thumbnail",
+    type: "back",
+    variant: "thumbnail",
+    label: "Back thumbnail",
+  },
 ];
 
 function pickImage(images, type, variant) {
@@ -93,6 +105,14 @@ function pickImage(images, type, variant) {
     images.find((image) => image.type === type && image.variant === variant) ??
     null
   );
+}
+
+function hasEffectiveImage({ currentImage, pendingImage, isDeleted }) {
+  if (pendingImage) {
+    return true;
+  }
+
+  return Boolean(currentImage) && !isDeleted;
 }
 
 function versionedImagePath(path, version) {
@@ -108,9 +128,17 @@ function deleteFieldForSlot(slot) {
   return `delete_image_${slot.type}_${slot.variant}`;
 }
 
+function generateFieldForType(type) {
+  return `generate_image_${type}_thumbnail_from_full`;
+}
+
 function slotOriginLabel(origin) {
   if (origin === "scraped") {
     return "Scraped";
+  }
+
+  if (origin === "generated") {
+    return "Generated";
   }
 
   return origin === "uploaded" ? "Uploaded" : "";
@@ -183,6 +211,10 @@ function NoteEditForm({
   const [noteVersion, setNoteVersion] = useState("");
   const [pendingImages, setPendingImages] = useState({});
   const [deletedSlots, setDeletedSlots] = useState({});
+  const [generatedThumbnails, setGeneratedThumbnails] = useState({
+    front: false,
+    back: false,
+  });
   const [activePasteSlot, setActivePasteSlot] = useState(null);
   const [allNotes, setAllNotes] = useState([]);
   const [positionMode, setPositionMode] = useState(
@@ -348,6 +380,7 @@ function NoteEditForm({
     setNoteVersion("");
     setPendingImages({});
     setDeletedSlots({});
+    setGeneratedThumbnails({ front: false, back: false });
     setPositionMode(noteId ? "keep" : initialPositionMode);
     setPositionReferenceId(noteId ? null : initialPositionReferenceId);
     setDestinationCollectionId(selectedCollectionId);
@@ -488,6 +521,9 @@ function NoteEditForm({
     setPendingImages((current) => ({ ...current, [slot.key]: file }));
     setDeletedSlots((current) => ({ ...current, [slot.key]: false }));
     clearScrapedImage(slot.key);
+    if (slot.variant === "thumbnail") {
+      setGeneratedThumbnails((current) => ({ ...current, [slot.type]: false }));
+    }
     setActivePasteSlot(slot.key);
   }
 
@@ -503,6 +539,9 @@ function NoteEditForm({
     clearSlotFile(slot);
     clearScrapedImage(slot.key);
     setDeletedSlots((current) => ({ ...current, [slot.key]: true }));
+    if (slot.variant === "thumbnail") {
+      setGeneratedThumbnails((current) => ({ ...current, [slot.type]: false }));
+    }
   }
 
   function undoSlotDelete(slot) {
@@ -754,9 +793,6 @@ function NoteEditForm({
 
       const nextScrapedImages = {};
       for (const img of result.images) {
-        if (img.variant !== "full") {
-          continue;
-        }
         const key = `image_${img.type}_${img.variant}`;
         nextScrapedImages[key] = img.sourceUrl;
       }
@@ -912,6 +948,12 @@ function NoteEditForm({
           payloadWithImages[`${key}_url`] = url;
         }
       }
+
+      ["front", "back"].forEach((type) => {
+        if (generatedThumbnails[type]) {
+          payloadWithImages[generateFieldForType(type)] = true;
+        }
+      });
 
       const payload = isCreateMode
         ? await createNote(payloadWithImages, selectedCollectionId)
@@ -1418,10 +1460,10 @@ function NoteEditForm({
           </div>
 
           <div className="field-block full-span">
-            <span>Note images</span>
+            <span>Pictures</span>
             <p className="muted image-field-help">
-              Scraped and uploaded note images share the same slots.
-              Uploading or scraping a slot replaces what is already
+              Scraped, uploaded, and generated pictures now share the same
+              slots. Uploading or scraping a slot replaces what is already
               there.
             </p>
             <div className="image-slot-grid">
@@ -1433,6 +1475,17 @@ function NoteEditForm({
                 );
                 const pendingPreview = imagePreviews[slot.key];
                 const isDeleted = Boolean(deletedSlots[slot.key]);
+                const pendingFullImage =
+                  pendingImages[`image_${slot.type}_full`];
+                const fullImage = pickImage(currentImages, slot.type, "full");
+                const isFullDeleted = Boolean(
+                  deletedSlots[`image_${slot.type}_full`],
+                );
+                const hasFullImage = hasEffectiveImage({
+                  currentImage: fullImage,
+                  pendingImage: pendingFullImage,
+                  isDeleted: isFullDeleted,
+                });
                 const scrapedImageUrl = pendingScrapedImages[slot.key];
                 const previewSrc = isDeleted
                   ? ""
@@ -1442,6 +1495,8 @@ function NoteEditForm({
                 const hasPendingImage =
                   Boolean(pendingPreview) || Boolean(scrapedImageUrl);
                 const hasExistingImage = Boolean(currentImage) && !isDeleted;
+                const showGenerateOption =
+                  slot.variant === "thumbnail" && hasFullImage;
 
                 return (
                   <div
@@ -1561,6 +1616,21 @@ function NoteEditForm({
                       >
                         Undo delete
                       </button>
+                      {showGenerateOption ? (
+                        <label className="image-generate-toggle image-generate-toggle--inline">
+                          <input
+                            checked={generatedThumbnails[slot.type]}
+                            onChange={(event) =>
+                              setGeneratedThumbnails((current) => ({
+                                ...current,
+                                [slot.type]: event.target.checked,
+                              }))
+                            }
+                            type="checkbox"
+                          />
+                          <span>Generate thumbnail</span>
+                        </label>
+                      ) : null}
                     </div>
                     <input
                       accept="image/*"

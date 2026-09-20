@@ -3177,7 +3177,9 @@ function NotesTable({
                           scrapeJob,
                         );
                         const displayImage = pickFirstAvailableImage(note, [
+                          ["front", "thumbnail"],
                           ["front", "full"],
+                          ["back", "thumbnail"],
                           ["back", "full"],
                         ]);
                         const frontThumb = displayImage?.path ?? null;

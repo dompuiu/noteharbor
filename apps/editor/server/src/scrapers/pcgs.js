@@ -44,10 +44,10 @@ function extractEmbeddedDataSource(html) {
 
 function extractEmbeddedImages(source) {
   const images = [];
-  const imagePattern = /\{showThumbnail:(?:true|false),label:\"([^\"]+)\",downloadUrl:\"([^\"]+)\",thumbnailUrl:\"[^\"]+\",popupUrl:\"([^\"]+)\"[^{}]*\}/g;
+  const imagePattern = /\{showThumbnail:(?:true|false),label:\"([^\"]+)\",downloadUrl:\"([^\"]+)\",thumbnailUrl:\"([^\"]+)\",popupUrl:\"([^\"]+)\"[^{}]*\}/g;
 
   for (const match of source.matchAll(imagePattern)) {
-    const [, label, downloadUrl, popupUrl] = match;
+    const [, label, downloadUrl, thumbnailUrl, popupUrl] = match;
     const normalizedLabel = label.toLowerCase();
     const side = normalizedLabel.includes('reverse') ? 'back' : 'front';
 
@@ -56,6 +56,14 @@ function extractEmbeddedImages(source) {
         side,
         variant: 'full',
         url: unescapeHtmlString(popupUrl || downloadUrl)
+      });
+    }
+
+    if (thumbnailUrl) {
+      images.push({
+        side,
+        variant: 'thumbnail',
+        url: unescapeHtmlString(thumbnailUrl)
       });
     }
   }
