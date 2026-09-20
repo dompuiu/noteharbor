@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import { Router } from 'express';
 import multer from 'multer';
 import {
@@ -18,15 +17,12 @@ import {
   IMAGE_SLOTS,
   deleteFlagFieldName,
   fieldNameForSlot,
-  generateFlagFieldName,
-  generateThumbnailBuffer,
   getExtensionForMimeType,
   imageMapFromList,
   imageSlotKey,
   normalizeImages,
   parseBooleanFlag,
   removeFileIfManaged,
-  resolveLocalPath,
   writeSlotBuffer
 } from '../imageStore.js';
 import { normalizeDenomination } from '../denomination.js';
@@ -113,10 +109,6 @@ function shouldDeleteSlot(body, type, variant) {
   return parseBooleanFlag(body?.[deleteFlagFieldName(type, variant)]);
 }
 
-function shouldGenerateThumbnail(body, type) {
-  return parseBooleanFlag(body?.[generateFlagFieldName(type)]);
-}
-
 function removeImageFromMap(imagesBySlot, slot) {
   const key = imageSlotKey(slot.type, slot.variant);
   const existing = imagesBySlot.get(key);
@@ -124,15 +116,6 @@ function removeImageFromMap(imagesBySlot, slot) {
     removeFileIfManaged(IMAGES_DIR, existing);
     imagesBySlot.delete(key);
   }
-}
-
-function getExistingImageBuffer(image) {
-  const filePath = resolveLocalPath(IMAGES_DIR, image?.localPath);
-  if (!filePath || !fs.existsSync(filePath)) {
-    return null;
-  }
-
-  return fs.readFileSync(filePath);
 }
 
 const MAX_IMAGE_DOWNLOAD_BYTES = 15 * 1024 * 1024; // 15 MB — matches multer upload limit
@@ -226,33 +209,6 @@ async function buildNextImages(noteId, existingImages, body, filesByField) {
     if (downloaded) {
       imagesBySlot.set(slotKey, downloaded);
     }
-  }
-
-  for (const type of ['front', 'back']) {
-    const fullFile = getUploadedFile(filesByField, type, 'full');
-    const thumbnailFile = getUploadedFile(filesByField, type, 'thumbnail');
-    const existingFullImage = imagesBySlot.get(imageSlotKey(type, 'full'));
-
-    if (thumbnailFile || !shouldGenerateThumbnail(body, type)) {
-      continue;
-    }
-
-    const sourceBuffer = fullFile?.buffer ?? getExistingImageBuffer(existingFullImage);
-    if (!sourceBuffer) {
-      continue;
-    }
-
-    const generatedBuffer = await generateThumbnailBuffer(sourceBuffer);
-    removeImageFromMap(imagesBySlot, { type, variant: 'thumbnail' });
-    const extension = fullFile
-      ? getExtensionForMimeType(fullFile.mimetype, fullFile.originalname)
-      : getExtensionForMimeType(null, existingFullImage?.localPath);
-    const generatedImage = writeSlotBuffer(IMAGES_DIR, noteId, type, 'thumbnail', generatedBuffer, {
-      extension,
-      origin: IMAGE_ORIGINS.generated,
-      sourceUrl: null
-    });
-    imagesBySlot.set(imageSlotKey(type, 'thumbnail'), generatedImage);
   }
 
   return normalizeImages(Array.from(imagesBySlot.values()));

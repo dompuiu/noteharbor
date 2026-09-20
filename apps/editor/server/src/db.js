@@ -223,6 +223,76 @@ function migrateBanknotesForCollectionScope(database, defaultCollectionId) {
   }
 }
 
+function migrateBanknotesForeignKey(database) {
+  const foreignKeys = database.prepare(`PRAGMA foreign_key_list(banknotes)`).all();
+
+  if (foreignKeys.some((key) => key.table === 'collections' && key.from === 'collection_id')) {
+    return;
+  }
+
+  // Legacy databases added collection_id via ALTER TABLE, which cannot declare
+  // a foreign key. Rebuild the table so deletes cascade instead of orphaning notes.
+  // Copy only columns the old table actually has so very old schemas migrate too.
+  const desiredColumns = [
+    'id',
+    'collection_id',
+    'display_order',
+    'denomination',
+    'issue_date',
+    'catalog_number',
+    'grading_company',
+    'grade',
+    'watermark',
+    'serial',
+    'url',
+    'notes',
+    'scraped_data',
+    'images',
+    'scrape_status',
+    'scrape_error',
+    'created_at',
+    'updated_at'
+  ];
+  const existingColumns = new Set(
+    database.prepare(`PRAGMA table_info(banknotes)`).all().map((column) => column.name)
+  );
+  const sharedColumns = desiredColumns.filter((column) => existingColumns.has(column));
+  const columnList = sharedColumns.join(', ');
+
+  database.exec(`
+    PRAGMA foreign_keys = OFF;
+
+    CREATE TABLE banknotes_new (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+      display_order INTEGER,
+      denomination TEXT,
+      issue_date TEXT,
+      catalog_number TEXT,
+      grading_company TEXT,
+      grade TEXT,
+      watermark TEXT,
+      serial TEXT,
+      url TEXT,
+      notes TEXT,
+      scraped_data TEXT,
+      images TEXT,
+      scrape_status TEXT DEFAULT 'pending',
+      scrape_error TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    INSERT INTO banknotes_new (${columnList})
+    SELECT ${columnList} FROM banknotes;
+
+    DROP TABLE banknotes;
+    ALTER TABLE banknotes_new RENAME TO banknotes;
+
+    PRAGMA foreign_keys = ON;
+  `);
+}
+
 function initializeSchema(database) {
   database.pragma('foreign_keys = ON');
 
@@ -353,6 +423,7 @@ function initializeSchema(database) {
 
   migrateBanknotesForCollectionScope(database, defaultCollectionId);
   migrateTagsForCollectionScope(database, defaultCollectionId);
+  migrateBanknotesForeignKey(database);
 
   database.exec(`
     CREATE INDEX IF NOT EXISTS idx_banknotes_collection_display_order
@@ -1403,6 +1474,7 @@ export {
   getNotesByIds,
   getSlideshowSession,
   importNotes,
+  migrateBanknotesForeignKey,
   moveNoteToCollection,
   openDatabase,
   reloadDatabase,

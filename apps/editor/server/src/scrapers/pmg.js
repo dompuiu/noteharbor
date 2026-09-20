@@ -35,14 +35,9 @@ class PMGScraper extends BaseScraper {
       const title = (img.attr('title') || '').toLowerCase();
       const side = title.includes('rev') || title.includes('back') || title.includes('reverse') ? 'front' : 'back';
       const fullSizeUrl = anchor.attr('href') ? new URL(anchor.attr('href'), pageUrl).href : null;
-      const thumbnailUrl = img.attr('src') ? new URL(img.attr('src'), pageUrl).href : null;
 
       if (fullSizeUrl) {
         images.push({ side, variant: 'full', url: fullSizeUrl });
-      }
-
-      if (thumbnailUrl) {
-        images.push({ side, variant: 'thumbnail', url: thumbnailUrl });
       }
     });
 

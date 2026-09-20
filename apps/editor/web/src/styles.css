@@ -1336,14 +1336,6 @@ button.tag {
   background: var(--surface-2);
 }
 
-.image-slot-card--thumbnail .image-dropzone {
-  min-height: 120px;
-}
-
-.image-slot-card--thumbnail .image-dropzone-preview {
-  max-height: 120px;
-}
-
 .image-slot-card--full .image-dropzone {
   min-height: 200px;
 }
@@ -1396,8 +1388,7 @@ button.tag {
   color: var(--success);
 }
 
-.image-slot-source--uploaded,
-.image-slot-source--generated {
+.image-slot-source--uploaded {
   background: var(--info-bg);
   color: var(--info);
 }
@@ -1444,24 +1435,6 @@ button.tag {
 
 .image-slot-actions--wrap {
   align-items: stretch;
-}
-
-.image-generate-toggle {
-  display: flex;
-  gap: 8px;
-  align-items: center;
-  font-size: 0.86rem;
-  color: #57534e;
-}
-
-.image-generate-toggle--inline {
-  white-space: nowrap;
-}
-
-.image-generate-toggle input {
-  width: 14px;
-  height: 14px;
-  margin: 0;
 }
 
 @media (max-width: 900px) {

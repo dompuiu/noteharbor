@@ -22,6 +22,15 @@ const archiveRouter = Router();
 const upload = multer({ dest: os.tmpdir() });
 const IMAGE_API_PREFIX = '/api/images/';
 
+function isThumbnailRecord(image) {
+  return image?.variant === 'thumbnail';
+}
+
+function isThumbnailRelativePath(relativePath) {
+  const fileName = String(relativePath ?? '').split('/').at(-1) ?? '';
+  return /^(front|back)-thumbnail\./.test(fileName);
+}
+
 function removePathIfExists(targetPath) {
   if (targetPath && fs.existsSync(targetPath)) {
     fs.rmSync(targetPath, { recursive: true, force: true });
@@ -65,6 +74,10 @@ function rewriteImageRecordsForImportedNote(images, archiveNoteId, stagedNoteId)
 
   for (const image of images) {
     if (!image || typeof image !== 'object') {
+      continue;
+    }
+
+    if (isThumbnailRecord(image)) {
       continue;
     }
 
@@ -427,6 +440,17 @@ function mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir) {
       ORDER BY id ASC
     `);
     const deleteCollectionStatement = stagedDatabase.prepare(`DELETE FROM collections WHERE id = ?`);
+    const deleteNoteLinksByCollectionStatement = stagedDatabase.prepare(`
+      DELETE FROM banknote_tags
+      WHERE banknote_id IN (SELECT id FROM banknotes WHERE collection_id = ?)
+    `);
+    const deleteNotesByCollectionStatement = stagedDatabase.prepare(`DELETE FROM banknotes WHERE collection_id = ?`);
+    const deleteTagsByCollectionStatement = stagedDatabase.prepare(`DELETE FROM tags WHERE collection_id = ?`);
+    const deleteOrphanTagLinksStatement = stagedDatabase.prepare(`
+      DELETE FROM banknote_tags
+      WHERE tag_id NOT IN (SELECT id FROM tags)
+         OR banknote_id NOT IN (SELECT id FROM banknotes)
+    `);
     const insertCollectionStatement = stagedDatabase.prepare(`
       INSERT INTO collections (name, is_default, created_at, updated_at)
       VALUES (?, 0, datetime('now'), datetime('now'))
@@ -503,6 +527,10 @@ function mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir) {
             .all(Number(existingCollection.id))
             .map((row) => Number(row.id));
           removedNoteIds.push(...noteIds);
+          deleteNoteLinksByCollectionStatement.run(Number(existingCollection.id));
+          deleteNotesByCollectionStatement.run(Number(existingCollection.id));
+          deleteTagsByCollectionStatement.run(Number(existingCollection.id));
+          deleteOrphanTagLinksStatement.run();
           deleteCollectionStatement.run(Number(existingCollection.id));
         }
 
@@ -605,6 +633,9 @@ function mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir) {
     }
 
     for (const plannedCopy of imageCopyPlan) {
+      if (isThumbnailRelativePath(plannedCopy.fromRelativePath) || isThumbnailRelativePath(plannedCopy.toRelativePath)) {
+        continue;
+      }
       copyReferencedImage(
         archiveImagesDir,
         stagedImagesDir,
@@ -760,4 +791,4 @@ archiveRouter.delete('/data', async (_request, response) => {
   }
 });
 
-export { archiveRouter };
+export { archiveRouter, mergeArchiveIntoStagedData };

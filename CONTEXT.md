@@ -78,8 +78,8 @@ A short label attached to notes, scoped to a collection.
 _Avoid_: Label, category
 
 **Note image**:
-An image of a note's face or reverse, stored in full and thumbnail variants, either uploaded or fetched by scraping.
-_Avoid_: Picture, photo, front/back (as the whole image)
+An image of a note's face or reverse, stored in full size, either uploaded or fetched by scraping.
+_Avoid_: Picture, photo, thumbnail, front/back (as the whole image)
 
 **Scrape**:
 Fetching a graded note's images and catalog details from its grading company (PMG, PCGS, TQG) using the note's serial number.

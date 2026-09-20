@@ -1,8 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
-function pickFrontThumbnail(images) {
+function pickFrontImage(images) {
   return (
-    images.find((img) => img.type === "front" && img.variant === "thumbnail") ??
     images.find((img) => img.type === "front" && img.variant === "full") ??
     null
   );
@@ -58,7 +57,7 @@ function PositionPicker({ notes, onSelect, selectedId }) {
           <p className="muted position-picker-empty">No notes match.</p>
         ) : (
           filteredNotes.map((note) => {
-            const thumb = pickFrontThumbnail(note.images ?? []);
+            const thumb = pickFrontImage(note.images ?? []);
             const isSelected = note.id === selectedId;
             return (
               <button

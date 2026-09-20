@@ -1,22 +1,17 @@
 import fs from 'node:fs';
 import path from 'node:path';
-import sharp from 'sharp';
 
 const IMAGE_TYPES = ['front', 'back'];
-const IMAGE_VARIANTS = ['full', 'thumbnail'];
+const IMAGE_VARIANTS = ['full'];
 const IMAGE_SLOTS = [
   { field: 'image_front_full', type: 'front', variant: 'full' },
-  { field: 'image_front_thumbnail', type: 'front', variant: 'thumbnail' },
-  { field: 'image_back_full', type: 'back', variant: 'full' },
-  { field: 'image_back_thumbnail', type: 'back', variant: 'thumbnail' }
+  { field: 'image_back_full', type: 'back', variant: 'full' }
 ];
 const IMAGE_ORIGINS = {
   scraped: 'scraped',
-  uploaded: 'uploaded',
-  generated: 'generated'
+  uploaded: 'uploaded'
 };
 const SLOT_KEY_SEPARATOR = ':';
-const THUMBNAIL_MAX_WIDTH = 500;
 
 function imageSlotKey(type, variant) {
   return `${type}${SLOT_KEY_SEPARATOR}${variant}`;
@@ -28,10 +23,6 @@ function fieldNameForSlot(type, variant) {
 
 function deleteFlagFieldName(type, variant) {
   return `delete_image_${type}_${variant}`;
-}
-
-function generateFlagFieldName(type) {
-  return `generate_image_${type}_thumbnail_from_full`;
 }
 
 function parseBooleanFlag(value) {
@@ -114,7 +105,7 @@ function ensureNoteImagesDir(imagesDir, noteId) {
 
 function normalizeImageOrigin(image) {
   const normalized = String(image?.origin ?? '').trim().toLowerCase();
-  if (normalized === IMAGE_ORIGINS.scraped || normalized === IMAGE_ORIGINS.uploaded || normalized === IMAGE_ORIGINS.generated) {
+  if (normalized === IMAGE_ORIGINS.scraped || normalized === IMAGE_ORIGINS.uploaded) {
     return normalized;
   }
 
@@ -131,7 +122,7 @@ function normalizeImageOrigin(image) {
 }
 
 function normalizeImageRecord(image) {
-  if (!image?.type || !image?.variant || !image?.localPath) {
+  if (!image?.type || !IMAGE_VARIANTS.includes(image?.variant) || !image?.localPath) {
     return null;
   }
 
@@ -184,12 +175,6 @@ function writeSlotBuffer(imagesDir, noteId, type, variant, buffer, { extension, 
   return slotRecord(noteId, type, variant, normalizedExtension, origin, sourceUrl);
 }
 
-async function generateThumbnailBuffer(inputBuffer) {
-  return sharp(inputBuffer)
-    .resize({ width: THUMBNAIL_MAX_WIDTH, withoutEnlargement: true })
-    .toBuffer();
-}
-
 function removeStaleManagedFiles(imagesDir, noteId, images) {
   const noteImagesDir = getNoteImagesDir(imagesDir, noteId);
   if (!fs.existsSync(noteImagesDir)) {
@@ -223,14 +208,11 @@ export {
   IMAGE_SLOTS,
   IMAGE_TYPES,
   IMAGE_VARIANTS,
-  THUMBNAIL_MAX_WIDTH,
   buildLocalPath,
   deleteFlagFieldName,
   deleteSlotFiles,
   ensureNoteImagesDir,
   fieldNameForSlot,
-  generateFlagFieldName,
-  generateThumbnailBuffer,
   getExtensionForMimeType,
   getNoteImagesDir,
   imageMapFromList,
