@@ -82,6 +82,56 @@ async function handleResponse(response) {
   return payload;
 }
 
+function parseJsonText(responseText) {
+  try {
+    const payload = JSON.parse(responseText);
+    return payload && typeof payload === 'object' ? payload : {};
+  } catch {
+    return {};
+  }
+}
+
+function toUploadProgressEvent(event) {
+  if (event?.lengthComputable && Number(event.total) > 0) {
+    const percent = Math.min(100, Math.max(0, Math.round((event.loaded / event.total) * 100)));
+
+    return { loaded: event.loaded, total: event.total, percent, phase: 'uploading' };
+  }
+
+  return { loaded: event?.loaded ?? 0, total: null, percent: null, phase: 'uploading' };
+}
+
+function postFormDataWithUploadProgress(url, formData, onProgress) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open('POST', url);
+
+    if (xhr.upload && typeof onProgress === 'function') {
+      xhr.upload.onprogress = (event) => {
+        onProgress(toUploadProgressEvent(event));
+      };
+      xhr.upload.onload = () => {
+        onProgress({ loaded: null, total: null, percent: 100, phase: 'processing' });
+      };
+    }
+
+    xhr.onload = () => {
+      const payload = parseJsonText(xhr.responseText);
+
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve(payload);
+        return;
+      }
+
+      reject(new Error(payload.error || 'Request failed.'));
+    };
+    xhr.onerror = () => {
+      reject(new Error('Request failed.'));
+    };
+    xhr.send(formData);
+  });
+}
+
 function notesBasePath(collectionId) {
   return Number.isInteger(collectionId)
     ? `/api/collections/${collectionId}/notes`
@@ -195,7 +245,7 @@ async function moveNote(id, collectionId, targetCollectionId, position) {
   return handleResponse(response);
 }
 
-async function importCsv(source, collectionId) {
+async function importCsv(source, collectionId, onProgress) {
   const formData = new FormData();
 
   if (isFileValue(source)) {
@@ -206,15 +256,10 @@ async function importCsv(source, collectionId) {
     throw new Error('Choose a CSV file or paste CSV text before importing.');
   }
 
-  const response = await fetch(importBasePath(collectionId), {
-    method: 'POST',
-    body: formData
-  });
-
-  return handleResponse(response);
+  return postFormDataWithUploadProgress(importBasePath(collectionId), formData, onProgress);
 }
 
-async function importArchive(file) {
+async function importArchive(file, onProgress) {
   if (!isFileValue(file)) {
     throw new Error('Choose a .zip archive before importing.');
   }
@@ -222,12 +267,7 @@ async function importArchive(file) {
   const formData = new FormData();
   formData.append('file', file);
 
-  const response = await fetch('/api/archive/import', {
-    method: 'POST',
-    body: formData
-  });
-
-  return handleResponse(response);
+  return postFormDataWithUploadProgress('/api/archive/import', formData, onProgress);
 }
 
 async function downloadArchive(collectionIds = null) {

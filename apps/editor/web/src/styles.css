@@ -2064,6 +2064,72 @@ button.tag {
   vertical-align: middle;
 }
 
+.button-spinner {
+  margin-right: 8px;
+  flex-shrink: 0;
+}
+
+.import-upload-progress {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 0.84rem;
+}
+
+.import-upload-progress progress,
+.import-progress-meter progress {
+  width: min(100%, 260px);
+  height: 10px;
+  accent-color: var(--accent);
+}
+
+.import-progress-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(24, 18, 13, 0.5);
+}
+
+.import-progress-card {
+  display: grid;
+  justify-items: center;
+  gap: 10px;
+  width: min(420px, 100%);
+  padding: 24px;
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-lg);
+  text-align: center;
+}
+
+.import-progress-spinner {
+  width: 28px;
+  height: 28px;
+  border-width: 3px;
+}
+
+.import-progress-title {
+  margin: 0;
+  font-weight: 700;
+  font-size: 1rem;
+}
+
+.import-progress-detail {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.import-progress-meter {
+  display: grid;
+  justify-items: center;
+  gap: 6px;
+  font-size: 0.86rem;
+}
+
 .scrape-toast {
   padding: 10px 14px;
   border-radius: var(--radius-md);

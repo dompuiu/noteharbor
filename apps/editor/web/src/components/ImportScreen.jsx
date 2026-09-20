@@ -68,6 +68,8 @@ function ImportScreen({
   const [submittingCsv, setSubmittingCsv] = useState(false);
   const [submittingArchive, setSubmittingArchive] = useState(false);
   const [exportingArchive, setExportingArchive] = useState(false);
+  const [csvUploadProgress, setCsvUploadProgress] = useState(null);
+  const [archiveUploadProgress, setArchiveUploadProgress] = useState(null);
   const [clearingData, setClearingData] = useState(false);
   const [operationStatus, setOperationStatus] = useState({
     currentOperation: 'idle',
@@ -82,9 +84,33 @@ function ImportScreen({
   const [canScrollDown, setCanScrollDown] = useState(false);
 
   const isBusy = operationStatus.isBusy;
+  const isTransferring = submittingCsv || submittingArchive || exportingArchive;
   const busyMessage = isBusy
     ? `This action is unavailable while ${formatOperationLabel(operationStatus.currentOperation)} is in progress.`
     : '';
+
+  function formatUploadStatus(progress, verb) {
+    if (!progress) {
+      return null;
+    }
+
+    if (progress.phase === 'processing') {
+      return 'Upload complete. Processing on server...';
+    }
+
+    if (Number.isInteger(progress.percent)) {
+      return `${verb} ${progress.percent}%`;
+    }
+
+    return `${verb}...`;
+  }
+
+  const csvBusyLabel = submittingCsv
+    ? (formatUploadStatus(csvUploadProgress, 'Uploading') ?? 'Importing...')
+    : null;
+  const archiveBusyLabel = submittingArchive
+    ? (formatUploadStatus(archiveUploadProgress, 'Uploading') ?? 'Importing archive...')
+    : null;
 
   function setCsvImportSource(nextSource, label) {
     setCsvSource(nextSource);
@@ -101,14 +127,14 @@ function ImportScreen({
 
   useEffect(() => {
     function handleKeyDown(event) {
-      if (event.key === 'Escape') {
+      if (event.key === 'Escape' && !isTransferring) {
         navigate('/');
       }
     }
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navigate]);
+  }, [navigate, isTransferring]);
 
   useEffect(() => {
     const validIds = collections.map((collection) => Number(collection.id)).filter((id) => Number.isInteger(id) && id > 0);
@@ -182,13 +208,13 @@ function ImportScreen({
     }
 
     loadStatus();
-    const timer = window.setInterval(loadStatus, 2000);
+    const timer = window.setInterval(loadStatus, isTransferring ? 500 : 2000);
 
     return () => {
       active = false;
       window.clearInterval(timer);
     };
-  }, []);
+  }, [isTransferring]);
 
   async function handleCsvSubmit(event) {
     event.preventDefault();
@@ -204,17 +230,19 @@ function ImportScreen({
     }
 
     setSubmittingCsv(true);
+    setCsvUploadProgress(null);
     setError('');
     setCsvResult(null);
     setArchiveResult(null);
 
     try {
-      const payload = await importCsv(csvSource, activeCollectionId);
+      const payload = await importCsv(csvSource, activeCollectionId, setCsvUploadProgress);
       setCsvResult(payload);
     } catch (importError) {
       setError(importError.message);
     } finally {
       setSubmittingCsv(false);
+      setCsvUploadProgress(null);
     }
   }
 
@@ -238,18 +266,20 @@ function ImportScreen({
     }
 
     setSubmittingArchive(true);
+    setArchiveUploadProgress(null);
     setError('');
     setCsvResult(null);
     setArchiveResult(null);
 
     try {
-      await importArchive(archiveSource);
+      await importArchive(archiveSource, setArchiveUploadProgress);
       setArchiveResult({ success: true });
       window.location.assign('/');
     } catch (importError) {
       setError(importError.message);
     } finally {
       setSubmittingArchive(false);
+      setArchiveUploadProgress(null);
     }
   }
 
@@ -605,9 +635,20 @@ function ImportScreen({
               </div>
             </div>
 
-            <button className="button button-primary import-submit" disabled={submittingCsv || isBusy || !activeCollectionId} type="submit">
-              {submittingCsv ? 'Importing...' : 'Import CSV'}
+            <button className="button button-primary import-submit" disabled={submittingCsv || isBusy || !activeCollectionId} type="submit" aria-busy={submittingCsv}>
+              {submittingCsv ? (
+                <>
+                  <span className="scrape-spinner button-spinner" aria-hidden="true" />
+                  <span>{csvBusyLabel}</span>
+                </>
+              ) : 'Import CSV'}
             </button>
+            {submittingCsv && csvUploadProgress?.phase === 'uploading' && Number.isInteger(csvUploadProgress.percent) ? (
+              <div className="full-span import-upload-progress" role="status" aria-live="polite">
+                <progress value={csvUploadProgress.percent} max="100" aria-label="CSV upload progress" />
+                <span className="muted">{csvUploadProgress.percent}% uploaded</span>
+              </div>
+            ) : null}
           </form>
 
           <form className="form-grid import-card" onSubmit={handleArchiveImport}>
@@ -747,16 +788,32 @@ function ImportScreen({
             ) : null}
 
             <div className="import-actions full-span">
-              <button className="button" disabled={exportingArchive || isBusy || !selectedExportCollectionIds.length} onClick={handleArchiveExport} type="button">
-                {exportingArchive ? 'Preparing export...' : 'Download archive'}
+              <button className="button" disabled={exportingArchive || isBusy || !selectedExportCollectionIds.length} onClick={handleArchiveExport} type="button" aria-busy={exportingArchive}>
+                {exportingArchive ? (
+                  <>
+                    <span className="scrape-spinner button-spinner" aria-hidden="true" />
+                    <span>Preparing export...</span>
+                  </>
+                ) : 'Download archive'}
               </button>
-              <button className="button button-primary" disabled={submittingArchive || isBusy || !archiveSource} type="submit">
-                {submittingArchive ? 'Importing archive...' : 'Import archive'}
+              <button className="button button-primary" disabled={submittingArchive || isBusy || !archiveSource} type="submit" aria-busy={submittingArchive}>
+                {submittingArchive ? (
+                  <>
+                    <span className="scrape-spinner button-spinner" aria-hidden="true" />
+                    <span>{archiveBusyLabel}</span>
+                  </>
+                ) : 'Import archive'}
               </button>
               <button className="button button-danger" disabled={clearingData || isBusy} onClick={handleClearData} type="button">
                 {clearingData ? 'Deleting data...' : 'Delete current data'}
               </button>
             </div>
+            {submittingArchive && archiveUploadProgress?.phase === 'uploading' && Number.isInteger(archiveUploadProgress.percent) ? (
+              <div className="full-span import-upload-progress" role="status" aria-live="polite">
+                <progress value={archiveUploadProgress.percent} max="100" aria-label="Archive upload progress" />
+                <span className="muted">{archiveUploadProgress.percent}% uploaded</span>
+              </div>
+            ) : null}
           </form>
         </div>
 
@@ -783,6 +840,36 @@ function ImportScreen({
         ) : null}
         </div>
       </div>
+      {isTransferring ? (
+        <div className="import-progress-overlay" role="alertdialog" aria-modal="true" aria-live="polite" aria-label={submittingCsv ? 'Importing CSV' : submittingArchive ? 'Importing archive' : 'Preparing archive export'}>
+          <div className="import-progress-card">
+            <span className="scrape-spinner import-progress-spinner" aria-hidden="true" />
+            <p className="import-progress-title">
+              {submittingCsv ? 'Importing CSV...' : submittingArchive ? 'Importing archive...' : 'Preparing export...'}
+            </p>
+            {submittingCsv && csvSourceLabel ? <p className="muted import-progress-detail">{csvSourceLabel}</p> : null}
+            {submittingArchive && archiveSource?.name ? <p className="muted import-progress-detail">{archiveSource.name}</p> : null}
+            {exportingArchive ? <p className="muted import-progress-detail">{selectedExportCollectionIds.length} collection(s) selected</p> : null}
+            {(submittingCsv ? csvUploadProgress : submittingArchive ? archiveUploadProgress : null)?.phase === 'uploading'
+              && Number.isInteger((submittingCsv ? csvUploadProgress : archiveUploadProgress)?.percent) ? (
+              <div className="import-progress-meter">
+                <progress
+                  value={(submittingCsv ? csvUploadProgress : archiveUploadProgress).percent}
+                  max="100"
+                  aria-label="Upload progress"
+                />
+                <span className="muted">{(submittingCsv ? csvUploadProgress : archiveUploadProgress).percent}% uploaded</span>
+              </div>
+            ) : (
+              <p className="muted import-progress-detail">
+                {((submittingCsv ? csvUploadProgress : archiveUploadProgress)?.phase === 'processing')
+                  ? 'Upload complete. Processing on server...'
+                  : 'Working...'}
+              </p>
+            )}
+          </div>
+        </div>
+      ) : null}
     </section>
   );
 }
