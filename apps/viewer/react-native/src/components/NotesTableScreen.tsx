@@ -270,7 +270,8 @@ export function NotesTableScreen({
             testID="table-hscroll"
             ref={hScrollRef}
             horizontal
-            style={styles.hscroll}>
+            style={styles.hscroll}
+            contentContainerStyle={styles.hscrollContent}>
             <View
               testID="table-content"
               style={[styles.tableContent, { width: tableWidth }]}>
@@ -317,6 +318,8 @@ export function NotesTableScreen({
               <ScrollView
                 testID="table-vscroll"
                 ref={vScrollRef}
+                style={styles.vscroll}
+                contentContainerStyle={styles.vscrollContent}
                 onLayout={(event) =>
                   (viewportHeightRef.current =
                     event.nativeEvent.layout.height)
@@ -420,6 +423,8 @@ export function NotesTableScreen({
 
 const styles = StyleSheet.create({
   screen: {
+    flex: 1,
+    minHeight: 0,
     gap: 16,
   },
   headerRow: {
@@ -525,10 +530,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
   },
   tableCard: {
+    flex: 1,
+    minHeight: 0,
     backgroundColor: viewerLight.surface,
     borderRadius: 28,
     borderWidth: 1.5,
     borderColor: viewerLight.border,
+    overflow: 'hidden',
   },
   emptyWrap: {
     padding: 24,
@@ -540,14 +548,28 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
   hscroll: {
-    flexGrow: 0,
+    flex: 1,
+    minHeight: 0,
+  },
+  hscrollContent: {
+    flexGrow: 1,
+    minHeight: '100%',
   },
   tableContent: {
-    paddingHorizontal: TABLE_HORIZONTAL_PADDING,
+    flexGrow: 1,
+    minHeight: '100%',
   },
   tableHeader: {
     flexDirection: 'row',
     backgroundColor: viewerLight.tableHeader,
+    paddingHorizontal: TABLE_HORIZONTAL_PADDING,
+  },
+  vscroll: {
+    flex: 1,
+    minHeight: 0,
+  },
+  vscrollContent: {
+    flexGrow: 1,
   },
   headerCell: {
     alignItems: 'center',
@@ -568,6 +590,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     minHeight: TABLE_ROW_HEIGHT,
+    paddingHorizontal: TABLE_HORIZONTAL_PADDING,
     paddingVertical: 12,
     borderTopWidth: 1,
     borderTopColor: viewerLight.borderSoft,

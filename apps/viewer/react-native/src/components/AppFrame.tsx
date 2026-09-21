@@ -33,11 +33,13 @@ const styles = StyleSheet.create({
   },
   card: {
     flex: 1,
+    minHeight: 0,
     borderRadius: 24,
     padding: 24,
     backgroundColor: viewerLight.surface,
     borderWidth: 1,
     borderColor: viewerLight.borderControl,
     gap: 16,
+    overflow: 'hidden',
   },
 });

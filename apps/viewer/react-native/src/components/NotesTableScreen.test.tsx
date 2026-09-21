@@ -325,6 +325,27 @@ test('thumbnails render at 96x56 with a placeholder on missing images', () => {
   );
 });
 
+test('table stays bounded inside its rounded container', () => {
+  const tree = renderScreen(makeController());
+  const flat = (style: unknown) =>
+    Object.assign({}, ...(Array.isArray(style) ? style : [style]));
+
+  const hscroll = byTestId(tree, 'table-hscroll');
+  expect(flat(hscroll.props.style).flex).toBe(1);
+
+  const vscroll = byTestId(tree, 'table-vscroll');
+  expect(flat(vscroll.props.style).flex).toBe(1);
+
+  const content = byTestId(tree, 'table-content');
+  const contentStyle = flat(content.props.style);
+  expect(contentStyle.flexGrow).toBe(1);
+  expect(contentStyle.paddingHorizontal).toBeUndefined();
+
+  const card = hscroll.parent;
+  expect(flat(card.props.style).flex).toBe(1);
+  expect(flat(card.props.style).overflow).toBe('hidden');
+});
+
 test('calculateTagsColumnWidth respects the 160 minimum and grows with chips', () => {
   expect(calculateTagsColumnWidth([])).toBe(160);
   expect(calculateTagsColumnWidth([makeNote({ tags: [] })])).toBe(160);
