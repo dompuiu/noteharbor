@@ -10,12 +10,24 @@ import 'package:note_harbor_viewer/features/table/notes_table_screen.dart';
 import 'package:note_harbor_viewer/models/viewer_dataset.dart';
 
 void main() {
-  Future<void> pumpKeyboardTable(
-    WidgetTester tester, {
+  // debugDefaultTargetPlatformOverride must be reset synchronously at the
+  // end of the test body: _verifyInvariants runs before addTearDown.
+  void keyboardTestWidgets(
+    String description,
+    Future<void> Function(WidgetTester tester) body, {
     TargetPlatform platform = TargetPlatform.windows,
-  }) async {
-    debugDefaultTargetPlatformOverride = platform;
-    addTearDown(() => debugDefaultTargetPlatformOverride = null);
+  }) {
+    testWidgets(description, (tester) async {
+      debugDefaultTargetPlatformOverride = platform;
+      try {
+        await body(tester);
+      } finally {
+        debugDefaultTargetPlatformOverride = null;
+      }
+    });
+  }
+
+  Future<void> pumpKeyboardTable(WidgetTester tester) async {
     final controller = DatasetController(
       repository: _KeyboardNavRepository(),
     );
@@ -45,7 +57,7 @@ void main() {
         matching: selectedRing(),
       );
 
-  testWidgets('arrow keys move keyboard selection between rows', (
+  keyboardTestWidgets('arrow keys move keyboard selection between rows', (
     WidgetTester tester,
   ) async {
     await pumpKeyboardTable(tester);
@@ -66,7 +78,7 @@ void main() {
     expect(selectedRow(1), findsOneWidget);
   });
 
-  testWidgets('home and end jump to first and last rows', (
+  keyboardTestWidgets('home and end jump to first and last rows', (
     WidgetTester tester,
   ) async {
     await pumpKeyboardTable(tester);
@@ -80,7 +92,7 @@ void main() {
     expect(selectedRow(1), findsOneWidget);
   });
 
-  testWidgets('page down and page up jump across rows', (
+  keyboardTestWidgets('page down and page up jump across rows', (
     WidgetTester tester,
   ) async {
     await pumpKeyboardTable(tester);
@@ -98,7 +110,7 @@ void main() {
     expect(selectedRow(1), findsOneWidget);
   });
 
-  testWidgets('enter opens the slideshow at the selected row', (
+  keyboardTestWidgets('enter opens the slideshow at the selected row', (
     WidgetTester tester,
   ) async {
     await pumpKeyboardTable(tester);
@@ -118,7 +130,7 @@ void main() {
     expect(selectedRow(2), findsOneWidget);
   });
 
-  testWidgets('tap opens the note without moving keyboard selection', (
+  keyboardTestWidgets('tap opens the note without moving keyboard selection', (
     WidgetTester tester,
   ) async {
     await pumpKeyboardTable(tester);
@@ -130,7 +142,7 @@ void main() {
     expect(find.text('3 / 5'), findsOneWidget);
   });
 
-  testWidgets('escape clears the keyboard selection', (
+  keyboardTestWidgets('escape clears the keyboard selection', (
     WidgetTester tester,
   ) async {
     await pumpKeyboardTable(tester);
@@ -144,28 +156,37 @@ void main() {
     expect(selectedRing(), findsNothing);
   });
 
-  testWidgets('slash focuses search and typing does not move selection', (
+  keyboardTestWidgets('search keeps keys for typing instead of selection', (
     WidgetTester tester,
   ) async {
     await pumpKeyboardTable(tester);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.slash);
     await tester.pump();
-    final searchField = tester.widget<TextField>(find.byType(TextField));
-    expect(searchField.focusNode?.hasFocus, isTrue);
-
-    // j is a table shortcut when the table has focus; while typing it must
-    // insert text instead of moving the selection.
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
-    await tester.pump();
     expect(
-      tester.widget<TextField>(find.byType(TextField)).controller?.text,
-      'j',
+      tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus,
+      isTrue,
     );
+
+    // j/k/space/home are table shortcuts when the table has focus. While
+    // typing they must reach the field instead: selection stays empty, focus
+    // stays in search, and no note opens. (Character insertion itself comes
+    // from the OS/engine text path, which widget tests cannot simulate, so
+    // this guards the focus scoping rather than the inserted text.)
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.sendKeyEvent(LogicalKeyboardKey.space);
+    await tester.sendKeyEvent(LogicalKeyboardKey.home);
+    await tester.pump();
     expect(selectedRing(), findsNothing);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus,
+      isTrue,
+    );
+    expect(find.text('Back'), findsNothing);
   });
 
-  testWidgets('filter changes reset the keyboard selection', (
+  keyboardTestWidgets('filter changes reset the keyboard selection', (
     WidgetTester tester,
   ) async {
     await pumpKeyboardTable(tester);
@@ -181,17 +202,19 @@ void main() {
     expect(find.text('Alpha Note'), findsNothing);
   });
 
-  testWidgets('keyboard selection stays inert on iOS', (
-    WidgetTester tester,
-  ) async {
-    await pumpKeyboardTable(tester, platform: TargetPlatform.iOS);
+  keyboardTestWidgets(
+    'keyboard selection stays inert on iOS',
+    (tester) async {
+      await pumpKeyboardTable(tester);
 
-    await tester.tap(find.byType(TextField));
-    await tester.pump();
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-    await tester.pump();
-    expect(selectedRing(), findsNothing);
-  });
+      await tester.tap(find.byType(TextField));
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(selectedRing(), findsNothing);
+    },
+    platform: TargetPlatform.iOS,
+  );
 }
 
 class _KeyboardNavRepository extends ViewerRepository {

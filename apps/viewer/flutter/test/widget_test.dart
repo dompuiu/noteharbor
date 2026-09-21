@@ -38,6 +38,13 @@ void main() {
 
     expect(find.text('Import data to get started'), findsOneWidget);
     expect(find.text('No dataset imported'), findsOneWidget);
+    // The archive picker sits below the fold on first run; the lazy ListView
+    // only builds it once scrolled into range.
+    await tester.scrollUntilVisible(
+      find.text('Choose archive'),
+      200.0,
+      scrollable: find.byType(ListView),
+    );
     expect(find.text('Choose archive'), findsOneWidget);
   });
 
@@ -148,7 +155,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField), 'den: 10000');
+    await tester.enterText(find.byType(TextField), 'denom: 10000');
     await tester.pumpAndSettle();
 
     expect(find.text('10,000 Lei'), findsOneWidget);
@@ -157,7 +164,7 @@ void main() {
     expect(find.text('110,000 Lei'), findsNothing);
     expect(find.text('1,000 Lei'), findsNothing);
 
-    await tester.enterText(find.byType(TextField), 'den: !10000');
+    await tester.enterText(find.byType(TextField), 'denom: !10000');
     await tester.pumpAndSettle();
 
     expect(find.text('10,000 Lei'), findsNothing);

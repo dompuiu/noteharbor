@@ -400,7 +400,7 @@ class _NoteImage extends StatelessWidget {
                   child: Center(
                     child: Text(
                       'No image',
-                      style: const TextStyle(color: ViewerPalette.darkMuted),
+                      style: TextStyle(color: ViewerPalette.darkMuted),
                     ),
                   ),
                 )
@@ -412,7 +412,7 @@ class _NoteImage extends StatelessWidget {
                     child: Center(
                       child: Text(
                         'Missing image',
-                        style: const TextStyle(color: ViewerPalette.darkMuted),
+                        style: TextStyle(color: ViewerPalette.darkMuted),
                       ),
                     ),
                   ),
