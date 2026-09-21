@@ -1433,7 +1433,8 @@ class _TableRow extends StatelessWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: ViewerPalette.accentSoft,
-                  borderRadius: BorderRadius.circular(12),
+                  borderRadius:
+                      BorderRadius.all(Radius.circular(12)),
                 ),
               ),
             ),
@@ -1491,7 +1492,8 @@ class _TableRow extends StatelessWidget {
               child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.circular(12),
+                    borderRadius:
+                        BorderRadius.all(Radius.circular(12)),
                     border: Border.fromBorderSide(
                       BorderSide(color: ViewerPalette.accent, width: 2),
                     ),
