@@ -192,6 +192,25 @@ void main() {
     expect(find.text('Back'), findsNothing);
   });
 
+  keyboardTestWidgets('clear button resets the filter', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    await tester.enterText(find.byType(TextField), 'Cello');
+    await tester.pumpAndSettle();
+    expect(find.text('Alpha Note'), findsNothing);
+
+    await tester.tap(find.byIcon(Icons.close_rounded));
+    await tester.pumpAndSettle();
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller?.text,
+      isEmpty,
+    );
+    expect(find.text('Alpha Note'), findsOneWidget);
+    expect(find.text('Echo Note'), findsOneWidget);
+  });
+
   keyboardTestWidgets('filter changes reset the keyboard selection', (
     WidgetTester tester,
   ) async {

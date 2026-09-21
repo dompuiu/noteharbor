@@ -948,15 +948,33 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                             prefixIcon: const Icon(Icons.search_rounded),
                             suffixIcon: _query.isEmpty
                                 ? null
-                                : IconButton(
-                                    onPressed: () {
-                                      _searchController.clear();
-                                      setState(() {
-                                        _query = '';
-                                        _selectedIndex = null;
-                                      });
-                                    },
-                                    icon: const Icon(Icons.close_rounded),
+                                : Padding(
+                                    padding: const EdgeInsets.only(right: 6),
+                                    child: IconButton(
+                                      tooltip: 'Clear filter',
+                                      onPressed: () {
+                                        _searchController.clear();
+                                        setState(() {
+                                          _query = '';
+                                          _selectedIndex = null;
+                                        });
+                                      },
+                                      iconSize: 18,
+                                      padding: const EdgeInsets.all(7),
+                                      constraints: const BoxConstraints(
+                                        minWidth: 32,
+                                        minHeight: 32,
+                                      ),
+                                      style: IconButton.styleFrom(
+                                        foregroundColor:
+                                            ViewerPalette.textMuted,
+                                        hoverColor: ViewerPalette.accentSoft,
+                                        focusColor: ViewerPalette.accentSoft,
+                                        highlightColor:
+                                            ViewerPalette.accentSoft,
+                                      ),
+                                      icon: const Icon(Icons.close_rounded),
+                                    ),
                                   ),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(18),
