@@ -46,6 +46,8 @@ class NoteSlideshowScreen extends StatefulWidget {
 class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   late final PageController _pageController;
   late final List<ImageSequenceItem> _imageSequence;
+  late final FocusNode _slideshowFocusNode =
+      FocusNode(debugLabel: 'noteSlideshow');
   late int _currentIndex;
 
   void _close({String? tagName}) {
@@ -72,6 +74,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   @override
   void dispose() {
     _pageController.dispose();
+    _slideshowFocusNode.dispose();
     super.dispose();
   }
 
@@ -100,6 +103,27 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   void _goNext() {
     if (widget.notes.isEmpty) return;
     _jump((_currentIndex + 1) % widget.notes.length);
+  }
+
+  void _openCurrentImageViewer() {
+    if (widget.notes.isEmpty) return;
+    final note = widget.notes[_currentIndex];
+    final type = note.fullFor('front') != null ? 'front' : 'back';
+    _openImageViewer(note, type);
+  }
+
+  void _openImageFromKeyboard() {
+    // Let focused controls (Back button, selectable text) handle their own
+    // Enter/Space keys instead of opening the popover underneath them.
+    if (FocusManager.instance.primaryFocus != _slideshowFocusNode) {
+      return;
+    }
+    if (HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isAltPressed) {
+      return;
+    }
+    _openCurrentImageViewer();
   }
 
   Future<void> _openImageViewer(NoteRecord note, String type) async {
@@ -142,6 +166,10 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
         SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
         SingleActivator(LogicalKeyboardKey.arrowLeft): _PreviousSlideIntent(),
         SingleActivator(LogicalKeyboardKey.arrowRight): _NextSlideIntent(),
+        SingleActivator(LogicalKeyboardKey.arrowDown): _OpenImageIntent(),
+        SingleActivator(LogicalKeyboardKey.enter): _OpenImageIntent(),
+        SingleActivator(LogicalKeyboardKey.numpadEnter): _OpenImageIntent(),
+        SingleActivator(LogicalKeyboardKey.space): _OpenImageIntent(),
       },
       child: Actions(
         actions: <Type, Action<Intent>>{
@@ -163,8 +191,15 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
               return null;
             },
           ),
+          _OpenImageIntent: CallbackAction<_OpenImageIntent>(
+            onInvoke: (_) {
+              _openImageFromKeyboard();
+              return null;
+            },
+          ),
         },
         child: Focus(
+          focusNode: _slideshowFocusNode,
           autofocus: true,
           child: PopScope<NoteSlideshowResult>(
             canPop: false,
@@ -574,4 +609,8 @@ class _PreviousSlideIntent extends Intent {
 
 class _NextSlideIntent extends Intent {
   const _NextSlideIntent();
+}
+
+class _OpenImageIntent extends Intent {
+  const _OpenImageIntent();
 }
