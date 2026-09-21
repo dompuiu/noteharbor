@@ -453,7 +453,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   late final FocusNode _tableFocusNode = FocusNode(debugLabel: 'notesTable');
   late final FocusNode _searchFocusNode = FocusNode(
     debugLabel: 'notesSearch',
-    onKeyEvent: _handleSearchKey,
+    onKeyEvent: (_, event) => _handleSearchKey(event),
   );
 
   // Keyboard selection is a desktop affordance (Windows/macOS/Linux/Web).
@@ -632,6 +632,38 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     }
   }
 
+  Widget? _clearFilterButton() {
+    if (_query.isEmpty) {
+      return null;
+    }
+    return Padding(
+      padding: const EdgeInsets.only(right: 6),
+      child: IconButton(
+        tooltip: 'Clear filter',
+        onPressed: () {
+          _searchController.clear();
+          setState(() {
+            _query = '';
+            _selectedIndex = null;
+          });
+        },
+        iconSize: 18,
+        padding: const EdgeInsets.all(7),
+        constraints: const BoxConstraints(
+          minWidth: 32,
+          minHeight: 32,
+        ),
+        style: IconButton.styleFrom(
+          foregroundColor: ViewerPalette.textMuted,
+          hoverColor: ViewerPalette.accentSoft,
+          focusColor: ViewerPalette.accentSoft,
+          highlightColor: ViewerPalette.accentSoft,
+        ),
+        icon: const Icon(Icons.close_rounded),
+      ),
+    );
+  }
+
   Future<void> _openNoteAtIndex(List<NoteRecord> notes, int index) async {
     final result = await Navigator.of(context).push<NoteSlideshowResult>(
       MaterialPageRoute<NoteSlideshowResult>(
@@ -801,7 +833,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     return KeyEventResult.ignored;
   }
 
-  KeyEventResult _handleSearchKey(FocusNode node, KeyEvent event) {
+  KeyEventResult _handleSearchKey(KeyEvent event) {
     if (!_keyboardNavEnabled) {
       return KeyEventResult.ignored;
     }
@@ -874,9 +906,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
         onTap: () {
-          if (_searchFocusNode.hasFocus) {
-            FocusScope.of(context).unfocus();
-          } else if (_keyboardNavEnabled) {
+          if (!_searchFocusNode.hasFocus && _keyboardNavEnabled) {
             _tableFocusNode.requestFocus();
           } else {
             FocusScope.of(context).unfocus();
@@ -946,36 +976,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                             hintText:
                                 'Filter... or use catalog: denom: date: company: grade: tags:',
                             prefixIcon: const Icon(Icons.search_rounded),
-                            suffixIcon: _query.isEmpty
-                                ? null
-                                : Padding(
-                                    padding: const EdgeInsets.only(right: 6),
-                                    child: IconButton(
-                                      tooltip: 'Clear filter',
-                                      onPressed: () {
-                                        _searchController.clear();
-                                        setState(() {
-                                          _query = '';
-                                          _selectedIndex = null;
-                                        });
-                                      },
-                                      iconSize: 18,
-                                      padding: const EdgeInsets.all(7),
-                                      constraints: const BoxConstraints(
-                                        minWidth: 32,
-                                        minHeight: 32,
-                                      ),
-                                      style: IconButton.styleFrom(
-                                        foregroundColor:
-                                            ViewerPalette.textMuted,
-                                        hoverColor: ViewerPalette.accentSoft,
-                                        focusColor: ViewerPalette.accentSoft,
-                                        highlightColor:
-                                            ViewerPalette.accentSoft,
-                                      ),
-                                      icon: const Icon(Icons.close_rounded),
-                                    ),
-                                  ),
+                            suffixIcon: _clearFilterButton(),
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(18),
                               borderSide:
