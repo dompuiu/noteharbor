@@ -6,7 +6,7 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ### Added
 
-- Table screen: keyboard row selection on desktop (Windows/macOS/Linux/Web), matching the Editor's table shortcuts — `↑`/`↓` (plus `j`/`k`), `Home`/`End`, `PgUp`/`PgDn` with pin-to-top paging, `Enter`/`Space` to open the selected note, `/` to focus the filter field, and `Esc` to leave it. The selected row shows a paint-only accent ring that never shifts row layout. Keys stay inert on iOS/Android, where tap behavior is unchanged.
+- Table screen: keyboard row selection on desktop (Windows/macOS/Linux/Web), matching the Editor's table shortcuts — `↑`/`↓` (plus `j`/`k`), `Home`/`End`, `PgUp`/`PgDn` with pin-to-top paging, `Enter`/`Space` to open the selected note, `/` to focus the filter field (dropping the row selection), and `Esc` to leave it. The selected row shows a paint-only accent ring that never shifts row layout. Keys stay inert on iOS/Android, where tap behavior is unchanged.
 
 ## [1.0.5] - 2026-09-07
 

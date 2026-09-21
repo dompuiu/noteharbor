@@ -161,8 +161,14 @@ void main() {
   ) async {
     await pumpKeyboardTable(tester);
 
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(selectedRing(), findsOneWidget);
+
+    // Focusing the filter drops the row selection.
     await tester.sendKeyEvent(LogicalKeyboardKey.slash);
     await tester.pump();
+    expect(selectedRing(), findsNothing);
     expect(
       tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus,
       isTrue,

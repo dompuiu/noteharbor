@@ -477,6 +477,25 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   List<NoteRecord> _currentVisibleNotes() =>
       _sortedNotes(widget.controller.activeCollectionNotes);
 
+  double get _rowExtent => _kTableRowHeight + _kTableRowSeparatorHeight;
+
+  void _scrollToOffset(double rawOffset) {
+    if (!_verticalScrollController.hasClients) {
+      return;
+    }
+    final position = _verticalScrollController.position;
+    _verticalScrollController.animateTo(
+      rawOffset.clamp(0.0, position.maxScrollExtent).toDouble(),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _focusSelection(int index) {
+    setState(() => _selectedIndex = index);
+    _tableFocusNode.requestFocus();
+  }
+
   @override
   void initState() {
     super.initState();
@@ -658,8 +677,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     final next = current == null
         ? (offset > 0 ? 0 : notes.length - 1)
         : (current + offset).clamp(0, notes.length - 1);
-    setState(() => _selectedIndex = next);
-    _tableFocusNode.requestFocus();
+    _focusSelection(next);
     _ensureSelectedVisible();
   }
 
@@ -668,8 +686,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     if (notes.isEmpty) {
       return;
     }
-    setState(() => _selectedIndex = first ? 0 : notes.length - 1);
-    _tableFocusNode.requestFocus();
+    _focusSelection(first ? 0 : notes.length - 1);
     _ensureSelectedVisible();
   }
 
@@ -678,30 +695,18 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     if (notes.isEmpty) {
       return;
     }
-    const rowExtent = _kTableRowHeight + _kTableRowSeparatorHeight;
     var pageSize = 10;
     var firstVisibleIndex = 0;
     if (_verticalScrollController.hasClients) {
       final position = _verticalScrollController.position;
-      pageSize = math.max(1, (position.viewportDimension / rowExtent).floor());
+      pageSize = math.max(1, (position.viewportDimension / _rowExtent).floor());
       firstVisibleIndex =
-          (position.pixels / rowExtent).floor().clamp(0, notes.length - 1);
+          (position.pixels / _rowExtent).floor().clamp(0, notes.length - 1);
     }
     final base = _selectedIndex ?? firstVisibleIndex;
     final target = (base + direction * pageSize).clamp(0, notes.length - 1);
-    setState(() => _selectedIndex = target);
-    _tableFocusNode.requestFocus();
-    if (!_verticalScrollController.hasClients) {
-      return;
-    }
-    final position = _verticalScrollController.position;
-    final targetOffset =
-        (target * rowExtent).clamp(0.0, position.maxScrollExtent).toDouble();
-    _verticalScrollController.animateTo(
-      targetOffset,
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-    );
+    _focusSelection(target);
+    _scrollToOffset(target * _rowExtent);
   }
 
   void _ensureSelectedVisible() {
@@ -710,8 +715,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       return;
     }
     final position = _verticalScrollController.position;
-    const rowExtent = _kTableRowHeight + _kTableRowSeparatorHeight;
-    final targetTop = index * rowExtent;
+    final targetTop = index * _rowExtent;
     final targetBottom = targetTop + _kTableRowHeight;
     final scrollOffset = position.pixels;
     final viewportBottom = scrollOffset + position.viewportDimension;
@@ -724,11 +728,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     if (target == null) {
       return;
     }
-    _verticalScrollController.animateTo(
-      target.clamp(0.0, position.maxScrollExtent).toDouble(),
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-    );
+    _scrollToOffset(target);
   }
 
   KeyEventResult _handleTableKey(KeyEvent event) {
@@ -781,6 +781,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     }
     if (key == LogicalKeyboardKey.slash &&
         !HardwareKeyboard.instance.isShiftPressed) {
+      // Entering the filter drops the row selection; typing narrows the
+      // list from scratch and Esc back to the table starts unselected.
+      setState(() => _selectedIndex = null);
       _searchFocusNode.requestFocus();
       final text = _searchController.text;
       if (text.isNotEmpty) {
@@ -858,22 +861,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       }
 
       if (_keyboardNavEnabled) {
-        setState(() => _selectedIndex = noteIndex);
-        _tableFocusNode.requestFocus();
+        _focusSelection(noteIndex);
       }
 
-      final targetOffset =
-          noteIndex * (_kTableRowHeight + _kTableRowSeparatorHeight);
-      final clampedOffset = targetOffset.clamp(
-        0,
-        _verticalScrollController.position.maxScrollExtent,
-      );
-
-      _verticalScrollController.animateTo(
-        clampedOffset.toDouble(),
-        duration: const Duration(milliseconds: 220),
-        curve: Curves.easeOut,
-      );
+      _scrollToOffset(noteIndex * _rowExtent);
     });
   }
 
