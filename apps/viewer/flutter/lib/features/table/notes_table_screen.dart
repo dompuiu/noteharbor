@@ -1,6 +1,8 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/viewer_palette.dart';
 import '../../data/dataset_controller.dart';
@@ -447,6 +449,33 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   String _sortKey = 'displayOrder';
   bool _ascending = true;
   int? _lastActiveCollectionId;
+  int? _selectedIndex;
+  late final FocusNode _tableFocusNode = FocusNode(debugLabel: 'notesTable');
+  late final FocusNode _searchFocusNode = FocusNode(
+    debugLabel: 'notesSearch',
+    onKeyEvent: _handleSearchKey,
+  );
+
+  // Keyboard selection is a desktop affordance (Windows/macOS/Linux/Web).
+  // It stays inert on touch-first platforms so tap behavior is unchanged.
+  bool get _keyboardNavEnabled {
+    if (kIsWeb) {
+      return true;
+    }
+    switch (defaultTargetPlatform) {
+      case TargetPlatform.iOS:
+      case TargetPlatform.android:
+      case TargetPlatform.fuchsia:
+        return false;
+      case TargetPlatform.windows:
+      case TargetPlatform.macOS:
+      case TargetPlatform.linux:
+        return true;
+    }
+  }
+
+  List<NoteRecord> _currentVisibleNotes() =>
+      _sortedNotes(widget.controller.activeCollectionNotes);
 
   @override
   void initState() {
@@ -474,6 +503,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     _searchController.dispose();
     _horizontalScrollController.dispose();
     _verticalScrollController.dispose();
+    _tableFocusNode.dispose();
+    _searchFocusNode.dispose();
     super.dispose();
   }
 
@@ -493,6 +524,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     setState(() {
       _query = '';
       _searchController.clear();
+      _selectedIndex = null;
     });
 
     if (_horizontalScrollController.hasClients) {
@@ -565,16 +597,237 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         _sortKey = key;
         _ascending = true;
       }
+      _selectedIndex = null;
     });
   }
 
   void _applyTagFilter(String tagName) {
     final filterValue = 'tags: $tagName';
     _searchController.text = filterValue;
-    setState(() => _query = filterValue);
+    setState(() {
+      _query = filterValue;
+      _selectedIndex = null;
+    });
     if (_horizontalScrollController.hasClients) {
       _horizontalScrollController.jumpTo(0);
     }
+  }
+
+  Future<void> _openNoteAtIndex(List<NoteRecord> notes, int index) async {
+    final result = await Navigator.of(context).push<NoteSlideshowResult>(
+      MaterialPageRoute<NoteSlideshowResult>(
+        builder: (context) => NoteSlideshowScreen(
+          notes: notes,
+          initialIndex: index,
+        ),
+      ),
+    );
+    if (!mounted) {
+      return;
+    }
+    if (_horizontalScrollController.hasClients) {
+      _horizontalScrollController.jumpTo(0);
+    }
+    if (result?.tagName != null) {
+      _searchController.text = result!.tagName!;
+      setState(() {
+        _query = result.tagName!;
+        _selectedIndex = null;
+      });
+    }
+    if (result != null) {
+      _revealNoteById(result.noteId);
+    }
+  }
+
+  void _openSelected() {
+    final notes = _currentVisibleNotes();
+    final index = _selectedIndex;
+    if (index == null || index < 0 || index >= notes.length) {
+      return;
+    }
+    _openNoteAtIndex(notes, index);
+  }
+
+  void _moveSelection(int offset) {
+    final notes = _currentVisibleNotes();
+    if (notes.isEmpty) {
+      return;
+    }
+    final current = _selectedIndex;
+    final next = current == null
+        ? (offset > 0 ? 0 : notes.length - 1)
+        : (current + offset).clamp(0, notes.length - 1);
+    setState(() => _selectedIndex = next);
+    _tableFocusNode.requestFocus();
+    _ensureSelectedVisible();
+  }
+
+  void _selectBoundary(bool first) {
+    final notes = _currentVisibleNotes();
+    if (notes.isEmpty) {
+      return;
+    }
+    setState(() => _selectedIndex = first ? 0 : notes.length - 1);
+    _tableFocusNode.requestFocus();
+    _ensureSelectedVisible();
+  }
+
+  void _pageSelection(int direction) {
+    final notes = _currentVisibleNotes();
+    if (notes.isEmpty) {
+      return;
+    }
+    const rowExtent = _kTableRowHeight + _kTableRowSeparatorHeight;
+    var pageSize = 10;
+    var firstVisibleIndex = 0;
+    if (_verticalScrollController.hasClients) {
+      final position = _verticalScrollController.position;
+      pageSize = math.max(1, (position.viewportDimension / rowExtent).floor());
+      firstVisibleIndex =
+          (position.pixels / rowExtent).floor().clamp(0, notes.length - 1);
+    }
+    final base = _selectedIndex ?? firstVisibleIndex;
+    final target = (base + direction * pageSize).clamp(0, notes.length - 1);
+    setState(() => _selectedIndex = target);
+    _tableFocusNode.requestFocus();
+    if (!_verticalScrollController.hasClients) {
+      return;
+    }
+    final position = _verticalScrollController.position;
+    final targetOffset =
+        (target * rowExtent).clamp(0.0, position.maxScrollExtent).toDouble();
+    _verticalScrollController.animateTo(
+      targetOffset,
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
+
+  void _ensureSelectedVisible() {
+    final index = _selectedIndex;
+    if (index == null || !_verticalScrollController.hasClients) {
+      return;
+    }
+    final position = _verticalScrollController.position;
+    const rowExtent = _kTableRowHeight + _kTableRowSeparatorHeight;
+    final targetTop = index * rowExtent;
+    final targetBottom = targetTop + _kTableRowHeight;
+    final scrollOffset = position.pixels;
+    final viewportBottom = scrollOffset + position.viewportDimension;
+    double? target;
+    if (targetTop < scrollOffset) {
+      target = targetTop;
+    } else if (targetBottom > viewportBottom) {
+      target = targetBottom - position.viewportDimension;
+    }
+    if (target == null) {
+      return;
+    }
+    _verticalScrollController.animateTo(
+      target.clamp(0.0, position.maxScrollExtent).toDouble(),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
+
+  KeyEventResult _handleTableKey(KeyEvent event) {
+    if (!_keyboardNavEnabled) {
+      return KeyEventResult.ignored;
+    }
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isAltPressed) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.keyJ) {
+      _moveSelection(1);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.keyK) {
+      _moveSelection(-1);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.home) {
+      _selectBoundary(true);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.end) {
+      _selectBoundary(false);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.pageUp) {
+      _pageSelection(-1);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.pageDown) {
+      _pageSelection(1);
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter ||
+        key == LogicalKeyboardKey.space) {
+      // Let focused controls (sort headers, row links) activate themselves.
+      if (FocusManager.instance.primaryFocus != _tableFocusNode) {
+        return KeyEventResult.ignored;
+      }
+      _openSelected();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.slash &&
+        !HardwareKeyboard.instance.isShiftPressed) {
+      _searchFocusNode.requestFocus();
+      final text = _searchController.text;
+      if (text.isNotEmpty) {
+        _searchController.selection =
+            TextSelection(baseOffset: 0, extentOffset: text.length);
+      }
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.escape) {
+      if (_selectedIndex != null) {
+        setState(() => _selectedIndex = null);
+      }
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  KeyEventResult _handleSearchKey(FocusNode node, KeyEvent event) {
+    if (!_keyboardNavEnabled) {
+      return KeyEventResult.ignored;
+    }
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.escape) {
+      _tableFocusNode.requestFocus();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      if (HardwareKeyboard.instance.isControlPressed ||
+          HardwareKeyboard.instance.isMetaPressed ||
+          HardwareKeyboard.instance.isAltPressed) {
+        return KeyEventResult.ignored;
+      }
+      if (_currentVisibleNotes().isEmpty) {
+        _tableFocusNode.requestFocus();
+        return KeyEventResult.handled;
+      }
+      setState(() => _selectedIndex ??= 0);
+      _tableFocusNode.requestFocus();
+      _ensureSelectedVisible();
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
   }
 
   Future<void> _openImportScreen() async {
@@ -604,6 +857,11 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         return;
       }
 
+      if (_keyboardNavEnabled) {
+        setState(() => _selectedIndex = noteIndex);
+        _tableFocusNode.requestFocus();
+      }
+
       final targetOffset =
           noteIndex * (_kTableRowHeight + _kTableRowSeparatorHeight);
       final clampedOffset = targetOffset.clamp(
@@ -624,7 +882,15 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     return Scaffold(
       body: GestureDetector(
         behavior: HitTestBehavior.translucent,
-        onTap: () => FocusScope.of(context).unfocus(),
+        onTap: () {
+          if (_searchFocusNode.hasFocus) {
+            FocusScope.of(context).unfocus();
+          } else if (_keyboardNavEnabled) {
+            _tableFocusNode.requestFocus();
+          } else {
+            FocusScope.of(context).unfocus();
+          }
+        },
         child: DecoratedBox(
           decoration: const BoxDecoration(
             color: ViewerPalette.pageBackground,
@@ -682,6 +948,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                         constraints: const BoxConstraints(maxWidth: 420),
                         child: TextField(
                           controller: _searchController,
+                          focusNode: _searchFocusNode,
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: _kTableSurface,
@@ -693,7 +960,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                 : IconButton(
                                     onPressed: () {
                                       _searchController.clear();
-                                      setState(() => _query = '');
+                                      setState(() {
+                                        _query = '';
+                                        _selectedIndex = null;
+                                      });
                                     },
                                     icon: const Icon(Icons.close_rounded),
                                   ),
@@ -715,7 +985,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                               ),
                             ),
                           ),
-                          onChanged: (value) => setState(() => _query = value),
+                          onChanged: (value) => setState(() {
+                            _query = value;
+                            _selectedIndex = null;
+                          }),
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -725,9 +998,14 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                             final tableWidth =
                                 math.max(minTableWidth, constraints.maxWidth);
 
-                            return DecoratedBox(
-                              decoration: BoxDecoration(
-                                color: _kTableSurface,
+                            return Focus(
+                              focusNode: _tableFocusNode,
+                              autofocus: _keyboardNavEnabled,
+                              onKeyEvent: (node, event) =>
+                                  _handleTableKey(event),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  color: _kTableSurface,
                                 borderRadius: BorderRadius.circular(28),
                                 border: Border.all(
                                     color: _kTableBorder, width: 1.5),
@@ -786,47 +1064,15 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                         note: note,
                                                         tagsColumnWidth:
                                                             tagsColumnWidth,
+                                                        selected:
+                                                            _keyboardNavEnabled &&
+                                                                _selectedIndex ==
+                                                                    index,
                                                         onTagTap:
                                                             _applyTagFilter,
-                                                        onTap: () async {
-                                                          final result =
-                                                              await Navigator.of(
-                                                                      context)
-                                                                  .push<
-                                                                      NoteSlideshowResult>(
-                                                            MaterialPageRoute<
-                                                                NoteSlideshowResult>(
-                                                              builder: (context) =>
-                                                                  NoteSlideshowScreen(
-                                                                notes: notes,
-                                                                initialIndex:
-                                                                    index,
-                                                              ),
-                                                            ),
-                                                          );
-                                                          if (!mounted) {
-                                                            return;
-                                                          }
-                                                          if (_horizontalScrollController
-                                                              .hasClients) {
-                                                            _horizontalScrollController
-                                                                .jumpTo(0);
-                                                          }
-                                                          if (result?.tagName !=
-                                                              null) {
-                                                            _searchController
-                                                                    .text =
-                                                                result!
-                                                                    .tagName!;
-                                                            setState(() =>
-                                                                _query = result
-                                                                    .tagName!);
-                                                          }
-                                                          if (result != null) {
-                                                            _revealNoteById(
-                                                                result.noteId);
-                                                          }
-                                                        },
+                                                        onTap: () =>
+                                                            _openNoteAtIndex(
+                                                                notes, index),
                                                       );
                                                     },
                                                   ),
@@ -837,6 +1083,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                         ),
                                       ),
                                     ),
+                                ),
                             );
                           },
                         ),
@@ -1158,12 +1405,14 @@ class _TableRow extends StatelessWidget {
     required this.tagsColumnWidth,
     required this.onTagTap,
     required this.onTap,
+    required this.selected,
   });
 
   final NoteRecord note;
   final double tagsColumnWidth;
   final ValueChanged<String> onTagTap;
   final VoidCallback onTap;
+  final bool selected;
 
   @override
   Widget build(BuildContext context) {
@@ -1173,11 +1422,26 @@ class _TableRow extends StatelessWidget {
       onTap: onTap,
       hoverColor: ViewerPalette.accentSoft,
       highlightColor: ViewerPalette.accentSoft,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-            horizontal: _kTableHorizontalPadding, vertical: 12),
-        child: Row(
-          children: [
+      // The selection ring is a paint-only overlay: it never participates in
+      // layout, so moving keyboard selection cannot shift rows (same idea as
+      // the editor's box-shadow focus ring).
+      child: Stack(
+        key: ValueKey('tableRow-${note.id}'),
+        children: [
+          if (selected)
+            const Positioned.fill(
+              child: DecoratedBox(
+                decoration: BoxDecoration(
+                  color: ViewerPalette.accentSoft,
+                  borderRadius: BorderRadius.circular(12),
+                ),
+              ),
+            ),
+          Padding(
+            padding: const EdgeInsets.symmetric(
+                horizontal: _kTableHorizontalPadding, vertical: 12),
+            child: Row(
+              children: [
             _DataCell(
                 width: _kOrderColumnWidth, child: Text('${note.displayOrder}')),
             _DataCell(
@@ -1219,8 +1483,23 @@ class _TableRow extends StatelessWidget {
             _DataCell(
                 width: tagsColumnWidth,
                 child: _NoteTagsCell(tags: note.tags, onTagTap: onTagTap)),
-          ],
-        ),
+            ],
+            ),
+          ),
+          if (selected)
+            const Positioned.fill(
+              child: IgnorePointer(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    borderRadius: BorderRadius.circular(12),
+                    border: Border.fromBorderSide(
+                      BorderSide(color: ViewerPalette.accent, width: 2),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+        ],
       ),
     );
   }
