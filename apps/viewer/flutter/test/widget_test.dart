@@ -40,11 +40,7 @@ void main() {
     expect(find.text('No dataset imported'), findsOneWidget);
     // The archive picker sits below the fold on first run; the lazy ListView
     // only builds it once scrolled into range.
-    await tester.scrollUntilVisible(
-      find.text('Choose archive'),
-      200.0,
-      scrollable: find.byType(ListView),
-    );
+    await tester.scrollUntilVisible(find.text('Choose archive'), 200.0);
     expect(find.text('Choose archive'), findsOneWidget);
   });
 
