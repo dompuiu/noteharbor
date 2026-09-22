@@ -142,23 +142,54 @@ std::vector<uint8_t> Base64Decode(const std::string &value, bool &ok) {
 
 namespace ViewerReactNative {
 
+std::wstring GetLocalAppDataDir() {
+  PWSTR rawPath = nullptr;
+  if (::SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &rawPath) == S_OK && rawPath != nullptr) {
+    std::wstring result{rawPath};
+    ::CoTaskMemFree(rawPath);
+    if (!result.empty()) {
+      return result;
+    }
+  } else if (rawPath != nullptr) {
+    ::CoTaskMemFree(rawPath);
+  }
+
+  wchar_t envBuffer[MAX_PATH * 4] = {};
+  if (::GetEnvironmentVariableW(L"LOCALAPPDATA", envBuffer, ARRAYSIZE(envBuffer)) > 0) {
+    return std::wstring{envBuffer};
+  }
+
+  if (::SHGetKnownFolderPath(FOLDERID_Profile, 0, nullptr, &rawPath) == S_OK && rawPath != nullptr) {
+    std::wstring result = std::wstring{rawPath} + L"\\AppData\\Local";
+    ::CoTaskMemFree(rawPath);
+    if (!result.empty()) {
+      return result;
+    }
+  } else if (rawPath != nullptr) {
+    ::CoTaskMemFree(rawPath);
+  }
+
+  wchar_t tempBuffer[MAX_PATH * 4] = {};
+  if (::GetTempPathW(ARRAYSIZE(tempBuffer), tempBuffer) > 0) {
+    return std::wstring{tempBuffer};
+  }
+
+  return {};
+}
+
 std::string NoteHarborFileSystem::GetDefaultDocumentDirectoryPath() noexcept {
   try {
-    PWSTR rawPath = nullptr;
-    if (::SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &rawPath) == S_OK && rawPath != nullptr) {
-      std::filesystem::path base{rawPath};
-      ::CoTaskMemFree(rawPath);
-      base /= L"ViewerReactNative";
-      std::error_code ec;
-      std::filesystem::create_directories(base, ec);
-      if (!ec) {
-        return WideToUtf8(base.wstring());
-      }
-      return WideToUtf8(base.wstring());
+    const std::wstring dir = GetLocalAppDataDir();
+    if (dir.empty()) {
+      return {};
     }
-    if (rawPath != nullptr) {
-      ::CoTaskMemFree(rawPath);
-    }
+    std::filesystem::path base{dir};
+    base /= L"ViewerReactNative";
+    std::error_code ec;
+    std::filesystem::create_directories(base, ec);
+    // Return the path even if creation reported an error; file
+    // operations will surface real failures with precise messages.
+    return WideToUtf8(base.wstring());
   } catch (...) {
   }
   return {};
