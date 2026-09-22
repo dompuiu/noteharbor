@@ -407,19 +407,16 @@ test('delete imported data confirm copy is verbatim and clears the pick', async 
   }
 });
 
-test('windows shows a manual-path fallback instead of the picker', async () => {
-  const tree = renderScreen({ platform: 'windows' });
-  absentTestId(tree, 'choose-archive');
-  byTestId(tree, 'manual-archive-path');
-  act(() => {
-    byTestId(tree, 'manual-archive-path').props.onChangeText(
-      '/tmp/manual.zip',
-    );
+test('windows shows the picker like other platforms', async () => {
+  const tree = renderScreen({
+    pickArchive: () =>
+      Promise.resolve({ archivePath: 'C:\\tmp\\a.zip', name: 'a.zip' }),
   });
-  act(() => {
-    byTestId(tree, 'manual-archive-apply').props.onPress();
+  byTestId(tree, 'choose-archive');
+  await act(async () => {
+    await byTestId(tree, 'choose-archive').props.onPress();
   });
-  expect(textContent(tree, 'picked-archive-name')).toBe('manual.zip');
+  expect(textContent(tree, 'picked-archive-name')).toBe('a.zip');
   expect(byTestId(tree, 'import-archive').props.disabled).toBe(false);
 });
 

@@ -10,7 +10,6 @@ import {
   ScrollView,
   StyleSheet,
   Text,
-  TextInput,
   View,
 } from 'react-native';
 import { viewerLight, viewerRadii } from '../theme/viewerTheme';
@@ -25,16 +24,6 @@ function basenameOf(path: string): string {
   return parts[parts.length - 1] ?? path;
 }
 
-function currentPlatform(): string {
-  try {
-    const reactNative = require('react-native') as {
-      Platform?: { OS?: string };
-    };
-    return reactNative.Platform?.OS ?? 'ios';
-  } catch {
-    return 'ios';
-  }
-}
 function dropdownLabel(collection: ViewerCollection): string {
   return `${collection.name}${collection.isDefault ? ' (default)' : ''} (${collection.noteCount})`;
 }
@@ -44,19 +33,16 @@ export function ImportScreen({
   isFirstRun,
   onClose,
   pickArchive = pickArchiveFile,
-  platform = currentPlatform(),
   paintDelayMs = 150,
 }: {
   controller: ViewerControllerState;
   isFirstRun: boolean;
   onClose?: () => void;
   pickArchive?: () => Promise<ArchivePickResult | null>;
-  platform?: string;
   paintDelayMs?: number;
 }) {
   const [pickedPath, setPickedPath] = useState<string | null>(null);
   const [pickedName, setPickedName] = useState<string | null>(null);
-  const [manualPath, setManualPath] = useState('');
   const [message, setMessage] = useState<string | null>(null);
   const [isPicking, setIsPicking] = useState(false);
   const [isImporting, setIsImporting] = useState(false);
@@ -66,7 +52,6 @@ export function ImportScreen({
   const activeCollection = controller.activeCollection;
   const generatedAt = dataset?.generatedAt?.trim() ?? '';
   const isBusy = controller.isMutating || isPicking || isImporting;
-  const useManualPath = platform === 'windows';
 
   const pick = async () => {
     setIsPicking(true);
@@ -80,16 +65,6 @@ export function ImportScreen({
     } finally {
       setIsPicking(false);
     }
-  };
-
-  const applyManualPath = () => {
-    const trimmed = manualPath.trim();
-    if (!trimmed) {
-      return;
-    }
-    setPickedPath(trimmed);
-    setPickedName(basenameOf(trimmed));
-    setMessage(null);
   };
 
   const importPicked = () => {
@@ -336,39 +311,19 @@ export function ImportScreen({
               {pickedName ?? 'No archive selected'}
             </Text>
           </View>
-          {useManualPath ? (
-            <View style={styles.manualRow}>
-              <TextInput
-                testID="manual-archive-path"
-                value={manualPath}
-                onChangeText={setManualPath}
-                placeholder="Enter archive path (.zip)"
-                placeholderTextColor={viewerLight.textFaint}
-                style={styles.manualInput}
-              />
-              <Pressable
-                testID="manual-archive-apply"
-                accessibilityLabel="Use this archive path"
-                onPress={applyManualPath}
-                style={styles.secondaryButton}>
-                <Text style={styles.secondaryButtonText}>Use this path</Text>
-              </Pressable>
-            </View>
-          ) : (
-            <Pressable
-              testID="choose-archive"
-              accessibilityLabel="Choose archive"
-              disabled={isBusy}
-              onPress={() => void pick()}
-              style={[
-                styles.secondaryButton,
-                isBusy && styles.buttonDisabled,
-              ]}>
-              <Text style={styles.secondaryButtonText}>
-                {isPicking ? 'Choosing...' : 'Choose archive'}
-              </Text>
-            </Pressable>
-          )}
+          <Pressable
+            testID="choose-archive"
+            accessibilityLabel="Choose archive"
+            disabled={isBusy}
+            onPress={() => void pick()}
+            style={[
+              styles.secondaryButton,
+              isBusy && styles.buttonDisabled,
+            ]}>
+            <Text style={styles.secondaryButtonText}>
+              {isPicking ? 'Choosing...' : 'Choose archive'}
+            </Text>
+          </Pressable>
           <Pressable
             testID="import-archive"
             accessibilityLabel="Import archive"
@@ -601,19 +556,6 @@ const styles = StyleSheet.create({
     color: viewerLight.danger,
     fontSize: 13,
     fontWeight: '600',
-  },
-  manualRow: {
-    gap: 10,
-  },
-  manualInput: {
-    borderRadius: viewerRadii.xs,
-    borderWidth: 1,
-    borderColor: viewerLight.borderControl,
-    paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: viewerLight.text,
-    fontSize: 14,
-    backgroundColor: viewerLight.surface,
   },
   messageText: {
     color: viewerLight.text,

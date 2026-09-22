@@ -20,7 +20,22 @@ function currentPlatform() {
 }
 
 export function isArchivePickerAvailable(platform: string = currentPlatform()) {
-  return platform !== 'windows';
+  return platform === 'windows' || platform === 'ios' || platform === 'macos' || platform === 'android';
+}
+
+function loadWindowsPickerModule() {
+  const reactNative = require('react-native') as {
+    NativeModules?: {
+      NoteHarborArchivePicker?: {
+        pickArchiveFile: () => Promise<ArchivePickResult | null>;
+      };
+    };
+  };
+  const nativeModule = reactNative.NativeModules?.NoteHarborArchivePicker;
+  if (!nativeModule) {
+    throw new Error('Windows archive picker is not available.');
+  }
+  return nativeModule;
 }
 
 function loadPickerModule() {
@@ -38,13 +53,16 @@ export async function pickArchiveFile(
     pick?: (options: unknown) => Promise<PickerResult[]>;
     zipType?: string;
     isCancel?: (error: unknown) => boolean;
+    windowsPick?: () => Promise<ArchivePickResult | null>;
   } = {},
 ): Promise<ArchivePickResult | null> {
   const platform = deps.platform ?? currentPlatform();
+  if (platform === 'windows') {
+    const windowsPick =
+      deps.windowsPick ?? (() => loadWindowsPickerModule().pickArchiveFile());
+    return windowsPick();
+  }
   if (!isArchivePickerAvailable(platform)) {
-    // No native picker on this platform: the caller shows a manual-path
-    // text input instead, and importArchive(archivePath) accepts that path.
-    // The input itself belongs to the Import screen ticket.
     return null;
   }
 

@@ -8,6 +8,7 @@ interface FileSystemModule {
   readFile(path: string, encoding: string): Promise<string>;
   unlink(path: string): Promise<void>;
   writeFile(path: string, contents: string, encoding: string): Promise<void>;
+  moveFile?(src: string, dest: string): Promise<void>;
 }
 
 function cloneSnapshot(snapshot: LocalDatasetSnapshot): LocalDatasetSnapshot {
@@ -29,9 +30,21 @@ function currentPlatform() {
   }
 }
 
+function resolveWindowsFileSystem(): FileSystemModule | null {
+  try {
+    const reactNative = require('react-native') as {
+      NativeModules?: Record<string, FileSystemModule | undefined>;
+    };
+    const module = reactNative.NativeModules?.NoteHarborFileSystem;
+    return module && module.DocumentDirectoryPath ? module : null;
+  } catch {
+    return null;
+  }
+}
+
 function resolveFileSystem() {
   if (currentPlatform() === 'windows') {
-    return null;
+    return resolveWindowsFileSystem();
   }
 
   try {
@@ -129,6 +142,19 @@ export class SeededLocalDatasetStorage implements LocalDatasetStorage {
     }
 
     await paths.fileSystem.mkdir(paths.rootDirectoryPath);
-    await paths.fileSystem.writeFile(paths.snapshotPath, JSON.stringify(snapshot), 'utf8');
+    const payload = JSON.stringify(snapshot);
+    const tmpPath = `${paths.snapshotPath}.tmp`;
+    await paths.fileSystem.writeFile(tmpPath, payload, 'utf8');
+    try {
+      if (paths.fileSystem.moveFile) {
+        await paths.fileSystem.moveFile(tmpPath, paths.snapshotPath);
+      } else {
+        await paths.fileSystem.writeFile(paths.snapshotPath, payload, 'utf8');
+        await paths.fileSystem.unlink(tmpPath).catch(() => undefined);
+      }
+    } catch {
+      await paths.fileSystem.writeFile(paths.snapshotPath, payload, 'utf8');
+      await paths.fileSystem.unlink(tmpPath).catch(() => undefined);
+    }
   }
 }

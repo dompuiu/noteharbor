@@ -124,6 +124,61 @@ test('deletes the imported dataset snapshot', async () => {
   expect(storage.getSnapshot()).toBeNull();
 });
 
+test('falls back to now when the imported snapshot has no timestamp', async () => {
+  const storage = createMemoryStorage(null);
+  const adapter = new LocalDataNativeDatasetAdapter(storage, {
+    importArchive: () =>
+      Promise.resolve({
+        generatedAt: null,
+        source: 'imported',
+        collections: [{ id: 5, name: 'Imported', noteCount: 0, isDefault: true }],
+        notes: [],
+      }),
+  });
+
+  await adapter.importArchive('/tmp/archive.zip');
+
+  const persisted = storage.getSnapshot() as any;
+  expect(typeof persisted.generatedAt).toBe('string');
+  expect(Date.parse(persisted.generatedAt)).not.toBeNaN();
+});
+
+test('unlinks image dirs of replaced notes on import', async () => {
+  const storage = createMemoryStorage({
+    generatedAt: '2026-05-30T00:00:00.000Z',
+    source: 'imported',
+    collections: [{ id: 1, name: 'Default', noteCount: 1, isDefault: true }],
+    notes: [
+      {
+        id: 10,
+        collectionId: 1,
+        displayOrder: 1,
+        images: [{ filePath: '/mock/documents/noteharbor-viewer/imports/import-1/nested/data/images/notes/7/front.jpg' }],
+      },
+    ],
+  });
+  const unlink = jest.fn(() => Promise.resolve());
+  const adapter = new LocalDataNativeDatasetAdapter(
+    storage,
+    {
+      importArchive: () =>
+        Promise.resolve({
+          generatedAt: '2026-06-02T00:00:00.000Z',
+          source: 'imported',
+          collections: [{ id: 7, name: 'Default', noteCount: 0, isDefault: true }],
+          notes: [],
+        }),
+    },
+    { unlink },
+  );
+
+  await adapter.importArchive('/tmp/archive.zip');
+
+  expect(unlink).toHaveBeenCalledWith(
+    expect.stringContaining('/images/notes/7'),
+  );
+});
+
 test('imports an archive into empty storage', async () => {
   const storage = createMemoryStorage(null);
   const adapter = new LocalDataNativeDatasetAdapter(storage, {

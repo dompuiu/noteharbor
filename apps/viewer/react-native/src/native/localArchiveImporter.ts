@@ -9,8 +9,12 @@ import {
 } from './nativeImportedDatasetReader';
 
 interface FileSystemDirectoryEntry {
-  isDirectory(): boolean;
+  isDirectory: boolean | (() => boolean);
   path: string;
+}
+
+function isDirectoryEntry(entry: FileSystemDirectoryEntry): boolean {
+  return typeof entry.isDirectory === 'function' ? entry.isDirectory() : !!entry.isDirectory;
 }
 
 interface FileSystemModule {
@@ -34,9 +38,21 @@ function currentPlatform() {
   }
 }
 
+function resolveWindowsFileSystem(): FileSystemModule | null {
+  try {
+    const reactNative = require('react-native') as {
+      NativeModules?: Record<string, FileSystemModule | undefined>;
+    };
+    const module = reactNative.NativeModules?.NoteHarborFileSystem;
+    return module && module.DocumentDirectoryPath ? module : null;
+  } catch {
+    return null;
+  }
+}
+
 function resolveFileSystem() {
   if (currentPlatform() === 'windows') {
-    return null;
+    return resolveWindowsFileSystem();
   }
 
   try {
@@ -187,7 +203,7 @@ async function findArchiveDataDir(rootDir: string): Promise<string | null> {
 
     const entries = await fileSystem.readDir(currentDir);
     for (const entry of entries) {
-      if (entry.isDirectory()) {
+      if (isDirectoryEntry(entry)) {
         queue.push(entry.path);
       }
     }

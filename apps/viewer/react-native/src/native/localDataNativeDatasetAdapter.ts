@@ -18,6 +18,75 @@ import {
 } from './localArchiveImporter';
 import type { NativeDatasetAdapter } from './nativeDatasetAdapter';
 
+interface FileCleanup {
+  unlink(path: string): Promise<void>;
+}
+
+function currentPlatform() {
+  try {
+    const reactNative = require('react-native') as {
+      Platform?: { OS?: string };
+    };
+    return reactNative.Platform?.OS ?? 'unknown';
+  } catch {
+    return 'unknown';
+  }
+}
+
+function resolveFileCleanup(): FileCleanup | null {
+  try {
+    if (currentPlatform() === 'windows') {
+      const reactNative = require('react-native') as {
+        NativeModules?: Record<string, FileCleanup | undefined>;
+      };
+      return reactNative.NativeModules?.NoteHarborFileSystem ?? null;
+    }
+    const module = require('react-native-fs') as FileCleanup | null;
+    return module && typeof module.unlink === 'function' ? module : null;
+  } catch {
+    return null;
+  }
+}
+
+function stripFileScheme(value: string) {
+  return value.startsWith('file://') ? value.slice('file://'.length) : value;
+}
+
+function noteImageDirForCleanup(filePath: string): string | null {
+  const normalized = stripFileScheme(filePath).replace(/\\/g, '/');
+  const match = normalized.match(/^(.*\/images\/notes\/[^/]+)/);
+  return match ? match[1] : null;
+}
+
+function cleanupDirsForNotes(notes: NoteRecord[]): string[] {
+  const dirs = new Set<string>();
+  for (const note of notes) {
+    for (const image of note.images ?? []) {
+      if (!image.filePath) {
+        continue;
+      }
+      const dir = noteImageDirForCleanup(image.filePath);
+      if (dir) {
+        dirs.add(dir);
+      }
+    }
+  }
+  return [...dirs];
+}
+
+async function bestEffortUnlink(cleanup: FileCleanup | null, dirs: string[]) {
+  if (!cleanup) {
+    return;
+  }
+  for (const dir of dirs) {
+    try {
+      await cleanup.unlink(dir);
+    } catch {
+      // Best effort: orphaned image dirs must never fail an import/delete.
+    }
+  }
+}
+
 function toInt(value: unknown, fallback = 0) {
   if (typeof value === 'number' && Number.isFinite(value)) {
     return Math.trunc(value);
@@ -196,7 +265,11 @@ function mergeImportedDataset(
   currentDataset: ViewerDataset | null,
   importedDataset: ViewerDataset,
 ): ViewerDataset {
-  const normalizedImported = withCollectionCounts(importedDataset);
+  const normalizedImported = withCollectionCounts({
+    ...importedDataset,
+    generatedAt:
+      importedDataset.generatedAt?.trim() || new Date().toISOString(),
+  });
   if (currentDataset == null) {
     return normalizedImported;
   }
@@ -276,7 +349,10 @@ function mergeImportedDataset(
   return withCollectionCounts(
     {
       ...currentDataset,
-      generatedAt: normalizedImported.generatedAt,
+      generatedAt:
+        normalizedImported.generatedAt?.trim() ||
+        currentDataset.generatedAt ||
+        new Date().toISOString(),
       source: normalizedImported.source,
       collections: nextCollections,
       notes: nextNotes,
@@ -300,6 +376,7 @@ export class LocalDataNativeDatasetAdapter implements NativeDatasetAdapter {
       typeof jest !== 'undefined'
         ? new SeededLocalArchiveImporter()
         : new FilesystemLocalArchiveImporter(),
+    private readonly fileCleanup: FileCleanup | null = resolveFileCleanup(),
   ) {}
 
   async loadDataset(): Promise<ViewerDataset> {
@@ -314,12 +391,22 @@ export class LocalDataNativeDatasetAdapter implements NativeDatasetAdapter {
   async importArchive(archivePath: string): Promise<void> {
     const importedSnapshot = await this.archiveImporter.importArchive(archivePath);
     const currentDataset = await this.tryLoadDataset();
-    const nextDataset = mergeImportedDataset(
-      currentDataset,
-      normalizeSnapshot(importedSnapshot),
-    );
+    const normalizedImported = normalizeSnapshot(importedSnapshot);
+    const removedNotes =
+      currentDataset == null
+        ? []
+        : currentDataset.notes.filter((note) =>
+            normalizedImported.collections.some(
+              (importedCollection) =>
+                normalizeCollectionName(
+                  currentDataset.collections.find((c) => c.id === note.collectionId)?.name ?? '',
+                ) === normalizeCollectionName(importedCollection.name),
+            ),
+          );
+    const nextDataset = mergeImportedDataset(currentDataset, normalizedImported);
 
     await this.storage.writeImportedDataset(toSnapshot(nextDataset));
+    await bestEffortUnlink(this.fileCleanup, cleanupDirsForNotes(removedNotes));
   }
 
   async deleteCollection(collectionId: number): Promise<void> {
@@ -334,6 +421,9 @@ export class LocalDataNativeDatasetAdapter implements NativeDatasetAdapter {
 
     const remainingNotes = dataset.notes.filter(
       (note) => note.collectionId !== collectionId,
+    );
+    const removedNotes = dataset.notes.filter(
+      (note) => note.collectionId === collectionId,
     );
     const nextDefaultId =
       remainingCollections.find((collection) => collection.isDefault)?.id ??
@@ -354,6 +444,7 @@ export class LocalDataNativeDatasetAdapter implements NativeDatasetAdapter {
     };
 
     await this.storage.writeImportedDataset(toSnapshot(nextDataset));
+    await bestEffortUnlink(this.fileCleanup, cleanupDirsForNotes(removedNotes));
   }
 
   async setDefaultCollection(collectionId: number): Promise<void> {

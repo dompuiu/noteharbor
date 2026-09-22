@@ -83,7 +83,7 @@
       </AdditionalIncludeDirectories>
     </ClCompile>
     <Link>
-      <AdditionalDependencies>shell32.lib;user32.lib;windowsapp.lib;winsqlite3.lib;%(AdditionalDependenices)</AdditionalDependencies>
+      <AdditionalDependencies>shell32.lib;user32.lib;windowsapp.lib;winsqlite3.lib;comdlg32.lib;crypt32.lib;%(AdditionalDependenices)</AdditionalDependencies>
       <SubSystem>Windows</SubSystem>
       <GenerateDebugInformation>true</GenerateDebugInformation>
     </Link>
@@ -101,6 +101,8 @@
   <PropertyGroup Label="UserMacros" />
   <ItemGroup>
     <ClInclude Include="ViewerReactNative.h" />
+    <ClInclude Include="NoteHarborArchivePicker.h" />
+    <ClInclude Include="NoteHarborFileSystem.h" />
     <ClInclude Include="NoteHarborImportedDatasetReader.h" />
     <ClInclude Include="resource.h" />
     <ClInclude Include="AutolinkedNativeModules.g.h" />
@@ -108,6 +110,8 @@
     <ClInclude Include="targetver.h" />
   </ItemGroup>
   <ItemGroup>
+    <ClCompile Include="NoteHarborArchivePicker.cpp" />
+    <ClCompile Include="NoteHarborFileSystem.cpp" />
     <ClCompile Include="NoteHarborImportedDatasetReader.cpp" />
     <ClCompile Include="ViewerReactNative.cpp" />
     <ClCompile Include="AutolinkedNativeModules.g.cpp" />
