@@ -320,4 +320,11 @@ void NoteHarborFileSystem::moveFile(
   }
 }
 
+std::string NoteHarborFileSystem::getDocumentDirectoryPath() noexcept {
+  // Synchronous accessor so JavaScript never depends on constant export
+  // timing; recomputed on each call (cheap: no I/O beyond ensuring the
+  // directory exists).
+  return GetDefaultDocumentDirectoryPath();
+}
+
 } // namespace ViewerReactNative

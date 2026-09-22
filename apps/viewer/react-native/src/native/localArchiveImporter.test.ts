@@ -163,6 +163,67 @@ function archiveBytesForWindows() {
   });
 }
 
+test('falls back to the sync path method when the constant is empty', async () => {
+  const reactNative = require('react-native') as {
+    Platform: { OS: string };
+    NativeModules: Record<string, unknown>;
+  };
+  const previousOS = reactNative.Platform.OS;
+  const previousWindowsFs = reactNative.NativeModules.NoteHarborFileSystem;
+  const windowsFs = {
+    DocumentDirectoryPath: '',
+    getDocumentDirectoryPath: jest.fn(() => 'C:/mock/documents'),
+    exists: jest.fn((path: string) => {
+      const normalized = String(path);
+      return Promise.resolve(
+        normalized === 'C:\\tmp\\a.zip' ||
+          (normalized.includes('/imports/import-') &&
+            normalized.endsWith('/nested/data/banknotes.db')) ||
+          (normalized.includes('/imports/import-') &&
+            normalized.endsWith('/nested/data/images')),
+      );
+    }),
+    mkdir: jest.fn(() => Promise.resolve()),
+    readDir: jest.fn((path: string) => {
+      const normalized = String(path);
+      if (/\/imports\/import-[^/]+$/.test(normalized)) {
+        return Promise.resolve([{ isDirectory: () => true, path: `${normalized}/nested` }]);
+      }
+      if (normalized.endsWith('/nested')) {
+        return Promise.resolve([{ isDirectory: () => true, path: `${normalized}/data` }]);
+      }
+      return Promise.resolve([]);
+    }),
+    readFile: jest.fn(() =>
+      Promise.resolve(Buffer.from(archiveBytesForWindows()).toString('base64')),
+    ),
+    unlink: jest.fn(() => Promise.resolve()),
+    writeFile: jest.fn(() => Promise.resolve()),
+  };
+  reactNative.Platform.OS = 'windows';
+  reactNative.NativeModules.NoteHarborFileSystem = windowsFs;
+  try {
+    const importer = new FilesystemLocalArchiveImporter();
+    nativeImportedDatasetReader.readImportedDataset.mockResolvedValue({
+      source: 'imported',
+      collections: [],
+      notes: [],
+    });
+
+    const snapshot = await importer.importArchive('C:\\tmp\\a.zip');
+
+    expect(windowsFs.getDocumentDirectoryPath).toHaveBeenCalled();
+    expect(snapshot.source).toBe('imported');
+  } finally {
+    reactNative.Platform.OS = previousOS;
+    if (previousWindowsFs === undefined) {
+      delete reactNative.NativeModules.NoteHarborFileSystem;
+    } else {
+      reactNative.NativeModules.NoteHarborFileSystem = previousWindowsFs;
+    }
+  }
+});
+
 test('rejects archives with missing dataset payload', async () => {
   const importer = new FilesystemLocalArchiveImporter();
   const archiveBytes = zipSync({

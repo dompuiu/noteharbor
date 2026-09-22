@@ -30,6 +30,8 @@ struct NoteHarborFileSystem {
   void unlink(std::string &&path, ::React::ReactPromise<void> &&result) noexcept;
   REACT_METHOD(moveFile, L"moveFile")
   void moveFile(std::string &&src, std::string &&dest, ::React::ReactPromise<void> &&result) noexcept;
+  REACT_SYNC_METHOD(getDocumentDirectoryPath)
+  std::string getDocumentDirectoryPath() noexcept;
 };
 
 } // namespace ViewerReactNative

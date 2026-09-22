@@ -9,6 +9,7 @@ interface FileSystemModule {
   unlink(path: string): Promise<void>;
   writeFile(path: string, contents: string, encoding: string): Promise<void>;
   moveFile?(src: string, dest: string): Promise<void>;
+  getDocumentDirectoryPath?: () => string;
 }
 
 function cloneSnapshot(snapshot: LocalDatasetSnapshot): LocalDatasetSnapshot {
@@ -30,13 +31,50 @@ function currentPlatform() {
   }
 }
 
+let cachedWindowsDocumentDir: string | null = null;
+
 function resolveWindowsFileSystem(): FileSystemModule | null {
   try {
     const reactNative = require('react-native') as {
       NativeModules?: Record<string, FileSystemModule | undefined>;
     };
-    const module = reactNative.NativeModules?.NoteHarborFileSystem;
-    return module && module.DocumentDirectoryPath ? module : null;
+    const live = reactNative.NativeModules?.NoteHarborFileSystem;
+    if (!live) {
+      return null;
+    }
+    let dir = live.DocumentDirectoryPath;
+    if (!dir) {
+      if (cachedWindowsDocumentDir) {
+        dir = cachedWindowsDocumentDir;
+      } else if (typeof live.getDocumentDirectoryPath === 'function') {
+        try {
+          const fetched = live.getDocumentDirectoryPath();
+          if (!fetched) {
+            return null;
+          }
+          cachedWindowsDocumentDir = fetched;
+          dir = fetched;
+        } catch {
+          return null;
+        }
+      } else {
+        return null;
+      }
+    }
+    // Delegate explicitly instead of spreading: native module proxies
+    // may not expose their methods as own enumerable properties.
+    return {
+      DocumentDirectoryPath: dir,
+      exists: (path) => live.exists(path),
+      mkdir: (path) => live.mkdir(path),
+      readFile: (path, encoding) => live.readFile(path, encoding),
+      unlink: (path) => live.unlink(path),
+      writeFile: (path, contents, encoding) => live.writeFile(path, contents, encoding),
+      ...(live.moveFile ? { moveFile: (src: string, dest: string) => live.moveFile!(src, dest) } : null),
+      ...(typeof live.getDocumentDirectoryPath === 'function'
+        ? { getDocumentDirectoryPath: () => (live.getDocumentDirectoryPath as () => string)() }
+        : null),
+    };
   } catch {
     return null;
   }
