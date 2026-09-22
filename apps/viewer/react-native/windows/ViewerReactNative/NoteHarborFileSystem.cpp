@@ -250,7 +250,12 @@ void NoteHarborFileSystem::readFile(
       return;
     }
     if (encoding == "base64") {
-      result.Resolve(Base64Encode(bytes));
+      const auto encoded = Base64Encode(bytes);
+      if (encoded.empty() && !bytes.empty()) {
+        result.Reject("Unable to encode file contents.");
+        return;
+      }
+      result.Resolve(encoded);
       return;
     }
     result.Resolve(std::string(reinterpret_cast<const char *>(bytes.data()), bytes.size()));
@@ -325,6 +330,19 @@ std::string NoteHarborFileSystem::getDocumentDirectoryPath() noexcept {
   // timing; recomputed on each call (cheap: no I/O beyond ensuring the
   // directory exists).
   return GetDefaultDocumentDirectoryPath();
+}
+
+int64_t NoteHarborFileSystem::getFileSize(std::string &&path) noexcept {
+  try {
+    std::error_code ec;
+    const auto size = std::filesystem::file_size(ToPath(path), ec);
+    if (ec || size == static_cast<decltype(size)>(-1)) {
+      return -1;
+    }
+    return static_cast<int64_t>(size);
+  } catch (...) {
+    return -1;
+  }
 }
 
 } // namespace ViewerReactNative

@@ -40,6 +40,7 @@ function currentPlatform() {
 
 interface WindowsFileSystemModule extends FileSystemModule {
   getDocumentDirectoryPath?: () => string;
+  getFileSize?: (path: string) => number;
 }
 
 let cachedWindowsDocumentDir: string | null = null;
@@ -74,7 +75,7 @@ function resolveWindowsFileSystem(): FileSystemModule | null {
     }
     // Delegate explicitly instead of spreading: native module proxies
     // may not expose their methods as own enumerable properties.
-    return {
+    const resolved: WindowsFileSystemModule = {
       DocumentDirectoryPath: dir,
       exists: (path) => live.exists(path),
       mkdir: (path) => live.mkdir(path),
@@ -83,6 +84,13 @@ function resolveWindowsFileSystem(): FileSystemModule | null {
       unlink: (path) => live.unlink(path),
       writeFile: (path, contents, encoding) => live.writeFile(path, contents, encoding),
     };
+    if (typeof live.getDocumentDirectoryPath === 'function') {
+      resolved.getDocumentDirectoryPath = () => (live.getDocumentDirectoryPath as () => string)();
+    }
+    if (typeof live.getFileSize === 'function') {
+      resolved.getFileSize = (path: string) => (live.getFileSize as (path: string) => number)(path);
+    }
+    return resolved;
   } catch {
     return null;
   }
@@ -157,6 +165,19 @@ function base64ToBytes(value: string) {
   }
 
   return bytes;
+}
+
+function describeNativeSize(fileSystem: FileSystemModule, archivePath: string): string {
+  try {
+    const sized = fileSystem as WindowsFileSystemModule;
+    if (typeof sized.getFileSize !== 'function') {
+      return 'no native size probe';
+    }
+    const size = sized.getFileSize(archivePath);
+    return typeof size === 'number' && size >= 0 ? `${size} bytes` : 'unknown size';
+  } catch {
+    return 'unknown size';
+  }
 }
 
 function hasZipSignature(bytes: Uint8Array): boolean {
@@ -318,7 +339,9 @@ async function importArchiveSnapshot(
   try {
     const archiveBytes = base64ToBytes(await fileSystem.readFile(archivePath, 'base64'));
     if (archiveBytes.length === 0) {
-      throw new Error('Archive file is empty (0 bytes read).');
+      throw new Error(
+        `Archive file is empty (0 bytes read, native reports ${describeNativeSize(fileSystem, archivePath)}).`,
+      );
     }
     if (!hasZipSignature(archiveBytes)) {
       throw new Error(

@@ -255,6 +255,41 @@ test('reports the byte count when unzip fails', async () => {
   );
 });
 
+test('reports the native file size when the read comes back empty', async () => {
+  const reactNative = require('react-native') as {
+    Platform: { OS: string };
+    NativeModules: Record<string, unknown>;
+  };
+  const previousOS = reactNative.Platform.OS;
+  const previousWindowsFs = reactNative.NativeModules.NoteHarborFileSystem;
+  const windowsFs = {
+    DocumentDirectoryPath: 'C:/mock/documents',
+    getFileSize: jest.fn(() => 12345),
+    exists: jest.fn(() => Promise.resolve(true)),
+    mkdir: jest.fn(() => Promise.resolve()),
+    readDir: jest.fn(() => Promise.resolve([])),
+    readFile: jest.fn(() => Promise.resolve('')),
+    unlink: jest.fn(() => Promise.resolve()),
+    writeFile: jest.fn(() => Promise.resolve()),
+  };
+  reactNative.Platform.OS = 'windows';
+  reactNative.NativeModules.NoteHarborFileSystem = windowsFs;
+  try {
+    const importer = new FilesystemLocalArchiveImporter();
+    await expect(importer.importArchive('C:\\tmp\\a.zip')).rejects.toThrow(
+      '0 bytes read, native reports 12345 bytes',
+    );
+    expect(windowsFs.getFileSize).toHaveBeenCalledWith('C:\\tmp\\a.zip');
+  } finally {
+    reactNative.Platform.OS = previousOS;
+    if (previousWindowsFs === undefined) {
+      delete reactNative.NativeModules.NoteHarborFileSystem;
+    } else {
+      reactNative.NativeModules.NoteHarborFileSystem = previousWindowsFs;
+    }
+  }
+});
+
 test('rejects archives with missing dataset payload', async () => {
   const importer = new FilesystemLocalArchiveImporter();
   const archiveBytes = zipSync({
