@@ -37,6 +37,18 @@ export interface ViewerControllerState {
 
 const defaultRepository = new LocalViewerRepository();
 
+function describeFailure(value: unknown, fallback: string): string {
+  // Native rejections (and some JS throws) arrive as plain strings rather
+  // than Error objects; surface them verbatim instead of the fallback.
+  if (value instanceof Error) {
+    return value.message;
+  }
+  if (typeof value === 'string' && value.length > 0) {
+    return value;
+  }
+  return fallback;
+}
+
 export function useViewerController(
   repository: ViewerRepository = defaultRepository,
 ): ViewerControllerState {
@@ -76,9 +88,7 @@ export function useViewerController(
     } catch (loadError: unknown) {
       setDataset(null);
       setSelectedCollectionId(null);
-      setError(
-        loadError instanceof Error ? loadError.message : 'Failed to load dataset.',
-      );
+      setError(describeFailure(loadError, 'Failed to load dataset.'));
     } finally {
       setIsLoading(false);
     }
@@ -109,9 +119,7 @@ export function useViewerController(
 
         setDataset(null);
         setSelectedCollectionId(null);
-        setError(
-          loadError instanceof Error ? loadError.message : 'Failed to load dataset.',
-        );
+        setError(describeFailure(loadError, 'Failed to load dataset.'));
       })
       .finally(() => {
         if (!cancelled) {
@@ -136,11 +144,7 @@ export function useViewerController(
           activeCollectionIdForDataset(nextDataset, currentCollectionId),
         );
       } catch (mutationError: unknown) {
-        setError(
-          mutationError instanceof Error
-            ? mutationError.message
-            : 'Dataset mutation failed.',
-        );
+        setError(describeFailure(mutationError, 'Dataset mutation failed.'));
       } finally {
         setIsMutating(false);
       }
