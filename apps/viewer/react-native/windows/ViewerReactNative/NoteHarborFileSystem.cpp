@@ -142,7 +142,7 @@ std::vector<uint8_t> Base64Decode(const std::string &value, bool &ok) {
 
 namespace ViewerReactNative {
 
-void NoteHarborFileSystem::Initialize(::React::ReactContext const &) noexcept {
+std::string NoteHarborFileSystem::GetDefaultDocumentDirectoryPath() noexcept {
   try {
     PWSTR rawPath = nullptr;
     if (::SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, nullptr, &rawPath) == S_OK && rawPath != nullptr) {
@@ -151,15 +151,17 @@ void NoteHarborFileSystem::Initialize(::React::ReactContext const &) noexcept {
       base /= L"ViewerReactNative";
       std::error_code ec;
       std::filesystem::create_directories(base, ec);
-      DocumentDirectoryPath = WideToUtf8(base.wstring());
-      return;
+      if (!ec) {
+        return WideToUtf8(base.wstring());
+      }
+      return WideToUtf8(base.wstring());
     }
     if (rawPath != nullptr) {
       ::CoTaskMemFree(rawPath);
     }
   } catch (...) {
   }
-  DocumentDirectoryPath = {};
+  return {};
 }
 
 void NoteHarborFileSystem::exists(std::string &&path, ::React::ReactPromise<bool> &&result) noexcept {

@@ -7,10 +7,11 @@ namespace ViewerReactNative {
 
 REACT_MODULE(NoteHarborFileSystem)
 struct NoteHarborFileSystem {
+  static std::string GetDefaultDocumentDirectoryPath() noexcept;
   REACT_CONSTANT(DocumentDirectoryPath);
-  std::string DocumentDirectoryPath;
-  REACT_INIT(Initialize);
-  void Initialize(::React::ReactContext const &) noexcept;
+  // Initialized at construction (not in REACT_INIT) so the constant is
+  // populated before JavaScript reads it, regardless of init ordering.
+  std::string DocumentDirectoryPath = GetDefaultDocumentDirectoryPath();
   REACT_METHOD(exists, L"exists")
   void exists(std::string &&path, ::React::ReactPromise<bool> &&result) noexcept;
   REACT_METHOD(mkdir, L"mkdir")

@@ -63,10 +63,34 @@ function resolveFileSystem() {
   }
 }
 
+function fileSystemUnavailableError() {
+  if (currentPlatform() === 'windows') {
+    try {
+      const reactNative = require('react-native') as {
+        NativeModules?: Record<string, FileSystemModule | undefined>;
+      };
+      const module = reactNative.NativeModules?.NoteHarborFileSystem;
+      if (!module) {
+        return new Error(
+          'Archive import is not available because the NoteHarborFileSystem native module is missing.',
+        );
+      }
+      if (!module.DocumentDirectoryPath) {
+        return new Error(
+          'Archive import is not available because the NoteHarborFileSystem module returned no document directory.',
+        );
+      }
+    } catch {
+      // Fall through to the generic error below.
+    }
+  }
+  return new Error('Archive import is not available because react-native-fs is unavailable.');
+}
+
 function getImportRootDirectoryPath() {
   const fileSystem = resolveFileSystem();
   if (!fileSystem) {
-    throw new Error('Archive import is not available because react-native-fs is unavailable.');
+    throw fileSystemUnavailableError();
   }
 
   return `${fileSystem.DocumentDirectoryPath}/noteharbor-viewer/imports`;
@@ -128,7 +152,7 @@ function directoryName(relativePath: string) {
 async function ensureParentDirectory(targetPath: string) {
   const fileSystem = resolveFileSystem();
   if (!fileSystem) {
-    throw new Error('Archive import is not available because react-native-fs is unavailable.');
+    throw fileSystemUnavailableError();
   }
 
   const lastSlashIndex = targetPath.lastIndexOf('/');
@@ -142,7 +166,7 @@ async function ensureParentDirectory(targetPath: string) {
 async function writeArchiveEntries(outputDir: string, archiveBytes: Uint8Array) {
   const fileSystem = resolveFileSystem();
   if (!fileSystem) {
-    throw new Error('Archive import is not available because react-native-fs is unavailable.');
+    throw fileSystemUnavailableError();
   }
 
   const archive = unzipSync(archiveBytes);
@@ -178,7 +202,7 @@ async function writeArchiveEntries(outputDir: string, archiveBytes: Uint8Array) 
 async function findArchiveDataDir(rootDir: string): Promise<string | null> {
   const fileSystem = resolveFileSystem();
   if (!fileSystem) {
-    throw new Error('Archive import is not available because react-native-fs is unavailable.');
+    throw fileSystemUnavailableError();
   }
 
   const queue = [rootDir];
@@ -218,7 +242,7 @@ async function importArchiveSnapshot(
 ): Promise<LocalDatasetSnapshot> {
   const fileSystem = resolveFileSystem();
   if (!fileSystem) {
-    throw new Error('Archive import is not available because react-native-fs is unavailable.');
+    throw fileSystemUnavailableError();
   }
 
   if (!archivePath.trim().toLowerCase().endsWith('.zip')) {
