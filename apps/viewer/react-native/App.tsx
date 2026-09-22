@@ -7,7 +7,7 @@ import {
   SafeAreaProvider,
   useSafeAreaInsets,
 } from 'react-native-safe-area-context';
-import { StatusBar, StyleSheet, Text } from 'react-native';
+import { Pressable, StatusBar, StyleSheet, Text } from 'react-native';
 import { useCallback, useState } from 'react';
 import { viewerLight } from './src/theme/viewerTheme';
 
@@ -103,6 +103,13 @@ function AppShell() {
           <Text style={styles.eyebrow}>Note Harbor</Text>
           <Text style={styles.title}>Unable to load data</Text>
           <Text style={styles.body}>{controller.error}</Text>
+          <Pressable
+            testID="dismiss-error"
+            accessibilityLabel="Dismiss error"
+            onPress={controller.clearError}
+            style={styles.dismissButton}>
+            <Text style={styles.dismissButtonText}>Dismiss</Text>
+          </Pressable>
         </Card>
       </ScreenFrame>
     );
@@ -185,6 +192,17 @@ const styles = StyleSheet.create({
     color: viewerLight.text,
     fontSize: 16,
     lineHeight: 24,
+  },
+  dismissButton: {
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    backgroundColor: viewerLight.surfaceContainer,
+  },
+  dismissButtonText: {
+    color: viewerLight.text,
+    fontSize: 14,
+    fontWeight: '700',
   },
   meta: {
     color: '#7a6247',

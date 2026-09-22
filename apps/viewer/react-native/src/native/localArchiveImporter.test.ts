@@ -224,6 +224,37 @@ test('falls back to the sync path method when the constant is empty', async () =
   }
 });
 
+test('rejects empty archive reads with a byte count', async () => {
+  const importer = new FilesystemLocalArchiveImporter();
+  mockedRNFS.readFile.mockResolvedValue('' as never);
+
+  await expect(importer.importArchive('/tmp/archive.zip')).rejects.toThrow(
+    '0 bytes read',
+  );
+});
+
+test('rejects non-zip payloads by signature', async () => {
+  const importer = new FilesystemLocalArchiveImporter();
+  mockedRNFS.readFile.mockResolvedValue(
+    Buffer.from('hello, not a zip').toString('base64') as never,
+  );
+
+  await expect(importer.importArchive('/tmp/archive.zip')).rejects.toThrow(
+    'not a valid zip file',
+  );
+});
+
+test('reports the byte count when unzip fails', async () => {
+  const importer = new FilesystemLocalArchiveImporter();
+  const full = zipSync({ 'nested/data/banknotes.db': strToU8('sqlite') });
+  const truncated = Buffer.from(full).subarray(0, Math.floor(full.length / 2));
+  mockedRNFS.readFile.mockResolvedValue(truncated.toString('base64') as never);
+
+  await expect(importer.importArchive('/tmp/archive.zip')).rejects.toThrow(
+    new RegExp(`could not be unzipped \\(${truncated.length} bytes read\\)`),
+  );
+});
+
 test('rejects archives with missing dataset payload', async () => {
   const importer = new FilesystemLocalArchiveImporter();
   const archiveBytes = zipSync({

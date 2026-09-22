@@ -28,7 +28,7 @@ export interface ViewerControllerState {
   setSort: (key: string) => void;
   filteredNotes: ViewerDataset['notes'];
   sourceLabel: string;
-  canManageImportedDatasets: boolean;
+  clearError: () => void;  canManageImportedDatasets: boolean;
   importArchive: (archivePath: string) => Promise<void>;
   deleteCollection: (collectionId: number) => Promise<void>;
   setDefaultCollection: (collectionId: number) => Promise<void>;
@@ -161,6 +161,10 @@ export function useViewerController(
     return sortViewerNotes(filterViewerNotes(notes, query), sortKey, ascending);
   }, [dataset, activeCollectionId, query, sortKey, ascending]);
 
+  const clearError = useCallback(() => {
+    setError(null);
+  }, []);
+
   return {
     dataset,
     isLoading,
@@ -176,6 +180,7 @@ export function useViewerController(
     setSort,
     filteredNotes,
     sourceLabel: dataset ? datasetSourceLabel(dataset.source) : 'No dataset loaded',
+    clearError,
     canManageImportedDatasets: repository.canManageImportedDatasets ?? true,
     importArchive: async (archivePath: string) => {
       await runMutation(() => repository.importArchive(archivePath));

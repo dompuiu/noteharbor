@@ -159,6 +159,18 @@ function base64ToBytes(value: string) {
   return bytes;
 }
 
+function hasZipSignature(bytes: Uint8Array): boolean {
+  // Local file header (PK\x03\x04), empty archive (PK\x05\x06), or
+  // spanned archive (PK\x07\x08).
+  return (
+    bytes.length >= 4 &&
+    bytes[0] === 0x50 &&
+    bytes[1] === 0x4b &&
+    (bytes[2] === 0x03 || bytes[2] === 0x05 || bytes[2] === 0x07) &&
+    (bytes[3] === 0x04 || bytes[3] === 0x06 || bytes[3] === 0x08)
+  );
+}
+
 function posixPath(value: string) {
   return value.replace(/\\/g, '/');
 }
@@ -207,7 +219,13 @@ async function writeArchiveEntries(outputDir: string, archiveBytes: Uint8Array) 
     throw fileSystemUnavailableError();
   }
 
-  const archive = unzipSync(archiveBytes);
+  let archive: ReturnType<typeof unzipSync>;
+  try {
+    archive = unzipSync(archiveBytes);
+  } catch (error) {
+    const detail = error instanceof Error ? error.message : `${error}`;
+    throw new Error(`Archive could not be unzipped (${archiveBytes.length} bytes read): ${detail}`);
+  }
 
   // Yield to the event loop every few writes so the blocking overlay paints.
   const yieldEveryEntries = 8;
@@ -299,6 +317,14 @@ async function importArchiveSnapshot(
 
   try {
     const archiveBytes = base64ToBytes(await fileSystem.readFile(archivePath, 'base64'));
+    if (archiveBytes.length === 0) {
+      throw new Error('Archive file is empty (0 bytes read).');
+    }
+    if (!hasZipSignature(archiveBytes)) {
+      throw new Error(
+        `Archive is not a valid zip file (${archiveBytes.length} bytes read, unexpected header).`,
+      );
+    }
     await writeArchiveEntries(extractionDir, archiveBytes);
 
     const archiveDataDir = await findArchiveDataDir(extractionDir);

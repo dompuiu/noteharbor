@@ -169,3 +169,26 @@ test('captures mutation errors on controller state', async () => {
   expect(probe.state?.error).toBe('Import failed.');
   expect(probe.state?.isMutating).toBe(false);
 });
+
+test('clearError dismisses controller errors without touching data', async () => {
+  const repository: ViewerRepository = {
+    loadDataset: () => Promise.resolve(dataset),
+    importArchive: () => Promise.reject(new Error('Import failed.')),
+    deleteCollection: () => Promise.resolve(dataset),
+    setDefaultCollection: () => Promise.resolve(dataset),
+    deleteImportedDataset: () => Promise.resolve(null),
+  };
+  const probe = await renderHook(repository);
+
+  await ReactTestRenderer.act(async () => {
+    await probe.state?.importArchive('/bad.zip');
+    await Promise.resolve();
+  });
+  expect(probe.state?.error).toBe('Import failed.');
+
+  await ReactTestRenderer.act(async () => {
+    probe.state?.clearError();
+  });
+  expect(probe.state?.error).toBeNull();
+  expect(probe.state?.dataset?.noteCount).toBe(1);
+});

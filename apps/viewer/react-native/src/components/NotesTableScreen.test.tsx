@@ -74,6 +74,7 @@ function makeController(
     setSort: jest.fn(),
     filteredNotes: baseNotes,
     sourceLabel: 'Using imported archive',
+    clearError: jest.fn(),
     canManageImportedDatasets: true,
     importArchive: jest.fn(),
     deleteCollection: jest.fn(),
