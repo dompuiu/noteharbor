@@ -417,12 +417,11 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
             extraData={pageWidth}
             horizontal
             pagingEnabled
-            // Hard snap like Flutter's PageView: a drag always settles on a
-            // full page, never resting between notes.
-            snapToInterval={pageWidth}
-            snapToAlignment="center"
+            // pagingEnabled alone drives page-by-page snapping. Do not add
+            // snapToInterval/snapToAlignment here: on react-native-windows
+            // that combination throws in ConfigureSnapInertiaModifiers and
+            // aborts the app on mount (every-row slideshow crash).
             decelerationRate="fast"
-            disableIntervalMomentum
             showsHorizontalScrollIndicator={false}
             style={styles.pager}
             // Virtualized like Flutter's PageView.builder: only the current

@@ -340,8 +340,12 @@ test('matches Flutter: no footer buttons, pager snaps full pages', () => {
   const pager = byTestId(tree, 'slideshow-pager');
   expect(pager.props.horizontal).toBe(true);
   expect(pager.props.pagingEnabled).toBe(true);
-  expect(pager.props.snapToAlignment).toBe('center');
-  expect(pager.props.disableIntervalMomentum).toBe(true);
+  // pagingEnabled alone drives full-page snapping. snapToInterval is
+  // intentionally absent: on react-native-windows it throws in
+  // ConfigureSnapInertiaModifiers and aborts the app on mount.
+  expect(pager.props.snapToInterval).toBeUndefined();
+  expect(pager.props.snapToAlignment).toBeUndefined();
+  expect(pager.props.disableIntervalMomentum).toBeUndefined();
   expect(pager.props.showsHorizontalScrollIndicator).toBe(false);
 });
 
