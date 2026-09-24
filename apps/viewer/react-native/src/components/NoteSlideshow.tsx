@@ -1,5 +1,6 @@
 import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
+  FlatList,
   Linking,
   Platform,
   Pressable,
@@ -8,6 +9,7 @@ import {
   Text,
   View,
   useWindowDimensions,
+  type ListRenderItemInfo,
 } from 'react-native';
 import {
   normalizeSourceUrl,
@@ -67,11 +69,22 @@ export function slideshowCounterText(index: number, count: number): string {
 
 export type SlideshowKeyAction = 'close' | 'next' | 'previous' | null;
 
-export function slideshowKeyAction(
-  key: string,
+// Raw key event shape shared by the web `keydown` listener and the native
+// desktop key handler (react-native-windows/macOS deliver `key`/`code`, plus
+// per-arrow boolean flags on some versions).
+export interface SlideshowNativeKeyEvent {
+  key?: string;
+  code?: string;
+  leftArrowKey?: boolean;
+  rightArrowKey?: boolean;
+}
+
+export function slideshowNativeKeyAction(
+  event: SlideshowNativeKeyEvent,
   isDesktopLike: boolean,
 ): SlideshowKeyAction {
-  if (key === 'Escape') {
+  const key = event.key ?? event.code ?? '';
+  if (key === 'Escape' || key === 'Esc') {
     return 'close';
   }
 
@@ -79,15 +92,22 @@ export function slideshowKeyAction(
     return null;
   }
 
-  if (key === 'ArrowLeft') {
+  if (key === 'ArrowLeft' || event.leftArrowKey === true) {
     return 'previous';
   }
 
-  if (key === 'ArrowRight') {
+  if (key === 'ArrowRight' || event.rightArrowKey === true) {
     return 'next';
   }
 
   return null;
+}
+
+export function slideshowKeyAction(
+  key: string,
+  isDesktopLike: boolean,
+): SlideshowKeyAction {
+  return slideshowNativeKeyAction({ key }, isDesktopLike);
 }
 
 export function isScrolledToBottom(
@@ -142,7 +162,8 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
   ref: React.Ref<NoteSlideshowHandle>,
 ) {
   const { width: windowWidth } = useWindowDimensions();
-  const pagerRef = useRef<ScrollView | null>(null);
+  const pagerRef = useRef<FlatList<NoteRecord> | null>(null);
+  const rootRef = useRef<View | null>(null);
   // Inline in the shared Card: measure our own width so pages match the
   // visible column instead of overflowing past the Card padding.
   const [containerWidth, setContainerWidth] = useState(0);
@@ -154,8 +175,22 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
   currentIndexRef.current = currentIndex;
 
   const scrollToIndex = useCallback(
-    (index: number) => {
-      pagerRef.current?.scrollTo?.({ x: index * pageWidth, animated: true });
+    (index: number, animated = true) => {
+      const list = pagerRef.current;
+      try {
+        // Animated jump = the slide transition (Flutter's animateToPage).
+        list?.scrollToIndex?.({ index, animated });
+      } catch {
+        // Target not yet measured: fall back to the raw page offset so
+        // arrow-key / jump navigation still lands on the right page
+        // (failures also surface via onScrollToIndexFailed below).
+        try {
+          list?.scrollToOffset?.({ offset: index * pageWidth, animated });
+        } catch {
+          // No native list mounted (e.g. test renderer): the state update
+          // already moved the counter; nothing left to animate.
+        }
+      }
     },
     [pageWidth],
   );
@@ -212,8 +247,9 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
   // Esc closes everywhere; arrows page with wrap on desktop-like targets.
   // Android hardware back arrives via Modal onRequestClose and iOS
   // swipe-dismiss via onDismiss, all on the same close path. The window
-  // listener only fires where window key events exist (web); native
-  // macOS/Windows key handling needs a native key module (out of scope).
+  // listener covers web; the root-view onKeyDown below covers native
+  // Windows/macOS targets (no extra native module: the props are ignored
+  // on platforms without hardware-keyboard view support).
   useEffect(() => {
     const target = window as unknown as
       | {
@@ -226,7 +262,10 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
     }
 
     const onKeyDown = (event: { key?: string }) => {
-      const action = slideshowKeyAction(event.key ?? '', isDesktopLike);
+      const action = slideshowNativeKeyAction(
+        { key: event.key ?? '' },
+        isDesktopLike,
+      );
       if (action === 'close') {
         close();
       } else if (action === 'next') {
@@ -239,6 +278,55 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
     target.addEventListener('keydown', onKeyDown);
     return () => target.removeEventListener?.('keydown', onKeyDown);
   }, [close, goNext, goPrevious, isDesktopLike]);
+
+  // Native desktop key handler attached to the root view (Windows/macOS).
+  // Same mapping as the web listener above.
+  const handleNativeKeyDown = useCallback(
+    (event: { nativeEvent?: SlideshowNativeKeyEvent }) => {
+      const action = slideshowNativeKeyAction(
+        event?.nativeEvent ?? {},
+        isDesktopLike,
+      );
+      if (action === 'close') {
+        close();
+      } else if (action === 'next') {
+        goNext();
+      } else if (action === 'previous') {
+        goPrevious();
+      }
+    },
+    [close, goNext, goPrevious, isDesktopLike],
+  );
+
+  // Mirror Flutter's autofocus so hardware arrow keys reach the handler
+  // without requiring a click first. Best-effort: no-ops where views
+  // have no focus method (e.g. the test renderer).
+  useEffect(() => {
+    try {
+      (
+        rootRef.current as unknown as { focus?: () => void } | null
+      )?.focus?.();
+    } catch {
+      // Swipe paging still works without focus.
+    }
+  }, []);
+
+  // Hardware-keyboard view props only exist on desktop targets; spreading
+  // them elsewhere would log unknown-prop warnings, so gate by Platform.
+  const nativeKeyProps = (
+    Platform.OS === 'windows' || Platform.OS === 'macos'
+      ? {
+          focusable: true,
+          keyDownEvents: [
+            { code: 'ArrowLeft' },
+            { code: 'ArrowRight' },
+            { code: 'Escape' },
+          ],
+          validKeysDown: ['ArrowLeft', 'ArrowRight', 'Escape'],
+          onKeyDown: handleNativeKeyDown,
+        }
+      : {}
+  ) as unknown as Partial<React.ComponentProps<typeof View>>;
 
   const openPopover = useCallback(
     async (note: NoteRecord, face: SlideshowImageFace) => {
@@ -254,18 +342,49 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
     [onOpenPopover, jumpToNoteId],
   );
 
+  // Fixed page size: FlatList can jump without measuring (initial page +
+  // arrow-key navigation) and recycles off-screen notes like Flutter's
+  // PageView.builder.
+  const getItemLayout = useCallback(
+    (_data: unknown, index: number) => ({
+      length: pageWidth,
+      offset: pageWidth * index,
+      index,
+    }),
+    [pageWidth],
+  );
+
+  const keyExtractor = useCallback((note: NoteRecord) => String(note.id), []);
+
+  const renderItem = useCallback(
+    ({ item: note }: ListRenderItemInfo<NoteRecord>) => (
+      <View style={{ width: pageWidth }}>
+        <NoteSlide
+          note={note}
+          imageWidth={Math.max(1, pageWidth - 56)}
+          onTagTap={(tagName) => close(tagName)}
+          onImageTap={(face) => openPopover(note, face)}
+        />
+      </View>
+    ),
+    [pageWidth, close, openPopover],
+  );
+
   return (
     // Inline (no Modal): shares the main window with the table, so it keeps
     // the same dimensions and stays resizable. A Modal opens a separate
     // native window on Windows/macOS that fills the screen.
     <View
+      ref={rootRef}
+      testID="slideshow-screen"
       style={styles.screen}
       onLayout={(event) => {
         const { width } = event.nativeEvent.layout;
         if (width > 0 && Math.abs(width - containerWidth) > 1) {
           setContainerWidth(width);
         }
-      }}>
+      }}
+      {...nativeKeyProps}>
         <View style={styles.header}>
           <View style={styles.spacer} />
           <View style={styles.counterPill}>
@@ -286,9 +405,15 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
             <Text style={styles.emptyText}>No notes to show.</Text>
           </View>
         ) : (
-          <ScrollView
+          <FlatList
             testID="slideshow-pager"
             ref={pagerRef}
+            data={notes}
+            keyExtractor={keyExtractor}
+            renderItem={renderItem}
+            getItemLayout={getItemLayout}
+            initialScrollIndex={clampSlideshowIndex(notes.length, initialIndex)}
+            extraData={pageWidth}
             horizontal
             pagingEnabled
             // Hard snap like Flutter's PageView: a drag always settles on a
@@ -299,6 +424,24 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
             disableIntervalMomentum
             showsHorizontalScrollIndicator={false}
             style={styles.pager}
+            // Virtualized like Flutter's PageView.builder: only the current
+            // page and its neighbours stay mounted.
+            initialNumToRender={3}
+            maxToRenderPerBatch={2}
+            windowSize={3}
+            removeClippedSubviews
+            onScrollToIndexFailed={(info) => {
+              // Unmeasured target (e.g. mid-layout jump): fall back to the
+              // raw page offset so navigation still lands correctly.
+              try {
+                pagerRef.current?.scrollToOffset?.({
+                  offset: info.index * pageWidth,
+                  animated: true,
+                });
+              } catch {
+                // No native list mounted: ignore.
+              }
+            }}
             onMomentumScrollEnd={(event) => {
               const measured = event.nativeEvent.layoutMeasurement.width;
               const page = measured > 0 ? measured : pageWidth;
@@ -308,18 +451,8 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
                   Math.round(event.nativeEvent.contentOffset.x / Math.max(1, page)),
                 ),
               );
-            }}>
-            {notes.map((note) => (
-              <View key={note.id} style={{ width: pageWidth }}>
-                <NoteSlide
-                  note={note}
-                  imageWidth={Math.max(1, pageWidth - 56)}
-                  onTagTap={(tagName) => close(tagName)}
-                  onImageTap={(face) => openPopover(note, face)}
-                />
-              </View>
-            ))}
-          </ScrollView>
+            }}
+          />
         )}
       </View>
   );

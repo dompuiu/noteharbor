@@ -1,5 +1,5 @@
 import React from 'react';
-import { Linking, Text } from 'react-native';
+import { Linking, Platform, Text } from 'react-native';
 import ReactTestRenderer, { act } from 'react-test-renderer';
 
 import type { NoteRecord } from '../shared/viewer-core';
@@ -12,6 +12,7 @@ import {
   slideshowCounterText,
   slideshowDetailRows,
   slideshowKeyAction,
+  slideshowNativeKeyAction,
   type NoteSlideshowHandle,
 } from './NoteSlideshow';
 import type { SlideshowReturn } from './NotesTableScreen';
@@ -337,10 +338,111 @@ test('matches Flutter: no footer buttons, pager snaps full pages', () => {
   absentTestId(tree, 'slideshow-next');
 
   const pager = byTestId(tree, 'slideshow-pager');
+  expect(pager.props.horizontal).toBe(true);
   expect(pager.props.pagingEnabled).toBe(true);
   expect(pager.props.snapToAlignment).toBe('center');
   expect(pager.props.disableIntervalMomentum).toBe(true);
   expect(pager.props.showsHorizontalScrollIndicator).toBe(false);
+});
+
+test('pager is virtualized like Flutter PageView.builder', () => {
+  const tree = renderSlideshow({
+    notes: [
+      ...baseNotes,
+      makeNote({ id: 3, denomination: '', catalogNumber: '' }),
+      makeNote({ id: 4, denomination: '20 Lei', catalogNumber: 'P-91' }),
+      makeNote({ id: 5, denomination: '50 Lei', catalogNumber: 'P-92' }),
+    ],
+  });
+
+  const pager = byTestId(tree, 'slideshow-pager');
+  // Only the current page and its neighbours stay mounted.
+  expect(pager.props.initialNumToRender).toBeLessThanOrEqual(3);
+  expect(pager.props.maxToRenderPerBatch).toBeLessThanOrEqual(3);
+  expect(pager.props.windowSize).toBeLessThanOrEqual(5);
+  expect(pager.props.removeClippedSubviews).toBe(true);
+  expect(typeof pager.props.getItemLayout).toBe('function');
+  expect(typeof pager.props.keyExtractor).toBe('function');
+  expect(pager.props.keyExtractor(baseNotes[0])).toBe('1');
+});
+
+test('pager getItemLayout pages by the measured width', () => {
+  const tree = renderSlideshow();
+
+  const pager = byTestId(tree, 'slideshow-pager');
+  const layout = pager.props.getItemLayout(null, 2);
+  expect(layout.index).toBe(2);
+  expect(layout.offset).toBe(layout.length * 2);
+  expect(layout.length).toBeGreaterThan(0);
+});
+
+test('pager starts on the initial index', () => {
+  const tree = renderSlideshow({ initialIndex: 1 });
+
+  expect(textContent(tree, 'slideshow-counter')).toBe('2 / 2');
+  expect(byTestId(tree, 'slideshow-pager').props.initialScrollIndex).toBe(1);
+});
+
+test('pager falls back to the raw page offset when the target is unmeasured', () => {
+  const tree = renderSlideshow();
+  const pager = byTestId(tree, 'slideshow-pager');
+
+  // The failed-jump handler re-targets the raw page offset; with no native
+  // list under the test renderer it must at least exist and leave the
+  // current page untouched.
+  expect(typeof pager.props.onScrollToIndexFailed).toBe('function');
+  act(() => {
+    pager.props.onScrollToIndexFailed({ index: 1, highestMeasuredFrameIndex: 0 });
+  });
+  expect(textContent(tree, 'slideshow-counter')).toBe('1 / 2');
+});
+
+test('native key mapping covers key/code/flag shapes with desktop gating', () => {
+  expect(slideshowNativeKeyAction({ key: 'Escape' }, false)).toBe('close');
+  expect(slideshowNativeKeyAction({ code: 'Escape' }, false)).toBe('close');
+  expect(slideshowNativeKeyAction({ key: 'ArrowRight' }, true)).toBe('next');
+  expect(slideshowNativeKeyAction({ code: 'ArrowLeft' }, true)).toBe('previous');
+  expect(slideshowNativeKeyAction({ rightArrowKey: true }, true)).toBe('next');
+  expect(slideshowNativeKeyAction({ leftArrowKey: true }, true)).toBe('previous');
+  expect(slideshowNativeKeyAction({ key: 'ArrowRight' }, false)).toBeNull();
+  expect(slideshowNativeKeyAction({ code: 'ArrowLeft' }, false)).toBeNull();
+  expect(slideshowNativeKeyAction({ key: 'Enter' }, true)).toBeNull();
+});
+
+test('native desktop keys page with wrap-around and Escape closes', () => {
+  const originalOS = Platform.OS;
+  jest.replaceProperty(Platform, 'OS', 'windows');
+  try {
+    const onClose: jest.Mock<void, [SlideshowReturn | null]> = jest.fn();
+    const tree = renderSlideshow({ onClose, isDesktopLike: true });
+
+    const screen = byTestId(tree, 'slideshow-screen');
+    expect(typeof screen.props.onKeyDown).toBe('function');
+    const pressNativeKey = (nativeEvent: object) => {
+      act(() => {
+        screen.props.onKeyDown({ nativeEvent });
+      });
+    };
+
+    // Wraps from the first to the last note.
+    pressNativeKey({ key: 'ArrowLeft' });
+    expect(textContent(tree, 'slideshow-counter')).toBe('2 / 2');
+
+    pressNativeKey({ code: 'ArrowRight' });
+    expect(textContent(tree, 'slideshow-counter')).toBe('1 / 2');
+
+    pressNativeKey({ key: 'Escape' });
+    expect(onClose).toHaveBeenCalledWith({ noteId: 1 });
+  } finally {
+    jest.replaceProperty(Platform, 'OS', originalOS);
+  }
+});
+
+test('native keys stay inert on non-desktop targets', () => {
+  const tree = renderSlideshow({ isDesktopLike: false });
+
+  // No native key props outside Windows/macOS (avoids unknown-prop noise).
+  expect(byTestId(tree, 'slideshow-screen').props.onKeyDown).toBeUndefined();
 });
 
 test('bottom fade hides at scroll bottom', () => {
