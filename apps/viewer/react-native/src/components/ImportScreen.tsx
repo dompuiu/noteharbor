@@ -374,7 +374,7 @@ export function ImportScreen({
         </Text>
       </ScrollView>
       <ImportBlockingOverlay
-        visible={isImporting}
+        visible={isImporting || controller.isMutating}
         archiveName={pickedName}
         testID="import-blocking-overlay"
       />

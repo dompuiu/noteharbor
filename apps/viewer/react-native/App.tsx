@@ -120,10 +120,11 @@ function AppShell() {
     controller.dataset.collections.length === 0;
 
   if (needsImport) {
+    // The ImportScreen renders its own blocking overlay (with the archive
+    // name); no app-level overlay here so the import never shows twice.
     return (
       <ScreenFrame topInset={insets.top} bottomInset={insets.bottom}>
         <ImportScreen controller={controller} isFirstRun />
-        <ImportBlockingOverlay visible={controller.isMutating} />
       </ScreenFrame>
     );
   }
@@ -170,7 +171,9 @@ function AppShell() {
           </>
         )}
       </Card>
-      <ImportBlockingOverlay visible={controller.isMutating} />
+      {/* Hidden while the Import screen is open: it renders its own overlay
+          so a mutation never shows two blocking indicators at once. */}
+      <ImportBlockingOverlay visible={controller.isMutating && !showImport} />
     </ScreenFrame>
   );
 }

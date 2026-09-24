@@ -38,13 +38,63 @@ export interface ViewerControllerState {
 const defaultRepository = new LocalViewerRepository();
 
 function describeFailure(value: unknown, fallback: string): string {
-  // Native rejections (and some JS throws) arrive as plain strings rather
-  // than Error objects; surface them verbatim instead of the fallback.
+  // Native rejections arrive as Error objects, plain strings, or plain
+  // objects ({code, message, userInfo, ...}) depending on platform/bridge.
+  // Extract a message from any shape so import failures never collapse to
+  // the generic fallback.
   if (value instanceof Error) {
-    return value.message;
+    if (value.message) {
+      return value.message;
+    }
+    return fallback;
   }
   if (typeof value === 'string' && value.length > 0) {
     return value;
+  }
+  if (value != null && typeof value === 'object') {
+    const record = value as Record<string, unknown>;
+    const message = record.message;
+    if (typeof message === 'string' && message.length > 0) {
+      const code = record.code;
+      if (typeof code === 'string' && code.length > 0) {
+        return `${message} (${code})`;
+      }
+      return message;
+    }
+    const nestedError = record.error;
+    if (typeof nestedError === 'string' && nestedError.length > 0) {
+      return nestedError;
+    }
+    if (nestedError != null && typeof nestedError === 'object') {
+      const nestedMessage = (nestedError as Record<string, unknown>).message;
+      if (typeof nestedMessage === 'string' && nestedMessage.length > 0) {
+        return nestedMessage;
+      }
+    }
+    const description =
+      record.description ?? record.reason ?? record.userInfo ?? record.detail;
+    if (typeof description === 'string' && description.length > 0) {
+      return description;
+    }
+    if (description != null && typeof description === 'object') {
+      const localized = (description as Record<string, unknown>)[
+        'NSLocalizedDescription'
+      ];
+      if (typeof localized === 'string' && localized.length > 0) {
+        return localized;
+      }
+    }
+    try {
+      const serialized = JSON.stringify(value);
+      if (serialized && serialized !== '{}' && serialized !== 'null') {
+        return serialized;
+      }
+    } catch {
+      // Fall through to the generic fallback below.
+    }
+  }
+  if (typeof value === 'number' || typeof value === 'boolean') {
+    return String(value);
   }
   return fallback;
 }

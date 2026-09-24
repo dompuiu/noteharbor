@@ -17,6 +17,8 @@ module.exports = {
   },
   transformIgnorePatterns: [
     'node_modules/(?!(\\.pnpm|(jest-)?react-native|@react-native(-community)?|@react-native-documents|react-native-safe-area-context|react-native-fs|react-native-documents|fflate|base-64)/)',
-    'node_modules/.pnpm/(?!(react-native|@react-native[^/]*|react-native-safe-area-context|react-native-fs|react-native-documents|fflate|base-64)@)',
+    // pnpm hashes scoped names (@react-native+virtualized-lists@<hash> has
+    // no @version segment), so allow scoped pnpm dirs explicitly.
+    'node_modules/.pnpm/(?!(react-native|@react-native[^/]*|@react-native\\+[^/]*|react-native-safe-area-context|react-native-fs|react-native-documents|fflate|base-64)(@|/))',
   ],
 };

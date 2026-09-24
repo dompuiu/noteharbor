@@ -20,6 +20,18 @@ struct NoteHarborFileSystem {
   void readDir(std::string &&path, ::React::ReactPromise<::React::JSValueArray> &&result) noexcept;
   REACT_METHOD(readFile, L"readFile")
   void readFile(std::string &&path, std::string &&encoding, ::React::ReactPromise<std::string> &&result) noexcept;
+  REACT_METHOD(readFileChunk, L"readFileChunk")
+  void readFileChunk(
+      std::string &&path,
+      double offset,
+      double length,
+      std::string &&encoding,
+      ::React::ReactPromise<std::string> &&result) noexcept;
+  REACT_METHOD(extractArchive, L"extractArchive")
+  void extractArchive(
+      std::string &&archivePath,
+      std::string &&destDir,
+      ::React::ReactPromise<void> &&result) noexcept;
   REACT_METHOD(writeFile, L"writeFile")
   void writeFile(
       std::string &&path,

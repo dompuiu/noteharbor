@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Text } from 'react-native';
+import { Modal, Platform, Text, View } from 'react-native';
 import ReactTestRenderer, { act } from 'react-test-renderer';
 
 import { ImportBlockingOverlay } from './ImportBlockingOverlay';
@@ -31,4 +31,21 @@ test('blocks back navigation and names the archive while mutating', () => {
   const texts = tree.root.findAllByType(Text).map((node) => node.props.children);
   expect(texts).toContain('Importing archive...');
   expect(texts).toContain('noteharbor-archive.zip');
+});
+
+test('renders inline without a Modal window on windows', () => {
+  const previousOS = Platform.OS;
+  Platform.OS = 'windows';
+  try {
+    const tree = renderOverlay(true, 'noteharbor-archive.zip');
+
+    expect(tree.root.findAllByType(Modal)).toHaveLength(0);
+
+    const texts = tree.root.findAllByType(Text).map((node) => node.props.children);
+    expect(texts).toContain('Importing archive...');
+    expect(texts).toContain('noteharbor-archive.zip');
+    expect(tree.root.findAllByType(View).length).toBeGreaterThan(0);
+  } finally {
+    Platform.OS = previousOS;
+  }
 });

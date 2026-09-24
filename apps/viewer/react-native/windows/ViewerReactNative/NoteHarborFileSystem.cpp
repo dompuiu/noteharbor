@@ -2,6 +2,7 @@
 
 #include "NoteHarborFileSystem.h"
 
+#include <appmodel.h>
 #include <shlobj.h>
 #include <wincrypt.h>
 
@@ -48,6 +49,28 @@ std::filesystem::path ToPath(const std::string &value) {
 
 std::string FromPath(const std::filesystem::path &path) {
   return WideToUtf8(path.wstring());
+}
+
+std::wstring QuoteNativeArg(const std::wstring &value) {
+  std::wstring result;
+  result.reserve(value.size() + 2);
+  result.push_back(L'"');
+  result.append(value);
+  result.push_back(L'"');
+  return result;
+}
+
+std::string TrimAscii(std::string value) {
+  const auto isSpace = [](char c) {
+    return c == ' ' || c == '\t' || c == '\r' || c == '\n';
+  };
+  while (!value.empty() && isSpace(value.front())) {
+    value.erase(value.begin());
+  }
+  while (!value.empty() && isSpace(value.back())) {
+    value.pop_back();
+  }
+  return value;
 }
 
 std::vector<uint8_t> ReadAllBytes(const std::filesystem::path &path, bool &ok) {
@@ -195,8 +218,44 @@ std::string NoteHarborFileSystem::GetDefaultDocumentDirectoryPath() noexcept {
   return {};
 }
 
-void NoteHarborFileSystem::exists(std::string &&path, ::React::ReactPromise<bool> &&result) noexcept {
-  try {
+namespace {
+// Maps an app-view %LOCALAPPDATA% path to the on-disk backing store so an
+// out-of-process helper (tar.exe) resolves the same files the packaged app
+// sees. Unpackaged runs (or non-redirected paths) pass through untouched.
+std::filesystem::path ToBackingStorePath(const std::filesystem::path &virtualPath) {
+  UINT32 familyLength = 0;
+  if (::GetCurrentPackageFamilyName(&familyLength, nullptr) != ERROR_INSUFFICIENT_BUFFER ||
+      familyLength <= 1) {
+    return virtualPath;
+  }
+
+  std::wstring family(familyLength, L'\0');
+  if (::GetCurrentPackageFamilyName(&familyLength, family.data()) != ERROR_SUCCESS) {
+    return virtualPath;
+  }
+  while (!family.empty() && family.back() == L'\0') {
+    family.pop_back();
+  }
+  if (family.empty()) {
+    return virtualPath;
+  }
+
+  const std::wstring base = GetLocalAppDataDir();
+  if (base.empty()) {
+    return virtualPath;
+  }
+  const std::wstring value = virtualPath.wstring();
+  if (value.size() <= base.size() || ::_wcsnicmp(value.c_str(), base.c_str(), base.size()) != 0 ||
+      (value[base.size()] != L'\\' && value[base.size()] != L'/')) {
+    return virtualPath;
+  }
+
+  return std::filesystem::path(
+      base + L"\\Packages\\" + family + L"\\LocalCache\\Local" + value.substr(base.size()));
+}
+} // namespace
+
+void NoteHarborFileSystem::exists(std::string &&path, ::React::ReactPromise<bool> &&result) noexcept {  try {
     std::error_code ec;
     result.Resolve(std::filesystem::exists(ToPath(path), ec));
   } catch (...) {
@@ -261,6 +320,221 @@ void NoteHarborFileSystem::readFile(
     result.Resolve(std::string(reinterpret_cast<const char *>(bytes.data()), bytes.size()));
   } catch (...) {
     result.Reject("Unable to read file.");
+  }
+}
+
+void NoteHarborFileSystem::readFileChunk(
+    std::string &&path,
+    double offset,
+    double length,
+    std::string &&encoding,
+    ::React::ReactPromise<std::string> &&result) noexcept {
+  try {
+    if (!(offset >= 0) || !(length > 0)) {
+      result.Reject("Invalid file chunk range.");
+      return;
+    }
+
+    const auto filePath = ToPath(path);
+    HANDLE file = ::CreateFileW(filePath.c_str(), GENERIC_READ, FILE_SHARE_READ, nullptr, OPEN_EXISTING,
+        FILE_ATTRIBUTE_NORMAL, nullptr);
+    if (file == INVALID_HANDLE_VALUE) {
+      result.Reject("Unable to read file chunk.");
+      return;
+    }
+
+    LARGE_INTEGER fileSize = {};
+    if (::GetFileSizeEx(file, &fileSize) == FALSE) {
+      ::CloseHandle(file);
+      result.Reject("Unable to read file chunk.");
+      return;
+    }
+
+    long long start = static_cast<long long>(offset);
+    long long want = static_cast<long long>(length);
+    if (start >= fileSize.QuadPart) {
+      ::CloseHandle(file);
+      result.Resolve(std::string{});
+      return;
+    }
+
+    long long available = fileSize.QuadPart - start;
+    long long count = want < available ? want : available;
+
+    LARGE_INTEGER position = {};
+    position.QuadPart = start;
+    if (::SetFilePointerEx(file, position, nullptr, FILE_BEGIN) == FALSE) {
+      ::CloseHandle(file);
+      result.Reject("Unable to read file chunk.");
+      return;
+    }
+
+    std::vector<uint8_t> bytes(static_cast<size_t>(count));
+    size_t bytesRead = 0;
+    while (bytesRead < bytes.size()) {
+      DWORD chunk = 0;
+      const size_t remaining = bytes.size() - bytesRead;
+      const DWORD request = remaining > MAXDWORD ? MAXDWORD : static_cast<DWORD>(remaining);
+      if (::ReadFile(file, bytes.data() + bytesRead, request, &chunk, nullptr) == FALSE || chunk == 0) {
+        ::CloseHandle(file);
+        result.Reject("Unable to read file chunk.");
+        return;
+      }
+      bytesRead += chunk;
+    }
+    ::CloseHandle(file);
+
+    if (encoding == "base64") {
+      const auto encoded = Base64Encode(bytes);
+      if (encoded.empty() && !bytes.empty()) {
+        result.Reject("Unable to encode file chunk.");
+        return;
+      }
+      result.Resolve(encoded);
+      return;
+    }
+    result.Resolve(std::string(reinterpret_cast<const char *>(bytes.data()), bytes.size()));
+  } catch (...) {
+    result.Reject("Unable to read file chunk.");
+  }
+}
+
+void NoteHarborFileSystem::extractArchive(
+    std::string &&archivePath,
+    std::string &&destDir,
+    ::React::ReactPromise<void> &&result) noexcept {
+  try {
+    // Quote injection guard: tar.exe receives one pre-quoted command line.
+    if (archivePath.find('"') != std::string::npos || destDir.find('"') != std::string::npos) {
+      result.Reject("Archive path is not supported.");
+      return;
+    }
+
+    const auto archive = ToPath(archivePath);
+    // Packaged runs redirect %LOCALAPPDATA% writes into the package
+    // LocalCache backing store, but the spawned tar.exe resolves the
+    // literal path — aim it at the backing store so both sides meet.
+    const auto dest = ToBackingStorePath(ToPath(destDir));
+
+    std::error_code ec;
+    std::filesystem::create_directories(dest, ec);
+    if (!std::filesystem::is_directory(dest, ec)) {
+      result.Reject("Unable to prepare the extraction directory.");
+      return;
+    }
+
+    wchar_t systemDir[MAX_PATH] = {};
+    if (::GetSystemDirectoryW(systemDir, ARRAYSIZE(systemDir)) == 0) {
+      result.Reject("Archive extraction is not available on this system.");
+      return;
+    }
+    const auto tarExe = std::filesystem::path(systemDir) / L"tar.exe";
+    if (!std::filesystem::exists(tarExe, ec)) {
+      result.Reject("Archive extraction is not available (tar.exe not found).");
+      return;
+    }
+
+    std::wstring command = L"\"" + tarExe.wstring() + L"\" -xf " +
+        QuoteNativeArg(archive.wstring()) + L" -C " + QuoteNativeArg(dest.wstring());
+
+    // Capture the child's stderr so failures carry tar's own message.
+    SECURITY_ATTRIBUTES inheritable{};
+    inheritable.nLength = static_cast<DWORD>(sizeof(SECURITY_ATTRIBUTES));
+    inheritable.bInheritHandle = TRUE;
+    HANDLE errorRead = nullptr;
+    HANDLE errorWrite = nullptr;
+    if (::CreatePipe(&errorRead, &errorWrite, &inheritable, 0) != FALSE) {
+      ::SetHandleInformation(errorRead, HANDLE_FLAG_INHERIT, 0);
+    } else {
+      errorRead = nullptr;
+      errorWrite = nullptr;
+    }
+
+    HANDLE nulInput =
+        ::CreateFileW(L"NUL", GENERIC_READ, FILE_SHARE_READ | FILE_SHARE_WRITE, nullptr, OPEN_EXISTING, 0, nullptr);
+
+    STARTUPINFOW startup{};
+    startup.cb = static_cast<DWORD>(sizeof(startup));
+    PROCESS_INFORMATION processInfo{};
+    bool launched = false;
+    if (errorWrite != nullptr && nulInput != INVALID_HANDLE_VALUE) {
+      startup.dwFlags = STARTF_USESTDHANDLES;
+      startup.hStdInput = nulInput;
+      startup.hStdOutput = errorWrite;
+      startup.hStdError = errorWrite;
+      launched = ::CreateProcessW(nullptr, command.data(), nullptr, nullptr, TRUE, CREATE_NO_WINDOW,
+                       nullptr, nullptr, &startup, &processInfo) == TRUE;
+    } else {
+      // No redirection: inherit nothing extra, no console window.
+      launched = ::CreateProcessW(nullptr, command.data(), nullptr, nullptr, FALSE, CREATE_NO_WINDOW,
+                       nullptr, nullptr, &startup, &processInfo) == TRUE;
+    }
+
+    if (errorWrite != nullptr) {
+      ::CloseHandle(errorWrite);
+    }
+    if (nulInput != INVALID_HANDLE_VALUE) {
+      ::CloseHandle(nulInput);
+    }
+
+    if (!launched) {
+      if (errorRead != nullptr) {
+        ::CloseHandle(errorRead);
+      }
+      result.Reject("Unable to extract archive.");
+      return;
+    }
+
+    constexpr DWORD kTimeoutMs = 20 * 60 * 1000;
+    const DWORD waitResult = ::WaitForSingleObject(processInfo.hProcess, kTimeoutMs);
+
+    std::string childErrors;
+    if (errorRead != nullptr) {
+      char buffer[4096];
+      for (;;) {
+        DWORD available = 0;
+        if (::PeekNamedPipe(errorRead, nullptr, 0, nullptr, &available, nullptr) == FALSE || available == 0) {
+          break;
+        }
+        DWORD chunk = 0;
+        if (::ReadFile(errorRead, buffer, sizeof(buffer), &chunk, nullptr) == FALSE || chunk == 0) {
+          break;
+        }
+        if (childErrors.size() < 2048) {
+          childErrors.append(buffer, chunk);
+        }
+      }
+      ::CloseHandle(errorRead);
+    }
+
+    DWORD exitCode = 1;
+    if (waitResult == WAIT_TIMEOUT) {
+      ::TerminateProcess(processInfo.hProcess, 1);
+      ::CloseHandle(processInfo.hThread);
+      ::CloseHandle(processInfo.hProcess);
+      result.Reject("Archive extraction timed out.");
+      return;
+    }
+    if (::GetExitCodeProcess(processInfo.hProcess, &exitCode) == FALSE) {
+      exitCode = 1;
+    }
+    ::CloseHandle(processInfo.hThread);
+    ::CloseHandle(processInfo.hProcess);
+
+    if (waitResult != WAIT_OBJECT_0 || exitCode != 0) {
+      std::string message =
+          "Unable to extract archive (tar exited " + std::to_string(exitCode) + ").";
+      const auto detail = TrimAscii(childErrors);
+      if (!detail.empty()) {
+        message += " " + detail.substr(0, 1024);
+      }
+      result.Reject(message.c_str());
+      return;
+    }
+
+    result.Resolve();
+  } catch (...) {
+    result.Reject("Unable to extract archive.");
   }
 }
 

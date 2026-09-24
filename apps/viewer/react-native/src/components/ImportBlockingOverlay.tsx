@@ -1,4 +1,4 @@
-import { ActivityIndicator, Modal, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Modal, Platform, StyleSheet, Text, View } from 'react-native';
 import { viewerLight } from '../theme/viewerTheme';
 
 export function ImportBlockingOverlay({
@@ -14,19 +14,29 @@ export function ImportBlockingOverlay({
     return null;
   }
 
+  const content = (
+    <View testID={testID} style={styles.barrier}>
+      <View style={styles.card}>
+        <ActivityIndicator size="large" color={viewerLight.accent} />
+        <Text style={styles.title}>Importing archive...</Text>
+        {archiveName ? <Text style={styles.name}>{archiveName}</Text> : null}
+      </View>
+    </View>
+  );
+
+  // On Windows a Modal opens a separate native window; render the barrier
+  // inline so the import UI stays in the app's window.
+  if (Platform.OS === 'windows') {
+    return <View style={styles.inlineHost}>{content}</View>;
+  }
+
   return (
     <Modal
       visible
       transparent
       animationType="fade"
       onRequestClose={() => {}}>
-      <View testID={testID} style={styles.barrier}>
-        <View style={styles.card}>
-          <ActivityIndicator size="large" color={viewerLight.accent} />
-          <Text style={styles.title}>Importing archive...</Text>
-          {archiveName ? <Text style={styles.name}>{archiveName}</Text> : null}
-        </View>
-      </View>
+      {content}
     </Modal>
   );
 }
@@ -37,6 +47,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: 'rgba(46,35,24,0.45)',
+  },
+  // Windows host: Modal would open a separate native window, so the
+  // barrier renders inline and fills the app window instead.
+  inlineHost: {
+    ...StyleSheet.absoluteFillObject,
+    zIndex: 999,
+    elevation: 999,
   },
   card: {
     alignItems: 'center',
