@@ -501,6 +501,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     super.initState();
     _lastActiveCollectionId = widget.controller.activeCollectionId;
     widget.controller.addListener(_handleControllerChange);
+    _searchFocusNode.addListener(_handleSearchFocusChange);
   }
 
   @override
@@ -519,6 +520,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   @override
   void dispose() {
     widget.controller.removeListener(_handleControllerChange);
+    _searchFocusNode.removeListener(_handleSearchFocusChange);
     _searchController.dispose();
     _horizontalScrollController.dispose();
     _verticalScrollController.dispose();
@@ -782,6 +784,12 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.keyK) {
+      // Up from the first row steps out of the table and into the filter.
+      // Home keeps its own meaning below: it always lands on the first row.
+      if (_selectedIndex == 0) {
+        _focusSearchField();
+        return KeyEventResult.handled;
+      }
       _moveSelection(-1);
       return KeyEventResult.handled;
     }
@@ -813,24 +821,44 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     }
     if (key == LogicalKeyboardKey.slash &&
         !HardwareKeyboard.instance.isShiftPressed) {
-      // Entering the filter drops the row selection; typing narrows the
-      // list from scratch and Esc back to the table starts unselected.
-      setState(() => _selectedIndex = null);
-      _searchFocusNode.requestFocus();
-      final text = _searchController.text;
-      if (text.isNotEmpty) {
-        _searchController.selection =
-            TextSelection(baseOffset: 0, extentOffset: text.length);
-      }
+      _focusSearchField();
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.escape) {
       if (_selectedIndex != null) {
         setState(() => _selectedIndex = null);
+      } else if (_query.isNotEmpty) {
+        // Deselected table: one more Escape clears the filters (mirrors the
+        // editor's filters -> first row -> deselect -> clear cascade).
+        _searchController.clear();
+        setState(() {
+          _query = '';
+          _selectedIndex = null;
+        });
       }
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
+  }
+
+  void _focusSearchField() {
+    // Entering the filter drops the row selection; typing narrows the list
+    // from scratch and Esc back to the table starts unselected.
+    setState(() => _selectedIndex = null);
+    _searchFocusNode.requestFocus();
+    final text = _searchController.text;
+    if (text.isNotEmpty) {
+      _searchController.selection =
+          TextSelection(baseOffset: 0, extentOffset: text.length);
+    }
+  }
+
+  void _handleSearchFocusChange() {
+    // Focusing the filter by any means (click, tap, slash, Tab) drops the row
+    // selection so the selection ring doesn't linger behind the field.
+    if (_searchFocusNode.hasFocus && _selectedIndex != null && mounted) {
+      setState(() => _selectedIndex = null);
+    }
   }
 
   KeyEventResult _handleSearchKey(KeyEvent event) {
@@ -842,7 +870,17 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     }
     final key = event.logicalKey;
     if (key == LogicalKeyboardKey.escape) {
+      // Escape behaves like ArrowDown here: leave the filter and land on the
+      // first row. With no rows to land on, focus the table unselected so a
+      // further Escape can still clear the filters.
+      if (_currentVisibleNotes().isEmpty) {
+        setState(() => _selectedIndex = null);
+        _tableFocusNode.requestFocus();
+        return KeyEventResult.handled;
+      }
+      setState(() => _selectedIndex = 0);
       _tableFocusNode.requestFocus();
+      _ensureSelectedVisible();
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.arrowDown ||

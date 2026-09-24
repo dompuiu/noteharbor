@@ -2,6 +2,16 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
+## [1.2.0] - 2026-09-24
+
+### Added
+
+- Table screen: `Esc` and `↓`/`Enter` in the filter field now jump to the first row (falling back to the unselected table when nothing matches), and `Esc` on the deselected table clears the active filter — matching the Editor's filters → first row → deselect → clear cascade. Pressing `↑` (or `k`) on the first row steps back out into the filter field; `Home` still lands on the first row.
+
+### Fixed
+
+- Table screen: clicking into the filter field with the mouse now drops the keyboard row selection, so the selection ring no longer lingers behind the field (previously only typing or `/` cleared it).
+
 ## [1.1.0] - 2026-09-21
 
 ### Added

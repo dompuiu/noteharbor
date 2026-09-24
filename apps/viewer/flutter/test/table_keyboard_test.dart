@@ -156,6 +156,143 @@ void main() {
     expect(selectedRing(), findsNothing);
   });
 
+  keyboardTestWidgets('up arrow from the first row focuses the filter', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(selectedRow(1), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(selectedRing(), findsNothing);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus,
+      isTrue,
+    );
+  });
+
+  keyboardTestWidgets('home still lands on the first row', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.pump();
+    expect(selectedRow(5), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.home);
+    await tester.pump();
+    expect(selectedRow(1), findsOneWidget);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus,
+      isFalse,
+    );
+  });
+
+  keyboardTestWidgets('tapping the filter clears the row selection', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(selectedRow(1), findsOneWidget);
+
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    expect(selectedRing(), findsNothing);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus,
+      isTrue,
+    );
+  });
+
+  keyboardTestWidgets('escape from the filter selects the first row', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    expect(selectedRing(), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus,
+      isTrue,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(selectedRow(1), findsOneWidget);
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'notesTable',
+    );
+  });
+
+  keyboardTestWidgets('escape from the filter with no matches returns to table', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    await tester.enterText(find.byType(TextField), 'zzz');
+    await tester.pumpAndSettle();
+    expect(find.text('No notes match the current filter.'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(selectedRing(), findsNothing);
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'notesTable',
+    );
+  });
+
+  keyboardTestWidgets('escape on the table clears active filters', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    await tester.enterText(find.byType(TextField), 'Cello');
+    await tester.pumpAndSettle();
+    expect(find.text('Alpha Note'), findsNothing);
+    expect(find.text('Cello Note'), findsOneWidget);
+
+    // Filter -> first row.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(selectedRow(3), findsOneWidget);
+
+    // Focused row -> deselect.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(selectedRing(), findsNothing);
+
+    // Deselected table -> clear the filters.
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).controller?.text,
+      isEmpty,
+    );
+    expect(find.text('Alpha Note'), findsOneWidget);
+    expect(find.text('Echo Note'), findsOneWidget);
+  });
+
+  keyboardTestWidgets('enter in the filter selects the first row', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pump();
+    expect(selectedRow(1), findsOneWidget);
+  });
+
   keyboardTestWidgets('search keeps keys for typing instead of selection', (
     WidgetTester tester,
   ) async {
