@@ -4,8 +4,10 @@ import {
   notePreviewImage,
   type NoteRecord,
 } from '../shared/viewer-core';
-import { useEffect, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
 import {
+  FlatList,
+  type ListRenderItemInfo,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -114,6 +116,85 @@ function sortArrow(
   return controller.ascending ? ' ▲' : ' ▼';
 }
 
+interface TableRowProps {
+  note: NoteRecord;
+  index: number;
+  tagsWidth: number;
+  onOpen: (index: number) => void;
+  onTagFilter: (tagName: string) => void;
+}
+
+// Memoized so scrolling a 300+ row virtualized list only re-renders rows
+// whose note object (or column width) actually changed.
+const TableRow = memo(function TableRow({
+  note,
+  index,
+  tagsWidth,
+  onOpen,
+  onTagFilter,
+}: TableRowProps) {
+  const tags = note.tags
+    .map((tag) => tag.name.trim())
+    .filter((name) => name.length > 0);
+  const thumbUri = noteImageUri(notePreviewImage(note, 'front'));
+
+  return (
+    <Pressable
+      key={note.id}
+      testID={`table-row-${note.id}`}
+      accessibilityLabel={`Open note ${note.id}`}
+      onPress={() => onOpen(index)}
+      style={styles.row}>
+      <View style={[styles.cell, FIXED_WIDTH_STYLES[90]]}>
+        <Text style={styles.cellText}>{note.displayOrder}</Text>
+      </View>
+      <View style={[styles.cell, FIXED_WIDTH_STYLES[120]]}>
+        <View
+          testID={thumbUri ? `thumb-${note.id}` : `thumb-placeholder-${note.id}`}
+          style={styles.thumbWrap}>
+          <NoteImageView uri={thumbUri} width={96} height={56} />
+        </View>
+      </View>
+      <View style={[styles.cell, FIXED_WIDTH_STYLES[190]]}>
+        <Text style={styles.cellText}>{dashForEmpty(note.denomination)}</Text>
+      </View>
+      <View style={[styles.cell, FIXED_WIDTH_STYLES[120]]}>
+        <Text style={styles.cellText}>{dashForEmpty(note.issueDate)}</Text>
+      </View>
+      <View style={[styles.cell, FIXED_WIDTH_STYLES[130]]}>
+        <Text style={styles.cellText}>{dashForEmpty(note.catalogNumber)}</Text>
+      </View>
+      <View style={[styles.cell, FIXED_WIDTH_STYLES[120]]}>
+        <Text style={styles.cellText}>{dashForEmpty(note.gradingCompany)}</Text>
+      </View>
+      <View style={[styles.cell, FIXED_WIDTH_STYLES[110]]}>
+        <Text style={styles.cellText}>{dashForEmpty(note.grade)}</Text>
+      </View>
+      <View style={[styles.cell, FIXED_WIDTH_STYLES[140]]}>
+        <Text style={styles.cellText}>{dashForEmpty(note.serial)}</Text>
+      </View>
+      <View style={[styles.cell, { width: tagsWidth }]}>
+        {tags.length === 0 ? (
+          <Text style={styles.cellText}>-</Text>
+        ) : (
+          <View style={styles.tagsCell}>
+            {tags.map((name) => (
+              <Pressable
+                key={name}
+                testID={`tag-chip-${name}`}
+                accessibilityLabel={`Filter by tag ${name}`}
+                onPress={() => onTagFilter(name)}
+                style={styles.tagChip}>
+                <Text style={styles.tagChipText}>{name}</Text>
+              </Pressable>
+            ))}
+          </View>
+        )}
+      </View>
+    </Pressable>
+  );
+});
+
 export function NotesTableScreen({
   controller,
   onOpenSlideshow,
@@ -124,9 +205,7 @@ export function NotesTableScreen({
   onOpenImport?: () => void;
 }) {
   const hScrollRef = useRef<ScrollView | null>(null);
-  const vScrollRef = useRef<ScrollView | null>(null);
-  const viewportHeightRef = useRef(0);
-  const contentHeightRef = useRef(0);
+  const vListRef = useRef<FlatList<NoteRecord> | null>(null);
   const prevCollectionIdRef = useRef<number | null | undefined>(undefined);
 
   const totalNotes = activeCollectionNotes(
@@ -134,7 +213,12 @@ export function NotesTableScreen({
     controller.activeCollectionId,
   ).length;
   const visibleNotes = controller.filteredNotes;
-  const tagsWidth = calculateTagsColumnWidth(visibleNotes);
+  // O(n) over the filtered notes; memoized so typing/scroll renders that
+  // don't change the list don't recompute the width.
+  const tagsWidth = useMemo(
+    () => calculateTagsColumnWidth(visibleNotes),
+    [visibleNotes],
+  );
   const tableWidth =
     FIXED_COLUMN_WIDTHS.reduce((sum, width) => sum + width, 0) +
     tagsWidth +
@@ -155,28 +239,53 @@ export function NotesTableScreen({
     prevCollectionIdRef.current = controller.activeCollectionId;
     controller.setQuery('');
     hScrollRef.current?.scrollTo({ x: 0, animated: false });
-    vScrollRef.current?.scrollTo({ y: 0, animated: false });
+    vListRef.current?.scrollToOffset({ offset: 0, animated: false });
   }, [controller, controller.activeCollectionId]);
 
-  const applyTagFilter = (tagName: string) => {
-    controller.setQuery(`tags: ${tagName}`);
-    hScrollRef.current?.scrollTo({ x: 0, animated: false });
-  };
+  // Estimate only: rows vary in height (tag chips wrap), so this is just
+  // the fallback when scrollToIndex can't measure the target yet.
+  const estimatedRowOffset = (index: number) =>
+    index * (TABLE_ROW_HEIGHT + TABLE_ROW_SEPARATOR_HEIGHT);
 
-  const revealNoteById = (notes: NoteRecord[], noteId: number) => {
-    const index = notes.findIndex((note) => note.id === noteId);
-    if (index < 0) {
-      return;
-    }
+  // setQuery is a stable useState setter, unlike the controller object
+  // identity (recreated every render): depend on it so memoized rows below
+  // aren't invalidated by unrelated re-renders.
+  const { setQuery } = controller;
 
-    const target = index * (TABLE_ROW_HEIGHT + TABLE_ROW_SEPARATOR_HEIGHT);
-    const maxOffset =
-      contentHeightRef.current - viewportHeightRef.current;
-    vScrollRef.current?.scrollTo({
-      y: maxOffset > 0 ? clampRevealOffset(target, maxOffset) : target,
+  const applyTagFilter = useCallback(
+    (tagName: string) => {
+      setQuery(`tags: ${tagName}`);
+      hScrollRef.current?.scrollTo({ x: 0, animated: false });
+    },
+    [setQuery],
+  );
+
+  const scrollToEstimatedOffset = useCallback((index: number) => {
+    vListRef.current?.scrollToOffset({
+      offset: estimatedRowOffset(index),
       animated: true,
     });
-  };
+  }, []);
+
+  const revealNoteById = useCallback(
+    (notes: NoteRecord[], noteId: number) => {
+      const index = notes.findIndex((note) => note.id === noteId);
+      if (index < 0) {
+        return;
+      }
+
+      // Rows have variable height (tag chips wrap), so no getItemLayout:
+      // scrollToIndex measures on demand. An unmeasured target reports
+      // through onScrollToIndexFailed, which falls back to the estimate.
+      // viewPosition 0 keeps the original top-aligned reveal.
+      vListRef.current?.scrollToIndex({
+        index,
+        animated: true,
+        viewPosition: 0,
+      });
+    },
+    [],
+  );
 
   const openRow = async (index: number) => {
     const result = await onOpenSlideshow?.(visibleNotes, index);
@@ -187,10 +296,35 @@ export function NotesTableScreen({
     hScrollRef.current?.scrollTo({ x: 0, animated: false });
     if (result.tagName) {
       // Canonical `tags:` filter (fixes Flutter's raw-name inconsistency).
-      controller.setQuery(`tags: ${result.tagName}`);
+      setQuery(`tags: ${result.tagName}`);
     }
     revealNoteById(visibleNotes, result.noteId);
   };
+
+  const handleOpenRow = useCallback(
+    (index: number) => {
+      openRow(index);
+    },
+    // openRow closes over visibleNotes/onOpenSlideshow/setQuery; re-create
+    // the stable callback when they change so memoized rows stay correct.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visibleNotes, onOpenSlideshow, setQuery],
+  );
+
+  const keyExtractor = useCallback((note: NoteRecord) => String(note.id), []);
+
+  const renderItem = useCallback(
+    ({ item, index }: ListRenderItemInfo<NoteRecord>) => (
+      <TableRow
+        note={item}
+        index={index}
+        tagsWidth={tagsWidth}
+        onOpen={handleOpenRow}
+        onTagFilter={applyTagFilter}
+      />
+    ),
+    [tagsWidth, handleOpenRow, applyTagFilter],
+  );
 
   const canShowImport =
     controller.canManageImportedDatasets && onOpenImport != null;
@@ -315,104 +449,25 @@ export function NotesTableScreen({
                   </Text>
                 </Pressable>
               </View>
-              <ScrollView
+              <FlatList
                 testID="table-vscroll"
-                ref={vScrollRef}
+                ref={vListRef}
+                data={visibleNotes}
+                keyExtractor={keyExtractor}
+                renderItem={renderItem}
                 style={styles.vscroll}
                 contentContainerStyle={styles.vscrollContent}
-                onLayout={(event) =>
-                  (viewportHeightRef.current =
-                    event.nativeEvent.layout.height)
-                }
-                onContentSizeChange={(_, height) =>
-                  (contentHeightRef.current = height)
-                }>
-                {visibleNotes.map((note, index) => {
-                  const tags = note.tags
-                    .map((tag) => tag.name.trim())
-                    .filter((name) => name.length > 0);
-                  const thumbUri = noteImageUri(
-                    notePreviewImage(note, 'front'),
-                  );
-                  return (
-                    <Pressable
-                      key={note.id}
-                      testID={`table-row-${note.id}`}
-                      accessibilityLabel={`Open note ${note.id}`}
-                      onPress={() => openRow(index)}
-                      style={styles.row}>
-                      <View style={[styles.cell, FIXED_WIDTH_STYLES[90]]}>
-                        <Text style={styles.cellText}>
-                          {note.displayOrder}
-                        </Text>
-                      </View>
-                      <View style={[styles.cell, FIXED_WIDTH_STYLES[120]]}>
-                        <View
-                          testID={
-                            thumbUri
-                              ? `thumb-${note.id}`
-                              : `thumb-placeholder-${note.id}`
-                          }
-                          style={styles.thumbWrap}>
-                          <NoteImageView
-                            uri={thumbUri}
-                            width={96}
-                            height={56}
-                          />
-                        </View>
-                      </View>
-                      <View style={[styles.cell, FIXED_WIDTH_STYLES[190]]}>
-                        <Text style={styles.cellText}>
-                          {dashForEmpty(note.denomination)}
-                        </Text>
-                      </View>
-                      <View style={[styles.cell, FIXED_WIDTH_STYLES[120]]}>
-                        <Text style={styles.cellText}>
-                          {dashForEmpty(note.issueDate)}
-                        </Text>
-                      </View>
-                      <View style={[styles.cell, FIXED_WIDTH_STYLES[130]]}>
-                        <Text style={styles.cellText}>
-                          {dashForEmpty(note.catalogNumber)}
-                        </Text>
-                      </View>
-                      <View style={[styles.cell, FIXED_WIDTH_STYLES[120]]}>
-                        <Text style={styles.cellText}>
-                          {dashForEmpty(note.gradingCompany)}
-                        </Text>
-                      </View>
-                      <View style={[styles.cell, FIXED_WIDTH_STYLES[110]]}>
-                        <Text style={styles.cellText}>
-                          {dashForEmpty(note.grade)}
-                        </Text>
-                      </View>
-                      <View style={[styles.cell, FIXED_WIDTH_STYLES[140]]}>
-                        <Text style={styles.cellText}>
-                          {dashForEmpty(note.serial)}
-                        </Text>
-                      </View>
-                      <View style={[styles.cell, { width: tagsWidth }]}>
-                        {tags.length === 0 ? (
-                          <Text style={styles.cellText}>-</Text>
-                        ) : (
-                          <View style={styles.tagsCell}>
-                            {tags.map((name) => (
-                              <Pressable
-                                key={name}
-                                testID={`tag-chip-${name}`}
-                                accessibilityLabel={`Filter by tag ${name}`}
-                                onPress={() => applyTagFilter(name)}
-                                style={styles.tagChip}>
-                                <Text style={styles.tagChipText}>{name}</Text>
-                              </Pressable>
-                            ))}
-                          </View>
-                        )}
-                      </View>
-                    </Pressable>
-                  );
-                })}
-              </ScrollView>
+                initialNumToRender={15}
+                maxToRenderPerBatch={10}
+                windowSize={7}
+                updateCellsBatchingPeriod={50}
+                removeClippedSubviews
+                onScrollToIndexFailed={(info) => {
+                  // Rows vary in height (tag chips wrap), so an unmeasured
+                  // target can fail: fall back to the estimated offset.
+                  scrollToEstimatedOffset(info.index);
+                }}
+              />
             </View>
           </ScrollView>
         )}

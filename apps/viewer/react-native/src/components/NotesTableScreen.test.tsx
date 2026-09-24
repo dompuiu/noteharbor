@@ -362,3 +362,42 @@ test('clampRevealOffset clamps the reveal target into the scroll range', () => {
   expect(clampRevealOffset(600, 500)).toBe(500);
   expect(clampRevealOffset(162, 500)).toBe(162);
 });
+
+test('large collections render through a windowed virtualized list', () => {
+  const manyNotes = Array.from({ length: 350 }, (_, index) =>
+    makeNote({
+      id: index + 1,
+      collectionId: 1,
+      displayOrder: index + 1,
+      tags: [],
+    }),
+  );
+  const tree = renderScreen(
+    makeController({
+      dataset: {
+        generatedAt: null,
+        noteCount: 350,
+        source: 'imported',
+        collections: [{ id: 1, name: 'Default', noteCount: 350, isDefault: true }],
+        notes: manyNotes,
+      },
+      filteredNotes: manyNotes,
+    }),
+  );
+
+  expect(textContent(tree, 'notes-pill')).toBe('Notes: 350 / 350');
+
+  const list = byTestId(tree, 'table-vscroll');
+  expect(list.props.data).toHaveLength(350);
+  // Windowed rendering: only an initial batch mounts up front.
+  expect(list.props.initialNumToRender).toBeLessThanOrEqual(20);
+  expect(list.props.maxToRenderPerBatch).toBeLessThanOrEqual(20);
+  expect(list.props.windowSize).toBeLessThanOrEqual(10);
+  expect(list.props.removeClippedSubviews).toBe(true);
+
+  const keys = manyNotes.map((note) => list.props.keyExtractor(note, 0));
+  expect(new Set(keys).size).toBe(manyNotes.length);
+
+  // First window is mounted synchronously.
+  byTestId(tree, 'table-row-1');
+});
