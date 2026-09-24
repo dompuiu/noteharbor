@@ -418,6 +418,14 @@ test('native desktop keys page with wrap-around and Escape closes', () => {
 
     const screen = byTestId(tree, 'slideshow-screen');
     expect(typeof screen.props.onKeyDown).toBe('function');
+    // Only props in the react-native-windows View API may reach the native
+    // view: an unknown prop here crashed the Windows app (0xc0000409).
+    expect(screen.props.validKeysDown).toBeUndefined();
+    expect(screen.props.keyDownEvents).toEqual([
+      { code: 'ArrowLeft' },
+      { code: 'ArrowRight' },
+      { code: 'Escape' },
+    ]);
     const pressNativeKey = (nativeEvent: object) => {
       act(() => {
         screen.props.onKeyDown({ nativeEvent });

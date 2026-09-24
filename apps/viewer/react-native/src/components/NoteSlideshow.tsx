@@ -313,6 +313,8 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
 
   // Hardware-keyboard view props only exist on desktop targets; spreading
   // them elsewhere would log unknown-prop warnings, so gate by Platform.
+  // Only props in the installed react-native-windows View API are passed:
+  // onKeyDown + keyDownEvents. Anything else risks a native crash.
   const nativeKeyProps = (
     Platform.OS === 'windows' || Platform.OS === 'macos'
       ? {
@@ -322,7 +324,6 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
             { code: 'ArrowRight' },
             { code: 'Escape' },
           ],
-          validKeysDown: ['ArrowLeft', 'ArrowRight', 'Escape'],
           onKeyDown: handleNativeKeyDown,
         }
       : {}
