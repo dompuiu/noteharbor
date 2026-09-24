@@ -2,6 +2,13 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.11.0] - 2026-09-24
+
+### Added
+
+- Pressing `↓` in any Table screen filter field now jumps straight to the first row of the filtered view; in the tags filter this applies when the suggestion dropdown is closed or empty, while an open dropdown keeps navigating its suggestions.
+- `Esc` now walks a full cascade on the Table screen: filter field → first row → deselect to the focus anchor → clear the filters when any are set. The `?` shortcuts help describes both additions.
+
 ## [1.10.0] - 2026-09-20
 
 ### Added
