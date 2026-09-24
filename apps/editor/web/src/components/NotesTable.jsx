@@ -1968,11 +1968,16 @@ function NotesTable({
       if (editable) {
         if (event.key === "Escape" && event.target.closest("thead")) {
           event.preventDefault();
-          // Land on the invisible anchor rather than jumping straight into
-          // the table, so the user can then press the down arrow to enter
-          // it themselves.
-          tableFocusAnchorRef.current?.focus();
-          focusedRowIdRef.current = null;
+          // Leave the filter and land straight on the first row (Esc
+          // behaves like ArrowDown here). With no rows to land on, fall
+          // back to the focus anchor so a further Escape can still clear
+          // the filters.
+          if (orderedNotes[0]) {
+            focusRowByNoteId(orderedNotes[0].id);
+          } else {
+            tableFocusAnchorRef.current?.focus();
+            focusedRowIdRef.current = null;
+          }
         }
         return;
       }
@@ -2023,6 +2028,19 @@ function NotesTable({
         return;
       }
 
+      if (
+        event.key === "Escape" &&
+        event.target === tableFocusAnchorRef.current
+      ) {
+        // Deselected-row state (see above): one more Escape clears the
+        // filters, if any are set. Focus stays on the anchor.
+        if (hasActiveFilters) {
+          event.preventDefault();
+          setFilters({});
+        }
+        return;
+      }
+
       const focusedRowElement = focusedRowIdRef.current
         ? rowElementMapRef.current.get(focusedRowIdRef.current)
         : null;
@@ -2068,6 +2086,7 @@ function NotesTable({
   }, [
     creatingNote,
     editingNoteId,
+    hasActiveFilters,
     orderedNotes,
     rowVirtualizer,
     slideshowRouteActive,
