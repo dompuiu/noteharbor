@@ -2,6 +2,13 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
+## [1.3.0] - 2026-09-24
+
+### Added
+
+- Image popover: zoom with the mouse wheel or `+`/`-`, stepping through Editor-style levels (fit, then 1×–4× the image's natural size) anchored at the cursor or centre. Drag with the mouse (or one finger) to pan a zoomed image, or use `Shift`+arrows to pan by 5% of the overflow. Pinch and double-tap zoom are unchanged.
+- Image popover: `Esc` now resets the zoom first and closes the popover on a second press.
+
 ## [1.2.0] - 2026-09-24
 
 ### Added
