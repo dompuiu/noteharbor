@@ -437,6 +437,7 @@ function TagsCell({ onApplyFilter, tags }) {
 const MultiValueFilterCombobox = forwardRef(function MultiValueFilterCombobox(
   {
     columnLabel,
+    onArrowDown,
     onChange,
     onHeightChange,
     options,
@@ -459,6 +460,7 @@ const MultiValueFilterCombobox = forwardRef(function MultiValueFilterCombobox(
       value={selectedValues}
       vocabulary={options}
       onChange={(nextValues) => onChange(nextValues.join(","))}
+      onArrowDown={onArrowDown}
       ariaLabel={`Filter ${columnLabel}`}
       emptyText=""
       placeholder=""
@@ -2210,6 +2212,23 @@ function NotesTable({
     focusRowByNoteId(orderedNotes[nextIndex].id);
   }
 
+  function handleFilterArrowDown(event) {
+    if (
+      event.key !== "ArrowDown" ||
+      event.metaKey ||
+      event.ctrlKey ||
+      event.altKey
+    ) {
+      return;
+    }
+
+    event.preventDefault();
+
+    if (orderedNotes[0]) {
+      focusRowByNoteId(orderedNotes[0].id);
+    }
+  }
+
   function ensureRowVisible(element) {
     const scroller = tableScrollYRef.current;
 
@@ -3107,6 +3126,7 @@ function NotesTable({
                                       [key]: nextValue,
                                     }))
                                   }
+                                  onArrowDown={handleFilterArrowDown}
                                   onHeightChange={(height) =>
                                     reportColumnFilterHeight(key, height)
                                   }
@@ -3135,6 +3155,7 @@ function NotesTable({
                                       [key]: event.target.value,
                                     }))
                                   }
+                                  onKeyDown={handleFilterArrowDown}
                                 />
                               )}
                             </th>

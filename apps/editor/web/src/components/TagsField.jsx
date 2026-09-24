@@ -77,6 +77,7 @@ export const TagsField = forwardRef(function TagsField(
     label,
     maxLength,
     maxTags,
+    onArrowDown,
     onChange,
     onCreate,
     onHeightChange,
@@ -255,6 +256,14 @@ export const TagsField = forwardRef(function TagsField(
     if (event.key === "Backspace" && !input && value.length) {
       event.preventDefault();
       removeTag(value[value.length - 1]);
+      return;
+    }
+    if (event.key === "ArrowDown" && onArrowDown && (!isOpen || !navList.length)) {
+      // Suggestion dropdown is closed (or has nothing to suggest): let the
+      // parent move focus elsewhere (e.g. into table rows) instead of
+      // opening the dropdown. While open with suggestions, ArrowDown keeps
+      // navigating them (handled below).
+      onArrowDown(event);
       return;
     }
     if (event.key === "ArrowDown" || event.key === "ArrowUp") {
