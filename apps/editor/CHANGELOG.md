@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.12.0] - 2026-09-24
+
+### Added
+
+- The Table screen now remembers the last filter field you were in. `/` returns to that field instead of always focusing the first one, and `↑` (or `k`) from the first row hands focus back up to it, selecting the field's value so you can replace it. When nothing is remembered yet, or the remembered column has since been hidden, it falls back to the first filter field; the `?` shortcuts help describes both keys.
+
 ## [1.11.0] - 2026-09-24
 
 ### Added
