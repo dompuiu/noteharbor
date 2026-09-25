@@ -13,6 +13,7 @@
     "dev:viewer:react-native:ios": "pnpm --filter viewer_react_native ios",
     "dev:viewer:react-native:windows": "pnpm --filter viewer_react_native windows",
     "test:viewer:react-native": "pnpm --filter viewer_react_native test",
+    "test:editor:web": "pnpm --filter editor_web test",
     "layout": "tsps --layout layout.yml"
   },
   "devDependencies": {

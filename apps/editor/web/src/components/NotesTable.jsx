@@ -24,6 +24,10 @@ import {
   copyTextToClipboard,
   formatNoteAsTsvRow,
 } from "../lib/noteClipboard.js";
+import {
+  shouldHandOffToFilters,
+  useFilterFocusMemory,
+} from "../lib/filterFocusMemory.js";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { Slideshow } from "./Slideshow.jsx";
@@ -439,6 +443,7 @@ const MultiValueFilterCombobox = forwardRef(function MultiValueFilterCombobox(
     columnLabel,
     onArrowDown,
     onChange,
+    onFocus,
     onHeightChange,
     options,
     value,
@@ -463,6 +468,7 @@ const MultiValueFilterCombobox = forwardRef(function MultiValueFilterCombobox(
       onArrowDown={onArrowDown}
       ariaLabel={`Filter ${columnLabel}`}
       emptyText=""
+      inputProps={{ onFocus }}
       placeholder=""
       onHeightChange={onHeightChange}
     />
@@ -1023,8 +1029,6 @@ function NotesTable({
   const vMetricsRef = useRef({ max: 0, range: 0, thumbHeight: 0 });
   const vThumbDragRef = useRef(null);
   const editorOverlayRef = useRef(null);
-  const tagsFilterInputRef = useRef(null);
-  const firstFilterInputRef = useRef(null);
   const focusedRowIdRef = useRef(null);
   const tableFocusAnchorRef = useRef(null);
   const currentRouteRef = useRef(null);
@@ -1120,6 +1124,16 @@ function NotesTable({
     () => [...baseColumns, scrapeStatusColumn],
     [],
   );
+  const filterColumnKeys = useMemo(
+    () => visibleColumns.map(([key]) => key),
+    [visibleColumns],
+  );
+  const {
+    focusFilter,
+    focusRememberedFilter,
+    getFilterRef,
+    rememberFilter,
+  } = useFilterFocusMemory(filterColumnKeys);
   const showScrapeStatusColumn = visibleColumns.some(
     ([key]) => key === "scrape_status",
   );
@@ -1960,8 +1974,7 @@ function NotesTable({
 
       if (event.key === "/" && !editable) {
         event.preventDefault();
-        firstFilterInputRef.current?.focus();
-        firstFilterInputRef.current?.select();
+        focusRememberedFilter();
         return;
       }
 
@@ -2132,7 +2145,7 @@ function NotesTable({
     });
 
     window.requestAnimationFrame(() => {
-      tagsFilterInputRef.current?.focus();
+      focusFilter("tags");
     });
   }
 
@@ -2222,6 +2235,24 @@ function NotesTable({
     const currentIndex = orderedNotes.findIndex(
       (note) => note.id === focusedRowIdRef.current,
     );
+    const currentElement =
+      currentIndex === 0
+        ? (rowElementMapRef.current.get(focusedRowIdRef.current) ?? null)
+        : null;
+
+    if (
+      shouldHandOffToFilters({
+        activeElement: document.activeElement,
+        currentIndex,
+        offset,
+        rowElement: currentElement,
+      }) &&
+      focusRememberedFilter()
+    ) {
+      focusedRowIdRef.current = null;
+      return;
+    }
+
     const baseIndex = currentIndex >= 0 ? currentIndex : offset > 0 ? -1 : 0;
     const nextIndex = Math.min(
       Math.max(baseIndex + offset, 0),
@@ -3113,14 +3144,8 @@ function NotesTable({
                         {showSelection ? <th /> : null}
                         <th />
                         <th />
-                        {visibleColumns.map(([key, label], columnIndex) => {
+                        {visibleColumns.map(([key, label]) => {
                           const isTagsColumn = key === "tags";
-                          const comboboxRef =
-                            key === "tags"
-                              ? tagsFilterInputRef
-                              : columnIndex === 0
-                                ? firstFilterInputRef
-                                : undefined;
 
                           return (
                             <th
@@ -3146,22 +3171,20 @@ function NotesTable({
                                     }))
                                   }
                                   onArrowDown={handleFilterArrowDown}
+                                  onFocus={() => rememberFilter(key)}
                                   onHeightChange={(height) =>
                                     reportColumnFilterHeight(key, height)
                                   }
                                   options={allTagNames}
-                                  ref={comboboxRef}
+                                  ref={getFilterRef(key)}
                                   value={filters[key] ?? ""}
                                 />
                               ) : (
                                 <input
                                   aria-label={`Filter ${label}`}
                                   className="filter-input"
-                                  ref={
-                                    columnIndex === 0
-                                      ? firstFilterInputRef
-                                      : undefined
-                                  }
+                                  ref={getFilterRef(key)}
+                                  onFocus={() => rememberFilter(key)}
                                   style={
                                     filterRowHeight
                                       ? { height: filterRowHeight }

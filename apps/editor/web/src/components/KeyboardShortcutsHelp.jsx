@@ -4,9 +4,15 @@ const shortcutGroups = [
   {
     title: "Table",
     items: [
-      { keys: ["/"], description: "Focus the first filter field" },
-      { keys: ["↑", "↓"], description: "Move focus between rows" },
-      { keys: ["j", "k"], description: "Move focus between rows (alternative)" },
+      { keys: ["/"], description: "Focus the last-used filter field" },
+      {
+        keys: ["↑", "↓"],
+        description: "Move focus between rows (↑ from the first row → filter field)",
+      },
+      {
+        keys: ["j", "k"],
+        description: "Move focus between rows (alternative; k from the first row → filter field)",
+      },
       { keys: ["PgUp", "PgDn"], description: "Scroll one page and focus the first row in view" },
       { keys: ["Home", "End"], description: "Focus the first / last row" },
       { keys: ["Enter", "Space"], description: "Open the focused note" },
