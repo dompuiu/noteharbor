@@ -4,10 +4,11 @@ import {
   notePreviewImage,
   type NoteRecord,
 } from '../shared/viewer-core';
-import { memo, useCallback, useEffect, useMemo, useRef } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   FlatList,
   type ListRenderItemInfo,
+  Image,
   Pressable,
   ScrollView,
   StyleSheet,
@@ -18,7 +19,12 @@ import {
 import { viewerLight } from '../theme/viewerTheme';
 
 import { NoteImageView } from './NoteImageView';
+import { CloseIcon, ImageIcon, SearchIcon, UploadIcon } from './ViewerIcons';
 import type { ViewerControllerState } from '../state/useViewerController';
+
+// Bundled copy of the Flutter header logo
+// (apps/viewer/flutter/web/icons/Icon-192.png).
+const logoSource = require('../assets/Icon-192.png');
 
 // Flutter widths (notes_table_screen.dart): ID 90 / Front 120 / Denomination
 // 190 / Date 120 / Catalog 130 / Company 120 / Grade 110 / Serial 140 / Tags
@@ -152,7 +158,16 @@ const TableRow = memo(function TableRow({
         <View
           testID={thumbUri ? `thumb-${note.id}` : `thumb-placeholder-${note.id}`}
           style={styles.thumbWrap}>
-          <NoteImageView uri={thumbUri} width={96} height={56} />
+          <NoteImageView
+            uri={thumbUri}
+            width={96}
+            height={56}
+            fit="cover"
+            radius={10}
+            placeholderIcon={
+              <ImageIcon size={22} color={viewerLight.textMuted} />
+            }
+          />
         </View>
       </View>
       <View style={[styles.cell, FIXED_WIDTH_STYLES[190]]}>
@@ -194,6 +209,10 @@ const TableRow = memo(function TableRow({
     </Pressable>
   );
 });
+
+function TableRowSeparator() {
+  return <View style={styles.rowSeparator} />;
+}
 
 export function NotesTableScreen({
   controller,
@@ -328,17 +347,23 @@ export function NotesTableScreen({
 
   const canShowImport =
     controller.canManageImportedDatasets && onOpenImport != null;
-  const collections = controller.dataset?.collections ?? [];
+  const [searchFocused, setSearchFocused] = useState(false);
 
   return (
     <View style={styles.screen}>
       <View style={styles.headerRow}>
         <View style={styles.badge} accessibilityLabel="Note Harbor">
+          <Image
+            source={logoSource}
+            style={styles.badgeLogo}
+            accessibilityLabel="Note Harbor logo"
+          />
           <Text style={styles.badgeText}>Note{'\n'}Harbor</Text>
         </View>
         <View style={styles.pill}>
           <Text testID="notes-pill" style={styles.pillText}>
-            {`Notes: ${visibleNotes.length} / ${totalNotes}`}
+            <Text style={styles.pillLabel}>Notes: </Text>
+            {`${visibleNotes.length} / ${totalNotes}`}
           </Text>
         </View>
         {canShowImport ? (
@@ -347,36 +372,24 @@ export function NotesTableScreen({
             accessibilityLabel="Manage imported archives"
             onPress={onOpenImport}
             style={styles.importButton}>
-            <Text style={styles.importGlyph}>↑</Text>
+            <UploadIcon size={20} color={viewerLight.accent} />
           </Pressable>
         ) : null}
       </View>
 
-      {collections.length > 0 ? (
-        <View style={styles.collectionRow}>
-          {collections.map((collection) => {
-            const isActive = collection.id === controller.activeCollectionId;
-            return (
-              <Pressable
-                key={collection.id}
-                testID={`collection-chip-${collection.id}`}
-                onPress={() => controller.selectCollection(collection.id)}
-                style={[styles.chip, isActive && styles.chipActive]}>
-                <Text
-                  style={[styles.chipText, isActive && styles.chipTextActive]}>
-                  {collection.name} ({collection.noteCount})
-                </Text>
-              </Pressable>
-            );
-          })}
-        </View>
-      ) : null}
-
-      <View style={styles.searchWrap}>
+      <View
+        testID="table-search-field"
+        style={[
+          styles.searchField,
+          searchFocused && styles.searchFieldFocused,
+        ]}>
+        <SearchIcon size={18} color={viewerLight.textMuted} />
         <TextInput
           testID="table-search"
           value={controller.query}
           onChangeText={controller.setQuery}
+          onFocus={() => setSearchFocused(true)}
+          onBlur={() => setSearchFocused(false)}
           placeholder="Filter... or use catalog: denom: date: company: grade: tags:"
           placeholderTextColor={viewerLight.textFaint}
           style={styles.searchInput}
@@ -387,7 +400,7 @@ export function NotesTableScreen({
             accessibilityLabel="Clear search"
             onPress={() => controller.setQuery('')}
             style={styles.clearButton}>
-            <Text style={styles.clearGlyph}>X</Text>
+            <CloseIcon size={18} color={viewerLight.textMuted} />
           </Pressable>
         ) : null}
       </View>
@@ -449,6 +462,7 @@ export function NotesTableScreen({
                   </Text>
                 </Pressable>
               </View>
+              <View testID="table-header-divider" style={styles.tableHeaderDivider} />
               <FlatList
                 testID="table-vscroll"
                 ref={vListRef}
@@ -462,6 +476,7 @@ export function NotesTableScreen({
                 windowSize={7}
                 updateCellsBatchingPeriod={50}
                 removeClippedSubviews
+                ItemSeparatorComponent={TableRowSeparator}
                 onScrollToIndexFailed={(info) => {
                   // Rows vary in height (tag chips wrap), so an unmeasured
                   // target can fail: fall back to the estimated offset.
@@ -480,7 +495,7 @@ const styles = StyleSheet.create({
   screen: {
     flex: 1,
     minHeight: 0,
-    gap: 16,
+    gap: 20,
   },
   headerRow: {
     flexDirection: 'row',
@@ -489,15 +504,28 @@ const styles = StyleSheet.create({
   },
   badge: {
     minHeight: 48,
-    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingLeft: 10,
+    paddingRight: 14,
     paddingVertical: 6,
-    justifyContent: 'center',
     backgroundColor: viewerLight.surface,
     borderRadius: 18,
     borderWidth: 1,
     borderColor: viewerLight.border,
+    shadowColor: viewerLight.shadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 1,
+    shadowRadius: 18,
+    elevation: 4,
+  },
+  badgeLogo: {
+    width: 36,
+    height: 36,
+    borderRadius: 12,
   },
   badgeText: {
+    marginLeft: 12,
     color: viewerLight.text,
     fontSize: 15,
     fontWeight: '800',
@@ -516,6 +544,8 @@ const styles = StyleSheet.create({
   pillText: {
     color: viewerLight.text,
     fontSize: 14,
+  },
+  pillLabel: {
     fontWeight: '700',
   },
   importButton: {
@@ -528,61 +558,31 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: viewerLight.border,
   },
-  importGlyph: {
-    color: viewerLight.accent,
-    fontSize: 20,
-    fontWeight: '800',
-  },
-  collectionRow: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
-  chip: {
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-    backgroundColor: viewerLight.surfaceContainer,
-  },
-  chipActive: {
-    backgroundColor: viewerLight.accent,
-  },
-  chipText: {
-    color: viewerLight.accentStrong,
-    fontSize: 13,
-    fontWeight: '700',
-  },
-  chipTextActive: {
-    color: viewerLight.surface,
-  },
-  searchWrap: {
-    maxWidth: 420,
+  searchField: {
     flexDirection: 'row',
     alignItems: 'center',
-  },
-  searchInput: {
-    flex: 1,
+    gap: 8,
     borderWidth: 1,
     borderColor: viewerLight.border,
     borderRadius: 18,
     paddingHorizontal: 14,
-    paddingVertical: 12,
-    color: viewerLight.text,
+    paddingVertical: 4,
     backgroundColor: viewerLight.surface,
   },
+  searchFieldFocused: {
+    borderWidth: 1.5,
+    borderColor: viewerLight.accent,
+  },
+  searchInput: {
+    flex: 1,
+    paddingVertical: 12,
+    color: viewerLight.text,
+  },
   clearButton: {
-    marginLeft: 8,
-    height: 40,
-    width: 40,
+    height: 32,
+    width: 32,
     alignItems: 'center',
     justifyContent: 'center',
-    borderRadius: 999,
-    backgroundColor: viewerLight.surfaceContainer,
-  },
-  clearGlyph: {
-    color: viewerLight.textMuted,
-    fontSize: 14,
-    fontWeight: '800',
   },
   tableCard: {
     flex: 1,
@@ -591,6 +591,11 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     borderWidth: 1.5,
     borderColor: viewerLight.border,
+    shadowColor: viewerLight.shadow,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 1,
+    shadowRadius: 28,
+    elevation: 8,
     overflow: 'hidden',
   },
   emptyWrap: {
@@ -618,6 +623,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     backgroundColor: viewerLight.tableHeader,
     paddingHorizontal: TABLE_HORIZONTAL_PADDING,
+    paddingVertical: 4,
+  },
+  tableHeaderDivider: {
+    height: 2,
+    backgroundColor: viewerLight.borderControl,
   },
   vscroll: {
     flex: 1,
@@ -647,8 +657,10 @@ const styles = StyleSheet.create({
     minHeight: TABLE_ROW_HEIGHT,
     paddingHorizontal: TABLE_HORIZONTAL_PADDING,
     paddingVertical: 12,
-    borderTopWidth: 1,
-    borderTopColor: viewerLight.borderSoft,
+  },
+  rowSeparator: {
+    height: TABLE_ROW_SEPARATOR_HEIGHT,
+    backgroundColor: viewerLight.borderSoft,
   },
   cell: {
     alignItems: 'center',
@@ -656,7 +668,7 @@ const styles = StyleSheet.create({
   },
   cellText: {
     color: viewerLight.text,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '600',
     textAlign: 'center',
   },

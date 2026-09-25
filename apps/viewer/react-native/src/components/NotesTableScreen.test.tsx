@@ -119,8 +119,24 @@ function absentTestId(tree: TestTree, testID: string) {
 }
 
 function textContent(tree: TestTree, testID: string): string {
-  const children = byTestId(tree, testID).findByType(Text).props.children;
-  return (Array.isArray(children) ? children : [children]).join('');
+  const flatten = (child: unknown): string => {
+    if (typeof child === 'string' || typeof child === 'number') {
+      return String(child);
+    }
+    if (Array.isArray(child)) {
+      return child.map(flatten).join('');
+    }
+    if (
+      typeof child === 'object' &&
+      child !== null &&
+      'props' in child &&
+      (child as { type?: unknown }).type === Text
+    ) {
+      return flatten((child as { props: { children?: unknown } }).props.children);
+    }
+    return '';
+  };
+  return flatten(byTestId(tree, testID).findByType(Text).props.children);
 }
 
 test('renders all nine column headers with Front not sortable', () => {
@@ -355,6 +371,50 @@ test('calculateTagsColumnWidth respects the 160 minimum and grows with chips', (
     makeNote({ tags: [{ name: 'Romania' }, { name: 'Polymer commemorative' }] }),
   ]);
   expect(wide).toBeGreaterThan(160);
+});
+
+test('matches the Flutter table chrome: no collection chips, logo badge, divider, separators', () => {
+  const tree = renderScreen(makeController());
+
+  // Full parity: the collection-chip row is gone.
+  expect(
+    tree.root.findAll(
+      (node) =>
+        typeof node.props?.testID === 'string' &&
+        node.props.testID.startsWith('collection-chip-'),
+    ).length,
+  ).toBe(0);
+
+  // Header badge carries the bundled logo.
+  expect(
+    tree.root.findAll(
+      (node) => node.props?.accessibilityLabel === 'Note Harbor logo',
+    ).length,
+  ).toBeGreaterThan(0);
+
+  // Search field is full width (no 420 cap) with a leading icon.
+  const flat = (style: unknown) =>
+    Object.assign({}, ...(Array.isArray(style) ? style : [style]));
+  expect(flat(byTestId(tree, 'table-search-field').props.style).maxWidth).toBeUndefined();
+  expect(
+    tree.root.findAll((node) => node.props?.testID === 'icon-search').length,
+  ).toBeGreaterThan(0);
+
+  // Header divider under the column headers.
+  byTestId(tree, 'table-header-divider');
+
+  // Row separators come from the list, not row borders.
+  const list = byTestId(tree, 'table-vscroll');
+  expect(typeof list.props.ItemSeparatorComponent).toBe('function');
+});
+
+test('clear affordance uses the close icon', () => {
+  const tree = renderScreen(makeController({ query: 'tags: rom' }));
+
+  const clear = byTestId(tree, 'search-clear');
+  expect(
+    clear.findAll((node) => node.props?.testID === 'icon-close').length,
+  ).toBeGreaterThan(0);
 });
 
 test('clampRevealOffset clamps the reveal target into the scroll range', () => {

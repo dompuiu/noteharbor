@@ -1,8 +1,4 @@
-import {
-  describeViewerCore,
-  viewerCoreVersion,
-  type NoteRecord,
-} from './src/shared/viewer-core';
+import type { NoteRecord } from './src/shared/viewer-core';
 import {
   SafeAreaProvider,
   useSafeAreaInsets,
@@ -129,48 +125,51 @@ function AppShell() {
     );
   }
 
-  // All screens render inside the same Card/window so table, slideshow,
-  // popover, and import share dimensions and stay resizable. Modals open a
-  // separate native window on Windows/macOS that fills the screen.
+  // The Table screen sits directly on the page background like Flutter
+  // (no outer Card); slideshow, popover, and import share the Card window.
+  // Modals open a separate native window on Windows/macOS that fills the
+  // screen.
+  const showTable = !slideshow && !showImport;
   return (
-    <ScreenFrame topInset={insets.top} bottomInset={insets.bottom}>
-      <Card>
-        {slideshow && popover ? (
-          <ImagePopover
-            notes={popover.notes}
-            initialNoteId={popover.noteId}
-            initialFace={popover.face}
-            onClose={closePopover}
-          />
-        ) : slideshow ? (
-          <NoteSlideshow
-            notes={slideshow.notes}
-            initialIndex={slideshow.initialIndex}
-            onClose={closeSlideshow}
-            onOpenPopover={openPopover}
-          />
-        ) : showImport ? (
-          <ImportScreen
-            controller={controller}
-            isFirstRun={false}
-            onClose={() => {
-              if (!controller.isMutating) {
-                setShowImport(false);
-              }
-            }}
-          />
-        ) : (
-          <>
-            <NotesTableScreen
-              controller={controller}
-              onOpenSlideshow={openSlideshow}
-              onOpenImport={() => setShowImport(true)}
+    <ScreenFrame
+      topInset={insets.top}
+      bottomInset={insets.bottom}
+      padding={showTable ? 12 : 20}>
+      {showTable ? (
+        <NotesTableScreen
+          controller={controller}
+          onOpenSlideshow={openSlideshow}
+          onOpenImport={() => setShowImport(true)}
+        />
+      ) : (
+        <Card>
+          {slideshow && popover ? (
+            <ImagePopover
+              notes={popover.notes}
+              initialNoteId={popover.noteId}
+              initialFace={popover.face}
+              onClose={closePopover}
             />
-            <Text style={styles.meta}>{describeViewerCore()}</Text>
-            <Text style={styles.meta}>viewer-core {viewerCoreVersion}</Text>
-          </>
-        )}
-      </Card>
+          ) : slideshow ? (
+            <NoteSlideshow
+              notes={slideshow.notes}
+              initialIndex={slideshow.initialIndex}
+              onClose={closeSlideshow}
+              onOpenPopover={openPopover}
+            />
+          ) : (
+            <ImportScreen
+              controller={controller}
+              isFirstRun={false}
+              onClose={() => {
+                if (!controller.isMutating) {
+                  setShowImport(false);
+                }
+              }}
+            />
+          )}
+        </Card>
+      )}
       {/* Hidden while the Import screen is open: it renders its own overlay
           so a mutation never shows two blocking indicators at once. */}
       <ImportBlockingOverlay visible={controller.isMutating && !showImport} />
@@ -206,11 +205,6 @@ const styles = StyleSheet.create({
     color: viewerLight.text,
     fontSize: 14,
     fontWeight: '700',
-  },
-  meta: {
-    color: '#7a6247',
-    fontSize: 13,
-    fontWeight: '600',
   },
 });
 

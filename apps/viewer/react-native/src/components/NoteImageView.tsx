@@ -10,6 +10,9 @@ export function NoteImageView({
   label,
   tone = 'light',
   errorLabel = 'No image',
+  fit = 'contain',
+  radius = 8,
+  placeholderIcon = null,
 }: {
   uri: string | null;
   fallbackSource?: ImageRequireSource | null;
@@ -18,6 +21,9 @@ export function NoteImageView({
   label?: string;
   tone?: 'light' | 'dark';
   errorLabel?: string;
+  fit?: 'contain' | 'cover';
+  radius?: number;
+  placeholderIcon?: React.ReactNode | null;
 }) {
   const [failed, setFailed] = useState(false);
   const tokens = tone === 'dark' ? viewerDark : viewerLight;
@@ -41,13 +47,16 @@ export function NoteImageView({
           {
             width,
             height,
+            borderRadius: radius,
             backgroundColor: tokens.tagBackground,
             borderColor: tokens.tagBorder,
           },
         ]}>
-        <Text style={[styles.placeholderText, { color: tokens.tagText }]}>
-          {copy}
-        </Text>
+        {placeholderIcon ?? (
+          <Text style={[styles.placeholderText, { color: tokens.tagText }]}>
+            {copy}
+          </Text>
+        )}
       </View>
     );
   };
@@ -65,8 +74,8 @@ export function NoteImageView({
   return (
     <Image
       source={{ uri }}
-      style={{ width, height }}
-      resizeMode="contain"
+      style={{ width, height, borderRadius: radius }}
+      resizeMode={fit}
       accessibilityLabel={label ?? 'Note image'}
       onError={() => setFailed(true)}
     />

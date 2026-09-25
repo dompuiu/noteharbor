@@ -5,16 +5,22 @@ export function ScreenFrame({
   children,
   topInset,
   bottomInset,
+  padding = 20,
 }: {
   children: React.ReactNode;
   topInset: number;
   bottomInset: number;
+  padding?: number;
 }) {
   return (
     <View
       style={[
         styles.screen,
-        { paddingTop: topInset + 24, paddingBottom: bottomInset + 24 },
+        {
+          paddingTop: topInset + 24,
+          paddingBottom: bottomInset + 24,
+          paddingHorizontal: padding,
+        },
       ]}>
       {children}
     </View>
