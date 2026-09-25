@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.13.0] - 2026-09-24
+
+### Changed
+
+- The Table screen no longer shows the horizontal scrollbar on a narrow window; the right-hand vertical bar is unchanged. Off-screen columns are now reached by dragging the table with the mouse — the cursor becomes a closed hand while dragging — and with `←`/`→` to pan one step or `Ctrl`/`Cmd` + `←`/`→` to jump to the first or last column. The `?` shortcuts help describes the new keys.
+
 ## [1.12.0] - 2026-09-24
 
 ### Added
