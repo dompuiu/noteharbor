@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.14.0] - 2026-09-24
+
+### Fixed
+
+- Table screen: a focused row's outline now stays visible while `Tab` moves focus onto the controls inside it — the drag handle, selection checkbox, denomination, tags, and action buttons. Pressing `Enter`/`Space` on one of those controls now activates that control instead of bubbling up and opening the note.
+
 ## [1.13.0] - 2026-09-24
 
 ### Changed
