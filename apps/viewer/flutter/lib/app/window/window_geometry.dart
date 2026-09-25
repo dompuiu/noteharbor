@@ -51,7 +51,11 @@ class WindowGeometry {
   ///
   /// macOS deliberately ignores maximize/fullscreen and always reopens at the
   /// saved normal geometry, so the flag is a Windows-only concept.
-  static bool remembersMaximizedState({required bool isWindows}) => isWindows;
+  static bool remembersMaximizedState({
+    required bool isWindows,
+    required bool maximized,
+  }) =>
+      isWindows && maximized;
 
   WindowGeometry copyWith({
     double? x,

@@ -26,6 +26,35 @@ void main() {
     });
   });
 
+  group('maximized platform rule', () {
+    test('is remembered on Windows only while maximized', () {
+      expect(
+        WindowGeometry.remembersMaximizedState(
+          isWindows: true,
+          maximized: true,
+        ),
+        isTrue,
+      );
+      expect(
+        WindowGeometry.remembersMaximizedState(
+          isWindows: true,
+          maximized: false,
+        ),
+        isFalse,
+      );
+    });
+
+    test('is ignored on macOS even while maximized', () {
+      expect(
+        WindowGeometry.remembersMaximizedState(
+          isWindows: false,
+          maximized: true,
+        ),
+        isFalse,
+      );
+    });
+  });
+
   group('json codec', () {
     test('round-trips a geometry', () {
       const geometry = WindowGeometry(

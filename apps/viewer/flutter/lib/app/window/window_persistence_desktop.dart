@@ -32,10 +32,6 @@ Future<void> setupWindowPersistence() async {
     );
     await windowManager.setMinimumSize(minimumSize);
 
-    // Hold the close until the final geometry has been written; otherwise the
-    // process can shut down mid-write and lose the last move or resize.
-    await windowManager.setPreventClose(true);
-
     windowManager.addListener(
       _WindowGeometryListener(store: store, initial: geometry),
     );
@@ -104,6 +100,9 @@ Rect _visibleArea(Display display) {
 /// Debounces move/resize events into occasional writes, and never records the
 /// bounds of a maximized, fullscreen or minimized window: the file always
 /// holds the last *normal* geometry.
+///
+/// Everything is saved while the window is live, so closing is not part of the
+/// save path: [onWindowClose] never intercepts the close or delays it.
 class _WindowGeometryListener with WindowListener {
   _WindowGeometryListener({
     required WindowGeometryStore store,
@@ -113,6 +112,8 @@ class _WindowGeometryListener with WindowListener {
 
   static const Duration _debounceDelay = Duration(milliseconds: 500);
 
+  /// Bounds of the last window state worth remembering. Used when the window
+  /// is minimized and the live bounds mean nothing.
   final WindowGeometryStore _store;
   WindowGeometry _lastNormal;
   Timer? _debounce;
@@ -135,18 +136,15 @@ class _WindowGeometryListener with WindowListener {
   void onWindowRestore() => _scheduleSave();
 
   @override
-  void onWindowClose() {
-    // The window is held open by setPreventClose until this finishes.
-    unawaited(_close());
-  }
+  void onWindowMinimize() => _scheduleSave();
 
-  Future<void> _close() async {
+  @override
+  void onWindowClose() {
+    // The close is never held: the geometry was already saved as the window
+    // was moved and resized, and this listener does not call setPreventClose.
+    // Keep the close callback trivial so shutdown stays instant; the window
+    // must never be destroyed from here.
     _debounce?.cancel();
-    try {
-      await _persist();
-    } finally {
-      await windowManager.destroy();
-    }
   }
 
   void _scheduleSave() {
@@ -162,29 +160,8 @@ class _WindowGeometryListener with WindowListener {
 
     _saving = true;
     try {
-      if (await windowManager.isMinimized()) {
-        return;
-      }
-
-      final maximized = await windowManager.isMaximized();
-      final fullScreen = await windowManager.isFullScreen();
-      if (!maximized && !fullScreen) {
-        final bounds = await windowManager.getBounds();
-        if (bounds.width > 0 && bounds.height > 0) {
-          _lastNormal = WindowGeometry(
-            x: bounds.left,
-            y: bounds.top,
-            width: bounds.width,
-            height: bounds.height,
-          );
-        }
-      }
-
-      await _store.save(
-        _lastNormal.copyWith(
-          maximized: remembersMaximizedState,
-        ),
-      );
+      final geometry = await _capture();
+      await _store.save(geometry);
     } catch (error) {
       debugPrint('Could not save the window geometry: $error');
     } finally {
@@ -196,7 +173,32 @@ class _WindowGeometryListener with WindowListener {
     }
   }
 
-  /// The single place that decides which platforms act on the maximized flag.
-  bool get remembersMaximizedState =>
-      WindowGeometry.remembersMaximizedState(isWindows: Platform.isWindows);
+  /// Reads the geometry worth remembering, updating the cached normal bounds
+  /// only while the window is in its normal state.
+  Future<WindowGeometry> _capture() async {
+    if (await windowManager.isMinimized()) {
+      return _lastNormal;
+    }
+
+    final maximized = await windowManager.isMaximized();
+    final fullScreen = await windowManager.isFullScreen();
+    if (!maximized && !fullScreen) {
+      final bounds = await windowManager.getBounds();
+      if (bounds.width > 0 && bounds.height > 0) {
+        _lastNormal = WindowGeometry(
+          x: bounds.left,
+          y: bounds.top,
+          width: bounds.width,
+          height: bounds.height,
+        );
+      }
+    }
+
+    return _lastNormal.copyWith(
+      maximized: WindowGeometry.remembersMaximizedState(
+        isWindows: Platform.isWindows,
+        maximized: maximized,
+      ),
+    );
+  }
 }
