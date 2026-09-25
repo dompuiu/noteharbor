@@ -455,7 +455,7 @@ void main() {
     expect(find.text('Back'), findsNothing);
   });
 
-  keyboardTestWidgets('rows show a pointer cursor, turning into a hand on drag', (
+  keyboardTestWidgets('rows show the drag hand while panning on Windows', (
     WidgetTester tester,
   ) async {
     await pumpKeyboardTable(tester);
@@ -473,26 +473,49 @@ void main() {
       await gesture.moveBy(const Offset(-50, 0));
       await tester.pump();
     }
-    expect(rowInk().mouseCursor, SystemMouseCursors.grabbing);
+    // Windows has no closed-hand cursor, so the pointing hand stands in.
+    expect(rowInk().mouseCursor, SystemMouseCursors.click);
 
     await gesture.up();
     await tester.pumpAndSettle();
     expect(rowInk().mouseCursor, SystemMouseCursors.click);
   });
 
-  keyboardTestWidgets('the header is a grab handle for panning', (
+  keyboardTestWidgets(
+    'rows show a closed hand while panning off Windows',
+    (WidgetTester tester) async {
+      await pumpKeyboardTable(tester);
+
+      InkWell rowInk() => tester.widget<InkWell>(
+            find.ancestor(of: tableRow(3), matching: find.byType(InkWell)),
+          );
+      expect(rowInk().mouseCursor, SystemMouseCursors.click);
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(tableRow(3)),
+        kind: PointerDeviceKind.mouse,
+      );
+      for (var step = 0; step < 4; step++) {
+        await gesture.moveBy(const Offset(-50, 0));
+        await tester.pump();
+      }
+      expect(rowInk().mouseCursor, SystemMouseCursors.grabbing);
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(rowInk().mouseCursor, SystemMouseCursors.click);
+    },
+    platform: TargetPlatform.macOS,
+  );
+
+  keyboardTestWidgets('the header keeps a normal cursor until panning', (
     WidgetTester tester,
   ) async {
     await pumpKeyboardTable(tester);
 
-    List<MouseCursor> headerCursors() => tester
-        .widgetList<MouseRegion>(
-          find.ancestor(of: find.text('ID'), matching: find.byType(MouseRegion)),
-        )
-        .map((region) => region.cursor)
-        .toList();
-
-    expect(headerCursors(), contains(SystemMouseCursors.grab));
+    MouseRegion headerRegion() =>
+        tester.widget<MouseRegion>(find.byKey(const ValueKey('tableHeader')));
+    expect(headerRegion().cursor, MouseCursor.defer);
 
     final gesture = await tester.startGesture(
       tester.getCenter(find.text('ID')),
@@ -502,12 +525,38 @@ void main() {
       await gesture.moveBy(const Offset(-50, 0));
       await tester.pump();
     }
-    expect(headerCursors(), contains(SystemMouseCursors.grabbing));
+    expect(headerRegion().cursor, SystemMouseCursors.click);
 
     await gesture.up();
     await tester.pumpAndSettle();
-    expect(headerCursors(), contains(SystemMouseCursors.grab));
+    expect(headerRegion().cursor, MouseCursor.defer);
   });
+
+  keyboardTestWidgets(
+    'the header shows a closed hand while panning off Windows',
+    (WidgetTester tester) async {
+      await pumpKeyboardTable(tester);
+
+      MouseRegion headerRegion() =>
+          tester.widget<MouseRegion>(find.byKey(const ValueKey('tableHeader')));
+      expect(headerRegion().cursor, MouseCursor.defer);
+
+      final gesture = await tester.startGesture(
+        tester.getCenter(find.text('ID')),
+        kind: PointerDeviceKind.mouse,
+      );
+      for (var step = 0; step < 4; step++) {
+        await gesture.moveBy(const Offset(-50, 0));
+        await tester.pump();
+      }
+      expect(headerRegion().cursor, SystemMouseCursors.grabbing);
+
+      await gesture.up();
+      await tester.pumpAndSettle();
+      expect(headerRegion().cursor, MouseCursor.defer);
+    },
+    platform: TargetPlatform.macOS,
+  );
 
   keyboardTestWidgets(
     'keyboard selection stays inert on iOS',

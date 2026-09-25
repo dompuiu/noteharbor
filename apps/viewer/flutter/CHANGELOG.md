@@ -10,7 +10,7 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ### Fixed
 
-- Table screen: rows now show a click pointer (a row click opens the note) and the header shows a grab hand, since either surface can be dragged to pan the columns. Both become a closed hand while dragging.
+- Table screen: rows show a pointer (a row click opens the note) and the header keeps the normal cursor on hover; either surface shows a drag hand while panning the columns. Windows ships no closed-hand cursor, so it falls back to the pointing hand there; other platforms use the closed hand.
 - Table screen: opening a note by clicking a row no longer leaves the keyboard selection ring behind. The ring is a keyboard affordance and now returns only when the slideshow was opened with the keyboard.
 
 ## [1.4.0] - 2026-09-24

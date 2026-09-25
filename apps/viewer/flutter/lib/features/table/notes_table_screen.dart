@@ -69,6 +69,15 @@ class _ColumnDragScrollBehavior extends MaterialScrollBehavior {
       };
 }
 
+/// The cursor shown while the columns are being panned. The Windows embedder
+/// has no open/closed-hand cursor: `grab`/`grabbing` are absent from its cursor
+/// map and silently fall back to the plain arrow, so Windows gets the pointing
+/// hand instead. Everywhere else keeps the canonical closed hand.
+MouseCursor get _draggingCursor =>
+    defaultTargetPlatform == TargetPlatform.windows
+        ? SystemMouseCursors.click
+        : SystemMouseCursors.grabbing;
+
 const TextStyle _kTagChipTextStyle = TextStyle(
   color: _kTagChipText,
   fontSize: 12,
@@ -1432,12 +1441,12 @@ class _TableHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // The header doubles as the grab handle for panning the columns. Sort
+    // The header doubles as a handle for panning the columns: it keeps the
+    // normal cursor on hover and only shows the drag hand while panning. Sort
     // buttons sit deeper and keep their own click cursor.
     return MouseRegion(
-      cursor: draggingColumns
-          ? SystemMouseCursors.grabbing
-          : SystemMouseCursors.grab,
+      key: const ValueKey('tableHeader'),
+      cursor: draggingColumns ? _draggingCursor : MouseCursor.defer,
       child: ColoredBox(
         color: _kTableHeaderBg,
         child: Padding(
@@ -1610,10 +1619,10 @@ class _TableRow extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      // Rows read as clickable; while the table is being dragged they become a
-      // closed hand. The header is the explicit grab handle.
+      // Rows read as clickable; while the table is being dragged they show the
+      // drag hand instead.
       mouseCursor: draggingColumns
-          ? SystemMouseCursors.grabbing
+          ? _draggingCursor
           : SystemMouseCursors.click,
       hoverColor: ViewerPalette.accentSoft,
       highlightColor: ViewerPalette.accentSoft,
