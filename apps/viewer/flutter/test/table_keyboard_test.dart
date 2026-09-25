@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -56,6 +57,12 @@ void main() {
         of: tableRow(id),
         matching: selectedRing(),
       );
+
+  // The table's horizontal scroller is the only SingleChildScrollView on the
+  // screen (the rows use a ListView).
+  ScrollController columnsController(WidgetTester tester) => tester
+      .widget<SingleChildScrollView>(find.byType(SingleChildScrollView))
+      .controller!;
 
   keyboardTestWidgets('arrow keys move keyboard selection between rows', (
     WidgetTester tester,
@@ -362,6 +369,68 @@ void main() {
     expect(selectedRing(), findsNothing);
     expect(find.text('Cello Note'), findsOneWidget);
     expect(find.text('Alpha Note'), findsNothing);
+  });
+
+  keyboardTestWidgets('left and right arrows scroll the columns', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    final controller = columnsController(tester);
+    expect(controller.position.maxScrollExtent, greaterThan(0));
+    expect(controller.offset, 0);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pumpAndSettle();
+    expect(controller.offset, greaterThan(0));
+
+    final afterRight = controller.offset;
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pumpAndSettle();
+    expect(controller.offset, lessThan(afterRight));
+  });
+
+  keyboardTestWidgets('ctrl plus left and right jump to the column edges', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    final controller = columnsController(tester);
+    final maxExtent = controller.position.maxScrollExtent;
+
+    Future<void> ctrlArrow(LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+    }
+
+    await ctrlArrow(LogicalKeyboardKey.arrowRight);
+    expect(controller.offset, maxExtent);
+
+    await ctrlArrow(LogicalKeyboardKey.arrowLeft);
+    expect(controller.offset, 0);
+  });
+
+  keyboardTestWidgets('dragging with the mouse pans the columns', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    final controller = columnsController(tester);
+    expect(controller.offset, 0);
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(tableRow(3)),
+      kind: PointerDeviceKind.mouse,
+    );
+    for (var step = 0; step < 4; step++) {
+      await gesture.moveBy(const Offset(-50, 0));
+      await tester.pump();
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(controller.offset, greaterThan(0));
+    // A drag must not be mistaken for a tap that opens the slideshow.
+    expect(find.text('Back'), findsNothing);
   });
 
   keyboardTestWidgets(

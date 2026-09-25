@@ -1,6 +1,7 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
@@ -51,6 +52,22 @@ const double _kTableThumbnailHeight = 56;
 const Color _kTableThumbnailPlaceholderBg = ViewerPalette.surfaceContainer;
 const Color _kTableThumbnailPlaceholderBorder = ViewerPalette.border;
 const Color _kTableThumbnailPlaceholderIcon = ViewerPalette.textMuted;
+
+/// How far one Left/Right arrow press pans the table's hidden columns.
+const double _kColumnScrollStep = 200;
+
+/// Lets a plain mouse drag pan a horizontal scroller. Flutter excludes
+/// [PointerDeviceKind.mouse] from drag gestures by default, which is why the
+/// table could previously only be panned with a trackpad or Shift+wheel.
+class _ColumnDragScrollBehavior extends MaterialScrollBehavior {
+  const _ColumnDragScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        ...super.dragDevices,
+        PointerDeviceKind.mouse,
+      };
+}
 
 const TextStyle _kTagChipTextStyle = TextStyle(
   color: _kTagChipText,
@@ -450,6 +467,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   bool _ascending = true;
   int? _lastActiveCollectionId;
   int? _selectedIndex;
+  bool _columnsDragging = false;
   late final FocusNode _tableFocusNode = FocusNode(debugLabel: 'notesTable');
   late final FocusNode _searchFocusNode = FocusNode(
     debugLabel: 'notesSearch',
@@ -489,6 +507,63 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
     );
+  }
+
+  bool get _columnsOverflow =>
+      _horizontalScrollController.hasClients &&
+      _horizontalScrollController.position.maxScrollExtent > 0;
+
+  /// Animates the columns to [target] (clamped to the scrollable range).
+  void _animateColumnsTo(double target) {
+    if (!_columnsOverflow) {
+      return;
+    }
+    final position = _horizontalScrollController.position;
+    _horizontalScrollController.animateTo(
+      target.clamp(0.0, position.maxScrollExtent).toDouble(),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
+
+  /// Pans the columns by [delta] logical pixels so the arrows can reveal
+  /// columns that sit off-screen on a narrow window. Returns whether there was
+  /// anything to scroll.
+  bool _scrollColumnsBy(double delta) {
+    if (!_columnsOverflow) {
+      return false;
+    }
+    _animateColumnsTo(_horizontalScrollController.position.pixels + delta);
+    return true;
+  }
+
+  /// Jumps to the first ([forward] false) or last ([forward] true) column.
+  /// Returns whether there was anything to scroll.
+  bool _scrollColumnsToEdge({required bool forward}) {
+    if (!_columnsOverflow) {
+      return false;
+    }
+    _animateColumnsTo(
+      forward ? _horizontalScrollController.position.maxScrollExtent : 0,
+    );
+    return true;
+  }
+
+  /// Tracks whether the user is actively dragging the columns, so rows can
+  /// show a closed-hand cursor. Vertical notifications are ignored.
+  bool _handleTableScrollNotification(ScrollNotification notification) {
+    if (notification.metrics.axis != Axis.horizontal) {
+      return false;
+    }
+    if (notification is ScrollStartNotification &&
+        notification.dragDetails != null) {
+      if (!_columnsDragging) {
+        setState(() => _columnsDragging = true);
+      }
+    } else if (notification is ScrollEndNotification && _columnsDragging) {
+      setState(() => _columnsDragging = false);
+    }
+    return false;
   }
 
   void _focusSelection(int index) {
@@ -772,12 +847,24 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
       return KeyEventResult.ignored;
     }
+    final key = event.logicalKey;
+    // Jump-to-edge uses the platform's primary modifier: Cmd on macOS, Ctrl
+    // elsewhere.
+    final bool jumpColumns = defaultTargetPlatform == TargetPlatform.macOS
+        ? HardwareKeyboard.instance.isMetaPressed
+        : HardwareKeyboard.instance.isControlPressed;
+    if (jumpColumns &&
+        (key == LogicalKeyboardKey.arrowLeft ||
+            key == LogicalKeyboardKey.arrowRight)) {
+      return _scrollColumnsToEdge(forward: key == LogicalKeyboardKey.arrowRight)
+          ? KeyEventResult.handled
+          : KeyEventResult.ignored;
+    }
     if (HardwareKeyboard.instance.isControlPressed ||
         HardwareKeyboard.instance.isMetaPressed ||
         HardwareKeyboard.instance.isAltPressed) {
       return KeyEventResult.ignored;
     }
-    final key = event.logicalKey;
     if (key == LogicalKeyboardKey.arrowDown ||
         key == LogicalKeyboardKey.keyJ) {
       _moveSelection(1);
@@ -808,6 +895,16 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     if (key == LogicalKeyboardKey.pageDown) {
       _pageSelection(1);
       return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowLeft) {
+      return _scrollColumnsBy(-_kColumnScrollStep)
+          ? KeyEventResult.handled
+          : KeyEventResult.ignored;
+    }
+    if (key == LogicalKeyboardKey.arrowRight) {
+      return _scrollColumnsBy(_kColumnScrollStep)
+          ? KeyEventResult.handled
+          : KeyEventResult.ignored;
     }
     if (key == LogicalKeyboardKey.enter ||
         key == LogicalKeyboardKey.numpadEnter ||
@@ -1071,67 +1168,87 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                           'No notes match the current filter.'))
                                   : ClipRRect(
                                       borderRadius: BorderRadius.circular(28),
-                                      child: SingleChildScrollView(
-                                        controller: _horizontalScrollController,
-                                        scrollDirection: Axis.horizontal,
-                                        child: SizedBox(
-                                          width: tableWidth,
-                                          child: Column(
-                                            children: [
-                                              _TableHeader(
-                                                sortKey: _sortKey,
-                                                ascending: _ascending,
-                                                onSort: _toggleSort,
-                                                tagsColumnWidth:
-                                                    tagsColumnWidth,
-                                              ),
-                                              const Divider(
-                                                height: 2,
-                                                thickness: 2,
-                                                color: _kTableHeaderDivider,
-                                              ),
-                                              Expanded(
-                                                child: Scrollbar(
-                                                  controller:
-                                                      _verticalScrollController,
-                                                  child: ListView.separated(
-                                                    controller:
-                                                        _verticalScrollController,
-                                                    itemCount: notes.length,
-                                                    separatorBuilder:
-                                                        (context, index) =>
-                                                            const Divider(
-                                                      height: 1,
-                                                      color: _kTableDivider,
-                                                    ),
-                                                    itemBuilder:
-                                                        (context, index) {
-                                                      final note = notes[index];
-
-                                                      return _TableRow(
-                                                        note: note,
-                                                        tagsColumnWidth:
-                                                            tagsColumnWidth,
-                                                        selected:
-                                                            _keyboardNavEnabled &&
-                                                                _selectedIndex ==
-                                                                    index,
-                                                        onTagTap:
-                                                            _applyTagFilter,
-                                                        onTap: () =>
-                                                            _openNoteAtIndex(
-                                                                notes, index),
-                                                      );
-                                                    },
+                                      child: NotificationListener<
+                                          ScrollNotification>(
+                                        onNotification:
+                                            _handleTableScrollNotification,
+                                        child: ScrollConfiguration(
+                                          behavior:
+                                              const _ColumnDragScrollBehavior(),
+                                          child: SingleChildScrollView(
+                                            controller:
+                                                _horizontalScrollController,
+                                            scrollDirection: Axis.horizontal,
+                                            child: SizedBox(
+                                              width: tableWidth,
+                                              child: Column(
+                                                children: [
+                                                  _TableHeader(
+                                                    sortKey: _sortKey,
+                                                    ascending: _ascending,
+                                                    onSort: _toggleSort,
+                                                    tagsColumnWidth:
+                                                        tagsColumnWidth,
                                                   ),
-                                                ),
+                                                  const Divider(
+                                                    height: 2,
+                                                    thickness: 2,
+                                                    color: _kTableHeaderDivider,
+                                                  ),
+                                                  Expanded(
+                                                    child: ScrollConfiguration(
+                                                      behavior:
+                                                          const MaterialScrollBehavior(),
+                                                      child: Scrollbar(
+                                                        controller:
+                                                            _verticalScrollController,
+                                                        child:
+                                                            ListView.separated(
+                                                          controller:
+                                                              _verticalScrollController,
+                                                          itemCount:
+                                                              notes.length,
+                                                          separatorBuilder:
+                                                              (context, index) =>
+                                                                  const Divider(
+                                                            height: 1,
+                                                            color:
+                                                                _kTableDivider,
+                                                          ),
+                                                          itemBuilder:
+                                                              (context, index) {
+                                                            final note =
+                                                                notes[index];
+
+                                                            return _TableRow(
+                                                              note: note,
+                                                              tagsColumnWidth:
+                                                                  tagsColumnWidth,
+                                                              draggingColumns:
+                                                                  _columnsDragging,
+                                                              selected: _keyboardNavEnabled &&
+                                                                  _selectedIndex ==
+                                                                      index,
+                                                              onTagTap:
+                                                                  _applyTagFilter,
+                                                              onTap: () =>
+                                                                  _openNoteAtIndex(
+                                                                      notes,
+                                                                      index),
+                                                            );
+                                                          },
+                                                        ),
+                                                      ),
+                                                    ),
+                                                  ),
+                                                ],
                                               ),
-                                            ],
+                                            ),
                                           ),
                                         ),
                                       ),
-                                    ),
                                 ),
+                            ),
                             );
                           },
                         ),
@@ -1451,6 +1568,7 @@ class _TableRow extends StatelessWidget {
   const _TableRow({
     required this.note,
     required this.tagsColumnWidth,
+    required this.draggingColumns,
     required this.onTagTap,
     required this.onTap,
     required this.selected,
@@ -1458,6 +1576,7 @@ class _TableRow extends StatelessWidget {
 
   final NoteRecord note;
   final double tagsColumnWidth;
+  final bool draggingColumns;
   final ValueChanged<String> onTagTap;
   final VoidCallback onTap;
   final bool selected;
@@ -1468,6 +1587,11 @@ class _TableRow extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
+      // The whole row doubles as a handle for panning the columns, matching
+      // the closed-hand cursor while a drag is in progress.
+      mouseCursor: draggingColumns
+          ? SystemMouseCursors.grabbing
+          : SystemMouseCursors.grab,
       hoverColor: ViewerPalette.accentSoft,
       highlightColor: ViewerPalette.accentSoft,
       // The selection ring is a paint-only overlay: it never participates in
