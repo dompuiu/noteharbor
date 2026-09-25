@@ -3535,6 +3535,16 @@ function NotesTable({
                                 openSlideshow(note.id);
                               }}
                               onKeyDown={(event) => {
+                                // Only the row itself opens the note. Tab can
+                                // move focus onto a control inside the row
+                                // (drag handle, checkbox, denomination link,
+                                // action buttons), and those must activate
+                                // themselves instead of the row swallowing
+                                // Enter/Space as it bubbles up.
+                                if (event.target !== event.currentTarget) {
+                                  return;
+                                }
+
                                 if (
                                   event.key === "Enter" ||
                                   event.key === " "
