@@ -979,6 +979,32 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     }
   }
 
+  /// A pointer interaction with the table is not a keyboard interaction: drop
+  /// the selection ring. A grab or drag never fires the row's `onTap`, so this
+  /// is the only place that can clear it for pointer users.
+  void _handleTablePointerDown(PointerDownEvent event) {
+    if (!_keyboardNavEnabled || _selectedIndex == null) {
+      return;
+    }
+    setState(() => _selectedIndex = null);
+  }
+
+  /// Called for each pointer-down outside the filter. On desktop, Flutter's
+  /// default would unfocus the field to the enclosing route scope; because a
+  /// drag never fires an `onTap`, that leaves the table without primary focus
+  /// and its shortcuts (/, arrows) dead. Return keyboard control to the table.
+  void _handleFilterTapOutside(PointerDownEvent event) {
+    if (!_keyboardNavEnabled) {
+      // Touch platforms keep the default: dismiss the on-screen keyboard.
+      _searchFocusNode.unfocus();
+      return;
+    }
+    if (_selectedIndex != null) {
+      setState(() => _selectedIndex = null);
+    }
+    _tableFocusNode.requestFocus();
+  }
+
   KeyEventResult _handleSearchKey(KeyEvent event) {
     if (!_keyboardNavEnabled) {
       return KeyEventResult.ignored;
@@ -1127,6 +1153,12 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                         child: TextField(
                           controller: _searchController,
                           focusNode: _searchFocusNode,
+                          // Flutter's default tap-outside behavior drops
+                          // primary focus to the enclosing route scope. On a
+                          // drag that never re-fires the table's onTap, so `/`
+                          // and the arrow keys stop working. Hand keyboard
+                          // control back to the table instead.
+                          onTapOutside: _handleFilterTapOutside,
                           decoration: InputDecoration(
                             filled: true,
                             fillColor: _kTableSurface,
@@ -1165,7 +1197,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                             final tableWidth =
                                 math.max(minTableWidth, constraints.maxWidth);
 
-                            return Focus(
+                            final Widget table = Focus(
                               focusNode: _tableFocusNode,
                               autofocus: _keyboardNavEnabled,
                               onKeyEvent: (node, event) =>
@@ -1275,6 +1307,13 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                       ),
                                 ),
                             ),
+                            );
+                            // Pointer-down inside the table drops the keyboard
+                            // selection ring (a grab/drag never fires onTap).
+                            return Listener(
+                              behavior: HitTestBehavior.translucent,
+                              onPointerDown: _handleTablePointerDown,
+                              child: table,
                             );
                           },
                         ),

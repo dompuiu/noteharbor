@@ -7,6 +7,8 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 ### Fixed
 
 - Table screen: pressing `↑` (or `k`) with no row selected now selects the first row, matching the Editor, instead of jumping to the last row.
+- Table screen: dragging a row with the mouse no longer drops keyboard focus. If the filter had focus, a drag (which never fires a tap) left primary focus on the route scope, so `/` stopped reaching the filter and `↓` moved to the Import button instead. Pointer interactions now hand keyboard control back to the table.
+- Table screen: grabbing or dragging a row with the mouse now clears the keyboard selection ring, which is a keyboard-only affordance.
 
 ## [1.5.0] - 2026-09-24
 

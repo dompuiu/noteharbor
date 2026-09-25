@@ -475,6 +475,77 @@ void main() {
     expect(controller.offset, greaterThan(0));
     // A drag must not be mistaken for a tap that opens the slideshow.
     expect(find.text('Back'), findsNothing);
+    // The table keeps primary focus so its shortcuts stay live.
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'notesTable');
+  });
+
+  keyboardTestWidgets(
+    'dragging a row while the filter has focus keeps keyboard control on the '
+    'table',
+    (WidgetTester tester) async {
+      await pumpKeyboardTable(tester);
+
+      // Put focus in the filter.
+      await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+      await tester.pump();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus,
+        isTrue,
+      );
+
+      // Grab a row with the mouse and pan the columns.
+      final gesture = await tester.startGesture(
+        tester.getCenter(tableRow(3)),
+        kind: PointerDeviceKind.mouse,
+      );
+      for (var step = 0; step < 4; step++) {
+        await gesture.moveBy(const Offset(-50, 0));
+        await tester.pump();
+      }
+      await gesture.up();
+      await tester.pumpAndSettle();
+
+      // A drag has no onTap to fall back on: the table must own the keyboard
+      // again, or the filter's tap-outside would leave focus on the route scope
+      // and send the arrow keys to the import button instead.
+      expect(FocusManager.instance.primaryFocus?.debugLabel, 'notesTable');
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(selectedRow(1), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+      await tester.pump();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus,
+        isTrue,
+      );
+    },
+  );
+
+  keyboardTestWidgets('mouse drag clears the keyboard selection ring', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(selectedRow(1), findsOneWidget);
+
+    // Grabbing a row with the mouse is a pointer interaction: the ring is a
+    // keyboard-only affordance and must drop even though no tap fires.
+    final gesture = await tester.startGesture(
+      tester.getCenter(tableRow(3)),
+      kind: PointerDeviceKind.mouse,
+    );
+    for (var step = 0; step < 4; step++) {
+      await gesture.moveBy(const Offset(-50, 0));
+      await tester.pump();
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(selectedRing(), findsNothing);
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'notesTable');
   });
 
   keyboardTestWidgets('rows keep a normal cursor until panning on Windows', (
