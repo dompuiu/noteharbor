@@ -3411,7 +3411,31 @@ function NotesTable({
                         ) : null}
                       </tr>
                     </thead>
-                    <tbody>
+                    <tbody
+                      onDragOver={(event) => {
+                        if (!canReorder || draggedNoteId === null) {
+                          return;
+                        }
+
+                        event.preventDefault();
+                      }}
+                      onDrop={(event) => {
+                        if (
+                          event.defaultPrevented ||
+                          !canReorder ||
+                          draggedNoteId === null ||
+                          !dropTarget
+                        ) {
+                          return;
+                        }
+
+                        event.preventDefault();
+                        void handleReorder(
+                          dropTarget.noteId,
+                          dropTarget.placement,
+                        );
+                      }}
+                    >
                       {topSpacerHeight ? (
                         <tr aria-hidden="true" className="table-spacer-row">
                           <td
@@ -3496,17 +3520,30 @@ function NotesTable({
                                 focusedRowIdRef.current = note.id;
                               }}
                               onDragLeave={(event) => {
+                                // The drop placeholder is a sibling row
+                                // inserted into this same tbody, so moving
+                                // the pointer onto it (or onto a neighbouring
+                                // row) must not clear the target. Clearing it
+                                // would unmount the placeholder, drop the
+                                // pointer back on this row, and re-insert the
+                                // placeholder — a loop that makes the rows
+                                // flicker. Only a move that leaves the body
+                                // entirely clears the target.
+                                const body =
+                                  event.currentTarget.closest("tbody");
+
                                 if (
-                                  !event.currentTarget.contains(
-                                    event.relatedTarget,
-                                  )
+                                  event.relatedTarget &&
+                                  body?.contains(event.relatedTarget)
                                 ) {
-                                  setDropTarget((current) =>
-                                    current?.noteId === note.id
-                                      ? null
-                                      : current,
-                                  );
+                                  return;
                                 }
+
+                                setDropTarget((current) =>
+                                  current?.noteId === note.id
+                                    ? null
+                                    : current,
+                                );
                               }}
                               onDragOver={(event) => {
                                 if (!canReorder || draggedNoteId === null) {
