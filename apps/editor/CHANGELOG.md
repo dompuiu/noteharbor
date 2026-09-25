@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.14.1] - 2026-09-25
+
+### Fixed
+
+- Table screen: dragging a row to reorder it no longer makes the rows jump when the pointer is held in the gap between two rows. The drop placeholder stays put, and releasing in the gap still commits the move.
+
 ## [1.14.0] - 2026-09-24
 
 ### Fixed
