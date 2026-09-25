@@ -1619,11 +1619,9 @@ class _TableRow extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      // Rows read as clickable; while the table is being dragged they show the
-      // drag hand instead.
-      mouseCursor: draggingColumns
-          ? _draggingCursor
-          : SystemMouseCursors.click,
+      // Rows keep the normal cursor on hover (no click hand) and only show the
+      // drag hand while the table is being panned.
+      mouseCursor: draggingColumns ? _draggingCursor : MouseCursor.defer,
       hoverColor: ViewerPalette.accentSoft,
       highlightColor: ViewerPalette.accentSoft,
       // The selection ring is a paint-only overlay: it never participates in

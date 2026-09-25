@@ -455,7 +455,7 @@ void main() {
     expect(find.text('Back'), findsNothing);
   });
 
-  keyboardTestWidgets('rows show the drag hand while panning on Windows', (
+  keyboardTestWidgets('rows keep a normal cursor until panning on Windows', (
     WidgetTester tester,
   ) async {
     await pumpKeyboardTable(tester);
@@ -463,7 +463,7 @@ void main() {
     InkWell rowInk() => tester.widget<InkWell>(
           find.ancestor(of: tableRow(3), matching: find.byType(InkWell)),
         );
-    expect(rowInk().mouseCursor, SystemMouseCursors.click);
+    expect(rowInk().mouseCursor, MouseCursor.defer);
 
     final gesture = await tester.startGesture(
       tester.getCenter(tableRow(3)),
@@ -478,7 +478,7 @@ void main() {
 
     await gesture.up();
     await tester.pumpAndSettle();
-    expect(rowInk().mouseCursor, SystemMouseCursors.click);
+    expect(rowInk().mouseCursor, MouseCursor.defer);
   });
 
   keyboardTestWidgets(
@@ -489,7 +489,7 @@ void main() {
       InkWell rowInk() => tester.widget<InkWell>(
             find.ancestor(of: tableRow(3), matching: find.byType(InkWell)),
           );
-      expect(rowInk().mouseCursor, SystemMouseCursors.click);
+      expect(rowInk().mouseCursor, MouseCursor.defer);
 
       final gesture = await tester.startGesture(
         tester.getCenter(tableRow(3)),
@@ -503,7 +503,7 @@ void main() {
 
       await gesture.up();
       await tester.pumpAndSettle();
-      expect(rowInk().mouseCursor, SystemMouseCursors.click);
+      expect(rowInk().mouseCursor, MouseCursor.defer);
     },
     platform: TargetPlatform.macOS,
   );
