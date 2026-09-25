@@ -413,32 +413,35 @@ input[type="radio"] {
   min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
-  scrollbar-width: thin;
-  scrollbar-color: var(--scroll-thumb) transparent;
+  /* No horizontal scrollbar: off-screen columns are panned by dragging the
+     table with the mouse or with the Left/Right arrows, matching the Viewer's
+     Flutter table. The scroller itself stays scrollable. */
+  scrollbar-width: none;
+  -ms-overflow-style: none;
   /* Query container for the table's width below. Sizing is inline-size
      only, so the scroller's flex stretching is unaffected. */
   container-type: inline-size;
 }
 
 .table-scroll-x::-webkit-scrollbar {
-  height: 10px;
+  width: 0;
+  height: 0;
+  display: none;
 }
 
-.table-scroll-x::-webkit-scrollbar-track {
-  background: transparent;
+/* While a drag pan is in progress every surface under the pointer (rows, sort
+   buttons, tag chips) shows the closed-hand cursor, and text selection is
+   suppressed so the drag never turns into a selection. */
+.table-scroll-x.is-panning,
+.table-scroll-x.is-panning * {
+  cursor: grabbing;
+  user-select: none;
 }
 
-.table-scroll-x::-webkit-scrollbar-thumb {
-  background: var(--scroll-thumb);
-  border-radius: 999px;
-  border: 2px solid transparent;
-  background-clip: content-box;
-}
-
-.table-scroll-x::-webkit-scrollbar-thumb:hover {
-  background: var(--scroll-thumb-hover);
-  border: 2px solid transparent;
-  background-clip: content-box;
+/* Thumbnails and links must not begin a native drag when a pan starts on
+   them; the pointer gesture on the scroller owns the drag instead. */
+.table-scroll-x img {
+  -webkit-user-drag: none;
 }
 
 .table-scroll-y {

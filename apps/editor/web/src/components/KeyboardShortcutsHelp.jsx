@@ -15,6 +15,14 @@ const shortcutGroups = [
       },
       { keys: ["PgUp", "PgDn"], description: "Scroll one page and focus the first row in view" },
       { keys: ["Home", "End"], description: "Focus the first / last row" },
+      {
+        keys: ["←", "→"],
+        description: "Pan the columns to reveal ones hidden by a narrow window",
+      },
+      {
+        keys: ["Ctrl/Cmd", "←", "→"],
+        description: "Jump to the first / last column",
+      },
       { keys: ["Enter", "Space"], description: "Open the focused note" },
       { keys: ["e"], description: "Edit the focused note" },
       { keys: ["d"], description: "Delete the focused note" },

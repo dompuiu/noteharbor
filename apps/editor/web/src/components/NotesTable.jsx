@@ -28,6 +28,13 @@ import {
   shouldHandOffToFilters,
   useFilterFocusMemory,
 } from "../lib/filterFocusMemory.js";
+import {
+  COLUMN_PAN_THRESHOLD_PX,
+  COLUMN_SCROLL_STEP,
+  clampColumnScrollLeft,
+  columnPanScrollLeft,
+  isColumnPanTarget,
+} from "../lib/tableColumnPan.js";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { Slideshow } from "./Slideshow.jsx";
@@ -1026,6 +1033,8 @@ function NotesTable({
   const tableShellRef = useRef(null);
   const tableScrollXRef = useRef(null);
   const tableScrollYRef = useRef(null);
+  const columnPanRef = useRef(null);
+  const suppressColumnPanClickRef = useRef(false);
   const vMetricsRef = useRef({ max: 0, range: 0, thumbHeight: 0 });
   const vThumbDragRef = useRef(null);
   const editorOverlayRef = useRef(null);
@@ -1096,6 +1105,7 @@ function NotesTable({
   const [slideshowNotes, setSlideshowNotes] = useState([]);
   const [draggedNoteId, setDraggedNoteId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
+  const [columnsDragging, setColumnsDragging] = useState(false);
   const [thumbPreviewState, setThumbPreviewState] = useState(null);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [columnFilterHeights, setColumnFilterHeights] = useState({});
@@ -1391,6 +1401,8 @@ function NotesTable({
   // changes (opening/closing the slideshow) leave them alone, and while a
   // slideshow URL with filter+sort context is open the URL owns them.
   useEffect(() => {
+    resetColumnScroll();
+
     if (skipFilterResetOnCollectionChangeRef.current) {
       skipFilterResetOnCollectionChangeRef.current = false;
       return;
@@ -1686,9 +1698,10 @@ function NotesTable({
     }
 
     const headerHeight = scroller.querySelector("thead")?.offsetHeight ?? 0;
-    const hasHorizontalBar = xScroller.scrollWidth > xScroller.clientWidth + 1;
+    // The horizontal scrollbar is hidden now, so the vertical track runs to
+    // the bottom edge instead of stopping above a bar.
     const top = headerHeight + 4;
-    const bottom = hasHorizontalBar ? 14 : 4;
+    const bottom = 4;
     const trackHeight = Math.max(0, xScroller.clientHeight - top - bottom);
 
     if (trackHeight <= 40) {
@@ -1881,6 +1894,154 @@ function NotesTable({
     }
   }
 
+  // Returns the horizontal scroller when the columns actually overflow, so
+  // panning is a no-op on a wide window just like the Viewer's table.
+  function columnScroller() {
+    const scroller = tableScrollXRef.current;
+
+    if (!scroller || scroller.scrollWidth <= scroller.clientWidth + 1) {
+      return null;
+    }
+
+    return scroller;
+  }
+
+  function scrollColumnsTo(scroller, left) {
+    // Chromium animates the pan; jsdom (tests) has no scrollTo, so fall back
+    // to a direct assignment there.
+    if (typeof scroller.scrollTo === "function") {
+      scroller.scrollTo({ behavior: "smooth", left });
+      return;
+    }
+
+    scroller.scrollLeft = left;
+  }
+
+  function panColumnsBy(delta) {
+    const scroller = columnScroller();
+
+    if (!scroller) {
+      return false;
+    }
+
+    scrollColumnsTo(
+      scroller,
+      clampColumnScrollLeft(
+        scroller.scrollLeft,
+        delta,
+        scroller.scrollWidth - scroller.clientWidth,
+      ),
+    );
+    return true;
+  }
+
+  function panColumnsToEdge(forward) {
+    const scroller = columnScroller();
+
+    if (!scroller) {
+      return false;
+    }
+
+    scrollColumnsTo(scroller, forward ? scroller.scrollWidth : 0);
+    return true;
+  }
+
+  function resetColumnScroll() {
+    const scroller = tableScrollXRef.current;
+
+    if (scroller) {
+      scroller.scrollLeft = 0;
+    }
+  }
+
+  function handleColumnPanPointerDown(event) {
+    const scroller = columnScroller();
+
+    if (
+      event.button !== 0 ||
+      event.pointerType === "touch" ||
+      !scroller ||
+      !isColumnPanTarget(event.target)
+    ) {
+      return;
+    }
+
+    columnPanRef.current = {
+      active: false,
+      pointerId: event.pointerId,
+      startScrollLeft: scroller.scrollLeft,
+      startX: event.clientX,
+    };
+  }
+
+  function handleColumnPanPointerMove(event) {
+    const pan = columnPanRef.current;
+    const scroller = tableScrollXRef.current;
+
+    if (!pan || !scroller || event.pointerId !== pan.pointerId) {
+      return;
+    }
+
+    const deltaX = event.clientX - pan.startX;
+
+    if (!pan.active) {
+      if (Math.abs(deltaX) < COLUMN_PAN_THRESHOLD_PX) {
+        return;
+      }
+
+      pan.active = true;
+      setColumnsDragging(true);
+
+      if (typeof scroller.setPointerCapture === "function") {
+        scroller.setPointerCapture(event.pointerId);
+      }
+
+      window.getSelection()?.removeAllRanges();
+    }
+
+    event.preventDefault();
+    scroller.scrollLeft = columnPanScrollLeft({
+      startScrollLeft: pan.startScrollLeft,
+      startX: pan.startX,
+      clientX: event.clientX,
+      max: scroller.scrollWidth - scroller.clientWidth,
+    });
+  }
+
+  function handleColumnPanPointerEnd(event) {
+    const pan = columnPanRef.current;
+
+    if (
+      !pan ||
+      (event?.pointerId != null && event.pointerId !== pan.pointerId)
+    ) {
+      return;
+    }
+
+    if (pan.active) {
+      // The drag finishes with a click on whatever was under the pointer;
+      // swallow that one click so a pan ending on a row does not open the
+      // note. The timer clears the flag if no click follows.
+      suppressColumnPanClickRef.current = true;
+      window.setTimeout(() => {
+        suppressColumnPanClickRef.current = false;
+      }, 0);
+    }
+
+    columnPanRef.current = null;
+    setColumnsDragging(false);
+  }
+
+  function handleColumnPanClickCapture(event) {
+    if (!suppressColumnPanClickRef.current) {
+      return;
+    }
+
+    suppressColumnPanClickRef.current = false;
+    event.preventDefault();
+    event.stopPropagation();
+  }
+
   useEffect(() => {
     if (!thumbPreviewState) {
       return undefined;
@@ -1947,10 +2108,6 @@ function NotesTable({
 
   useEffect(() => {
     function handleGlobalKeyDown(event) {
-      if (event.metaKey || event.ctrlKey || event.altKey) {
-        return;
-      }
-
       if (showShortcutsHelp) {
         return;
       }
@@ -1961,6 +2118,26 @@ function NotesTable({
           event.target.tagName === "TEXTAREA" ||
           event.target.tagName === "SELECT" ||
           event.target.isContentEditable);
+      const tableKeysActive =
+        !slideshowRouteActive && !editingNoteId && !creatingNote;
+
+      // Cmd/Ctrl + Left/Right jumps to the first/last column, like the Viewer.
+      // Checked before the modifier guard below so it is not swallowed.
+      if (
+        tableKeysActive &&
+        (event.metaKey || event.ctrlKey) &&
+        !event.altKey &&
+        !editable &&
+        (event.key === "ArrowLeft" || event.key === "ArrowRight") &&
+        panColumnsToEdge(event.key === "ArrowRight")
+      ) {
+        event.preventDefault();
+        return;
+      }
+
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
 
       if (event.key === "?" && !editable) {
         event.preventDefault();
@@ -2004,6 +2181,16 @@ function NotesTable({
       if (event.key === "ArrowUp" || event.key === "k") {
         event.preventDefault();
         moveRowFocus(-1);
+        return;
+      }
+
+      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
+        const delta =
+          event.key === "ArrowLeft" ? -COLUMN_SCROLL_STEP : COLUMN_SCROLL_STEP;
+
+        if (panColumnsBy(delta)) {
+          event.preventDefault();
+        }
         return;
       }
 
@@ -2144,6 +2331,8 @@ function NotesTable({
       };
     });
 
+    resetColumnScroll();
+
     window.requestAnimationFrame(() => {
       focusFilter("tags");
     });
@@ -2190,6 +2379,7 @@ function NotesTable({
 
   function closeSlideshow() {
     focusRestoreNoteIdRef.current = currentRoute.noteId;
+    resetColumnScroll();
     navigateToTableRoute(emptyTableRoute(), { replace: true });
   }
 
@@ -3074,7 +3264,16 @@ function NotesTable({
                 ref={tableFocusAnchorRef}
                 tabIndex={-1}
               />
-              <div className="table-scroll-x" ref={tableScrollXRef}>
+              <div
+                className={`table-scroll-x${columnsDragging ? " is-panning" : ""}`}
+                onClickCapture={handleColumnPanClickCapture}
+                onLostPointerCapture={handleColumnPanPointerEnd}
+                onPointerCancel={handleColumnPanPointerEnd}
+                onPointerDown={handleColumnPanPointerDown}
+                onPointerMove={handleColumnPanPointerMove}
+                onPointerUp={handleColumnPanPointerEnd}
+                ref={tableScrollXRef}
+              >
                 <div className="table-scroll-y" ref={tableScrollYRef}>
                   <table aria-busy={rowsPending || undefined}>
                     <thead>
@@ -3498,6 +3697,7 @@ function NotesTable({
                               <td>
                                 {note.url ? (
                                   <a
+                                    draggable={false}
                                     href={note.url}
                                     onClick={(event) => event.stopPropagation()}
                                     rel="noreferrer"
