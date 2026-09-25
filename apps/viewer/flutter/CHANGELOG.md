@@ -2,7 +2,7 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
-## [Unreleased]
+## [1.5.1] - 2026-09-24
 
 ### Fixed
 
