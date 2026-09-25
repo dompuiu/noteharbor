@@ -185,6 +185,28 @@ void main() {
     expect(selectedRing(), findsNothing);
   });
 
+  keyboardTestWidgets('up arrow with no selection selects the first row', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    expect(selectedRing(), findsNothing);
+
+    // Up with nothing selected starts at the first row (matching the Editor),
+    // not the last row.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(selectedRow(1), findsOneWidget);
+
+    // A second Up hands off from the first row to the filter.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pump();
+    expect(selectedRing(), findsNothing);
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus,
+      isTrue,
+    );
+  });
+
   keyboardTestWidgets('up arrow from the first row focuses the filter', (
     WidgetTester tester,
   ) async {

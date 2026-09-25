@@ -801,8 +801,11 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       return;
     }
     final current = _selectedIndex;
+    // With nothing selected both directions enter the table at the first row,
+    // matching the Editor. Up from the first row then hands off to the filter
+    // (see _handleTableKey) rather than wrapping to the last row.
     final next = current == null
-        ? (offset > 0 ? 0 : notes.length - 1)
+        ? 0
         : (current + offset).clamp(0, notes.length - 1);
     _focusSelection(next);
     _ensureSelectedVisible();

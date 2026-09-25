@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- Table screen: pressing `↑` (or `k`) with no row selected now selects the first row, matching the Editor, instead of jumping to the last row.
+
 ## [1.5.0] - 2026-09-24
 
 ### Added
