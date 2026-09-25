@@ -147,6 +147,28 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Back'), findsOneWidget);
     expect(find.text('3 / 5'), findsOneWidget);
+
+    // A mouse-opened note returns without a selection ring.
+    await tester.tap(find.text('Back'));
+    await tester.pumpAndSettle();
+    expect(selectedRing(), findsNothing);
+  });
+
+  keyboardTestWidgets('clicking a row clears a keyboard selection', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(selectedRow(1), findsOneWidget);
+
+    await tester.tap(find.text('Cello Note'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Back'));
+    await tester.pumpAndSettle();
+
+    expect(selectedRing(), findsNothing);
   });
 
   keyboardTestWidgets('escape clears the keyboard selection', (

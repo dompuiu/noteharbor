@@ -741,7 +741,16 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     );
   }
 
-  Future<void> _openNoteAtIndex(List<NoteRecord> notes, int index) async {
+  Future<void> _openNoteAtIndex(
+    List<NoteRecord> notes,
+    int index, {
+    required bool viaKeyboard,
+  }) async {
+    // A mouse click dismisses the keyboard selection: the ring is a keyboard
+    // affordance and should not appear for pointer users.
+    if (!viaKeyboard && _selectedIndex != null) {
+      setState(() => _selectedIndex = null);
+    }
     final result = await Navigator.of(context).push<NoteSlideshowResult>(
       MaterialPageRoute<NoteSlideshowResult>(
         builder: (context) => NoteSlideshowScreen(
@@ -764,7 +773,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       });
     }
     if (result != null) {
-      _revealNoteById(result.noteId);
+      _revealNoteById(result.noteId, select: viaKeyboard);
     }
   }
 
@@ -774,7 +783,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     if (index == null || index < 0 || index >= notes.length) {
       return;
     }
-    _openNoteAtIndex(notes, index);
+    _openNoteAtIndex(notes, index, viaKeyboard: true);
   }
 
   void _moveSelection(int offset) {
@@ -1009,7 +1018,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     );
   }
 
-  void _revealNoteById(int noteId) {
+  void _revealNoteById(int noteId, {required bool select}) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_verticalScrollController.hasClients) {
         return;
@@ -1027,7 +1036,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         return;
       }
 
-      if (_keyboardNavEnabled) {
+      // Only a keyboard-opened note restores the selection ring on return.
+      if (select && _keyboardNavEnabled) {
         _focusSelection(noteIndex);
       }
 
@@ -1234,7 +1244,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                               onTap: () =>
                                                                   _openNoteAtIndex(
                                                                       notes,
-                                                                      index),
+                                                                      index,
+                                                                      viaKeyboard:
+                                                                          false),
                                                             );
                                                           },
                                                         ),
