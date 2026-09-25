@@ -123,7 +123,7 @@ On Windows and macOS, the packaged app can launch its own CDP-enabled Chrome via
 For Windows artifacts, build on Windows:
 
 ```bash
-pnpm build:editor:desktop:win
+pnpm build:editor:desktop:windows
 ```
 
 ### Run the Flutter viewer locally

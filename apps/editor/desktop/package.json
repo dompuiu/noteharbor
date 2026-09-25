@@ -9,7 +9,7 @@
     "build:web": "node ./scripts/build-web.mjs",
     "prepare:package": "node ./scripts/prepare-package.mjs",
     "build": "pnpm run build:web && pnpm run prepare:package && electron-builder install-app-deps && electron-builder",
-    "build:win": "pnpm run build:web && pnpm run prepare:package && electron-builder install-app-deps && electron-builder --win nsis portable",
+    "build:windows": "pnpm run build:web && pnpm run prepare:package && electron-builder install-app-deps && electron-builder --win nsis portable",
     "pack": "pnpm run build:web && pnpm run prepare:package && electron-builder install-app-deps && electron-builder --dir"
   },
   "dependencies": {
