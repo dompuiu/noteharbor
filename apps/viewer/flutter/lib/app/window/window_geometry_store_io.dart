@@ -5,6 +5,7 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 
 import 'window_geometry.dart';
+import 'window_geometry_store.dart';
 
 WindowGeometryStore createWindowGeometryStore() {
   return const _FileWindowGeometryStore();

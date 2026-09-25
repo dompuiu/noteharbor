@@ -1,4 +1,5 @@
 import 'window_geometry.dart';
+import 'window_geometry_store.dart';
 
 WindowGeometryStore createWindowGeometryStore() {
   return const _NoopWindowGeometryStore();

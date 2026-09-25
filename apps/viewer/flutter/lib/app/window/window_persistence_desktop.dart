@@ -32,6 +32,10 @@ Future<void> setupWindowPersistence() async {
     );
     await windowManager.setMinimumSize(minimumSize);
 
+    // Hold the close until the final geometry has been written; otherwise the
+    // process can shut down mid-write and lose the last move or resize.
+    await windowManager.setPreventClose(true);
+
     windowManager.addListener(
       _WindowGeometryListener(store: store, initial: geometry),
     );
@@ -48,7 +52,7 @@ Future<void> setupWindowPersistence() async {
       windowManager.waitUntilReadyToShow(options, () async {
         try {
           await windowManager.setBounds(geometry.bounds);
-          if (geometry.maximized && Platform.isWindows) {
+          if (geometry.maximized) {
             await windowManager.maximize();
           }
           await windowManager.show();
@@ -132,9 +136,17 @@ class _WindowGeometryListener with WindowListener {
 
   @override
   void onWindowClose() {
-    // Best effort: the debounced write has usually landed already.
+    // The window is held open by setPreventClose until this finishes.
+    unawaited(_close());
+  }
+
+  Future<void> _close() async {
     _debounce?.cancel();
-    unawaited(_persist());
+    try {
+      await _persist();
+    } finally {
+      await windowManager.destroy();
+    }
   }
 
   void _scheduleSave() {
@@ -170,8 +182,7 @@ class _WindowGeometryListener with WindowListener {
 
       await _store.save(
         _lastNormal.copyWith(
-          // macOS ignores this and always restores the normal geometry.
-          maximized: maximized && Platform.isWindows,
+          maximized: remembersMaximizedState,
         ),
       );
     } catch (error) {
@@ -184,4 +195,8 @@ class _WindowGeometryListener with WindowListener {
       }
     }
   }
+
+  /// The single place that decides which platforms act on the maximized flag.
+  bool get remembersMaximizedState =>
+      WindowGeometry.remembersMaximizedState(isWindows: Platform.isWindows);
 }

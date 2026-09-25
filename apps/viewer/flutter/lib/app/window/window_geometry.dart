@@ -3,8 +3,8 @@ import 'dart:ui';
 /// Persisted window geometry for the desktop viewer.
 ///
 /// This type is deliberately free of any `window_manager`, `dart:io` or
-/// plugin imports: it is pure Dart so it can be unit tested and safely
-/// compiled for the web build.
+/// plugin imports so it can be unit tested and safely compiled for the web
+/// build. It does use `dart:ui` for [Rect].
 class WindowGeometry {
   const WindowGeometry({
     required this.x,
@@ -40,11 +40,18 @@ class WindowGeometry {
   final double width;
   final double height;
 
-  /// Windows-only: whether the window was maximized when it was last saved.
-  /// macOS ignores this and always restores the saved position and size.
+  /// Whether the window was maximized when it was last saved.
+  ///
+  /// Only meaningful on Windows; see [remembersMaximizedState].
   final bool maximized;
 
   Rect get bounds => Rect.fromLTWH(x, y, width, height);
+
+  /// Whether this platform should persist and act on [maximized].
+  ///
+  /// macOS deliberately ignores maximize/fullscreen and always reopens at the
+  /// saved normal geometry, so the flag is a Windows-only concept.
+  static bool remembersMaximizedState({required bool isWindows}) => isWindows;
 
   WindowGeometry copyWith({
     double? x,
@@ -96,12 +103,17 @@ class WindowGeometry {
       return null;
     }
 
+    final rawMaximized = map['maximized'];
+    if (rawMaximized != null && rawMaximized is! bool) {
+      return null;
+    }
+
     return WindowGeometry(
       x: x,
       y: y,
       width: width,
       height: height,
-      maximized: map['maximized'] == true,
+      maximized: rawMaximized == true,
     );
   }
 
@@ -109,14 +121,16 @@ class WindowGeometry {
   ///
   /// The window is kept on whichever display it most overlaps, resized to fit
   /// that display and nudged until it is fully visible. When it overlaps no
-  /// display at all (a disconnected monitor, a resolution change) it is placed
-  /// at the default position on the first available display.
+  /// display at all (a disconnected monitor, a resolution change), or when no
+  /// display is known at all, it keeps its size and falls back to the default
+  /// position, so a failed display lookup cannot re-apply a position that may
+  /// be off-screen.
   WindowGeometry clampToDisplays(List<Rect> displays) {
     final usable = displays
         .where((display) => display.width > 0 && display.height > 0)
         .toList(growable: false);
     if (usable.isEmpty) {
-      return this;
+      return copyWith(x: defaultX, y: defaultY);
     }
 
     Rect? target;
@@ -133,21 +147,19 @@ class WindowGeometry {
       }
     }
 
-    final offScreen = target == null;
-    target ??= usable.first;
+    if (target == null) {
+      return copyWith(x: defaultX, y: defaultY);
+    }
 
     final clampedWidth = _clampDimension(width, minimumWidth, target.width);
     final clampedHeight = _clampDimension(height, minimumHeight, target.height);
-
-    final desiredX = offScreen ? defaultX : x;
-    final desiredY = offScreen ? defaultY : y;
 
     final maxX = target.right - clampedWidth;
     final maxY = target.bottom - clampedHeight;
 
     return copyWith(
-      x: desiredX.clamp(target.left, maxX).toDouble(),
-      y: desiredY.clamp(target.top, maxY).toDouble(),
+      x: x.clamp(target.left, maxX).toDouble(),
+      y: y.clamp(target.top, maxY).toDouble(),
       width: clampedWidth,
       height: clampedHeight,
     );
@@ -171,15 +183,6 @@ class WindowGeometry {
     return 'WindowGeometry(x: $x, y: $y, width: $width, height: $height, '
         'maximized: $maximized)';
   }
-}
-
-/// Reads and writes a persisted window geometry.
-///
-/// The IO implementation stores a small JSON file; the web stub is a no-op.
-abstract class WindowGeometryStore {
-  Future<WindowGeometry?> load();
-
-  Future<void> save(WindowGeometry geometry);
 }
 
 double? _readFiniteDouble(Object? value) {

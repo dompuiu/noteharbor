@@ -113,13 +113,41 @@ void main() {
 
       expect(decoded?.maximized, isFalse);
     });
+
+    test('returns null for a non-boolean maximized flag', () {
+      expect(
+        WindowGeometry.tryFromJson(<String, Object?>{
+          'version': 1,
+          'x': 10,
+          'y': 10,
+          'width': 393,
+          'height': 852,
+          'maximized': 'true',
+        }),
+        isNull,
+      );
+    });
   });
 
   group('clampToDisplays', () {
-    test('is a no-op when no displays are known', () {
-      const geometry = WindowGeometry(x: 5000, y: 5000, width: 393, height: 852);
+    test('falls back to the default position when nothing is known', () {
+      // A display lookup failure must not re-apply a possibly off-screen
+      // position saved on a monitor that is no longer attached.
+      const geometry = WindowGeometry(
+        x: 5000,
+        y: 5000,
+        width: 393,
+        height: 852,
+        maximized: true,
+      );
 
-      expect(geometry.clampToDisplays(const <Rect>[]), geometry);
+      final clamped = geometry.clampToDisplays(const <Rect>[]);
+
+      expect(clamped.x, WindowGeometry.defaultX);
+      expect(clamped.y, WindowGeometry.defaultY);
+      expect(clamped.width, 393);
+      expect(clamped.height, 852);
+      expect(clamped.maximized, isTrue);
     });
 
     test('leaves an on-screen window untouched', () {
