@@ -1,5 +1,6 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../../app/app_info.dart';
 import '../../app/viewer_palette.dart';
@@ -229,11 +230,29 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
     }
   }
 
+  /// Leaves the import screen on Escape, matching the table screen's Escape
+  /// handling. Confirm dialogs handle their own Escape before it reaches here,
+  /// and [Navigator.maybePop] is a no-op when this is the only route (first
+  /// run) or while an import is in progress (`PopScope`).
+  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey != LogicalKeyboardKey.escape) {
+      return KeyEventResult.ignored;
+    }
+    Navigator.of(context).maybePop();
+    return KeyEventResult.handled;
+  }
+
   @override
   Widget build(BuildContext context) {
-    return PopScope(
-      canPop: !_isImporting,
-      child: Stack(
+    return Focus(
+      autofocus: true,
+      onKeyEvent: _handleKeyEvent,
+      child: PopScope(
+        canPop: !_isImporting,
+        child: Stack(
         children: [
           Scaffold(
             appBar: AppBar(
@@ -555,6 +574,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
               ),
             ),
         ],
+      ),
       ),
     );
   }
