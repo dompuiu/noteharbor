@@ -1199,6 +1199,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                     onSort: _toggleSort,
                                                     tagsColumnWidth:
                                                         tagsColumnWidth,
+                                                    draggingColumns:
+                                                        _columnsDragging,
                                                   ),
                                                   const Divider(
                                                     height: 2,
@@ -1419,87 +1421,96 @@ class _TableHeader extends StatelessWidget {
     required this.ascending,
     required this.onSort,
     required this.tagsColumnWidth,
+    required this.draggingColumns,
   });
 
   final String sortKey;
   final bool ascending;
   final ValueChanged<String> onSort;
   final double tagsColumnWidth;
+  final bool draggingColumns;
 
   @override
   Widget build(BuildContext context) {
-    return ColoredBox(
-      color: _kTableHeaderBg,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(
-            horizontal: _kTableHorizontalPadding, vertical: 4),
-        child: Row(
-          children: [
-            _HeaderCell(
-                width: _kOrderColumnWidth,
-                label: 'ID',
-                sortKey: 'displayOrder',
-                activeSortKey: sortKey,
-                ascending: ascending,
-                onSort: onSort),
-            _HeaderCell(
-                width: _kFrontColumnWidth,
-                label: 'Front',
-                isSortable: false,
-                sortKey: '',
-                activeSortKey: sortKey,
-                ascending: ascending,
-                onSort: onSort),
-            _HeaderCell(
-                width: _kDenominationColumnWidth,
-                label: 'Denomination',
-                sortKey: 'denomination',
-                activeSortKey: sortKey,
-                ascending: ascending,
-                onSort: onSort),
-            _HeaderCell(
-                width: _kDateColumnWidth,
-                label: 'Date',
-                sortKey: 'issueDate',
-                activeSortKey: sortKey,
-                ascending: ascending,
-                onSort: onSort),
-            _HeaderCell(
-                width: _kCatalogColumnWidth,
-                label: 'Catalog',
-                sortKey: 'catalogNumber',
-                activeSortKey: sortKey,
-                ascending: ascending,
-                onSort: onSort),
-            _HeaderCell(
-                width: _kCompanyColumnWidth,
-                label: 'Company',
-                sortKey: 'gradingCompany',
-                activeSortKey: sortKey,
-                ascending: ascending,
-                onSort: onSort),
-            _HeaderCell(
-                width: _kGradeColumnWidth,
-                label: 'Grade',
-                sortKey: 'grade',
-                activeSortKey: sortKey,
-                ascending: ascending,
-                onSort: onSort),
-            _HeaderCell(
-                width: _kSerialColumnWidth,
-                label: 'Serial',
-                sortKey: 'serial',
-                activeSortKey: sortKey,
-                ascending: ascending,
-                onSort: onSort),
-            _HeaderCell(
-                width: tagsColumnWidth,
-                label: 'Tags',
-                sortKey: 'tags',
-                activeSortKey: sortKey,
-                ascending: ascending,
-                onSort: onSort),
-          ],
+    // The header doubles as the grab handle for panning the columns. Sort
+    // buttons sit deeper and keep their own click cursor.
+    return MouseRegion(
+      cursor: draggingColumns
+          ? SystemMouseCursors.grabbing
+          : SystemMouseCursors.grab,
+      child: ColoredBox(
+        color: _kTableHeaderBg,
+        child: Padding(
+          padding: const EdgeInsets.symmetric(
+              horizontal: _kTableHorizontalPadding, vertical: 4),
+          child: Row(
+            children: [
+              _HeaderCell(
+                  width: _kOrderColumnWidth,
+                  label: 'ID',
+                  sortKey: 'displayOrder',
+                  activeSortKey: sortKey,
+                  ascending: ascending,
+                  onSort: onSort),
+              _HeaderCell(
+                  width: _kFrontColumnWidth,
+                  label: 'Front',
+                  isSortable: false,
+                  sortKey: '',
+                  activeSortKey: sortKey,
+                  ascending: ascending,
+                  onSort: onSort),
+              _HeaderCell(
+                  width: _kDenominationColumnWidth,
+                  label: 'Denomination',
+                  sortKey: 'denomination',
+                  activeSortKey: sortKey,
+                  ascending: ascending,
+                  onSort: onSort),
+              _HeaderCell(
+                  width: _kDateColumnWidth,
+                  label: 'Date',
+                  sortKey: 'issueDate',
+                  activeSortKey: sortKey,
+                  ascending: ascending,
+                  onSort: onSort),
+              _HeaderCell(
+                  width: _kCatalogColumnWidth,
+                  label: 'Catalog',
+                  sortKey: 'catalogNumber',
+                  activeSortKey: sortKey,
+                  ascending: ascending,
+                  onSort: onSort),
+              _HeaderCell(
+                  width: _kCompanyColumnWidth,
+                  label: 'Company',
+                  sortKey: 'gradingCompany',
+                  activeSortKey: sortKey,
+                  ascending: ascending,
+                  onSort: onSort),
+              _HeaderCell(
+                  width: _kGradeColumnWidth,
+                  label: 'Grade',
+                  sortKey: 'grade',
+                  activeSortKey: sortKey,
+                  ascending: ascending,
+                  onSort: onSort),
+              _HeaderCell(
+                  width: _kSerialColumnWidth,
+                  label: 'Serial',
+                  sortKey: 'serial',
+                  activeSortKey: sortKey,
+                  ascending: ascending,
+                  onSort: onSort),
+              _HeaderCell(
+                  width: tagsColumnWidth,
+                  label: 'Tags',
+                  sortKey: 'tags',
+                  activeSortKey: sortKey,
+                  ascending: ascending,
+                  onSort: onSort),
+            ],
+          ),
         ),
       ),
     );
@@ -1599,11 +1610,11 @@ class _TableRow extends StatelessWidget {
 
     return InkWell(
       onTap: onTap,
-      // The whole row doubles as a handle for panning the columns, matching
-      // the closed-hand cursor while a drag is in progress.
+      // Rows read as clickable; while the table is being dragged they become a
+      // closed hand. The header is the explicit grab handle.
       mouseCursor: draggingColumns
           ? SystemMouseCursors.grabbing
-          : SystemMouseCursors.grab,
+          : SystemMouseCursors.click,
       hoverColor: ViewerPalette.accentSoft,
       highlightColor: ViewerPalette.accentSoft,
       // The selection ring is a paint-only overlay: it never participates in

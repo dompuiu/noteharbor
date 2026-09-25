@@ -455,6 +455,60 @@ void main() {
     expect(find.text('Back'), findsNothing);
   });
 
+  keyboardTestWidgets('rows show a pointer cursor, turning into a hand on drag', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    InkWell rowInk() => tester.widget<InkWell>(
+          find.ancestor(of: tableRow(3), matching: find.byType(InkWell)),
+        );
+    expect(rowInk().mouseCursor, SystemMouseCursors.click);
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(tableRow(3)),
+      kind: PointerDeviceKind.mouse,
+    );
+    for (var step = 0; step < 4; step++) {
+      await gesture.moveBy(const Offset(-50, 0));
+      await tester.pump();
+    }
+    expect(rowInk().mouseCursor, SystemMouseCursors.grabbing);
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(rowInk().mouseCursor, SystemMouseCursors.click);
+  });
+
+  keyboardTestWidgets('the header is a grab handle for panning', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    List<MouseCursor> headerCursors() => tester
+        .widgetList<MouseRegion>(
+          find.ancestor(of: find.text('ID'), matching: find.byType(MouseRegion)),
+        )
+        .map((region) => region.cursor)
+        .toList();
+
+    expect(headerCursors(), contains(SystemMouseCursors.grab));
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('ID')),
+      kind: PointerDeviceKind.mouse,
+    );
+    for (var step = 0; step < 4; step++) {
+      await gesture.moveBy(const Offset(-50, 0));
+      await tester.pump();
+    }
+    expect(headerCursors(), contains(SystemMouseCursors.grabbing));
+
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(headerCursors(), contains(SystemMouseCursors.grab));
+  });
+
   keyboardTestWidgets(
     'keyboard selection stays inert on iOS',
     (tester) async {

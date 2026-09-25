@@ -6,7 +6,7 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ### Added
 
-- Table screen: reach columns that sit off-screen on a narrow window. Drag any row (or the header) with the mouse — rows show a grab cursor that becomes a closed hand while dragging. `←`/`→` scroll a step through the columns, and `Ctrl`+`←`/`→` (`Cmd` on macOS) jump to the first/last column. No horizontal scrollbar is added; `Shift`+wheel and trackpad panning are unchanged.
+- Table screen: reach columns that sit off-screen on a narrow window. Drag any row or the header with the mouse to pan — rows show a click pointer so they read as openable, the header shows a grab hand, and either becomes a closed hand while dragging. `←`/`→` scroll a step through the columns, and `Ctrl`+`←`/`→` (`Cmd` on macOS) jump to the first/last column. No horizontal scrollbar is added; `Shift`+wheel and trackpad panning are unchanged.
 - Import screen: `Esc` returns to the table screen. Confirmation dialogs still handle their own `Esc` first, and leaving stays blocked while an import is running.
 
 ### Fixed
