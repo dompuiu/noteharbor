@@ -4,6 +4,7 @@ import ReactTestRenderer, { act } from 'react-test-renderer';
 
 import type { ViewerControllerState } from '../state/useViewerController';
 import type { NoteRecord } from '../shared/viewer-core';
+import { viewerLight } from '../theme/viewerTheme';
 import {
   NotesTableScreen,
   calculateTagsColumnWidth,
@@ -402,6 +403,17 @@ test('matches the Flutter table chrome: no collection chips, logo badge, divider
 
   // Header divider under the column headers.
   byTestId(tree, 'table-header-divider');
+
+  // Header cells render at the 14px Material default, not 13.
+  const headerText = byTestId(tree, 'sort-denomination').findByType(Text);
+  expect(flat(headerText.props.style).fontSize).toBe(14);
+  const frontText = byTestId(tree, 'header-front').findByType(Text);
+  expect(flat(frontText.props.style).fontSize).toBe(14);
+
+  // Filter field matches the 16px Material default with the neutral hint.
+  const search = byTestId(tree, 'table-search');
+  expect(search.props.style.fontSize).toBe(16);
+  expect(search.props.placeholderTextColor).toBe(viewerLight.searchHint);
 
   // Row separators come from the list, not row borders.
   const list = byTestId(tree, 'table-vscroll');

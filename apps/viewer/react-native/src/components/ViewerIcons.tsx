@@ -96,28 +96,33 @@ export function CloseIcon({ size = 18, color }: IconProps) {
 
 export function UploadIcon({ size = 20, color }: IconProps) {
   const thickness = barThickness(size);
-  const headLength = size * 0.3;
-  const headTop = size * 0.1;
-  const centerX = (size - thickness) / 2;
+  const centerX = size / 2;
+  // Arrow tip; the two head arms meet here. Each arm is a horizontal bar
+  // rotated about its own center, so the centers sit one half-arm diagonally
+  // down-left/down-right of the tip (RN rotates clockwise).
+  const tipY = size * 0.1;
+  const armLength = size * 0.34;
+  const armOffset = armLength * 0.3536;
+  const armTop = tipY + armOffset - thickness / 2;
   const shaft = barStyle(
-    centerX,
-    headTop + headLength * 0.35,
+    centerX - thickness / 2,
+    tipY,
     thickness,
-    size * 0.42,
+    size * 0.44,
     color,
   );
   const leftHead = barStyle(
-    centerX - headLength / 2 + thickness / 2,
-    headTop,
-    headLength,
+    centerX - armOffset - armLength / 2,
+    armTop,
+    armLength,
     thickness,
     color,
     '-45deg',
   );
   const rightHead = barStyle(
-    centerX - headLength / 2 + thickness / 2,
-    headTop,
-    headLength,
+    centerX + armOffset - armLength / 2,
+    armTop,
+    armLength,
     thickness,
     color,
     '45deg',

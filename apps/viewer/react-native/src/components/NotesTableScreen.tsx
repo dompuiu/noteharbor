@@ -383,7 +383,7 @@ export function NotesTableScreen({
           styles.searchField,
           searchFocused && styles.searchFieldFocused,
         ]}>
-        <SearchIcon size={18} color={viewerLight.textMuted} />
+        <SearchIcon size={24} color={viewerLight.searchHint} />
         <TextInput
           testID="table-search"
           value={controller.query}
@@ -391,7 +391,7 @@ export function NotesTableScreen({
           onFocus={() => setSearchFocused(true)}
           onBlur={() => setSearchFocused(false)}
           placeholder="Filter... or use catalog: denom: date: company: grade: tags:"
-          placeholderTextColor={viewerLight.textFaint}
+          placeholderTextColor={viewerLight.searchHint}
           style={styles.searchInput}
         />
         {controller.query !== '' ? (
@@ -527,7 +527,7 @@ const styles = StyleSheet.create({
   badgeText: {
     marginLeft: 12,
     color: viewerLight.text,
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '800',
     lineHeight: 15,
   },
@@ -551,6 +551,7 @@ const styles = StyleSheet.create({
   importButton: {
     height: 48,
     width: 48,
+    marginLeft: 4,
     alignItems: 'center',
     justifyContent: 'center',
     backgroundColor: viewerLight.surface,
@@ -577,6 +578,7 @@ const styles = StyleSheet.create({
     flex: 1,
     paddingVertical: 12,
     color: viewerLight.text,
+    fontSize: 16,
   },
   clearButton: {
     height: 32,
@@ -643,12 +645,12 @@ const styles = StyleSheet.create({
   },
   headerCellText: {
     color: viewerLight.accentStrong,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
   },
   headerCellPlain: {
     color: viewerLight.text,
-    fontSize: 13,
+    fontSize: 14,
     fontWeight: '800',
   },
   row: {

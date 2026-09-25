@@ -12,6 +12,10 @@ export const viewerLight = {
   text: '#2E2318',
   textMuted: '#8A755A',
   textFaint: '#B5A488',
+  // Material3 default hint/prefix color (ColorScheme.onSurfaceVariant):
+  // Flutter sets no explicit hint style, so the field hint and magnifier
+  // render in this neutral gray, not the warm faint tone.
+  searchHint: '#49454F',
   accent: '#96622F',
   accentStrong: '#71461F',
   accentSoft: 'rgba(150,98,47,0.12)',

@@ -134,7 +134,8 @@ function AppShell() {
     <ScreenFrame
       topInset={insets.top}
       bottomInset={insets.bottom}
-      padding={showTable ? 12 : 20}>
+      padding={showTable ? 12 : 20}
+      verticalPadding={showTable ? 12 : 24}>
       {showTable ? (
         <NotesTableScreen
           controller={controller}
