@@ -41,6 +41,18 @@ void main() {
     await tester.pumpAndSettle();
   }
 
+  Future<void> pumpKeyboardTableWithImports(WidgetTester tester) async {
+    final controller = DatasetController(
+      repository: _KeyboardNavRepository(manageImports: true),
+    );
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+  }
+
   Finder tableRow(int id) => find.byKey(ValueKey('tableRow-$id'));
 
   // The keyboard selection ring is a paint-only overlay and the only accent
@@ -64,6 +76,15 @@ void main() {
   ScrollController columnsController(WidgetTester tester) => tester
       .widget<SingleChildScrollView>(find.byType(SingleChildScrollView))
       .controller!;
+
+  // A focused header is only "reached" if it is actually on-screen: its
+  // rect must sit inside the horizontal scroller's viewport.
+  void expectHeaderVisible(WidgetTester tester, String label) {
+    final headerRect = tester.getRect(find.text(label));
+    final scrollerRect = tester.getRect(find.byType(SingleChildScrollView));
+    expect(headerRect.left, greaterThanOrEqualTo(scrollerRect.left - 0.5));
+    expect(headerRect.right, lessThanOrEqualTo(scrollerRect.right + 0.5));
+  }
 
   keyboardTestWidgets('arrow keys move keyboard selection between rows', (
     WidgetTester tester,
@@ -723,11 +744,355 @@ void main() {
       expect(selectedRing(), findsOneWidget);
     },
   );
+
+  keyboardTestWidgets('tab walks filter, headers, and rows in order', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus,
+      isTrue,
+    );
+
+    const expectedHeaders = [
+      'tableHeader-displayOrder',
+      'tableHeader-denomination',
+      'tableHeader-issueDate',
+      'tableHeader-catalogNumber',
+      'tableHeader-gradingCompany',
+      'tableHeader-grade',
+      'tableHeader-serial',
+      'tableHeader-tags',
+    ];
+    for (final label in expectedHeaders) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(FocusManager.instance.primaryFocus?.debugLabel, label);
+    }
+    expect(selectedRing(), findsNothing);
+
+    // The last header behaves like ArrowDown: Tab lands on the first row.
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(selectedRow(1), findsOneWidget);
+
+    // Tab keeps walking rows like the down arrow.
+    for (final id in [2, 3, 4, 5]) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(selectedRow(id), findsOneWidget);
+    }
+
+    // Tab stops on the last row instead of wrapping.
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(selectedRow(5), findsOneWidget);
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'notesTable');
+  });
+
+  keyboardTestWidgets('shift+tab walks rows and headers in reverse', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(selectedRow(2), findsOneWidget);
+
+    Future<void> shiftTab() async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+    }
+
+    bool filterHasFocus() =>
+        tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus ??
+        false;
+
+    // Second row -> first row, like the up arrow.
+    await shiftTab();
+    expect(selectedRow(1), findsOneWidget);
+
+    // First row steps out to the last header, which must be scrolled into
+    // view even though the rows sit at the left edge.
+    await shiftTab();
+    await tester.pumpAndSettle();
+    expect(selectedRing(), findsNothing);
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'tableHeader-tags');
+    expectHeaderVisible(tester, 'TAGS');
+
+    // Back through the remaining headers in reverse visual order: every
+    // focused header must be on-screen, whichever way the columns had to
+    // move to show it.
+    const reversedHeaders = [
+      ('tableHeader-serial', 'SERIAL'),
+      ('tableHeader-grade', 'GRADE'),
+      ('tableHeader-gradingCompany', 'COMPANY'),
+      ('tableHeader-catalogNumber', 'CATALOG'),
+      ('tableHeader-issueDate', 'DATE'),
+      ('tableHeader-denomination', 'DENOMINATION'),
+      ('tableHeader-displayOrder', 'ID'),
+    ];
+    for (final (debugLabel, visibleLabel) in reversedHeaders) {
+      await shiftTab();
+      await tester.pumpAndSettle();
+      expect(FocusManager.instance.primaryFocus?.debugLabel, debugLabel);
+      expectHeaderVisible(tester, visibleLabel);
+    }
+
+    // The first header steps back into the filter.
+    await shiftTab();
+    expect(filterHasFocus(), isTrue);
+
+    // Shift+Tab stops in the filter instead of wrapping to the last row.
+    await shiftTab();
+    expect(filterHasFocus(), isTrue);
+    expect(selectedRing(), findsNothing);
+  });
+
+  keyboardTestWidgets('shift+tab from a row scrolls right to the header', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    // Enter the rows from the headers: Tab-driven row selection resets the
+    // columns to the left edge.
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.pump();
+    for (var step = 0; step < 8; step++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+    }
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(selectedRow(1), findsOneWidget);
+    expect(columnsController(tester).offset, 0);
+
+    // Stepping back out to Tags must scroll right to reveal it instead of
+    // leaving the first columns showing.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pumpAndSettle();
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'tableHeader-tags');
+    expect(columnsController(tester).offset, greaterThan(0));
+    expectHeaderVisible(tester, 'TAGS');
+  });
+
+  keyboardTestWidgets('tab reveals headers panned off-screen both ways', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    final columns = columnsController(tester);
+    expect(columns.position.maxScrollExtent, greaterThan(0));
+    expect(columns.offset, 0);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.pump();
+
+    // Forward through all eight headers: reaching Tags pulls the columns
+    // to the far end.
+    for (var step = 0; step < 8; step++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+    }
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'tableHeader-tags');
+    await tester.pumpAndSettle();
+    final forwardOffset = columnsController(tester).offset;
+    expect(forwardOffset, greaterThan(0));
+    expect(tester.getCenter(find.text('TAGS')).dx, lessThanOrEqualTo(800));
+
+    // Reverse back to ID: every header is revealed on the way, ending where
+    // the forward flow started.
+    for (var step = 0; step < 7; step++) {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+    }
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'tableHeader-displayOrder',
+    );
+    await tester.pumpAndSettle();
+    expect(columnsController(tester).offset, lessThan(forwardOffset));
+    expect(tester.getTopLeft(find.text('ID')).dx, greaterThanOrEqualTo(0));
+  });
+
+  keyboardTestWidgets('enter on a focused header sorts the column', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'tableHeader-displayOrder',
+    );
+    expect(
+      tester.getTopLeft(tableRow(1)).dy,
+      lessThan(tester.getTopLeft(tableRow(5)).dy),
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.text('Back'), findsNothing);
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'tableHeader-displayOrder',
+    );
+    expect(
+      tester.getTopLeft(tableRow(5)).dy,
+      lessThan(tester.getTopLeft(tableRow(1)).dy),
+    );
+  });
+
+  keyboardTestWidgets('tab onto a row resets panned columns to the start', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    // Walk the headers to the far end: Tags sits off-screen to the right.
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.pump();
+    for (var step = 0; step < 8; step++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+    }
+    await tester.pumpAndSettle();
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'tableHeader-tags',
+    );
+    expect(columnsController(tester).offset, greaterThan(0));
+
+    // Tabbing onto the row presents it from the left, not still on Tags.
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(selectedRow(1), findsOneWidget);
+    expect(columnsController(tester).offset, 0);
+
+    // Stepping between rows with Tab / Shift+Tab keeps the left position.
+    Future<void> shiftTab() async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+    }
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(selectedRow(2), findsOneWidget);
+    expect(columnsController(tester).offset, 0);
+
+    await shiftTab();
+    await tester.pumpAndSettle();
+    expect(selectedRow(1), findsOneWidget);
+    expect(columnsController(tester).offset, 0);
+  });
+
+  keyboardTestWidgets('tab reveals a header only when it is off-screen', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    expect(columnsController(tester).offset, 0);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.pump();
+
+    Future<void> shiftTab() async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+    }
+
+    // ID and Denomination are already fully visible: stepping to them
+    // must not scroll.
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'tableHeader-displayOrder',
+    );
+    expect(columnsController(tester).offset, 0);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pumpAndSettle();
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'tableHeader-denomination',
+    );
+    expect(columnsController(tester).offset, 0);
+
+    // Walk on to Tags at the far end: that scroll is necessary.
+    for (var step = 0; step < 6; step++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+    }
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'tableHeader-tags',
+    );
+    await tester.pumpAndSettle();
+    final atTags = columnsController(tester).offset;
+    expect(atTags, greaterThan(0));
+
+    // Serial is already visible at the far end: stepping back to it
+    // must not scroll.
+    await shiftTab();
+    await tester.pumpAndSettle();
+    expect(
+      FocusManager.instance.primaryFocus?.debugLabel,
+      'tableHeader-serial',
+    );
+    expect(columnsController(tester).offset, atTags);
+  });
+
+  keyboardTestWidgets('shift+tab from the filter focuses the import button', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTableWithImports(tester);
+    expect(find.byTooltip('Manage imported archives'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus,
+      isTrue,
+    );
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'tableImport');
+
+    // Tab from the import button returns to the filter.
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(
+      tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus,
+      isTrue,
+    );
+  });
 }
 
 class _KeyboardNavRepository extends ViewerRepository {
+  _KeyboardNavRepository({this.manageImports = false});
+
+  final bool manageImports;
+
   @override
-  bool get canManageImportedDatasets => false;
+  bool get canManageImportedDatasets => manageImports;
 
   @override
   Future<ViewerDataset> loadDataset() async {

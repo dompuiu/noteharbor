@@ -59,6 +59,19 @@ const Color _kZebraTint = Color(0x0D96622F);
 /// How far one Left/Right arrow press pans the table's hidden columns.
 const double _kColumnScrollStep = 200;
 
+/// Sortable column headers in visual order. `Front` has no sort button and is
+/// skipped by the explicit Tab order: filter -> headers -> rows.
+const List<String> _kSortableHeaderKeys = [
+  'displayOrder',
+  'denomination',
+  'issueDate',
+  'catalogNumber',
+  'gradingCompany',
+  'grade',
+  'serial',
+  'tags',
+];
+
 /// Lets a plain mouse drag pan a horizontal scroller. Flutter excludes
 /// [PointerDeviceKind.mouse] from drag gestures by default, which is why the
 /// table could previously only be panned with a trackpad or Shift+wheel.
@@ -501,6 +514,15 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     debugLabel: 'notesSearch',
     onKeyEvent: (_, event) => _handleSearchKey(event),
   );
+  late final Map<String, FocusNode> _headerFocusNodes = {
+    for (final key in _kSortableHeaderKeys)
+      key: FocusNode(
+        debugLabel: 'tableHeader-$key',
+        onKeyEvent: (node, event) => _handleHeaderKey(event, key),
+      ),
+  };
+  late final FocusNode _importButtonFocusNode =
+      FocusNode(debugLabel: 'tableImport');
 
   // Keyboard selection is a desktop affordance (Windows/macOS/Linux/Web).
   // It stays inert on touch-first platforms so tap behavior is unchanged.
@@ -619,6 +641,116 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     _tableFocusNode.requestFocus();
   }
 
+  /// Moves real keyboard focus to the [sortKey] header button and scrolls the
+  /// columns the minimal amount to show it, but only when it is not already
+  /// fully visible. The direction of travel doesn't decide this: where the
+  /// header sits relative to the viewport does (a reverse step can still need
+  /// to scroll right, e.g. Row 1 parked at the left edge stepping out to the
+  /// far-right Tags header).
+  void _focusHeader(String sortKey) {
+    final node = _headerFocusNodes[sortKey];
+    if (node == null) {
+      return;
+    }
+    // Leaving a row for a header drops the ring so it doesn't linger behind
+    // the header focus.
+    if (_selectedIndex != null) {
+      setState(() => _selectedIndex = null);
+    }
+    node.requestFocus();
+    _revealHeaderIfNeeded(node);
+  }
+
+  /// Brings the header behind [node] into view with the smallest possible
+  /// scroll, and does nothing when it is already fully visible. This mirrors
+  /// the framework's own focus traversal ([RevealedOffset.clampOffset] picks
+  /// whichever edge needs revealing), instead of [Scrollable.ensureVisible]'s
+  /// one-sided policies, which only ever scroll a single direction.
+  void _revealHeaderIfNeeded(FocusNode node) {
+    final scroller = _horizontalScrollController;
+    if (!scroller.hasClients) {
+      return;
+    }
+    final box = node.context?.findRenderObject();
+    final viewport = box == null ? null : RenderAbstractViewport.maybeOf(box);
+    if (box is! RenderBox || viewport == null) {
+      return;
+    }
+    final target = RevealedOffset.clampOffset(
+      leadingEdgeOffset: viewport.getOffsetToReveal(box, 0.0),
+      trailingEdgeOffset: viewport.getOffsetToReveal(box, 1.0),
+      currentOffset: scroller.position.pixels,
+    );
+    if (target == null) {
+      return;
+    }
+    scroller.animateTo(
+      target.offset
+          .clamp(
+            scroller.position.minScrollExtent,
+            scroller.position.maxScrollExtent,
+          )
+          .toDouble(),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
+  }
+
+  /// Tab-driven row selection always presents rows from the left: entering or
+  /// stepping through rows via Tab/Shift+Tab resets the panned columns, so a
+  /// row reached from the far-right headers doesn't sit showing Tags.
+  /// Arrow-key selection leaves the columns alone.
+  void _focusRowFromTab(int index) {
+    _focusSelection(index);
+    _ensureSelectedVisible();
+    if (_horizontalScrollController.hasClients) {
+      _horizontalScrollController.jumpTo(0);
+    }
+  }
+
+  /// Explicit Tab order within a focused header button. The table-level
+  /// handler owns row Tab; this owns header-to-header (and header-to-edge)
+  /// moves so propagation stops here once handled.
+  KeyEventResult _handleHeaderKey(KeyEvent event, String sortKey) {
+    if (!_keyboardNavEnabled) {
+      return KeyEventResult.ignored;
+    }
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey != LogicalKeyboardKey.tab) {
+      return KeyEventResult.ignored;
+    }
+    if (HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isAltPressed) {
+      return KeyEventResult.ignored;
+    }
+    final index = _kSortableHeaderKeys.indexOf(sortKey);
+    if (index < 0) {
+      return KeyEventResult.ignored;
+    }
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      if (index == 0) {
+        _focusSearchField();
+      } else {
+        _focusHeader(_kSortableHeaderKeys[index - 1]);
+      }
+      return KeyEventResult.handled;
+    }
+    if (index == _kSortableHeaderKeys.length - 1) {
+      // Last header behaves like ArrowDown: land on the first row, or stop
+      // when there is no row to land on.
+      if (_currentVisibleNotes().isEmpty) {
+        return KeyEventResult.handled;
+      }
+      _focusRowFromTab(0);
+      return KeyEventResult.handled;
+    }
+    _focusHeader(_kSortableHeaderKeys[index + 1]);
+    return KeyEventResult.handled;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -651,6 +783,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     _verticalScrollController.dispose();
     _tableFocusNode.dispose();
     _searchFocusNode.dispose();
+    _importButtonFocusNode.dispose();
+    for (final node in _headerFocusNodes.values) {
+      node.dispose();
+    }
     super.dispose();
   }
 
@@ -950,6 +1086,36 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         HardwareKeyboard.instance.isAltPressed) {
       return KeyEventResult.ignored;
     }
+    if (key == LogicalKeyboardKey.tab) {
+      // Explicit Tab order for the table stop: headers are handled by their
+      // own focus nodes, this covers the table/row stop. Forward Tab walks
+      // rows like ArrowDown; reverse Shift+Tab walks back up, stepping out to
+      // the last header from the first row. Both ends stop in place.
+      final notes = _currentVisibleNotes();
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        final current = _selectedIndex;
+        if (current == null) {
+          _focusSearchField();
+          return KeyEventResult.handled;
+        }
+        if (current <= 0) {
+          _focusHeader(_kSortableHeaderKeys.last);
+          return KeyEventResult.handled;
+        }
+        _focusRowFromTab(current - 1);
+        return KeyEventResult.handled;
+      }
+      final current = _selectedIndex;
+      if (current == null) {
+        _focusHeader(_kSortableHeaderKeys.first);
+        return KeyEventResult.handled;
+      }
+      if (current >= notes.length - 1) {
+        return KeyEventResult.handled;
+      }
+      _focusRowFromTab(current + 1);
+      return KeyEventResult.handled;
+    }
     if (key == LogicalKeyboardKey.arrowDown ||
         key == LogicalKeyboardKey.keyJ) {
       _moveSelection(1);
@@ -1077,6 +1243,30 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
+    if (key == LogicalKeyboardKey.tab) {
+      // Explicit Tab order from the filter: forward enters the headers at ID,
+      // reverse steps out to the import action above (or stops in place when
+      // imports are unavailable). Collapse a lingering select-all so the
+      // highlight does not sit stale behind the next focus.
+      if (HardwareKeyboard.instance.isControlPressed ||
+          HardwareKeyboard.instance.isMetaPressed ||
+          HardwareKeyboard.instance.isAltPressed) {
+        return KeyEventResult.ignored;
+      }
+      if (!_searchController.selection.isCollapsed) {
+        _searchController.selection = TextSelection.collapsed(
+          offset: _searchController.text.length,
+        );
+      }
+      if (HardwareKeyboard.instance.isShiftPressed) {
+        if (widget.controller.canManageImportedDatasets) {
+          _importButtonFocusNode.requestFocus();
+        }
+        return KeyEventResult.handled;
+      }
+      _focusHeader(_kSortableHeaderKeys.first);
+      return KeyEventResult.handled;
+    }
     if (key == LogicalKeyboardKey.escape) {
       // Escape behaves like ArrowDown here: leave the filter and land on the
       // first row. With no rows to land on, focus the table unselected so a
@@ -1219,6 +1409,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                             widget.controller.canManageImportedDatasets
                                 ? _openImportScreen
                                 : null,
+                        importButtonFocusNode: _importButtonFocusNode,
                       ),
                       const SizedBox(height: 20),
                       ConstrainedBox(
@@ -1326,6 +1517,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                         tagsColumnWidth,
                                                     draggingColumns:
                                                         _columnsDragging,
+                                                    headerFocusNodes:
+                                                        _headerFocusNodes,
                                                   ),
                                                   const Divider(
                                                     height: 2,
@@ -1425,11 +1618,13 @@ class _Header extends StatelessWidget {
     required this.totalCount,
     required this.visibleCount,
     required this.onOpenImports,
+    required this.importButtonFocusNode,
   });
 
   final int totalCount;
   final int visibleCount;
   final VoidCallback? onOpenImports;
+  final FocusNode importButtonFocusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -1488,7 +1683,10 @@ class _Header extends StatelessWidget {
         _StatPill(label: 'Notes', value: '$visibleCount / $totalCount'),
         if (onOpenImports != null) ...[
           const SizedBox(width: 16),
-          _ImportButton(onPressed: onOpenImports!),
+          _ImportButton(
+            onPressed: onOpenImports!,
+            focusNode: importButtonFocusNode,
+          ),
         ],
       ],
     );
@@ -1496,9 +1694,10 @@ class _Header extends StatelessWidget {
 }
 
 class _ImportButton extends StatefulWidget {
-  const _ImportButton({required this.onPressed});
+  const _ImportButton({required this.onPressed, required this.focusNode});
 
   final VoidCallback onPressed;
+  final FocusNode focusNode;
 
   @override
   State<_ImportButton> createState() => _ImportButtonState();
@@ -1530,6 +1729,7 @@ class _ImportButtonState extends State<_ImportButton> {
           height: _kHeaderBadgeHeight,
           width: _kHeaderBadgeHeight,
           child: IconButton(
+            focusNode: widget.focusNode,
             tooltip: 'Manage imported archives',
             onPressed: widget.onPressed,
             padding: EdgeInsets.zero,
@@ -1608,6 +1808,7 @@ class _TableHeader extends StatelessWidget {
     required this.onSort,
     required this.tagsColumnWidth,
     required this.draggingColumns,
+    required this.headerFocusNodes,
   });
 
   final String sortKey;
@@ -1615,6 +1816,7 @@ class _TableHeader extends StatelessWidget {
   final ValueChanged<String> onSort;
   final double tagsColumnWidth;
   final bool draggingColumns;
+  final Map<String, FocusNode> headerFocusNodes;
 
   @override
   Widget build(BuildContext context) {
@@ -1646,7 +1848,8 @@ class _TableHeader extends StatelessWidget {
                   sortKey: 'displayOrder',
                   activeSortKey: sortKey,
                   ascending: ascending,
-                  onSort: onSort),
+                  onSort: onSort,
+                  focusNode: headerFocusNodes['displayOrder']),
               _HeaderCell(
                   width: _kFrontColumnWidth,
                   label: 'Front',
@@ -1661,49 +1864,56 @@ class _TableHeader extends StatelessWidget {
                   sortKey: 'denomination',
                   activeSortKey: sortKey,
                   ascending: ascending,
-                  onSort: onSort),
+                  onSort: onSort,
+                  focusNode: headerFocusNodes['denomination']),
               _HeaderCell(
                   width: _kDateColumnWidth,
                   label: 'Date',
                   sortKey: 'issueDate',
                   activeSortKey: sortKey,
                   ascending: ascending,
-                  onSort: onSort),
+                  onSort: onSort,
+                  focusNode: headerFocusNodes['issueDate']),
               _HeaderCell(
                   width: _kCatalogColumnWidth,
                   label: 'Catalog',
                   sortKey: 'catalogNumber',
                   activeSortKey: sortKey,
                   ascending: ascending,
-                  onSort: onSort),
+                  onSort: onSort,
+                  focusNode: headerFocusNodes['catalogNumber']),
               _HeaderCell(
                   width: _kCompanyColumnWidth,
                   label: 'Company',
                   sortKey: 'gradingCompany',
                   activeSortKey: sortKey,
                   ascending: ascending,
-                  onSort: onSort),
+                  onSort: onSort,
+                  focusNode: headerFocusNodes['gradingCompany']),
               _HeaderCell(
                   width: _kGradeColumnWidth,
                   label: 'Grade',
                   sortKey: 'grade',
                   activeSortKey: sortKey,
                   ascending: ascending,
-                  onSort: onSort),
+                  onSort: onSort,
+                  focusNode: headerFocusNodes['grade']),
               _HeaderCell(
                   width: _kSerialColumnWidth,
                   label: 'Serial',
                   sortKey: 'serial',
                   activeSortKey: sortKey,
                   ascending: ascending,
-                  onSort: onSort),
+                  onSort: onSort,
+                  focusNode: headerFocusNodes['serial']),
               _HeaderCell(
                   width: tagsColumnWidth,
                   label: 'Tags',
                   sortKey: 'tags',
                   activeSortKey: sortKey,
                   ascending: ascending,
-                  onSort: onSort),
+                  onSort: onSort,
+                  focusNode: headerFocusNodes['tags']),
             ],
           ),
         ),
@@ -1721,6 +1931,7 @@ class _HeaderCell extends StatelessWidget {
     required this.ascending,
     required this.onSort,
     this.isSortable = true,
+    this.focusNode,
   });
 
   final double width;
@@ -1730,6 +1941,7 @@ class _HeaderCell extends StatelessWidget {
   final bool ascending;
   final ValueChanged<String> onSort;
   final bool isSortable;
+  final FocusNode? focusNode;
 
   @override
   Widget build(BuildContext context) {
@@ -1739,6 +1951,7 @@ class _HeaderCell extends StatelessWidget {
       width: width,
       child: isSortable
           ? TextButton(
+              focusNode: focusNode,
               onPressed: () => onSort(sortKey),
               style: TextButton.styleFrom(
                 alignment: Alignment.center,
