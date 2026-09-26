@@ -1,4 +1,4 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
 import {
   FlatList,
   Linking,
@@ -142,6 +142,17 @@ function slideshowTags(note: NoteRecord): string[] {
 }
 
 const FADE_STRIP_OPACITIES = [0.05, 0.15, 0.3, 0.5, 0.7, 0.9];
+
+// Flutter parity (PageView.builder): only the current page and one neighbour
+// per side mount heavy content. Far pages keep their slot (same width, so
+// getItemLayout offsets stay exact) as a cheap placeholder. This matters on
+// Windows/macOS where FlatList windowing alone still mounts every NoteSlide's
+// ScrollView + images + meta panel and the slideshow feels sluggish.
+export const SLIDESHOW_OFFSCREEN_LIMIT = 1;
+
+export function isSlideshowIndexMounted(currentIndex: number, index: number): boolean {
+  return Math.abs(index - currentIndex) <= SLIDESHOW_OFFSCREEN_LIMIT;
+}
 
 export const NoteSlideshow = forwardRef(function NoteSlideshow(
   {
@@ -358,17 +369,24 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
   const keyExtractor = useCallback((note: NoteRecord) => String(note.id), []);
 
   const renderItem = useCallback(
-    ({ item: note }: ListRenderItemInfo<NoteRecord>) => (
+    ({ item: note, index }: ListRenderItemInfo<NoteRecord>) => (
       <View style={{ width: pageWidth }}>
-        <NoteSlide
-          note={note}
-          imageWidth={Math.max(1, pageWidth - 56)}
-          onTagTap={(tagName) => close(tagName)}
-          onImageTap={(face) => openPopover(note, face)}
-        />
+        {isSlideshowIndexMounted(currentIndex, index) ? (
+          <NoteSlide
+            note={note}
+            imageWidth={Math.max(1, pageWidth - 56)}
+            onTagTap={(tagName) => close(tagName)}
+            onImageTap={(face) => openPopover(note, face)}
+          />
+        ) : (
+          <View
+            testID={`slide-placeholder-${note.id}`}
+            style={styles.slideOuter}
+          />
+        )}
       </View>
     ),
-    [pageWidth, close, openPopover],
+    [pageWidth, close, openPopover, currentIndex],
   );
 
   return (
@@ -414,7 +432,7 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
             renderItem={renderItem}
             getItemLayout={getItemLayout}
             initialScrollIndex={clampSlideshowIndex(notes.length, initialIndex)}
-            extraData={pageWidth}
+            extraData={{ pageWidth, currentIndex }}
             horizontal
             pagingEnabled
             // pagingEnabled alone drives page-by-page snapping. Do not add
@@ -425,7 +443,8 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
             showsHorizontalScrollIndicator={false}
             style={styles.pager}
             // Virtualized like Flutter's PageView.builder: only the current
-            // page and its neighbours stay mounted.
+            // page and its neighbours mount heavy content (see
+            // isSlideshowIndexMounted above); placeholders hold the slots.
             initialNumToRender={3}
             maxToRenderPerBatch={2}
             windowSize={3}
@@ -458,7 +477,7 @@ export const NoteSlideshow = forwardRef(function NoteSlideshow(
   );
 });
 
-function NoteSlide({
+const NoteSlide = memo(function NoteSlide({
   note,
   imageWidth,
   onTagTap,
@@ -582,9 +601,9 @@ function NoteSlide({
       <View pointerEvents="none" style={styles.slideBorder} />
     </View>
   );
-}
+});
 
-function SlideImage({
+const SlideImage = memo(function SlideImage({
   note,
   face,
   imageWidth,
@@ -637,7 +656,7 @@ function SlideImage({
       />
     </Pressable>
   );
-}
+});
 
 const styles = StyleSheet.create({
   screen: {

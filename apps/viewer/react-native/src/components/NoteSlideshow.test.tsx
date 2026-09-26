@@ -6,6 +6,7 @@ import type { NoteRecord } from '../shared/viewer-core';
 import {
   clampSlideshowIndex,
   isScrolledToBottom,
+  isSlideshowIndexMounted,
   nextSlideshowIndex,
   NoteSlideshow,
   prevSlideshowIndex,
@@ -13,6 +14,7 @@ import {
   slideshowDetailRows,
   slideshowKeyAction,
   slideshowNativeKeyAction,
+  SLIDESHOW_OFFSCREEN_LIMIT,
   type NoteSlideshowHandle,
 } from './NoteSlideshow';
 import type { SlideshowReturn } from './NotesTableScreen';
@@ -137,16 +139,15 @@ test('renders inline with the position counter and Back', () => {
 });
 
 test('shows titles with the Untitled fallback', () => {
-  const tree = renderSlideshow({
-    notes: [
-      ...baseNotes,
-      makeNote({ id: 3, denomination: '', catalogNumber: '' }),
-    ],
-  });
-
+  const tree = renderSlideshow();
   expect(textContent(tree, 'slide-title-1')).toBe('5 Lei - P-98');
   expect(textContent(tree, 'slide-title-2')).toBe('10 Lei - P-90');
-  expect(textContent(tree, 'slide-title-3')).toBe('Untitled note');
+
+  // Untitled fallback on a single-note slideshow (index 0 always mounted).
+  const untitled = renderSlideshow({
+    notes: [makeNote({ id: 3, denomination: '', catalogNumber: '' })],
+  });
+  expect(textContent(untitled, 'slide-title-3')).toBe('Untitled note');
 });
 
 test('shows the grading company only when present', () => {
@@ -368,6 +369,38 @@ test('pager is virtualized like Flutter PageView.builder', () => {
   expect(typeof pager.props.getItemLayout).toBe('function');
   expect(typeof pager.props.keyExtractor).toBe('function');
   expect(pager.props.keyExtractor(baseNotes[0])).toBe('1');
+  // Heavy slide content follows the mounted window: neighbours render,
+  // far notes keep cheap placeholder slots (Flutter PageView.builder parity).
+  expect(SLIDESHOW_OFFSCREEN_LIMIT).toBe(1);
+  expect(isSlideshowIndexMounted(0, 0)).toBe(true);
+  expect(isSlideshowIndexMounted(0, 1)).toBe(true);
+  expect(isSlideshowIndexMounted(0, 2)).toBe(false);
+  expect(textContent(tree, 'slide-title-1')).toBe('5 Lei - P-98');
+  expect(textContent(tree, 'slide-title-2')).toBe('10 Lei - P-90');
+  byTestId(tree, 'slide-placeholder-3');
+  absentTestId(tree, 'slide-title-3');
+});
+
+test('swiping slides the mounted window forward', () => {
+  const tree = renderSlideshow({
+    notes: [
+      ...baseNotes,
+      makeNote({ id: 3, denomination: '15 Lei', catalogNumber: 'P-93' }),
+      makeNote({ id: 4, denomination: '20 Lei', catalogNumber: 'P-91' }),
+    ],
+  });
+
+  absentTestId(tree, 'slide-title-3');
+  act(() => {
+    byTestId(tree, 'slideshow-pager').props.onMomentumScrollEnd({
+      nativeEvent: {
+        contentOffset: { x: 400 },
+        layoutMeasurement: { width: 400 },
+      },
+    });
+  });
+  expect(textContent(tree, 'slideshow-counter')).toBe('2 / 4');
+  expect(textContent(tree, 'slide-title-3')).toBe('15 Lei - P-93');
 });
 
 test('pager getItemLayout pages by the measured width', () => {
