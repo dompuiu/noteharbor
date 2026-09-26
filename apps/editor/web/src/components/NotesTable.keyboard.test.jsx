@@ -1,5 +1,5 @@
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
@@ -13,6 +13,11 @@ vi.mock("../lib/api.js", () => ({
   startScrape: vi.fn(),
 }));
 
+const virtualWindow = vi.hoisted(() => ({
+  start: 0,
+  end: Number.POSITIVE_INFINITY,
+}));
+
 vi.mock("@tanstack/react-virtual", () => ({
   useVirtualizer: ({ count }) => ({
     getVirtualItems: () =>
@@ -22,7 +27,10 @@ vi.mock("@tanstack/react-virtual", () => ({
         size: 43,
         start: index * 43,
         end: (index + 1) * 43,
-      })),
+      })).filter(
+        (item) =>
+          item.index >= virtualWindow.start && item.index < virtualWindow.end,
+      ),
     getTotalSize: () => count * 43,
     measureElement: () => {},
     scrollToIndex: () => {},
@@ -47,8 +55,8 @@ function LocationProbe() {
   return <output data-testid="route-hash">{location.hash}</output>;
 }
 
-function renderTable() {
-  return render(
+function tableTree() {
+  return (
     <MemoryRouter>
       <LocationProbe />
       <NotesTable
@@ -59,8 +67,12 @@ function renderTable() {
         loadingCollections={false}
         onSelectCollection={() => {}}
       />
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+}
+
+function renderTable() {
+  return render(tableTree());
 }
 
 function currentHash() {
@@ -73,6 +85,8 @@ async function findRow() {
 }
 
 beforeEach(() => {
+  virtualWindow.start = 0;
+  virtualWindow.end = Number.POSITIVE_INFINITY;
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
     width: 1000,
@@ -162,5 +176,154 @@ describe("NotesTable keyboard focus inside a row", () => {
 
     expect(checkbox).toBeChecked();
     expect(currentHash()).not.toContain("slideshow");
+  });
+});
+
+describe("Slideshow close return highlight", () => {
+  function notePayload(id, denomination) {
+    return {
+      id,
+      display_order: id,
+      denomination,
+      issue_date: "",
+      catalog_number: "",
+      grading_company: "",
+      grade: "",
+      serial: "",
+      url: "https://example.test/note/1",
+      images: [],
+      tags: [],
+      scrape_status: "idle",
+    };
+  }
+
+  async function openSlideshowOnFirstRow(user) {
+    getNotes.mockResolvedValue({
+      notes: [notePayload(1, "AAAA"), notePayload(2, "BBBB")],
+    });
+    const { rerender } = renderTable();
+
+    const first = await screen.findByText("AAAA");
+    const firstRow = first.closest("tr");
+    await user.click(firstRow);
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1");
+    });
+    return { firstRow, rerender };
+  }
+
+  test("Close button highlights the returned row", async () => {
+    const user = userEvent.setup();
+    const { firstRow } = await openSlideshowOnFirstRow(user);
+
+    const closeButton = await screen.findByRole("button", {
+      name: /close slideshow/i,
+    });
+    await user.click(closeButton);
+
+    await waitFor(() => {
+      expect(currentHash()).not.toContain("slideshow");
+    });
+    await waitFor(() => {
+      expect(firstRow).toHaveFocus();
+    });
+    expect(firstRow).toHaveClass("table-row-link--returned");
+  });
+
+  test("Escape highlights the returned row", async () => {
+    const user = userEvent.setup();
+    const { firstRow } = await openSlideshowOnFirstRow(user);
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(currentHash()).not.toContain("slideshow");
+    });
+    await waitFor(() => {
+      expect(firstRow).toHaveFocus();
+    });
+    expect(firstRow).toHaveClass("table-row-link--returned");
+  });
+
+  test("moving focus to another row clears the return highlight", async () => {
+    const user = userEvent.setup();
+    const { firstRow } = await openSlideshowOnFirstRow(user);
+
+    const closeButton = await screen.findByRole("button", {
+      name: /close slideshow/i,
+    });
+    await user.click(closeButton);
+
+    await waitFor(() => {
+      expect(firstRow).toHaveClass("table-row-link--returned");
+    });
+
+    const second = await screen.findByText("BBBB");
+    const secondRow = second.closest("tr");
+    await act(async () => {
+      secondRow.focus();
+    });
+
+    await waitFor(() => {
+      expect(firstRow).not.toHaveClass("table-row-link--returned");
+    });
+  });
+
+  test("moving to another note then closing highlights that note's row", async () => {
+    const user = userEvent.setup();
+    await openSlideshowOnFirstRow(user);
+
+    // Move through the slideshow to the second note, then close.
+    await user.keyboard("{ArrowRight}");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/2");
+    });
+
+    const closeButton = await screen.findByRole("button", {
+      name: /close slideshow/i,
+    });
+    await user.click(closeButton);
+
+    await waitFor(() => {
+      expect(currentHash()).not.toContain("slideshow");
+    });
+
+    const second = await screen.findByText("BBBB");
+    const secondRow = second.closest("tr");
+    await waitFor(() => {
+      expect(secondRow).toHaveFocus();
+    });
+    expect(secondRow).toHaveClass("table-row-link--returned");
+  });
+
+  test("scrolling the returned row out of view clears the return highlight", async () => {
+    const user = userEvent.setup();
+    const { firstRow, rerender } = await openSlideshowOnFirstRow(user);
+
+    const closeButton = await screen.findByRole("button", {
+      name: /close slideshow/i,
+    });
+    await user.click(closeButton);
+
+    await waitFor(() => {
+      expect(firstRow).toHaveClass("table-row-link--returned");
+    });
+
+    // Scroll the returned row out of the virtualized window: it unmounts.
+    virtualWindow.start = 1;
+    rerender(tableTree());
+
+    await waitFor(() => {
+      expect(screen.queryByText("AAAA")).not.toBeInTheDocument();
+    });
+
+    // Scroll back: the row remounts without the stale highlight.
+    virtualWindow.start = 0;
+    rerender(tableTree());
+
+    const first = await screen.findByText("AAAA");
+    expect(first.closest("tr")).not.toHaveClass("table-row-link--returned");
   });
 });

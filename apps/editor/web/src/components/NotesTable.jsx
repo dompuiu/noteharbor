@@ -1103,6 +1103,7 @@ function NotesTable({
   const [bulkLoading, setBulkLoading] = useState(false);
   const [reorderLoading, setReorderLoading] = useState(false);
   const [slideshowNotes, setSlideshowNotes] = useState([]);
+  const [returnedNoteId, setReturnedNoteId] = useState(null);
   const [draggedNoteId, setDraggedNoteId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const [columnsDragging, setColumnsDragging] = useState(false);
@@ -1670,9 +1671,10 @@ function NotesTable({
     // A changed filter or sort produces a new row order: drop any keyboard
     // focus target from the previous order (including a not-yet-landed
     // virtualized focus) so the next ArrowDown starts at the first row of
-    // the new order.
+    // the new order. The slideshow-return cue belongs to the old order too.
     focusedRowIdRef.current = null;
     pendingRowFocusNoteIdRef.current = null;
+    setReturnedNoteId(null);
   }, [filters, sortDirection, sortKey]);
 
   // The vertical scrollbar is custom-drawn so its track spans only the rows
@@ -2106,6 +2108,21 @@ function NotesTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slideshowRouteActive]);
 
+  useLayoutEffect(() => {
+    // Unmounting a focused row fires no blur event, so the slideshow-return
+    // cue cannot rely on onBlur alone: once its row leaves the virtualized
+    // window (scroll, filter), drop the cue so it cannot go stale and
+    // reappear when the row scrolls back into view. A row ref detach is the
+    // wrong place for this — inline ref callbacks detach and reattach on
+    // every render, which would clear the cue immediately.
+    if (
+      returnedNoteId != null &&
+      !rowElementMapRef.current.has(returnedNoteId)
+    ) {
+      setReturnedNoteId(null);
+    }
+  });
+
   useEffect(() => {
     function handleGlobalKeyDown(event) {
       if (showShortcutsHelp) {
@@ -2362,6 +2379,7 @@ function NotesTable({
 
   function openSlideshow(startId) {
     setActionError("");
+    setReturnedNoteId(null);
     const noteId = startId ?? orderedNotes[0]?.id ?? null;
 
     if (!noteId) {
@@ -2379,6 +2397,7 @@ function NotesTable({
 
   function closeSlideshow() {
     focusRestoreNoteIdRef.current = currentRoute.noteId;
+    setReturnedNoteId(currentRoute.noteId);
     resetColumnScroll();
     navigateToTableRoute(emptyTableRoute(), { replace: true });
   }
@@ -3493,7 +3512,7 @@ function NotesTable({
                               </tr>
                             ) : null}
                             <tr
-                              className={`table-row-link${draggedNoteId === note.id ? " table-row-link--dragging" : ""}`}
+                              className={`table-row-link${draggedNoteId === note.id ? " table-row-link--dragging" : ""}${returnedNoteId === note.id ? " table-row-link--returned" : ""}`}
                               data-index={virtualRow.index}
                               key={note.id}
                               ref={(element) => {
@@ -3518,6 +3537,17 @@ function NotesTable({
                               }}
                               onFocus={() => {
                                 focusedRowIdRef.current = note.id;
+                              }}
+                              onBlur={(event) => {
+                                if (
+                                  !event.currentTarget.contains(
+                                    event.relatedTarget,
+                                  )
+                                ) {
+                                  setReturnedNoteId((current) =>
+                                    current === note.id ? null : current,
+                                  );
+                                }
                               }}
                               onDragLeave={(event) => {
                                 // The drop placeholder is a sibling row
