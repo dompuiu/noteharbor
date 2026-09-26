@@ -2,6 +2,29 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
+## [1.6.0] - 2026-09-26
+
+### Added
+
+- Import screen: the archive picker is a dashed drop zone showing the selected file name, a readiness hint, and a ZIP badge. Import and delete results appear in a status banner with a success/error icon and accent edge.
+- Table screen: loading shows a skeleton placeholder, and an empty filter result shows an illustrated empty state with a clear-the-filter hint.
+- Table screen: `Tab`/`Shift`+`Tab` follow an explicit order — filter field, sortable column headers, rows — with `Shift`+`Tab` from the filter reaching the Import button. Tabbing into rows resets panned columns to the left edge, and focused headers scroll into view.
+- Note slideshow: hover-revealed edge chevrons over the slide edges move to the previous/next note on desktop; they stay invisible and inert on touch devices.
+
+### Changed
+
+- App theme: the interface typeface is Inter (bundled) with a unified Material 3 theme for buttons, inputs, dialogs, tooltips, and scrollbars. Switching between the Import and Table screens crossfades (instant when reduced motion is requested).
+- Table screen: the header is reduced to the app icon plus the `Note Harbor` title; column headers are uppercase with an animated sort indicator, and odd rows carry a zebra tint.
+- Note slideshow and image viewer: navigation stops at the first/last item instead of wrapping around.
+- Note slideshow: `↑`/`↓` scroll the slide content instead of opening the image viewer; the viewer opens with `Enter`/`Space`.
+- Note slideshow: slide images sit in a fixed 3:2 recessed dark well with no hairline border, so framing no longer depends on the picture's size.
+- Table screen: scrolling with the mouse wheel or a drag drops the keyboard row selection and collapses a lingering select-all highlight in the filter field; keyboard-driven scrolling is unaffected.
+
+### Fixed
+
+- Table screen and Import screen: arrow keys keep working after switching between the two screens, instead of focus being lost with the unmounted screen during the transition.
+- Note slideshow: the index pill and Back button heights are aligned, a bottom fade signals scrollable content, and no scrollbar is shown.
+
 ## [1.5.1] - 2026-09-24
 
 ### Fixed

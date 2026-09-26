@@ -2,5 +2,5 @@
 ///
 /// Kept in sync with `version` in `pubspec.yaml` on every release.
 abstract final class AppInfo {
-  static const String version = '1.5.1';
+  static const String version = '1.6.0';
 }
