@@ -7,6 +7,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:note_harbor_viewer/app/viewer_palette.dart';
 import 'package:note_harbor_viewer/data/dataset_controller.dart';
 import 'package:note_harbor_viewer/data/viewer_repository.dart';
+import 'package:note_harbor_viewer/features/import/import_dataset_screen.dart';
 import 'package:note_harbor_viewer/features/table/notes_table_screen.dart';
 import 'package:note_harbor_viewer/models/viewer_dataset.dart';
 
@@ -663,6 +664,64 @@ void main() {
       expect(selectedRing(), findsNothing);
     },
     platform: TargetPlatform.iOS,
+  );
+
+  keyboardTestWidgets(
+    'mouse wheel scroll drops the keyboard selection ring',
+    (tester) async {
+      await pumpKeyboardTable(tester);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(selectedRing(), findsOneWidget);
+
+      final pointer = TestPointer(1, PointerDeviceKind.mouse);
+      pointer.hover(tester.getCenter(tableRow(1)));
+      await tester.sendEventToBinding(
+        pointer.scroll(const Offset(0, 120)),
+      );
+      await tester.pumpAndSettle();
+
+      expect(selectedRing(), findsNothing);
+    },
+  );
+
+  keyboardTestWidgets(
+    'table takes keyboard focus after the import-to-table swap',
+    (tester) async {
+      final controller = DatasetController(
+        repository: _KeyboardNavRepository(),
+      );
+      await controller.load();
+
+      Widget buildHome(Widget child) {
+        return MaterialApp(
+          home: AnimatedSwitcher(
+            duration: const Duration(milliseconds: 220),
+            transitionBuilder: (widget, animation) => FadeTransition(
+              opacity: animation,
+              child: widget,
+            ),
+            child: child,
+          ),
+        );
+      }
+
+      await tester.pumpWidget(
+        buildHome(ImportDatasetScreen(controller: controller)),
+      );
+      await tester.pumpAndSettle();
+      expect(find.text('Import Dataset'), findsOneWidget);
+
+      await tester.pumpWidget(
+        buildHome(NotesTableScreen(controller: controller)),
+      );
+      await tester.pumpAndSettle();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(selectedRing(), findsOneWidget);
+    },
   );
 }
 

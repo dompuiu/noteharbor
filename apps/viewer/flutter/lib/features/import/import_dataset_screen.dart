@@ -18,12 +18,47 @@ class ImportDatasetScreen extends StatefulWidget {
 }
 
 class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
+  late final FocusNode _screenFocusNode =
+      FocusNode(debugLabel: 'importScreen');
   String? _selectedArchivePath;
   String? _selectedArchiveName;
   String? _message;
   bool _messageIsError = false;
   bool _isPicking = false;
   bool _isImporting = false;
+
+  @override
+  void initState() {
+    super.initState();
+    FocusManager.instance.addListener(_handleFocusDrain);
+  }
+
+  @override
+  void dispose() {
+    FocusManager.instance.removeListener(_handleFocusDrain);
+    _screenFocusNode.dispose();
+    super.dispose();
+  }
+
+  /// Mirrors the table screen's drain guard: after a table→import swap the
+  /// exiting table takes focus with it, which would leave this screen's
+  /// Escape handling dead. Pushed dialogs make this route non-current, so
+  /// confirm dialogs are never disturbed.
+  void _handleFocusDrain() {
+    if (!mounted) {
+      return;
+    }
+    if (ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+    // A scope as primary focus means no interactive leaf holds focus: the
+    // route scope itself reports hasFocus, so check the type instead.
+    final primary = FocusManager.instance.primaryFocus;
+    if (primary != null && primary is! FocusScopeNode) {
+      return;
+    }
+    _screenFocusNode.requestFocus();
+  }
 
   Future<void> _pickArchive() async {
     setState(() {
@@ -263,6 +298,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
   @override
   Widget build(BuildContext context) {
     return Focus(
+      focusNode: _screenFocusNode,
       autofocus: true,
       onKeyEvent: _handleKeyEvent,
       child: PopScope(

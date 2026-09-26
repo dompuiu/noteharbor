@@ -3,6 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/viewer_palette.dart';
@@ -578,7 +579,27 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
 
   /// Tracks whether the user is actively dragging the columns, so rows can
   /// show a closed-hand cursor. Vertical notifications are ignored.
+  ///
+  /// Any user-driven scroll (wheel, drag) also hands control back to the
+  /// pointer: the keyboard row selection is dropped, like on pointer-down,
+  /// and a lingering select-all in the filter is collapsed so the highlight
+  /// does not sit stale behind the scrolled table. Programmatic scrolls
+  /// (keyboard navigation, reveal-after-close) never trigger this.
   bool _handleTableScrollNotification(ScrollNotification notification) {
+    // A wheel tick dispatches forward/reverse followed by idle; only the
+    // user-driven directions reset the selection (idle also fires when a
+    // programmatic jump settles back through goIdle).
+    if (notification is UserScrollNotification &&
+        notification.direction != ScrollDirection.idle) {
+      if (_selectedIndex != null && mounted) {
+        setState(() => _selectedIndex = null);
+      }
+      if (_searchFocusNode.hasFocus && !_searchController.selection.isCollapsed) {
+        _searchController.selection = TextSelection.collapsed(
+          offset: _searchController.text.length,
+        );
+      }
+    }
     if (notification.metrics.axis != Axis.horizontal) {
       return false;
     }
@@ -604,6 +625,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     _lastActiveCollectionId = widget.controller.activeCollectionId;
     widget.controller.addListener(_handleControllerChange);
     _searchFocusNode.addListener(_handleSearchFocusChange);
+    FocusManager.instance.addListener(_handleFocusDrain);
   }
 
   @override
@@ -621,6 +643,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
 
   @override
   void dispose() {
+    FocusManager.instance.removeListener(_handleFocusDrain);
     widget.controller.removeListener(_handleControllerChange);
     _searchFocusNode.removeListener(_handleSearchFocusChange);
     _searchController.dispose();
@@ -629,6 +652,29 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     _tableFocusNode.dispose();
     _searchFocusNode.dispose();
     super.dispose();
+  }
+
+  /// Re-claims keyboard control when focus drains to nothing while this
+  /// screen owns the route. This happens on startup: the home crossfade
+  /// mounts the table while the exiting import screen still holds focus,
+  /// and the focus is lost when that screen unmounts — leaving arrow keys
+  /// to wander through focus traversal (import button, filter) instead of
+  /// reaching the rows. Pushed routes (slideshow, dialogs) make this route
+  /// non-current, so they are never disturbed.
+  void _handleFocusDrain() {
+    if (!mounted || !_keyboardNavEnabled) {
+      return;
+    }
+    if (ModalRoute.of(context)?.isCurrent != true) {
+      return;
+    }
+    // A scope as primary focus means no interactive leaf holds focus: the
+    // route scope itself reports hasFocus, so check the type instead.
+    final primary = FocusManager.instance.primaryFocus;
+    if (primary != null && primary is! FocusScopeNode) {
+      return;
+    }
+    _tableFocusNode.requestFocus();
   }
 
   void _handleControllerChange() {
@@ -1188,8 +1234,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                           onTapOutside: _handleFilterTapOutside,
                           decoration: InputDecoration(
                             filled: true,
-                            fillColor: ViewerPalette.surfaceContainer
-                                .withValues(alpha: 0.55),
+                            fillColor: ViewerPalette.surface,
                             hintText:
                                 'Filter…  catalog:  denom:  date:  company:  grade:  tags:',
                             hintStyle: const TextStyle(
@@ -1754,10 +1799,16 @@ class _HeaderCell extends StatelessWidget {
                       opacity: isActive ? 1.0 : 0.0,
                       duration: const Duration(milliseconds: 150),
                       child: const Padding(
-                        padding: EdgeInsets.only(left: 4),
-                        child: Icon(
-                          Icons.arrow_upward_rounded,
-                          size: 14,
+                        padding: EdgeInsets.only(left: 5),
+                        child: Text(
+                          '▲',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 10,
+                            fontWeight: FontWeight.w800,
+                            color: _kTableSortableHeaderText,
+                            height: 1,
+                          ),
                         ),
                       ),
                     ),
