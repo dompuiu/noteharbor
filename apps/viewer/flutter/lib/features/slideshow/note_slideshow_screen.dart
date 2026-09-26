@@ -22,6 +22,12 @@ const _kTagChipText = ViewerPalette.tagText;
 /// Keyboard scroll step for the slide content, in logical pixels.
 const _kArrowScrollOffset = 120.0;
 
+/// Fixed landscape stage for the scan images. Measured across the real
+/// dataset (914 full images, avg ratio ~1.55, all but 6 landscape), 3:2
+/// centers the error so letterboxing stays small on every slide. The fixed
+/// height keeps the slide height (and the meta panel position) identical.
+const _kImageStageAspectRatio = 3 / 2;
+
 class NoteSlideshowResult {
   const NoteSlideshowResult({
     required this.noteId,
@@ -577,56 +583,43 @@ class _NoteImage extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final image = this.image;
     return GestureDetector(
       onTap: image == null ? null : onTap,
       child: AspectRatio(
-        aspectRatio: 1.65,
-        child: DecoratedBox(
+        aspectRatio: _kImageStageAspectRatio,
+        child: Container(
+          // Recessed well: darker than the card so it reads as an inset.
+          // The picture sits on a thin dark matte inside it.
           decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(13),
-            border: Border.all(color: _kBorder),
+            color: ViewerPalette.darkBackground,
+            borderRadius: BorderRadius.circular(14),
           ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: image == null
-                ? const ColoredBox(
-                    color: _kDetailsBg,
-                    child: Center(
-                      child: Text(
-                        'No image',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          color: ViewerPalette.darkMuted,
-                        ),
-                      ),
+          clipBehavior: Clip.antiAlias,
+          padding: const EdgeInsets.all(8),
+          child: image == null
+              ? const Center(
+                  child: Text(
+                    'No image',
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      color: ViewerPalette.darkMuted,
                     ),
-                  )
-                : Image(
-                    image: createNoteImageProvider(image!),
-                    fit: BoxFit.contain,
-                    frameBuilder:
-                        (context, child, frame, wasSynchronouslyLoaded) {
-                      if (wasSynchronouslyLoaded || frame != null) {
-                        return child;
-                      }
-                      return const ColoredBox(
-                        color: _kDetailsBg,
-                      );
-                    },
-                    errorBuilder: (_, __, ___) => const ColoredBox(
-                      color: _kDetailsBg,
-                      child: Center(
-                        child: Text(
-                          'Missing image',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            color: ViewerPalette.darkMuted,
-                          ),
-                        ),
+                  ),
+                )
+              : Image(
+                  image: createNoteImageProvider(image),
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, __, ___) => const Center(
+                    child: Text(
+                      'Missing image',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        color: ViewerPalette.darkMuted,
                       ),
                     ),
                   ),
-          ),
+                ),
         ),
       ),
     );
