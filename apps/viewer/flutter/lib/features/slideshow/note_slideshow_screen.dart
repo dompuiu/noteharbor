@@ -19,6 +19,9 @@ const _kTagChipBg = ViewerPalette.tagBackground;
 const _kTagChipBorder = ViewerPalette.tagBorder;
 const _kTagChipText = ViewerPalette.tagText;
 
+/// Keyboard scroll step for the slide content, in logical pixels.
+const _kArrowScrollOffset = 120.0;
+
 class NoteSlideshowResult {
   const NoteSlideshowResult({
     required this.noteId,
@@ -49,6 +52,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   late final FocusNode _slideshowFocusNode =
       FocusNode(debugLabel: 'noteSlideshow');
   late int _currentIndex;
+  final Map<int, _NoteSlideState> _slideStates = {};
 
   void _close({String? tagName}) {
     if (!mounted) {
@@ -105,6 +109,30 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
       return;
     }
     _jump(_currentIndex + 1);
+  }
+
+  void _registerSlide(int index, _NoteSlideState state) {
+    _slideStates[index] = state;
+  }
+
+  void _unregisterSlide(int index, _NoteSlideState state) {
+    if (identical(_slideStates[index], state)) {
+      _slideStates.remove(index);
+    }
+  }
+
+  void _scrollCurrentSlide(double dy) {
+    // Let focused controls (Back button, selectable text) handle their own
+    // arrow keys instead of scrolling underneath them.
+    if (FocusManager.instance.primaryFocus != _slideshowFocusNode) {
+      return;
+    }
+    if (HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isAltPressed) {
+      return;
+    }
+    _slideStates[_currentIndex]?.scrollBy(dy);
   }
 
   void _openCurrentImageViewer() {
@@ -168,7 +196,8 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
         SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
         SingleActivator(LogicalKeyboardKey.arrowLeft): _PreviousSlideIntent(),
         SingleActivator(LogicalKeyboardKey.arrowRight): _NextSlideIntent(),
-        SingleActivator(LogicalKeyboardKey.arrowDown): _OpenImageIntent(),
+        SingleActivator(LogicalKeyboardKey.arrowUp): _ScrollUpIntent(),
+        SingleActivator(LogicalKeyboardKey.arrowDown): _ScrollDownIntent(),
         SingleActivator(LogicalKeyboardKey.enter): _OpenImageIntent(),
         SingleActivator(LogicalKeyboardKey.numpadEnter): _OpenImageIntent(),
         SingleActivator(LogicalKeyboardKey.space): _OpenImageIntent(),
@@ -190,6 +219,18 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
           _NextSlideIntent: CallbackAction<_NextSlideIntent>(
             onInvoke: (_) {
               _goNext();
+              return null;
+            },
+          ),
+          _ScrollUpIntent: CallbackAction<_ScrollUpIntent>(
+            onInvoke: (_) {
+              _scrollCurrentSlide(-_kArrowScrollOffset);
+              return null;
+            },
+          ),
+          _ScrollDownIntent: CallbackAction<_ScrollDownIntent>(
+            onInvoke: (_) {
+              _scrollCurrentSlide(_kArrowScrollOffset);
               return null;
             },
           ),
@@ -227,16 +268,22 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                   ),
                 ),
                 child: SafeArea(
+                  minimum: const EdgeInsets.only(bottom: 12),
                   child: Column(
                     children: [
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                        child: Row(
-                          children: [
-                            const Spacer(),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
+                        // Stretch the row so the index pill matches the Back
+                        // button height instead of sizing to its own text.
+                        child: IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              const Spacer(),
+                              Container(
+                                alignment: Alignment.center,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
                                 color: ViewerPalette.darkScrim,
                                 borderRadius: BorderRadius.circular(18),
@@ -268,7 +315,8 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                               onPressed: _close,
                               child: const Text('Back'),
                             ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                       Expanded(
@@ -281,10 +329,13 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                                   setState(() => _currentIndex = i),
                               itemBuilder: (context, index) {
                                 return _NoteSlide(
+                                  index: index,
                                   note: widget.notes[index],
                                   onTapImage: _openImageViewer,
                                   onTagTap: (tagName) =>
                                       _close(tagName: tagName),
+                                  onAttached: _registerSlide,
+                                  onDetached: _unregisterSlide,
                                 );
                               },
                             ),
@@ -313,14 +364,20 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
 
 class _NoteSlide extends StatefulWidget {
   const _NoteSlide({
+    required this.index,
     required this.note,
     required this.onTapImage,
     required this.onTagTap,
+    this.onAttached,
+    this.onDetached,
   });
 
+  final int index;
   final NoteRecord note;
   final void Function(NoteRecord, String) onTapImage;
   final void Function(String tagName) onTagTap;
+  final void Function(int index, _NoteSlideState state)? onAttached;
+  final void Function(int index, _NoteSlideState state)? onDetached;
 
   @override
   State<_NoteSlide> createState() => _NoteSlideState();
@@ -334,10 +391,23 @@ class _NoteSlideState extends State<_NoteSlide> {
   void initState() {
     super.initState();
     _scrollController.addListener(_onScroll);
+    widget.onAttached?.call(widget.index, this);
+  }
+
+  @override
+  void didUpdateWidget(covariant _NoteSlide oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.index != widget.index ||
+        oldWidget.onAttached != widget.onAttached ||
+        oldWidget.onDetached != widget.onDetached) {
+      oldWidget.onDetached?.call(oldWidget.index, this);
+      widget.onAttached?.call(widget.index, this);
+    }
   }
 
   @override
   void dispose() {
+    widget.onDetached?.call(widget.index, this);
     _scrollController.dispose();
     super.dispose();
   }
@@ -346,6 +416,24 @@ class _NoteSlideState extends State<_NoteSlide> {
     final atBottom = _scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 1;
     if (atBottom != _atBottom) setState(() => _atBottom = atBottom);
+  }
+
+  /// Scrolls the slide content by [dy] pixels, clamped to the scroll extents.
+  void scrollBy(double dy) {
+    if (!_scrollController.hasClients) {
+      return;
+    }
+    final position = _scrollController.position;
+    final target =
+        (position.pixels + dy).clamp(0.0, position.maxScrollExtent);
+    if (target == position.pixels) {
+      return;
+    }
+    _scrollController.animateTo(
+      target,
+      duration: const Duration(milliseconds: 180),
+      curve: Curves.easeOut,
+    );
   }
 
   @override
@@ -372,59 +460,68 @@ class _NoteSlideState extends State<_NoteSlide> {
               clipBehavior: Clip.antiAlias,
               child: Stack(
                 children: [
-                  SingleChildScrollView(
-                    controller: _scrollController,
-                    padding: const EdgeInsets.all(16),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      children: [
-                        Text(
-                          widget.note.title,
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            color: _kTextPrimary,
-                            fontSize: 22,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.3,
-                          ),
-                          textAlign: TextAlign.center,
-                        ),
-                        if (widget.note.gradingCompany.isNotEmpty) ...[
-                          const SizedBox(height: 4),
+                  ScrollConfiguration(
+                    // No scrollbar: the bottom fade already signals
+                    // that the card content scrolls.
+                    behavior: ScrollConfiguration.of(
+                      context,
+                    ).copyWith(scrollbars: false),
+                    child: SingleChildScrollView(
+                      controller: _scrollController,
+                      padding: const EdgeInsets.all(16),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
                           Text(
-                            widget.note.gradingCompany,
+                            widget.note.title,
                             style: const TextStyle(
                               fontFamily: 'Inter',
-                              color: _kTextAccent,
-                              fontSize: 15,
-                              letterSpacing: 0.2,
+                              color: _kTextPrimary,
+                              fontSize: 22,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.3,
                             ),
                             textAlign: TextAlign.center,
                           ),
+                          if (widget.note.gradingCompany.isNotEmpty) ...[
+                            const SizedBox(height: 4),
+                            Text(
+                              widget.note.gradingCompany,
+                              style: const TextStyle(
+                                fontFamily: 'Inter',
+                                color: _kTextAccent,
+                                fontSize: 15,
+                                letterSpacing: 0.2,
+                              ),
+                              textAlign: TextAlign.center,
+                            ),
+                          ],
+                          const SizedBox(height: 12),
+                          Container(
+                            height: 1,
+                            margin:
+                                const EdgeInsets.symmetric(horizontal: 48),
+                            color: _kBorder,
+                          ),
+                          const SizedBox(height: 16),
+                          _NoteImage(
+                            image: widget.note.fullFor('front'),
+                            onTap: () =>
+                                widget.onTapImage(widget.note, 'front'),
+                          ),
+                          const SizedBox(height: 12),
+                          _NoteImage(
+                            image: widget.note.fullFor('back'),
+                            onTap: () =>
+                                widget.onTapImage(widget.note, 'back'),
+                          ),
+                          const SizedBox(height: 16),
+                          _MetaPanel(
+                            note: widget.note,
+                            onTagTap: widget.onTagTap,
+                          ),
                         ],
-                        const SizedBox(height: 12),
-                        Container(
-                          height: 1,
-                          margin:
-                              const EdgeInsets.symmetric(horizontal: 48),
-                          color: _kBorder,
-                        ),
-                        const SizedBox(height: 16),
-                        _NoteImage(
-                          image: widget.note.fullFor('front'),
-                          onTap: () => widget.onTapImage(widget.note, 'front'),
-                        ),
-                        const SizedBox(height: 12),
-                        _NoteImage(
-                          image: widget.note.fullFor('back'),
-                          onTap: () => widget.onTapImage(widget.note, 'back'),
-                        ),
-                        const SizedBox(height: 16),
-                        _MetaPanel(
-                          note: widget.note,
-                          onTagTap: widget.onTagTap,
-                        ),
-                      ],
+                      ),
                     ),
                   ),
                   Positioned(
@@ -775,4 +872,12 @@ class _NextSlideIntent extends Intent {
 
 class _OpenImageIntent extends Intent {
   const _OpenImageIntent();
+}
+
+class _ScrollUpIntent extends Intent {
+  const _ScrollUpIntent();
+}
+
+class _ScrollDownIntent extends Intent {
+  const _ScrollDownIntent();
 }

@@ -84,7 +84,21 @@ void main() {
     expect(find.text('1 / 2'), findsOneWidget);
   });
 
-  testWidgets('arrow down opens the image popover for the current slide', (
+  double maxSlideScroll(WidgetTester tester) {
+    var max = 0.0;
+    for (final element in find.byType(SingleChildScrollView).evaluate()) {
+      final controller = (element.widget as SingleChildScrollView).controller;
+      if (controller != null && controller.hasClients) {
+        final pixels = controller.position.pixels;
+        if (pixels > max) {
+          max = pixels;
+        }
+      }
+    }
+    return max;
+  }
+
+  testWidgets('arrow down scrolls the slide instead of opening the popover', (
     WidgetTester tester,
   ) async {
     final notes = [
@@ -94,7 +108,26 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('1 / 2'), findsNothing);
+    expect(maxSlideScroll(tester), greaterThan(0));
+  });
+
+  testWidgets('arrow up scrolls the slide back up', (
+    WidgetTester tester,
+  ) async {
+    final notes = [
+      NoteRecord.fromJson(slideNote(id: 1, denomination: 'A', withImages: true)),
+    ];
+    await pumpSlideshow(tester, notes);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    final scrolled = maxSlideScroll(tester);
+    expect(scrolled, greaterThan(0));
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+    await tester.pumpAndSettle();
+    expect(maxSlideScroll(tester), lessThan(scrolled));
   });
 
   testWidgets('back from the popover returns to the slide', (

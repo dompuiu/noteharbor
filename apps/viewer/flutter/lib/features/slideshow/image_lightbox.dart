@@ -197,29 +197,38 @@ class _ImageLightboxState extends State<ImageLightbox> {
                   ),
                 ),
                 child: SafeArea(
+                  minimum: const EdgeInsets.only(bottom: 12),
                   child: Column(
                     children: [
                       Padding(
                         padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                        child: Row(
-                          children: [
-                            Expanded(
-                              child: Text(
-                                item.label,
-                                style: const TextStyle(
-                                  fontFamily: 'Inter',
-                                  color: ViewerPalette.darkText,
-                                  fontSize: 17,
-                                  fontWeight: FontWeight.w800,
-                                  letterSpacing: -0.2,
+                        // Stretch the row so the index pill matches the Back
+                        // button height instead of sizing to its own text.
+                        child: IntrinsicHeight(
+                          child: Row(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            children: [
+                              Expanded(
+                                child: Align(
+                                  alignment: Alignment.centerLeft,
+                                  child: Text(
+                                    item.label,
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      color: ViewerPalette.darkText,
+                                      fontSize: 17,
+                                      fontWeight: FontWeight.w800,
+                                      letterSpacing: -0.2,
+                                    ),
+                                    overflow: TextOverflow.ellipsis,
+                                  ),
                                 ),
-                                overflow: TextOverflow.ellipsis,
                               ),
-                            ),
-                            const SizedBox(width: 12),
-                            Container(
-                              padding: const EdgeInsets.symmetric(
-                                  horizontal: 12, vertical: 8),
+                              const SizedBox(width: 12),
+                              Container(
+                                alignment: Alignment.center,
+                                padding: const EdgeInsets.symmetric(
+                                    horizontal: 12, vertical: 8),
                               decoration: BoxDecoration(
                                 color: ViewerPalette.darkScrim,
                                 borderRadius: BorderRadius.circular(18),
@@ -251,7 +260,8 @@ class _ImageLightboxState extends State<ImageLightbox> {
                               onPressed: _closeWithCurrentNote,
                               child: const Text('Back'),
                             ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
                     Expanded(
