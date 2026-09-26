@@ -96,13 +96,15 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   }
 
   void _goPrevious() {
-    if (widget.notes.isEmpty) return;
-    _jump((_currentIndex - 1 + widget.notes.length) % widget.notes.length);
+    if (widget.notes.isEmpty || _currentIndex <= 0) return;
+    _jump(_currentIndex - 1);
   }
 
   void _goNext() {
-    if (widget.notes.isEmpty) return;
-    _jump((_currentIndex + 1) % widget.notes.length);
+    if (widget.notes.isEmpty || _currentIndex >= widget.notes.length - 1) {
+      return;
+    }
+    _jump(_currentIndex + 1);
   }
 
   void _openCurrentImageViewer() {

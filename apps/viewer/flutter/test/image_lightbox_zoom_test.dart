@@ -13,13 +13,13 @@ import 'package:note_harbor_viewer/models/note_record.dart';
 void main() {
   const imagePath = 'noteharbor-zoom-test.png';
 
-  NoteRecord zoomNote() {
+  NoteRecord zoomNote({int id = 1}) {
     return NoteRecord.fromJson(<String, dynamic>{
-      'id': 1,
-      'displayOrder': 1,
+      'id': id,
+      'displayOrder': id,
       'denomination': 'Test',
       'issueDate': '',
-      'catalogNumber': 'KB-1',
+      'catalogNumber': 'KB-$id',
       'gradingCompany': '',
       'grade': '',
       'watermark': '',
@@ -62,6 +62,26 @@ void main() {
     final note = zoomNote();
     final items = <ImageSequenceItem>[
       ImageSequenceItem(note: note, image: note.fullFor('front')),
+    ];
+
+    await tester.pumpWidget(
+      MaterialApp(home: _LightboxLauncher(items: items)),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+  }
+
+  Future<void> pumpMultiItemPopover(WidgetTester tester) async {
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await seedLargeImage(tester);
+
+    final notes = [zoomNote(id: 1), zoomNote(id: 2)];
+    final items = <ImageSequenceItem>[
+      for (final note in notes)
+        ImageSequenceItem(note: note, image: note.fullFor('front')),
     ];
 
     await tester.pumpWidget(
@@ -141,6 +161,31 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     expect(find.text('open'), findsOneWidget);
+  });
+
+  testWidgets('arrow left on the first image stays on the first image', (
+    tester,
+  ) async {
+    await pumpMultiItemPopover(tester);
+    expect(find.text('1 / 2'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('1 / 2'), findsOneWidget);
+  });
+
+  testWidgets('arrow right on the last image stays on the last image', (
+    tester,
+  ) async {
+    await pumpMultiItemPopover(tester);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 2'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 2'), findsOneWidget);
   });
 }
 

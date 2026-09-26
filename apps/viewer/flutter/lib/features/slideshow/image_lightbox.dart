@@ -73,19 +73,19 @@ class _ImageLightboxState extends State<ImageLightbox> {
   }
 
   void _goPrevious() {
-    if (widget.items.isEmpty) {
+    if (widget.items.isEmpty || _currentIndex <= 0) {
       return;
     }
 
-    _jump((_currentIndex - 1 + widget.items.length) % widget.items.length);
+    _jump(_currentIndex - 1);
   }
 
   void _goNext() {
-    if (widget.items.isEmpty) {
+    if (widget.items.isEmpty || _currentIndex >= widget.items.length - 1) {
       return;
     }
 
-    _jump((_currentIndex + 1) % widget.items.length);
+    _jump(_currentIndex + 1);
   }
 
   void _setPageScrollEnabled(bool enabled) {
