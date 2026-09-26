@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.14.2] - 2026-09-26
+
+### Changed
+
+- The `?` keyboard shortcuts help now packs its sections tighter: the tall Table group keeps the left column while Slideshow, Image preview, and Everywhere stack in the right column, removing the empty gap under Slideshow.
+
 ## [1.14.1] - 2026-09-25
 
 ### Fixed
