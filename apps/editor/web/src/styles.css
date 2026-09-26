@@ -615,25 +615,25 @@ td {
    The row's own `:focus-visible` rule is still needed: `:has()` only looks
    at descendants.
 
-   `.table-row-link--returned` extends the same paint to the row a closed
-   slideshow returns to, since programmatic focus after a mouse click on
-   the slideshow's Close button does not match `:focus-visible`. */
+   `.table-row-link--active` extends the same paint to the row that owns
+   the keyboard cursor, since programmatic focus (slideshow Close button,
+   virtualized remount) does not match `:focus-visible`. */
 .table-row-link:hover > td,
 .table-row-link:focus-visible > td,
 .table-row-link:has(:focus-visible) > td,
-.table-row-link--returned > td {
+.table-row-link--active > td {
   background: var(--accent-soft);
 }
 
 .table-row-link:focus-visible,
 .table-row-link:has(:focus-visible),
-.table-row-link--returned {
+.table-row-link--active {
   outline: none;
 }
 
 .table-row-link:focus-visible > td,
 .table-row-link:has(:focus-visible) > td,
-.table-row-link--returned > td {
+.table-row-link--active > td {
   box-shadow:
     inset 0 1px 0 var(--accent),
     inset 0 -1px 0 var(--accent);
@@ -641,7 +641,7 @@ td {
 
 .table-row-link:focus-visible > td:first-child,
 .table-row-link:has(:focus-visible) > td:first-child,
-.table-row-link--returned > td:first-child {
+.table-row-link--active > td:first-child {
   box-shadow:
     inset 0 1px 0 var(--accent),
     inset 0 -1px 0 var(--accent),
@@ -650,7 +650,7 @@ td {
 
 .table-row-link:focus-visible > td:last-child,
 .table-row-link:has(:focus-visible) > td:last-child,
-.table-row-link--returned > td:last-child {
+.table-row-link--active > td:last-child {
   box-shadow:
     inset 0 1px 0 var(--accent),
     inset 0 -1px 0 var(--accent),
@@ -659,7 +659,7 @@ td {
 
 .table-row-link:focus-visible .drag-handle,
 .table-row-link:has(:focus-visible) .drag-handle,
-.table-row-link--returned .drag-handle {
+.table-row-link--active .drag-handle {
   inset: 2px;
   border-radius: 6px;
 }

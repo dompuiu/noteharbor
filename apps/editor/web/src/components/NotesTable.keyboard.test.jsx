@@ -179,7 +179,7 @@ describe("NotesTable keyboard focus inside a row", () => {
   });
 });
 
-describe("Slideshow close return highlight", () => {
+describe("Active row highlight", () => {
   function notePayload(id, denomination) {
     return {
       id,
@@ -228,7 +228,7 @@ describe("Slideshow close return highlight", () => {
     await waitFor(() => {
       expect(firstRow).toHaveFocus();
     });
-    expect(firstRow).toHaveClass("table-row-link--returned");
+    expect(firstRow).toHaveClass("table-row-link--active");
   });
 
   test("Escape highlights the returned row", async () => {
@@ -243,10 +243,10 @@ describe("Slideshow close return highlight", () => {
     await waitFor(() => {
       expect(firstRow).toHaveFocus();
     });
-    expect(firstRow).toHaveClass("table-row-link--returned");
+    expect(firstRow).toHaveClass("table-row-link--active");
   });
 
-  test("moving focus to another row clears the return highlight", async () => {
+  test("moving focus to another row moves the active highlight", async () => {
     const user = userEvent.setup();
     const { firstRow } = await openSlideshowOnFirstRow(user);
 
@@ -256,7 +256,7 @@ describe("Slideshow close return highlight", () => {
     await user.click(closeButton);
 
     await waitFor(() => {
-      expect(firstRow).toHaveClass("table-row-link--returned");
+      expect(firstRow).toHaveClass("table-row-link--active");
     });
 
     const second = await screen.findByText("BBBB");
@@ -266,7 +266,7 @@ describe("Slideshow close return highlight", () => {
     });
 
     await waitFor(() => {
-      expect(firstRow).not.toHaveClass("table-row-link--returned");
+      expect(firstRow).not.toHaveClass("table-row-link--active");
     });
   });
 
@@ -295,10 +295,10 @@ describe("Slideshow close return highlight", () => {
     await waitFor(() => {
       expect(secondRow).toHaveFocus();
     });
-    expect(secondRow).toHaveClass("table-row-link--returned");
+    expect(secondRow).toHaveClass("table-row-link--active");
   });
 
-  test("scrolling the returned row out of view clears the return highlight", async () => {
+  test("scrolling the returned row out of view keeps the active highlight", async () => {
     const user = userEvent.setup();
     const { firstRow, rerender } = await openSlideshowOnFirstRow(user);
 
@@ -308,7 +308,7 @@ describe("Slideshow close return highlight", () => {
     await user.click(closeButton);
 
     await waitFor(() => {
-      expect(firstRow).toHaveClass("table-row-link--returned");
+      expect(firstRow).toHaveClass("table-row-link--active");
     });
 
     // Scroll the returned row out of the virtualized window: it unmounts.
@@ -319,11 +319,80 @@ describe("Slideshow close return highlight", () => {
       expect(screen.queryByText("AAAA")).not.toBeInTheDocument();
     });
 
-    // Scroll back: the row remounts without the stale highlight.
+    // Scroll back: the row remounts with its cursor highlight and focus.
     virtualWindow.start = 0;
     rerender(tableTree());
 
     const first = await screen.findByText("AAAA");
-    expect(first.closest("tr")).not.toHaveClass("table-row-link--returned");
+    const restoredRow = first.closest("tr");
+    await waitFor(() => {
+      expect(restoredRow).toHaveFocus();
+    });
+    expect(restoredRow).toHaveClass("table-row-link--active");
+  });
+
+  test("focusing a filter clears the active row highlight", async () => {
+    getNotes.mockResolvedValue({
+      notes: [notePayload(1, "AAAA"), notePayload(2, "BBBB")],
+    });
+    renderTable();
+
+    const first = await screen.findByText("AAAA");
+    const firstRow = first.closest("tr");
+    await act(async () => {
+      firstRow.focus();
+    });
+
+    await waitFor(() => {
+      expect(firstRow).toHaveClass("table-row-link--active");
+    });
+
+    const filter = await screen.findByLabelText("Filter Denomination");
+    await act(async () => {
+      filter.focus();
+    });
+
+    await waitFor(() => {
+      expect(firstRow).not.toHaveClass("table-row-link--active");
+    });
+  });
+
+  test("ArrowDown cursor survives scrolling out of view and back", async () => {
+    const user = userEvent.setup();
+    getNotes.mockResolvedValue({
+      notes: [notePayload(1, "AAAA"), notePayload(2, "BBBB")],
+    });
+    const { rerender } = renderTable();
+
+    const first = await screen.findByText("AAAA");
+    const firstRow = first.closest("tr");
+    await act(async () => {
+      firstRow.focus();
+    });
+    await user.keyboard("{ArrowDown}");
+
+    const second = await screen.findByText("BBBB");
+    await waitFor(() => {
+      expect(second.closest("tr")).toHaveFocus();
+    });
+
+    // Scroll the cursor row out of the virtualized window: it unmounts.
+    virtualWindow.start = 2;
+    rerender(tableTree());
+
+    await waitFor(() => {
+      expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
+    });
+
+    // Scroll back: the row remounts with its cursor highlight and focus.
+    virtualWindow.start = 0;
+    rerender(tableTree());
+
+    const restored = await screen.findByText("BBBB");
+    const restoredRow = restored.closest("tr");
+    await waitFor(() => {
+      expect(restoredRow).toHaveFocus();
+    });
+    expect(restoredRow).toHaveClass("table-row-link--active");
   });
 });

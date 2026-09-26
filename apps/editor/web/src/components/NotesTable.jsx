@@ -1043,6 +1043,13 @@ function NotesTable({
   const currentRouteRef = useRef(null);
   const skipFilterResetOnCollectionChangeRef = useRef(false);  const pendingRowFocusNoteIdRef = useRef(null);
   const focusRestoreNoteIdRef = useRef(null);
+  const clearRowCursor = useCallback(() => {
+    // The keyboard cursor is focus memory plus paint: both must drop
+    // together so the highlight can never outlive its focus target or
+    // vice versa.
+    focusedRowIdRef.current = null;
+    setActiveNoteId(null);
+  }, []);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -1103,7 +1110,7 @@ function NotesTable({
   const [bulkLoading, setBulkLoading] = useState(false);
   const [reorderLoading, setReorderLoading] = useState(false);
   const [slideshowNotes, setSlideshowNotes] = useState([]);
-  const [returnedNoteId, setReturnedNoteId] = useState(null);
+  const [activeNoteId, setActiveNoteId] = useState(null);
   const [draggedNoteId, setDraggedNoteId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const [columnsDragging, setColumnsDragging] = useState(false);
@@ -1671,11 +1678,10 @@ function NotesTable({
     // A changed filter or sort produces a new row order: drop any keyboard
     // focus target from the previous order (including a not-yet-landed
     // virtualized focus) so the next ArrowDown starts at the first row of
-    // the new order. The slideshow-return cue belongs to the old order too.
-    focusedRowIdRef.current = null;
+    // the new order. The active-row cue belongs to the old order too.
     pendingRowFocusNoteIdRef.current = null;
-    setReturnedNoteId(null);
-  }, [filters, sortDirection, sortKey]);
+    clearRowCursor();
+  }, [clearRowCursor, filters, sortDirection, sortKey]);
 
   // The vertical scrollbar is custom-drawn so its track spans only the rows
   // area below the sticky header (a native scrollbar would always run the
@@ -2108,20 +2114,35 @@ function NotesTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slideshowRouteActive]);
 
-  useLayoutEffect(() => {
-    // Unmounting a focused row fires no blur event, so the slideshow-return
-    // cue cannot rely on onBlur alone: once its row leaves the virtualized
-    // window (scroll, filter), drop the cue so it cannot go stale and
-    // reappear when the row scrolls back into view. A row ref detach is the
-    // wrong place for this — inline ref callbacks detach and reattach on
-    // every render, which would clear the cue immediately.
-    if (
-      returnedNoteId != null &&
-      !rowElementMapRef.current.has(returnedNoteId)
-    ) {
-      setReturnedNoteId(null);
+  useEffect(() => {
+    // Unmounting a focused row fires no blur event: the browser drops focus
+    // to <body> and the keyboard cursor would silently die. When focus lands
+    // anywhere that is not a table row, drop the active-row cue and its
+    // focus memory so the highlight cannot go stale. Focus on <body> (the
+    // unmount case) is deliberately ignored here — the row ref callback
+    // reclaims focus when the active row remounts.
+    function handleFocusIn(event) {
+      if (!(event.target instanceof HTMLElement)) {
+        return;
+      }
+
+      if (event.target.closest("tr.table-row-link")) {
+        return;
+      }
+
+      if (
+        document.activeElement === document.body ||
+        event.target === document.body
+      ) {
+        return;
+      }
+
+      clearRowCursor();
     }
-  });
+
+    document.addEventListener("focusin", handleFocusIn);
+    return () => document.removeEventListener("focusin", handleFocusIn);
+  }, [clearRowCursor]);
 
   useEffect(() => {
     function handleGlobalKeyDown(event) {
@@ -2183,7 +2204,7 @@ function NotesTable({
             focusRowByNoteId(orderedNotes[0].id);
           } else {
             tableFocusAnchorRef.current?.focus();
-            focusedRowIdRef.current = null;
+            clearRowCursor();
           }
         }
         return;
@@ -2241,7 +2262,7 @@ function NotesTable({
         // all" checkbox rather than wherever the browser's default tab
         // order would otherwise resume from.
         tableFocusAnchorRef.current?.focus();
-        focusedRowIdRef.current = null;
+        clearRowCursor();
         return;
       }
 
@@ -2301,6 +2322,7 @@ function NotesTable({
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [
+    clearRowCursor,
     creatingNote,
     editingNoteId,
     hasActiveFilters,
@@ -2379,7 +2401,7 @@ function NotesTable({
 
   function openSlideshow(startId) {
     setActionError("");
-    setReturnedNoteId(null);
+    setActiveNoteId(null);
     const noteId = startId ?? orderedNotes[0]?.id ?? null;
 
     if (!noteId) {
@@ -2397,7 +2419,7 @@ function NotesTable({
 
   function closeSlideshow() {
     focusRestoreNoteIdRef.current = currentRoute.noteId;
-    setReturnedNoteId(currentRoute.noteId);
+    setActiveNoteId(currentRoute.noteId);
     resetColumnScroll();
     navigateToTableRoute(emptyTableRoute(), { replace: true });
   }
@@ -2415,6 +2437,7 @@ function NotesTable({
       // explicitly instead.
       element.focus({ preventScroll: true });
       focusedRowIdRef.current = noteId;
+      setActiveNoteId(noteId);
 
       if (options.pinToTop) {
         pinRowToTop(element);
@@ -2431,6 +2454,7 @@ function NotesTable({
     }
 
     pendingRowFocusNoteIdRef.current = noteId;
+    setActiveNoteId(noteId);
     rowVirtualizer.scrollToIndex(index, {
       align: options.pinToTop ? "start" : "auto",
     });
@@ -2458,7 +2482,7 @@ function NotesTable({
       }) &&
       focusRememberedFilter()
     ) {
-      focusedRowIdRef.current = null;
+      clearRowCursor();
       return;
     }
 
@@ -3512,7 +3536,7 @@ function NotesTable({
                               </tr>
                             ) : null}
                             <tr
-                              className={`table-row-link${draggedNoteId === note.id ? " table-row-link--dragging" : ""}${returnedNoteId === note.id ? " table-row-link--returned" : ""}`}
+                              className={`table-row-link${draggedNoteId === note.id ? " table-row-link--dragging" : ""}${activeNoteId === note.id ? " table-row-link--active" : ""}`}
                               data-index={virtualRow.index}
                               key={note.id}
                               ref={(element) => {
@@ -3529,7 +3553,18 @@ function NotesTable({
                                     pendingRowFocusNoteIdRef.current = null;
                                     element.focus({ preventScroll: true });
                                     focusedRowIdRef.current = note.id;
+                                    setActiveNoteId(note.id);
                                     ensureRowVisible(element);
+                                  } else if (
+                                    focusedRowIdRef.current === note.id &&
+                                    document.activeElement === document.body
+                                  ) {
+                                    // The active row was scrolled out of the
+                                    // virtualized window (unmounting drops
+                                    // focus to <body> with no blur event) and
+                                    // has now remounted: reclaim focus without
+                                    // scrolling, since the user put it here.
+                                    element.focus({ preventScroll: true });
                                   }
                                 } else {
                                   rowElementMapRef.current.delete(note.id);
@@ -3537,6 +3572,7 @@ function NotesTable({
                               }}
                               onFocus={() => {
                                 focusedRowIdRef.current = note.id;
+                                setActiveNoteId(note.id);
                               }}
                               onBlur={(event) => {
                                 if (
@@ -3544,7 +3580,11 @@ function NotesTable({
                                     event.relatedTarget,
                                   )
                                 ) {
-                                  setReturnedNoteId((current) =>
+                                  focusedRowIdRef.current =
+                                    focusedRowIdRef.current === note.id
+                                      ? null
+                                      : focusedRowIdRef.current;
+                                  setActiveNoteId((current) =>
                                     current === note.id ? null : current,
                                   );
                                 }
