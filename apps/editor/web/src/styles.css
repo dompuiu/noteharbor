@@ -2332,6 +2332,19 @@ kbd {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 20px;
+  align-items: start;
+  align-content: start;
+}
+
+/* Table is the tall group: keep it in column 1 while Slideshow,
+   Image preview, and Everywhere stack in column 2 beneath Slideshow. */
+.shortcuts-group:first-child {
+  grid-column: 1;
+  grid-row: 1 / span 3;
+}
+
+.shortcuts-group:not(:first-child) {
+  grid-column: 2;
 }
 
 .shortcuts-group h3 {
@@ -2449,5 +2462,11 @@ kbd {
 @media (max-width: 640px) {
   .shortcuts-groups {
     grid-template-columns: 1fr;
+  }
+
+  .shortcuts-group:first-child,
+  .shortcuts-group:not(:first-child) {
+    grid-column: auto;
+    grid-row: auto;
   }
 }
