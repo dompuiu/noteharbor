@@ -64,6 +64,14 @@ void main() {
     await tester.tap(find.byIcon(Icons.file_upload_outlined));
     await tester.pumpAndSettle();
 
+    // The bundled Inter font resolves asynchronously on first pump, which
+    // can shift the list layout after the initial scroll settles. Settle,
+    // then re-ensure visibility before tapping.
+    await tester.scrollUntilVisible(
+      find.byIcon(Icons.delete_outline_rounded),
+      200,
+    );
+    await tester.pumpAndSettle();
     await tester.scrollUntilVisible(
       find.byIcon(Icons.delete_outline_rounded),
       200,

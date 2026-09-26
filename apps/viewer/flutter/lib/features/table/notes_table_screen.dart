@@ -52,6 +52,8 @@ const double _kTableThumbnailHeight = 56;
 const Color _kTableThumbnailPlaceholderBg = ViewerPalette.surfaceContainer;
 const Color _kTableThumbnailPlaceholderBorder = ViewerPalette.border;
 const Color _kTableThumbnailPlaceholderIcon = ViewerPalette.textMuted;
+const double _kCardRadius = ViewerPalette.radiusXl;
+const Color _kZebraTint = Color(0x0D96622F);
 
 /// How far one Left/Right arrow press pans the table's hidden columns.
 const double _kColumnScrollStep = 200;
@@ -79,9 +81,25 @@ MouseCursor get _draggingCursor =>
         : SystemMouseCursors.grabbing;
 
 const TextStyle _kTagChipTextStyle = TextStyle(
+  fontFamily: 'Inter',
   color: _kTagChipText,
   fontSize: 12,
   fontWeight: FontWeight.w600,
+  height: 1,
+);
+
+const TextStyle _kDataCellTextStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: _kTableText,
+  fontWeight: FontWeight.w600,
+  fontFeatures: [FontFeature.tabularFigures()],
+);
+
+const TextStyle _kHeaderLabelTextStyle = TextStyle(
+  fontFamily: 'Inter',
+  fontWeight: FontWeight.w800,
+  fontSize: 12,
+  letterSpacing: 1.1,
   height: 1,
 );
 
@@ -1097,7 +1115,16 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         },
         child: DecoratedBox(
           decoration: const BoxDecoration(
-            color: ViewerPalette.pageBackground,
+            gradient: LinearGradient(
+              begin: Alignment.topCenter,
+              end: Alignment.bottomCenter,
+              colors: [
+                ViewerPalette.pageBackgroundTop,
+                ViewerPalette.pageBackground,
+                ViewerPalette.pageBackgroundBottom,
+              ],
+              stops: [0.0, 0.55, 1.0],
+            ),
           ),
           child: SafeArea(
             bottom: false,
@@ -1106,7 +1133,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
               builder: (context, _) {
                 if (widget.controller.isLoading &&
                     widget.controller.dataset == null) {
-                  return const Center(child: CircularProgressIndicator());
+                  return const _TableSkeleton();
                 }
 
                 if (widget.controller.error != null &&
@@ -1161,23 +1188,38 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                           onTapOutside: _handleFilterTapOutside,
                           decoration: InputDecoration(
                             filled: true,
-                            fillColor: _kTableSurface,
+                            fillColor: ViewerPalette.surfaceContainer
+                                .withValues(alpha: 0.55),
                             hintText:
-                                'Filter... or use catalog: denom: date: company: grade: tags:',
-                            prefixIcon: const Icon(Icons.search_rounded),
+                                'Filter…  catalog:  denom:  date:  company:  grade:  tags:',
+                            hintStyle: const TextStyle(
+                              fontFamily: 'Inter',
+                              color: ViewerPalette.textFaint,
+                              fontSize: 13,
+                            ),
+                            prefixIcon: const Icon(
+                              Icons.search_rounded,
+                              size: 20,
+                            ),
+                            prefixIconColor: ViewerPalette.textMuted,
                             suffixIcon: _clearFilterButton(),
+                            contentPadding: const EdgeInsets.symmetric(
+                                horizontal: 16, vertical: 14),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
+                              borderRadius: BorderRadius.circular(
+                                  ViewerPalette.radiusLg),
                               borderSide:
                                   const BorderSide(color: _kTableBorder),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
+                              borderRadius: BorderRadius.circular(
+                                  ViewerPalette.radiusLg),
                               borderSide:
                                   const BorderSide(color: _kTableBorder),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(18),
+                              borderRadius: BorderRadius.circular(
+                                  ViewerPalette.radiusLg),
                               borderSide: const BorderSide(
                                 color: ViewerPalette.accent,
                                 width: 1.5,
@@ -1205,23 +1247,17 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
                                   color: _kTableSurface,
-                                borderRadius: BorderRadius.circular(28),
+                                borderRadius: BorderRadius.circular(
+                                          _kCardRadius),
                                 border: Border.all(
-                                    color: _kTableBorder, width: 1.5),
-                                boxShadow: const [
-                                  BoxShadow(
-                                    blurRadius: 28,
-                                    offset: Offset(0, 16),
-                                    color: ViewerPalette.shadow,
-                                  ),
-                                ],
+                                    color: _kTableBorder, width: 1),
+                                boxShadow: ViewerPalette.shadowMid,
                               ),
                               child: notes.isEmpty
-                                  ? const Center(
-                                      child: Text(
-                                          'No notes match the current filter.'))
+                                  ? const _TableEmptyState()
                                   : ClipRRect(
-                                      borderRadius: BorderRadius.circular(28),
+                                      borderRadius: BorderRadius.circular(
+                                          _kCardRadius),
                                       child: NotificationListener<
                                           ScrollNotification>(
                                         onNotification:
@@ -1258,6 +1294,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                       child: Scrollbar(
                                                         controller:
                                                             _verticalScrollController,
+                                                        thumbVisibility: true,
                                                         child:
                                                             ListView.separated(
                                                           controller:
@@ -1276,7 +1313,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                             final note =
                                                                 notes[index];
 
-                                                            return _TableRow(
+                                                            final row = _TableRow(
                                                               note: note,
                                                               tagsColumnWidth:
                                                                   tagsColumnWidth,
@@ -1294,6 +1331,14 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                                       viaKeyboard:
                                                                           false),
                                                             );
+                                                            if (index.isOdd) {
+                                                              return ColoredBox(
+                                                                color:
+                                                                    _kZebraTint,
+                                                                child: row,
+                                                              );
+                                                            }
+                                                            return row;
                                                           },
                                                         ),
                                                       ),
@@ -1348,40 +1393,76 @@ class _Header extends StatelessWidget {
         DecoratedBox(
           decoration: BoxDecoration(
             color: _kTableSurface,
-            borderRadius: BorderRadius.circular(18),
+            borderRadius:
+                BorderRadius.circular(ViewerPalette.radiusLg),
             border: Border.all(color: _kTableBorder),
-            boxShadow: const [
-              BoxShadow(
-                blurRadius: 18,
-                offset: Offset(0, 10),
-                color: ViewerPalette.shadow,
-              ),
-            ],
+            boxShadow: ViewerPalette.shadowLow,
           ),
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: _kHeaderBadgeHeight),
             child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 6, 14, 6),
+              padding: const EdgeInsets.fromLTRB(10, 6, 16, 6),
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.asset(
-                      'web/icons/Icon-192.png',
-                      width: 36,
-                      height: 36,
-                      fit: BoxFit.cover,
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                        colors: [
+                          ViewerPalette.accent,
+                          ViewerPalette.accentStrong,
+                        ],
+                      ),
+                      borderRadius: BorderRadius.circular(
+                          ViewerPalette.radiusSm),
+                      boxShadow: ViewerPalette.shadowLow,
+                    ),
+                    child: Padding(
+                      padding: const EdgeInsets.all(3),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(9),
+                        child: Image.asset(
+                          'web/icons/Icon-192.png',
+                          width: 30,
+                          height: 30,
+                          fit: BoxFit.cover,
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 12),
-                  Text(
-                    'Note\nHarbor',
-                    style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                  Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        'Note\nHarbor',
+                        style: Theme.of(context)
+                            .textTheme
+                            .titleMedium
+                            ?.copyWith(
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.w800,
+                              color: _kTableText,
+                              height: 0.95,
+                              letterSpacing: -0.3,
+                            ),
+                      ),
+                      const SizedBox(height: 3),
+                      const Text(
+                        'COLLECTION VIEWER',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 9,
                           fontWeight: FontWeight.w800,
-                          color: _kTableText,
-                          height: 0.95,
+                          letterSpacing: 1.6,
+                          color: ViewerPalette.textMuted,
+                          height: 1,
                         ),
+                      ),
+                    ],
                   ),
                 ],
               ),
@@ -1399,34 +1480,53 @@ class _Header extends StatelessWidget {
   }
 }
 
-class _ImportButton extends StatelessWidget {
+class _ImportButton extends StatefulWidget {
   const _ImportButton({required this.onPressed});
 
   final VoidCallback onPressed;
 
   @override
+  State<_ImportButton> createState() => _ImportButtonState();
+}
+
+class _ImportButtonState extends State<_ImportButton> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: _kTableSurface,
-        borderRadius: BorderRadius.circular(18),
-        border: Border.all(color: _kTableBorder),
-      ),
-      child: SizedBox(
-        height: _kHeaderBadgeHeight,
-        width: _kHeaderBadgeHeight,
-        child: IconButton(
-          tooltip: 'Manage imported archives',
-          onPressed: onPressed,
-          padding: EdgeInsets.zero,
-          constraints: const BoxConstraints.tightFor(
-            width: _kHeaderBadgeHeight,
-            height: _kHeaderBadgeHeight,
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+        decoration: BoxDecoration(
+          color: _hovered ? ViewerPalette.accentSoft : _kTableSurface,
+          borderRadius:
+              BorderRadius.circular(ViewerPalette.radiusLg),
+          border: Border.all(
+            color:
+                _hovered ? ViewerPalette.accent : _kTableBorder,
           ),
-          icon: const Icon(
-            Icons.file_upload_outlined,
-            size: 20,
-            color: ViewerPalette.accent,
+          boxShadow: ViewerPalette.shadowLow,
+        ),
+        child: SizedBox(
+          height: _kHeaderBadgeHeight,
+          width: _kHeaderBadgeHeight,
+          child: IconButton(
+            tooltip: 'Manage imported archives',
+            onPressed: widget.onPressed,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints.tightFor(
+              width: _kHeaderBadgeHeight,
+              height: _kHeaderBadgeHeight,
+            ),
+            icon: const Icon(
+              Icons.file_upload_outlined,
+              size: 20,
+              color: ViewerPalette.accent,
+            ),
           ),
         ),
       ),
@@ -1445,8 +1545,10 @@ class _StatPill extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: _kTableSurface,
-        borderRadius: BorderRadius.circular(18),
+        borderRadius:
+            BorderRadius.circular(ViewerPalette.radiusLg),
         border: Border.all(color: _kTableBorder),
+        boxShadow: ViewerPalette.shadowLow,
       ),
       child: SizedBox(
         height: _kHeaderBadgeHeight,
@@ -1455,9 +1557,27 @@ class _StatPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Text('$label: ',
-                  style: const TextStyle(fontWeight: FontWeight.w700)),
-              Text(value),
+              const Text(
+                'NOTES',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
+                  color: ViewerPalette.textMuted,
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                value,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 14,
+                  fontWeight: FontWeight.w700,
+                  color: _kTableText,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
             ],
           ),
         ),
@@ -1489,8 +1609,17 @@ class _TableHeader extends StatelessWidget {
     return MouseRegion(
       key: const ValueKey('tableHeader'),
       cursor: draggingColumns ? _draggingCursor : MouseCursor.defer,
-      child: ColoredBox(
-        color: _kTableHeaderBg,
+      child: DecoratedBox(
+        decoration: const BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topCenter,
+            end: Alignment.bottomCenter,
+            colors: [
+              Color(0xFFECE0C6),
+              _kTableHeaderBg,
+            ],
+          ),
+        ),
         child: Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: _kTableHorizontalPadding, vertical: 4),
@@ -1590,11 +1719,6 @@ class _HeaderCell extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isActive = isSortable && sortKey == activeSortKey;
-    final icon = isActive
-        ? (ascending
-            ? Icons.arrow_upward_rounded
-            : Icons.arrow_downward_rounded)
-        : null;
 
     return SizedBox(
       width: width,
@@ -1604,22 +1728,40 @@ class _HeaderCell extends StatelessWidget {
               style: TextButton.styleFrom(
                 alignment: Alignment.center,
                 foregroundColor: _kTableSortableHeaderText,
+                overlayColor: ViewerPalette.accentSoft,
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(
+                      ViewerPalette.radiusSm),
+                ),
               ),
               child: Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
                   Flexible(
                       child: Text(
-                    label,
-                    style: const TextStyle(
-                      fontWeight: FontWeight.w800,
-                      color: _kTableSortableHeaderText,
+                    label.toUpperCase(),
+                    style: _kHeaderLabelTextStyle.copyWith(
+                      color: isActive
+                          ? _kTableSortableHeaderText
+                          : ViewerPalette.textMuted,
                     ),
                   )),
-                  if (icon != null) ...[
-                    const SizedBox(width: 4),
-                    Icon(icon, size: 16),
-                  ],
+                  AnimatedRotation(
+                    turns: isActive && !ascending ? 0.5 : 0.0,
+                    duration: const Duration(milliseconds: 180),
+                    curve: Curves.easeOut,
+                    child: AnimatedOpacity(
+                      opacity: isActive ? 1.0 : 0.0,
+                      duration: const Duration(milliseconds: 150),
+                      child: const Padding(
+                        padding: EdgeInsets.only(left: 4),
+                        child: Icon(
+                          Icons.arrow_upward_rounded,
+                          size: 14,
+                        ),
+                      ),
+                    ),
+                  ),
                 ],
               ),
             )
@@ -1627,10 +1769,9 @@ class _HeaderCell extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 12),
               child: Center(
                   child: Text(
-                label,
-                style: const TextStyle(
-                  fontWeight: FontWeight.w800,
-                  color: _kTableText,
+                label.toUpperCase(),
+                style: _kHeaderLabelTextStyle.copyWith(
+                  color: ViewerPalette.textMuted,
                 ),
               )),
             ),
@@ -1693,15 +1834,32 @@ class _TableRow extends StatelessWidget {
               width: _kFrontColumnWidth,
               child: image == null
                   ? const _TableThumbnailPlaceholder()
-                  : ClipRRect(
-                      borderRadius: BorderRadius.circular(10),
-                      child: Image(
-                        image: createNoteImageProvider(image),
-                        width: _kTableThumbnailWidth,
-                        height: _kTableThumbnailHeight,
-                        fit: BoxFit.cover,
-                        errorBuilder: (context, error, stackTrace) =>
-                            const _TableThumbnailPlaceholder(),
+                  : DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.circular(
+                            ViewerPalette.radiusSm),
+                        border: Border.all(
+                            color: ViewerPalette.borderControl),
+                        boxShadow: ViewerPalette.shadowLow,
+                      ),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(
+                            ViewerPalette.radiusSm - 1),
+                        child: Image(
+                          image: createNoteImageProvider(image),
+                          width: _kTableThumbnailWidth,
+                          height: _kTableThumbnailHeight,
+                          fit: BoxFit.cover,
+                          frameBuilder:
+                              (context, child, frame, wasSynchronouslyLoaded) {
+                            if (wasSynchronouslyLoaded || frame != null) {
+                              return child;
+                            }
+                            return const _TableThumbnailPlaceholder();
+                          },
+                          errorBuilder: (context, error, stackTrace) =>
+                              const _TableThumbnailPlaceholder(),
+                        ),
                       ),
                     ),
             ),
@@ -1760,8 +1918,16 @@ class _TableThumbnailPlaceholder extends StatelessWidget {
       width: _kTableThumbnailWidth,
       height: _kTableThumbnailHeight,
       decoration: BoxDecoration(
-        color: _kTableThumbnailPlaceholderBg,
-        borderRadius: BorderRadius.circular(10),
+        gradient: const LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            Color(0xFFF4EBD8),
+            _kTableThumbnailPlaceholderBg,
+          ],
+        ),
+        borderRadius:
+            BorderRadius.circular(ViewerPalette.radiusSm),
         border: Border.all(color: _kTableThumbnailPlaceholderBorder),
       ),
       child: const Center(
@@ -1797,34 +1963,64 @@ class _NoteTagsCell extends StatelessWidget {
       children: [
         for (var i = 0; i < tagNames.length; i++) ...[
           if (i > 0) const SizedBox(width: _kTagChipHorizontalGap),
-          GestureDetector(
+          _TagChip(
+            label: tagNames[i],
             onTap: () => onTagTap(tagNames[i]),
-            child: MouseRegion(
-              cursor: SystemMouseCursors.click,
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: _kTagChipBg,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: _kTagChipBorder),
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: _kTagChipHorizontalPadding,
-                    vertical: 4,
-                  ),
-                  child: Text(
-                    tagNames[i],
-                    maxLines: 1,
-                    overflow: TextOverflow.visible,
-                    softWrap: false,
-                    style: _kTagChipTextStyle,
-                  ),
-                ),
-              ),
-            ),
           ),
         ],
       ],
+    );
+  }
+}
+
+class _TagChip extends StatefulWidget {
+  const _TagChip({required this.label, required this.onTap});
+
+  final String label;
+  final VoidCallback onTap;
+
+  @override
+  State<_TagChip> createState() => _TagChipState();
+}
+
+class _TagChipState extends State<_TagChip> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return GestureDetector(
+      onTap: widget.onTap,
+      child: MouseRegion(
+        cursor: SystemMouseCursors.click,
+        onEnter: (_) => setState(() => _hovered = true),
+        onExit: (_) => setState(() => _hovered = false),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeOut,
+          decoration: BoxDecoration(
+            color: _hovered ? ViewerPalette.accentSoft : _kTagChipBg,
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: _hovered
+                  ? ViewerPalette.accent
+                  : _kTagChipBorder,
+            ),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(
+              horizontal: _kTagChipHorizontalPadding,
+              vertical: 4,
+            ),
+            child: Text(
+              widget.label,
+              maxLines: 1,
+              overflow: TextOverflow.visible,
+              softWrap: false,
+              style: _kTagChipTextStyle,
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
@@ -1840,11 +2036,146 @@ class _DataCell extends StatelessWidget {
     return SizedBox(
       width: width,
       child: DefaultTextStyle.merge(
-        style: const TextStyle(
-          color: _kTableText,
-          fontWeight: FontWeight.w600,
-        ),
+        style: _kDataCellTextStyle,
         child: Center(child: child),
+      ),
+    );
+  }
+}
+
+class _TableEmptyState extends StatelessWidget {
+  const _TableEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(32),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: ViewerPalette.surfaceContainer,
+                borderRadius: BorderRadius.circular(
+                    ViewerPalette.radiusLg),
+                border: Border.all(color: ViewerPalette.border),
+              ),
+              child: const Padding(
+                padding: EdgeInsets.all(16),
+                child: Icon(
+                  Icons.search_off_rounded,
+                  size: 28,
+                  color: ViewerPalette.textMuted,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'No notes match the current filter.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontWeight: FontWeight.w700,
+                fontSize: 15,
+                color: ViewerPalette.text,
+              ),
+            ),
+            const SizedBox(height: 6),
+            const Text(
+              'Try a different search, or clear the filter to see everything.',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13,
+                color: ViewerPalette.textMuted,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _TableSkeleton extends StatefulWidget {
+  const _TableSkeleton();
+
+  @override
+  State<_TableSkeleton> createState() => _TableSkeletonState();
+}
+
+class _TableSkeletonState extends State<_TableSkeleton>
+    with SingleTickerProviderStateMixin {
+  late final AnimationController _pulse = AnimationController(
+    vsync: this,
+    duration: const Duration(milliseconds: 1100),
+  )..repeat(reverse: true);
+
+  @override
+  void dispose() {
+    _pulse.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 640),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: ViewerPalette.surface,
+            borderRadius:
+                BorderRadius.circular(ViewerPalette.radiusXl),
+            border: Border.all(color: ViewerPalette.border),
+            boxShadow: ViewerPalette.shadowMid,
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: AnimatedBuilder(
+              animation: _pulse,
+              builder: (context, _) {
+                final t = Curves.easeInOut.transform(_pulse.value);
+                return Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    for (var i = 0; i < 5; i++) ...[
+                      _SkeletonLine(
+                        alpha: 0.35 + 0.45 * (i.isEven ? t : 1 - t),
+                        widthFactor: i == 0 ? 0.9 : (i == 4 ? 0.55 : 0.75),
+                      ),
+                      if (i < 4) const SizedBox(height: 12),
+                    ],
+                  ],
+                );
+              },
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _SkeletonLine extends StatelessWidget {
+  const _SkeletonLine({required this.alpha, required this.widthFactor});
+
+  final double alpha;
+  final double widthFactor;
+
+  @override
+  Widget build(BuildContext context) {
+    return FractionallySizedBox(
+      widthFactor: widthFactor,
+      alignment: Alignment.centerLeft,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: ViewerPalette.textFaint.withValues(alpha: alpha.clamp(0.0, 1.0)),
+          borderRadius:
+              BorderRadius.circular(ViewerPalette.radiusSm),
+        ),
+        child: const SizedBox(height: 16),
       ),
     );
   }

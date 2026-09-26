@@ -212,58 +212,93 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
             },
             child: Scaffold(
               backgroundColor: _kBg,
-              body: SafeArea(
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                      child: Row(
-                        children: [
-                          const Spacer(),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: ViewerPalette.darkScrim,
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            child: Text(
-                              '${_currentIndex + 1} / ${widget.notes.length}',
-                              style: const TextStyle(
-                                color: _kTextPrimary,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 15,
+              body: DecoratedBox(
+                decoration: const BoxDecoration(
+                  gradient: RadialGradient(
+                    center: Alignment(0.0, -0.45),
+                    radius: 1.25,
+                    colors: [
+                      Color(0xFF2E251B),
+                      ViewerPalette.darkBackground,
+                    ],
+                    stops: [0.0, 1.0],
+                  ),
+                ),
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                        child: Row(
+                          children: [
+                            const Spacer(),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: ViewerPalette.darkScrim,
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                    color: ViewerPalette.darkBorder),
+                              ),
+                              child: Text(
+                                '${_currentIndex + 1} / ${widget.notes.length}',
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: _kTextPrimary,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 15,
+                                  fontFeatures: [
+                                    FontFeature.tabularFigures()
+                                  ],
+                                ),
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          FilledButton.tonal(
-                            style: FilledButton.styleFrom(
-                              backgroundColor:
-                                  ViewerPalette.darkScrim,
-                              foregroundColor: _kTextPrimary,
+                            const SizedBox(width: 10),
+                            FilledButton.tonal(
+                              style: FilledButton.styleFrom(
+                                backgroundColor:
+                                    ViewerPalette.darkScrim,
+                                foregroundColor: _kTextPrimary,
+                                side: const BorderSide(
+                                    color: ViewerPalette.darkBorder),
+                              ),
+                              onPressed: _close,
+                              child: const Text('Back'),
                             ),
-                            onPressed: _close,
-                            child: const Text('Back'),
-                          ),
-                        ],
+                          ],
+                        ),
                       ),
-                    ),
-                    Expanded(
-                      child: PageView.builder(
-                        controller: _pageController,
-                        itemCount: widget.notes.length,
-                        onPageChanged: (i) => setState(() => _currentIndex = i),
-                        itemBuilder: (context, index) {
-                          return _NoteSlide(
-                            note: widget.notes[index],
-                            onTapImage: _openImageViewer,
-                            onTagTap: (tagName) => _close(tagName: tagName),
-                          );
-                        },
+                      Expanded(
+                        child: Stack(
+                          children: [
+                            PageView.builder(
+                              controller: _pageController,
+                              itemCount: widget.notes.length,
+                              onPageChanged: (i) =>
+                                  setState(() => _currentIndex = i),
+                              itemBuilder: (context, index) {
+                                return _NoteSlide(
+                                  note: widget.notes[index],
+                                  onTapImage: _openImageViewer,
+                                  onTagTap: (tagName) =>
+                                      _close(tagName: tagName),
+                                );
+                              },
+                            ),
+                            _EdgeChevron(
+                              left: true,
+                              onTap: _goPrevious,
+                            ),
+                            _EdgeChevron(
+                              left: false,
+                              onTap: _goNext,
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
             ),
@@ -323,7 +358,14 @@ class _NoteSlideState extends State<_NoteSlide> {
               margin: const EdgeInsets.all(1),
               decoration: BoxDecoration(
                 color: _kCardBg,
-                borderRadius: BorderRadius.circular(19),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: const [
+                  BoxShadow(
+                    blurRadius: 32,
+                    offset: Offset(0, 16),
+                    color: Color(0x66000000),
+                  ),
+                ],
               ),
               clipBehavior: Clip.antiAlias,
               child: Stack(
@@ -337,9 +379,11 @@ class _NoteSlideState extends State<_NoteSlide> {
                         Text(
                           widget.note.title,
                           style: const TextStyle(
+                            fontFamily: 'Inter',
                             color: _kTextPrimary,
                             fontSize: 22,
-                            fontWeight: FontWeight.w700,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
                           ),
                           textAlign: TextAlign.center,
                         ),
@@ -348,10 +392,21 @@ class _NoteSlideState extends State<_NoteSlide> {
                           Text(
                             widget.note.gradingCompany,
                             style: const TextStyle(
-                                color: _kTextAccent, fontSize: 15),
+                              fontFamily: 'Inter',
+                              color: _kTextAccent,
+                              fontSize: 15,
+                              letterSpacing: 0.2,
+                            ),
                             textAlign: TextAlign.center,
                           ),
                         ],
+                        const SizedBox(height: 12),
+                        Container(
+                          height: 1,
+                          margin:
+                              const EdgeInsets.symmetric(horizontal: 48),
+                          color: _kBorder,
+                        ),
                         const SizedBox(height: 16),
                         _NoteImage(
                           image: widget.note.fullFor('front'),
@@ -427,31 +482,52 @@ class _NoteImage extends StatelessWidget {
       onTap: image == null ? null : onTap,
       child: AspectRatio(
         aspectRatio: 1.65,
-        child: ClipRRect(
-          borderRadius: BorderRadius.circular(12),
-          child: image == null
-              ? const ColoredBox(
-                  color: _kDetailsBg,
-                  child: Center(
-                    child: Text(
-                      'No image',
-                      style: TextStyle(color: ViewerPalette.darkMuted),
-                    ),
-                  ),
-                )
-              : Image(
-                  image: createNoteImageProvider(image!),
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const ColoredBox(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(13),
+            border: Border.all(color: _kBorder),
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(12),
+            child: image == null
+                ? const ColoredBox(
                     color: _kDetailsBg,
                     child: Center(
                       child: Text(
-                        'Missing image',
-                        style: TextStyle(color: ViewerPalette.darkMuted),
+                        'No image',
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          color: ViewerPalette.darkMuted,
+                        ),
+                      ),
+                    ),
+                  )
+                : Image(
+                    image: createNoteImageProvider(image!),
+                    fit: BoxFit.contain,
+                    frameBuilder:
+                        (context, child, frame, wasSynchronouslyLoaded) {
+                      if (wasSynchronouslyLoaded || frame != null) {
+                        return child;
+                      }
+                      return const ColoredBox(
+                        color: _kDetailsBg,
+                      );
+                    },
+                    errorBuilder: (_, __, ___) => const ColoredBox(
+                      color: _kDetailsBg,
+                      child: Center(
+                        child: Text(
+                          'Missing image',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            color: ViewerPalette.darkMuted,
+                          ),
+                        ),
                       ),
                     ),
                   ),
-                ),
+          ),
         ),
       ),
     );
@@ -502,19 +578,22 @@ class _MetaPanel extends StatelessWidget {
             Text(
               entry.key,
               style: const TextStyle(
+                fontFamily: 'Inter',
                 color: _kTextLabel,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
               ),
             ),
             const SizedBox(height: 3),
             SelectableText(
               entry.value,
               style: const TextStyle(
+                fontFamily: 'Inter',
                 color: _kTextPrimary,
                 fontSize: 16,
                 fontWeight: FontWeight.w600,
+                fontFeatures: [FontFeature.tabularFigures()],
               ),
             ),
             const SizedBox(height: 14),
@@ -523,10 +602,11 @@ class _MetaPanel extends StatelessWidget {
             const Text(
               'Tags',
               style: TextStyle(
+                fontFamily: 'Inter',
                 color: _kTextLabel,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
               ),
             ),
             const SizedBox(height: 8),
@@ -537,20 +617,31 @@ class _MetaPanel extends StatelessWidget {
                 for (final tag in note.tags)
                   GestureDetector(
                     onTap: () => onTagTap(tag.name),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 12, vertical: 6),
-                      decoration: BoxDecoration(
-                        color: _kTagChipBg,
-                        borderRadius: BorderRadius.circular(20),
-                        border: Border.all(color: _kTagChipBorder),
-                      ),
-                      child: Text(
-                        tag.name,
-                        style: const TextStyle(
-                          color: _kTagChipText,
-                          fontSize: 14,
-                          fontWeight: FontWeight.w600,
+                    child: MouseRegion(
+                      cursor: SystemMouseCursors.click,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: _kTagChipBg,
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: _kTagChipBorder),
+                          boxShadow: const [
+                            BoxShadow(
+                              blurRadius: 8,
+                              offset: Offset(0, 2),
+                              color: Color(0x40000000),
+                            ),
+                          ],
+                        ),
+                        child: Text(
+                          tag.name,
+                          style: const TextStyle(
+                            fontFamily: 'Inter',
+                            color: _kTagChipText,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
                         ),
                       ),
                     ),
@@ -563,10 +654,11 @@ class _MetaPanel extends StatelessWidget {
             const Text(
               'Source URL',
               style: TextStyle(
+                fontFamily: 'Inter',
                 color: _kTextLabel,
-                fontSize: 12,
-                fontWeight: FontWeight.w600,
-                letterSpacing: 0.5,
+                fontSize: 11,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
               ),
             ),
             const SizedBox(height: 3),
@@ -575,6 +667,7 @@ class _MetaPanel extends StatelessWidget {
               child: Text(
                 note.url,
                 style: const TextStyle(
+                  fontFamily: 'Inter',
                   color: _kTextAccent,
                   decoration: TextDecoration.underline,
                   fontSize: 15,
@@ -586,18 +679,85 @@ class _MetaPanel extends StatelessWidget {
           const Text(
             'Notes',
             style: TextStyle(
+              fontFamily: 'Inter',
               color: _kTextLabel,
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              letterSpacing: 0.5,
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.1,
             ),
           ),
           const SizedBox(height: 3),
           Text(
             note.notes.trim().isEmpty ? 'No extra notes.' : note.notes,
-            style: const TextStyle(color: _kTextPrimary, fontSize: 15),
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              color: _kTextPrimary,
+              fontSize: 15,
+              height: 1.5,
+            ),
           ),
         ],
+      ),
+    );
+  }
+}
+
+/// Hover-revealed previous/next affordance floating over the slide edges.
+/// Paint-only on touch devices (no hover): it stays invisible and inert.
+class _EdgeChevron extends StatefulWidget {
+  const _EdgeChevron({required this.left, required this.onTap});
+
+  final bool left;
+  final VoidCallback onTap;
+
+  @override
+  State<_EdgeChevron> createState() => _EdgeChevronState();
+}
+
+class _EdgeChevronState extends State<_EdgeChevron> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return Positioned(
+      left: widget.left ? 20 : null,
+      right: widget.left ? null : 20,
+      top: 0,
+      bottom: 0,
+      child: Center(
+        child: MouseRegion(
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: AnimatedOpacity(
+            opacity: _hovered ? 1.0 : 0.0,
+            duration: const Duration(milliseconds: 160),
+            curve: Curves.easeOut,
+            child: IgnorePointer(
+              ignoring: !_hovered,
+              child: GestureDetector(
+                onTap: widget.onTap,
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: ViewerPalette.darkScrim,
+                    borderRadius: BorderRadius.circular(20),
+                    border:
+                        Border.all(color: ViewerPalette.darkBorder),
+                  ),
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Icon(
+                      widget.left
+                          ? Icons.chevron_left_rounded
+                          : Icons.chevron_right_rounded,
+                      color: ViewerPalette.darkText,
+                      size: 26,
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }

@@ -30,3 +30,7 @@ flutter:
   uses-material-design: true
   assets:
     - web/icons/Icon-192.png
+  fonts:
+    - family: Inter
+      fonts:
+        - asset: assets/fonts/InterVariable.ttf

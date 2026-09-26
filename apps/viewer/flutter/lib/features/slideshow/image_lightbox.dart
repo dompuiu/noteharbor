@@ -184,54 +184,76 @@ class _ImageLightboxState extends State<ImageLightbox> {
             },
             child: Scaffold(
               backgroundColor: ViewerPalette.darkBackground,
-              body: SafeArea(
-                child: Column(
-                  children: [
-                    Padding(
-                      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                      child: Row(
-                        children: [
-                          Expanded(
-                            child: Text(
-                              item.label,
-                              style: const TextStyle(
-                                color: ViewerPalette.darkText,
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700,
-                              ),
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                          ),
-                          const SizedBox(width: 12),
-                          Container(
-                            padding: const EdgeInsets.symmetric(
-                                horizontal: 12, vertical: 8),
-                            decoration: BoxDecoration(
-                              color: ViewerPalette.darkScrim,
-                              borderRadius: BorderRadius.circular(18),
-                            ),
-                            child: Text(
-                              '${_currentIndex + 1} / ${widget.items.length}',
-                              style: const TextStyle(
-                                color: ViewerPalette.darkText,
-                                fontWeight: FontWeight.w600,
-                                fontSize: 15,
+              body: DecoratedBox(
+                decoration: const BoxDecoration(
+                  gradient: RadialGradient(
+                    center: Alignment(0.0, -0.45),
+                    radius: 1.25,
+                    colors: [
+                      Color(0xFF2E251B),
+                      ViewerPalette.darkBackground,
+                    ],
+                    stops: [0.0, 1.0],
+                  ),
+                ),
+                child: SafeArea(
+                  child: Column(
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                        child: Row(
+                          children: [
+                            Expanded(
+                              child: Text(
+                                item.label,
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: ViewerPalette.darkText,
+                                  fontSize: 17,
+                                  fontWeight: FontWeight.w800,
+                                  letterSpacing: -0.2,
+                                ),
+                                overflow: TextOverflow.ellipsis,
                               ),
                             ),
-                          ),
-                          const SizedBox(width: 10),
-                          FilledButton.tonal(
-                            style: FilledButton.styleFrom(
-                              backgroundColor:
-                                  ViewerPalette.darkScrim,
-                              foregroundColor: ViewerPalette.darkText,
+                            const SizedBox(width: 12),
+                            Container(
+                              padding: const EdgeInsets.symmetric(
+                                  horizontal: 12, vertical: 8),
+                              decoration: BoxDecoration(
+                                color: ViewerPalette.darkScrim,
+                                borderRadius: BorderRadius.circular(18),
+                                border: Border.all(
+                                    color: ViewerPalette.darkBorder),
+                              ),
+                              child: Text(
+                                '${_currentIndex + 1} / ${widget.items.length}',
+                                style: const TextStyle(
+                                  fontFamily: 'Inter',
+                                  color: ViewerPalette.darkText,
+                                  fontWeight: FontWeight.w600,
+                                  fontSize: 15,
+                                  fontFeatures: [
+                                    FontFeature.tabularFigures()
+                                  ],
+                                ),
+                              ),
                             ),
-                            onPressed: _closeWithCurrentNote,
-                            child: const Text('Back'),
-                          ),
-                        ],
+                            const SizedBox(width: 10),
+                            FilledButton.tonal(
+                              style: FilledButton.styleFrom(
+                                backgroundColor:
+                                    ViewerPalette.darkScrim,
+                                foregroundColor: ViewerPalette.darkText,
+                                side: const BorderSide(
+                                    color: ViewerPalette.darkBorder),
+                              ),
+                              onPressed: _closeWithCurrentNote,
+                              child: const Text('Back'),
+                            ),
+                          ],
+                        ),
                       ),
-                    ),
                     Expanded(
                       child: PageView.builder(
                         controller: _controller,
@@ -255,6 +277,13 @@ class _ImageLightboxState extends State<ImageLightbox> {
                                 border: Border.all(
                                   color: ViewerPalette.darkBorder,
                                 ),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    blurRadius: 32,
+                                    offset: Offset(0, 16),
+                                    color: Color(0x66000000),
+                                  ),
+                                ],
                               ),
                               clipBehavior: Clip.antiAlias,
                               child: Padding(
@@ -264,6 +293,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
                                         child: Text(
                                           'No image',
                                           style: TextStyle(
+                                            fontFamily: 'Inter',
                                             color: ViewerPalette.darkMuted,
                                             fontSize: 16,
                                           ),
@@ -287,6 +317,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
                   ],
                 ),
               ),
+            ),
             ),
           ),
         ),

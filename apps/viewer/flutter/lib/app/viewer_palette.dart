@@ -72,4 +72,71 @@ abstract final class ViewerPalette {
 
   /// Warm-white at 8% (opaque form), for pills and buttons on dark.
   static const Color darkScrim = Color(0x14F7ECDC);
+
+  // ── Refresh tokens (prototype): background lift, depth, shape ─────
+  /// Top stop of the warm paper gradient behind light screens.
+  static const Color pageBackgroundTop = Color(0xFFF7F0E2);
+
+  /// Bottom stop of the warm paper gradient behind light screens.
+  static const Color pageBackgroundBottom = Color(0xFFEEE2CC);
+
+  /// Low lift: pills, chips, small badges.
+  static const List<BoxShadow> shadowLow = [
+    BoxShadow(
+      blurRadius: 10,
+      offset: Offset(0, 3),
+      color: Color(0x143E2C14),
+    ),
+    BoxShadow(
+      blurRadius: 2,
+      offset: Offset(0, 1),
+      color: Color(0x0F3E2C14),
+    ),
+  ];
+
+  /// Mid lift: table card, panels.
+  static const List<BoxShadow> shadowMid = [
+    BoxShadow(
+      blurRadius: 22,
+      offset: Offset(0, 10),
+      color: Color(0x1A3E2C14),
+    ),
+    BoxShadow(
+      blurRadius: 3,
+      offset: Offset(0, 1),
+      color: Color(0x143E2C14),
+    ),
+  ];
+
+  /// High lift: dialogs, blocking overlays, popovers.
+  static const List<BoxShadow> shadowHigh = [
+    BoxShadow(
+      blurRadius: 36,
+      offset: Offset(0, 18),
+      color: Color(0x243E2C14),
+    ),
+    BoxShadow(
+      blurRadius: 4,
+      offset: Offset(0, 2),
+      color: Color(0x143E2C14),
+    ),
+  ];
+
+  /// Hairline highlight drawn inside a card edge for a lit-paper feel.
+  static const Color edgeHighlight = Color(0x80FFFBF2);
+
+  // ── Shape scale ───────────────────────────────────────────────────
+  static const double radiusXs = 8;
+  static const double radiusSm = 12;
+  static const double radiusMd = 16;
+  static const double radiusLg = 20;
+  static const double radiusXl = 24;
+
+  // ── Spacing scale ─────────────────────────────────────────────────
+  static const double spaceXs = 4;
+  static const double spaceSm = 8;
+  static const double spaceMd = 12;
+  static const double spaceLg = 16;
+  static const double spaceXl = 20;
+  static const double spaceXxl = 28;
 }
