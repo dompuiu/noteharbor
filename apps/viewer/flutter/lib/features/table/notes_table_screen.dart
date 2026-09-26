@@ -1450,33 +1450,15 @@ class _Header extends StatelessWidget {
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                        colors: [
-                          ViewerPalette.accent,
-                          ViewerPalette.accentStrong,
-                        ],
-                      ),
-                      borderRadius: BorderRadius.circular(
-                          ViewerPalette.radiusSm),
-                      boxShadow: ViewerPalette.shadowLow,
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.all(3),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(9),
-                        child: Image.asset(
-                          'web/icons/Icon-192.png',
-                          width: 30,
-                          height: 30,
-                          fit: BoxFit.cover,
-                        ),
+                  ClipRRect(
+                      borderRadius: BorderRadius.circular(9),
+                      child: Image.asset(
+                        'web/icons/Icon-192.png',
+                        width: 30,
+                        height: 30,
+                        fit: BoxFit.cover,
                       ),
                     ),
-                  ),
                   const SizedBox(width: 12),
                   Column(
                     mainAxisSize: MainAxisSize.min,
@@ -1494,18 +1476,6 @@ class _Header extends StatelessWidget {
                               height: 0.95,
                               letterSpacing: -0.3,
                             ),
-                      ),
-                      const SizedBox(height: 3),
-                      const Text(
-                        'COLLECTION VIEWER',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 9,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.6,
-                          color: ViewerPalette.textMuted,
-                          height: 1,
-                        ),
                       ),
                     ],
                   ),
