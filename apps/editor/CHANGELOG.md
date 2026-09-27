@@ -2,6 +2,17 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.16.0] - 2026-09-26
+
+### Added
+
+- Table screen: odd rows carry a faint zebra tint so long rows stay trackable, re-striping by visual position when filtering or sorting.
+- Table screen: the sorted column header stands out in accent, and a column filter carrying a value shows the accent border with a soft tint.
+
+### Changed
+
+- Table screen: sort buttons span the full header-cell width with an accent-soft hover tint, and the label-row headers use heavy wide-tracked capitals.
+
 ## [1.15.1] - 2026-09-26
 
 ### Changed
