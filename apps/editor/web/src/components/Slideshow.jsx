@@ -594,6 +594,7 @@ function Slideshow({
   previewKind = null,
 }) {
   const note = notes[currentIndex];
+  const screenRef = useRef(null);
 
   function moveSlideshow(offset) {
     onChangeIndex(
@@ -641,7 +642,22 @@ function Slideshow({
         return;
       }
 
-      if ((event.key === "Enter" || event.key === "ArrowDown") && note) {
+      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+        const screen = screenRef.current;
+
+        if (
+          screen &&
+          screen.scrollHeight > screen.clientHeight + 1
+        ) {
+          event.preventDefault();
+          screen.scrollBy({
+            top: event.key === "ArrowDown" ? 80 : -80,
+          });
+        }
+        return;
+      }
+
+      if ((event.key === "Enter" || event.key === " ") && note) {
         event.preventDefault();
         const openableItem = getPreviewItems(note, {
           includeMissingSides: true,
@@ -698,7 +714,10 @@ function Slideshow({
   const scrapePanelTitle = getScrapePanelTitle(note);
 
   return (
-    <section className="slideshow-screen slideshow-screen--overlay">
+    <section
+      className="slideshow-screen slideshow-screen--overlay"
+      ref={screenRef}
+    >
       {previewItem && previewNote && (
         <ImagePopover
           alt={previewItem.alt}

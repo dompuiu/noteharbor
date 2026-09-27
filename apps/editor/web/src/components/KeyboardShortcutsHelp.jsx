@@ -36,7 +36,8 @@ const shortcutGroups = [
     title: "Slideshow",
     items: [
       { keys: ["←", "→"], description: "Go to the previous / next note" },
-      { keys: ["Enter", "↓"], description: "Open the image preview" },
+      { keys: ["↑", "↓"], description: "Scroll the slideshow content" },
+      { keys: ["Enter", "Space"], description: "Open the image preview" },
       { keys: ["Esc"], description: "Close the slideshow" },
     ],
   },
