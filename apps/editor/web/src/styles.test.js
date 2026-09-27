@@ -24,10 +24,8 @@ describe("table styles", () => {
     );
   });
 
-  test("sort buttons fill their header cell", () => {
-    expect(styles).toMatch(/\.sort-button\s*\{[^}]*width:\s*100%/);
-    expect(styles).toMatch(
-      /thead tr:first-child th:has\(\.sort-button\)\s*\{\s*padding:\s*0/,
-    );
+  test("sort buttons stay compact pills like the Flutter header", () => {
+    expect(styles).toMatch(/\.sort-button\s*\{[^}]*display:\s*inline-flex/);
+    expect(styles).not.toMatch(/th:has\(\.sort-button\)/);
   });
 });
