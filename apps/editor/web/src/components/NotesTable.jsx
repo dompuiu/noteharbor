@@ -2858,6 +2858,10 @@ function NotesTable({
     setNotes(reorderedNotes);
     setReorderLoading(true);
     clearDragState();
+    // Land the keyboard cursor on the moved row in its new place. The row
+    // keeps its key, so React moves the same DOM node and focus follows it
+    // there.
+    focusRowByNoteId(draggedNoteId);
 
     try {
       const payload = await saveNotesOrder(

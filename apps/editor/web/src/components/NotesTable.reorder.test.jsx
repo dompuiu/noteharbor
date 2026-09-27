@@ -175,4 +175,44 @@ describe("NotesTable row reordering", () => {
       expect(reorderNotes).toHaveBeenCalledWith([2, 3, 1], 1);
     });
   });
+
+  test("dropping a row moves the keyboard cursor to its new place", async () => {
+    // The server echoes the reordered notes back; the rows stay mounted.
+    reorderNotes.mockResolvedValue({
+      notes: [note(2, "BBBB"), note(3, "CCCC"), note(1, "AAAA")],
+    });
+    const { container } = renderTable();
+
+    const handle = await screen.findByLabelText("Move AAAA");
+    const targetRow = rowFor(container, "CCCC");
+    expect(targetRow).toBeTruthy();
+
+    const dataTransfer = makeDataTransfer();
+
+    await act(async () => {
+      handle.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+    });
+
+    await act(async () => {
+      targetRow.dispatchEvent(
+        dragEvent("dragover", { clientY: 400, dataTransfer }),
+      );
+    });
+
+    await act(async () => {
+      targetRow.dispatchEvent(
+        dragEvent("drop", { clientY: 400, dataTransfer }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenCalledWith([2, 3, 1], 1);
+    });
+
+    const movedRow = rowFor(container, "AAAA");
+    await waitFor(() => {
+      expect(movedRow).toHaveFocus();
+    });
+    expect(movedRow).toHaveClass("table-row-link--active");
+  });
 });
