@@ -698,13 +698,22 @@ thead tr:first-child th {
   border-bottom-color: var(--border);
 }
 
+/* The sort button is the cell: dropping the cell padding lets the button
+   box fill the whole th, so its hover tint covers the full header cell.
+   Plain label cells (Front, Actions) and the filter row keep their
+   padding. */
+thead tr:first-child th:has(.sort-button) {
+  padding: 0;
+}
+
 .table-spacer-row td {
   padding: 0;
   border-bottom: 0;
 }
 
 .sort-button {
-  display: inline-flex;
+  display: flex;
+  width: 100%;
   align-items: center;
   justify-content: center;
   gap: 4px;
@@ -713,7 +722,7 @@ thead tr:first-child th {
   background: transparent;
   font-weight: 700;
   font-size: inherit;
-  padding: 2px 4px;
+  padding: 10px 12px;
   border-radius: 6px;
   color: inherit;
   transition: background 0.15s ease;

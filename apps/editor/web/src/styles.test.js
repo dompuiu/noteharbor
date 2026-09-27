@@ -23,4 +23,11 @@ describe("table styles", () => {
       /\.sort-button:hover\s*\{\s*background:\s*var\(--accent-soft\)/,
     );
   });
+
+  test("sort buttons fill their header cell", () => {
+    expect(styles).toMatch(/\.sort-button\s*\{[^}]*width:\s*100%/);
+    expect(styles).toMatch(
+      /thead tr:first-child th:has\(\.sort-button\)\s*\{\s*padding:\s*0/,
+    );
+  });
 });
