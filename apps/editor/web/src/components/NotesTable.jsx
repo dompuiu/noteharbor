@@ -3375,7 +3375,7 @@ function NotesTable({
                             ) : null}
                           </button>
                         </th>
-                        <th>Front</th>
+                        <th>FRONT</th>
                         {visibleColumns.map(([key, label]) => (
                           <th
                             className={
@@ -3392,7 +3392,7 @@ function NotesTable({
                               onClick={() => toggleSort(key)}
                               type="button"
                             >
-                              {label}
+                              {label.toUpperCase()}
                               {sortKey === key ? (
                                 <span>
                                   {sortDirection === "asc" ? " ▲" : " ▼"}
@@ -3401,7 +3401,7 @@ function NotesTable({
                             </button>
                           </th>
                         ))}
-                        {showActions ? <th>Actions</th> : null}
+                        {showActions ? <th>ACTIONS</th> : null}
                         {vScroll.visible ? (
                           <th
                             aria-hidden="true"

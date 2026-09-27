@@ -100,13 +100,29 @@ beforeEach(() => {
 });
 
 describe("NotesTable header emphasis", () => {
+  test("sort button labels render uppercase in markup", async () => {
+    const { container } = renderTable();
+
+    await screen.findByLabelText("Move AAAA");
+
+    const labels = Array.from(
+      container.querySelectorAll("thead tr:first-child .sort-button"),
+    ).map((button) =>
+      button.textContent.replace(/[▲▼]/g, "").trim(),
+    );
+    expect(labels.length).toBeGreaterThan(0);
+    for (const label of labels) {
+      expect(label).toBe(label.toUpperCase());
+    }
+    expect(labels).toContain("DENOMINATION");
+  });
   test("only the sorted column carries the active sort class", async () => {
     renderTable();
     const user = userEvent.setup();
 
     const idButton = await screen.findByRole("button", { name: /^ID/ });
     const denominationButton = screen.getByRole("button", {
-      name: /Denomination/,
+      name: /DENOMINATION/,
     });
     expect(idButton.classList.contains("sort-button--active")).toBe(true);
     expect(

@@ -126,8 +126,8 @@ describe("NotesTable zebra striping", () => {
 
     // Two clicks on Denomination: first selects the column (asc), second
     // flips to desc, reversing the visual order to CCCC, BBBB, AAAA.
-    await user.click(screen.getByRole("button", { name: /Denomination/ }));
-    await user.click(screen.getByRole("button", { name: /Denomination/ }));
+    await user.click(screen.getByRole("button", { name: /DENOMINATION/ }));
+    await user.click(screen.getByRole("button", { name: /DENOMINATION/ }));
 
     await waitFor(() => {
       const first = rowsInOrder(container)[0];
