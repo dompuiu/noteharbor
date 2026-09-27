@@ -28,4 +28,23 @@ describe("table styles", () => {
     expect(styles).toMatch(/\.sort-button\s*\{[^}]*width:\s*100%/);
     expect(styles).not.toMatch(/th:has\(\.sort-button\)/);
   });
+
+  test("the sorted column stands out in accent-strong", () => {
+    expect(styles).toMatch(
+      /\.sort-button--active\s*\{\s*color:\s*var\(--accent-strong\)/,
+    );
+  });
+
+  test("a filled column filter stands out with the accent border", () => {
+    expect(styles).toMatch(/\.filter-input--active/);
+    expect(styles).toMatch(
+      /\.tags-filter-combobox:has\(\.tags-filter-chip\)/,
+    );
+  });
+
+  test("label-row headers use heavy wide-tracked caps", () => {
+    expect(styles).toMatch(
+      /thead tr:first-child th\s*\{[^}]*font-weight:\s*800/,
+    );
+  });
 });

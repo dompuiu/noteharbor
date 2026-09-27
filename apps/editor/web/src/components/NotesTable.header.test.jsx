@@ -1,0 +1,147 @@
+import { MemoryRouter } from "react-router-dom";
+import { render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+import { NotesTable } from "./NotesTable.jsx";
+
+vi.mock("../lib/api.js", () => ({
+  deleteNote: vi.fn(),
+  getNotes: vi.fn(),
+  getOperationStatus: vi.fn(),
+  reorderNotes: vi.fn(),
+  getScrapeStatus: vi.fn(),
+  startScrape: vi.fn(),
+}));
+
+vi.mock("@tanstack/react-virtual", () => ({
+  useVirtualizer: ({ count }) => ({
+    getVirtualItems: () =>
+      Array.from({ length: count }, (_, index) => ({
+        index,
+        key: index,
+        size: 43,
+        start: index * 43,
+        end: (index + 1) * 43,
+      })),
+    getTotalSize: () => count * 43,
+    measureElement: () => {},
+    scrollToIndex: () => {},
+    scrollToOffset: () => {},
+  }),
+}));
+
+import {
+  getNotes,
+  getOperationStatus,
+  getScrapeStatus,
+} from "../lib/api.js";
+
+class FakeResizeObserver {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+}
+
+function note(id, denomination) {
+  return {
+    id,
+    display_order: id,
+    denomination,
+    issue_date: "",
+    catalog_number: "",
+    grading_company: "",
+    grade: "",
+    serial: "",
+    url: null,
+    images: [],
+    tags: [],
+    scrape_status: "idle",
+  };
+}
+
+function renderTable() {
+  return render(
+    <MemoryRouter>
+      <NotesTable
+        activeCollection={{ id: 1, is_default: 1, name: "Test" }}
+        activeCollectionId={1}
+        collections={[{ id: 1, is_default: 1, name: "Test" }]}
+        collectionsError=""
+        loadingCollections={false}
+        onSelectCollection={() => {}}
+      />
+    </MemoryRouter>,
+  );
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  window.localStorage.clear();
+  vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
+    width: 1000,
+    height: 600,
+    top: 0,
+    left: 0,
+    right: 1000,
+    bottom: 600,
+    x: 0,
+    y: 0,
+    toJSON: () => ({}),
+  });
+  getNotes.mockResolvedValue({
+    notes: [note(1, "AAAA"), note(2, "BBBB"), note(3, "CCCC")],
+  });
+  getScrapeStatus.mockResolvedValue({ status: "idle", items: [] });
+  getOperationStatus.mockResolvedValue({
+    currentOperation: "idle",
+    isBusy: false,
+  });
+});
+
+describe("NotesTable header emphasis", () => {
+  test("only the sorted column carries the active sort class", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    const idButton = await screen.findByRole("button", { name: /^ID/ });
+    const denominationButton = screen.getByRole("button", {
+      name: /Denomination/,
+    });
+    expect(idButton.classList.contains("sort-button--active")).toBe(true);
+    expect(
+      denominationButton.classList.contains("sort-button--active"),
+    ).toBe(false);
+
+    await user.click(denominationButton);
+
+    expect(idButton.classList.contains("sort-button--active")).toBe(false);
+    expect(
+      denominationButton.classList.contains("sort-button--active"),
+    ).toBe(true);
+  });
+
+  test("a column filter with a value carries the active filter class", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    const denominationFilter = await screen.findByLabelText(
+      "Filter Denomination",
+    );
+    expect(
+      denominationFilter.classList.contains("filter-input--active"),
+    ).toBe(false);
+
+    await user.type(denominationFilter, "AA");
+
+    expect(
+      denominationFilter.classList.contains("filter-input--active"),
+    ).toBe(true);
+
+    await user.clear(denominationFilter);
+
+    expect(
+      denominationFilter.classList.contains("filter-input--active"),
+    ).toBe(false);
+  });
+});

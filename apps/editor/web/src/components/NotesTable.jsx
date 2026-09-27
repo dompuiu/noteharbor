@@ -3363,7 +3363,7 @@ function NotesTable({
                         ) : null}
                         <th>
                           <button
-                            className="sort-button"
+                            className={`sort-button${sortKey === "id" ? " sort-button--active" : ""}`}
                             onClick={() => toggleSort("id")}
                             type="button"
                           >
@@ -3388,7 +3388,7 @@ function NotesTable({
                             key={key}
                           >
                             <button
-                              className="sort-button"
+                              className={`sort-button${sortKey === key ? " sort-button--active" : ""}`}
                               onClick={() => toggleSort(key)}
                               type="button"
                             >
@@ -3452,7 +3452,7 @@ function NotesTable({
                               ) : (
                                 <input
                                   aria-label={`Filter ${label}`}
-                                  className="filter-input"
+                                  className={`filter-input${String(filters[key] ?? "").trim() ? " filter-input--active" : ""}`}
                                   ref={getFilterRef(key)}
                                   onFocus={() => rememberFilter(key)}
                                   style={
