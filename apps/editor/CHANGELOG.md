@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.15.1] - 2026-09-26
+
+### Changed
+
+- Note slideshow: the image preview now opens with `Enter` or `Space` (`↓` no longer opens it), and `↑`/`↓` scroll the slideshow content when it overflows.
+
 ## [1.15.0] - 2026-09-27
 
 ### Fixed
