@@ -1050,6 +1050,11 @@ function NotesTable({
     focusedRowIdRef.current = null;
     setActiveNoteId(null);
   }, []);
+  // A mouse press focuses the row before any drag or click resolves. The
+  // flag marks that focus as mouse-driven so it claims focus memory but
+  // not the cursor paint: selection happens on drop, keyboard moves, and
+  // slideshow return — never on mouse down.
+  const mouseFocusSuppressRef = useRef(false);
   const location = useLocation();
   const navigate = useNavigate();
 
@@ -3574,9 +3579,20 @@ function NotesTable({
                                   rowElementMapRef.current.delete(note.id);
                                 }
                               }}
+                              onMouseDown={() => {
+                                mouseFocusSuppressRef.current = true;
+                              }}
+                              onMouseUp={() => {
+                                mouseFocusSuppressRef.current = false;
+                              }}
                               onFocus={() => {
                                 focusedRowIdRef.current = note.id;
-                                setActiveNoteId(note.id);
+
+                                if (mouseFocusSuppressRef.current) {
+                                  mouseFocusSuppressRef.current = false;
+                                } else {
+                                  setActiveNoteId(note.id);
+                                }
                               }}
                               onBlur={(event) => {
                                 if (

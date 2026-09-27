@@ -189,6 +189,12 @@ describe("NotesTable row reordering", () => {
 
     const dataTransfer = makeDataTransfer();
 
+    // Real drags start with a mouse press on the handle, which must not
+    // select the row by itself — selection happens on drop below.
+    await act(async () => {
+      handle.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+    });
+
     await act(async () => {
       handle.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
     });

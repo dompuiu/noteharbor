@@ -357,6 +357,33 @@ describe("Active row highlight", () => {
     });
   });
 
+  test("mouse press does not paint the cursor; keyboard still claims it", async () => {
+    const user = userEvent.setup();
+    getNotes.mockResolvedValue({
+      notes: [notePayload(1, "AAAA"), notePayload(2, "BBBB")],
+    });
+    renderTable();
+
+    const first = await screen.findByText("AAAA");
+    const firstRow = first.closest("tr");
+    await act(async () => {
+      firstRow.dispatchEvent(new MouseEvent("mousedown", { bubbles: true }));
+      firstRow.focus();
+    });
+
+    expect(firstRow).toHaveFocus();
+    expect(firstRow).not.toHaveClass("table-row-link--active");
+
+    await user.keyboard("{ArrowDown}");
+
+    const second = await screen.findByText("BBBB");
+    const secondRow = second.closest("tr");
+    await waitFor(() => {
+      expect(secondRow).toHaveFocus();
+    });
+    expect(secondRow).toHaveClass("table-row-link--active");
+  });
+
   test("ArrowDown cursor survives scrolling out of view and back", async () => {
     const user = userEvent.setup();
     getNotes.mockResolvedValue({
