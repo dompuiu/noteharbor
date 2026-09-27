@@ -2,6 +2,13 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.15.0] - 2026-09-27
+
+### Fixed
+
+- Table screen: the keyboard cursor is now a persistent active-row highlight. Closing the slideshow marks the returned row with both the Close button and `Esc`, scrolling the cursor row out of view and back keeps its highlight and focus, and committing a drag-and-drop reorder lands the cursor on the moved row.
+- Table screen: pressing the mouse on a row no longer paints the highlight or moves the keyboard cursor — selection now happens on drop, arrow-key moves, and slideshow return. Dragging the table to pan its columns no longer steals the active row either; the pan stays focus-neutral while ordinary clicks keep working.
+
 ## [1.14.2] - 2026-09-26
 
 ### Changed
