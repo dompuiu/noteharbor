@@ -1968,6 +1968,9 @@ function NotesTable({
   }
 
   function handleColumnPanPointerDown(event) {
+    // Clear first so a missed pointerup cannot leave a stale pending pan
+    // that would suppress focus on a later, unrelated press.
+    columnPanRef.current = null;
     const scroller = columnScroller();
 
     if (
@@ -1985,6 +1988,17 @@ function NotesTable({
       startScrollLeft: scroller.scrollLeft,
       startX: event.clientX,
     };
+  }
+
+  function handleColumnPanMouseDown(event) {
+    // Pointerdown fires before mousedown and already armed the pan, so a
+    // press that can start a pan must stay focus-neutral: cancelling the
+    // press's default focus action keeps the active row's DOM focus, focus
+    // memory, and highlight intact. The follow-up click is unaffected, so
+    // ordinary clicks still fire; a completed pan swallows its own click.
+    if (columnPanRef.current) {
+      event.preventDefault();
+    }
   }
 
   function handleColumnPanPointerMove(event) {
@@ -2042,6 +2056,10 @@ function NotesTable({
     }
 
     columnPanRef.current = null;
+    // The row clears this on its own mouseup, but a pan captures the
+    // pointer to the scroller so the row's mouseup may never run. Reset
+    // here so a stale press flag cannot suppress a later keyboard paint.
+    mouseFocusSuppressRef.current = false;
     setColumnsDragging(false);
   }
 
@@ -3320,6 +3338,7 @@ function NotesTable({
                 className={`table-scroll-x${columnsDragging ? " is-panning" : ""}`}
                 onClickCapture={handleColumnPanClickCapture}
                 onLostPointerCapture={handleColumnPanPointerEnd}
+                onMouseDown={handleColumnPanMouseDown}
                 onPointerCancel={handleColumnPanPointerEnd}
                 onPointerDown={handleColumnPanPointerDown}
                 onPointerMove={handleColumnPanPointerMove}

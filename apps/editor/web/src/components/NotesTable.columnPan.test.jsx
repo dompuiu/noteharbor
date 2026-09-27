@@ -1,5 +1,6 @@
 import { MemoryRouter } from "react-router-dom";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
 
@@ -100,6 +101,39 @@ beforeEach(() => {
   });
 });
 
+function notePayload(id, denomination) {
+  return {
+    id,
+    display_order: id,
+    denomination,
+    issue_date: "",
+    catalog_number: "",
+    grading_company: "",
+    grade: "",
+    serial: "",
+    url: null,
+    images: [],
+    tags: [],
+    scrape_status: "idle",
+  };
+}
+
+function armHorizontalOverflow(container) {
+  const scroller = container.querySelector(".table-scroll-x");
+  expect(scroller).not.toBeNull();
+
+  Object.defineProperty(scroller, "scrollWidth", {
+    configurable: true,
+    value: 1600,
+  });
+  Object.defineProperty(scroller, "clientWidth", {
+    configurable: true,
+    value: 1000,
+  });
+  scroller.scrollLeft = 0;
+  return scroller;
+}
+
 describe("NotesTable column panning", () => {
   test("dragging a row pans the table instead of selecting text", async () => {
     const { container } = renderTable();
@@ -150,5 +184,57 @@ describe("NotesTable column panning", () => {
         pointerType: "mouse",
       }),
     );
+  });
+
+  test("panning from another row keeps the active row's focus and highlight", async () => {
+    getNotes.mockResolvedValue({
+      notes: [notePayload(1, "AAAA"), notePayload(2, "BBBB")],
+    });
+    const { container } = renderTable();
+    const user = userEvent.setup();
+
+    const first = await screen.findByText("AAAA");
+    const firstRow = first.closest("tr");
+    const second = await screen.findByText("BBBB");
+    const secondRow = second.closest("tr");
+    expect(firstRow).not.toBeNull();
+    expect(secondRow).not.toBeNull();
+
+    const scroller = armHorizontalOverflow(container);
+
+    await act(async () => {
+      firstRow.focus();
+    });
+    await waitFor(() => {
+      expect(firstRow).toHaveClass("table-row-link--active");
+    });
+
+    await user.pointer([
+      {
+        target: second,
+        coords: { clientX: 900, clientY: 300 },
+        keys: "[MouseLeft>]",
+      },
+      { target: second, coords: { clientX: 800, clientY: 300 } },
+      { keys: "[/MouseLeft]" },
+    ]);
+
+    await waitFor(() => {
+      expect(scroller.scrollLeft).toBe(100);
+    });
+    expect(firstRow).toHaveFocus();
+    expect(firstRow).toHaveClass("table-row-link--active");
+    expect(secondRow).not.toHaveFocus();
+    expect(secondRow).not.toHaveClass("table-row-link--active");
+
+    // The pan captured the pointer, so the dragged row's own mouseup never
+    // ran: keyboard focus after the pan must still paint the cursor.
+    await act(async () => {
+      secondRow.focus();
+    });
+    await waitFor(() => {
+      expect(secondRow).toHaveClass("table-row-link--active");
+    });
+    expect(firstRow).not.toHaveClass("table-row-link--active");
   });
 });
