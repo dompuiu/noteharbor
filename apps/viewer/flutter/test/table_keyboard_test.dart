@@ -159,7 +159,7 @@ void main() {
     expect(selectedRow(2), findsOneWidget);
   });
 
-  keyboardTestWidgets('tap opens the note without moving keyboard selection', (
+  keyboardTestWidgets('tap opens the note and returns with the row selected', (
     WidgetTester tester,
   ) async {
     await pumpKeyboardTable(tester);
@@ -170,13 +170,13 @@ void main() {
     expect(find.text('Back'), findsOneWidget);
     expect(find.text('3 / 5'), findsOneWidget);
 
-    // A mouse-opened note returns without a selection ring.
+    // A mouse-opened note returns with the row selected, matching the Editor.
     await tester.tap(find.text('Back'));
     await tester.pumpAndSettle();
-    expect(selectedRing(), findsNothing);
+    expect(selectedRow(3), findsOneWidget);
   });
 
-  keyboardTestWidgets('clicking a row clears a keyboard selection', (
+  keyboardTestWidgets('clicking a row returns with the clicked row selected', (
     WidgetTester tester,
   ) async {
     await pumpKeyboardTable(tester);
@@ -190,7 +190,7 @@ void main() {
     await tester.tap(find.text('Back'));
     await tester.pumpAndSettle();
 
-    expect(selectedRing(), findsNothing);
+    expect(selectedRow(3), findsOneWidget);
   });
 
   keyboardTestWidgets('escape clears the keyboard selection', (
@@ -544,7 +544,7 @@ void main() {
     },
   );
 
-  keyboardTestWidgets('mouse drag clears the keyboard selection ring', (
+  keyboardTestWidgets('mouse drag keeps the keyboard selection ring', (
     WidgetTester tester,
   ) async {
     await pumpKeyboardTable(tester);
@@ -553,8 +553,8 @@ void main() {
     await tester.pump();
     expect(selectedRow(1), findsOneWidget);
 
-    // Grabbing a row with the mouse is a pointer interaction: the ring is a
-    // keyboard-only affordance and must drop even though no tap fires.
+    // Grabbing a row with the mouse is a pointer interaction, but the row
+    // cursor survives it, matching the Editor.
     final gesture = await tester.startGesture(
       tester.getCenter(tableRow(3)),
       kind: PointerDeviceKind.mouse,
@@ -566,7 +566,34 @@ void main() {
     await gesture.up();
     await tester.pumpAndSettle();
 
-    expect(selectedRing(), findsNothing);
+    expect(selectedRow(1), findsOneWidget);
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'notesTable');
+  });
+
+  keyboardTestWidgets('dragging the selected row keeps the ring on that row', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(selectedRow(3), findsOneWidget);
+
+    // Grab the selected row itself and pan the columns: the ring stays put.
+    final gesture = await tester.startGesture(
+      tester.getCenter(tableRow(3)),
+      kind: PointerDeviceKind.mouse,
+    );
+    for (var step = 0; step < 4; step++) {
+      await gesture.moveBy(const Offset(-50, 0));
+      await tester.pump();
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(selectedRow(3), findsOneWidget);
     expect(FocusManager.instance.primaryFocus?.debugLabel, 'notesTable');
   });
 
@@ -688,7 +715,7 @@ void main() {
   );
 
   keyboardTestWidgets(
-    'mouse wheel scroll drops the keyboard selection ring',
+    'mouse wheel scroll keeps the keyboard selection ring',
     (tester) async {
       await pumpKeyboardTable(tester);
 
@@ -703,7 +730,7 @@ void main() {
       );
       await tester.pumpAndSettle();
 
-      expect(selectedRing(), findsNothing);
+      expect(selectedRow(1), findsOneWidget);
     },
   );
 

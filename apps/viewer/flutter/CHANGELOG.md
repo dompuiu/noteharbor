@@ -2,6 +2,13 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- Table screen: the row cursor now survives mouse use, matching the Editor — pressing, dragging (column pan), or wheel-scrolling no longer drops it.
+- Table screen: closing the slideshow repaints the row cursor on the returned row whether the note was opened with the keyboard or the mouse (opening still clears it).
+
 ## [1.6.0] - 2026-09-26
 
 ### Added

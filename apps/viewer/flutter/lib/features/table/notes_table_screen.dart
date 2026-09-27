@@ -602,20 +602,17 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   /// Tracks whether the user is actively dragging the columns, so rows can
   /// show a closed-hand cursor. Vertical notifications are ignored.
   ///
-  /// Any user-driven scroll (wheel, drag) also hands control back to the
-  /// pointer: the keyboard row selection is dropped, like on pointer-down,
-  /// and a lingering select-all in the filter is collapsed so the highlight
-  /// does not sit stale behind the scrolled table. Programmatic scrolls
-  /// (keyboard navigation, reveal-after-close) never trigger this.
+  /// A user-driven scroll (wheel, drag) collapses a lingering select-all in
+  /// the filter so the highlight does not sit stale behind the scrolled
+  /// table; the row cursor itself survives, matching the Editor.
+  /// Programmatic scrolls (keyboard navigation, reveal-after-close) never
+  /// trigger this.
   bool _handleTableScrollNotification(ScrollNotification notification) {
     // A wheel tick dispatches forward/reverse followed by idle; only the
-    // user-driven directions reset the selection (idle also fires when a
-    // programmatic jump settles back through goIdle).
+    // user-driven directions collapse the filter highlight (idle also fires
+    // when a programmatic jump settles back through goIdle).
     if (notification is UserScrollNotification &&
         notification.direction != ScrollDirection.idle) {
-      if (_selectedIndex != null && mounted) {
-        setState(() => _selectedIndex = null);
-      }
       if (_searchFocusNode.hasFocus && !_searchController.selection.isCollapsed) {
         _searchController.selection = TextSelection.collapsed(
           offset: _searchController.text.length,
@@ -950,14 +947,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     );
   }
 
-  Future<void> _openNoteAtIndex(
-    List<NoteRecord> notes,
-    int index, {
-    required bool viaKeyboard,
-  }) async {
-    // A mouse click dismisses the keyboard selection: the ring is a keyboard
-    // affordance and should not appear for pointer users.
-    if (!viaKeyboard && _selectedIndex != null) {
+  Future<void> _openNoteAtIndex(List<NoteRecord> notes, int index) async {
+    // Opening a note dismisses the row cursor; closing the slideshow paints
+    // it back on the returned row (see _revealNoteById), matching the Editor.
+    if (_selectedIndex != null) {
       setState(() => _selectedIndex = null);
     }
     final result = await Navigator.of(context).push<NoteSlideshowResult>(
@@ -982,7 +975,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       });
     }
     if (result != null) {
-      _revealNoteById(result.noteId, select: viaKeyboard);
+      _revealNoteById(result.noteId);
     }
   }
 
@@ -992,7 +985,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     if (index == null || index < 0 || index >= notes.length) {
       return;
     }
-    _openNoteAtIndex(notes, index, viaKeyboard: true);
+    _openNoteAtIndex(notes, index);
   }
 
   void _moveSelection(int offset) {
@@ -1209,16 +1202,6 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     }
   }
 
-  /// A pointer interaction with the table is not a keyboard interaction: drop
-  /// the selection ring. A grab or drag never fires the row's `onTap`, so this
-  /// is the only place that can clear it for pointer users.
-  void _handleTablePointerDown(PointerDownEvent event) {
-    if (!_keyboardNavEnabled || _selectedIndex == null) {
-      return;
-    }
-    setState(() => _selectedIndex = null);
-  }
-
   /// Called for each pointer-down outside the filter. On desktop, Flutter's
   /// default would unfocus the field to the enclosing route scope; because a
   /// drag never fires an `onTap`, that leaves the table without primary focus
@@ -1310,7 +1293,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     );
   }
 
-  void _revealNoteById(int noteId, {required bool select}) {
+  void _revealNoteById(int noteId) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted || !_verticalScrollController.hasClients) {
         return;
@@ -1328,8 +1311,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         return;
       }
 
-      // Only a keyboard-opened note restores the selection ring on return.
-      if (select && _keyboardNavEnabled) {
+      // The closed slideshow always restores the row cursor on the
+      // returned row, however the slideshow was opened, matching the Editor.
+      if (_keyboardNavEnabled) {
         _focusSelection(noteIndex);
       }
 
@@ -1565,9 +1549,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                               onTap: () =>
                                                                   _openNoteAtIndex(
                                                                       notes,
-                                                                      index,
-                                                                      viaKeyboard:
-                                                                          false),
+                                                                      index),
                                                             );
                                                             if (index.isOdd) {
                                                               return ColoredBox(
@@ -1591,13 +1573,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                 ),
                             ),
                             );
-                            // Pointer-down inside the table drops the keyboard
-                            // selection ring (a grab/drag never fires onTap).
-                            return Listener(
-                              behavior: HitTestBehavior.translucent,
-                              onPointerDown: _handleTablePointerDown,
-                              child: table,
-                            );
+                            return table;
                           },
                         ),
                       ),
