@@ -21,6 +21,7 @@
   --accent: #96622f;
   --accent-strong: #71461f;
   --accent-soft: rgba(150, 98, 47, 0.12);
+  --row-zebra: rgba(150, 98, 47, 0.05);
   --accent-ink: #fffaf1;
   --success: #2f6b3c;
   --success-bg: rgba(47, 107, 60, 0.1);
@@ -602,6 +603,16 @@ td {
   transition: background 0.18s ease;
 }
 
+/* Odd rows carry a faint accent tint so long rows stay trackable across
+   the wide table. Painted on the row, not the cells, so the
+   semi-transparent hover/focus/active cell paint composites over it
+   instead of replacing it — the two tints stack. Parity comes from the
+   row's visual index (see NotesTable), so filtering and sorting
+   re-stripe the list. */
+.table-row-link--zebra {
+  background: var(--row-zebra);
+}
+
 /* Row highlight and focus ring are painted on the cells (not the row) so
    they stop at the last content cell instead of running under the overlay
    scrollbar in the header-only gutter column. The ring uses inset
@@ -705,6 +716,16 @@ thead tr:first-child th {
   padding: 2px 4px;
   border-radius: 6px;
   color: inherit;
+  transition: background 0.15s ease;
+}
+
+/* Sort header hover tints just the label button, not the whole column or
+   the filter row below it. Guarded to hover-capable pointers so a tap
+   never leaves a stuck tint. */
+@media (hover: hover) {
+  .sort-button:hover {
+    background: var(--accent-soft);
+  }
 }
 
 .filter-input,

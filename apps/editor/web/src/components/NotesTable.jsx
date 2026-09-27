@@ -3564,7 +3564,7 @@ function NotesTable({
                               </tr>
                             ) : null}
                             <tr
-                              className={`table-row-link${draggedNoteId === note.id ? " table-row-link--dragging" : ""}${activeNoteId === note.id ? " table-row-link--active" : ""}`}
+                              className={`table-row-link${virtualRow.index % 2 === 1 ? " table-row-link--zebra" : ""}${draggedNoteId === note.id ? " table-row-link--dragging" : ""}${activeNoteId === note.id ? " table-row-link--active" : ""}`}
                               data-index={virtualRow.index}
                               key={note.id}
                               ref={(element) => {
