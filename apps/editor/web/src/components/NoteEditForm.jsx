@@ -1188,11 +1188,6 @@ function NoteEditForm({
         <div className="panel-heading">
           <div>
             <p className="eyebrow">{isCreateMode ? "Add note" : "Edit note"}</p>
-            <h1>
-              {isCreateMode
-                ? "Add a banknote to the collection"
-                : "Adjust collection details"}
-            </h1>
           </div>
           <div className="inline-actions">
             {!isCreateMode ? (
