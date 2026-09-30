@@ -8,9 +8,10 @@
   "scripts": {
     "build:web": "node ./scripts/build-web.mjs",
     "prepare:package": "node ./scripts/prepare-package.mjs",
-    "build": "pnpm run build:web && pnpm run prepare:package && electron-builder install-app-deps && electron-builder",
-    "build:windows": "pnpm run build:web && pnpm run prepare:package && electron-builder install-app-deps && electron-builder --win nsis portable",
-    "pack": "pnpm run build:web && pnpm run prepare:package && electron-builder install-app-deps && electron-builder --dir"
+    "reset:native-stamps": "node ./scripts/reset-native-stamps.mjs",
+    "build": "pnpm run build:web && pnpm run prepare:package && pnpm run reset:native-stamps && electron-builder install-app-deps && electron-builder",
+    "build:windows": "pnpm run build:web && pnpm run prepare:package && pnpm run reset:native-stamps && electron-builder install-app-deps && electron-builder --win nsis portable",
+    "pack": "pnpm run build:web && pnpm run prepare:package && pnpm run reset:native-stamps && electron-builder install-app-deps && electron-builder --dir"
   },
   "dependencies": {
     "@img/sharp-darwin-arm64": "0.34.5",

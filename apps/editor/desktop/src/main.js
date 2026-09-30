@@ -560,6 +560,10 @@ app.whenReady().then(async () => {
   });
 }).catch((error) => {
   console.error(error);
+  dialog.showErrorBox(
+    'Note Harbor Editor failed to start',
+    error?.stack ?? String(error)
+  );
   app.quit();
 });
 
