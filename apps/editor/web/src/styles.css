@@ -772,14 +772,13 @@ thead tr:first-child th {
   text-align: center;
 }
 
-/* A column filter carrying a value stands out with the accent border and
-   a soft tint, extending the focus language to the filled state. The tags
-   combobox keys off its rendered chips instead, so no prop threading is
-   needed for it. */
+/* A column filter carrying a value stands out with the accent border alone.
+   It keeps the same surface as an empty filter, so typing a value never
+   changes the field's fill. The tags combobox keys off its rendered chips
+   instead, so no prop threading is needed for it. */
 .filter-input--active,
 .tags-filter-combobox:has(.tags-filter-chip) {
   border-color: var(--accent);
-  background: var(--accent-soft);
 }
 
 .field-block .note-textarea {
@@ -831,7 +830,7 @@ thead tr:first-child th {
 }
 
 .tags-filter-clear-all:hover {
-  color: var(--text);
+  color: var(--accent-strong);
 }
 
 /* Scoped under the combobox (0,2,0) so the borderless inline input wins over

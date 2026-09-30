@@ -2,6 +2,13 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- Table screen: a column filter carrying a value is now marked by its accent border alone. The fill stays the same as an empty filter, so the field no longer changes colour as you type a value into it.
+- Table screen: the tags filter's "Clear all" now hovers to the accent tone instead of near-black text, keeping it in the warm palette.
+
 ## [1.16.0] - 2026-09-26
 
 ### Added
