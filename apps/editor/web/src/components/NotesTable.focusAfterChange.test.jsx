@@ -477,3 +477,50 @@ describe("The note editor hands the cursor back", () => {
     expect(row).toHaveClass("table-row-link--active");
   });
 });
+
+describe("Note editor Escape", () => {
+  async function openEditorOn(user, denomination = "AAAA") {
+    renderTable();
+    await screen.findByText(denomination);
+    await user.click(
+      screen.getByRole("button", { name: `Edit ${denomination}` }),
+    );
+
+    const field = await screen.findByLabelText("Denomination");
+    await waitFor(() => {
+      expect(field).toHaveFocus();
+    });
+    return field;
+  }
+
+  test("Escape blurs a focused field before it closes the editor", async () => {
+    const user = userEvent.setup();
+    const field = await openEditorOn(user);
+
+    await user.keyboard("{Escape}");
+
+    expect(field).not.toHaveFocus();
+    expect(screen.getByLabelText("Denomination")).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Denomination")).not.toBeInTheDocument();
+    });
+  });
+
+  test("Escape closes the editor in one press when no field is focused", async () => {
+    const user = userEvent.setup();
+    const field = await openEditorOn(user);
+
+    act(() => {
+      field.blur();
+    });
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Denomination")).not.toBeInTheDocument();
+    });
+  });
+});

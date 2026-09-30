@@ -24,6 +24,7 @@ import {
   copyTextToClipboard,
   formatNoteAsTsvRow,
 } from "../lib/noteClipboard.js";
+import { isEditableElement } from "../lib/editableElement.js";
 import {
   shouldHandOffToFilters,
   useFilterFocusMemory,
@@ -1632,9 +1633,23 @@ function NotesTable({
     }
 
     function handleKeyDown(event) {
-      if (event.key === "Escape") {
-        closeEditor();
+      if (event.key !== "Escape") {
+        return;
       }
+
+      // A focused field gets the first Escape: blurring it keeps the user in
+      // the editor, so closing the screen takes a second press.
+      const activeElement = document.activeElement;
+      const fieldFocused =
+        isEditableElement(activeElement) &&
+        editorOverlayRef.current?.contains(activeElement);
+
+      if (fieldFocused) {
+        activeElement.blur();
+        return;
+      }
+
+      closeEditor();
     }
 
     window.addEventListener("keydown", handleKeyDown);
@@ -2239,12 +2254,7 @@ function NotesTable({
         return;
       }
 
-      const editable =
-        event.target instanceof HTMLElement &&
-        (event.target.tagName === "INPUT" ||
-          event.target.tagName === "TEXTAREA" ||
-          event.target.tagName === "SELECT" ||
-          event.target.isContentEditable);
+      const editable = isEditableElement(event.target);
       const tableKeysActive =
         !slideshowRouteActive && !editingNoteId && !creatingNote;
 

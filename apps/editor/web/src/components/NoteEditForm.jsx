@@ -18,6 +18,7 @@ import {
   readTextFromClipboard,
 } from "../lib/noteClipboard.js";
 import { isDesktopRuntime } from "../lib/appMode.js";
+import { isEditableElement } from "../lib/editableElement.js";
 import { PositionPicker } from "./PositionPicker.jsx";
 import { TagsField } from "./TagsField.jsx";
 
@@ -484,16 +485,12 @@ function NoteEditForm({
         return;
       }
 
-      const editable =
-        event.target instanceof HTMLElement &&
-        (event.target.tagName === "INPUT" ||
-          event.target.tagName === "TEXTAREA" ||
-          event.target.tagName === "SELECT" ||
-          event.target.isContentEditable);
-
       // Inside a field the plain keys belong to the text (caret movement and
       // the letters h/l), so only Shift+Arrow steps to an adjacent note there.
-      if (editable && !(event.shiftKey && event.key.startsWith("Arrow"))) {
+      if (
+        isEditableElement(event.target) &&
+        !(event.shiftKey && event.key.startsWith("Arrow"))
+      ) {
         return;
       }
 
