@@ -2385,11 +2385,11 @@ kbd {
   align-content: start;
 }
 
-/* Table is the tall group: keep it in column 1 while Slideshow,
-   Image preview, and Everywhere stack in column 2 beneath Slideshow. */
+/* Table is the tall group: keep it in column 1 while Note editor,
+   Slideshow, Image preview, and Everywhere stack in column 2 beneath it. */
 .shortcuts-group:first-child {
   grid-column: 1;
-  grid-row: 1 / span 3;
+  grid-row: 1 / span 4;
 }
 
 .shortcuts-group:not(:first-child) {

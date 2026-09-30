@@ -471,6 +471,55 @@ function NoteEditForm({
     firstFieldRef.current?.focus();
   }, [loading, noteId]);
 
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (event.metaKey || event.ctrlKey) {
+        return;
+      }
+
+      const goNext = event.key === "ArrowRight" || event.key === "l";
+      const goPrevious = event.key === "ArrowLeft" || event.key === "h";
+
+      if (!goNext && !goPrevious) {
+        return;
+      }
+
+      const editable =
+        event.target instanceof HTMLElement &&
+        (event.target.tagName === "INPUT" ||
+          event.target.tagName === "TEXTAREA" ||
+          event.target.tagName === "SELECT" ||
+          event.target.isContentEditable);
+
+      // Inside a field the plain keys belong to the text (caret movement and
+      // the letters h/l), so only Shift+Arrow steps to an adjacent note there.
+      if (editable && !(event.shiftKey && event.key.startsWith("Arrow"))) {
+        return;
+      }
+
+      if (goNext) {
+        if (!canNavigateNext) {
+          return;
+        }
+
+        event.preventDefault();
+        onNavigateNext?.();
+        return;
+      }
+
+      if (!canNavigatePrevious) {
+        return;
+      }
+
+      event.preventDefault();
+      onNavigatePrevious?.();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [canNavigateNext, canNavigatePrevious, onNavigateNext, onNavigatePrevious]);
+
   const imagePreviews = useMemo(() => {
     const nextPreviews = {};
 
@@ -1197,7 +1246,7 @@ function NoteEditForm({
                   className="icon-link note-nav-arrow"
                   disabled={!canNavigatePrevious}
                   onClick={onNavigatePrevious}
-                  title="Previous note"
+                  title="Previous note (← or h)"
                   type="button"
                 >
                   <svg
@@ -1222,7 +1271,7 @@ function NoteEditForm({
                   className="icon-link note-nav-arrow"
                   disabled={!canNavigateNext}
                   onClick={onNavigateNext}
-                  title="Next note"
+                  title="Next note (→ or l)"
                   type="button"
                 >
                   <svg
