@@ -801,6 +801,27 @@ function applyTableView(noteList, filterObj, key, direction, scrapeJob) {
   );
 }
 
+// Where a delete leaves the cursor, resolved against the list the delete is
+// applied to. `rowNoteId` is the note that slides into the highest removed
+// slot, or the new last row when the removals ran past the end; it is null
+// when no removed note was on screen. `emptiesView` is true when the
+// deletions take the last visible row, which needs the table anchor instead
+// of a row. The slot is picked before the delete because a position cannot be
+// resolved against a list that no longer contains the removed rows.
+function deleteFocusAfterRemoval(noteList, removedIds) {
+  const removed = new Set(removedIds);
+  const remaining = noteList.filter((note) => !removed.has(note.id));
+  const firstRemovedIndex = noteList.findIndex((note) => removed.has(note.id));
+
+  return {
+    rowNoteId:
+      firstRemovedIndex < 0 || !remaining.length
+        ? null
+        : remaining[Math.min(firstRemovedIndex, remaining.length - 1)].id,
+    emptiesView: noteList.length > 0 && !remaining.length,
+  };
+}
+
 function versionedImagePath(path, version) {
   if (!path) {
     return null;
@@ -1041,12 +1062,27 @@ function NotesTable({
   const focusedRowIdRef = useRef(null);
   const tableFocusAnchorRef = useRef(null);
   const currentRouteRef = useRef(null);
-  const skipFilterResetOnCollectionChangeRef = useRef(false);  const pendingRowFocusNoteIdRef = useRef(null);
+  const skipFilterResetOnCollectionChangeRef = useRef(false);
+  const pendingRowFocusNoteIdRef = useRef(null);
   const focusRestoreNoteIdRef = useRef(null);
+  // The row the keyboard cursor last landed on, kept apart from
+  // `focusedRowIdRef` because it has to outlive focus leaving the table:
+  // opening the note editor moves focus into the overlay and drops the live
+  // cursor, but closing the editor hands the cursor back to this row. Only a
+  // change of row order invalidates it.
+  const lastRowFocusNoteIdRef = useRef(null);
+  // A focus request that has to wait for `orderedNotes` to reflect the
+  // change that produced it — a newly created note, or a deleted row's
+  // neighbour. `focusRowByNoteId` cannot resolve a note the current list
+  // does not contain yet, so the request is held until the next list, then
+  // dropped if the note never arrives (filtered out, or moved to another
+  // collection).
+  const deferredRowFocusNoteIdRef = useRef(null);
   const clearRowCursor = useCallback(() => {
     // The keyboard cursor is focus memory plus paint: both must drop
     // together so the highlight can never outlive its focus target or
-    // vice versa.
+    // vice versa. The last-focused-row memory is deliberately left alone —
+    // it is what lets the editor overlay hand the cursor back on close.
     focusedRowIdRef.current = null;
     setActiveNoteId(null);
   }, []);
@@ -1683,10 +1719,40 @@ function NotesTable({
     // A changed filter or sort produces a new row order: drop any keyboard
     // focus target from the previous order (including a not-yet-landed
     // virtualized focus) so the next ArrowDown starts at the first row of
-    // the new order. The active-row cue belongs to the old order too.
+    // the new order. The active-row cue belongs to the old order too, and so
+    // do the last-focused-row memory and any focus still waiting on a list
+    // change: they name rows of the old order.
     pendingRowFocusNoteIdRef.current = null;
+    deferredRowFocusNoteIdRef.current = null;
+    lastRowFocusNoteIdRef.current = null;
     clearRowCursor();
   }, [clearRowCursor, filters, sortDirection, sortKey]);
+
+  useEffect(() => {
+    // Land a focus request that was made while the list was still settling.
+    // The note is looked up instead of focused at request time because a
+    // create appends it and a delete removes a neighbour, and neither is in
+    // the list on the render that started the request.
+    const noteId = deferredRowFocusNoteIdRef.current;
+
+    if (noteId == null) {
+      return;
+    }
+
+    deferredRowFocusNoteIdRef.current = null;
+
+    if (orderedNotes.some((note) => note.id === noteId)) {
+      focusRowByNoteId(noteId);
+    } else if (!orderedNotes.length) {
+      // The request named a note that left the view (moved to another
+      // collection, fell out of the filter) and took the last row with it:
+      // there is no row to land on, so use the anchor rather than <body>.
+      focusTableAnchor();
+    }
+    // `focusRowByNoteId` reads the list of the render it runs in, so it must
+    // not be a dependency: including it would fire this on every render.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orderedNotes]);
 
   // The vertical scrollbar is custom-drawn so its track spans only the rows
   // area below the sticky header (a native scrollbar would always run the
@@ -2226,7 +2292,7 @@ function NotesTable({
           if (orderedNotes[0]) {
             focusRowByNoteId(orderedNotes[0].id);
           } else {
-            tableFocusAnchorRef.current?.focus();
+            focusTableAnchor();
             clearRowCursor();
           }
         }
@@ -2284,7 +2350,7 @@ function NotesTable({
         // blur()) so a following Tab press lands on the header's "select
         // all" checkbox rather than wherever the browser's default tab
         // order would otherwise resume from.
-        tableFocusAnchorRef.current?.focus();
+        focusTableAnchor();
         clearRowCursor();
         return;
       }
@@ -2445,6 +2511,21 @@ function NotesTable({
     setActiveNoteId(currentRoute.noteId);
     resetColumnScroll();
     navigateToTableRoute(emptyTableRoute(), { replace: true });
+  }
+
+  function focusTableAnchor() {
+    // With no rows left there is no row to land on. Keeping focus on the
+    // anchor rather than letting it fall to <body> preserves the table's
+    // Escape and Tab behaviour.
+    tableFocusAnchorRef.current?.focus({ preventScroll: true });
+  }
+
+  function landFocusAfterDelete({ rowNoteId, emptiesView }) {
+    if (rowNoteId != null) {
+      deferredRowFocusNoteIdRef.current = rowNoteId;
+    } else if (emptiesView) {
+      focusTableAnchor();
+    }
   }
 
   function focusRowByNoteId(noteId, options = {}) {
@@ -2636,6 +2717,24 @@ function NotesTable({
     navigateToTableRoute({ kind: "create", beforeId: referenceNoteId });
   }
 
+  function editorCloseFocusNoteId() {
+    // An edit shows the note it is acting on, including after stepping
+    // through notes with the previous/next arrows. A create has no note of
+    // its own, so it returns to the row the user was on. Either way, a
+    // target that no longer exists (moved to another collection, filtered
+    // out) falls back to the first row.
+    const preferred = editingNoteId ?? lastRowFocusNoteIdRef.current;
+
+    if (
+      preferred != null &&
+      orderedNotes.some((note) => note.id === preferred)
+    ) {
+      return preferred;
+    }
+
+    return orderedNotes[0]?.id ?? null;
+  }
+
   function closeEditor() {
     if (slideshowRouteActive) {
       navigateToTableRoute(
@@ -2651,7 +2750,17 @@ function NotesTable({
       return;
     }
 
+    // The overlay is about to unmount, so the cursor has to be handed back
+    // before it does: the rows stay mounted behind the overlay, so the
+    // target row can be focused directly.
+    const focusNoteId = editorCloseFocusNoteId();
     navigateToTableRoute(emptyTableRoute(), { replace: true });
+
+    if (focusNoteId == null) {
+      focusTableAnchor();
+    } else {
+      focusRowByNoteId(focusNoteId);
+    }
   }
 
   function resetEditorOverlayScroll() {
@@ -2761,6 +2870,13 @@ function NotesTable({
       );
       return;
     }
+
+    // A saved note is the row to return to: a create appends it, an edit
+    // replaces it in place (possibly at a new sort position). When the save
+    // took the note out of this view — moved to another collection, or it
+    // fell out of the filter — the request is dropped, unless it emptied the
+    // view, in which case the deferred focus falls back to the anchor.
+    deferredRowFocusNoteIdRef.current = updatedNote.id;
 
     navigateToTableRoute(emptyTableRoute(), { replace: true });
   }
@@ -2930,9 +3046,17 @@ function NotesTable({
           return;
         }
 
+        // Land the cursor where the selection started: the row that takes
+        // the topmost deleted slot, or the new last row when the selection
+        // ran to the end.
+        const removal = deleteFocusAfterRemoval(orderedNotes, selectedIds);
+
         await Promise.all(
           selectedIds.map((id) => deleteNote(id, activeCollectionId)),
         );
+        // Request the landing focus before the refetch sets the list, so the
+        // request can never be flushed after the render it belongs to.
+        landFocusAfterDelete(removal);
         await loadNotes();
         clearSelection();
         return;
@@ -2971,6 +3095,9 @@ function NotesTable({
       });
       clearSelection();
     } catch (actionError) {
+      // A failed bulk action must not leave a focus request behind for the
+      // next list change to pick up.
+      deferredRowFocusNoteIdRef.current = null;
       setActionError(actionError.message);
     } finally {
       setBulkLoading(false);
@@ -2988,10 +3115,16 @@ function NotesTable({
 
     setActionError("");
 
+    // Work out the landing row before the note leaves the list: the row that
+    // slips into the deleted note's slot, or the new last row when the
+    // deleted note was last.
+    const removal = deleteFocusAfterRemoval(orderedNotes, [noteId]);
+
     try {
       await deleteNote(noteId, activeCollectionId);
       setNotes((current) => current.filter((entry) => entry.id !== noteId));
       setSelectedIds((current) => current.filter((id) => id !== noteId));
+      landFocusAfterDelete(removal);
     } catch (deleteError) {
       setActionError(deleteError.message);
     }
@@ -3606,6 +3739,7 @@ function NotesTable({
                               }}
                               onFocus={() => {
                                 focusedRowIdRef.current = note.id;
+                                lastRowFocusNoteIdRef.current = note.id;
 
                                 if (mouseFocusSuppressRef.current) {
                                   mouseFocusSuppressRef.current = false;
