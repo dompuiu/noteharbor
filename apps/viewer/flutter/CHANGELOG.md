@@ -2,6 +2,21 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
+## [1.8.0] - 2026-10-01
+
+### Added
+
+- Note slideshow: `Home` and `End` jump to the first and last note; the Image popover gains the same two keys over its front/back sequence. Both jumps land instantly rather than animating through every item.
+- `h`/`j`/`k`/`l` now alias the arrow keys in the Table screen, Note slideshow, and Image popover.
+- Table screen: `Shift`, `Cmd`, or `Ctrl` + `←`/`→` (and the `h`/`l` aliases) jump the columns to the first or last.
+
+### Changed
+
+- Keyboard: `Ctrl`, `Cmd`, and `Shift` are interchangeable for the arrow intents in the Table screen and Image popover; `Alt` stays inert.
+- Table screen: row focus moves only with the plain arrows and plain `j`/`k` — `Shift`+`↑`/`↓` and `Shift`+`j`/`k` no longer move the selection, and `Shift`+`↓` in the filter field is a no-op.
+- Image popover: in fit view, modified `←`/`→` (and `h`/`l`) page the images; modified `↑`/`↓` do nothing.
+- Updated dependencies.
+
 ## [1.7.0] - 2026-09-27
 
 ### Changed
