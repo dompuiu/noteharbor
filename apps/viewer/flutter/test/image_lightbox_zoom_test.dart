@@ -93,29 +93,6 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  /// Opens the popover on a sequence of [count] imaged pages.
-  Future<void> pumpManyItemPopover(
-    WidgetTester tester,
-    int count, {
-    int initialIndex = 0,
-  }) async {
-    final notes = <NoteRecord>[
-      for (var id = 1; id <= count; id++) zoomNote(id: id),
-    ];
-    await pumpSequence(
-      tester,
-      frontImageItems(notes),
-      initialIndex: initialIndex,
-    );
-  }
-
-  /// Opens the popover on a two-page sequence whose final page renders no
-  /// image, mirroring a Note whose Note image is missing.
-  Future<void> pumpPopoverEndingWithoutImage(WidgetTester tester) async {
-    final notes = [zoomNote(id: 1), zoomNote(id: 2, withImage: false)];
-    await pumpSequence(tester, frontImageItems(notes));
-  }
-
   List<ImageSequenceItem> frontImageItems(List<NoteRecord> notes) => [
         for (final note in notes)
           ImageSequenceItem(note: note, image: note.fullFor('front')),
@@ -139,6 +116,29 @@ void main() {
     );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
+  }
+
+  /// Opens the popover on a sequence of [count] imaged pages.
+  Future<void> pumpManyItemPopover(
+    WidgetTester tester,
+    int count, {
+    int initialIndex = 0,
+  }) async {
+    final notes = <NoteRecord>[
+      for (var id = 1; id <= count; id++) zoomNote(id: id),
+    ];
+    await pumpSequence(
+      tester,
+      frontImageItems(notes),
+      initialIndex: initialIndex,
+    );
+  }
+
+  /// Opens the popover on a two-page sequence whose final page renders no
+  /// image, mirroring a Note whose Note image is missing.
+  Future<void> pumpPopoverEndingWithoutImage(WidgetTester tester) async {
+    final notes = [zoomNote(id: 1), zoomNote(id: 2, withImage: false)];
+    await pumpSequence(tester, frontImageItems(notes));
   }
 
   testWidgets('mouse wheel zooms in, and back out', (tester) async {
