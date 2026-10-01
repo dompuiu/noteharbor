@@ -97,7 +97,8 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
     return items;
   }
 
-  void _jump(int nextIndex) {
+  /// Animates to [nextIndex], used by the arrow keys.
+  void _animateTo(int nextIndex) {
     _pageController.animateToPage(
       nextIndex,
       duration: const Duration(milliseconds: 220),
@@ -105,16 +106,35 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
     );
   }
 
+  /// Jumps straight to [nextIndex] with no page transition, used by Home and
+  /// End so a large Collection reaches its endpoint immediately.
+  void _jumpTo(int nextIndex) {
+    _pageController.jumpToPage(nextIndex);
+    setState(() => _currentIndex = nextIndex);
+  }
+
   void _goPrevious() {
     if (widget.notes.isEmpty || _currentIndex <= 0) return;
-    _jump(_currentIndex - 1);
+    _animateTo(_currentIndex - 1);
   }
 
   void _goNext() {
     if (widget.notes.isEmpty || _currentIndex >= widget.notes.length - 1) {
       return;
     }
-    _jump(_currentIndex + 1);
+    _animateTo(_currentIndex + 1);
+  }
+
+  void _goToFirst() {
+    if (widget.notes.isEmpty || _currentIndex <= 0) return;
+    _jumpTo(0);
+  }
+
+  void _goToLast() {
+    if (widget.notes.isEmpty || _currentIndex >= widget.notes.length - 1) {
+      return;
+    }
+    _jumpTo(widget.notes.length - 1);
   }
 
   void _registerSlide(int index, _NoteSlideState state) {
@@ -191,8 +211,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
       return;
     }
 
-    _pageController.jumpToPage(selectedNoteIndex);
-    setState(() => _currentIndex = selectedNoteIndex);
+    _jumpTo(selectedNoteIndex);
   }
 
   @override
@@ -202,6 +221,8 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
         SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
         SingleActivator(LogicalKeyboardKey.arrowLeft): _PreviousSlideIntent(),
         SingleActivator(LogicalKeyboardKey.arrowRight): _NextSlideIntent(),
+        SingleActivator(LogicalKeyboardKey.home): _FirstSlideIntent(),
+        SingleActivator(LogicalKeyboardKey.end): _LastSlideIntent(),
         SingleActivator(LogicalKeyboardKey.arrowUp): _ScrollUpIntent(),
         SingleActivator(LogicalKeyboardKey.arrowDown): _ScrollDownIntent(),
         SingleActivator(LogicalKeyboardKey.enter): _OpenImageIntent(),
@@ -225,6 +246,18 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
           _NextSlideIntent: CallbackAction<_NextSlideIntent>(
             onInvoke: (_) {
               _goNext();
+              return null;
+            },
+          ),
+          _FirstSlideIntent: CallbackAction<_FirstSlideIntent>(
+            onInvoke: (_) {
+              _goToFirst();
+              return null;
+            },
+          ),
+          _LastSlideIntent: CallbackAction<_LastSlideIntent>(
+            onInvoke: (_) {
+              _goToLast();
               return null;
             },
           ),
@@ -861,6 +894,14 @@ class _PreviousSlideIntent extends Intent {
 
 class _NextSlideIntent extends Intent {
   const _NextSlideIntent();
+}
+
+class _FirstSlideIntent extends Intent {
+  const _FirstSlideIntent();
+}
+
+class _LastSlideIntent extends Intent {
+  const _LastSlideIntent();
 }
 
 class _OpenImageIntent extends Intent {

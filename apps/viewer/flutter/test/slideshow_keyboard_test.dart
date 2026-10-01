@@ -192,4 +192,112 @@ void main() {
     expect(find.text('1 / 1'), findsOneWidget);
     expect(find.text('1 / 2'), findsNothing);
   });
+
+  List<NoteRecord> manyNotes(int count) => [
+        for (var i = 1; i <= count; i++)
+          NoteRecord.fromJson(
+            slideNote(id: i, denomination: 'N$i', withImages: true),
+          ),
+      ];
+
+  testWidgets('home jumps to the first note', (WidgetTester tester) async {
+    await pumpSlideshow(tester, manyNotes(5), initialIndex: 4);
+    expect(find.text('5 / 5'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.home);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 5'), findsOneWidget);
+    expect(find.text('N1 - KB-1'), findsOneWidget);
+  });
+
+  testWidgets('end jumps to the last note', (WidgetTester tester) async {
+    await pumpSlideshow(tester, manyNotes(5));
+    expect(find.text('1 / 5'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.pumpAndSettle();
+
+    expect(find.text('5 / 5'), findsOneWidget);
+    expect(find.text('N5 - KB-5'), findsOneWidget);
+  });
+
+  testWidgets('end reaches the last note in one frame, not an animation', (
+    WidgetTester tester,
+  ) async {
+    await pumpSlideshow(tester, manyNotes(5));
+    expect(find.text('1 / 5'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    // A single frame: an animated transition would still be in flight and the
+    // index pill would not have moved to the endpoint yet.
+    await tester.pump();
+    expect(find.text('5 / 5'), findsOneWidget);
+  });
+
+  testWidgets('home on the first note changes nothing', (
+    WidgetTester tester,
+  ) async {
+    await pumpSlideshow(tester, manyNotes(5));
+    expect(find.text('1 / 5'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.home);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 5'), findsOneWidget);
+  });
+
+  testWidgets('end on the last note changes nothing', (
+    WidgetTester tester,
+  ) async {
+    await pumpSlideshow(tester, manyNotes(5), initialIndex: 4);
+    expect(find.text('5 / 5'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.pumpAndSettle();
+
+    expect(find.text('5 / 5'), findsOneWidget);
+  });
+
+  testWidgets('home and end change nothing in a single-note collection', (
+    WidgetTester tester,
+  ) async {
+    await pumpSlideshow(tester, manyNotes(1));
+    expect(find.text('1 / 1'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.home);
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 1'), findsOneWidget);
+  });
+
+  testWidgets('end works while the Back button holds focus', (
+    WidgetTester tester,
+  ) async {
+    await pumpSlideshow(tester, manyNotes(5));
+    expect(find.text('1 / 5'), findsOneWidget);
+
+    final backFocusNode = Focus.of(tester.element(find.text('Back')));
+    backFocusNode.requestFocus();
+    await tester.pump();
+    expect(backFocusNode.hasFocus, isTrue);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.pumpAndSettle();
+
+    expect(find.text('5 / 5'), findsOneWidget);
+  });
+
+  testWidgets('ctrl+end does nothing', (WidgetTester tester) async {
+    await pumpSlideshow(tester, manyNotes(5));
+    expect(find.text('1 / 5'), findsOneWidget);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 5'), findsOneWidget);
+  });
 }
