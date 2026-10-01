@@ -3,6 +3,8 @@ import {
   copyTextToClipboard,
   formatNoteAsTsvRow,
 } from "../lib/noteClipboard.js";
+import { isEditableElement } from "../lib/editableElement.js";
+import { NoteCounter } from "./NoteCounter.jsx";
 
 function formatScrapedLabel(label) {
   return String(label ?? "")
@@ -642,10 +644,12 @@ function Slideshow({
   currentIndex,
   keyboardDisabled = false,
   notes,
+  onAdd,
   onChangeIndex,
   onClose,
   onCopy,
   onEdit,
+  onJump,
   onClosePreview,
   onMovePreview,
   onOpenPreview,
@@ -683,6 +687,11 @@ function Slideshow({
         return;
       }
 
+      // The editable counter in the top bar owns its own keys while focused.
+      if (isEditableElement(event.target)) {
+        return;
+      }
+
       const direction = directionOf(event);
 
       // A modified arrow (or h/j/k/l alias) is inert and left for the
@@ -698,6 +707,18 @@ function Slideshow({
 
       if (event.key === "Escape") {
         onClose();
+        return;
+      }
+
+      if (event.key === "a" && note) {
+        event.preventDefault();
+        onAdd?.(note.id);
+        return;
+      }
+
+      if (event.key === "e" && note) {
+        event.preventDefault();
+        onEdit?.(note.id);
         return;
       }
 
@@ -758,7 +779,9 @@ function Slideshow({
     keyboardDisabled,
     note,
     notes.length,
+    onAdd,
     onClose,
+    onEdit,
     onOpenPreview,
     previewKind,
   ]);
@@ -819,9 +842,14 @@ function Slideshow({
 
       <div className="slideshow-topbar">
         <div className="slideshow-topbar-actions">
-          <div className="counter-pill">
-            {currentIndex + 1} / {notes.length}
-          </div>
+          <NoteCounter
+            jumpLabel="Note position"
+            onJump={onJump}
+            position={currentIndex + 1}
+            showArrows={false}
+            total={notes.length}
+            variant="dark"
+          />
           <button
             aria-label="Copy note details"
             className="icon-link icon-link--on-dark"
@@ -853,10 +881,19 @@ function Slideshow({
             </svg>
           </button>
           <button
+            aria-label="Add note"
+            className="icon-link icon-link--on-dark"
+            onClick={() => onAdd?.(note.id)}
+            title="Add note (a)"
+            type="button"
+          >
+            Add note
+          </button>
+          <button
             aria-label="Edit note"
             className="icon-link icon-link--on-dark"
             onClick={() => onEdit?.(note.id)}
-            title="Edit note"
+            title="Edit note (e)"
             type="button"
           >
             Edit note

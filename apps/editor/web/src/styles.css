@@ -224,6 +224,54 @@ input[type="radio"] {
   font-variant-numeric: tabular-nums;
 }
 
+/* The shared counter, in its on-dark slideshow form. */
+.note-counter--dark {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.note-counter-value--editable {
+  border-bottom: 1px dotted currentColor;
+  cursor: text;
+}
+
+.note-counter-value--editable:hover,
+.note-counter-value--editable:focus-visible {
+  border-bottom-style: solid;
+}
+
+.note-counter-input {
+  width: 3ch;
+  min-width: 3ch;
+  padding: 0;
+  border: none;
+  border-bottom: 1px solid currentColor;
+  border-radius: 0;
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+}
+
+.note-counter-input:focus {
+  outline: none;
+}
+
+/* The add-mode counter: unmistakable next to the edit-mode one. */
+.note-counter-value--add {
+  border-style: dashed;
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.note-counter-value--add::before {
+  content: "+";
+  margin-right: 3px;
+  font-weight: 700;
+}
+
 .nav-link:hover,
 .button:hover,
 .icon-link:hover {
@@ -1659,6 +1707,43 @@ button.tag {
 }
 
 .scrape-conflict-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 12px;
+}
+
+.confirm-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: grid;
+  place-items: center;
+  padding: 24px;
+  background: rgba(28, 22, 16, 0.55);
+}
+
+.confirm-dialog {
+  width: min(100%, 440px);
+  display: grid;
+  gap: 14px;
+  padding: 24px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.confirm-dialog-title {
+  margin: 0;
+  font-size: 1.15rem;
+}
+
+.confirm-dialog-body {
+  margin: 0;
+  color: var(--text-muted);
+}
+
+.confirm-dialog-actions {
   display: flex;
   justify-content: flex-end;
   gap: 12px;

@@ -1,5 +1,5 @@
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
@@ -127,6 +127,11 @@ function editorSubmitButton() {
     .find((button) => button.type === "submit");
 }
 
+async function confirmDelete(user) {
+  const dialog = await screen.findByRole("dialog");
+  await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   notesDb = [note(1, "AAAA"), note(2, "BBBB"), note(3, "CCCC")];
@@ -143,7 +148,6 @@ beforeEach(() => {
     y: 0,
     toJSON: () => ({}),
   });
-  vi.spyOn(window, "confirm").mockReturnValue(true);
 
   getNotes.mockImplementation(async (collectionId) => ({
     // The destination collection (2) is empty, so the move form does not
@@ -194,6 +198,7 @@ describe("Delete keeps the cursor on the table", () => {
     await screen.findByText("AAAA");
 
     await user.click(screen.getByRole("button", { name: "Delete BBBB" }));
+    await confirmDelete(user);
 
     await waitFor(() => {
       expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
@@ -212,6 +217,7 @@ describe("Delete keeps the cursor on the table", () => {
     await screen.findByText("AAAA");
 
     await user.click(screen.getByRole("button", { name: "Delete CCCC" }));
+    await confirmDelete(user);
 
     await waitFor(() => {
       expect(screen.queryByText("CCCC")).not.toBeInTheDocument();
@@ -232,6 +238,7 @@ describe("Delete keeps the cursor on the table", () => {
     await user.click(screen.getByRole("checkbox", { name: "Select BBBB" }));
     await user.selectOptions(screen.getByLabelText("Bulk action"), "delete");
     await user.click(screen.getByRole("button", { name: "Apply" }));
+    await confirmDelete(user);
 
     await waitFor(() => {
       expect(screen.queryByText("AAAA")).not.toBeInTheDocument();
@@ -253,6 +260,7 @@ describe("Delete keeps the cursor on the table", () => {
     await screen.findByText("AAAA");
 
     await user.click(screen.getByRole("button", { name: "Delete AAAA" }));
+    await confirmDelete(user);
 
     await waitFor(() => {
       expect(screen.queryByText("AAAA")).not.toBeInTheDocument();
@@ -274,7 +282,7 @@ describe("The note editor hands the cursor back", () => {
     await waitFor(() => {
       expect(editorSubmitButton()).toBeTruthy();
     });
-    await user.click(editorSubmitButton());
+    await user.click(screen.getByRole("button", { name: "Add & close" }));
 
     const newRow = await rowFor("NEW");
     await waitFor(() => {
@@ -349,7 +357,7 @@ describe("The note editor hands the cursor back", () => {
     );
     await user.selectOptions(collectionSelect, "2");
     await user.click(
-      await screen.findByRole("button", { name: "Save changes" }),
+      await screen.findByRole("button", { name: "Save & close" }),
     );
 
     await waitFor(() => {
@@ -376,7 +384,7 @@ describe("The note editor hands the cursor back", () => {
     );
     await user.selectOptions(collectionSelect, "2");
     await user.click(
-      await screen.findByRole("button", { name: "Save changes" }),
+      await screen.findByRole("button", { name: "Save & close" }),
     );
 
     await waitFor(() => {
@@ -439,7 +447,7 @@ describe("The note editor hands the cursor back", () => {
     await user.keyboard("e");
 
     await user.click(
-      await screen.findByRole("button", { name: "Save changes" }),
+      await screen.findByRole("button", { name: "Save & close" }),
     );
 
     const restored = await rowFor("BBBB");

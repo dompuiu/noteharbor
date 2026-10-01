@@ -19,6 +19,7 @@ import {
 } from "../lib/noteClipboard.js";
 import { isDesktopRuntime } from "../lib/appMode.js";
 import { isEditableElement } from "../lib/editableElement.js";
+import { NoteCounter } from "./NoteCounter.jsx";
 import { PositionPicker } from "./PositionPicker.jsx";
 import { TagsField } from "./TagsField.jsx";
 
@@ -133,6 +134,36 @@ function generateFieldForType(type) {
   return `generate_image_${type}_thumbnail_from_full`;
 }
 
+// Everything that makes the form "changed": the text fields and tags plus
+// the parts that are not in `form` (images, scrape results, position, and the
+// destination Collection). Focus, blur, opening pickers, and async loads
+// finishing are absent on purpose, so they never arm the unsaved prompt.
+function serializeEditorState(state) {
+  const deletedSlots = Object.keys(state.deletedSlots ?? {})
+    .filter((key) => state.deletedSlots[key])
+    .sort();
+
+  return JSON.stringify({
+    deletedSlots,
+    destinationCollectionId: state.destinationCollectionId ?? null,
+    form: state.form,
+    generatedThumbnails: state.generatedThumbnails,
+    images: (state.currentImages ?? [])
+      .map((image) => `${image.type}:${image.variant}:${image.localPath ?? ""}`)
+      .sort(),
+    pendingImages: Object.entries(state.pendingImages ?? {})
+      .map(
+        ([key, file]) =>
+          `${key}:${file?.name ?? ""}:${file?.size ?? ""}`,
+      )
+      .sort(),
+    pendingScrapedImages: Object.keys(state.pendingScrapedImages ?? {}).sort(),
+    positionMode: state.positionMode,
+    positionReferenceId: state.positionReferenceId ?? null,
+    scrapeDetails: state.scrapeDetails ?? null,
+  });
+}
+
 function slotOriginLabel(origin) {
   if (origin === "scraped") {
     return "Scraped";
@@ -188,6 +219,8 @@ function NoteEditForm({
   nextNoteId = null,
   noteId: noteIdProp,
   onCancel,
+  onDirtyChange,
+  onJumpToPosition,
   onNavigateNext,
   onNavigatePrevious,
   onReady,
@@ -249,8 +282,52 @@ function NoteEditForm({
   const formElementRef = useRef(null);
   const scrapeToastTimer = useRef(null);
   const scrapeBrowserPollTimer = useRef(null);
+  const saveIntentRef = useRef("stay");
+  const baselineSignatureRef = useRef(null);
   const desktopBridge = getDesktopBridge();
   const hasDesktopScrapeLauncher = isDesktopRuntime;
+
+  function editorSnapshot() {
+    return serializeEditorState({
+      currentImages,
+      deletedSlots,
+      destinationCollectionId,
+      form,
+      generatedThumbnails,
+      pendingImages,
+      pendingScrapedImages,
+      positionMode,
+      positionReferenceId,
+      scrapeDetails,
+    });
+  }
+
+  const currentSignature = editorSnapshot();
+  const dirty =
+    !loading &&
+    baselineSignatureRef.current != null &&
+    currentSignature !== baselineSignatureRef.current;
+
+  // The snapshot is taken once the note's data has loaded, and is not
+  // refreshed on every edit: it is the state the form started from, which is
+  // what "changed" is measured against.
+  useEffect(() => {
+    if (loading) {
+      baselineSignatureRef.current = null;
+      return;
+    }
+
+    baselineSignatureRef.current = editorSnapshot();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
+
+  useEffect(() => {
+    onDirtyChange?.(dirty);
+  }, [dirty, onDirtyChange]);
+
+  useEffect(() => {
+    return () => onDirtyChange?.(false);
+  }, [onDirtyChange]);
 
   const wrapperClassName = overlay
     ? "edit-note-overlay-content"
@@ -260,8 +337,8 @@ function NoteEditForm({
     positionMode === "before" || positionMode === "after";
   const positionInvalid =
     positionNeedsReference && positionReferenceId === null;
-  const canNavigatePrevious = !isCreateMode && Boolean(previousNoteId) && !saving;
-  const canNavigateNext = !isCreateMode && Boolean(nextNoteId) && !saving;
+  const canNavigatePrevious = Boolean(previousNoteId) && !saving;
+  const canNavigateNext = Boolean(nextNoteId) && !saving;
   const canScrapeUrl =
     !scraping &&
     Boolean(form.url.trim()) &&
@@ -476,6 +553,15 @@ function NoteEditForm({
     function handleKeyDown(event) {
       // Alt+arrow is left for the platform, as it is everywhere else.
       if (event.altKey) {
+        return;
+      }
+
+      // The editable counter owns its arrows while focused: they move the
+      // caret, they do not change notes.
+      if (
+        event.target instanceof HTMLElement &&
+        event.target.closest("[data-note-counter-input]")
+      ) {
         return;
       }
 
@@ -1007,6 +1093,7 @@ function NoteEditForm({
       const payload = isCreateMode
         ? await createNote(payloadWithImages, selectedCollectionId)
         : await updateNote(noteId, payloadWithImages, selectedCollectionId);
+      const intent = saveIntentRef.current;
 
       if (movingToDifferentCollection) {
         const movedPayload = await moveNote(
@@ -1030,8 +1117,15 @@ function NoteEditForm({
 
       const reorderedNotes = await applyPositionAfterSave(payload.note.id);
 
+      // Saving an edit keeps the same note loaded, so the snapshot has to be
+      // re-taken here; a create reloads the new note (and re-snapshots on
+      // load) because the overlay switches into edit mode.
+      if (!isCreateMode) {
+        baselineSignatureRef.current = editorSnapshot();
+      }
+
       if (onSaveSuccess) {
-        onSaveSuccess(payload.note, reorderedNotes);
+        onSaveSuccess(payload.note, reorderedNotes, undefined, intent);
         return;
       }
 
@@ -1239,57 +1333,24 @@ function NoteEditForm({
             <p className="eyebrow">{isCreateMode ? "Add note" : "Edit note"}</p>
           </div>
           <div className="inline-actions">
-            {!isCreateMode ? (
-              <div className="note-nav-group">
-                <button
-                  aria-label="Edit previous note"
-                  className="icon-link note-nav-arrow"
-                  disabled={!canNavigatePrevious}
-                  onClick={onNavigatePrevious}
-                  title="Previous note (← or h)"
-                  type="button"
-                >
-                  <svg
-                    aria-hidden="true"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    width="16"
-                  >
-                    <path
-                      d="M15 6l-6 6 6 6"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    />
-                  </svg>
-                </button>
-                <span className="note-nav-counter" title="Current note in table view">
-                  {currentNotePosition ?? "-"} / {totalNotesInView}
-                </span>
-                <button
-                  aria-label="Edit next note"
-                  className="icon-link note-nav-arrow"
-                  disabled={!canNavigateNext}
-                  onClick={onNavigateNext}
-                  title="Next note (→ or l)"
-                  type="button"
-                >
-                  <svg
-                    aria-hidden="true"
-                    height="16"
-                    viewBox="0 0 24 24"
-                    width="16"
-                  >
-                    <path
-                      d="M9 6l6 6-6 6"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth="2"
-                    />
-                  </svg>
-                </button>
-              </div>
-            ) : null}
+            <NoteCounter
+              addMode={isCreateMode}
+              canGoNext={canNavigateNext}
+              canGoPrevious={canNavigatePrevious}
+              counterTitle={
+                isCreateMode
+                  ? "A new note will be inserted here"
+                  : "Current note in table view"
+              }
+              jumpLabel="Current note position"
+              nextLabel="Edit next note"
+              onJump={onJumpToPosition}
+              onNext={onNavigateNext}
+              onPrevious={onNavigatePrevious}
+              position={currentNotePosition}
+              previousLabel="Edit previous note"
+              total={totalNotesInView}
+            />
             {onCancel ? (
               <button
                 className="button"
@@ -1391,6 +1452,9 @@ function NoteEditForm({
             <button
               className="button button-primary"
               form="edit-note-form"
+              onClick={() => {
+                saveIntentRef.current = "stay";
+              }}
               disabled={saving || positionInvalid}
               title={isCreateMode ? "Add banknote" : "Save changes"}
               type="submit"
@@ -1402,6 +1466,18 @@ function NoteEditForm({
                 : isCreateMode
                   ? "Add banknote"
                   : "Save changes"}
+            </button>
+            <button
+              className="button"
+              form="edit-note-form"
+              onClick={() => {
+                saveIntentRef.current = "return";
+              }}
+              disabled={saving || positionInvalid}
+              title={isCreateMode ? "Add & close" : "Save & close"}
+              type="submit"
+            >
+              {isCreateMode ? "Add & close" : "Save & close"}
             </button>
           </div>
         </div>

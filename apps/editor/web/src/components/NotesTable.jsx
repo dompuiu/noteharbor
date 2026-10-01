@@ -37,6 +37,7 @@ import {
   isColumnPanTarget,
 } from "../lib/tableColumnPan.js";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
+import { ConfirmDialog, useConfirmation } from "./ConfirmDialog.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 import { TagsField } from "./TagsField.jsx";
@@ -862,6 +863,7 @@ function emptyTableRoute() {
     beforeId: null,
     kind: "table",
     noteId: null,
+    overlayCreate: false,
     overlayEdit: false,
     previewKind: null,
     slideshowCollectionId: null,
@@ -869,6 +871,17 @@ function emptyTableRoute() {
     slideshowSortDirection: null,
     slideshowSortKey: null,
   };
+}
+
+// A route whose overlay is creating a new Note, or a top-level create route.
+function isCreateRoute(route) {
+  return route.kind === "create" || Boolean(route.overlayCreate);
+}
+
+// A route that edits an existing Note, either directly or over the slideshow.
+function isEditNoteRoute(route) {
+  return (route.kind === "edit" || Boolean(route.overlayEdit)) &&
+    !route.overlayCreate;
 }
 
 function hasSlideshowContext(route) {
@@ -963,6 +976,7 @@ function parseTableHash(hash) {
       ...emptyTableRoute(),
       kind: "slideshow",
       noteId,
+      overlayCreate: params.get("overlay") === "create",
       overlayEdit: params.get("overlay") === "edit",
       previewKind,
       slideshowCollectionId: parsePositiveInteger(params.get("collection")),
@@ -1005,6 +1019,8 @@ function buildTableHash(route) {
 
     if (route.overlayEdit) {
       params.set("overlay", "edit");
+    } else if (route.overlayCreate) {
+      params.set("overlay", "create");
     }
 
     if (Number.isInteger(route.slideshowCollectionId)) {
@@ -1168,6 +1184,15 @@ function NotesTable({
     visible: false,
   });
   const selectAllRef = useRef(null);
+  const editorDirtyRef = useRef(false);
+  const confirmOpenRef = useRef(false);
+  const closeEditorRef = useRef(null);
+  const { confirm: requestConfirmation, dialog: confirmDialog, isOpen: confirmOpen } =
+    useConfirmation();
+  confirmOpenRef.current = confirmOpen;
+  const handleEditorDirtyChange = useCallback((dirty) => {
+    editorDirtyRef.current = dirty;
+  }, []);
 
   useEffect(() => {
     return () => {
@@ -1242,41 +1267,82 @@ function NotesTable({
     [notes],
   );
   const slideshowRouteActive = currentRoute.kind === "slideshow";
-  const creatingNote = currentRoute.kind === "create";
-  const editingNoteId =
-    currentRoute.kind === "edit" || currentRoute.overlayEdit
-      ? currentRoute.noteId
-      : null;
-  const createPositionReferenceId =
-    creatingNote &&
-    currentRoute.beforeId &&
-    notes.some((note) => note.id === currentRoute.beforeId)
+  const creatingNote = isCreateRoute(currentRoute);
+  const editingNoteId = isEditNoteRoute(currentRoute)
+    ? currentRoute.noteId
+    : null;
+  const createPositionReferenceId = creatingNote
+    ? currentRoute.beforeId &&
+      notes.some((note) => note.id === currentRoute.beforeId)
       ? currentRoute.beforeId
-      : null;
+      : currentRoute.overlayCreate &&
+          notes.some((note) => note.id === currentRoute.noteId)
+        ? currentRoute.noteId
+        : null
+    : null;
   const createPositionMode = createPositionReferenceId ? "before" : "end";
   const slideshowIndex = slideshowRouteActive
     ? slideshowNotes.findIndex((note) => note.id === currentRoute.noteId)
     : -1;
-  const editingNoteIndex = useMemo(() => {
-    if (!editingNoteId) {
-      return -1;
+  // The Note editor counts and navigates within the list it was opened from:
+  // the slideshow's frozen list when opened over it, the current table view
+  // otherwise. This is what makes "5" mean the same thing in both places.
+  const editorList =
+    slideshowRouteActive && slideshowNotes.length
+      ? slideshowNotes
+      : orderedNotes;
+  const editingNoteIndex = editingNoteId
+    ? editorList.findIndex((note) => note.id === editingNoteId)
+    : -1;
+  // Where the incoming Note will sit: before the reference Note, or at the
+  // end of the list. The arrows and typed jumps move relative to that slot,
+  // wrapping around the ends exactly as edit mode does.
+  const createSlotIndex = creatingNote
+    ? (() => {
+        if (createPositionReferenceId == null) {
+          return editorList.length;
+        }
+
+        const referenceIndex = editorList.findIndex(
+          (note) => note.id === createPositionReferenceId,
+        );
+        return referenceIndex < 0 ? editorList.length : referenceIndex;
+      })()
+    : -1;
+  // The note at `index` in the editor's list, wrapping around the ends (only
+  // the Note editor wraps; the Table screen keeps its clamps).
+  function noteAtWrappedIndex(index) {
+    const length = editorList.length;
+    return editorList[((index % length) + length) % length];
+  }
+  const editorNavigation = (() => {
+    if (creatingNote) {
+      if (!editorList.length) {
+        return { previous: null, next: null };
+      }
+
+      // The incoming Note would sit at `createSlotIndex`; "next" is the note
+      // it lands before, or the first Note when it lands at the end.
+      return {
+        previous: noteAtWrappedIndex(createSlotIndex - 1).id,
+        next: noteAtWrappedIndex(createSlotIndex).id,
+      };
     }
 
-    return orderedNotes.findIndex((note) => note.id === editingNoteId);
-  }, [editingNoteId, orderedNotes]);
-  const previousEditingNoteId =
-    editingNoteIndex >= 0 && orderedNotes.length > 1
-      ? orderedNotes[
-          (editingNoteIndex - 1 + orderedNotes.length) % orderedNotes.length
-        ].id
-      : null;
-  const nextEditingNoteId =
-    editingNoteIndex >= 0 && orderedNotes.length > 1
-      ? orderedNotes[(editingNoteIndex + 1) % orderedNotes.length].id
-      : null;
+    if (editingNoteIndex >= 0 && editorList.length > 1) {
+      return {
+        previous: noteAtWrappedIndex(editingNoteIndex - 1).id,
+        next: noteAtWrappedIndex(editingNoteIndex + 1).id,
+      };
+    }
+
+    return { previous: null, next: null };
+  })();
+  const previousEditingNoteId = editorNavigation.previous;
+  const nextEditingNoteId = editorNavigation.next;
   const currentEditingNotePosition =
     editingNoteIndex >= 0 ? editingNoteIndex + 1 : null;
-  const totalNotesInTableView = orderedNotes.length;
+  const totalNotesInTableView = editorList.length;
 
   // The note list encoded in a slideshow URL (filter + sort snapshot taken
   // when the slideshow was opened). Recomputed live so a cold-opened tab
@@ -1606,6 +1672,7 @@ function NotesTable({
         {
           kind: "slideshow",
           noteId: currentRoute.noteId,
+          overlayCreate: currentRoute.overlayCreate,
           overlayEdit: currentRoute.overlayEdit,
           previewKind: null,
           slideshowCollectionId: currentRoute.slideshowCollectionId,
@@ -1637,6 +1704,11 @@ function NotesTable({
         return;
       }
 
+      // While a confirmation is open, Escape belongs to the dialog.
+      if (confirmOpenRef.current) {
+        return;
+      }
+
       // A focused field gets the first Escape: blurring it keeps the user in
       // the editor, so closing the screen takes a second press.
       const activeElement = document.activeElement;
@@ -1649,7 +1721,7 @@ function NotesTable({
         return;
       }
 
-      closeEditor();
+      guardEditorExit(() => closeEditorRef.current?.());
     }
 
     window.addEventListener("keydown", handleKeyDown);
@@ -2250,7 +2322,7 @@ function NotesTable({
 
   useEffect(() => {
     function handleGlobalKeyDown(event) {
-      if (showShortcutsHelp) {
+      if (showShortcutsHelp || confirmOpenRef.current) {
         return;
       }
 
@@ -2735,6 +2807,58 @@ function NotesTable({
     navigateToTableRoute({ kind: "create", beforeId: referenceNoteId });
   }
 
+  function openCreateNoteOverSlideshow(referenceNoteId) {
+    setActionError("");
+    navigateToTableRoute({
+      kind: "slideshow",
+      noteId: referenceNoteId,
+      overlayCreate: true,
+      overlayEdit: false,
+      previewKind: null,
+      ...slideshowRouteContext(),
+    });
+  }
+
+  // Guarded exits share one prompt: navigating to another Note and closing
+  // the editor both throw away whatever the form holds, so both ask the same
+  // question. "Keep editing" is the default, and the copy names what is
+  // about to be lost.
+  function guardEditorExit(action) {
+    if (confirmOpenRef.current) {
+      return;
+    }
+
+    if (!editorDirtyRef.current) {
+      action();
+      return;
+    }
+
+    const route = currentRouteRef.current;
+    const isCreate = isCreateRoute(route);
+    requestConfirmation({
+      title: isCreate ? "Discard new note?" : "Discard changes?",
+      body: isCreate
+        ? "Your new note will be lost."
+        : "Your changes will be lost.",
+      cancelLabel: "Keep editing",
+      confirmLabel: "Discard",
+    }).then((confirmed) => {
+      if (confirmed) {
+        action();
+      }
+    });
+  }
+
+  function jumpEditorToPosition(position) {
+    const target = editorList[position - 1];
+
+    if (!target) {
+      return;
+    }
+
+    guardEditorExit(() => navigateToAdjacentEdit(target.id));
+  }
+
   function editorCloseFocusNoteId() {
     // An edit shows the note it is acting on, including after stepping
     // through notes with the previous/next arrows. A create has no note of
@@ -2754,11 +2878,14 @@ function NotesTable({
   }
 
   function closeEditor() {
+    editorDirtyRef.current = false;
+
     if (slideshowRouteActive) {
       navigateToTableRoute(
         {
           kind: "slideshow",
           noteId: currentRoute.noteId,
+          overlayCreate: false,
           overlayEdit: false,
           previewKind: currentRoute.previewKind,
           ...slideshowRouteContext(),
@@ -2781,6 +2908,8 @@ function NotesTable({
     }
   }
 
+  closeEditorRef.current = closeEditor;
+
   function resetEditorOverlayScroll() {
     if (editorOverlayRef.current) {
       editorOverlayRef.current.scrollTop = 0;
@@ -2792,11 +2921,14 @@ function NotesTable({
       return;
     }
 
+    editorDirtyRef.current = false;
+
     if (slideshowRouteActive) {
       navigateToTableRoute(
         {
           kind: "slideshow",
           noteId: nextNoteId,
+          overlayCreate: false,
           overlayEdit: true,
           previewKind: currentRoute.previewKind,
           ...slideshowRouteContext(),
@@ -2826,7 +2958,10 @@ function NotesTable({
     updatedNote,
     reorderedNotes,
     movedToCollection,
+    intent = "return",
   ) {
+    editorDirtyRef.current = false;
+
     if (movedToCollection) {
       // The note now belongs to a different collection — it no longer
       // belongs in this view, so drop it instead of merging it in.
@@ -2876,11 +3011,37 @@ function NotesTable({
       });
     }
 
+    // Save and stay keeps the editor open on the saved Note: a create
+    // switches into edit mode on the Note it just made, rather than clearing
+    // the form, so another Note is one "Add" away.
+    if (intent === "stay" && !movedToCollection) {
+      if (slideshowRouteActive) {
+        navigateToTableRoute(
+          {
+            kind: "slideshow",
+            noteId: updatedNote.id,
+            overlayCreate: false,
+            overlayEdit: true,
+            previewKind: currentRoute.previewKind,
+            ...slideshowRouteContext(),
+          },
+          { replace: true },
+        );
+      } else {
+        navigateToTableRoute(
+          { kind: "edit", noteId: updatedNote.id },
+          { replace: true },
+        );
+      }
+      return;
+    }
+
     if (!movedToCollection && slideshowRouteActive) {
       navigateToTableRoute(
         {
           kind: "slideshow",
           noteId: updatedNote.id,
+          overlayCreate: false,
           overlayEdit: false,
           previewKind: currentRoute.previewKind,
         },
@@ -3056,11 +3217,12 @@ function NotesTable({
 
     try {
       if (bulkAction === "delete") {
-        const shouldDelete = window.confirm(
-          `Delete ${selectedIds.length} selected note${selectedIds.length === 1 ? "" : "s"}?`,
-        );
+        const confirmed = await requestConfirmation({
+          title: `Delete ${selectedIds.length} selected note${selectedIds.length === 1 ? "" : "s"}?`,
+          confirmLabel: "Delete",
+        });
 
-        if (!shouldDelete) {
+        if (!confirmed) {
           return;
         }
 
@@ -3125,9 +3287,12 @@ function NotesTable({
   async function handleDeleteNote(noteId) {
     const note = notes.find((entry) => entry.id === noteId);
     const noteLabel = note?.denomination || `note #${noteId}`;
-    const shouldDelete = window.confirm(`Delete ${noteLabel}?`);
+    const confirmed = await requestConfirmation({
+      title: `Delete ${noteLabel}?`,
+      confirmLabel: "Delete",
+    });
 
-    if (!shouldDelete) {
+    if (!confirmed) {
       return;
     }
 
@@ -3311,15 +3476,19 @@ function NotesTable({
         <KeyboardShortcutsHelp onClose={() => setShowShortcutsHelp(false)} />
       ) : null}
 
+      {confirmDialog}
+
       {slideshowRouteActive && slideshowNotes.length && slideshowIndex >= 0 ? (
         <Slideshow
           currentIndex={slideshowIndex}
           keyboardDisabled={Boolean(editingNoteId || creatingNote)}
           notes={slideshowNotes}
+          onAdd={openCreateNoteOverSlideshow}
           onChangeIndex={changeSlideshowIndex}
           onClose={closeSlideshow}
           onCopy={setActionError}
           onEdit={openEditor}
+          onJump={(position) => changeSlideshowIndex(position - 1)}
           onOpenPreview={openPreview}
           onClosePreview={closePreview}
           onMovePreview={movePreview}
@@ -3343,10 +3512,16 @@ function NotesTable({
               initialPositionReferenceId={createPositionReferenceId}
               nextNoteId={nextEditingNoteId}
               noteId={editingNoteId}
-              onCancel={closeEditor}
-              onNavigateNext={() => navigateToAdjacentEdit(nextEditingNoteId)}
+              onCancel={() => guardEditorExit(() => closeEditorRef.current?.())}
+              onDirtyChange={handleEditorDirtyChange}
+              onJumpToPosition={jumpEditorToPosition}
+              onNavigateNext={() =>
+                guardEditorExit(() => navigateToAdjacentEdit(nextEditingNoteId))
+              }
               onNavigatePrevious={() =>
-                navigateToAdjacentEdit(previousEditingNoteId)
+                guardEditorExit(() =>
+                  navigateToAdjacentEdit(previousEditingNoteId),
+                )
               }
               onReady={resetEditorOverlayScroll}
               onSaveSuccess={handleSaveEditedNote}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { clearAppData, downloadArchive, getOperationStatus, importArchive, importCsv } from '../lib/api.js';
+import { useConfirmation } from './ConfirmDialog.jsx';
 
 function getPastedCsvFile(event) {
   const items = Array.from(event.clipboardData?.items ?? []);
@@ -82,6 +83,11 @@ function ImportScreen({
   const [selectedExportCollectionIds, setSelectedExportCollectionIds] = useState([]);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
+  const {
+    confirm: requestConfirmation,
+    dialog: confirmDialog,
+    isOpen: confirmOpen,
+  } = useConfirmation();
 
   const isBusy = operationStatus.isBusy;
   const isTransferring = submittingCsv || submittingArchive || exportingArchive;
@@ -104,14 +110,14 @@ function ImportScreen({
 
   useEffect(() => {
     function handleKeyDown(event) {
-      if (event.key === 'Escape' && !isTransferring) {
+      if (event.key === 'Escape' && !isTransferring && !confirmOpen) {
         navigate('/');
       }
     }
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navigate, isTransferring]);
+  }, [navigate, isTransferring, confirmOpen]);
 
   useEffect(() => {
     const validIds = collections.map((collection) => Number(collection.id)).filter((id) => Number.isInteger(id) && id > 0);
@@ -236,7 +242,12 @@ function ImportScreen({
       return;
     }
 
-    const confirmed = window.confirm('Importing an archive will replace collections that exist in the archive (by name). Collections missing from the archive stay untouched. Continue?');
+    const confirmed = await requestConfirmation({
+      title:
+        'Importing an archive will replace collections that exist in the archive (by name).',
+      body: 'Collections missing from the archive stay untouched. Continue?',
+      confirmLabel: 'Import',
+    });
 
     if (!confirmed) {
       return;
@@ -286,7 +297,11 @@ function ImportScreen({
       return;
     }
 
-    const confirmed = window.confirm('Delete all current app data and pictures? This cannot be undone.');
+    const confirmed = await requestConfirmation({
+      title: 'Delete all current app data and pictures?',
+      body: 'This cannot be undone.',
+      confirmLabel: 'Delete data',
+    });
 
     if (!confirmed) {
       return;
@@ -371,7 +386,10 @@ function ImportScreen({
       return;
     }
 
-    const confirmed = window.confirm(`Delete collection "${activeCollection?.name}" and all its notes/images?`);
+    const confirmed = await requestConfirmation({
+      title: `Delete collection "${activeCollection?.name}" and all its notes/images?`,
+      confirmLabel: 'Delete',
+    });
 
     if (!confirmed) {
       return;
@@ -400,6 +418,7 @@ function ImportScreen({
 
   return (
     <section className="screen-stack narrow-stack import-screen">
+      {confirmDialog}
       <div className="panel import-panel">
         <div
           className={`import-panel-scroll${scrollFadeClass}`}

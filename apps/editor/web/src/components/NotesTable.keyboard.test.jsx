@@ -171,7 +171,6 @@ describe("NotesTable keyboard focus inside a row", () => {
   });
 
   test("Enter on a nested action button runs its own action, not the row's", async () => {
-    const confirmSpy = vi.spyOn(window, "confirm").mockReturnValue(false);
     renderTable();
     const user = userEvent.setup();
     const row = await findRow();
@@ -187,7 +186,11 @@ describe("NotesTable keyboard focus inside a row", () => {
 
     await user.keyboard("{Enter}");
 
-    expect(confirmSpy).toHaveBeenCalledWith("Delete ZZTEST?");
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: "Delete ZZTEST?" }),
+    ).toBeInTheDocument();
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
     expect(currentHash()).not.toContain("slideshow");
   });
 

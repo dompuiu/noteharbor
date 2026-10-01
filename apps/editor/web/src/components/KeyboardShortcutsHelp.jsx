@@ -54,6 +54,8 @@ const shortcutGroups = [
       { keys: ["←", "→"], description: "Go to the previous / next note" },
       { keys: ["Home", "End"], description: "Go to the first / last note" },
       { keys: ["↑", "↓"], description: "Scroll the slideshow content" },
+      { keys: ["a"], description: "Add a note before the one on screen" },
+      { keys: ["e"], description: "Edit the note on screen" },
       { keys: ["Enter", "Space"], description: "Open the image preview" },
       { keys: ["Esc"], description: "Close the slideshow" },
     ],
