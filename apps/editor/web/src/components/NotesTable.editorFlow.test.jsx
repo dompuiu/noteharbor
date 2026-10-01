@@ -842,8 +842,12 @@ describe("The editor's collection actions", () => {
   test("Ctrl+A opens create mode ahead of the edited note", async () => {
     const user = userEvent.setup();
     renderTable();
-    await openEditorOn(user, "BBBB");
+    const field = await openEditorOn(user, "BBBB");
 
+    // Ctrl+A is the add-before shortcut only when no field owns the key.
+    act(() => {
+      field.blur();
+    });
     await user.keyboard("{Control>}a{/Control}");
 
     await user.type(await screen.findByLabelText("Denomination"), "NEW");
@@ -868,6 +872,18 @@ describe("The editor's collection actions", () => {
       expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
     });
     expect(currentHash()).not.toContain("edit");
+  });
+
+  test("Ctrl+A in a field keeps select-all and does not add a note", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await openEditorOn(user, "BBBB");
+
+    await user.keyboard("{Control>}a{/Control}");
+
+    // Still editing BBBB, not creating a note before it.
+    expect(currentHash()).toContain("edit/2");
+    expect(screen.getByLabelText("Denomination")).toBeInTheDocument();
   });
 
   test("the save shortcut is ignored while the delete dialog is open", async () => {

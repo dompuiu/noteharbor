@@ -610,9 +610,11 @@ function NoteEditForm({
   }, [canNavigateNext, canNavigatePrevious, onNavigateNext, onNavigatePrevious]);
 
   // The editor owns Ctrl/Cmd+S (save and stay), Ctrl/Cmd+Shift+S (save and
-  // close), Ctrl/Cmd+D (delete), and Ctrl/Cmd+A (add before), so their
-  // browser defaults are suppressed. The confirmation dialog takes priority:
-  // while it is open the shortcuts are ignored.
+  // close), Ctrl/Cmd+D (delete), and Ctrl/Cmd+A (add before). The save keys
+  // are the browser's "save page"; delete and add-before are pressed with no
+  // field focused (inside a field Ctrl+A belongs to the text, as select-all).
+  // The confirmation dialog and the scrape-conflict overlay take priority:
+  // while either is open the shortcuts are ignored.
   useEffect(() => {
     function handleKeyDown(event) {
       if (event.altKey || !(event.ctrlKey || event.metaKey)) {
@@ -622,6 +624,14 @@ function NoteEditForm({
       const key = event.key.toLowerCase();
 
       if (key !== "s" && key !== "d" && key !== "a") {
+        return;
+      }
+
+      if (scrapeConflictOverlayOpen) {
+        return;
+      }
+
+      if (key === "a" && isEditableElement(event.target)) {
         return;
       }
 
@@ -663,6 +673,7 @@ function NoteEditForm({
     onDelete,
     positionInvalid,
     saving,
+    scrapeConflictOverlayOpen,
     shortcutsDisabled,
   ]);
 
