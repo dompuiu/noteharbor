@@ -139,10 +139,7 @@ void main() {
     await _zoomInWithKeyboard(tester);
 
     final before = _imageTranslation(tester);
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
-    await tester.pump();
+    await _panWithKeyboard(tester, LogicalKeyboardKey.arrowRight);
     final after = _imageTranslation(tester);
 
     expect(after.dx, lessThan(before.dx));
@@ -161,6 +158,19 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     expect(find.text('open'), findsOneWidget);
+  });
+
+  testWidgets('shift + arrow keys do not navigate while in fit view', (
+    tester,
+  ) async {
+    await pumpMultiItemPopover(tester);
+    expect(find.text('1 / 2'), findsOneWidget);
+
+    await _panWithKeyboard(tester, LogicalKeyboardKey.arrowRight);
+    expect(find.text('1 / 2'), findsOneWidget);
+
+    await _panWithKeyboard(tester, LogicalKeyboardKey.arrowLeft);
+    expect(find.text('1 / 2'), findsOneWidget);
   });
 
   testWidgets('arrow left on the first image stays on the first image', (
@@ -194,6 +204,16 @@ Future<void> _zoomInWithKeyboard(WidgetTester tester) async {
   await tester.sendKeyEvent(LogicalKeyboardKey.equal);
   await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
   await tester.pump();
+}
+
+Future<void> _panWithKeyboard(
+  WidgetTester tester,
+  LogicalKeyboardKey key,
+) async {
+  await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+  await tester.sendKeyEvent(key);
+  await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+  await tester.pumpAndSettle();
 }
 
 Future<ui.Image> _solidImage(int width, int height) async {

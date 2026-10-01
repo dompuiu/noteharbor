@@ -159,14 +159,9 @@ class _ImageLightboxState extends State<ImageLightbox> {
           ),
           _PanImageIntent: CallbackAction<_PanImageIntent>(
             onInvoke: (intent) {
-              if (!_zoomController.pan(intent.dx, intent.dy)) {
-                // Not pannable: fall back to image navigation, like the Editor.
-                if (intent.dx < 0) {
-                  _goNext();
-                } else if (intent.dx > 0) {
-                  _goPrevious();
-                }
-              }
+              // Only pans in zoom view; a no-op in fit view so shift + arrows
+              // never navigate between images.
+              _zoomController.pan(intent.dx, intent.dy);
               return null;
             },
           ),
@@ -379,7 +374,7 @@ class _ImageZoomController {
 
   void zoomOut() => _active?.zoomOut();
 
-  bool pan(double dx, double dy) => _active?.pan(dx, dy) ?? false;
+  void pan(double dx, double dy) => _active?.pan(dx, dy);
 
   /// Resets the zoom if zoomed. Returns whether a reset was performed.
   bool resetZoom() => _active?.resetZoom() ?? false;
@@ -467,12 +462,11 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
 
   void zoomOut() => _changeZoom(-1);
 
-  /// Pans by [dx]/[dy] steps of 5% of the overflow (Editor parity). Returns
-  /// false when the image is not pannable so the caller can fall back to
-  /// navigation.
-  bool pan(double dx, double dy) {
+  /// Pans by [dx]/[dy] steps of 5% of the overflow. A no-op when the image is
+  /// not pannable (i.e. in fit view).
+  void pan(double dx, double dy) {
     if (!_isPannable || _viewport.isEmpty) {
-      return false;
+      return;
     }
 
     final contentSize = _fittedContentSize(_viewport);
@@ -485,7 +479,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
       dy * overflowY * _kPanOverflowFraction,
     );
     if (delta == Offset.zero) {
-      return true;
+      return;
     }
 
     setState(() {
@@ -496,7 +490,6 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
         scale: _scale,
       );
     });
-    return true;
   }
 
   /// Resets the zoom if zoomed. Returns whether a reset was performed.
