@@ -257,8 +257,39 @@ describe("Adding from the Note slideshow", () => {
     expect(currentHash()).toContain("slideshow/2");
     expect(currentHash()).toContain("overlay=create");
     expect(await screen.findByText("? / 3")).toBeInTheDocument();
-    // The slideshow stays rendered behind the editor.
-    expect(document.querySelector(".slideshow-screen")).not.toBeNull();
+    // The slideshow stays rendered behind the editor. Its controls are inert
+    // while the overlay is open (out of the tab order and the accessibility
+    // tree), so pin the survival on a DOM attribute that outlives `inert`: the
+    // slideshow's own "Previous note" tooltip, and the inert backdrop itself.
+    const slideshowSurvivor = screen.getByTitle("Previous note (←)");
+    expect(slideshowSurvivor).toBeInTheDocument();
+    expect(slideshowSurvivor.closest("[inert]")).not.toBeNull();
+    // The table behind is inert too, so a Tab cannot reach a row's Edit action
+    // (or the toolbar) and silently drop the new Note.
+    expect(
+      screen.getByRole("button", { name: "Edit AAAA" }).closest("[inert]"),
+    ).not.toBeNull();
+  });
+
+  test("the slideshow's shortcuts are inactive while the create overlay is open", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await openSlideshowOn(user, "BBBB");
+
+    await user.keyboard("a");
+    const field = await screen.findByLabelText("Denomination");
+    expect(currentHash()).toContain("slideshow/2");
+    expect(currentHash()).toContain("overlay=create");
+
+    // Not in a field: if the slideshow still owned the keyboard, `e` would
+    // switch to editing the note on screen and drop the new Note.
+    act(() => {
+      field.blur();
+    });
+    await user.keyboard("e");
+
+    expect(currentHash()).toContain("overlay=create");
+    expect(currentHash()).not.toContain("overlay=edit");
   });
 
   test("Add & close returns to the slideshow on the new Note", async () => {

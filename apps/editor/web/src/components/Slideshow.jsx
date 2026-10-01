@@ -818,9 +818,14 @@ function Slideshow({
     : 0;
   const scrapePanelTitle = getScrapePanelTitle(note);
 
+  // While an editor overlay is open the slideshow is a backdrop: it keeps
+  // rendering, but `inert` takes its controls out of the tab order and stops
+  // clicks, so a stray Tab cannot reach behind the modal and act (closing the
+  // slideshow or typing a counter jump) while the editor holds unsaved work.
   return (
     <section
       className="slideshow-screen slideshow-screen--overlay"
+      inert={keyboardDisabled}
       ref={screenRef}
     >
       {previewItem && previewNote && (

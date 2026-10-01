@@ -1271,12 +1271,16 @@ function NotesTable({
   const editingNoteId = isEditNoteRoute(currentRoute)
     ? currentRoute.noteId
     : null;
+  // The editor is a modal overlay: while it is open, the table and the
+  // slideshow behind it must not be reachable, so a stray Tab cannot click
+  // "Edit note", the toolbar, or a row and discard unsaved work silently.
+  const editorOverlayOpen = Boolean(editingNoteId || creatingNote);
   const createPositionReferenceId = creatingNote
     ? currentRoute.beforeId &&
       notes.some((note) => note.id === currentRoute.beforeId)
       ? currentRoute.beforeId
       : currentRoute.overlayCreate &&
-          notes.some((note) => note.id === currentRoute.noteId)
+          slideshowNotes.some((note) => note.id === currentRoute.noteId)
         ? currentRoute.noteId
         : null
     : null;
@@ -1695,7 +1699,7 @@ function NotesTable({
   ]);
 
   useEffect(() => {
-    if (!editingNoteId && !creatingNote) {
+    if (!editorOverlayOpen) {
       return undefined;
     }
 
@@ -1729,10 +1733,10 @@ function NotesTable({
     return () => {
       window.removeEventListener("keydown", handleKeyDown);
     };
-  }, [creatingNote, editingNoteId]);
+  }, [editorOverlayOpen]);
 
   useEffect(() => {
-    if (!editingNoteId && !creatingNote) {
+    if (!editorOverlayOpen) {
       return undefined;
     }
 
@@ -1743,7 +1747,7 @@ function NotesTable({
     });
 
     return () => window.cancelAnimationFrame(frameId);
-  }, [creatingNote, editingNoteId]);
+  }, [editorOverlayOpen]);
 
   const hasActiveFilters = useMemo(
     () => Object.values(filters).some((value) => String(value).trim()),
@@ -2328,7 +2332,7 @@ function NotesTable({
 
       const editable = isEditableElement(event.target);
       const tableKeysActive =
-        !slideshowRouteActive && !editingNoteId && !creatingNote;
+        !slideshowRouteActive && !editorOverlayOpen;
 
       // Cmd/Ctrl/Shift + Left/Right (or h/l) jumps to the first/last column,
       // like the Viewer. Checked before the modifier guard below so it is not
@@ -2360,7 +2364,7 @@ function NotesTable({
         return;
       }
 
-      if (slideshowRouteActive || editingNoteId || creatingNote) {
+      if (slideshowRouteActive || editorOverlayOpen) {
         return;
       }
 
@@ -3481,7 +3485,7 @@ function NotesTable({
       {slideshowRouteActive && slideshowNotes.length && slideshowIndex >= 0 ? (
         <Slideshow
           currentIndex={slideshowIndex}
-          keyboardDisabled={Boolean(editingNoteId || creatingNote)}
+          keyboardDisabled={editorOverlayOpen}
           notes={slideshowNotes}
           onAdd={openCreateNoteOverSlideshow}
           onChangeIndex={changeSlideshowIndex}
@@ -3498,7 +3502,7 @@ function NotesTable({
         />
       ) : null}
 
-      {editingNoteId || creatingNote ? (
+      {editorOverlayOpen ? (
         <section className="edit-note-overlay" ref={editorOverlayRef}>
           <div
             className="edit-note-overlay-frame"
@@ -3533,7 +3537,7 @@ function NotesTable({
         </section>
       ) : null}
 
-      <div className="panel">
+      <div className="panel" inert={editorOverlayOpen}>
         <div className="panel-heading panel-heading--compact">
           <div className="panel-heading-copy">
             <h2>Note Harbor Editor</h2>

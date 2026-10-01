@@ -1522,46 +1522,46 @@ function NoteEditForm({
 
           <div className="field-block">
             <label htmlFor={fieldInputId("url")}>URL</label>
-              <div className="url-field-row">
-                <input
-                  data-note-editor-context-field="true"
-                  id={fieldInputId("url")}
-                  name="url"
-                  onChange={handleFieldChange}
-                  onContextMenu={handleNoteEditorTextContextMenu}
-                  value={form.url}
-                />
-                {hasDesktopScrapeLauncher ? (
-                  <button
-                    className="button"
-                    disabled={scrapeBrowserStatus.launching}
-                    onClick={handleOpenScrapeBrowser}
-                    title="Open Chrome for scraping"
-                    type="button"
-                  >
-                    {scrapeBrowserStatus.launching ? "Opening..." : "Open Chrome"}
-                  </button>
-                ) : null}
+            <div className="url-field-row">
+              <input
+                data-note-editor-context-field="true"
+                id={fieldInputId("url")}
+                name="url"
+                onChange={handleFieldChange}
+                onContextMenu={handleNoteEditorTextContextMenu}
+                value={form.url}
+              />
+              {hasDesktopScrapeLauncher ? (
                 <button
-                  aria-label="Auto Populate fields from URL"
                   className="button"
-                  disabled={!canScrapeUrl}
-                  onClick={handleAutoPopulate}
-                  title={
-                    hasDesktopScrapeLauncher && !scrapeBrowserStatus.available
-                      ? scrapeBrowserStatus.error || "Open Chrome for scraping first"
-                      : "Auto Populate fields from URL"
-                  }
+                  disabled={scrapeBrowserStatus.launching}
+                  onClick={handleOpenScrapeBrowser}
+                  title="Open Chrome for scraping"
                   type="button"
                 >
-                  {scraping ? (
-                    <span className="scrape-spinner" aria-label="Loading" />
+                  {scrapeBrowserStatus.launching ? "Opening..." : "Open Chrome"}
+                </button>
+              ) : null}
+              <button
+                aria-label="Auto Populate fields from URL"
+                className="button"
+                disabled={!canScrapeUrl}
+                onClick={handleAutoPopulate}
+                title={
+                  hasDesktopScrapeLauncher && !scrapeBrowserStatus.available
+                    ? scrapeBrowserStatus.error || "Open Chrome for scraping first"
+                    : "Auto Populate fields from URL"
+                }
+                type="button"
+              >
+                {scraping ? (
+                  <span className="scrape-spinner" aria-label="Loading" />
                 ) : (
                   <span aria-hidden="true">✦</span>
                 )}
-                </button>
-              </div>
+              </button>
             </div>
+          </div>
 
           <div className="field-block full-span">
             <label htmlFor={fieldInputId("notes")}>Notes</label>
