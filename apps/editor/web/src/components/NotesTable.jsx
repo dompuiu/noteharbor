@@ -824,6 +824,30 @@ function deleteFocusAfterRemoval(noteList, removedIds) {
   };
 }
 
+// Where the slideshow lands after the note with `removedId` leaves its list:
+// the note that slips into the removed slot, else the one before it, else the
+// first. Null means the list emptied and there is no slide to land on. Resolved
+// against the list the delete is applied to, before the removal lands, so the
+// landing is known before the route-sync effect reacts to the shorter list.
+function slideshowLandingNoteId(noteList, removedId) {
+  const removedIndex = noteList.findIndex((note) => note.id === removedId);
+
+  if (removedIndex < 0) {
+    return null;
+  }
+
+  const remaining = noteList.filter((note) => note.id !== removedId);
+
+  if (!remaining.length) {
+    return null;
+  }
+
+  const landing =
+    remaining[removedIndex] ?? remaining[removedIndex - 1] ?? remaining[0];
+
+  return landing.id;
+}
+
 function versionedImagePath(path, version) {
   if (!path) {
     return null;
@@ -1099,6 +1123,11 @@ function NotesTable({
   // still has the editor overlay mounted when it runs, so the anchor it needs
   // to focus is inert. The request is held until the list settles.
   const deferredAnchorFocusRef = useRef(false);
+  // A delete from the Notes editor records the slide it should land on before
+  // it removes the note. The route-sync effect is the single place that reacts
+  // to a route whose note has left the list, so it consumes this intent and
+  // moves the slideshow on rather than bouncing to the Table.
+  const pendingSlideshowLandingRef = useRef(null);
   const clearRowCursor = useCallback(() => {
     // The keyboard cursor is focus memory plus paint: both must drop
     // together so the highlight can never outlive its focus target or
@@ -1672,6 +1701,23 @@ function NotesTable({
     );
 
     if (targetIndex < 0) {
+      const pendingLanding = pendingSlideshowLandingRef.current;
+
+      // A delete that removed this route's note recorded where to land. The
+      // route itself is intentionally still on the removed note for the render
+      // this effect runs for, so consume the intent instead of treating the
+      // hand-off as a vanished slide.
+      if (pendingLanding && pendingLanding.removedId === currentRoute.noteId) {
+        pendingSlideshowLandingRef.current = null;
+        navigateToTableRoute(
+          pendingLanding.landingId == null
+            ? emptyTableRoute()
+            : slideshowRoute(pendingLanding.landingId),
+          { replace: true },
+        );
+        return;
+      }
+
       navigateToTableRoute(emptyTableRoute(), { replace: true });
       return;
     }
@@ -1835,6 +1881,7 @@ function NotesTable({
     pendingRowFocusNoteIdRef.current = null;
     deferredRowFocusNoteIdRef.current = null;
     deferredAnchorFocusRef.current = false;
+    pendingSlideshowLandingRef.current = null;
     lastRowFocusNoteIdRef.current = null;
     clearRowCursor();
   }, [clearRowCursor, filters, sortDirection, sortKey]);
@@ -3306,7 +3353,7 @@ function NotesTable({
     }
   }
 
-  async function handleDeleteNote(noteId) {
+  async function handleDeleteNote(noteId, { fromSlideshow = false } = {}) {
     const note = notes.find((entry) => entry.id === noteId);
     const noteLabel = note?.denomination || `note #${noteId}`;
     const confirmed = await requestConfirmation({
@@ -3320,19 +3367,41 @@ function NotesTable({
 
     setActionError("");
 
-    // Work out the landing row before the note leaves the list: the row that
-    // slips into the deleted note's slot, or the new last row when the
-    // deleted note was last.
-    const removal = deleteFocusAfterRemoval(orderedNotes, [noteId]);
+    // Work out where the screen lands before the note leaves the list: for the
+    // Table, the row that slips into the deleted note's slot (or the new last
+    // row when the deleted note was last); for the slideshow, the note that
+    // takes its place.
+    const removal = fromSlideshow
+      ? null
+      : deleteFocusAfterRemoval(orderedNotes, [noteId]);
+    const slideshowLanding = fromSlideshow
+      ? slideshowLandingNoteId(slideshowNotes, noteId)
+      : undefined;
 
     try {
       await deleteNote(noteId, activeCollectionId);
+
+      if (fromSlideshow) {
+        // The route-sync effect is the single place that reacts to a route
+        // whose note has left the list, so record the landing intent and let
+        // it move the slideshow on rather than race it with a second route
+        // write here.
+        pendingSlideshowLandingRef.current = {
+          removedId: noteId,
+          landingId: slideshowLanding,
+        };
+      }
+
       setNotes((current) => current.filter((entry) => entry.id !== noteId));
       setSelectedIds((current) => current.filter((id) => id !== noteId));
       setSlideshowNotes((current) =>
         current.filter((entry) => entry.id !== noteId),
       );
-      landFocusAfterDelete(removal);
+
+      if (!fromSlideshow) {
+        landFocusAfterDelete(removal);
+      }
+
       return true;
     } catch (deleteError) {
       setActionError(deleteError.message);
@@ -3340,42 +3409,27 @@ function NotesTable({
     }
   }
 
-  // The editor's Delete removes the note it is showing, then hands the screen
-  // back: the note it was on no longer exists, so the slideshow moves to a
-  // neighbour, or the Table screen takes over when there is nowhere to land.
+  // The editor's Delete removes the note it is showing. The landing is owned by
+  // handleDeleteNote: it records the intended slide and lets the route-sync
+  // effect move there, so the delete never races the effect with a second
+  // route write.
   async function handleDeleteEditingNote() {
     if (editingNoteId == null) {
       return;
     }
 
-    const slideshowIndex = slideshowRouteActive
-      ? slideshowNotes.findIndex((note) => note.id === editingNoteId)
-      : -1;
-
-    const deleted = await handleDeleteNote(editingNoteId);
-
-    if (!deleted) {
-      return;
-    }
-
+    // Clear the dirty flag for the hand-off so closing the editor cannot trip
+    // the discard guard; restore it if the delete is cancelled or fails.
+    const wasDirty = editorDirtyRef.current;
     editorDirtyRef.current = false;
 
-    if (slideshowIndex >= 0) {
-      const remaining = slideshowNotes.filter(
-        (note) => note.id !== editingNoteId,
-      );
+    const deleted = await handleDeleteNote(editingNoteId, {
+      fromSlideshow: slideshowRouteActive,
+    });
 
-      if (remaining.length) {
-        const nextNote =
-          remaining[slideshowIndex] ??
-          remaining[slideshowIndex - 1] ??
-          remaining[0];
-        navigateToTableRoute(slideshowRoute(nextNote.id), { replace: true });
-        return;
-      }
+    if (!deleted) {
+      editorDirtyRef.current = wasDirty;
     }
-
-    navigateToTableRoute(emptyTableRoute(), { replace: true });
   }
 
   // The editor's Add before opens create mode positioned ahead of the note

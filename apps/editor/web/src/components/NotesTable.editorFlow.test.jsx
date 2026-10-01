@@ -912,6 +912,68 @@ describe("The editor's collection actions", () => {
   });
 });
 
+describe("Deleting the Note being edited from the slideshow", () => {
+  async function deleteEditingFromSlideshow(user, denomination) {
+    await openSlideshowOn(user, denomination);
+    await user.click(screen.getByRole("button", { name: "Edit note" }));
+    await screen.findByLabelText("Denomination");
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+  }
+
+  test("moves to the next note", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("AAAA");
+
+    await deleteEditingFromSlideshow(user, "BBBB");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/3");
+    });
+    expect(screen.queryByLabelText("Denomination")).not.toBeInTheDocument();
+  });
+
+  test("moves to the previous note when it was the last", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("AAAA");
+
+    await deleteEditingFromSlideshow(user, "CCCC");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/2");
+    });
+  });
+
+  test("moves to the next note when it was the first", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("AAAA");
+
+    await deleteEditingFromSlideshow(user, "AAAA");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/2");
+    });
+  });
+
+  test("returns to the Table when it was the only note", async () => {
+    notesDb = [note(1, "AAAA")];
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("AAAA");
+
+    await deleteEditingFromSlideshow(user, "AAAA");
+
+    await waitFor(() => {
+      expect(currentHash()).not.toContain("slideshow");
+    });
+    expect(screen.queryByText("AAAA")).not.toBeInTheDocument();
+  });
+});
+
 describe("The a shortcut in the Table", () => {
   test("with no row focused it opens the create form", async () => {
     const user = userEvent.setup();
