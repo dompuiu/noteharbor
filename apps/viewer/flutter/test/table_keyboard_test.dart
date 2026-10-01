@@ -476,6 +476,253 @@ void main() {
     expect(controller.offset, 0);
   });
 
+  keyboardTestWidgets('shift plus left and right jump to the column edges', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    final controller = columnsController(tester);
+    final maxExtent = controller.position.maxScrollExtent;
+
+    Future<void> shiftArrow(LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+    }
+
+    await shiftArrow(LogicalKeyboardKey.arrowRight);
+    expect(controller.offset, maxExtent);
+
+    await shiftArrow(LogicalKeyboardKey.arrowLeft);
+    expect(controller.offset, 0);
+  });
+
+  keyboardTestWidgets(
+    'cmd plus left and right jump to the column edges',
+    (WidgetTester tester) async {
+      await pumpKeyboardTable(tester);
+      final controller = columnsController(tester);
+      final maxExtent = controller.position.maxScrollExtent;
+
+      Future<void> cmdArrow(LogicalKeyboardKey key) async {
+        await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+        await tester.sendKeyEvent(key);
+        await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+        await tester.pumpAndSettle();
+      }
+
+      await cmdArrow(LogicalKeyboardKey.arrowRight);
+      expect(controller.offset, maxExtent);
+
+      await cmdArrow(LogicalKeyboardKey.arrowLeft);
+      expect(controller.offset, 0);
+    },
+    platform: TargetPlatform.macOS,
+  );
+
+  keyboardTestWidgets('h and l pan the columns one step', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    final controller = columnsController(tester);
+    expect(controller.offset, 0);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.pumpAndSettle();
+    expect(controller.offset, greaterThan(0));
+
+    final afterL = controller.offset;
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
+    await tester.pumpAndSettle();
+    expect(controller.offset, lessThan(afterL));
+  });
+
+  keyboardTestWidgets('shift plus h and l jump to the column edges', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    final controller = columnsController(tester);
+    final maxExtent = controller.position.maxScrollExtent;
+
+    Future<void> shiftKey(LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+    }
+
+    await shiftKey(LogicalKeyboardKey.keyL);
+    expect(controller.offset, maxExtent);
+
+    await shiftKey(LogicalKeyboardKey.keyH);
+    expect(controller.offset, 0);
+  });
+
+  keyboardTestWidgets('column pan clamps at the ends', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    final controller = columnsController(tester);
+    final maxExtent = controller.position.maxScrollExtent;
+    expect(maxExtent, greaterThan(0));
+
+    for (var step = 0; step < 6; step++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    }
+    await tester.pumpAndSettle();
+    expect(controller.offset, 0);
+
+    for (var step = 0; step < 12; step++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    }
+    await tester.pumpAndSettle();
+    expect(controller.offset, maxExtent);
+  });
+
+  keyboardTestWidgets('column keys are a no-op when the columns fit', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(4000, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await pumpKeyboardTable(tester);
+    final controller = columnsController(tester);
+    expect(controller.position.maxScrollExtent, 0);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.pumpAndSettle();
+    expect(controller.offset, 0);
+    expect(selectedRing(), findsNothing);
+  });
+
+  keyboardTestWidgets('shift up, down, j and k leave row focus alone', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(selectedRow(1), findsOneWidget);
+
+    Future<void> shiftKey(LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+    }
+
+    for (final key in const [
+      LogicalKeyboardKey.arrowDown,
+      LogicalKeyboardKey.keyJ,
+      LogicalKeyboardKey.arrowUp,
+      LogicalKeyboardKey.keyK,
+    ]) {
+      await shiftKey(key);
+      expect(selectedRow(1), findsOneWidget);
+      expect(FocusManager.instance.primaryFocus?.debugLabel, 'notesTable');
+    }
+
+    // The plain keys still move the selection.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(selectedRow(2), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.pump();
+    expect(selectedRow(1), findsOneWidget);
+  });
+
+  keyboardTestWidgets('ctrl, meta and alt up and down leave row focus alone', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+
+    for (final modifier in const [
+      LogicalKeyboardKey.controlLeft,
+      LogicalKeyboardKey.metaLeft,
+      LogicalKeyboardKey.altLeft,
+    ]) {
+      await tester.sendKeyDownEvent(modifier);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
+      await tester.sendKeyUpEvent(modifier);
+      await tester.pump();
+      expect(selectedRing(), findsNothing);
+      expect(FocusManager.instance.primaryFocus?.debugLabel, 'notesTable');
+    }
+  });
+
+  keyboardTestWidgets('shift down in the filter keeps focus in the filter', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+    await tester.pump();
+    bool filterHasFocus() =>
+        tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus ??
+        false;
+    expect(filterHasFocus(), isTrue);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+    expect(filterHasFocus(), isTrue);
+    expect(selectedRing(), findsNothing);
+
+    // Plain Down still hands focus to the table's first row.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(selectedRow(1), findsOneWidget);
+  });
+
+  keyboardTestWidgets('alt plus shift and arrow leaves the columns alone', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    final controller = columnsController(tester);
+    expect(controller.offset, 0);
+
+    // Alt is never an interchangeable modifier, so Alt+Shift+arrow must stay
+    // inert rather than borrowing Shift's jump-to-edge.
+    for (final key in const [
+      LogicalKeyboardKey.arrowRight,
+      LogicalKeyboardKey.keyL,
+      LogicalKeyboardKey.arrowLeft,
+      LogicalKeyboardKey.keyH,
+    ]) {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.altLeft);
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.altLeft);
+      await tester.pumpAndSettle();
+      expect(controller.offset, 0);
+    }
+  });
+
+  keyboardTestWidgets('ctrl plus h and l jump to the column edges', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    final controller = columnsController(tester);
+    final maxExtent = controller.position.maxScrollExtent;
+
+    Future<void> ctrlKey(LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pumpAndSettle();
+    }
+
+    await ctrlKey(LogicalKeyboardKey.keyL);
+    expect(controller.offset, maxExtent);
+
+    await ctrlKey(LogicalKeyboardKey.keyH);
+    expect(controller.offset, 0);
+  });
+
   keyboardTestWidgets('dragging with the mouse pans the columns', (
     WidgetTester tester,
   ) async {

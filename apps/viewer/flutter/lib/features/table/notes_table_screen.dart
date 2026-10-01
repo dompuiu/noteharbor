@@ -1062,21 +1062,30 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       return KeyEventResult.ignored;
     }
     final key = event.logicalKey;
-    // Jump-to-edge uses the platform's primary modifier: Cmd on macOS, Ctrl
-    // elsewhere.
-    final bool jumpColumns = defaultTargetPlatform == TargetPlatform.macOS
-        ? HardwareKeyboard.instance.isMetaPressed
-        : HardwareKeyboard.instance.isControlPressed;
-    if (jumpColumns &&
-        (key == LogicalKeyboardKey.arrowLeft ||
-            key == LogicalKeyboardKey.arrowRight)) {
-      return _scrollColumnsToEdge(forward: key == LogicalKeyboardKey.arrowRight)
+    // Alt is never one of the interchangeable modifiers: Alt+arrow stays
+    // inert everywhere, so it must be screened out before the jump branch.
+    if (HardwareKeyboard.instance.isAltPressed) {
+      return KeyEventResult.ignored;
+    }
+    final bool shiftPressed = HardwareKeyboard.instance.isShiftPressed;
+    // Jump-to-edge accepts Shift or the platform's primary modifier: Cmd on
+    // macOS, Ctrl elsewhere.
+    final bool primaryModifierPressed =
+        defaultTargetPlatform == TargetPlatform.macOS
+            ? HardwareKeyboard.instance.isMetaPressed
+            : HardwareKeyboard.instance.isControlPressed;
+    final bool jumpColumns = primaryModifierPressed || shiftPressed;
+    final bool leftKey =
+        key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.keyH;
+    final bool rightKey =
+        key == LogicalKeyboardKey.arrowRight || key == LogicalKeyboardKey.keyL;
+    if (jumpColumns && (leftKey || rightKey)) {
+      return _scrollColumnsToEdge(forward: rightKey)
           ? KeyEventResult.handled
           : KeyEventResult.ignored;
     }
     if (HardwareKeyboard.instance.isControlPressed ||
-        HardwareKeyboard.instance.isMetaPressed ||
-        HardwareKeyboard.instance.isAltPressed) {
+        HardwareKeyboard.instance.isMetaPressed) {
       return KeyEventResult.ignored;
     }
     if (key == LogicalKeyboardKey.tab) {
@@ -1109,12 +1118,17 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       _focusRowFromTab(current + 1);
       return KeyEventResult.handled;
     }
-    if (key == LogicalKeyboardKey.arrowDown ||
-        key == LogicalKeyboardKey.keyJ) {
+    // Row focus moves only for the plain keys: Shift+Up/Down and Shift+j/k
+    // are inert so resting a finger on Shift does not move the selection.
+    if (!shiftPressed &&
+        (key == LogicalKeyboardKey.arrowDown ||
+            key == LogicalKeyboardKey.keyJ)) {
       _moveSelection(1);
       return KeyEventResult.handled;
     }
-    if (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.keyK) {
+    if (!shiftPressed &&
+        (key == LogicalKeyboardKey.arrowUp ||
+            key == LogicalKeyboardKey.keyK)) {
       // Up from the first row steps out of the table and into the filter.
       // Home keeps its own meaning below: it always lands on the first row.
       if (_selectedIndex == 0) {
@@ -1140,12 +1154,12 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       _pageSelection(1);
       return KeyEventResult.handled;
     }
-    if (key == LogicalKeyboardKey.arrowLeft) {
+    if (leftKey) {
       return _scrollColumnsBy(-_kColumnScrollStep)
           ? KeyEventResult.handled
           : KeyEventResult.ignored;
     }
-    if (key == LogicalKeyboardKey.arrowRight) {
+    if (rightKey) {
       return _scrollColumnsBy(_kColumnScrollStep)
           ? KeyEventResult.handled
           : KeyEventResult.ignored;
@@ -1263,6 +1277,13 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       _tableFocusNode.requestFocus();
       _ensureSelectedVisible();
       return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.arrowDown &&
+        HardwareKeyboard.instance.isShiftPressed) {
+      // Shift+Down must not pull focus out of the filter: it is left for the
+      // text field's own selection handling. This has to come before the
+      // transfer branch below, whose Ctrl/Cmd/Alt guard does not screen Shift.
+      return KeyEventResult.ignored;
     }
     if (key == LogicalKeyboardKey.arrowDown ||
         key == LogicalKeyboardKey.enter ||
