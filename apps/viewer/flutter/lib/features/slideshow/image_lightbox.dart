@@ -64,7 +64,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
     super.dispose();
   }
 
-  /// Animates to [nextIndex], used by the arrow keys.
+  /// Animates to [nextIndex], used by a single-step arrow move.
   void _animateTo(int nextIndex) {
     _controller.animateToPage(
       nextIndex,
@@ -73,8 +73,9 @@ class _ImageLightboxState extends State<ImageLightbox> {
     );
   }
 
-  /// Jumps straight to [nextIndex] with no page transition, used by Home and
-  /// End so a large Collection reaches its endpoint immediately.
+  /// Jumps straight to [nextIndex] with no page transition, used by Home, End
+  /// and a wrap-around so a large sequence reaches its target immediately
+  /// instead of animating through every page in between.
   void _jumpTo(int nextIndex) {
     _controller.jumpToPage(nextIndex);
     setState(() => _currentIndex = nextIndex);
@@ -85,14 +86,28 @@ class _ImageLightboxState extends State<ImageLightbox> {
   bool get _atLastPage =>
       widget.items.isEmpty || _currentIndex >= widget.items.length - 1;
 
+  /// Moves one image back, wrapping from the first image to the last.
   void _goPrevious() {
-    if (_atFirstPage) return;
-    _animateTo(_currentIndex - 1);
+    if (widget.items.isEmpty) return;
+    _moveTo((_currentIndex - 1) % widget.items.length);
   }
 
+  /// Moves one image forward, wrapping from the last image to the first.
   void _goNext() {
-    if (_atLastPage) return;
-    _animateTo(_currentIndex + 1);
+    if (widget.items.isEmpty) return;
+    _moveTo((_currentIndex + 1) % widget.items.length);
+  }
+
+  /// Moves to [nextIndex]. An adjacent step animates; a wrap-around, which
+  /// crosses the whole sequence, lands instantly instead of blurring through
+  /// every page in between.
+  void _moveTo(int nextIndex) {
+    if (nextIndex == _currentIndex) return; // Single page: nothing to move to.
+    if ((nextIndex - _currentIndex).abs() == 1) {
+      _animateTo(nextIndex);
+    } else {
+      _jumpTo(nextIndex);
+    }
   }
 
   void _goToFirst() {

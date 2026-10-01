@@ -97,7 +97,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
     return items;
   }
 
-  /// Animates to [nextIndex], used by the arrow keys.
+  /// Animates to [nextIndex], used by a single-step arrow move.
   void _animateTo(int nextIndex) {
     _pageController.animateToPage(
       nextIndex,
@@ -106,8 +106,9 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
     );
   }
 
-  /// Jumps straight to [nextIndex] with no page transition, used by Home and
-  /// End so a large Collection reaches its endpoint immediately.
+  /// Jumps straight to [nextIndex] with no page transition, used by Home, End
+  /// and a wrap-around so a large Collection reaches its target immediately
+  /// instead of animating through every note in between.
   void _jumpTo(int nextIndex) {
     _pageController.jumpToPage(nextIndex);
     setState(() => _currentIndex = nextIndex);
@@ -118,14 +119,28 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   bool get _atLastNote =>
       widget.notes.isEmpty || _currentIndex >= widget.notes.length - 1;
 
+  /// Moves one note back, wrapping from the first note to the last.
   void _goPrevious() {
-    if (_atFirstNote) return;
-    _animateTo(_currentIndex - 1);
+    if (widget.notes.isEmpty) return;
+    _moveTo((_currentIndex - 1) % widget.notes.length);
   }
 
+  /// Moves one note forward, wrapping from the last note to the first.
   void _goNext() {
-    if (_atLastNote) return;
-    _animateTo(_currentIndex + 1);
+    if (widget.notes.isEmpty) return;
+    _moveTo((_currentIndex + 1) % widget.notes.length);
+  }
+
+  /// Moves to [nextIndex]. An adjacent step animates; a wrap-around, which
+  /// crosses the whole Collection, lands instantly instead of blurring through
+  /// every note in between.
+  void _moveTo(int nextIndex) {
+    if (nextIndex == _currentIndex) return; // Single note: nothing to move to.
+    if ((nextIndex - _currentIndex).abs() == 1) {
+      _animateTo(nextIndex);
+    } else {
+      _jumpTo(nextIndex);
+    }
   }
 
   void _goToFirst() {

@@ -147,7 +147,7 @@ void main() {
     expect(find.text('1 / 1'), findsOneWidget);
   });
 
-  testWidgets('arrow left on the first slide stays on the first slide', (
+  testWidgets('arrow left on the first slide wraps to the last', (
     WidgetTester tester,
   ) async {
     final notes = [
@@ -159,10 +159,11 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.pumpAndSettle();
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('B - KB-2'), findsOneWidget);
   });
 
-  testWidgets('arrow right on the last slide stays on the last slide', (
+  testWidgets('arrow right on the last slide wraps to the first', (
     WidgetTester tester,
   ) async {
     final notes = [
@@ -174,7 +175,8 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pumpAndSettle();
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('A - KB-1'), findsOneWidget);
   });
 
   testWidgets('enter does nothing when the slide has no images', (
@@ -255,6 +257,49 @@ void main() {
     // index pill would not have moved to the endpoint yet.
     await tester.pump();
     expect(find.text('40 / 40'), findsOneWidget);
+  });
+
+  testWidgets('a wrap-around lands on its target in one frame', (
+    WidgetTester tester,
+  ) async {
+    // A collection large enough that animating across it would be obvious.
+    await pumpSlideshow(tester, manyNotes(40));
+    expect(find.text('1 / 40'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    // A single frame: an animated transition would still be in flight and the
+    // index pill would not have moved to the wrapped note yet.
+    await tester.pump();
+    expect(find.text('40 / 40'), findsOneWidget);
+  });
+
+  testWidgets('an adjacent arrow step animates rather than jumping', (
+    WidgetTester tester,
+  ) async {
+    await pumpSlideshow(tester, manyNotes(3), initialIndex: 1);
+    expect(find.text('2 / 3'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    // A single frame: the animated step is still in flight, so the index pill
+    // has not reached the next note yet (a jump would have moved it).
+    await tester.pump();
+    expect(find.text('2 / 3'), findsOneWidget);
+
+    await tester.pumpAndSettle();
+    expect(find.text('3 / 3'), findsOneWidget);
+  });
+
+  testWidgets('arrows change nothing in a single-note collection', (
+    WidgetTester tester,
+  ) async {
+    await pumpSlideshow(tester, manyNotes(1));
+    expect(find.text('1 / 1'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 1'), findsOneWidget);
   });
 
   testWidgets('home on the first note changes nothing', (
@@ -347,7 +392,7 @@ void main() {
     expect(find.text('N2 - KB-2'), findsOneWidget);
   });
 
-  testWidgets('h and l clamp at the ends like the arrows', (
+  testWidgets('h and l wrap at the ends like the arrows', (
     WidgetTester tester,
   ) async {
     await pumpSlideshow(tester, manyNotes(2));
@@ -355,15 +400,11 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
     await tester.pumpAndSettle();
+    expect(find.text('2 / 2'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.pumpAndSettle();
     expect(find.text('1 / 2'), findsOneWidget);
-
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
-    await tester.pumpAndSettle();
-    expect(find.text('2 / 2'), findsOneWidget);
-
-    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
-    await tester.pumpAndSettle();
-    expect(find.text('2 / 2'), findsOneWidget);
   });
 
   testWidgets('j and k scroll the slide like the arrows', (

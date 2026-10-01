@@ -343,7 +343,7 @@ void main() {
     expect(find.text('open'), findsOneWidget);
   });
 
-  testWidgets('arrow left on the first image stays on the first image', (
+  testWidgets('arrow left on the first image wraps to the last image', (
     tester,
   ) async {
     await pumpMultiItemPopover(tester);
@@ -351,10 +351,10 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.pumpAndSettle();
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('2 / 2'), findsOneWidget);
   });
 
-  testWidgets('arrow right on the last image stays on the last image', (
+  testWidgets('arrow right on the last image wraps to the first image', (
     tester,
   ) async {
     await pumpMultiItemPopover(tester);
@@ -365,7 +365,7 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pumpAndSettle();
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('1 / 2'), findsOneWidget);
   });
 
   testWidgets('home jumps to the first page', (tester) async {
@@ -416,6 +416,34 @@ void main() {
     // index pill would not have moved to the endpoint yet.
     await tester.pump();
     expect(find.text('40 / 40'), findsOneWidget);
+  });
+
+  testWidgets('a wrap-around lands on its target in one frame', (tester) async {
+    // A sequence large enough that animating across it would be obvious.
+    await pumpManyItemPopover(tester, 40);
+    expect(find.text('1 / 40'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    // A single frame: an animated transition would still be in flight and the
+    // index pill would not have moved to the wrapped page yet.
+    await tester.pump();
+    expect(find.text('40 / 40'), findsOneWidget);
+  });
+
+  testWidgets('an adjacent arrow step animates rather than jumping', (
+    tester,
+  ) async {
+    await pumpManyItemPopover(tester, 3, initialIndex: 1);
+    expect(find.text('2 / 3'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    // A single frame: the animated step is still in flight, so the index pill
+    // has not reached the next page yet (a jump would have moved it).
+    await tester.pump();
+    expect(find.text('2 / 3'), findsOneWidget);
+
+    await tester.pumpAndSettle();
+    expect(find.text('3 / 3'), findsOneWidget);
   });
 
   testWidgets('home and end still move between pages while zoomed', (
