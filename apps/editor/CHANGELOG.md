@@ -2,6 +2,29 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.17.0] - 2026-10-01
+
+### Added
+
+- Add a Note from the Note slideshow: a top-bar "Add note" action and the `a` key start a new Note that lands immediately before the Note on screen, with the slideshow kept rendered behind the Note editor overlay; `e` opens the Note on screen. The Note editor's counter now also shows a distinct create-mode `? / N` (the number of notes in view) instead of a number.
+- The counter's first number is editable in both the Note editor and the Note slideshow: click it, type a position, and press `Enter` to jump (`Escape` reverts, out-of-range values clamp). The counter counts the list the editor was opened from, so its position matches the slideshow when opened over it.
+- The Note editor gains two save actions: "Save changes"/"Add banknote" saves and stays (a create switches to editing the Note just made), while "Save & close"/"Add & close" saves and returns to where you came from.
+- `Home` and `End` jump the Note slideshow and the Image popover to the first and last item.
+- `h`/`j`/`k`/`l` now alias the arrow keys across the Table screen, Note slideshow, Note editor, and Image popover, and `Ctrl`/`Cmd`/`Shift` are interchangeable for the arrow intents.
+
+### Changed
+
+- Leaving the Note editor — arrows, `←`/`→`/`h`/`l`, typed jumps, the Close button, or `Escape` — now asks "Discard changes?" (or "Discard new note?") only when the form actually differs from what was loaded. "Keep editing" is the safe default and saving never prompts.
+- Every destructive confirmation — deleting a Note or a selection, deleting a collection, deleting all app data, and importing an archive — now uses the app's own dialog instead of the browser's. `Escape` abandons the action, and the destructive choice is never the default.
+- The Note editor is a true modal: the Table screen and Note slideshow behind it are inert, so `Tab` cannot reach behind the overlay.
+- The Note slideshow keeps its filter/sort context when a save returns to it, matching save-and-stay, so a refresh or bookmark rebuilds the same list.
+- The `?` shortcuts help describes the new keys.
+
+### Fixed
+
+- Editor desktop: the packaged app no longer crashes on startup with `ERR_DLOPEN_FAILED` (a stale native-module stamp let a Node build of `better-sqlite3` ship in the Electron bundle); a failed startup now shows an error dialog instead of quitting silently.
+- Table screen: creating, editing, or deleting a Note now places the keyboard cursor on the affected row (or the next one when the last row is deleted), so `j`/`k`, `e`, and `d` keep working without clicking a row again.
+
 ## [1.16.1] - 2026-09-29
 
 ### Changed
