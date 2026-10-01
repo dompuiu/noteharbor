@@ -2388,18 +2388,6 @@ kbd {
   line-height: 1;
 }
 
-/* A shortcut hint inside a button: quiet, and sized to the button's text. */
-.button .button-shortcut {
-  min-width: 0;
-  height: auto;
-  margin-left: 6px;
-  padding: 1px 5px;
-  background: transparent;
-  box-shadow: none;
-  font-size: 0.68rem;
-  opacity: 0.75;
-}
-
 .slideshow-screen kbd,
 .image-popover-content kbd {
   background: rgba(245, 240, 232, 0.1);

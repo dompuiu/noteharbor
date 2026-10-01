@@ -180,16 +180,6 @@ function fieldInputId(name) {
   return `edit-note-${name}`;
 }
 
-// A shortcut hint shown inside a button. It is hidden from assistive tech so
-// the button's accessible name stays just its label.
-function ShortcutHint({ children }) {
-  return (
-    <kbd aria-hidden="true" className="button-shortcut">
-      {children}
-    </kbd>
-  );
-}
-
 function TagSuggestionCloud({ limit = 16, onSelect, query = "", selected = [], vocabulary = [] }) {
   const items = useMemo(() => {
     const selectedKeys = new Set(selected.map((tag) => tag.toLowerCase()));
@@ -240,6 +230,7 @@ function NoteEditForm({
   overlay = false,
   previousNoteId = null,
   selectedCollectionId = null,
+  shortcutsDisabled = false,
   totalNotesInView = 0,
 }) {
   const { id: routeNoteId } = useParams();
@@ -618,32 +609,62 @@ function NoteEditForm({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [canNavigateNext, canNavigatePrevious, onNavigateNext, onNavigatePrevious]);
 
-  // Ctrl/Cmd+S saves and stays; Ctrl/Cmd+Shift+S saves and closes. The
-  // editor owns the key, so the browser's own "save page" is suppressed.
+  // The editor owns Ctrl/Cmd+S (save and stay), Ctrl/Cmd+Shift+S (save and
+  // close), Ctrl/Cmd+D (delete), and Ctrl/Cmd+A (add before), so their
+  // browser defaults are suppressed. The confirmation dialog takes priority:
+  // while it is open the shortcuts are ignored.
   useEffect(() => {
     function handleKeyDown(event) {
-      if (!(event.ctrlKey || event.metaKey) || event.altKey) {
+      if (event.altKey || !(event.ctrlKey || event.metaKey)) {
         return;
       }
 
-      if (event.key.toLowerCase() !== "s") {
+      const key = event.key.toLowerCase();
+
+      if (key !== "s" && key !== "d" && key !== "a") {
         return;
       }
 
       event.preventDefault();
 
-      if (event.repeat || loading || saving || positionInvalid) {
+      if (event.repeat || shortcutsDisabled || loading || saving) {
         return;
       }
 
-      saveIntentRef.current = event.shiftKey ? "return" : "stay";
-      formElementRef.current?.requestSubmit();
+      if (key === "s") {
+        if (positionInvalid) {
+          return;
+        }
+
+        saveIntentRef.current = event.shiftKey ? "return" : "stay";
+        formElementRef.current?.requestSubmit();
+        return;
+      }
+
+      if (isCreateMode) {
+        return;
+      }
+
+      if (key === "d") {
+        onDelete?.();
+        return;
+      }
+
+      onAddBefore?.();
     }
 
     window.addEventListener("keydown", handleKeyDown);
 
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [loading, positionInvalid, saving]);
+  }, [
+    isCreateMode,
+    loading,
+    onAddBefore,
+    onDelete,
+    positionInvalid,
+    saving,
+    shortcutsDisabled,
+  ]);
 
   const imagePreviews = useMemo(() => {
     const nextPreviews = {};
@@ -1475,9 +1496,9 @@ function NoteEditForm({
             {!isCreateMode && onAddBefore ? (
               <button
                 className="button"
+                data-shortcut="Ctrl+A"
                 disabled={saving}
                 onClick={onAddBefore}
-                title="Add a note before this one"
                 type="button"
               >
                 Add before
@@ -1486,9 +1507,9 @@ function NoteEditForm({
             {!isCreateMode && onDelete ? (
               <button
                 className="button"
+                data-shortcut="Ctrl+D"
                 disabled={saving}
                 onClick={onDelete}
-                title="Delete this note"
                 type="button"
               >
                 Delete
@@ -1497,8 +1518,8 @@ function NoteEditForm({
             {onCancel ? (
               <button
                 className="button"
+                data-shortcut="Esc"
                 onClick={handleCancel}
-                title={cancelLabel}
                 type="button"
               >
                 {cancelLabel}
@@ -1510,12 +1531,12 @@ function NoteEditForm({
             )}
             <button
               className="button"
+              data-shortcut="Ctrl+S"
               form="edit-note-form"
               onClick={() => {
                 saveIntentRef.current = "stay";
               }}
               disabled={saving || positionInvalid}
-              title={isCreateMode ? "Add" : "Save"}
               type="submit"
             >
               {saving
@@ -1525,20 +1546,18 @@ function NoteEditForm({
                 : isCreateMode
                   ? "Add"
                   : "Save"}
-              {saving ? null : <ShortcutHint>Ctrl+S</ShortcutHint>}
             </button>
             <button
               className="button button-primary"
+              data-shortcut="Ctrl+Shift+S"
               form="edit-note-form"
               onClick={() => {
                 saveIntentRef.current = "return";
               }}
               disabled={saving || positionInvalid}
-              title={isCreateMode ? "Add & close" : "Save & close"}
               type="submit"
             >
               {isCreateMode ? "Add & close" : "Save & close"}
-              {saving ? null : <ShortcutHint>Ctrl+Shift+S</ShortcutHint>}
             </button>
           </div>
         </div>

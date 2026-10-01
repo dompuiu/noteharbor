@@ -51,6 +51,14 @@ const shortcutGroups = [
         description: "Save the note and close the editor",
       },
       {
+        keys: ["Ctrl/Cmd", "D"],
+        description: "Delete the note being edited",
+      },
+      {
+        keys: ["Ctrl/Cmd", "A"],
+        description: "Add a note before the one being edited",
+      },
+      {
         keys: ["Esc"],
         description: "Move focus out of the field, then close the editor",
       },

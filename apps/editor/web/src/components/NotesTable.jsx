@@ -1095,6 +1095,10 @@ function NotesTable({
   // dropped if the note never arrives (filtered out, or moved to another
   // collection).
   const deferredRowFocusNoteIdRef = useRef(null);
+  // The sibling of the deferred row focus: a delete that empties the table
+  // still has the editor overlay mounted when it runs, so the anchor it needs
+  // to focus is inert. The request is held until the list settles.
+  const deferredAnchorFocusRef = useRef(false);
   const clearRowCursor = useCallback(() => {
     // The keyboard cursor is focus memory plus paint: both must drop
     // together so the highlight can never outlive its focus target or
@@ -1830,6 +1834,7 @@ function NotesTable({
     // change: they name rows of the old order.
     pendingRowFocusNoteIdRef.current = null;
     deferredRowFocusNoteIdRef.current = null;
+    deferredAnchorFocusRef.current = false;
     lastRowFocusNoteIdRef.current = null;
     clearRowCursor();
   }, [clearRowCursor, filters, sortDirection, sortKey]);
@@ -1841,18 +1846,25 @@ function NotesTable({
     // the list on the render that started the request.
     const noteId = deferredRowFocusNoteIdRef.current;
 
-    if (noteId == null) {
+    if (noteId != null) {
+      deferredRowFocusNoteIdRef.current = null;
+
+      if (orderedNotes.some((note) => note.id === noteId)) {
+        focusRowByNoteId(noteId);
+      } else if (!orderedNotes.length) {
+        // The request named a note that left the view (moved to another
+        // collection, fell out of the filter) and took the last row with it:
+        // there is no row to land on, so use the anchor rather than <body>.
+        focusTableAnchor();
+      }
       return;
     }
 
-    deferredRowFocusNoteIdRef.current = null;
-
-    if (orderedNotes.some((note) => note.id === noteId)) {
-      focusRowByNoteId(noteId);
-    } else if (!orderedNotes.length) {
-      // The request named a note that left the view (moved to another
-      // collection, fell out of the filter) and took the last row with it:
-      // there is no row to land on, so use the anchor rather than <body>.
+    // A delete that emptied the view asked for the anchor, but the editor
+    // overlay was still mounted (and inert) when it made the request; land it
+    // now that the list has settled.
+    if (deferredAnchorFocusRef.current) {
+      deferredAnchorFocusRef.current = false;
       focusTableAnchor();
     }
     // `focusRowByNoteId` reads the list of the render it runs in, so it must
@@ -2626,7 +2638,7 @@ function NotesTable({
     if (rowNoteId != null) {
       deferredRowFocusNoteIdRef.current = rowNoteId;
     } else if (emptiesView) {
-      focusTableAnchor();
+      deferredAnchorFocusRef.current = true;
     }
   }
 
@@ -3297,6 +3309,9 @@ function NotesTable({
       await deleteNote(noteId, activeCollectionId);
       setNotes((current) => current.filter((entry) => entry.id !== noteId));
       setSelectedIds((current) => current.filter((id) => id !== noteId));
+      setSlideshowNotes((current) =>
+        current.filter((entry) => entry.id !== noteId),
+      );
       landFocusAfterDelete(removal);
       return true;
     } catch (deleteError) {
@@ -3305,12 +3320,17 @@ function NotesTable({
     }
   }
 
-  // The editor's Delete removes the note it is showing, then drops back to
-  // the Table screen: the route it was on no longer names a note.
+  // The editor's Delete removes the note it is showing, then hands the screen
+  // back: the note it was on no longer exists, so the slideshow moves to a
+  // neighbour, or the Table screen takes over when there is nowhere to land.
   async function handleDeleteEditingNote() {
     if (editingNoteId == null) {
       return;
     }
+
+    const slideshowIndex = slideshowRouteActive
+      ? slideshowNotes.findIndex((note) => note.id === editingNoteId)
+      : -1;
 
     const deleted = await handleDeleteNote(editingNoteId);
 
@@ -3319,6 +3339,22 @@ function NotesTable({
     }
 
     editorDirtyRef.current = false;
+
+    if (slideshowIndex >= 0) {
+      const remaining = slideshowNotes.filter(
+        (note) => note.id !== editingNoteId,
+      );
+
+      if (remaining.length) {
+        const nextNote =
+          remaining[slideshowIndex] ??
+          remaining[slideshowIndex - 1] ??
+          remaining[0];
+        navigateToTableRoute(slideshowRoute(nextNote.id), { replace: true });
+        return;
+      }
+    }
+
     navigateToTableRoute(emptyTableRoute(), { replace: true });
   }
 
@@ -3530,6 +3566,7 @@ function NotesTable({
               onSaveSuccess={handleSaveEditedNote}
               overlay
               previousNoteId={previousEditingNoteId}
+              shortcutsDisabled={confirmOpen}
               totalNotesInView={totalNotesInEditorList}
             />
           </div>
@@ -3572,8 +3609,8 @@ function NotesTable({
             <button
               aria-label="Add banknote"
               className="icon-link button-primary"
+              data-shortcut="a"
               onClick={openCreateNote}
-              title="Add banknote"
               type="button"
             >
               Add banknote
@@ -4261,11 +4298,11 @@ function NotesTable({
                                   <div className="inline-actions">
                                     <button
                                       className="icon-link"
+                                      data-shortcut="c"
                                       onClick={(event) => {
                                         event.stopPropagation();
                                         void handleCopyNoteDetails(note);
                                       }}
-                                      title="Copy note details"
                                       type="button"
                                       aria-label={`Copy ${note.denomination || `note ${note.id}`}`}
                                     >
@@ -4299,11 +4336,11 @@ function NotesTable({
                                     </button>
                                     <button
                                       className="icon-link"
+                                      data-shortcut="a"
                                       onClick={(event) => {
                                         event.stopPropagation();
                                         openCreateNoteBefore(note.id);
                                       }}
-                                      title="Insert note before this"
                                       type="button"
                                       aria-label={`Insert note before ${note.denomination || `note ${note.id}`}`}
                                     >
@@ -4329,11 +4366,11 @@ function NotesTable({
                                     </button>
                                     <button
                                       className="icon-link"
+                                      data-shortcut="e"
                                       onClick={(event) => {
                                         event.stopPropagation();
                                         openEditor(note.id);
                                       }}
-                                      title="Edit note"
                                       type="button"
                                       aria-label={`Edit ${note.denomination || `note ${note.id}`}`}
                                     >
@@ -4359,11 +4396,11 @@ function NotesTable({
                                     </button>
                                     <button
                                       className="icon-link"
+                                      data-shortcut="d"
                                       onClick={(event) => {
                                         event.stopPropagation();
                                         void handleDeleteNote(note.id);
                                       }}
-                                      title="Delete note"
                                       type="button"
                                       aria-label={`Delete ${note.denomination || `note ${note.id}`}`}
                                     >

@@ -766,7 +766,7 @@ describe("Two save actions", () => {
 });
 
 describe("The editor's collection actions", () => {
-  test("Save & close is the primary action; both saves show their shortcut", async () => {
+  test("Save & close is the primary action; every action shows its shortcut", async () => {
     const user = userEvent.setup();
     renderTable();
     await openEditorOn(user, "AAAA");
@@ -776,9 +776,21 @@ describe("The editor's collection actions", () => {
 
     expect(saveAndClose).toHaveClass("button-primary");
     expect(save).not.toHaveClass("button-primary");
-    expect(save).toHaveTextContent("Ctrl+S");
-    expect(save).not.toHaveTextContent("Ctrl+Shift+S");
-    expect(saveAndClose).toHaveTextContent("Ctrl+Shift+S");
+
+    expect(save).toHaveAttribute("data-shortcut", "Ctrl+S");
+    expect(saveAndClose).toHaveAttribute("data-shortcut", "Ctrl+Shift+S");
+    expect(screen.getByRole("button", { name: "Close" })).toHaveAttribute(
+      "data-shortcut",
+      "Esc",
+    );
+    expect(screen.getByRole("button", { name: "Add before" })).toHaveAttribute(
+      "data-shortcut",
+      "Ctrl+A",
+    );
+    expect(screen.getByRole("button", { name: "Delete" })).toHaveAttribute(
+      "data-shortcut",
+      "Ctrl+D",
+    );
   });
 
   test("Add before opens create mode ahead of the edited note", async () => {
@@ -825,6 +837,80 @@ describe("The editor's collection actions", () => {
     expect(screen.getByText("BBBB")).toBeInTheDocument();
     expect(currentHash()).toContain("edit/2");
     expect(screen.getByLabelText("Denomination")).toBeInTheDocument();
+  });
+
+  test("Ctrl+A opens create mode ahead of the edited note", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await openEditorOn(user, "BBBB");
+
+    await user.keyboard("{Control>}a{/Control}");
+
+    await user.type(await screen.findByLabelText("Denomination"), "NEW");
+    await user.click(screen.getByRole("button", { name: "Add & close" }));
+
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenCalledWith([1, 99, 2, 3], 1);
+    });
+  });
+
+  test("Ctrl+D deletes the edited note", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await openEditorOn(user, "BBBB");
+
+    await user.keyboard("{Control>}d{/Control}");
+
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
+    });
+    expect(currentHash()).not.toContain("edit");
+  });
+
+  test("the save shortcut is ignored while the delete dialog is open", async () => {
+    updateNote.mockClear();
+    const user = userEvent.setup();
+    renderTable();
+    const field = await openEditorOn(user, "BBBB");
+
+    await user.type(field, "!");
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = await screen.findByRole("dialog");
+
+    await user.keyboard("{Control>}s{/Control}");
+
+    expect(updateNote).not.toHaveBeenCalled();
+    expect(currentHash()).toContain("edit/2");
+
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+    expect(await screen.findByLabelText("Denomination")).toHaveValue("BBBB!");
+  });
+});
+
+describe("Shortcut tooltips", () => {
+  test("the table's note buttons and Add banknote expose their shortcuts", async () => {
+    renderTable();
+    await screen.findByText("AAAA");
+
+    expect(screen.getByRole("button", { name: "Copy AAAA" })).toHaveAttribute(
+      "data-shortcut",
+      "c",
+    );
+    expect(
+      screen.getByRole("button", { name: "Insert note before AAAA" }),
+    ).toHaveAttribute("data-shortcut", "a");
+    expect(screen.getByRole("button", { name: "Edit AAAA" })).toHaveAttribute(
+      "data-shortcut",
+      "e",
+    );
+    expect(screen.getByRole("button", { name: "Delete AAAA" })).toHaveAttribute(
+      "data-shortcut",
+      "d",
+    );
+    expect(toolbarAddButton()).toHaveAttribute("data-shortcut", "a");
   });
 });
 

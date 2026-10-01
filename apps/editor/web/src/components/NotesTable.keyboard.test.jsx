@@ -845,6 +845,11 @@ describe("Arrow modifiers and h/j/k/l aliases", () => {
       "Shift",
       "S",
     ]);
+    expect(keysOf("Delete the note being edited")).toEqual(["Ctrl/Cmd", "D"]);
+    expect(keysOf("Add a note before the one being edited")).toEqual([
+      "Ctrl/Cmd",
+      "A",
+    ]);
   });
 
   test("the shortcut help notes Shift+Up/Down is inert without advertising it", async () => {
