@@ -775,4 +775,57 @@ describe("Arrow modifiers and h/j/k/l aliases", () => {
     await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
     expect(image.style.transform).toBe("translate(-20px, 0px)");
   });
+
+  test("the shortcut help lists the new modifiers and aliases", async () => {
+    const user = userEvent.setup();
+    getNotes.mockResolvedValue({ notes: threeNotes });
+    renderTable();
+
+    await user.keyboard("?");
+    const dialog = await screen.findByRole("dialog", {
+      name: "Keyboard shortcuts",
+    });
+
+    function keysOf(description) {
+      const row = within(dialog).getByText(description).closest("li");
+      return Array.from(row.querySelectorAll("kbd"), (key) => key.textContent);
+    }
+
+    // The column-pan row gains the h/l aliases.
+    expect(
+      keysOf("Pan the columns to reveal ones hidden by a narrow window"),
+    ).toEqual(["←", "→", "h", "l"]);
+
+    // The column-jump row gains the Shift variant.
+    expect(keysOf("Jump to the first / last column")).toEqual([
+      "Ctrl/Cmd/Shift",
+      "←",
+      "→",
+    ]);
+
+    // The note editor's previous/next rows show the h/l aliases.
+    expect(keysOf("Go to the previous note")).toEqual(["←", "h"]);
+    expect(keysOf("Go to the next note")).toEqual(["→", "l"]);
+  });
+
+  test("the shortcut help notes Shift+Up/Down is inert without advertising it", async () => {
+    const user = userEvent.setup();
+    getNotes.mockResolvedValue({ notes: threeNotes });
+    renderTable();
+
+    await user.keyboard("?");
+    const dialog = await screen.findByRole("dialog", {
+      name: "Keyboard shortcuts",
+    });
+
+    const rowFocusRow = within(dialog)
+      .getByText(/^Move focus between rows \(↑ from the first row/)
+      .closest("li");
+
+    // The row advertises only the plain keys, and says Shift does nothing.
+    expect(
+      Array.from(rowFocusRow.querySelectorAll("kbd"), (key) => key.textContent),
+    ).toEqual(["↑", "↓"]);
+    expect(rowFocusRow.textContent).toContain("Shift+↑/↓ does nothing");
+  });
 });

@@ -7,7 +7,8 @@ const shortcutGroups = [
       { keys: ["/"], description: "Focus the last-used filter field" },
       {
         keys: ["↑", "↓"],
-        description: "Move focus between rows (↑ from the first row → filter field)",
+        description:
+          "Move focus between rows (↑ from the first row → filter field; Shift+↑/↓ does nothing)",
       },
       {
         keys: ["j", "k"],
@@ -16,11 +17,11 @@ const shortcutGroups = [
       { keys: ["PgUp", "PgDn"], description: "Scroll one page and focus the first row in view" },
       { keys: ["Home", "End"], description: "Focus the first / last row" },
       {
-        keys: ["←", "→"],
+        keys: ["←", "→", "h", "l"],
         description: "Pan the columns to reveal ones hidden by a narrow window",
       },
       {
-        keys: ["Ctrl/Cmd", "←", "→"],
+        keys: ["Ctrl/Cmd/Shift", "←", "→"],
         description: "Jump to the first / last column",
       },
       { keys: ["Enter", "Space"], description: "Open the focused note" },
