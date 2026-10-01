@@ -3261,6 +3261,42 @@ function NotesTable({
     });
   }
 
+  // The absolute sibling of movePreview: jump straight to the first or last
+  // page of the same positional sequence, without counting steps. Returns
+  // whether the preview moved, so its key handler only suppresses the key's
+  // native behaviour when there was somewhere to go.
+  function jumpPreview(edge) {
+    if (
+      !slideshowRouteActive ||
+      !slideshowNotes.length ||
+      !currentRoute.previewKind
+    ) {
+      return false;
+    }
+
+    const atStart = edge === "start";
+    const nextNoteIndex = atStart ? 0 : slideshowNotes.length - 1;
+    const nextKind = atStart ? "front" : "back";
+    const nextNote = slideshowNotes[nextNoteIndex];
+
+    if (
+      nextNote.id === currentRoute.noteId &&
+      nextKind === currentRoute.previewKind
+    ) {
+      return false;
+    }
+
+    navigateToTableRoute({
+      kind: "slideshow",
+      noteId: nextNote.id,
+      overlayEdit: false,
+      previewKind: nextKind,
+      ...slideshowRouteContext(),
+    });
+
+    return true;
+  }
+
   return (
     <section className="screen-stack">
       {showShortcutsHelp ? (
@@ -3279,6 +3315,8 @@ function NotesTable({
           onOpenPreview={openPreview}
           onClosePreview={closePreview}
           onMovePreview={movePreview}
+          onPreviewEnd={() => jumpPreview("end")}
+          onPreviewStart={() => jumpPreview("start")}
           previewKind={currentRoute.previewKind}
         />
       ) : null}

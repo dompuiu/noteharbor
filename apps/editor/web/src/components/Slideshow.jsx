@@ -67,6 +67,10 @@ function versionedImagePath(path, version) {
   return version ? `${path}${separator}v=${encodeURIComponent(version)}` : path;
 }
 
+function hasModifierPressed(event) {
+  return event.metaKey || event.ctrlKey || event.altKey;
+}
+
 function pickImage(note, type, variant = "full") {
   const imagePath =
     note.images.find(
@@ -130,6 +134,8 @@ function ImagePopover({
   onClose,
   onNext,
   onPrevious,
+  onPreviewEnd,
+  onPreviewStart,
   placeholderText,
   src,
 }) {
@@ -427,6 +433,10 @@ function ImagePopover({
 
   useEffect(() => {
     function onKeyDown(e) {
+      if (hasModifierPressed(e)) {
+        return;
+      }
+
       if (e.key === "Escape") {
         if (zoomed) {
           resetZoom();
@@ -480,12 +490,32 @@ function ImagePopover({
       if (e.key === "ArrowLeft") {
         moveToPreviousImage();
       }
+
+      if (e.key === "Home" || e.key === "End") {
+        const moved =
+          e.key === "Home" ? onPreviewStart?.() : onPreviewEnd?.();
+
+        if (moved) {
+          e.preventDefault();
+          resetZoom();
+        }
+      }
     }
 
     window.addEventListener("keydown", onKeyDown);
 
     return () => window.removeEventListener("keydown", onKeyDown);
-  }, [onClose, onNext, onPrevious, overflowX, overflowY, pannable, zoomScale]);
+  }, [
+    onClose,
+    onNext,
+    onPreviewEnd,
+    onPreviewStart,
+    onPrevious,
+    overflowX,
+    overflowY,
+    pannable,
+    zoomScale,
+  ]);
 
   const imageWrapClassName = [
     "image-popover-image-wrap",
@@ -591,6 +621,8 @@ function Slideshow({
   onClosePreview,
   onMovePreview,
   onOpenPreview,
+  onPreviewEnd,
+  onPreviewStart,
   previewKind = null,
 }) {
   const note = notes[currentIndex];
@@ -623,7 +655,7 @@ function Slideshow({
         return;
       }
 
-      if (event.metaKey || event.ctrlKey || event.altKey) {
+      if (hasModifierPressed(event)) {
         return;
       }
 
@@ -639,6 +671,18 @@ function Slideshow({
 
       if (event.key === "ArrowLeft") {
         moveSlideshow(-1);
+        return;
+      }
+
+      if (event.key === "Home" || event.key === "End") {
+        const targetIndex = event.key === "Home" ? 0 : notes.length - 1;
+
+        if (targetIndex === currentIndex) {
+          return;
+        }
+
+        event.preventDefault();
+        onChangeIndex(targetIndex);
         return;
       }
 
@@ -673,6 +717,7 @@ function Slideshow({
 
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
+    currentIndex,
     keyboardDisabled,
     note,
     notes.length,
@@ -728,6 +773,8 @@ function Slideshow({
           onClose={() => onClosePreview?.(note.id)}
           onNext={() => onMovePreview?.(1)}
           onPrevious={() => onMovePreview?.(-1)}
+          onPreviewEnd={onPreviewEnd}
+          onPreviewStart={onPreviewStart}
           placeholderText={`No scraped ${previewItem.label.toLowerCase()} image exists for this note yet.`}
           src={previewItem.src}
         />

@@ -1,5 +1,5 @@
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
@@ -421,5 +421,155 @@ describe("Active row highlight", () => {
       expect(restoredRow).toHaveFocus();
     });
     expect(restoredRow).toHaveClass("table-row-link--active");
+  });
+});
+
+describe("Home and End in the slideshow and image preview", () => {
+  function notePayload(id, denomination) {
+    return {
+      id,
+      display_order: id,
+      denomination,
+      issue_date: "",
+      catalog_number: "",
+      grading_company: "",
+      grade: "",
+      serial: "",
+      url: `https://example.test/note/${id}`,
+      images: [],
+      tags: [],
+      scrape_status: "idle",
+    };
+  }
+
+  const threeNotes = [
+    notePayload(1, "AAAA"),
+    notePayload(2, "BBBB"),
+    notePayload(3, "CCCC"),
+  ];
+
+  async function openSlideshowOnFirstNote(user) {
+    getNotes.mockResolvedValue({ notes: threeNotes });
+    renderTable();
+
+    const first = await screen.findByText("AAAA");
+    await user.click(first.closest("tr"));
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1");
+    });
+  }
+
+  test("End moves the slideshow to the last note and Home back to the first", async () => {
+    const user = userEvent.setup();
+    await openSlideshowOnFirstNote(user);
+
+    await user.keyboard("{End}");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/3");
+    });
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("CCCC");
+
+    await user.keyboard("{Home}");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1");
+    });
+    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("AAAA");
+  });
+
+  test("End and Home move the image preview to the last and first page", async () => {
+    const user = userEvent.setup();
+    await openSlideshowOnFirstNote(user);
+
+    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1/preview/front");
+    });
+
+    await user.keyboard("{End}");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/3/preview/back");
+    });
+    expect(screen.getByText("CCCC - Back")).toBeInTheDocument();
+    expect(screen.getByText("6 / 6")).toBeInTheDocument();
+
+    await user.keyboard("{Home}");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1/preview/front");
+    });
+    expect(screen.getByText("AAAA - Front")).toBeInTheDocument();
+    expect(screen.getByText("1 / 6")).toBeInTheDocument();
+  });
+
+  test("modified keys leave the image preview where it is", async () => {
+    const user = userEvent.setup();
+    await openSlideshowOnFirstNote(user);
+
+    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1/preview/front");
+    });
+
+    // Ctrl+Right no longer pages the image preview.
+    await user.keyboard("{Control>}{ArrowRight}{/Control}");
+    expect(currentHash()).toContain("slideshow/1/preview/front");
+
+    await user.keyboard("{End}");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/3/preview/back");
+    });
+
+    // Ctrl+Home does not jump back to the first page.
+    await user.keyboard("{Control>}{Home}{/Control}");
+    expect(currentHash()).toContain("slideshow/3/preview/back");
+    expect(screen.getByText("CCCC - Back")).toBeInTheDocument();
+  });
+
+  test("Home and End change nothing in a Collection with a single note", async () => {
+    const user = userEvent.setup();
+    getNotes.mockResolvedValue({ notes: [notePayload(1, "AAAA")] });
+    renderTable();
+
+    const first = await screen.findByText("AAAA");
+    await user.click(first.closest("tr"));
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1");
+    });
+
+    await user.keyboard("{End}");
+    await user.keyboard("{Home}");
+
+    expect(currentHash()).toContain("slideshow/1");
+  });
+
+  test("Home and End suppress the browser default only when they move the slideshow", async () => {
+    const user = userEvent.setup();
+    await openSlideshowOnFirstNote(user);
+
+    // Already on the first note: Home is a no-op and left to the browser.
+    expect(fireEvent.keyDown(window, { key: "Home" })).toBe(true);
+
+    // End moves the slideshow, so the browser default is suppressed.
+    expect(fireEvent.keyDown(window, { key: "End" })).toBe(false);
+  });
+
+  test("the image preview suppresses the browser default only when it moves", async () => {
+    const user = userEvent.setup();
+    await openSlideshowOnFirstNote(user);
+
+    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1/preview/front");
+    });
+
+    // Already on the first page: Home is a no-op and left to the browser.
+    expect(fireEvent.keyDown(window, { key: "Home" })).toBe(true);
+
+    // End moves the preview, so the browser default is suppressed.
+    expect(fireEvent.keyDown(window, { key: "End" })).toBe(false);
   });
 });
