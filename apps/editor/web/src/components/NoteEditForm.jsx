@@ -1343,12 +1343,10 @@ function NoteEditForm({
                   : "Current note in table view"
               }
               jumpLabel="Current note position"
-              nextLabel="Edit next note"
               onJump={onJumpToPosition}
               onNext={onNavigateNext}
               onPrevious={onNavigatePrevious}
               position={currentNotePosition}
-              previousLabel="Edit previous note"
               total={totalNotesInView}
             />
             {onCancel ? (

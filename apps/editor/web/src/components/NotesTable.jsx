@@ -1342,7 +1342,7 @@ function NotesTable({
   const nextEditingNoteId = editorNavigation.next;
   const currentEditingNotePosition =
     editingNoteIndex >= 0 ? editingNoteIndex + 1 : null;
-  const totalNotesInTableView = editorList.length;
+  const totalNotesInEditorList = editorList.length;
 
   // The note list encoded in a slideshow URL (filter + sort snapshot taken
   // when the slideshow was opened). Recomputed live so a cold-opened tab
@@ -3527,7 +3527,7 @@ function NotesTable({
               onSaveSuccess={handleSaveEditedNote}
               overlay
               previousNoteId={previousEditingNoteId}
-              totalNotesInView={totalNotesInTableView}
+              totalNotesInView={totalNotesInEditorList}
             />
           </div>
         </section>
