@@ -2260,10 +2260,10 @@ function NotesTable({
 
       // Cmd/Ctrl/Shift + Left/Right (or h/l) jumps to the first/last column,
       // like the Viewer. Checked before the modifier guard below so it is not
-      // swallowed.
-      const jumpToEnd =
+      // swallowed. The uppercase spellings cover a held Shift and Caps Lock.
+      const pointsToEnd =
         event.key === "ArrowRight" || event.key === "l" || event.key === "L";
-      const jumpToStart =
+      const pointsToStart =
         event.key === "ArrowLeft" || event.key === "h" || event.key === "H";
 
       if (
@@ -2271,8 +2271,8 @@ function NotesTable({
         (event.metaKey || event.ctrlKey || event.shiftKey) &&
         !event.altKey &&
         !editable &&
-        (jumpToEnd || jumpToStart) &&
-        panColumnsToEdge(jumpToEnd)
+        (pointsToEnd || pointsToStart) &&
+        panColumnsToEdge(pointsToEnd)
       ) {
         event.preventDefault();
         return;
@@ -2329,14 +2329,8 @@ function NotesTable({
         return;
       }
 
-      if (
-        event.key === "ArrowLeft" ||
-        event.key === "ArrowRight" ||
-        event.key === "h" ||
-        event.key === "l"
-      ) {
-        const backward = event.key === "ArrowLeft" || event.key === "h";
-        const delta = backward ? -COLUMN_SCROLL_STEP : COLUMN_SCROLL_STEP;
+      if (pointsToStart || pointsToEnd) {
+        const delta = pointsToStart ? -COLUMN_SCROLL_STEP : COLUMN_SCROLL_STEP;
 
         if (panColumnsBy(delta)) {
           event.preventDefault();

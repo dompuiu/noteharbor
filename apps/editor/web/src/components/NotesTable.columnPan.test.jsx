@@ -173,6 +173,13 @@ describe("NotesTable column keyboard panning", () => {
 
     await user.keyboard("{Shift>}h{/Shift}");
     expect(scroller.scrollLeft).toBe(0);
+
+    // Caps Lock spells the alias uppercase without a held Shift; it still pans.
+    fireEvent.keyDown(window, { key: "L" });
+    expect(scroller.scrollLeft).toBe(200);
+
+    fireEvent.keyDown(window, { key: "H" });
+    expect(scroller.scrollLeft).toBe(0);
   });
 
   test("column keys are left for the platform when the columns fit the window", async () => {
