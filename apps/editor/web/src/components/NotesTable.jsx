@@ -3283,7 +3283,7 @@ function NotesTable({
     });
 
     if (!confirmed) {
-      return;
+      return false;
     }
 
     setActionError("");
@@ -3298,9 +3298,47 @@ function NotesTable({
       setNotes((current) => current.filter((entry) => entry.id !== noteId));
       setSelectedIds((current) => current.filter((id) => id !== noteId));
       landFocusAfterDelete(removal);
+      return true;
     } catch (deleteError) {
       setActionError(deleteError.message);
+      return false;
     }
+  }
+
+  // The editor's Delete removes the note it is showing, then drops back to
+  // the Table screen: the route it was on no longer names a note.
+  async function handleDeleteEditingNote() {
+    if (editingNoteId == null) {
+      return;
+    }
+
+    const deleted = await handleDeleteNote(editingNoteId);
+
+    if (!deleted) {
+      return;
+    }
+
+    editorDirtyRef.current = false;
+    navigateToTableRoute(emptyTableRoute(), { replace: true });
+  }
+
+  // The editor's Add before opens create mode positioned ahead of the note
+  // being edited, in whichever screen the editor was opened over. Opening the
+  // form discards unsaved changes, so it goes through the same guard as the
+  // other exits.
+  function handleAddBeforeEditingNote() {
+    if (editingNoteId == null) {
+      return;
+    }
+
+    guardEditorExit(() => {
+      if (slideshowRouteActive) {
+        openCreateNoteOverSlideshow(editingNoteId);
+        return;
+      }
+
+      openCreateNoteBefore(editingNoteId);
+    });
   }
 
   async function handleCopyNoteDetails(note) {
@@ -3475,7 +3513,9 @@ function NotesTable({
               initialPositionReferenceId={createPositionReferenceId}
               nextNoteId={nextEditingNoteId}
               noteId={editingNoteId}
+              onAddBefore={handleAddBeforeEditingNote}
               onCancel={() => guardEditorExit(() => closeEditorRef.current?.())}
+              onDelete={handleDeleteEditingNote}
               onDirtyChange={handleEditorDirtyChange}
               onJumpToPosition={jumpEditorToPosition}
               onNavigateNext={() =>

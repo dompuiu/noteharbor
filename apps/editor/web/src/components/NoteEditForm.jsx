@@ -180,6 +180,16 @@ function fieldInputId(name) {
   return `edit-note-${name}`;
 }
 
+// A shortcut hint shown inside a button. It is hidden from assistive tech so
+// the button's accessible name stays just its label.
+function ShortcutHint({ children }) {
+  return (
+    <kbd aria-hidden="true" className="button-shortcut">
+      {children}
+    </kbd>
+  );
+}
+
 function TagSuggestionCloud({ limit = 16, onSelect, query = "", selected = [], vocabulary = [] }) {
   const items = useMemo(() => {
     const selectedKeys = new Set(selected.map((tag) => tag.toLowerCase()));
@@ -218,7 +228,9 @@ function NoteEditForm({
   initialPositionReferenceId = null,
   nextNoteId = null,
   noteId: noteIdProp,
+  onAddBefore,
   onCancel,
+  onDelete,
   onDirtyChange,
   onJumpToPosition,
   onNavigateNext,
@@ -1460,6 +1472,28 @@ function NoteEditForm({
                 />
               </svg>
             </button>
+            {!isCreateMode && onAddBefore ? (
+              <button
+                className="button"
+                disabled={saving}
+                onClick={onAddBefore}
+                title="Add a note before this one"
+                type="button"
+              >
+                Add before
+              </button>
+            ) : null}
+            {!isCreateMode && onDelete ? (
+              <button
+                className="button"
+                disabled={saving}
+                onClick={onDelete}
+                title="Delete this note"
+                type="button"
+              >
+                Delete
+              </button>
+            ) : null}
             {onCancel ? (
               <button
                 className="button"
@@ -1475,7 +1509,7 @@ function NoteEditForm({
               </Link>
             )}
             <button
-              className="button button-primary"
+              className="button"
               form="edit-note-form"
               onClick={() => {
                 saveIntentRef.current = "stay";
@@ -1491,9 +1525,10 @@ function NoteEditForm({
                 : isCreateMode
                   ? "Add"
                   : "Save"}
+              {saving ? null : <ShortcutHint>Ctrl+S</ShortcutHint>}
             </button>
             <button
-              className="button"
+              className="button button-primary"
               form="edit-note-form"
               onClick={() => {
                 saveIntentRef.current = "return";
@@ -1503,6 +1538,7 @@ function NoteEditForm({
               type="submit"
             >
               {isCreateMode ? "Add & close" : "Save & close"}
+              {saving ? null : <ShortcutHint>Ctrl+Shift+S</ShortcutHint>}
             </button>
           </div>
         </div>

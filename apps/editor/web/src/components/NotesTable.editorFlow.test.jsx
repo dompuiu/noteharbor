@@ -765,6 +765,69 @@ describe("Two save actions", () => {
   });
 });
 
+describe("The editor's collection actions", () => {
+  test("Save & close is the primary action; both saves show their shortcut", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await openEditorOn(user, "AAAA");
+
+    const save = screen.getByRole("button", { name: "Save" });
+    const saveAndClose = screen.getByRole("button", { name: "Save & close" });
+
+    expect(saveAndClose).toHaveClass("button-primary");
+    expect(save).not.toHaveClass("button-primary");
+    expect(save).toHaveTextContent("Ctrl+S");
+    expect(save).not.toHaveTextContent("Ctrl+Shift+S");
+    expect(saveAndClose).toHaveTextContent("Ctrl+Shift+S");
+  });
+
+  test("Add before opens create mode ahead of the edited note", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await openEditorOn(user, "BBBB");
+
+    await user.click(screen.getByRole("button", { name: "Add before" }));
+
+    await user.type(await screen.findByLabelText("Denomination"), "NEW");
+    await user.click(screen.getByRole("button", { name: "Add & close" }));
+
+    // The new Note landed immediately before BBBB (id 2).
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenCalledWith([1, 99, 2, 3], 1);
+    });
+  });
+
+  test("Delete removes the edited note and closes the editor", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await openEditorOn(user, "BBBB");
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
+    });
+    expect(currentHash()).not.toContain("edit");
+    expect(screen.queryByLabelText("Denomination")).not.toBeInTheDocument();
+  });
+
+  test("cancelling Delete keeps the note and the editor", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await openEditorOn(user, "BBBB");
+
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(screen.getByText("BBBB")).toBeInTheDocument();
+    expect(currentHash()).toContain("edit/2");
+    expect(screen.getByLabelText("Denomination")).toBeInTheDocument();
+  });
+});
+
 describe("Destructive confirmations use the app dialog", () => {
   test("cancelling a delete keeps the Note", async () => {
     const user = userEvent.setup();
