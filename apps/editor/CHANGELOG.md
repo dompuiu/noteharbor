@@ -2,6 +2,23 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [1.18.0] - 2026-10-01
+
+### Added
+
+- Note editor: `Ctrl`/`Cmd`+`S` saves and stays, `Ctrl`/`Cmd`+`Shift`+`S` saves and closes, `Ctrl`/`Cmd`+`D` deletes the note being edited, and `Ctrl`/`Cmd`+`A` adds a note before it. The action row now has explicit "Add before" and "Delete" actions, and every action shows its shortcut in a tooltip.
+- Table screen: the `a` shortcut adds a note when no row is focused (appending at the end) and inserts before the row when focus sits inside one of its controls. The `?` shortcuts help lists the new editor keys.
+
+### Changed
+
+- Note editor: the save actions are named for what they do — "Save"/"Add" saves and stays, while "Save & close"/"Add & close" saves and returns — and "Save & close" is the primary action. The toolbar's add action is "Add note".
+- Note editor: shortcuts are paused while the discard confirmation or a scrape conflict is open, and `Ctrl`/`Cmd`+`A` inside a field still selects the field's text.
+- Note slideshow: the "Add note" button's tooltip now says the new note lands before the one on screen.
+
+### Fixed
+
+- Note slideshow: deleting the note being edited now moves to the neighbouring note — or back to the Table screen when it was the only note — instead of dropping the editor to the Table screen.
+
 ## [1.17.0] - 2026-10-01
 
 ### Added
