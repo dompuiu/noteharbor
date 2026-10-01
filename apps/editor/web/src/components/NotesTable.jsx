@@ -2491,8 +2491,34 @@ function NotesTable({
       const focusedRowElement = focusedRowIdRef.current
         ? rowElementMapRef.current.get(focusedRowIdRef.current)
         : null;
+      const rowHasFocus =
+        Boolean(focusedRowElement) &&
+        document.activeElement === focusedRowElement;
+      // Focusing any control inside a row bubbles focus to the row, so the
+      // row cursor can still be "on" a row while a nested button holds focus.
+      // `contains` keeps "a" inserting before that row instead of treating it
+      // as no row at all.
+      const focusWithinFocusedRow =
+        Boolean(focusedRowElement) &&
+        focusedRowElement.contains(document.activeElement);
 
-      if (!focusedRowElement || document.activeElement !== focusedRowElement) {
+      // "a" opens the create form: before the focused row when the cursor is
+      // on (or inside) one, otherwise it falls back to the toolbar's Add
+      // action so the shortcut still works from an empty focus state or right
+      // after the row cursor was cleared.
+      if (event.key === "a") {
+        event.preventDefault();
+
+        if (focusWithinFocusedRow) {
+          openCreateNoteBefore(focusedRowIdRef.current);
+        } else {
+          openCreateNote();
+        }
+
+        return;
+      }
+
+      if (!rowHasFocus) {
         return;
       }
 
@@ -2519,12 +2545,6 @@ function NotesTable({
       if (event.key === "c") {
         event.preventDefault();
         void handleCopyNoteDetails(focusedNote);
-        return;
-      }
-
-      if (event.key === "a") {
-        event.preventDefault();
-        openCreateNoteBefore(focusedNote.id);
       }
     }
 
@@ -3607,13 +3627,13 @@ function NotesTable({
               ))}
             </select>
             <button
-              aria-label="Add banknote"
+              aria-label="Add note"
               className="icon-link button-primary"
               data-shortcut="a"
               onClick={openCreateNote}
               type="button"
             >
-              Add banknote
+              Add note
             </button>
             <Link
               aria-label="Import or export"

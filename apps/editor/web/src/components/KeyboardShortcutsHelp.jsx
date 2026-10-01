@@ -28,7 +28,7 @@ const shortcutGroups = [
       { keys: ["e"], description: "Edit the focused note" },
       { keys: ["d"], description: "Delete the focused note" },
       { keys: ["c"], description: "Copy the focused note's details" },
-      { keys: ["a"], description: "Add a new note before the focused note" },
+      { keys: ["a"], description: "Add a new note (before the focused row when one is focused, otherwise at the end)" },
       { keys: ["↓"], description: "Jump from a filter field to the first row" },
       { keys: ["Esc"], description: "Filters → first row → deselect → clear filters" },
     ],

@@ -109,7 +109,13 @@ async function rowFor(denomination) {
 }
 
 function toolbarAddButton() {
-  return screen.getByRole("button", { name: "Add banknote" });
+  return screen.getByRole("button", { name: "Add note" });
+}
+
+function slideshowAddButton() {
+  // The toolbar and the slideshow top bar both read "Add note"; the toolbar
+  // button has no title, so the slideshow's own tooltip distinguishes it.
+  return screen.getByTitle(/Add note/);
 }
 
 async function openEditorOn(user, denomination) {
@@ -235,7 +241,7 @@ describe("The counter in create mode", () => {
     renderTable();
 
     await waitFor(() => {
-      expect(screen.queryByRole("button", { name: "Add banknote" })).toBeTruthy();
+      expect(screen.queryByRole("button", { name: "Add note" })).toBeTruthy();
     });
     await user.click(toolbarAddButton());
 
@@ -252,7 +258,7 @@ describe("Adding from the Note slideshow", () => {
     renderTable();
     await openSlideshowOn(user, "BBBB");
 
-    await user.click(screen.getByRole("button", { name: "Add note" }));
+    await user.click(slideshowAddButton());
 
     expect(currentHash()).toContain("slideshow/2");
     expect(currentHash()).toContain("overlay=create");
@@ -297,7 +303,7 @@ describe("Adding from the Note slideshow", () => {
     renderTable();
     await openSlideshowOn(user, "BBBB");
 
-    await user.click(screen.getByRole("button", { name: "Add note" }));
+    await user.click(slideshowAddButton());
     await user.type(await screen.findByLabelText("Denomination"), "NEW");
     await user.click(screen.getByRole("button", { name: "Add & close" }));
 
@@ -361,7 +367,7 @@ describe("Adding from the Note slideshow", () => {
     renderTable();
     await openSlideshowOn(user, "BBBB");
 
-    await user.click(screen.getByRole("button", { name: "Add note" }));
+    await user.click(slideshowAddButton());
     await user.type(await screen.findByLabelText("Denomination"), "NEW");
     await user.click(screen.getByRole("button", { name: "Add" }));
 
@@ -906,8 +912,50 @@ describe("The editor's collection actions", () => {
   });
 });
 
+describe("The a shortcut in the Table", () => {
+  test("with no row focused it opens the create form", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("AAAA");
+
+    await user.keyboard("a");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("#new");
+    });
+    expect(await screen.findByLabelText("Denomination")).toBeInTheDocument();
+  });
+
+  test("with a row focused it inserts before that row", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    const row = await rowFor("BBBB");
+    row.focus();
+
+    await user.keyboard("a");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("before=2");
+    });
+  });
+
+  test("with focus inside a row's control it still inserts before that row", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("BBBB");
+
+    screen.getByRole("button", { name: "Insert note before BBBB" }).focus();
+
+    await user.keyboard("a");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("before=2");
+    });
+  });
+});
+
 describe("Shortcut tooltips", () => {
-  test("the table's note buttons and Add banknote expose their shortcuts", async () => {
+  test("the table's note buttons and Add note expose their shortcuts", async () => {
     renderTable();
     await screen.findByText("AAAA");
 

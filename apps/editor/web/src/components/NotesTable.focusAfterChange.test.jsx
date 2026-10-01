@@ -116,7 +116,7 @@ async function rowFor(denomination) {
 }
 
 function toolbarAddButton() {
-  return screen.getByRole("button", { name: "Add banknote" });
+  return screen.getByRole("button", { name: "Add note" });
 }
 
 function editorSubmitButton() {
