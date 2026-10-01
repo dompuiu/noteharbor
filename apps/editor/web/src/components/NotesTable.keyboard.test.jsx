@@ -670,6 +670,34 @@ describe("Arrow modifiers and h/j/k/l aliases", () => {
     expect(scrollBy).not.toHaveBeenCalled();
   });
 
+  test("Shift keeps its own keys in the Note slideshow", async () => {
+    const user = userEvent.setup();
+    getNotes.mockResolvedValue({ notes: threeNotes });
+    renderTable();
+
+    await user.click((await screen.findByText("AAAA")).closest("tr"));
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1");
+    });
+
+    // Only modified arrows are inert; Shift+End/Home still navigate.
+    await user.keyboard("{Shift>}{End}{/Shift}");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/3");
+    });
+
+    await user.keyboard("{Shift>}{Home}{/Shift}");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1");
+    });
+
+    // Shift+Enter still opens the preview.
+    await user.keyboard("{Shift>}{Enter}{/Shift}");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1/preview/front");
+    });
+  });
+
   test("Shift/Ctrl/Cmd + Left/Right and h/l page images in fit view", async () => {
     const user = userEvent.setup();
     getNotes.mockResolvedValue({ notes: threeNotes });

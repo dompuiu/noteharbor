@@ -71,10 +71,10 @@ function hasModifierPressed(event) {
   return event.metaKey || event.ctrlKey || event.altKey;
 }
 
-// The arrow keys with h/j/k/l aliased onto them. A held Shift spells the
-// letters uppercase ("H", "L", …), so the Image popover lowercases the key
-// before looking it up; the Note slideshow forbids modifiers outright and
-// matches only the plain lowercase aliases.
+// The arrow keys with h/j/k/l aliased onto them. A held Shift (or Caps Lock)
+// spells the letters uppercase ("H", "L", …), so callers resolve the key
+// through directionOf, which lowercases a single-character key before the
+// lookup.
 const arrowDirections = {
   ArrowLeft: "left",
   ArrowRight: "right",
@@ -683,9 +683,16 @@ function Slideshow({
         return;
       }
 
-      // Shift joins Ctrl/Cmd/Alt as an inert modifier here: every modified
-      // arrow is left for the platform.
-      if (hasModifierPressed(event) || event.shiftKey) {
+      const direction = directionOf(event);
+
+      // A modified arrow (or h/j/k/l alias) is inert and left for the
+      // platform. Only the arrows are affected: a bare Shift must not swallow
+      // Shift+Enter/Space/Home/End, which keep their own meaning.
+      if (direction && (hasModifierPressed(event) || event.shiftKey)) {
+        return;
+      }
+
+      if (hasModifierPressed(event)) {
         return;
       }
 
@@ -693,8 +700,6 @@ function Slideshow({
         onClose();
         return;
       }
-
-      const direction = arrowDirections[event.key];
 
       if (direction === "right") {
         moveSlideshow(1);
