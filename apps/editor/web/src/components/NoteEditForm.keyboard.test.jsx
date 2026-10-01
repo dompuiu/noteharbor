@@ -92,6 +92,44 @@ describe("Note editor keyboard navigation", () => {
     expect(onNavigatePrevious).toHaveBeenCalledTimes(1);
   });
 
+  test("Shift, Ctrl and Cmd + arrows change notes outside a field", async () => {
+    const onNavigateNext = vi.fn();
+    const onNavigatePrevious = vi.fn();
+    const input = await renderLoadedForm({ onNavigateNext, onNavigatePrevious });
+    const user = userEvent.setup();
+
+    input.blur();
+
+    await user.keyboard("{Shift>}{ArrowRight}{/Shift}");
+    await user.keyboard("{Control>}{ArrowRight}{/Control}");
+    await user.keyboard("{Meta>}{ArrowRight}{/Meta}");
+    expect(onNavigateNext).toHaveBeenCalledTimes(3);
+
+    await user.keyboard("{Shift>}{ArrowLeft}{/Shift}");
+    await user.keyboard("{Control>}{ArrowLeft}{/Control}");
+    await user.keyboard("{Meta>}{ArrowLeft}{/Meta}");
+    expect(onNavigatePrevious).toHaveBeenCalledTimes(3);
+  });
+
+  test("Shift, Ctrl and Cmd + h/l change notes outside a field", async () => {
+    const onNavigateNext = vi.fn();
+    const onNavigatePrevious = vi.fn();
+    const input = await renderLoadedForm({ onNavigateNext, onNavigatePrevious });
+    const user = userEvent.setup();
+
+    input.blur();
+
+    await user.keyboard("{Shift>}l{/Shift}");
+    await user.keyboard("{Control>}l{/Control}");
+    await user.keyboard("{Meta>}l{/Meta}");
+    expect(onNavigateNext).toHaveBeenCalledTimes(3);
+
+    await user.keyboard("{Shift>}h{/Shift}");
+    await user.keyboard("{Control>}h{/Control}");
+    await user.keyboard("{Meta>}h{/Meta}");
+    expect(onNavigatePrevious).toHaveBeenCalledTimes(3);
+  });
+
   test("plain arrows and h/l keep their text behaviour inside a field", async () => {
     const onNavigateNext = vi.fn();
     const onNavigatePrevious = vi.fn();
@@ -104,6 +142,32 @@ describe("Note editor keyboard navigation", () => {
     expect(input).toHaveValue("TWOTESTl");
     expect(onNavigateNext).not.toHaveBeenCalled();
     expect(onNavigatePrevious).not.toHaveBeenCalled();
+  });
+
+  test("Ctrl/Cmd+arrows keep the field's own caret handling and do not change notes", async () => {
+    const onNavigateNext = vi.fn();
+    const onNavigatePrevious = vi.fn();
+    const input = await renderLoadedForm({ onNavigateNext, onNavigatePrevious });
+    const user = userEvent.setup();
+
+    input.setSelectionRange(3, 3);
+    await user.keyboard("{Control>}{ArrowRight}{/Control}");
+    expect(onNavigateNext).not.toHaveBeenCalled();
+    // The field kept the key: the caret moved instead of the note changing.
+    expect(input.selectionStart).toBe(4);
+
+    input.setSelectionRange(3, 3);
+    await user.keyboard("{Meta>}{ArrowLeft}{/Meta}");
+    expect(onNavigatePrevious).not.toHaveBeenCalled();
+    expect(input.selectionStart).toBe(2);
+
+    // Ctrl/Cmd + the letter aliases are equally left to the field.
+    await user.keyboard("{Control>}l{/Control}");
+    await user.keyboard("{Control>}h{/Control}");
+    await user.keyboard("{Meta>}l{/Meta}");
+    expect(onNavigateNext).not.toHaveBeenCalled();
+    expect(onNavigatePrevious).not.toHaveBeenCalled();
+    expect(input).toHaveFocus();
   });
 
   test("Shift+Arrow changes notes from inside a field", async () => {
@@ -119,27 +183,58 @@ describe("Note editor keyboard navigation", () => {
     expect(onNavigatePrevious).toHaveBeenCalledTimes(1);
   });
 
-  test("does not change notes when there is no adjacent note", async () => {
+  test("Shift+h and Shift+l change notes from inside a field", async () => {
     const onNavigateNext = vi.fn();
+    const onNavigatePrevious = vi.fn();
+    const input = await renderLoadedForm({ onNavigateNext, onNavigatePrevious });
+    const user = userEvent.setup();
+
+    await user.keyboard("{Shift>}l{/Shift}");
+    expect(onNavigateNext).toHaveBeenCalledTimes(1);
+    expect(input).toHaveValue("TWOTEST");
+
+    await user.keyboard("{Shift>}h{/Shift}");
+    expect(onNavigatePrevious).toHaveBeenCalledTimes(1);
+    expect(input).toHaveValue("TWOTEST");
+  });
+
+  test("navigation stops at the ends of the collection", async () => {
+    const onNavigateNext = vi.fn();
+    const onNavigatePrevious = vi.fn();
     const input = await renderLoadedForm({
       nextNoteId: null,
+      previousNoteId: null,
       onNavigateNext,
+      onNavigatePrevious,
     });
     const user = userEvent.setup();
 
     input.blur();
     await user.keyboard("{ArrowRight}");
+    await user.keyboard("{ArrowLeft}");
+    await user.keyboard("l");
+    await user.keyboard("h");
+
     expect(onNavigateNext).not.toHaveBeenCalled();
+    expect(onNavigatePrevious).not.toHaveBeenCalled();
   });
 
-  test("modifier+Arrow does not change notes", async () => {
+  test("Alt+arrow and Alt+h/l do not change notes from a field or outside it", async () => {
     const onNavigateNext = vi.fn();
-    const input = await renderLoadedForm({ onNavigateNext });
+    const onNavigatePrevious = vi.fn();
+    const input = await renderLoadedForm({ onNavigateNext, onNavigatePrevious });
     const user = userEvent.setup();
 
+    await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
+    await user.keyboard("{Alt>}{ArrowLeft}{/Alt}");
+    await user.keyboard("{Alt>}l{/Alt}");
+    await user.keyboard("{Alt>}h{/Alt}");
+
     input.blur();
-    await user.keyboard("{Meta>}{ArrowRight}{/Meta}");
-    await user.keyboard("{Control>}{ArrowRight}{/Control}");
+    await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
+    await user.keyboard("{Alt>}l{/Alt}");
+
     expect(onNavigateNext).not.toHaveBeenCalled();
+    expect(onNavigatePrevious).not.toHaveBeenCalled();
   });
 });

@@ -474,23 +474,26 @@ function NoteEditForm({
 
   useEffect(() => {
     function handleKeyDown(event) {
-      if (event.metaKey || event.ctrlKey) {
+      // Alt+arrow is left for the platform, as it is everywhere else.
+      if (event.altKey) {
         return;
       }
 
-      const goNext = event.key === "ArrowRight" || event.key === "l";
-      const goPrevious = event.key === "ArrowLeft" || event.key === "h";
+      const goNext =
+        event.key === "ArrowRight" || event.key === "l" || event.key === "L";
+      const goPrevious =
+        event.key === "ArrowLeft" || event.key === "h" || event.key === "H";
 
       if (!goNext && !goPrevious) {
         return;
       }
 
       // Inside a field the plain keys belong to the text (caret movement and
-      // the letters h/l), so only Shift+Arrow steps to an adjacent note there.
-      if (
-        isEditableElement(event.target) &&
-        !(event.shiftKey && event.key.startsWith("Arrow"))
-      ) {
+      // the letters h/l) and Ctrl/Cmd keeps its normal handling, so only a
+      // bare Shift steps to an adjacent note there.
+      const shiftOnly = event.shiftKey && !event.metaKey && !event.ctrlKey;
+
+      if (isEditableElement(event.target) && !shiftOnly) {
         return;
       }
 
