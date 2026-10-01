@@ -37,7 +37,7 @@ import {
   isColumnPanTarget,
 } from "../lib/tableColumnPan.js";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
-import { ConfirmDialog, useConfirmation } from "./ConfirmDialog.jsx";
+import { useConfirmation } from "./ConfirmDialog.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 import { TagsField } from "./TagsField.jsx";
