@@ -1,5 +1,12 @@
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
@@ -83,6 +90,29 @@ async function findRow() {
   const denomination = await screen.findByText("ZZTEST");
   return denomination.closest("tr");
 }
+
+function notePayload(id, denomination, images = []) {
+  return {
+    id,
+    display_order: id,
+    denomination,
+    issue_date: "",
+    catalog_number: "",
+    grading_company: "",
+    grade: "",
+    serial: "",
+    url: `https://example.test/note/${id}`,
+    images,
+    tags: [],
+    scrape_status: "idle",
+  };
+}
+
+const threeNotes = [
+  notePayload(1, "AAAA"),
+  notePayload(2, "BBBB"),
+  notePayload(3, "CCCC"),
+];
 
 beforeEach(() => {
   virtualWindow.start = 0;
@@ -180,23 +210,6 @@ describe("NotesTable keyboard focus inside a row", () => {
 });
 
 describe("Active row highlight", () => {
-  function notePayload(id, denomination) {
-    return {
-      id,
-      display_order: id,
-      denomination,
-      issue_date: "",
-      catalog_number: "",
-      grading_company: "",
-      grade: "",
-      serial: "",
-      url: "https://example.test/note/1",
-      images: [],
-      tags: [],
-      scrape_status: "idle",
-    };
-  }
-
   async function openSlideshowOnFirstRow(user) {
     getNotes.mockResolvedValue({
       notes: [notePayload(1, "AAAA"), notePayload(2, "BBBB")],
@@ -425,29 +438,6 @@ describe("Active row highlight", () => {
 });
 
 describe("Home and End in the slideshow and image preview", () => {
-  function notePayload(id, denomination) {
-    return {
-      id,
-      display_order: id,
-      denomination,
-      issue_date: "",
-      catalog_number: "",
-      grading_company: "",
-      grade: "",
-      serial: "",
-      url: `https://example.test/note/${id}`,
-      images: [],
-      tags: [],
-      scrape_status: "idle",
-    };
-  }
-
-  const threeNotes = [
-    notePayload(1, "AAAA"),
-    notePayload(2, "BBBB"),
-    notePayload(3, "CCCC"),
-  ];
-
   async function openSlideshowOnFirstNote(user) {
     getNotes.mockResolvedValue({ notes: threeNotes });
     renderTable();
@@ -505,7 +495,7 @@ describe("Home and End in the slideshow and image preview", () => {
     expect(screen.getByText("1 / 6")).toBeInTheDocument();
   });
 
-  test("modified keys leave the image preview where it is", async () => {
+  test("Ctrl+arrows page in fit view while modified Home stays put", async () => {
     const user = userEvent.setup();
     await openSlideshowOnFirstNote(user);
 
@@ -514,9 +504,11 @@ describe("Home and End in the slideshow and image preview", () => {
       expect(currentHash()).toContain("slideshow/1/preview/front");
     });
 
-    // Ctrl+Right no longer pages the image preview.
+    // Ctrl+Right pages the image preview in fit view, like Shift already did.
     await user.keyboard("{Control>}{ArrowRight}{/Control}");
-    expect(currentHash()).toContain("slideshow/1/preview/front");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1/preview/back");
+    });
 
     await user.keyboard("{End}");
     await waitFor(() => {
@@ -571,5 +563,216 @@ describe("Home and End in the slideshow and image preview", () => {
 
     // End moves the preview, so the browser default is suppressed.
     expect(fireEvent.keyDown(window, { key: "End" })).toBe(false);
+  });
+});
+
+describe("Arrow modifiers and h/j/k/l aliases", () => {
+  test("table row focus moves on plain j/k while a held Shift leaves it alone", async () => {
+    const user = userEvent.setup();
+    getNotes.mockResolvedValue({
+      notes: [notePayload(1, "AAAA"), notePayload(2, "BBBB")],
+    });
+    renderTable();
+
+    const firstRow = (await screen.findByText("AAAA")).closest("tr");
+    const secondRow = (await screen.findByText("BBBB")).closest("tr");
+
+    await act(async () => {
+      firstRow.focus();
+    });
+
+    await user.keyboard("j");
+    await waitFor(() => {
+      expect(secondRow).toHaveFocus();
+    });
+
+    await user.keyboard("{Shift>}{ArrowUp}{/Shift}");
+    await user.keyboard("{Shift>}k{/Shift}");
+    expect(firstRow).not.toHaveFocus();
+    expect(secondRow).toHaveFocus();
+
+    await user.keyboard("{Shift>}{ArrowDown}{/Shift}");
+    await user.keyboard("{Shift>}j{/Shift}");
+    expect(secondRow).toHaveFocus();
+
+    await user.keyboard("k");
+    await waitFor(() => {
+      expect(firstRow).toHaveFocus();
+    });
+  });
+
+  test("Shift+Down in a filter field does not pull focus into the table", async () => {
+    const user = userEvent.setup();
+    getNotes.mockResolvedValue({
+      notes: [notePayload(1, "AAAA"), notePayload(2, "BBBB")],
+    });
+    renderTable();
+
+    const firstRow = (await screen.findByText("AAAA")).closest("tr");
+    const filter = await screen.findByLabelText("Filter Denomination");
+
+    await act(async () => {
+      filter.focus();
+    });
+
+    await user.keyboard("{Shift>}{ArrowDown}{/Shift}");
+    expect(filter).toHaveFocus();
+    expect(firstRow).not.toHaveFocus();
+
+    // Plain Down still jumps from the filter to the first row.
+    await user.keyboard("{ArrowDown}");
+    await waitFor(() => {
+      expect(firstRow).toHaveFocus();
+    });
+  });
+
+  test("h/l change notes and j/k scroll the Note slideshow", async () => {
+    const user = userEvent.setup();
+    getNotes.mockResolvedValue({ notes: threeNotes });
+    const { container } = renderTable();
+
+    await user.click((await screen.findByText("AAAA")).closest("tr"));
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1");
+    });
+
+    await user.keyboard("l");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/2");
+    });
+
+    await user.keyboard("h");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1");
+    });
+
+    const slideScreen = container.querySelector(".slideshow-screen");
+    Object.defineProperty(slideScreen, "scrollHeight", {
+      configurable: true,
+      value: 1000,
+    });
+    Object.defineProperty(slideScreen, "clientHeight", {
+      configurable: true,
+      value: 600,
+    });
+    const scrollBy = vi.fn();
+    slideScreen.scrollBy = scrollBy;
+
+    await user.keyboard("j");
+    expect(scrollBy).toHaveBeenLastCalledWith({ top: 80 });
+
+    await user.keyboard("k");
+    expect(scrollBy).toHaveBeenLastCalledWith({ top: -80 });
+
+    scrollBy.mockClear();
+    await user.keyboard("{Shift>}{ArrowDown}{/Shift}");
+    await user.keyboard("{Shift>}{ArrowUp}{/Shift}");
+    expect(scrollBy).not.toHaveBeenCalled();
+  });
+
+  test("Shift/Ctrl/Cmd + Left/Right and h/l page images in fit view", async () => {
+    const user = userEvent.setup();
+    getNotes.mockResolvedValue({ notes: threeNotes });
+    renderTable();
+
+    await user.click((await screen.findByText("AAAA")).closest("tr"));
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1");
+    });
+
+    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1/preview/front");
+    });
+
+    await user.keyboard("{Shift>}{ArrowRight}{/Shift}");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1/preview/back");
+    });
+
+    await user.keyboard("{Control>}{ArrowRight}{/Control}");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/2/preview/front");
+    });
+
+    await user.keyboard("{Meta>}{ArrowLeft}{/Meta}");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1/preview/back");
+    });
+
+    await user.keyboard("l");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/2/preview/front");
+    });
+
+    await user.keyboard("h");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1/preview/back");
+    });
+
+    // Modified vertical arrows do nothing in fit view.
+    await user.keyboard("{Shift>}{ArrowDown}{/Shift}");
+    await user.keyboard("{Control>}{ArrowUp}{/Control}");
+    expect(currentHash()).toContain("slideshow/1/preview/back");
+  });
+
+  test("modified arrows pan the zoomed image while Alt stays inert", async () => {
+    const user = userEvent.setup();
+    const imageNote = notePayload(1, "AAAA", [
+      { type: "front", variant: "full", localPath: "/api/notes/1/front" },
+      { type: "back", variant: "full", localPath: "/api/notes/1/back" },
+    ]);
+    getNotes.mockResolvedValue({
+      notes: [imageNote, notePayload(2, "BBBB")],
+    });
+    renderTable();
+
+    await user.click((await screen.findByText("AAAA")).closest("tr"));
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1");
+    });
+
+    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1/preview/front");
+    });
+
+    const overlay = document.querySelector(".image-popover-overlay");
+    const image = within(overlay).getByRole("img");
+    Object.defineProperty(image, "naturalWidth", {
+      configurable: true,
+      value: 1200,
+    });
+    Object.defineProperty(image, "naturalHeight", {
+      configurable: true,
+      value: 800,
+    });
+    fireEvent.load(image);
+    fireEvent.doubleClick(image);
+
+    expect(image.style.transform).toBe("translate(0px, 0px)");
+
+    await user.keyboard("{Shift>}{ArrowRight}{/Shift}");
+    expect(image.style.transform).toBe("translate(-10px, 0px)");
+
+    await user.keyboard("{Control>}{ArrowRight}{/Control}");
+    expect(image.style.transform).toBe("translate(-20px, 0px)");
+
+    await user.keyboard("{Meta>}{ArrowLeft}{/Meta}");
+    expect(image.style.transform).toBe("translate(-10px, 0px)");
+
+    // h/j/k/l alias the arrows, including the Shift-held spelling.
+    await user.keyboard("{Shift>}l{/Shift}");
+    expect(image.style.transform).toBe("translate(-20px, 0px)");
+
+    await user.keyboard("{Control>}{ArrowDown}{/Control}");
+    expect(image.style.transform).toBe("translate(-20px, -10px)");
+
+    await user.keyboard("{Shift>}k{/Shift}");
+    expect(image.style.transform).toBe("translate(-20px, 0px)");
+
+    // Alt+arrow is inert even while the image is pannable.
+    await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
+    expect(image.style.transform).toBe("translate(-20px, 0px)");
   });
 });

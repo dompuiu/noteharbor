@@ -2258,15 +2258,21 @@ function NotesTable({
       const tableKeysActive =
         !slideshowRouteActive && !editingNoteId && !creatingNote;
 
-      // Cmd/Ctrl + Left/Right jumps to the first/last column, like the Viewer.
-      // Checked before the modifier guard below so it is not swallowed.
+      // Cmd/Ctrl/Shift + Left/Right (or h/l) jumps to the first/last column,
+      // like the Viewer. Checked before the modifier guard below so it is not
+      // swallowed.
+      const jumpToEnd =
+        event.key === "ArrowRight" || event.key === "l" || event.key === "L";
+      const jumpToStart =
+        event.key === "ArrowLeft" || event.key === "h" || event.key === "H";
+
       if (
         tableKeysActive &&
-        (event.metaKey || event.ctrlKey) &&
+        (event.metaKey || event.ctrlKey || event.shiftKey) &&
         !event.altKey &&
         !editable &&
-        (event.key === "ArrowLeft" || event.key === "ArrowRight") &&
-        panColumnsToEdge(event.key === "ArrowRight")
+        (jumpToEnd || jumpToStart) &&
+        panColumnsToEdge(jumpToEnd)
       ) {
         event.preventDefault();
         return;
@@ -2309,21 +2315,28 @@ function NotesTable({
         return;
       }
 
-      if (event.key === "ArrowDown" || event.key === "j") {
+      // Row focus only moves for the plain keys: a held Shift rests the focus
+      // where it is instead of pulling it to another note.
+      if (!event.shiftKey && (event.key === "ArrowDown" || event.key === "j")) {
         event.preventDefault();
         moveRowFocus(1);
         return;
       }
 
-      if (event.key === "ArrowUp" || event.key === "k") {
+      if (!event.shiftKey && (event.key === "ArrowUp" || event.key === "k")) {
         event.preventDefault();
         moveRowFocus(-1);
         return;
       }
 
-      if (event.key === "ArrowLeft" || event.key === "ArrowRight") {
-        const delta =
-          event.key === "ArrowLeft" ? -COLUMN_SCROLL_STEP : COLUMN_SCROLL_STEP;
+      if (
+        event.key === "ArrowLeft" ||
+        event.key === "ArrowRight" ||
+        event.key === "h" ||
+        event.key === "l"
+      ) {
+        const backward = event.key === "ArrowLeft" || event.key === "h";
+        const delta = backward ? -COLUMN_SCROLL_STEP : COLUMN_SCROLL_STEP;
 
         if (panColumnsBy(delta)) {
           event.preventDefault();
@@ -2614,7 +2627,8 @@ function NotesTable({
       event.key !== "ArrowDown" ||
       event.metaKey ||
       event.ctrlKey ||
-      event.altKey
+      event.altKey ||
+      event.shiftKey
     ) {
       return;
     }

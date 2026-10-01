@@ -71,6 +71,26 @@ function hasModifierPressed(event) {
   return event.metaKey || event.ctrlKey || event.altKey;
 }
 
+// The arrow keys with h/j/k/l aliased onto them. A held Shift spells the
+// letters uppercase ("H", "L", …), so the Image popover lowercases the key
+// before looking it up; the Note slideshow forbids modifiers outright and
+// matches only the plain lowercase aliases.
+const arrowDirections = {
+  ArrowLeft: "left",
+  ArrowRight: "right",
+  ArrowUp: "up",
+  ArrowDown: "down",
+  h: "left",
+  j: "down",
+  k: "up",
+  l: "right",
+};
+
+function directionOf(event) {
+  const key = event.key.length === 1 ? event.key.toLowerCase() : event.key;
+  return arrowDirections[key];
+}
+
 function pickImage(note, type, variant = "full") {
   const imagePath =
     note.images.find(
@@ -433,6 +453,36 @@ function ImagePopover({
 
   useEffect(() => {
     function onKeyDown(e) {
+      const direction = directionOf(e);
+      const modified = e.shiftKey || e.ctrlKey || e.metaKey;
+
+      // Ctrl, Cmd and Shift are interchangeable for the arrow intents. Handled
+      // before the modifier guard below so the presses are not swallowed.
+      if (direction && modified && !e.altKey) {
+        if (pannable) {
+          if (direction === "left") {
+            panBy(overflowX * 0.05, 0);
+          } else if (direction === "right") {
+            panBy(-overflowX * 0.05, 0);
+          } else if (direction === "up") {
+            panBy(0, overflowY * 0.05);
+          } else {
+            panBy(0, -overflowY * 0.05);
+          }
+          e.preventDefault();
+          return;
+        }
+
+        // Not pannable: horizontal presses fall back to paging, vertical ones
+        // are inert.
+        if (direction === "left") {
+          moveToPreviousImage();
+        } else if (direction === "right") {
+          moveToNextImage();
+        }
+        return;
+      }
+
       if (hasModifierPressed(e)) {
         return;
       }
@@ -459,36 +509,14 @@ function ImagePopover({
         return;
       }
 
-      if (pannable && e.shiftKey && e.key === "ArrowRight") {
-        e.preventDefault();
-        panBy(-overflowX * 0.05, 0);
-        return;
-      }
-
-      if (pannable && e.shiftKey && e.key === "ArrowLeft") {
-        e.preventDefault();
-        panBy(overflowX * 0.05, 0);
-        return;
-      }
-
-      if (pannable && e.shiftKey && e.key === "ArrowDown") {
-        e.preventDefault();
-        panBy(0, -overflowY * 0.05);
-        return;
-      }
-
-      if (pannable && e.shiftKey && e.key === "ArrowUp") {
-        e.preventDefault();
-        panBy(0, overflowY * 0.05);
-        return;
-      }
-
-      if (e.key === "ArrowRight") {
+      if (direction === "right") {
         moveToNextImage();
+        return;
       }
 
-      if (e.key === "ArrowLeft") {
+      if (direction === "left") {
         moveToPreviousImage();
+        return;
       }
 
       if (e.key === "Home" || e.key === "End") {
@@ -655,7 +683,9 @@ function Slideshow({
         return;
       }
 
-      if (hasModifierPressed(event)) {
+      // Shift joins Ctrl/Cmd/Alt as an inert modifier here: every modified
+      // arrow is left for the platform.
+      if (hasModifierPressed(event) || event.shiftKey) {
         return;
       }
 
@@ -664,12 +694,14 @@ function Slideshow({
         return;
       }
 
-      if (event.key === "ArrowRight") {
+      const direction = arrowDirections[event.key];
+
+      if (direction === "right") {
         moveSlideshow(1);
         return;
       }
 
-      if (event.key === "ArrowLeft") {
+      if (direction === "left") {
         moveSlideshow(-1);
         return;
       }
@@ -686,7 +718,7 @@ function Slideshow({
         return;
       }
 
-      if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      if (direction === "down" || direction === "up") {
         const screen = screenRef.current;
 
         if (
@@ -695,7 +727,7 @@ function Slideshow({
         ) {
           event.preventDefault();
           screen.scrollBy({
-            top: event.key === "ArrowDown" ? 80 : -80,
+            top: direction === "down" ? 80 : -80,
           });
         }
         return;

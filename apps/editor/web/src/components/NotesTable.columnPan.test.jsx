@@ -1,5 +1,5 @@
 import { MemoryRouter } from "react-router-dom";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
@@ -133,6 +133,60 @@ function armHorizontalOverflow(container) {
   scroller.scrollLeft = 0;
   return scroller;
 }
+
+describe("NotesTable column keyboard panning", () => {
+  test("Shift/Ctrl/Cmd + Left/Right jump to the first and last column", async () => {
+    const { container } = renderTable();
+    const user = userEvent.setup();
+    await screen.findByText("ZZTEST");
+    const scroller = armHorizontalOverflow(container);
+
+    scroller.scrollLeft = 400;
+
+    await user.keyboard("{Shift>}{ArrowRight}{/Shift}");
+    expect(scroller.scrollLeft).toBe(1600);
+
+    await user.keyboard("{Shift>}{ArrowLeft}{/Shift}");
+    expect(scroller.scrollLeft).toBe(0);
+
+    await user.keyboard("{Control>}{ArrowRight}{/Control}");
+    expect(scroller.scrollLeft).toBe(1600);
+
+    await user.keyboard("{Meta>}{ArrowLeft}{/Meta}");
+    expect(scroller.scrollLeft).toBe(0);
+  });
+
+  test("h/l pan one step and with a modifier jump to the edge", async () => {
+    const { container } = renderTable();
+    const user = userEvent.setup();
+    await screen.findByText("ZZTEST");
+    const scroller = armHorizontalOverflow(container);
+
+    await user.keyboard("l");
+    expect(scroller.scrollLeft).toBe(200);
+
+    await user.keyboard("h");
+    expect(scroller.scrollLeft).toBe(0);
+
+    await user.keyboard("{Control>}l{/Control}");
+    expect(scroller.scrollLeft).toBe(1600);
+
+    await user.keyboard("{Shift>}h{/Shift}");
+    expect(scroller.scrollLeft).toBe(0);
+  });
+
+  test("column keys are left for the platform when the columns fit the window", async () => {
+    renderTable();
+    await screen.findByText("ZZTEST");
+
+    // The mocked scroller reports no horizontal overflow, so the edge jump
+    // and the one-step pan both decline to consume the key.
+    expect(fireEvent.keyDown(window, { key: "ArrowRight", shiftKey: true })).toBe(
+      true,
+    );
+    expect(fireEvent.keyDown(window, { key: "l", ctrlKey: true })).toBe(true);
+  });
+});
 
 describe("NotesTable column panning", () => {
   test("dragging a row pans the table instead of selecting text", async () => {
