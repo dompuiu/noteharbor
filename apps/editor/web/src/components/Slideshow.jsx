@@ -522,8 +522,7 @@ function ImagePopover({
       }
 
       if (e.key === "Home" || e.key === "End") {
-        const moved =
-          e.key === "Home" ? onPreviewStart?.() : onPreviewEnd?.();
+        const moved = e.key === "Home" ? onPreviewStart?.() : onPreviewEnd?.();
 
         if (moved) {
           e.preventDefault();
@@ -747,10 +746,7 @@ function Slideshow({
       if (direction === "down" || direction === "up") {
         const screen = screenRef.current;
 
-        if (
-          screen &&
-          screen.scrollHeight > screen.clientHeight + 1
-        ) {
+        if (screen && screen.scrollHeight > screen.clientHeight + 1) {
           event.preventDefault();
           screen.scrollBy({
             top: direction === "down" ? 80 : -80,
@@ -889,7 +885,7 @@ function Slideshow({
             aria-label="Add note"
             className="icon-link icon-link--on-dark"
             onClick={() => onAdd?.(note.id)}
-            title="Add note (a)"
+            title="Add note before this one (a)"
             type="button"
           >
             Add note
