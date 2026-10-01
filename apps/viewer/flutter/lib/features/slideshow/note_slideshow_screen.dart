@@ -113,27 +113,28 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
     setState(() => _currentIndex = nextIndex);
   }
 
+  bool get _atFirstNote => widget.notes.isEmpty || _currentIndex <= 0;
+
+  bool get _atLastNote =>
+      widget.notes.isEmpty || _currentIndex >= widget.notes.length - 1;
+
   void _goPrevious() {
-    if (widget.notes.isEmpty || _currentIndex <= 0) return;
+    if (_atFirstNote) return;
     _animateTo(_currentIndex - 1);
   }
 
   void _goNext() {
-    if (widget.notes.isEmpty || _currentIndex >= widget.notes.length - 1) {
-      return;
-    }
+    if (_atLastNote) return;
     _animateTo(_currentIndex + 1);
   }
 
   void _goToFirst() {
-    if (widget.notes.isEmpty || _currentIndex <= 0) return;
+    if (_atFirstNote) return;
     _jumpTo(0);
   }
 
   void _goToLast() {
-    if (widget.notes.isEmpty || _currentIndex >= widget.notes.length - 1) {
-      return;
-    }
+    if (_atLastNote) return;
     _jumpTo(widget.notes.length - 1);
   }
 

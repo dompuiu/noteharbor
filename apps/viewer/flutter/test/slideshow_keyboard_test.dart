@@ -222,17 +222,39 @@ void main() {
     expect(find.text('N5 - KB-5'), findsOneWidget);
   });
 
+  testWidgets('end lands on the last note even when it has no images', (
+    WidgetTester tester,
+  ) async {
+    final notes = [
+      NoteRecord.fromJson(
+        slideNote(id: 1, denomination: 'N1', withImages: true),
+      ),
+      NoteRecord.fromJson(
+        slideNote(id: 2, denomination: 'N2', withImages: false),
+      ),
+    ];
+    await pumpSlideshow(tester, notes);
+    expect(find.text('1 / 2'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('N2 - KB-2'), findsOneWidget);
+  });
+
   testWidgets('end reaches the last note in one frame, not an animation', (
     WidgetTester tester,
   ) async {
-    await pumpSlideshow(tester, manyNotes(5));
-    expect(find.text('1 / 5'), findsOneWidget);
+    // A collection large enough that animating to the end would be obvious.
+    await pumpSlideshow(tester, manyNotes(40));
+    expect(find.text('1 / 40'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.end);
     // A single frame: an animated transition would still be in flight and the
     // index pill would not have moved to the endpoint yet.
     await tester.pump();
-    expect(find.text('5 / 5'), findsOneWidget);
+    expect(find.text('40 / 40'), findsOneWidget);
   });
 
   testWidgets('home on the first note changes nothing', (
@@ -289,15 +311,22 @@ void main() {
     expect(find.text('5 / 5'), findsOneWidget);
   });
 
-  testWidgets('ctrl+end does nothing', (WidgetTester tester) async {
-    await pumpSlideshow(tester, manyNotes(5));
-    expect(find.text('1 / 5'), findsOneWidget);
+  testWidgets('modified home and end do nothing', (WidgetTester tester) async {
+    await pumpSlideshow(tester, manyNotes(5), initialIndex: 2);
+    expect(find.text('3 / 5'), findsOneWidget);
 
-    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
-    await tester.sendKeyEvent(LogicalKeyboardKey.end);
-    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
-    await tester.pumpAndSettle();
+    for (final modifier in const [
+      LogicalKeyboardKey.controlLeft,
+      LogicalKeyboardKey.metaLeft,
+      LogicalKeyboardKey.altLeft,
+    ]) {
+      await tester.sendKeyDownEvent(modifier);
+      await tester.sendKeyEvent(LogicalKeyboardKey.home);
+      await tester.sendKeyEvent(LogicalKeyboardKey.end);
+      await tester.sendKeyUpEvent(modifier);
+      await tester.pumpAndSettle();
 
-    expect(find.text('1 / 5'), findsOneWidget);
+      expect(find.text('3 / 5'), findsOneWidget);
+    }
   });
 }
