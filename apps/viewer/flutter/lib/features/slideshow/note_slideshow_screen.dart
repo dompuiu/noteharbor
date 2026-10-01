@@ -218,14 +218,20 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   @override
   Widget build(BuildContext context) {
     return Shortcuts(
+      // h/j/k/l alias the arrows. The activators stay plain (no modifiers), so
+      // any modified arrow or letter is left for the platform and stays inert.
       shortcuts: const <ShortcutActivator, Intent>{
         SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
         SingleActivator(LogicalKeyboardKey.arrowLeft): _PreviousSlideIntent(),
+        SingleActivator(LogicalKeyboardKey.keyH): _PreviousSlideIntent(),
         SingleActivator(LogicalKeyboardKey.arrowRight): _NextSlideIntent(),
+        SingleActivator(LogicalKeyboardKey.keyL): _NextSlideIntent(),
         SingleActivator(LogicalKeyboardKey.home): _FirstSlideIntent(),
         SingleActivator(LogicalKeyboardKey.end): _LastSlideIntent(),
         SingleActivator(LogicalKeyboardKey.arrowUp): _ScrollUpIntent(),
+        SingleActivator(LogicalKeyboardKey.keyK): _ScrollUpIntent(),
         SingleActivator(LogicalKeyboardKey.arrowDown): _ScrollDownIntent(),
+        SingleActivator(LogicalKeyboardKey.keyJ): _ScrollDownIntent(),
         SingleActivator(LogicalKeyboardKey.enter): _OpenImageIntent(),
         SingleActivator(LogicalKeyboardKey.numpadEnter): _OpenImageIntent(),
         SingleActivator(LogicalKeyboardKey.space): _OpenImageIntent(),

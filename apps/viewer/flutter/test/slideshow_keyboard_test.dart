@@ -329,4 +329,113 @@ void main() {
       expect(find.text('3 / 5'), findsOneWidget);
     }
   });
+
+  testWidgets('h and l move to the previous and next note', (
+    WidgetTester tester,
+  ) async {
+    await pumpSlideshow(tester, manyNotes(3), initialIndex: 1);
+    expect(find.text('2 / 3'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.pumpAndSettle();
+    expect(find.text('3 / 3'), findsOneWidget);
+    expect(find.text('N3 - KB-3'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('N2 - KB-2'), findsOneWidget);
+  });
+
+  testWidgets('h and l clamp at the ends like the arrows', (
+    WidgetTester tester,
+  ) async {
+    await pumpSlideshow(tester, manyNotes(2));
+    expect(find.text('1 / 2'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
+    await tester.pumpAndSettle();
+    expect(find.text('1 / 2'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 2'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 2'), findsOneWidget);
+  });
+
+  testWidgets('j and k scroll the slide like the arrows', (
+    WidgetTester tester,
+  ) async {
+    final notes = [
+      NoteRecord.fromJson(slideNote(id: 1, denomination: 'A', withImages: true)),
+    ];
+    await pumpSlideshow(tester, notes);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
+    await tester.pumpAndSettle();
+    expect(maxSlideScroll(tester), greaterThan(0));
+
+    final scrolled = maxSlideScroll(tester);
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyK);
+    await tester.pumpAndSettle();
+    expect(maxSlideScroll(tester), lessThan(scrolled));
+  });
+
+  testWidgets('shift plus up and down does not scroll the slide', (
+    WidgetTester tester,
+  ) async {
+    final notes = [
+      NoteRecord.fromJson(slideNote(id: 1, denomination: 'A', withImages: true)),
+    ];
+    await pumpSlideshow(tester, notes);
+
+    for (final key in const [
+      LogicalKeyboardKey.arrowUp,
+      LogicalKeyboardKey.arrowDown,
+    ]) {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pumpAndSettle();
+
+      expect(maxSlideScroll(tester), 0);
+      expect(find.text('1 / 2'), findsNothing);
+    }
+  });
+
+  testWidgets('modified arrows and letters stay inert', (
+    WidgetTester tester,
+  ) async {
+    await pumpSlideshow(tester, manyNotes(3), initialIndex: 1);
+    expect(find.text('2 / 3'), findsOneWidget);
+
+    for (final modifier in const [
+      LogicalKeyboardKey.controlLeft,
+      LogicalKeyboardKey.metaLeft,
+      LogicalKeyboardKey.altLeft,
+      LogicalKeyboardKey.shiftLeft,
+    ]) {
+      for (final key in const [
+        LogicalKeyboardKey.arrowLeft,
+        LogicalKeyboardKey.arrowRight,
+        LogicalKeyboardKey.arrowUp,
+        LogicalKeyboardKey.arrowDown,
+        LogicalKeyboardKey.keyH,
+        LogicalKeyboardKey.keyL,
+        LogicalKeyboardKey.keyJ,
+        LogicalKeyboardKey.keyK,
+      ]) {
+        await tester.sendKeyDownEvent(modifier);
+        await tester.sendKeyEvent(key);
+        await tester.sendKeyUpEvent(modifier);
+        await tester.pumpAndSettle();
+
+        expect(find.text('2 / 3'), findsOneWidget);
+        expect(maxSlideScroll(tester), 0);
+      }
+    }
+  });
 }
