@@ -566,16 +566,19 @@ void main() {
     final maxExtent = controller.position.maxScrollExtent;
     expect(maxExtent, greaterThan(0));
 
-    for (var step = 0; step < 6; step++) {
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    // Each pan is an animation, so settle between presses: dispatching them
+    // back to back would interrupt every animation before it moves.
+    Future<void> press(LogicalKeyboardKey key, int times) async {
+      for (var step = 0; step < times; step++) {
+        await tester.sendKeyEvent(key);
+        await tester.pumpAndSettle();
+      }
     }
-    await tester.pumpAndSettle();
+
+    await press(LogicalKeyboardKey.arrowLeft, 6);
     expect(controller.offset, 0);
 
-    for (var step = 0; step < 12; step++) {
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
-    }
-    await tester.pumpAndSettle();
+    await press(LogicalKeyboardKey.arrowRight, 12);
     expect(controller.offset, maxExtent);
   });
 
