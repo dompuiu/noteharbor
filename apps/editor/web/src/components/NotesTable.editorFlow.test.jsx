@@ -305,6 +305,9 @@ describe("Adding from the Note slideshow", () => {
       expect(currentHash()).toContain("slideshow/99");
     });
     expect(currentHash()).not.toContain("overlay");
+    // The slideshow keeps the frozen list it was opened with: the context
+    // (collection + filter/sort snapshot) survives the save-and-return.
+    expect(currentHash()).toContain("collection=1");
     // The new Note landed immediately before BBBB (id 2).
     expect(reorderNotes).toHaveBeenCalledWith([1, 99, 2, 3], 1);
   });
@@ -456,6 +459,75 @@ describe("Leaving a changed Note editor", () => {
     await waitFor(() => {
       expect(currentHash()).toContain("edit/2");
     });
+  });
+
+  test("a keyboard arrow is gated the same way", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    const field = await openEditorOn(user, "AAAA");
+    await user.type(field, "!");
+
+    act(() => {
+      field.blur();
+    });
+    await user.keyboard("{ArrowRight}");
+
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Keep editing" }));
+    expect(currentHash()).toContain("edit/1");
+
+    await user.keyboard("{ArrowRight}");
+    const secondDialog = await screen.findByRole("dialog");
+    await user.click(
+      within(secondDialog).getByRole("button", { name: "Discard" }),
+    );
+    await waitFor(() => {
+      expect(currentHash()).toContain("edit/2");
+    });
+  });
+
+  test("an unchanged typed jump navigates with no prompt", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await openEditorOn(user, "BBBB");
+
+    await user.click(
+      screen.getByRole("textbox", { name: "Current note position" }),
+    );
+    const input = screen.getByRole("textbox", {
+      name: "Current note position",
+    });
+    await user.type(input, "1{Enter}");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("edit/1");
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  test("an unchanged Note closes with no prompt from Close or Escape", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await openEditorOn(user, "AAAA");
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Denomination")).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+
+    await openEditorOn(user, "AAAA");
+    const field = await screen.findByLabelText("Denomination");
+    act(() => {
+      field.blur();
+    });
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Denomination")).not.toBeInTheDocument();
+    });
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 
   test("a changed new Note names what will be lost", async () => {
@@ -633,6 +705,41 @@ describe("Two save actions", () => {
 
     expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save & close" })).toBeInTheDocument();
+  });
+
+  test("Save changes keeps the editor open over the slideshow on the edited Note", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await openSlideshowOn(user, "AAAA");
+    await user.click(screen.getByRole("button", { name: "Edit note" }));
+    const field = await screen.findByLabelText("Denomination");
+
+    await user.type(field, "!");
+    await user.click(screen.getByRole("button", { name: "Save changes" }));
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1");
+      expect(currentHash()).toContain("overlay=edit");
+    });
+    expect(await screen.findByLabelText("Denomination")).toHaveValue("AAAA!");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  test("Save & close returns to the slideshow on the edited Note", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await openSlideshowOn(user, "AAAA");
+    await user.click(screen.getByRole("button", { name: "Edit note" }));
+    const field = await screen.findByLabelText("Denomination");
+
+    await user.type(field, "!");
+    await user.click(screen.getByRole("button", { name: "Save & close" }));
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1");
+    });
+    expect(currentHash()).not.toContain("overlay");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });
 

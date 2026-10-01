@@ -1411,6 +1411,21 @@ function NotesTable({
     };
   }
 
+  // One shape for every slideshow URL: the context snapshot the list was
+  // opened with, plus the optional overlay/preview state. Callers vary only
+  // the Note and those flags, so the route is built in one place.
+  function slideshowRoute(noteId, overrides = {}) {
+    return {
+      kind: "slideshow",
+      noteId,
+      overlayCreate: false,
+      overlayEdit: false,
+      previewKind: null,
+      ...slideshowRouteContext(),
+      ...overrides,
+    };
+  }
+
   const totalColumnCount =
     visibleColumns.length +
     2 +
@@ -2590,13 +2605,7 @@ function NotesTable({
       return;
     }
 
-    navigateToTableRoute({
-      kind: "slideshow",
-      noteId,
-      overlayEdit: false,
-      previewKind: null,
-      ...slideshowRouteContext(),
-    });
+    navigateToTableRoute(slideshowRoute(noteId));
   }
 
   function closeSlideshow() {
@@ -2788,13 +2797,12 @@ function NotesTable({
     setActionError("");
 
     if (slideshowRouteActive) {
-      navigateToTableRoute({
-        kind: "slideshow",
-        noteId,
-        overlayEdit: true,
-        previewKind: currentRoute.previewKind,
-        ...slideshowRouteContext(),
-      });
+      navigateToTableRoute(
+        slideshowRoute(noteId, {
+          overlayEdit: true,
+          previewKind: currentRoute.previewKind,
+        }),
+      );
       return;
     }
 
@@ -2813,14 +2821,9 @@ function NotesTable({
 
   function openCreateNoteOverSlideshow(referenceNoteId) {
     setActionError("");
-    navigateToTableRoute({
-      kind: "slideshow",
-      noteId: referenceNoteId,
-      overlayCreate: true,
-      overlayEdit: false,
-      previewKind: null,
-      ...slideshowRouteContext(),
-    });
+    navigateToTableRoute(
+      slideshowRoute(referenceNoteId, { overlayCreate: true }),
+    );
   }
 
   // Guarded exits share one prompt: navigating to another Note and closing
@@ -2886,14 +2889,9 @@ function NotesTable({
 
     if (slideshowRouteActive) {
       navigateToTableRoute(
-        {
-          kind: "slideshow",
-          noteId: currentRoute.noteId,
-          overlayCreate: false,
-          overlayEdit: false,
+        slideshowRoute(currentRoute.noteId, {
           previewKind: currentRoute.previewKind,
-          ...slideshowRouteContext(),
-        },
+        }),
         { replace: true },
       );
       return;
@@ -2929,14 +2927,10 @@ function NotesTable({
 
     if (slideshowRouteActive) {
       navigateToTableRoute(
-        {
-          kind: "slideshow",
-          noteId: nextNoteId,
-          overlayCreate: false,
+        slideshowRoute(nextNoteId, {
           overlayEdit: true,
           previewKind: currentRoute.previewKind,
-          ...slideshowRouteContext(),
-        },
+        }),
         { replace: true },
       );
       return;
@@ -3021,14 +3015,10 @@ function NotesTable({
     if (intent === "stay" && !movedToCollection) {
       if (slideshowRouteActive) {
         navigateToTableRoute(
-          {
-            kind: "slideshow",
-            noteId: updatedNote.id,
-            overlayCreate: false,
+          slideshowRoute(updatedNote.id, {
             overlayEdit: true,
             previewKind: currentRoute.previewKind,
-            ...slideshowRouteContext(),
-          },
+          }),
           { replace: true },
         );
       } else {
@@ -3042,13 +3032,9 @@ function NotesTable({
 
     if (!movedToCollection && slideshowRouteActive) {
       navigateToTableRoute(
-        {
-          kind: "slideshow",
-          noteId: updatedNote.id,
-          overlayCreate: false,
-          overlayEdit: false,
+        slideshowRoute(updatedNote.id, {
           previewKind: currentRoute.previewKind,
-        },
+        }),
         { replace: true },
       );
       return;
@@ -3345,13 +3331,7 @@ function NotesTable({
       return;
     }
 
-    navigateToTableRoute({
-      kind: "slideshow",
-      noteId: nextNote.id,
-      overlayEdit: false,
-      previewKind: null,
-      ...slideshowRouteContext(),
-    });
+    navigateToTableRoute(slideshowRoute(nextNote.id));
   }
 
   function openPreview(noteId, previewKind) {
@@ -3359,26 +3339,11 @@ function NotesTable({
       return;
     }
 
-    navigateToTableRoute({
-      kind: "slideshow",
-      noteId,
-      overlayEdit: false,
-      previewKind,
-      ...slideshowRouteContext(),
-    });
+    navigateToTableRoute(slideshowRoute(noteId, { previewKind }));
   }
 
   function closePreview(noteId) {
-    navigateToTableRoute(
-      {
-        kind: "slideshow",
-        noteId,
-        overlayEdit: false,
-        previewKind: null,
-        ...slideshowRouteContext(),
-      },
-      { replace: true },
-    );
+    navigateToTableRoute(slideshowRoute(noteId), { replace: true });
   }
 
   function movePreview(offset) {
@@ -3429,13 +3394,11 @@ function NotesTable({
       remainingSteps -= 1;
     }
 
-    navigateToTableRoute({
-      kind: "slideshow",
-      noteId: slideshowNotes[nextNoteIndex].id,
-      overlayEdit: false,
-      previewKind: nextItems[nextItemIndex],
-      ...slideshowRouteContext(),
-    });
+    navigateToTableRoute(
+      slideshowRoute(slideshowNotes[nextNoteIndex].id, {
+        previewKind: nextItems[nextItemIndex],
+      }),
+    );
   }
 
   // The absolute sibling of movePreview: jump straight to the first or last
@@ -3463,13 +3426,9 @@ function NotesTable({
       return false;
     }
 
-    navigateToTableRoute({
-      kind: "slideshow",
-      noteId: nextNote.id,
-      overlayEdit: false,
-      previewKind: nextKind,
-      ...slideshowRouteContext(),
-    });
+    navigateToTableRoute(
+      slideshowRoute(nextNote.id, { previewKind: nextKind }),
+    );
 
     return true;
   }
