@@ -19,7 +19,7 @@ vi.mock("../lib/collections.jsx", () => ({
   useCollections: () => ({ collections: [] }),
 }));
 
-import { getNote, getNotes, getTags } from "../lib/api.js";
+import { getNote, getNotes, getTags, updateNote } from "../lib/api.js";
 
 function notePayload() {
   return {
@@ -58,9 +58,11 @@ async function renderLoadedForm(props = {}) {
 }
 
 beforeEach(() => {
+  vi.clearAllMocks();
   getNote.mockResolvedValue({ note: notePayload() });
   getNotes.mockResolvedValue({ notes: [] });
   getTags.mockResolvedValue({ tags: [] });
+  updateNote.mockResolvedValue({ note: notePayload() });
 });
 
 describe("Note editor keyboard navigation", () => {
@@ -236,5 +238,42 @@ describe("Note editor keyboard navigation", () => {
 
     expect(onNavigateNext).not.toHaveBeenCalled();
     expect(onNavigatePrevious).not.toHaveBeenCalled();
+  });
+
+  test("Ctrl+S saves and keeps editing", async () => {
+    const onSaveSuccess = vi.fn();
+    const input = await renderLoadedForm({ onSaveSuccess });
+    const user = userEvent.setup();
+
+    await user.type(input, "!");
+    await user.keyboard("{Control>}s{/Control}");
+
+    await waitFor(() => expect(onSaveSuccess).toHaveBeenCalledTimes(1));
+    expect(updateNote).toHaveBeenCalled();
+    expect(onSaveSuccess.mock.calls[0][3]).toBe("stay");
+  });
+
+  test("Ctrl+Shift+S saves and closes", async () => {
+    const onSaveSuccess = vi.fn();
+    const input = await renderLoadedForm({ onSaveSuccess });
+    const user = userEvent.setup();
+
+    await user.type(input, "!");
+    await user.keyboard("{Control>}{Shift>}s{/Shift}{/Control}");
+
+    await waitFor(() => expect(onSaveSuccess).toHaveBeenCalledTimes(1));
+    expect(onSaveSuccess.mock.calls[0][3]).toBe("return");
+  });
+
+  test("Cmd+S saves and keeps editing", async () => {
+    const onSaveSuccess = vi.fn();
+    const input = await renderLoadedForm({ onSaveSuccess });
+    const user = userEvent.setup();
+
+    await user.type(input, "!");
+    await user.keyboard("{Meta>}s{/Meta}");
+
+    await waitFor(() => expect(onSaveSuccess).toHaveBeenCalledTimes(1));
+    expect(onSaveSuccess.mock.calls[0][3]).toBe("stay");
   });
 });

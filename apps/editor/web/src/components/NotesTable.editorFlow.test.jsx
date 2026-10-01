@@ -356,18 +356,14 @@ describe("Adding from the Note slideshow", () => {
     });
   });
 
-  test("Add banknote stays in the editor over the slideshow", async () => {
+  test("Add stays in the editor over the slideshow", async () => {
     const user = userEvent.setup();
     renderTable();
     await openSlideshowOn(user, "BBBB");
 
     await user.click(screen.getByRole("button", { name: "Add note" }));
     await user.type(await screen.findByLabelText("Denomination"), "NEW");
-    await user.click(
-      screen
-        .getAllByRole("button", { name: "Add banknote" })
-        .find((button) => button.type === "submit"),
-    );
+    await user.click(screen.getByRole("button", { name: "Add" }));
 
     await waitFor(() => {
       expect(currentHash()).toContain("slideshow/99");
@@ -647,18 +643,14 @@ describe("The counter's editable number in the editor", () => {
 });
 
 describe("Two save actions", () => {
-  test("Add banknote stays in the editor on the new Note", async () => {
+  test("Add stays in the editor on the new Note", async () => {
     const user = userEvent.setup();
     renderTable();
     await screen.findByText("AAAA");
 
     await user.click(toolbarAddButton());
     await user.type(await screen.findByLabelText("Denomination"), "NEW");
-    await user.click(
-      screen
-        .getAllByRole("button", { name: "Add banknote" })
-        .find((button) => button.type === "submit"),
-    );
+    await user.click(screen.getByRole("button", { name: "Add" }));
 
     await waitFor(() => {
       expect(currentHash()).toContain("edit/99");
@@ -682,13 +674,13 @@ describe("Two save actions", () => {
     expect(currentHash()).not.toContain("edit");
   });
 
-  test("Save changes keeps the editor open on the edited Note", async () => {
+  test("Save keeps the editor open on the edited Note", async () => {
     const user = userEvent.setup();
     renderTable();
     const field = await openEditorOn(user, "AAAA");
 
     await user.type(field, "!");
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       expect(updateNote).toHaveBeenCalled();
@@ -703,11 +695,11 @@ describe("Two save actions", () => {
     renderTable();
     await openEditorOn(user, "AAAA");
 
-    expect(screen.getByRole("button", { name: "Save changes" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Save" })).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Save & close" })).toBeInTheDocument();
   });
 
-  test("Save changes keeps the editor open over the slideshow on the edited Note", async () => {
+  test("Save keeps the editor open over the slideshow on the edited Note", async () => {
     const user = userEvent.setup();
     renderTable();
     await openSlideshowOn(user, "AAAA");
@@ -715,7 +707,7 @@ describe("Two save actions", () => {
     const field = await screen.findByLabelText("Denomination");
 
     await user.type(field, "!");
-    await user.click(screen.getByRole("button", { name: "Save changes" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       expect(currentHash()).toContain("slideshow/1");
@@ -739,6 +731,36 @@ describe("Two save actions", () => {
       expect(currentHash()).toContain("slideshow/1");
     });
     expect(currentHash()).not.toContain("overlay");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  test("Ctrl+S keeps the editor open on the edited Note", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    const field = await openEditorOn(user, "AAAA");
+
+    await user.type(field, "!");
+    await user.keyboard("{Control>}s{/Control}");
+
+    await waitFor(() => {
+      expect(updateNote).toHaveBeenCalled();
+    });
+    expect(currentHash()).toContain("edit/1");
+    expect(await screen.findByLabelText("Denomination")).toHaveValue("AAAA!");
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+  });
+
+  test("Ctrl+Shift+S closes the editor on the edited Note", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    const field = await openEditorOn(user, "AAAA");
+
+    await user.type(field, "!");
+    await user.keyboard("{Control>}{Shift>}s{/Shift}{/Control}");
+
+    await waitFor(() => {
+      expect(currentHash()).not.toContain("edit");
+    });
     expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
   });
 });

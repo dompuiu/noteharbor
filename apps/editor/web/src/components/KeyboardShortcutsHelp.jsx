@@ -43,6 +43,14 @@ const shortcutGroups = [
         description: "Change notes while typing in a field",
       },
       {
+        keys: ["Ctrl/Cmd", "S"],
+        description: "Save the note and keep editing",
+      },
+      {
+        keys: ["Ctrl/Cmd", "Shift", "S"],
+        description: "Save the note and close the editor",
+      },
+      {
         keys: ["Esc"],
         description: "Move focus out of the field, then close the editor",
       },

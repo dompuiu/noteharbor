@@ -606,6 +606,33 @@ function NoteEditForm({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [canNavigateNext, canNavigatePrevious, onNavigateNext, onNavigatePrevious]);
 
+  // Ctrl/Cmd+S saves and stays; Ctrl/Cmd+Shift+S saves and closes. The
+  // editor owns the key, so the browser's own "save page" is suppressed.
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (!(event.ctrlKey || event.metaKey) || event.altKey) {
+        return;
+      }
+
+      if (event.key.toLowerCase() !== "s") {
+        return;
+      }
+
+      event.preventDefault();
+
+      if (event.repeat || loading || saving || positionInvalid) {
+        return;
+      }
+
+      saveIntentRef.current = event.shiftKey ? "return" : "stay";
+      formElementRef.current?.requestSubmit();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [loading, positionInvalid, saving]);
+
   const imagePreviews = useMemo(() => {
     const nextPreviews = {};
 
@@ -1349,20 +1376,6 @@ function NoteEditForm({
               position={currentNotePosition}
               total={totalNotesInView}
             />
-            {onCancel ? (
-              <button
-                className="button"
-                onClick={handleCancel}
-                title={cancelLabel}
-                type="button"
-              >
-                {cancelLabel}
-              </button>
-            ) : (
-              <Link className="button" title={cancelLabel} to="/">
-                {cancelLabel}
-              </Link>
-            )}
             <button
               aria-label="Paste note details"
               className="icon-link"
@@ -1447,6 +1460,20 @@ function NoteEditForm({
                 />
               </svg>
             </button>
+            {onCancel ? (
+              <button
+                className="button"
+                onClick={handleCancel}
+                title={cancelLabel}
+                type="button"
+              >
+                {cancelLabel}
+              </button>
+            ) : (
+              <Link className="button" title={cancelLabel} to="/">
+                {cancelLabel}
+              </Link>
+            )}
             <button
               className="button button-primary"
               form="edit-note-form"
@@ -1454,7 +1481,7 @@ function NoteEditForm({
                 saveIntentRef.current = "stay";
               }}
               disabled={saving || positionInvalid}
-              title={isCreateMode ? "Add banknote" : "Save changes"}
+              title={isCreateMode ? "Add" : "Save"}
               type="submit"
             >
               {saving
@@ -1462,8 +1489,8 @@ function NoteEditForm({
                   ? "Adding..."
                   : "Saving..."
                 : isCreateMode
-                  ? "Add banknote"
-                  : "Save changes"}
+                  ? "Add"
+                  : "Save"}
             </button>
             <button
               className="button"

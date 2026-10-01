@@ -837,6 +837,14 @@ describe("Arrow modifiers and h/j/k/l aliases", () => {
     // The note editor's previous/next rows show the h/l aliases.
     expect(keysOf("Go to the previous note")).toEqual(["←", "h"]);
     expect(keysOf("Go to the next note")).toEqual(["→", "l"]);
+
+    // The note editor advertises the save shortcuts.
+    expect(keysOf("Save the note and keep editing")).toEqual(["Ctrl/Cmd", "S"]);
+    expect(keysOf("Save the note and close the editor")).toEqual([
+      "Ctrl/Cmd",
+      "Shift",
+      "S",
+    ]);
   });
 
   test("the shortcut help notes Shift+Up/Down is inert without advertising it", async () => {

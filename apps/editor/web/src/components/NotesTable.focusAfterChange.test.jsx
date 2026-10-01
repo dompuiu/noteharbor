@@ -116,15 +116,11 @@ async function rowFor(denomination) {
 }
 
 function toolbarAddButton() {
-  // The toolbar button and the editor's submit button share the label, so
-  // this only works before the overlay is open.
   return screen.getByRole("button", { name: "Add banknote" });
 }
 
 function editorSubmitButton() {
-  return screen
-    .getAllByRole("button", { name: "Add banknote" })
-    .find((button) => button.type === "submit");
+  return screen.getByRole("button", { name: "Add" });
 }
 
 async function confirmDelete(user) {
