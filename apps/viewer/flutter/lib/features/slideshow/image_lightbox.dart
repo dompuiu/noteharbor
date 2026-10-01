@@ -118,29 +118,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
     final item = widget.items[_currentIndex];
 
     return Shortcuts(
-      shortcuts: const <ShortcutActivator, Intent>{
-        SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
-        SingleActivator(LogicalKeyboardKey.arrowLeft): _PreviousImageIntent(),
-        SingleActivator(LogicalKeyboardKey.arrowRight): _NextImageIntent(),
-        SingleActivator(LogicalKeyboardKey.home): _FirstImageIntent(),
-        SingleActivator(LogicalKeyboardKey.end): _LastImageIntent(),
-        SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true):
-            _PanImageIntent(1, 0),
-        SingleActivator(LogicalKeyboardKey.arrowRight, shift: true):
-            _PanImageIntent(-1, 0),
-        SingleActivator(LogicalKeyboardKey.arrowUp, shift: true):
-            _PanImageIntent(0, 1),
-        SingleActivator(LogicalKeyboardKey.arrowDown, shift: true):
-            _PanImageIntent(0, -1),
-        SingleActivator(LogicalKeyboardKey.equal, shift: true):
-            _ZoomInIntent(),
-        SingleActivator(LogicalKeyboardKey.add): _ZoomInIntent(),
-        SingleActivator(LogicalKeyboardKey.numpadAdd): _ZoomInIntent(),
-        SingleActivator(LogicalKeyboardKey.minus): _ZoomOutIntent(),
-        SingleActivator(LogicalKeyboardKey.minus, shift: true):
-            _ZoomOutIntent(),
-        SingleActivator(LogicalKeyboardKey.numpadSubtract): _ZoomOutIntent(),
-      },
+      shortcuts: _kImageLightboxShortcuts,
       child: Actions(
         actions: <Type, Action<Intent>>{
           DismissIntent: CallbackAction<DismissIntent>(
@@ -190,9 +168,18 @@ class _ImageLightboxState extends State<ImageLightbox> {
           ),
           _PanImageIntent: CallbackAction<_PanImageIntent>(
             onInvoke: (intent) {
-              // Only pans in zoom view; a no-op in fit view so shift + arrows
-              // never navigate between images.
-              _zoomController.pan(intent.dx, intent.dy);
+              final direction = intent.direction;
+              // Pans in Zoom view. In fit view there is nothing to pan, so the
+              // horizontal modified keys fall back to paging the sequence and
+              // the vertical ones are a no-op.
+              if (_zoomController.pan(direction.dx, direction.dy)) {
+                return null;
+              }
+              if (direction == _PanDirection.left) {
+                _goPrevious();
+              } else if (direction == _PanDirection.right) {
+                _goNext();
+              }
               return null;
             },
           ),
@@ -387,11 +374,85 @@ class _ZoomOutIntent extends Intent {
 }
 
 class _PanImageIntent extends Intent {
-  const _PanImageIntent(this.dx, this.dy);
+  const _PanImageIntent(this.direction);
 
-  /// Offset steps along each axis, as a multiple of 5% of the overflow.
+  final _PanDirection direction;
+}
+
+/// A pan direction. The dx/dy steps are multiples of 5% of the overflow; the
+/// horizontal directions also page the sequence when the image is not pannable.
+enum _PanDirection {
+  left(dx: 1.0, dy: 0.0),
+  right(dx: -1.0, dy: 0.0),
+  up(dx: 0.0, dy: 1.0),
+  down(dx: 0.0, dy: -1.0);
+
+  const _PanDirection({required this.dx, required this.dy});
+
   final double dx;
   final double dy;
+}
+
+/// The arrow keys with h/j/k/l aliased onto them.
+final Map<LogicalKeyboardKey, _PanDirection> _kPanDirections = {
+  LogicalKeyboardKey.arrowLeft: _PanDirection.left,
+  LogicalKeyboardKey.keyH: _PanDirection.left,
+  LogicalKeyboardKey.arrowRight: _PanDirection.right,
+  LogicalKeyboardKey.keyL: _PanDirection.right,
+  LogicalKeyboardKey.arrowUp: _PanDirection.up,
+  LogicalKeyboardKey.keyK: _PanDirection.up,
+  LogicalKeyboardKey.arrowDown: _PanDirection.down,
+  LogicalKeyboardKey.keyJ: _PanDirection.down,
+};
+
+/// Ctrl, Cmd and Shift are interchangeable for the pans, so each direction key
+/// gets one activator per modifier. A [SingleActivator] requires every modifier
+/// it does not name to be up, so the three cannot share a single activator.
+List<SingleActivator> _panActivatorsFor(LogicalKeyboardKey key) => <SingleActivator>[
+      SingleActivator(key, shift: true),
+      SingleActivator(key, control: true),
+      SingleActivator(key, meta: true),
+    ];
+
+/// The Image popover's keyboard map. Plain Left/Right and h/l page the
+/// sequence; the modified directions pan in Zoom view and, when the image is
+/// not pannable, fall back to paging on the horizontal axis. Alt is named on
+/// no activator, so Alt + arrow stays inert.
+final Map<ShortcutActivator, Intent> _kImageLightboxShortcuts =
+    _buildImageLightboxShortcuts();
+
+Map<ShortcutActivator, Intent> _buildImageLightboxShortcuts() {
+  final shortcuts = <ShortcutActivator, Intent>{
+    const SingleActivator(LogicalKeyboardKey.escape): const DismissIntent(),
+    const SingleActivator(LogicalKeyboardKey.arrowLeft):
+        const _PreviousImageIntent(),
+    const SingleActivator(LogicalKeyboardKey.keyH):
+        const _PreviousImageIntent(),
+    const SingleActivator(LogicalKeyboardKey.arrowRight):
+        const _NextImageIntent(),
+    const SingleActivator(LogicalKeyboardKey.keyL):
+        const _NextImageIntent(),
+    const SingleActivator(LogicalKeyboardKey.home): const _FirstImageIntent(),
+    const SingleActivator(LogicalKeyboardKey.end): const _LastImageIntent(),
+    const SingleActivator(LogicalKeyboardKey.equal, shift: true):
+        const _ZoomInIntent(),
+    const SingleActivator(LogicalKeyboardKey.add): const _ZoomInIntent(),
+    const SingleActivator(LogicalKeyboardKey.numpadAdd):
+        const _ZoomInIntent(),
+    const SingleActivator(LogicalKeyboardKey.minus): const _ZoomOutIntent(),
+    const SingleActivator(LogicalKeyboardKey.minus, shift: true):
+        const _ZoomOutIntent(),
+    const SingleActivator(LogicalKeyboardKey.numpadSubtract):
+        const _ZoomOutIntent(),
+  };
+
+  for (final direction in _kPanDirections.entries) {
+    for (final activator in _panActivatorsFor(direction.key)) {
+      shortcuts[activator] = _PanImageIntent(direction.value);
+    }
+  }
+
+  return shortcuts;
 }
 
 /// Routes zoom/pan intents from the lightbox (which owns keyboard focus) to the
@@ -413,7 +474,9 @@ class _ImageZoomController {
 
   void zoomOut() => _active?.zoomOut();
 
-  void pan(double dx, double dy) => _active?.pan(dx, dy);
+  /// Pans the active page. Returns whether the image is pannable; when it is
+  /// not, the caller falls back to paging on the horizontal axis.
+  bool pan(double dx, double dy) => _active?.pan(dx, dy) ?? false;
 
   /// Resets the zoom if zoomed. Returns whether a reset was performed.
   bool resetZoom() => _active?.resetZoom() ?? false;
@@ -501,11 +564,12 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
 
   void zoomOut() => _changeZoom(-1);
 
-  /// Pans by [dx]/[dy] steps of 5% of the overflow. A no-op when the image is
-  /// not pannable (i.e. in fit view).
-  void pan(double dx, double dy) {
+  /// Pans by [dx]/[dy] steps of 5% of the overflow. Returns whether the image
+  /// is pannable; when it is not (i.e. in fit view) the caller falls back to
+  /// paging.
+  bool pan(double dx, double dy) {
     if (!_isPannable || _viewport.isEmpty) {
-      return;
+      return false;
     }
 
     final contentSize = _fittedContentSize(_viewport);
@@ -517,18 +581,17 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
       dx * overflowX * _kPanOverflowFraction,
       dy * overflowY * _kPanOverflowFraction,
     );
-    if (delta == Offset.zero) {
-      return;
+    if (delta != Offset.zero) {
+      setState(() {
+        _offset = _clampOffset(
+          offset: _offset + delta,
+          viewport: _viewport,
+          contentSize: contentSize,
+          scale: _scale,
+        );
+      });
     }
-
-    setState(() {
-      _offset = _clampOffset(
-        offset: _offset + delta,
-        viewport: _viewport,
-        contentSize: contentSize,
-        scale: _scale,
-      );
-    });
+    return true;
   }
 
   /// Resets the zoom if zoomed. Returns whether a reset was performed.

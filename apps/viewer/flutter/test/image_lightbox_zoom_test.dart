@@ -184,15 +184,148 @@ void main() {
     expect(after.dx, lessThan(before.dx));
   });
 
-  testWidgets('shift + arrow keys pan a zoomed image', (tester) async {
+  testWidgets('every interchangeable modifier pans with any arrow or alias', (
+    tester,
+  ) async {
+    // (direction key, whether the pan is horizontal, whether the image's
+    // translation grows along that axis)
+    const directions = <(LogicalKeyboardKey, bool, bool)>[
+      (LogicalKeyboardKey.arrowLeft, true, true),
+      (LogicalKeyboardKey.keyH, true, true),
+      (LogicalKeyboardKey.arrowRight, true, false),
+      (LogicalKeyboardKey.keyL, true, false),
+      (LogicalKeyboardKey.arrowUp, false, true),
+      (LogicalKeyboardKey.keyK, false, true),
+      (LogicalKeyboardKey.arrowDown, false, false),
+      (LogicalKeyboardKey.keyJ, false, false),
+    ];
+    const modifiers = <LogicalKeyboardKey>[
+      LogicalKeyboardKey.shiftLeft,
+      LogicalKeyboardKey.controlLeft,
+      LogicalKeyboardKey.metaLeft,
+    ];
+
     await pumpPopover(tester);
     await _zoomInWithKeyboard(tester);
 
-    final before = _imageTranslation(tester);
-    await _panWithKeyboard(tester, LogicalKeyboardKey.arrowRight);
-    final after = _imageTranslation(tester);
+    for (final modifier in modifiers) {
+      for (final (key, horizontal, grows) in directions) {
+        final before = _imageTranslation(tester);
+        await _pressWithModifier(tester, modifier, key);
+        final after = _imageTranslation(tester);
+        final delta = horizontal ? after.dx - before.dx : after.dy - before.dy;
 
-    expect(after.dx, lessThan(before.dx));
+        expect(
+          grows ? delta > 0 : delta < 0,
+          isTrue,
+          reason: '$modifier + $key',
+        );
+      }
+    }
+  });
+
+  testWidgets('h/l page between images', (tester) async {
+    await pumpMultiItemPopover(tester);
+    expect(find.text('1 / 2'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 2'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
+    await tester.pumpAndSettle();
+    expect(find.text('1 / 2'), findsOneWidget);
+  });
+
+  testWidgets('modified horizontal keys page in fit view, vertical stay put', (
+    tester,
+  ) async {
+    await pumpMultiItemPopover(tester);
+    expect(find.text('1 / 2'), findsOneWidget);
+
+    // Vertical modified presses pan nothing and page nothing.
+    for (final modifier in const [
+      LogicalKeyboardKey.shiftLeft,
+      LogicalKeyboardKey.controlLeft,
+      LogicalKeyboardKey.metaLeft,
+    ]) {
+      for (final key in const [
+        LogicalKeyboardKey.arrowUp,
+        LogicalKeyboardKey.arrowDown,
+        LogicalKeyboardKey.keyK,
+        LogicalKeyboardKey.keyJ,
+      ]) {
+        await _pressWithModifier(tester, modifier, key);
+        expect(find.text('1 / 2'), findsOneWidget, reason: '$modifier + $key');
+      }
+    }
+
+    // Every modifier carries both horizontal arrows and their aliases to the
+    // neighbouring image, forwards and back.
+    for (final modifier in const [
+      LogicalKeyboardKey.shiftLeft,
+      LogicalKeyboardKey.controlLeft,
+      LogicalKeyboardKey.metaLeft,
+    ]) {
+      for (final (next, previous) in const [
+        (LogicalKeyboardKey.arrowRight, LogicalKeyboardKey.arrowLeft),
+        (LogicalKeyboardKey.keyL, LogicalKeyboardKey.keyH),
+      ]) {
+        await _pressWithModifier(tester, modifier, next);
+        expect(find.text('2 / 2'), findsOneWidget, reason: '$modifier + $next');
+
+        await _pressWithModifier(tester, modifier, previous);
+        expect(
+          find.text('1 / 2'),
+          findsOneWidget,
+          reason: '$modifier + $previous',
+        );
+      }
+    }
+  });
+
+  testWidgets('plain Left and Right page in both directions', (tester) async {
+    await pumpManyItemPopover(tester, 3, initialIndex: 1);
+    expect(find.text('2 / 3'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pumpAndSettle();
+    expect(find.text('1 / 3'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 3'), findsOneWidget);
+  });
+
+  testWidgets('alt + any arrow or h/j/k/l stays inert', (tester) async {
+    const altKeys = [
+      LogicalKeyboardKey.arrowLeft,
+      LogicalKeyboardKey.arrowRight,
+      LogicalKeyboardKey.arrowUp,
+      LogicalKeyboardKey.arrowDown,
+      LogicalKeyboardKey.keyH,
+      LogicalKeyboardKey.keyJ,
+      LogicalKeyboardKey.keyK,
+      LogicalKeyboardKey.keyL,
+    ];
+
+    await pumpMultiItemPopover(tester);
+    expect(find.text('1 / 2'), findsOneWidget);
+
+    // In fit view even the keys that would page stay inert.
+    for (final key in altKeys) {
+      await _pressWithModifier(tester, LogicalKeyboardKey.altLeft, key);
+      expect(find.text('1 / 2'), findsOneWidget, reason: 'fit, alt + $key');
+    }
+
+    await _zoomInWithKeyboard(tester);
+    final before = _imageTranslation(tester);
+
+    for (final key in altKeys) {
+      await _pressWithModifier(tester, LogicalKeyboardKey.altLeft, key);
+      expect(_imageTranslation(tester), before, reason: 'zoom, alt + $key');
+      expect(find.text('1 / 2'), findsOneWidget, reason: 'zoom, alt + $key');
+    }
   });
 
   testWidgets('escape resets zoom before closing the popover', (tester) async {
@@ -208,19 +341,6 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     expect(find.text('open'), findsOneWidget);
-  });
-
-  testWidgets('shift + arrow keys do not navigate while in fit view', (
-    tester,
-  ) async {
-    await pumpMultiItemPopover(tester);
-    expect(find.text('1 / 2'), findsOneWidget);
-
-    await _panWithKeyboard(tester, LogicalKeyboardKey.arrowRight);
-    expect(find.text('1 / 2'), findsOneWidget);
-
-    await _panWithKeyboard(tester, LogicalKeyboardKey.arrowLeft);
-    expect(find.text('1 / 2'), findsOneWidget);
   });
 
   testWidgets('arrow left on the first image stays on the first image', (
@@ -376,13 +496,14 @@ Future<void> _zoomInWithKeyboard(WidgetTester tester) async {
   await tester.pump();
 }
 
-Future<void> _panWithKeyboard(
+Future<void> _pressWithModifier(
   WidgetTester tester,
+  LogicalKeyboardKey modifier,
   LogicalKeyboardKey key,
 ) async {
-  await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+  await tester.sendKeyDownEvent(modifier);
   await tester.sendKeyEvent(key);
-  await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+  await tester.sendKeyUpEvent(modifier);
   await tester.pumpAndSettle();
 }
 
