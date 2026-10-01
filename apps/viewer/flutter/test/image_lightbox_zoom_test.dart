@@ -13,7 +13,7 @@ import 'package:note_harbor_viewer/models/note_record.dart';
 void main() {
   const imagePath = 'noteharbor-zoom-test.png';
 
-  NoteRecord zoomNote({int id = 1}) {
+  NoteRecord zoomNote({int id = 1, bool withImage = true}) {
     return NoteRecord.fromJson(<String, dynamic>{
       'id': id,
       'displayOrder': id,
@@ -29,13 +29,15 @@ void main() {
       'scrapeStatus': 'done',
       'scrapeError': '',
       'tags': <dynamic>[],
-      'images': <dynamic>[
-        <String, dynamic>{
-          'type': 'front',
-          'variant': 'full',
-          'filePath': imagePath,
-        },
-      ],
+      'images': withImage
+          ? <dynamic>[
+              <String, dynamic>{
+                'type': 'front',
+                'variant': 'full',
+                'filePath': imagePath,
+              },
+            ]
+          : <dynamic>[],
       'scrapedData': null,
     });
   }
@@ -86,6 +88,54 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(home: _LightboxLauncher(items: items)),
+    );
+    await tester.tap(find.text('open'));
+    await tester.pumpAndSettle();
+  }
+
+  /// Opens the popover on a sequence of [count] imaged pages.
+  Future<void> pumpManyItemPopover(
+    WidgetTester tester,
+    int count, {
+    int initialIndex = 0,
+  }) async {
+    final notes = <NoteRecord>[
+      for (var id = 1; id <= count; id++) zoomNote(id: id),
+    ];
+    await pumpSequence(
+      tester,
+      frontImageItems(notes),
+      initialIndex: initialIndex,
+    );
+  }
+
+  /// Opens the popover on a two-page sequence whose final page renders no
+  /// image, mirroring a Note whose Note image is missing.
+  Future<void> pumpPopoverEndingWithoutImage(WidgetTester tester) async {
+    final notes = [zoomNote(id: 1), zoomNote(id: 2, withImage: false)];
+    await pumpSequence(tester, frontImageItems(notes));
+  }
+
+  List<ImageSequenceItem> frontImageItems(List<NoteRecord> notes) => [
+        for (final note in notes)
+          ImageSequenceItem(note: note, image: note.fullFor('front')),
+      ];
+
+  Future<void> pumpSequence(
+    WidgetTester tester,
+    List<ImageSequenceItem> items, {
+    int initialIndex = 0,
+  }) async {
+    tester.view.physicalSize = const Size(800, 600);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await seedLargeImage(tester);
+
+    await tester.pumpWidget(
+      MaterialApp(
+        home: _LightboxLauncher(items: items, initialIndex: initialIndex),
+      ),
     );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
@@ -197,6 +247,126 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('2 / 2'), findsOneWidget);
   });
+
+  testWidgets('home jumps to the first page', (tester) async {
+    await pumpManyItemPopover(tester, 5, initialIndex: 4);
+    expect(find.text('5 / 5'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.home);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 5'), findsOneWidget);
+    expect(find.text('Test - KB-1'), findsOneWidget);
+  });
+
+  testWidgets('end jumps to the last page', (tester) async {
+    await pumpManyItemPopover(tester, 5);
+    expect(find.text('1 / 5'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.pumpAndSettle();
+
+    expect(find.text('5 / 5'), findsOneWidget);
+    expect(find.text('Test - KB-5'), findsOneWidget);
+  });
+
+  testWidgets('end lands on the last page even when it renders no image', (
+    tester,
+  ) async {
+    await pumpPopoverEndingWithoutImage(tester);
+    expect(find.text('1 / 2'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.pumpAndSettle();
+
+    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('Test - KB-2'), findsOneWidget);
+    expect(find.text('No image'), findsOneWidget);
+  });
+
+  testWidgets('end reaches the last page in one frame, not an animation', (
+    tester,
+  ) async {
+    // A collection large enough that animating to the end would be obvious.
+    await pumpManyItemPopover(tester, 40);
+    expect(find.text('1 / 40'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    // A single frame: an animated transition would still be in flight and the
+    // index pill would not have moved to the endpoint yet.
+    await tester.pump();
+    expect(find.text('40 / 40'), findsOneWidget);
+  });
+
+  testWidgets('home and end still move between pages while zoomed', (
+    tester,
+  ) async {
+    await pumpManyItemPopover(tester, 3);
+    await _zoomInWithKeyboard(tester);
+    expect(_maxZoom(tester), greaterThan(1.0));
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.pumpAndSettle();
+    expect(find.text('3 / 3'), findsOneWidget);
+    expect(find.text('Test - KB-3'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.home);
+    await tester.pumpAndSettle();
+    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('Test - KB-1'), findsOneWidget);
+  });
+
+  testWidgets('home on the first page changes nothing', (tester) async {
+    await pumpManyItemPopover(tester, 5);
+    expect(find.text('1 / 5'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.home);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 5'), findsOneWidget);
+  });
+
+  testWidgets('end on the last page changes nothing', (tester) async {
+    await pumpManyItemPopover(tester, 5, initialIndex: 4);
+    expect(find.text('5 / 5'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.pumpAndSettle();
+
+    expect(find.text('5 / 5'), findsOneWidget);
+  });
+
+  testWidgets('home and end change nothing with a single page', (
+    tester,
+  ) async {
+    await pumpPopover(tester);
+    expect(find.text('1 / 1'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.home);
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.pumpAndSettle();
+
+    expect(find.text('1 / 1'), findsOneWidget);
+  });
+
+  testWidgets('modified home and end do nothing', (tester) async {
+    await pumpManyItemPopover(tester, 5, initialIndex: 2);
+    expect(find.text('3 / 5'), findsOneWidget);
+
+    for (final modifier in const [
+      LogicalKeyboardKey.controlLeft,
+      LogicalKeyboardKey.metaLeft,
+      LogicalKeyboardKey.altLeft,
+    ]) {
+      await tester.sendKeyDownEvent(modifier);
+      await tester.sendKeyEvent(LogicalKeyboardKey.home);
+      await tester.sendKeyEvent(LogicalKeyboardKey.end);
+      await tester.sendKeyUpEvent(modifier);
+      await tester.pumpAndSettle();
+
+      expect(find.text('3 / 5'), findsOneWidget);
+    }
+  });
 }
 
 Future<void> _zoomInWithKeyboard(WidgetTester tester) async {
@@ -253,9 +423,10 @@ Offset _imageTranslation(WidgetTester tester) {
 }
 
 class _LightboxLauncher extends StatelessWidget {
-  const _LightboxLauncher({required this.items});
+  const _LightboxLauncher({required this.items, this.initialIndex = 0});
 
   final List<ImageSequenceItem> items;
+  final int initialIndex;
 
   @override
   Widget build(BuildContext context) {
@@ -264,7 +435,8 @@ class _LightboxLauncher extends StatelessWidget {
         child: ElevatedButton(
           onPressed: () => Navigator.of(context).push(
             MaterialPageRoute<int>(
-              builder: (_) => ImageLightbox(items: items, initialIndex: 0),
+              builder: (_) =>
+                  ImageLightbox(items: items, initialIndex: initialIndex),
             ),
           ),
           child: const Text('open'),

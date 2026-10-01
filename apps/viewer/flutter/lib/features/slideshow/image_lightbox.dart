@@ -64,7 +64,8 @@ class _ImageLightboxState extends State<ImageLightbox> {
     super.dispose();
   }
 
-  void _jump(int nextIndex) {
+  /// Animates to [nextIndex], used by the arrow keys.
+  void _animateTo(int nextIndex) {
     _controller.animateToPage(
       nextIndex,
       duration: const Duration(milliseconds: 220),
@@ -72,20 +73,36 @@ class _ImageLightboxState extends State<ImageLightbox> {
     );
   }
 
-  void _goPrevious() {
-    if (widget.items.isEmpty || _currentIndex <= 0) {
-      return;
-    }
+  /// Jumps straight to [nextIndex] with no page transition, used by Home and
+  /// End so a large Collection reaches its endpoint immediately.
+  void _jumpTo(int nextIndex) {
+    _controller.jumpToPage(nextIndex);
+    setState(() => _currentIndex = nextIndex);
+  }
 
-    _jump(_currentIndex - 1);
+  bool get _atFirstPage => widget.items.isEmpty || _currentIndex <= 0;
+
+  bool get _atLastPage =>
+      widget.items.isEmpty || _currentIndex >= widget.items.length - 1;
+
+  void _goPrevious() {
+    if (_atFirstPage) return;
+    _animateTo(_currentIndex - 1);
   }
 
   void _goNext() {
-    if (widget.items.isEmpty || _currentIndex >= widget.items.length - 1) {
-      return;
-    }
+    if (_atLastPage) return;
+    _animateTo(_currentIndex + 1);
+  }
 
-    _jump(_currentIndex + 1);
+  void _goToFirst() {
+    if (_atFirstPage) return;
+    _jumpTo(0);
+  }
+
+  void _goToLast() {
+    if (_atLastPage) return;
+    _jumpTo(widget.items.length - 1);
   }
 
   void _setPageScrollEnabled(bool enabled) {
@@ -105,6 +122,8 @@ class _ImageLightboxState extends State<ImageLightbox> {
         SingleActivator(LogicalKeyboardKey.escape): DismissIntent(),
         SingleActivator(LogicalKeyboardKey.arrowLeft): _PreviousImageIntent(),
         SingleActivator(LogicalKeyboardKey.arrowRight): _NextImageIntent(),
+        SingleActivator(LogicalKeyboardKey.home): _FirstImageIntent(),
+        SingleActivator(LogicalKeyboardKey.end): _LastImageIntent(),
         SingleActivator(LogicalKeyboardKey.arrowLeft, shift: true):
             _PanImageIntent(1, 0),
         SingleActivator(LogicalKeyboardKey.arrowRight, shift: true):
@@ -142,6 +161,18 @@ class _ImageLightboxState extends State<ImageLightbox> {
           _NextImageIntent: CallbackAction<_NextImageIntent>(
             onInvoke: (intent) {
               _goNext();
+              return null;
+            },
+          ),
+          _FirstImageIntent: CallbackAction<_FirstImageIntent>(
+            onInvoke: (intent) {
+              _goToFirst();
+              return null;
+            },
+          ),
+          _LastImageIntent: CallbackAction<_LastImageIntent>(
+            onInvoke: (intent) {
+              _goToLast();
               return null;
             },
           ),
@@ -337,6 +368,14 @@ class _PreviousImageIntent extends Intent {
 
 class _NextImageIntent extends Intent {
   const _NextImageIntent();
+}
+
+class _FirstImageIntent extends Intent {
+  const _FirstImageIntent();
+}
+
+class _LastImageIntent extends Intent {
+  const _LastImageIntent();
 }
 
 class _ZoomInIntent extends Intent {
