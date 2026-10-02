@@ -52,8 +52,9 @@ class _ImageLightboxState extends State<ImageLightbox> {
 
   /// The image currently on screen, derived from the virtual page so paging
   /// past either end wraps without a seam.
-  int get _currentIndex =>
-      widget.items.isEmpty ? 0 : _virtualIndex % widget.items.length;
+  int get _currentIndex => widget.items.isEmpty
+      ? 0
+      : (_virtualIndex - _kVirtualPageOrigin) % widget.items.length;
 
   void _closeWithCurrentNote() {
     if (!mounted) {
@@ -321,8 +322,9 @@ class _ImageLightboxState extends State<ImageLightbox> {
                               _pageScrollEnabled = true;
                             }),
                             itemBuilder: (context, index) {
-                              final imageItem =
-                                  widget.items[index % widget.items.length];
+                              final imageItem = widget.items[
+                                  (index - _kVirtualPageOrigin) %
+                                      widget.items.length];
                               return Padding(
                                 padding:
                                     const EdgeInsets.fromLTRB(12, 4, 12, 0),

@@ -77,12 +77,14 @@ void main() {
   }
 
   Future<void> mouseDrag(WidgetTester tester, Offset delta) async {
-    final gesture = await tester.startGesture(
-      tester.getCenter(find.byType(PageView)),
+    // [tester.drag] splits the movement into a slop-crossing move plus the
+    // remainder. A single move would be swallowed as the drag's start
+    // ([DragStartBehavior.start]) and never page.
+    await tester.drag(
+      find.byType(PageView),
+      delta,
       kind: PointerDeviceKind.mouse,
     );
-    await gesture.moveBy(delta);
-    await gesture.up();
     await tester.pumpAndSettle();
   }
 

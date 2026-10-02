@@ -69,8 +69,9 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
 
   /// The note currently on screen, derived from the virtual page so paging past
   /// either end wraps without a seam.
-  int get _currentIndex =>
-      widget.notes.isEmpty ? 0 : _virtualIndex % widget.notes.length;
+  int get _currentIndex => widget.notes.isEmpty
+      ? 0
+      : (_virtualIndex - _kVirtualPageOrigin) % widget.notes.length;
 
   void _close({String? tagName}) {
     if (!mounted) {
@@ -413,8 +414,9 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                                 itemBuilder: (context, index) {
                                   return _NoteSlide(
                                     index: index,
-                                    note: widget
-                                        .notes[index % widget.notes.length],
+                                    note: widget.notes[
+                                        (index - _kVirtualPageOrigin) %
+                                            widget.notes.length],
                                     onTapImage: _openImageViewer,
                                     onTagTap: (tagName) =>
                                         _close(tagName: tagName),

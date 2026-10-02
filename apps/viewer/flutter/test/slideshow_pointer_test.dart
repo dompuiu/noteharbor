@@ -79,13 +79,15 @@ void main() {
   }
 
   // Drags a mouse across the front image, the largest drag surface on a slide.
+  // [tester.drag] splits the movement into a slop-crossing move plus the
+  // remainder. A single move would be swallowed as the drag's start
+  // ([DragStartBehavior.start]) and never page.
   Future<void> mouseDrag(WidgetTester tester, Offset delta) async {
-    final gesture = await tester.startGesture(
-      tester.getCenter(find.byType(Image).first),
+    await tester.drag(
+      find.byType(Image).first,
+      delta,
       kind: PointerDeviceKind.mouse,
     );
-    await gesture.moveBy(delta);
-    await gesture.up();
     await tester.pumpAndSettle();
   }
 
