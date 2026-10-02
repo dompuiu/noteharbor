@@ -1,7 +1,6 @@
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
@@ -10,6 +9,7 @@ import '../../app/viewer_palette.dart';
 import '../../data/dataset_controller.dart';
 import '../../models/note_record.dart';
 import '../../models/tag.dart';
+import '../../widgets/mouse_drag_scroll_behavior.dart';
 import '../../widgets/note_image_provider.dart';
 import '../import/import_dataset_screen.dart';
 import '../slideshow/note_slideshow_screen.dart';
@@ -71,19 +71,6 @@ const List<String> _kSortableHeaderKeys = [
   'serial',
   'tags',
 ];
-
-/// Lets a plain mouse drag pan a horizontal scroller. Flutter excludes
-/// [PointerDeviceKind.mouse] from drag gestures by default, which is why the
-/// table could previously only be panned with a trackpad or Shift+wheel.
-class _ColumnDragScrollBehavior extends MaterialScrollBehavior {
-  const _ColumnDragScrollBehavior();
-
-  @override
-  Set<PointerDeviceKind> get dragDevices => {
-        ...super.dragDevices,
-        PointerDeviceKind.mouse,
-      };
-}
 
 /// The cursor shown while the columns are being panned. The Windows embedder
 /// has no open/closed-hand cursor: `grab`/`grabbing` are absent from its cursor
@@ -200,7 +187,8 @@ bool _matchesDenominationFilterValue(String noteValue, String filterValue) {
     return false;
   }
 
-  final textOnlyFilter = filterValue.replaceAll(RegExp(r'\d(?:[\d,. ]*\d)?'), ' ');
+  final textOnlyFilter =
+      filterValue.replaceAll(RegExp(r'\d(?:[\d,. ]*\d)?'), ' ');
   final textTerms = _splitSearchTerms(textOnlyFilter);
   return textTerms.every((term) => noteValue.contains(term));
 }
@@ -228,7 +216,8 @@ bool _matchesAllFieldsSearch(
   final denomination = note.denomination.toLowerCase();
 
   return searchTerms.every(
-    (term) => haystack.contains(term) || _matchesDenominationTerm(denomination, term),
+    (term) =>
+        haystack.contains(term) || _matchesDenominationTerm(denomination, term),
   );
 }
 
@@ -613,7 +602,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     // when a programmatic jump settles back through goIdle).
     if (notification is UserScrollNotification &&
         notification.direction != ScrollDirection.idle) {
-      if (_searchFocusNode.hasFocus && !_searchController.selection.isCollapsed) {
+      if (_searchFocusNode.hasFocus &&
+          !_searchController.selection.isCollapsed) {
         _searchController.selection = TextSelection.collapsed(
           offset: _searchController.text.length,
         );
@@ -997,9 +987,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     // With nothing selected both directions enter the table at the first row,
     // matching the Editor. Up from the first row then hands off to the filter
     // (see _handleTableKey) rather than wrapping to the last row.
-    final next = current == null
-        ? 0
-        : (current + offset).clamp(0, notes.length - 1);
+    final next =
+        current == null ? 0 : (current + offset).clamp(0, notes.length - 1);
     _focusSelection(next);
     _ensureSelectedVisible();
   }
@@ -1127,8 +1116,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       return KeyEventResult.handled;
     }
     if (!shiftPressed &&
-        (key == LogicalKeyboardKey.arrowUp ||
-            key == LogicalKeyboardKey.keyK)) {
+        (key == LogicalKeyboardKey.arrowUp || key == LogicalKeyboardKey.keyK)) {
       // Up from the first row steps out of the table and into the filter.
       // Home keeps its own meaning below: it always lands on the first row.
       if (_selectedIndex == 0) {
@@ -1447,20 +1435,20 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                             contentPadding: const EdgeInsets.symmetric(
                                 horizontal: 16, vertical: 14),
                             border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(
-                                  ViewerPalette.radiusLg),
+                              borderRadius:
+                                  BorderRadius.circular(ViewerPalette.radiusLg),
                               borderSide:
                                   const BorderSide(color: _kTableBorder),
                             ),
                             enabledBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(
-                                  ViewerPalette.radiusLg),
+                              borderRadius:
+                                  BorderRadius.circular(ViewerPalette.radiusLg),
                               borderSide:
                                   const BorderSide(color: _kTableBorder),
                             ),
                             focusedBorder: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(
-                                  ViewerPalette.radiusLg),
+                              borderRadius:
+                                  BorderRadius.circular(ViewerPalette.radiusLg),
                               borderSide: const BorderSide(
                                 color: ViewerPalette.accent,
                                 width: 1.5,
@@ -1488,111 +1476,116 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
                                   color: _kTableSurface,
-                                borderRadius: BorderRadius.circular(
-                                          _kCardRadius),
-                                border: Border.all(
-                                    color: _kTableBorder, width: 1),
-                                boxShadow: ViewerPalette.shadowMid,
-                              ),
-                              child: notes.isEmpty
-                                  ? const _TableEmptyState()
-                                  : ClipRRect(
-                                      borderRadius: BorderRadius.circular(
-                                          _kCardRadius),
-                                      child: NotificationListener<
-                                          ScrollNotification>(
-                                        onNotification:
-                                            _handleTableScrollNotification,
-                                        child: ScrollConfiguration(
-                                          behavior:
-                                              const _ColumnDragScrollBehavior(),
-                                          child: SingleChildScrollView(
-                                            controller:
-                                                _horizontalScrollController,
-                                            scrollDirection: Axis.horizontal,
-                                            child: SizedBox(
-                                              width: tableWidth,
-                                              child: Column(
-                                                children: [
-                                                  _TableHeader(
-                                                    sortKey: _sortKey,
-                                                    ascending: _ascending,
-                                                    onSort: _toggleSort,
-                                                    tagsColumnWidth:
-                                                        tagsColumnWidth,
-                                                    draggingColumns:
-                                                        _columnsDragging,
-                                                    headerFocusNodes:
-                                                        _headerFocusNodes,
-                                                  ),
-                                                  const Divider(
-                                                    height: 2,
-                                                    thickness: 2,
-                                                    color: _kTableHeaderDivider,
-                                                  ),
-                                                  Expanded(
-                                                    child: ScrollConfiguration(
-                                                      behavior:
-                                                          const MaterialScrollBehavior(),
-                                                      child: Scrollbar(
-                                                        controller:
-                                                            _verticalScrollController,
-                                                        thumbVisibility: true,
-                                                        child:
-                                                            ListView.separated(
+                                  borderRadius:
+                                      BorderRadius.circular(_kCardRadius),
+                                  border: Border.all(
+                                      color: _kTableBorder, width: 1),
+                                  boxShadow: ViewerPalette.shadowMid,
+                                ),
+                                child: notes.isEmpty
+                                    ? const _TableEmptyState()
+                                    : ClipRRect(
+                                        borderRadius:
+                                            BorderRadius.circular(_kCardRadius),
+                                        child: NotificationListener<
+                                            ScrollNotification>(
+                                          onNotification:
+                                              _handleTableScrollNotification,
+                                          child: ScrollConfiguration(
+                                            behavior:
+                                                const MouseDragScrollBehavior(),
+                                            child: SingleChildScrollView(
+                                              controller:
+                                                  _horizontalScrollController,
+                                              scrollDirection: Axis.horizontal,
+                                              child: SizedBox(
+                                                width: tableWidth,
+                                                child: Column(
+                                                  children: [
+                                                    _TableHeader(
+                                                      sortKey: _sortKey,
+                                                      ascending: _ascending,
+                                                      onSort: _toggleSort,
+                                                      tagsColumnWidth:
+                                                          tagsColumnWidth,
+                                                      draggingColumns:
+                                                          _columnsDragging,
+                                                      headerFocusNodes:
+                                                          _headerFocusNodes,
+                                                    ),
+                                                    const Divider(
+                                                      height: 2,
+                                                      thickness: 2,
+                                                      color:
+                                                          _kTableHeaderDivider,
+                                                    ),
+                                                    Expanded(
+                                                      child:
+                                                          ScrollConfiguration(
+                                                        behavior:
+                                                            const MaterialScrollBehavior(),
+                                                        child: Scrollbar(
                                                           controller:
                                                               _verticalScrollController,
-                                                          itemCount:
-                                                              notes.length,
-                                                          separatorBuilder:
-                                                              (context, index) =>
-                                                                  const Divider(
-                                                            height: 1,
-                                                            color:
-                                                                _kTableDivider,
-                                                          ),
-                                                          itemBuilder:
-                                                              (context, index) {
-                                                            final note =
-                                                                notes[index];
+                                                          thumbVisibility: true,
+                                                          child: ListView
+                                                              .separated(
+                                                            controller:
+                                                                _verticalScrollController,
+                                                            itemCount:
+                                                                notes.length,
+                                                            separatorBuilder:
+                                                                (context,
+                                                                        index) =>
+                                                                    const Divider(
+                                                              height: 1,
+                                                              color:
+                                                                  _kTableDivider,
+                                                            ),
+                                                            itemBuilder:
+                                                                (context,
+                                                                    index) {
+                                                              final note =
+                                                                  notes[index];
 
-                                                            final row = _TableRow(
-                                                              note: note,
-                                                              tagsColumnWidth:
-                                                                  tagsColumnWidth,
-                                                              draggingColumns:
-                                                                  _columnsDragging,
-                                                              selected: _keyboardNavEnabled &&
-                                                                  _selectedIndex ==
-                                                                      index,
-                                                              onTagTap:
-                                                                  _applyTagFilter,
-                                                              onTap: () =>
-                                                                  _openNoteAtIndex(
-                                                                      notes,
-                                                                      index),
-                                                            );
-                                                            if (index.isOdd) {
-                                                              return ColoredBox(
-                                                                color:
-                                                                    _kZebraTint,
-                                                                child: row,
+                                                              final row =
+                                                                  _TableRow(
+                                                                note: note,
+                                                                tagsColumnWidth:
+                                                                    tagsColumnWidth,
+                                                                draggingColumns:
+                                                                    _columnsDragging,
+                                                                selected: _keyboardNavEnabled &&
+                                                                    _selectedIndex ==
+                                                                        index,
+                                                                onTagTap:
+                                                                    _applyTagFilter,
+                                                                onTap: () =>
+                                                                    _openNoteAtIndex(
+                                                                        notes,
+                                                                        index),
                                                               );
-                                                            }
-                                                            return row;
-                                                          },
+                                                              if (index.isOdd) {
+                                                                return ColoredBox(
+                                                                  color:
+                                                                      _kZebraTint,
+                                                                  child: row,
+                                                                );
+                                                              }
+                                                              return row;
+                                                            },
+                                                          ),
                                                         ),
                                                       ),
                                                     ),
-                                                  ),
-                                                ],
+                                                  ],
+                                                ),
                                               ),
                                             ),
                                           ),
                                         ),
                                       ),
-                                ),
-                            ),
+                              ),
                             );
                             return table;
                           },
@@ -1630,8 +1623,7 @@ class _Header extends StatelessWidget {
         DecoratedBox(
           decoration: BoxDecoration(
             color: _kTableSurface,
-            borderRadius:
-                BorderRadius.circular(ViewerPalette.radiusLg),
+            borderRadius: BorderRadius.circular(ViewerPalette.radiusLg),
             border: Border.all(color: _kTableBorder),
             boxShadow: ViewerPalette.shadowLow,
           ),
@@ -1643,14 +1635,14 @@ class _Header extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   ClipRRect(
-                      borderRadius: BorderRadius.circular(9),
-                      child: Image.asset(
-                        'web/icons/Icon-192.png',
-                        width: 30,
-                        height: 30,
-                        fit: BoxFit.cover,
-                      ),
+                    borderRadius: BorderRadius.circular(9),
+                    child: Image.asset(
+                      'web/icons/Icon-192.png',
+                      width: 30,
+                      height: 30,
+                      fit: BoxFit.cover,
                     ),
+                  ),
                   const SizedBox(width: 12),
                   Column(
                     mainAxisSize: MainAxisSize.min,
@@ -1658,16 +1650,14 @@ class _Header extends StatelessWidget {
                     children: [
                       Text(
                         'Note\nHarbor',
-                        style: Theme.of(context)
-                            .textTheme
-                            .titleMedium
-                            ?.copyWith(
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w800,
-                              color: _kTableText,
-                              height: 0.95,
-                              letterSpacing: -0.3,
-                            ),
+                        style:
+                            Theme.of(context).textTheme.titleMedium?.copyWith(
+                                  fontFamily: 'Inter',
+                                  fontWeight: FontWeight.w800,
+                                  color: _kTableText,
+                                  height: 0.95,
+                                  letterSpacing: -0.3,
+                                ),
                       ),
                     ],
                   ),
@@ -1714,11 +1704,9 @@ class _ImportButtonState extends State<_ImportButton> {
         curve: Curves.easeOut,
         decoration: BoxDecoration(
           color: _hovered ? ViewerPalette.accentSoft : _kTableSurface,
-          borderRadius:
-              BorderRadius.circular(ViewerPalette.radiusLg),
+          borderRadius: BorderRadius.circular(ViewerPalette.radiusLg),
           border: Border.all(
-            color:
-                _hovered ? ViewerPalette.accent : _kTableBorder,
+            color: _hovered ? ViewerPalette.accent : _kTableBorder,
           ),
           boxShadow: ViewerPalette.shadowLow,
         ),
@@ -1757,8 +1745,7 @@ class _StatPill extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: _kTableSurface,
-        borderRadius:
-            BorderRadius.circular(ViewerPalette.radiusLg),
+        borderRadius: BorderRadius.circular(ViewerPalette.radiusLg),
         border: Border.all(color: _kTableBorder),
         boxShadow: ViewerPalette.shadowLow,
       ),
@@ -1955,8 +1942,7 @@ class _HeaderCell extends StatelessWidget {
                 foregroundColor: _kTableSortableHeaderText,
                 overlayColor: ViewerPalette.accentSoft,
                 shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(
-                      ViewerPalette.radiusSm),
+                  borderRadius: BorderRadius.circular(ViewerPalette.radiusSm),
                 ),
               ),
               child: Row(
@@ -2049,8 +2035,7 @@ class _TableRow extends StatelessWidget {
               child: DecoratedBox(
                 decoration: BoxDecoration(
                   color: ViewerPalette.accentSoft,
-                  borderRadius:
-                      BorderRadius.all(Radius.circular(12)),
+                  borderRadius: BorderRadius.all(Radius.circular(12)),
                 ),
               ),
             ),
@@ -2059,65 +2044,67 @@ class _TableRow extends StatelessWidget {
                 horizontal: _kTableHorizontalPadding, vertical: 12),
             child: Row(
               children: [
-            _DataCell(
-                width: _kOrderColumnWidth, child: Text('${note.displayOrder}')),
-            _DataCell(
-              width: _kFrontColumnWidth,
-              child: image == null
-                  ? const _TableThumbnailPlaceholder()
-                  : DecoratedBox(
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(
-                            ViewerPalette.radiusSm),
-                        border: Border.all(
-                            color: ViewerPalette.borderControl),
-                        boxShadow: ViewerPalette.shadowLow,
-                      ),
-                      child: ClipRRect(
-                        borderRadius: BorderRadius.circular(
-                            ViewerPalette.radiusSm - 1),
-                        child: Image(
-                          image: createNoteImageProvider(image),
-                          width: _kTableThumbnailWidth,
-                          height: _kTableThumbnailHeight,
-                          fit: BoxFit.cover,
-                          frameBuilder:
-                              (context, child, frame, wasSynchronouslyLoaded) {
-                            if (wasSynchronouslyLoaded || frame != null) {
-                              return child;
-                            }
-                            return const _TableThumbnailPlaceholder();
-                          },
-                          errorBuilder: (context, error, stackTrace) =>
-                              const _TableThumbnailPlaceholder(),
+                _DataCell(
+                    width: _kOrderColumnWidth,
+                    child: Text('${note.displayOrder}')),
+                _DataCell(
+                  width: _kFrontColumnWidth,
+                  child: image == null
+                      ? const _TableThumbnailPlaceholder()
+                      : DecoratedBox(
+                          decoration: BoxDecoration(
+                            borderRadius:
+                                BorderRadius.circular(ViewerPalette.radiusSm),
+                            border:
+                                Border.all(color: ViewerPalette.borderControl),
+                            boxShadow: ViewerPalette.shadowLow,
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(
+                                ViewerPalette.radiusSm - 1),
+                            child: Image(
+                              image: createNoteImageProvider(image),
+                              width: _kTableThumbnailWidth,
+                              height: _kTableThumbnailHeight,
+                              fit: BoxFit.cover,
+                              frameBuilder: (context, child, frame,
+                                  wasSynchronouslyLoaded) {
+                                if (wasSynchronouslyLoaded || frame != null) {
+                                  return child;
+                                }
+                                return const _TableThumbnailPlaceholder();
+                              },
+                              errorBuilder: (context, error, stackTrace) =>
+                                  const _TableThumbnailPlaceholder(),
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-            ),
-            _DataCell(
-                width: _kDenominationColumnWidth,
-                child: Text(note.denomination)),
-            _DataCell(
-                width: _kDateColumnWidth,
-                child: Text(note.issueDate.isEmpty ? '-' : note.issueDate)),
-            _DataCell(
-                width: _kCatalogColumnWidth,
-                child: Text(
-                    note.catalogNumber.isEmpty ? '-' : note.catalogNumber)),
-            _DataCell(
-                width: _kCompanyColumnWidth,
-                child: Text(
-                    note.gradingCompany.isEmpty ? '-' : note.gradingCompany)),
-            _DataCell(
-                width: _kGradeColumnWidth,
-                child: Text(note.grade.isEmpty ? '-' : note.grade)),
-            _DataCell(
-                width: _kSerialColumnWidth,
-                child: Text(note.serial.isEmpty ? '-' : note.serial)),
-            _DataCell(
-                width: tagsColumnWidth,
-                child: _NoteTagsCell(tags: note.tags, onTagTap: onTagTap)),
-            ],
+                ),
+                _DataCell(
+                    width: _kDenominationColumnWidth,
+                    child: Text(note.denomination)),
+                _DataCell(
+                    width: _kDateColumnWidth,
+                    child: Text(note.issueDate.isEmpty ? '-' : note.issueDate)),
+                _DataCell(
+                    width: _kCatalogColumnWidth,
+                    child: Text(
+                        note.catalogNumber.isEmpty ? '-' : note.catalogNumber)),
+                _DataCell(
+                    width: _kCompanyColumnWidth,
+                    child: Text(note.gradingCompany.isEmpty
+                        ? '-'
+                        : note.gradingCompany)),
+                _DataCell(
+                    width: _kGradeColumnWidth,
+                    child: Text(note.grade.isEmpty ? '-' : note.grade)),
+                _DataCell(
+                    width: _kSerialColumnWidth,
+                    child: Text(note.serial.isEmpty ? '-' : note.serial)),
+                _DataCell(
+                    width: tagsColumnWidth,
+                    child: _NoteTagsCell(tags: note.tags, onTagTap: onTagTap)),
+              ],
             ),
           ),
           if (selected)
@@ -2125,8 +2112,7 @@ class _TableRow extends StatelessWidget {
               child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    borderRadius:
-                        BorderRadius.all(Radius.circular(12)),
+                    borderRadius: BorderRadius.all(Radius.circular(12)),
                     border: Border.fromBorderSide(
                       BorderSide(color: ViewerPalette.accent, width: 2),
                     ),
@@ -2157,8 +2143,7 @@ class _TableThumbnailPlaceholder extends StatelessWidget {
             _kTableThumbnailPlaceholderBg,
           ],
         ),
-        borderRadius:
-            BorderRadius.circular(ViewerPalette.radiusSm),
+        borderRadius: BorderRadius.circular(ViewerPalette.radiusSm),
         border: Border.all(color: _kTableThumbnailPlaceholderBorder),
       ),
       child: const Center(
@@ -2232,9 +2217,7 @@ class _TagChipState extends State<_TagChip> {
             color: _hovered ? ViewerPalette.accentSoft : _kTagChipBg,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: _hovered
-                  ? ViewerPalette.accent
-                  : _kTagChipBorder,
+              color: _hovered ? ViewerPalette.accent : _kTagChipBorder,
             ),
           ),
           child: Padding(
@@ -2288,8 +2271,7 @@ class _TableEmptyState extends StatelessWidget {
             DecoratedBox(
               decoration: BoxDecoration(
                 color: ViewerPalette.surfaceContainer,
-                borderRadius: BorderRadius.circular(
-                    ViewerPalette.radiusLg),
+                borderRadius: BorderRadius.circular(ViewerPalette.radiusLg),
                 border: Border.all(color: ViewerPalette.border),
               ),
               child: const Padding(
@@ -2357,8 +2339,7 @@ class _TableSkeletonState extends State<_TableSkeleton>
         child: DecoratedBox(
           decoration: BoxDecoration(
             color: ViewerPalette.surface,
-            borderRadius:
-                BorderRadius.circular(ViewerPalette.radiusXl),
+            borderRadius: BorderRadius.circular(ViewerPalette.radiusXl),
             border: Border.all(color: ViewerPalette.border),
             boxShadow: ViewerPalette.shadowMid,
           ),
@@ -2402,9 +2383,9 @@ class _SkeletonLine extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: ViewerPalette.textFaint.withValues(alpha: alpha.clamp(0.0, 1.0)),
-          borderRadius:
-              BorderRadius.circular(ViewerPalette.radiusSm),
+          color:
+              ViewerPalette.textFaint.withValues(alpha: alpha.clamp(0.0, 1.0)),
+          borderRadius: BorderRadius.circular(ViewerPalette.radiusSm),
         ),
         child: const SizedBox(height: 16),
       ),

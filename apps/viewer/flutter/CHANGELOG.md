@@ -4,8 +4,13 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ## [Unreleased]
 
+### Added
+
+- Note slideshow and Image popover: a left/right mouse drag now moves to the previous/next item, so the desktop viewer can be paged with the mouse alone. The drag is horizontal only — a vertical mouse drag still does nothing to the note card, and in the popover a drag while zoomed keeps panning the image.
+
 ### Changed
 
+- Note slideshow and Image popover: swiping or dragging past either end now wraps seamlessly — the page follows the pointer across the seam instead of stopping at the ends. `←`/`→`, the chevrons and `Home`/`End` keep their instant wrap; only the pointer gesture glides.
 - Note slideshow and Image popover: previous/next now wrap around — `←` on the first note lands on the last, and `→` on the last lands on the first, instead of stopping at the ends. This also covers the popover's modified `←`/`→` in fit view. A wrap that jumps across other items lands instantly rather than animating through them; `Home` and `End` are unchanged.
 
 ## [1.8.0] - 2026-10-01

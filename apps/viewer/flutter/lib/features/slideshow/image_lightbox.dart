@@ -7,8 +7,15 @@ import 'package:flutter/services.dart';
 import '../../app/viewer_palette.dart';
 import '../../models/note_image.dart';
 import '../../models/note_record.dart';
+import '../../widgets/mouse_drag_scroll_behavior.dart';
 import '../../widgets/note_image_provider.dart';
 import 'image_zoom_levels.dart';
+
+/// The virtual page the first image is pinned to. The popover pages an
+/// unbounded [PageView] so that a swipe past either end wraps with no visible
+/// seam; this leaves enough room behind the first image that a backwards wrap
+/// never runs out of pages.
+const int _kVirtualPageOrigin = 1 << 20;
 
 class ImageSequenceItem {
   const ImageSequenceItem({
@@ -39,9 +46,14 @@ class ImageLightbox extends StatefulWidget {
 class _ImageLightboxState extends State<ImageLightbox> {
   final _ImageZoomController _zoomController = _ImageZoomController();
   late final PageController _controller;
-  late int _currentIndex;
+  late int _virtualIndex;
   bool _pageScrollEnabled = true;
   int _pageGeneration = 0;
+
+  /// The image currently on screen, derived from the virtual page so paging
+  /// past either end wraps without a seam.
+  int get _currentIndex =>
+      widget.items.isEmpty ? 0 : _virtualIndex % widget.items.length;
 
   void _closeWithCurrentNote() {
     if (!mounted) {
@@ -54,8 +66,8 @@ class _ImageLightboxState extends State<ImageLightbox> {
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
-    _controller = PageController(initialPage: widget.initialIndex);
+    _virtualIndex = _kVirtualPageOrigin + widget.initialIndex;
+    _controller = PageController(initialPage: _virtualIndex);
   }
 
   @override
@@ -64,21 +76,21 @@ class _ImageLightboxState extends State<ImageLightbox> {
     super.dispose();
   }
 
-  /// Animates to [nextIndex], used by a single-step arrow move.
-  void _animateTo(int nextIndex) {
+  /// Animates to the virtual page [page], used by a single-step arrow move.
+  void _animateToPage(int page) {
     _controller.animateToPage(
-      nextIndex,
+      page,
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
     );
   }
 
-  /// Jumps straight to [nextIndex] with no page transition, used by Home, End
-  /// and a wrap-around so a large sequence reaches its target immediately
-  /// instead of animating through every page in between.
-  void _jumpTo(int nextIndex) {
-    _controller.jumpToPage(nextIndex);
-    setState(() => _currentIndex = nextIndex);
+  /// Jumps straight to the virtual page [page] with no page transition, used by
+  /// Home, End and a wrap-around so a large sequence reaches its target
+  /// immediately instead of animating through every page in between.
+  void _jumpToPage(int page) {
+    _controller.jumpToPage(page);
+    setState(() => _virtualIndex = page);
   }
 
   bool get _atFirstPage => widget.items.isEmpty || _currentIndex <= 0;
@@ -86,38 +98,38 @@ class _ImageLightboxState extends State<ImageLightbox> {
   bool get _atLastPage =>
       widget.items.isEmpty || _currentIndex >= widget.items.length - 1;
 
-  /// Moves one image back, wrapping from the first image to the last.
+  /// Moves one image back. An adjacent step animates; the wrap from the first
+  /// image to the last lands instantly instead of blurring through the rest.
   void _goPrevious() {
-    if (widget.items.isEmpty) return;
-    _moveTo((_currentIndex - 1) % widget.items.length);
-  }
-
-  /// Moves one image forward, wrapping from the last image to the first.
-  void _goNext() {
-    if (widget.items.isEmpty) return;
-    _moveTo((_currentIndex + 1) % widget.items.length);
-  }
-
-  /// Moves to [nextIndex]. An adjacent step animates; a wrap-around, which
-  /// crosses the whole sequence, lands instantly instead of blurring through
-  /// every page in between.
-  void _moveTo(int nextIndex) {
-    if (nextIndex == _currentIndex) return; // Single page: nothing to move to.
-    if ((nextIndex - _currentIndex).abs() == 1) {
-      _animateTo(nextIndex);
+    if (widget.items.length < 2) return;
+    final target = _virtualIndex - 1;
+    if (_atFirstPage) {
+      _jumpToPage(target);
     } else {
-      _jumpTo(nextIndex);
+      _animateToPage(target);
+    }
+  }
+
+  /// Moves one image forward. An adjacent step animates; the wrap from the last
+  /// image to the first lands instantly instead of blurring through the rest.
+  void _goNext() {
+    if (widget.items.length < 2) return;
+    final target = _virtualIndex + 1;
+    if (_atLastPage) {
+      _jumpToPage(target);
+    } else {
+      _animateToPage(target);
     }
   }
 
   void _goToFirst() {
     if (_atFirstPage) return;
-    _jumpTo(0);
+    _jumpToPage(_virtualIndex - _currentIndex);
   }
 
   void _goToLast() {
     if (_atLastPage) return;
-    _jumpTo(widget.items.length - 1);
+    _jumpToPage(_virtualIndex - _currentIndex + widget.items.length - 1);
   }
 
   void _setPageScrollEnabled(bool enabled) {
@@ -257,105 +269,112 @@ class _ImageLightboxState extends State<ImageLightbox> {
                                 alignment: Alignment.center,
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: ViewerPalette.darkScrim,
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(
-                                    color: ViewerPalette.darkBorder),
-                              ),
-                              child: Text(
-                                '${_currentIndex + 1} / ${widget.items.length}',
-                                style: const TextStyle(
-                                  fontFamily: 'Inter',
-                                  color: ViewerPalette.darkText,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                  fontFeatures: [
-                                    FontFeature.tabularFigures()
-                                  ],
+                                decoration: BoxDecoration(
+                                  color: ViewerPalette.darkScrim,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                      color: ViewerPalette.darkBorder),
+                                ),
+                                child: Text(
+                                  '${_currentIndex + 1} / ${widget.items.length}',
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: ViewerPalette.darkText,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 15,
+                                    fontFeatures: [
+                                      FontFeature.tabularFigures()
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            FilledButton.tonal(
-                              style: FilledButton.styleFrom(
-                                backgroundColor:
-                                    ViewerPalette.darkScrim,
-                                foregroundColor: ViewerPalette.darkText,
-                                side: const BorderSide(
-                                    color: ViewerPalette.darkBorder),
+                              const SizedBox(width: 10),
+                              FilledButton.tonal(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: ViewerPalette.darkScrim,
+                                  foregroundColor: ViewerPalette.darkText,
+                                  side: const BorderSide(
+                                      color: ViewerPalette.darkBorder),
+                                ),
+                                onPressed: _closeWithCurrentNote,
+                                child: const Text('Back'),
                               ),
-                              onPressed: _closeWithCurrentNote,
-                              child: const Text('Back'),
-                            ),
                             ],
                           ),
                         ),
                       ),
-                    Expanded(
-                      child: PageView.builder(
-                        controller: _controller,
-                        physics: _pageScrollEnabled
-                            ? const PageScrollPhysics()
-                            : const NeverScrollableScrollPhysics(),
-                        itemCount: widget.items.length,
-                        onPageChanged: (value) => setState(() {
-                          _currentIndex = value;
-                          _pageGeneration += 1;
-                          _pageScrollEnabled = true;
-                        }),
-                        itemBuilder: (context, index) {
-                          final imageItem = widget.items[index];
-                          return Padding(
-                            padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: ViewerPalette.darkSurface,
-                                borderRadius: BorderRadius.circular(20),
-                                border: Border.all(
-                                  color: ViewerPalette.darkBorder,
-                                ),
-                                boxShadow: const [
-                                  BoxShadow(
-                                    blurRadius: 32,
-                                    offset: Offset(0, 16),
-                                    color: Color(0x66000000),
-                                  ),
-                                ],
-                              ),
-                              clipBehavior: Clip.antiAlias,
-                              child: Padding(
-                                padding: const EdgeInsets.all(16),
-                                child: imageItem.image == null
-                                    ? const Center(
-                                        child: Text(
-                                          'No image',
-                                          style: TextStyle(
-                                            fontFamily: 'Inter',
-                                            color: ViewerPalette.darkMuted,
-                                            fontSize: 16,
-                                          ),
-                                        ),
-                                      )
-                                    : _ZoomableImagePage(
-                                        key: ValueKey(
-                                          '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
-                                        ),
-                                        image: imageItem.image!,
-                                        controller: _zoomController,
-                                        onPageScrollEnabledChanged:
-                                            _setPageScrollEnabled,
+                      Expanded(
+                        child: ScrollConfiguration(
+                          // A mouse drag pages the sequence at fit scale; while
+                          // zoomed the physics below are disabled so the drag
+                          // pans the image instead.
+                          behavior: const MouseDragScrollBehavior(),
+                          child: PageView.builder(
+                            controller: _controller,
+                            physics: _pageScrollEnabled
+                                ? const PageScrollPhysics()
+                                : const NeverScrollableScrollPhysics(),
+                            itemCount: widget.items.isEmpty ? 0 : null,
+                            onPageChanged: (value) => setState(() {
+                              _virtualIndex = value;
+                              _pageGeneration += 1;
+                              _pageScrollEnabled = true;
+                            }),
+                            itemBuilder: (context, index) {
+                              final imageItem =
+                                  widget.items[index % widget.items.length];
+                              return Padding(
+                                padding:
+                                    const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                                child: Container(
+                                  decoration: BoxDecoration(
+                                    color: ViewerPalette.darkSurface,
+                                    borderRadius: BorderRadius.circular(20),
+                                    border: Border.all(
+                                      color: ViewerPalette.darkBorder,
+                                    ),
+                                    boxShadow: const [
+                                      BoxShadow(
+                                        blurRadius: 32,
+                                        offset: Offset(0, 16),
+                                        color: Color(0x66000000),
                                       ),
-                              ),
-                            ),
-                          );
-                        },
+                                    ],
+                                  ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: Padding(
+                                    padding: const EdgeInsets.all(16),
+                                    child: imageItem.image == null
+                                        ? const Center(
+                                            child: Text(
+                                              'No image',
+                                              style: TextStyle(
+                                                fontFamily: 'Inter',
+                                                color: ViewerPalette.darkMuted,
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                          )
+                                        : _ZoomableImagePage(
+                                            key: ValueKey(
+                                              '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
+                                            ),
+                                            image: imageItem.image!,
+                                            controller: _zoomController,
+                                            onPageScrollEnabledChanged:
+                                                _setPageScrollEnabled,
+                                          ),
+                                  ),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
                 ),
               ),
-            ),
             ),
           ),
         ),
@@ -423,7 +442,8 @@ final Map<LogicalKeyboardKey, _PanDirection> _kPanDirections = {
 /// Ctrl, Cmd and Shift are interchangeable for the pans, so each direction key
 /// gets one activator per modifier. A [SingleActivator] requires every modifier
 /// it does not name to be up, so the three cannot share a single activator.
-List<SingleActivator> _panActivatorsFor(LogicalKeyboardKey key) => <SingleActivator>[
+List<SingleActivator> _panActivatorsFor(LogicalKeyboardKey key) =>
+    <SingleActivator>[
       SingleActivator(key, shift: true),
       SingleActivator(key, control: true),
       SingleActivator(key, meta: true),
@@ -445,15 +465,13 @@ Map<ShortcutActivator, Intent> _buildImageLightboxShortcuts() {
         const _PreviousImageIntent(),
     const SingleActivator(LogicalKeyboardKey.arrowRight):
         const _NextImageIntent(),
-    const SingleActivator(LogicalKeyboardKey.keyL):
-        const _NextImageIntent(),
+    const SingleActivator(LogicalKeyboardKey.keyL): const _NextImageIntent(),
     const SingleActivator(LogicalKeyboardKey.home): const _FirstImageIntent(),
     const SingleActivator(LogicalKeyboardKey.end): const _LastImageIntent(),
     const SingleActivator(LogicalKeyboardKey.equal, shift: true):
         const _ZoomInIntent(),
     const SingleActivator(LogicalKeyboardKey.add): const _ZoomInIntent(),
-    const SingleActivator(LogicalKeyboardKey.numpadAdd):
-        const _ZoomInIntent(),
+    const SingleActivator(LogicalKeyboardKey.numpadAdd): const _ZoomInIntent(),
     const SingleActivator(LogicalKeyboardKey.minus): const _ZoomOutIntent(),
     const SingleActivator(LogicalKeyboardKey.minus, shift: true):
         const _ZoomOutIntent(),

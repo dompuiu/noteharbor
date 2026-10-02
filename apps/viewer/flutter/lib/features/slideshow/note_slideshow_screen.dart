@@ -5,6 +5,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../app/viewer_palette.dart';
 import '../../models/note_image.dart';
 import '../../models/note_record.dart';
+import '../../widgets/mouse_drag_scroll_behavior.dart';
 import '../../widgets/note_image_provider.dart';
 import 'image_lightbox.dart';
 
@@ -27,6 +28,12 @@ const _kArrowScrollOffset = 120.0;
 /// centers the error so letterboxing stays small on every slide. The fixed
 /// height keeps the slide height (and the meta panel position) identical.
 const _kImageStageAspectRatio = 3 / 2;
+
+/// The virtual page the first note is pinned to. The slideshow pages an
+/// unbounded [PageView] so that a swipe past either end wraps with no visible
+/// seam; this leaves enough room behind the first note that a backwards wrap
+/// never runs out of pages.
+const int _kVirtualPageOrigin = 1 << 20;
 
 class NoteSlideshowResult {
   const NoteSlideshowResult({
@@ -57,8 +64,13 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   late final List<ImageSequenceItem> _imageSequence;
   late final FocusNode _slideshowFocusNode =
       FocusNode(debugLabel: 'noteSlideshow');
-  late int _currentIndex;
+  late int _virtualIndex;
   final Map<int, _NoteSlideState> _slideStates = {};
+
+  /// The note currently on screen, derived from the virtual page so paging past
+  /// either end wraps without a seam.
+  int get _currentIndex =>
+      widget.notes.isEmpty ? 0 : _virtualIndex % widget.notes.length;
 
   void _close({String? tagName}) {
     if (!mounted) {
@@ -76,8 +88,8 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   @override
   void initState() {
     super.initState();
-    _currentIndex = widget.initialIndex;
-    _pageController = PageController(initialPage: widget.initialIndex);
+    _virtualIndex = _kVirtualPageOrigin + widget.initialIndex;
+    _pageController = PageController(initialPage: _virtualIndex);
     _imageSequence = _buildImageSequence(widget.notes);
   }
 
@@ -97,21 +109,21 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
     return items;
   }
 
-  /// Animates to [nextIndex], used by a single-step arrow move.
-  void _animateTo(int nextIndex) {
+  /// Animates to the virtual page [page], used by a single-step arrow move.
+  void _animateToPage(int page) {
     _pageController.animateToPage(
-      nextIndex,
+      page,
       duration: const Duration(milliseconds: 220),
       curve: Curves.easeOut,
     );
   }
 
-  /// Jumps straight to [nextIndex] with no page transition, used by Home, End
-  /// and a wrap-around so a large Collection reaches its target immediately
-  /// instead of animating through every note in between.
-  void _jumpTo(int nextIndex) {
-    _pageController.jumpToPage(nextIndex);
-    setState(() => _currentIndex = nextIndex);
+  /// Jumps straight to the virtual page [page] with no page transition, used by
+  /// Home, End and a wrap-around so a large Collection reaches its target
+  /// immediately instead of animating through every note in between.
+  void _jumpToPage(int page) {
+    _pageController.jumpToPage(page);
+    setState(() => _virtualIndex = page);
   }
 
   bool get _atFirstNote => widget.notes.isEmpty || _currentIndex <= 0;
@@ -119,38 +131,44 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   bool get _atLastNote =>
       widget.notes.isEmpty || _currentIndex >= widget.notes.length - 1;
 
-  /// Moves one note back, wrapping from the first note to the last.
+  /// Moves one note back. An adjacent step animates; the wrap from the first
+  /// note to the last lands instantly instead of blurring through the rest.
   void _goPrevious() {
-    if (widget.notes.isEmpty) return;
-    _moveTo((_currentIndex - 1) % widget.notes.length);
-  }
-
-  /// Moves one note forward, wrapping from the last note to the first.
-  void _goNext() {
-    if (widget.notes.isEmpty) return;
-    _moveTo((_currentIndex + 1) % widget.notes.length);
-  }
-
-  /// Moves to [nextIndex]. An adjacent step animates; a wrap-around, which
-  /// crosses the whole Collection, lands instantly instead of blurring through
-  /// every note in between.
-  void _moveTo(int nextIndex) {
-    if (nextIndex == _currentIndex) return; // Single note: nothing to move to.
-    if ((nextIndex - _currentIndex).abs() == 1) {
-      _animateTo(nextIndex);
+    if (widget.notes.length < 2) return;
+    final target = _virtualIndex - 1;
+    if (_atFirstNote) {
+      _jumpToPage(target);
     } else {
-      _jumpTo(nextIndex);
+      _animateToPage(target);
+    }
+  }
+
+  /// Moves one note forward. An adjacent step animates; the wrap from the last
+  /// note to the first lands instantly instead of blurring through the rest.
+  void _goNext() {
+    if (widget.notes.length < 2) return;
+    final target = _virtualIndex + 1;
+    if (_atLastNote) {
+      _jumpToPage(target);
+    } else {
+      _animateToPage(target);
     }
   }
 
   void _goToFirst() {
     if (_atFirstNote) return;
-    _jumpTo(0);
+    _jumpToPage(_virtualIndex - _currentIndex);
   }
 
   void _goToLast() {
     if (_atLastNote) return;
-    _jumpTo(widget.notes.length - 1);
+    _jumpToPage(_virtualIndex - _currentIndex + widget.notes.length - 1);
+  }
+
+  /// Jumps to [contentIndex] within the current cycle, used when the popover
+  /// hands a different note back to the slideshow.
+  void _jumpToContent(int contentIndex) {
+    _jumpToPage(_virtualIndex - _currentIndex + contentIndex);
   }
 
   void _registerSlide(int index, _NoteSlideState state) {
@@ -174,7 +192,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
         HardwareKeyboard.instance.isAltPressed) {
       return;
     }
-    _slideStates[_currentIndex]?.scrollBy(dy);
+    _slideStates[_virtualIndex]?.scrollBy(dy);
   }
 
   void _openCurrentImageViewer() {
@@ -227,7 +245,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
       return;
     }
 
-    _jumpTo(selectedNoteIndex);
+    _jumpToContent(selectedNoteIndex);
   }
 
   @override
@@ -345,37 +363,36 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                                 alignment: Alignment.center,
                                 padding: const EdgeInsets.symmetric(
                                     horizontal: 12, vertical: 8),
-                              decoration: BoxDecoration(
-                                color: ViewerPalette.darkScrim,
-                                borderRadius: BorderRadius.circular(18),
-                                border: Border.all(
-                                    color: ViewerPalette.darkBorder),
-                              ),
-                              child: Text(
-                                '${_currentIndex + 1} / ${widget.notes.length}',
-                                style: const TextStyle(
-                                  fontFamily: 'Inter',
-                                  color: _kTextPrimary,
-                                  fontWeight: FontWeight.w600,
-                                  fontSize: 15,
-                                  fontFeatures: [
-                                    FontFeature.tabularFigures()
-                                  ],
+                                decoration: BoxDecoration(
+                                  color: ViewerPalette.darkScrim,
+                                  borderRadius: BorderRadius.circular(18),
+                                  border: Border.all(
+                                      color: ViewerPalette.darkBorder),
+                                ),
+                                child: Text(
+                                  '${_currentIndex + 1} / ${widget.notes.length}',
+                                  style: const TextStyle(
+                                    fontFamily: 'Inter',
+                                    color: _kTextPrimary,
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 15,
+                                    fontFeatures: [
+                                      FontFeature.tabularFigures()
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                            const SizedBox(width: 10),
-                            FilledButton.tonal(
-                              style: FilledButton.styleFrom(
-                                backgroundColor:
-                                    ViewerPalette.darkScrim,
-                                foregroundColor: _kTextPrimary,
-                                side: const BorderSide(
-                                    color: ViewerPalette.darkBorder),
+                              const SizedBox(width: 10),
+                              FilledButton.tonal(
+                                style: FilledButton.styleFrom(
+                                  backgroundColor: ViewerPalette.darkScrim,
+                                  foregroundColor: _kTextPrimary,
+                                  side: const BorderSide(
+                                      color: ViewerPalette.darkBorder),
+                                ),
+                                onPressed: _close,
+                                child: const Text('Back'),
                               ),
-                              onPressed: _close,
-                              child: const Text('Back'),
-                            ),
                             ],
                           ),
                         ),
@@ -383,22 +400,29 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                       Expanded(
                         child: Stack(
                           children: [
-                            PageView.builder(
-                              controller: _pageController,
-                              itemCount: widget.notes.length,
-                              onPageChanged: (i) =>
-                                  setState(() => _currentIndex = i),
-                              itemBuilder: (context, index) {
-                                return _NoteSlide(
-                                  index: index,
-                                  note: widget.notes[index],
-                                  onTapImage: _openImageViewer,
-                                  onTagTap: (tagName) =>
-                                      _close(tagName: tagName),
-                                  onAttached: _registerSlide,
-                                  onDetached: _unregisterSlide,
-                                );
-                              },
+                            ScrollConfiguration(
+                              // A mouse drag pages the slide; the note card
+                              // opts back out below so it does not also
+                              // drag-scroll.
+                              behavior: const MouseDragScrollBehavior(),
+                              child: PageView.builder(
+                                controller: _pageController,
+                                itemCount: widget.notes.isEmpty ? 0 : null,
+                                onPageChanged: (i) =>
+                                    setState(() => _virtualIndex = i),
+                                itemBuilder: (context, index) {
+                                  return _NoteSlide(
+                                    index: index,
+                                    note: widget
+                                        .notes[index % widget.notes.length],
+                                    onTapImage: _openImageViewer,
+                                    onTagTap: (tagName) =>
+                                        _close(tagName: tagName),
+                                    onAttached: _registerSlide,
+                                    onDetached: _unregisterSlide,
+                                  );
+                                },
+                              ),
                             ),
                             _EdgeChevron(
                               left: true,
@@ -485,8 +509,7 @@ class _NoteSlideState extends State<_NoteSlide> {
       return;
     }
     final position = _scrollController.position;
-    final target =
-        (position.pixels + dy).clamp(0.0, position.maxScrollExtent);
+    final target = (position.pixels + dy).clamp(0.0, position.maxScrollExtent);
     if (target == position.pixels) {
       return;
     }
@@ -522,11 +545,13 @@ class _NoteSlideState extends State<_NoteSlide> {
               child: Stack(
                 children: [
                   ScrollConfiguration(
-                    // No scrollbar: the bottom fade already signals
-                    // that the card content scrolls.
-                    behavior: ScrollConfiguration.of(
-                      context,
-                    ).copyWith(scrollbars: false),
+                    // Reset to the platform default so the mouse drag that
+                    // pages the slideshow does not also drag-scroll the card,
+                    // while keeping the scrollbar hidden (the bottom fade
+                    // already signals that the card content scrolls).
+                    behavior: const MaterialScrollBehavior().copyWith(
+                      scrollbars: false,
+                    ),
                     child: SingleChildScrollView(
                       controller: _scrollController,
                       padding: const EdgeInsets.all(16),
@@ -560,8 +585,7 @@ class _NoteSlideState extends State<_NoteSlide> {
                           const SizedBox(height: 12),
                           Container(
                             height: 1,
-                            margin:
-                                const EdgeInsets.symmetric(horizontal: 48),
+                            margin: const EdgeInsets.symmetric(horizontal: 48),
                             color: _kBorder,
                           ),
                           const SizedBox(height: 16),
@@ -573,8 +597,7 @@ class _NoteSlideState extends State<_NoteSlide> {
                           const SizedBox(height: 12),
                           _NoteImage(
                             image: widget.note.fullFor('back'),
-                            onTap: () =>
-                                widget.onTapImage(widget.note, 'back'),
+                            onTap: () => widget.onTapImage(widget.note, 'back'),
                           ),
                           const SizedBox(height: 16),
                           _MetaPanel(
@@ -887,8 +910,7 @@ class _EdgeChevronState extends State<_EdgeChevron> {
                   decoration: BoxDecoration(
                     color: ViewerPalette.darkScrim,
                     borderRadius: BorderRadius.circular(20),
-                    border:
-                        Border.all(color: ViewerPalette.darkBorder),
+                    border: Border.all(color: ViewerPalette.darkBorder),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(10),
