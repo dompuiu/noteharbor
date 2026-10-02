@@ -99,28 +99,18 @@ class _ImageLightboxState extends State<ImageLightbox> {
   bool get _atLastPage =>
       widget.items.isEmpty || _currentIndex >= widget.items.length - 1;
 
-  /// Moves one image back. An adjacent step animates; the wrap from the first
-  /// image to the last lands instantly instead of blurring through the rest.
+  /// Moves one image back. The step always animates, so the wrap from the first
+  /// image to the last glides across the seam exactly like a swipe does.
   void _goPrevious() {
     if (widget.items.length < 2) return;
-    final target = _virtualIndex - 1;
-    if (_atFirstPage) {
-      _jumpToPage(target);
-    } else {
-      _animateToPage(target);
-    }
+    _animateToPage(_virtualIndex - 1);
   }
 
-  /// Moves one image forward. An adjacent step animates; the wrap from the last
-  /// image to the first lands instantly instead of blurring through the rest.
+  /// Moves one image forward. The step always animates, so the wrap from the last
+  /// image to the first glides across the seam exactly like a swipe does.
   void _goNext() {
     if (widget.items.length < 2) return;
-    final target = _virtualIndex + 1;
-    if (_atLastPage) {
-      _jumpToPage(target);
-    } else {
-      _animateToPage(target);
-    }
+    _animateToPage(_virtualIndex + 1);
   }
 
   void _goToFirst() {

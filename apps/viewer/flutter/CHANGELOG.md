@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
+## [Unreleased]
+
+### Changed
+
+- Note slideshow and Image popover: the keyboard wrap now glides across the seam like a swipe, instead of landing instantly. `←`/`→` (and the chevrons, plus `h`/`l` in the slideshow) pass seamlessly from the last item to the first and back; `Home`/`End` still jump.
+
 ## [1.9.1] - 2026-10-01
 
 ### Added

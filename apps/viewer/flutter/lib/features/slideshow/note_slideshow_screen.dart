@@ -132,28 +132,18 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   bool get _atLastNote =>
       widget.notes.isEmpty || _currentIndex >= widget.notes.length - 1;
 
-  /// Moves one note back. An adjacent step animates; the wrap from the first
-  /// note to the last lands instantly instead of blurring through the rest.
+  /// Moves one note back. The step always animates, so the wrap from the first
+  /// note to the last glides across the seam exactly like a swipe does.
   void _goPrevious() {
     if (widget.notes.length < 2) return;
-    final target = _virtualIndex - 1;
-    if (_atFirstNote) {
-      _jumpToPage(target);
-    } else {
-      _animateToPage(target);
-    }
+    _animateToPage(_virtualIndex - 1);
   }
 
-  /// Moves one note forward. An adjacent step animates; the wrap from the last
-  /// note to the first lands instantly instead of blurring through the rest.
+  /// Moves one note forward. The step always animates, so the wrap from the last
+  /// note to the first glides across the seam exactly like a swipe does.
   void _goNext() {
     if (widget.notes.length < 2) return;
-    final target = _virtualIndex + 1;
-    if (_atLastNote) {
-      _jumpToPage(target);
-    } else {
-      _animateToPage(target);
-    }
+    _animateToPage(_virtualIndex + 1);
   }
 
   void _goToFirst() {

@@ -259,18 +259,21 @@ void main() {
     expect(find.text('40 / 40'), findsOneWidget);
   });
 
-  testWidgets('a wrap-around lands on its target in one frame', (
+  testWidgets('a wrap-around glides across the seam like a swipe', (
     WidgetTester tester,
   ) async {
-    // A collection large enough that animating across it would be obvious.
-    await pumpSlideshow(tester, manyNotes(40));
-    expect(find.text('1 / 40'), findsOneWidget);
+    await pumpSlideshow(tester, manyNotes(3));
+    expect(find.text('1 / 3'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
-    // A single frame: an animated transition would still be in flight and the
-    // index pill would not have moved to the wrapped note yet.
+    // A single frame: the wrap animates across the seam, so the index pill has
+    // not reached the wrapped note yet (a jump would have moved it).
     await tester.pump();
-    expect(find.text('40 / 40'), findsOneWidget);
+    expect(find.text('1 / 3'), findsOneWidget);
+
+    await tester.pumpAndSettle();
+    expect(find.text('3 / 3'), findsOneWidget);
+    expect(find.text('N3 - KB-3'), findsOneWidget);
   });
 
   testWidgets('an adjacent arrow step animates rather than jumping', (
