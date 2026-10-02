@@ -2,7 +2,7 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
-## [1.9.0] - 2026-10-01
+## [1.9.1] - 2026-10-01
 
 ### Added
 
@@ -11,6 +11,11 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 ### Changed
 
 - Note slideshow and Image popover: swiping or dragging past either end now wraps seamlessly — the page follows the pointer across the seam instead of stopping at the ends. `←`/`→`, the chevrons and `Home`/`End` keep their instant wrap; only the pointer gesture glides.
+
+## [1.9.0] - 2026-10-01
+
+### Changed
+
 - Note slideshow and Image popover: previous/next now wrap around — `←` on the first note lands on the last, and `→` on the last lands on the first, instead of stopping at the ends. This also covers the popover's modified `←`/`→` in fit view. A wrap that jumps across other items lands instantly rather than animating through them; `Home` and `End` are unchanged.
 
 ## [1.8.0] - 2026-10-01
