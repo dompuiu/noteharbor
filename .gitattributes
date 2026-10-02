@@ -1,0 +1,11 @@
+# Keep this file itself at LF: git's attribute parser does not strip a
+# trailing CR, so a CRLF copy would silently break the patterns below.
+.gitattributes text eol=lf
+
+# Flutter regenerates these plugin registrants with LF endings. On Windows,
+# where core.autocrlf=true, a `flutter` run would otherwise rewrite them to CRLF
+# and leave them looking modified. Pin them to LF so the working tree matches.
+apps/viewer/flutter/windows/flutter/generated_plugin_registrant.cc text eol=lf
+apps/viewer/flutter/windows/flutter/generated_plugin_registrant.h text eol=lf
+apps/viewer/flutter/windows/flutter/generated_plugins.cmake text eol=lf
+apps/viewer/flutter/macos/Flutter/GeneratedPluginRegistrant.swift text eol=lf
