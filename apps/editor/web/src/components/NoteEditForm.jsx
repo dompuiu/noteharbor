@@ -19,6 +19,7 @@ import {
 } from "../lib/noteClipboard.js";
 import { isDesktopRuntime } from "../lib/appMode.js";
 import { isEditableElement } from "../lib/editableElement.js";
+import { CATALOG_ROUTES } from "../lib/routes.js";
 import { NoteCounter } from "./NoteCounter.jsx";
 import { PositionPicker } from "./PositionPicker.jsx";
 import { TagsField } from "./TagsField.jsx";
@@ -448,7 +449,7 @@ function NoteEditForm({
       return;
     }
 
-    navigate("/");
+    navigate(CATALOG_ROUTES.banknotes);
   }
 
   useEffect(() => {
@@ -1182,7 +1183,7 @@ function NoteEditForm({
           return;
         }
 
-        navigate("/");
+        navigate(CATALOG_ROUTES.banknotes);
         return;
       }
 
@@ -1200,7 +1201,7 @@ function NoteEditForm({
         return;
       }
 
-      navigate("/");
+      navigate(CATALOG_ROUTES.banknotes);
     } catch (saveError) {
       setError(saveError.message);
     } finally {
@@ -1536,7 +1537,7 @@ function NoteEditForm({
                 {cancelLabel}
               </button>
             ) : (
-              <Link className="button" title={cancelLabel} to="/">
+              <Link className="button" title={cancelLabel} to={CATALOG_ROUTES.banknotes}>
                 {cancelLabel}
               </Link>
             )}

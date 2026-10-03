@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { clearAppData, downloadArchive, getOperationStatus, importArchive, importCsv } from '../lib/api.js';
+import { CATALOG_ROUTES } from '../lib/routes.js';
 import { useConfirmation } from './ConfirmDialog.jsx';
 
 function getPastedCsvFile(event) {
@@ -111,7 +112,7 @@ function ImportScreen({
   useEffect(() => {
     function handleKeyDown(event) {
       if (event.key === 'Escape' && !isTransferring && !confirmOpen) {
-        navigate('/');
+        navigate(CATALOG_ROUTES.banknotes);
       }
     }
 
@@ -262,7 +263,7 @@ function ImportScreen({
     try {
       await importArchive(archiveSource, setArchiveUploadProgress);
       setArchiveResult({ success: true });
-      window.location.assign('/');
+      window.location.assign(CATALOG_ROUTES.banknotes);
     } catch (importError) {
       setError(importError.message);
     } finally {
@@ -314,7 +315,7 @@ function ImportScreen({
 
     try {
       await clearAppData();
-      window.location.assign('/');
+      window.location.assign(CATALOG_ROUTES.banknotes);
     } catch (clearError) {
       setError(clearError.message);
     } finally {
@@ -436,7 +437,7 @@ function ImportScreen({
             </p>
           </div>
           {showBackToTable ? (
-            <Link className="button" to="/">
+            <Link className="button" to={CATALOG_ROUTES.banknotes}>
               Back to table
             </Link>
           ) : null}

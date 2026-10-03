@@ -452,7 +452,7 @@ The helper does not open a new tab or navigate. It requires an already open tab 
 
 ## UI Screens
 
-### Notes Table (`/`)
+### Notes Table (`/catalog/banknotes`)
 
 Primary editor screen with:
 
@@ -465,7 +465,7 @@ Primary editor screen with:
 - collection switcher (create, rename, delete, and set default collection)
 - row-level keyboard shortcuts (`e` edit, `d` delete, `c` copy, `a` add) plus table/slideshow navigation shortcuts — press `?` for the full list
 
-### Import and Export (`/import`)
+### Import and Export (`/catalog/import-export`)
 
 Handles:
 
@@ -475,7 +475,7 @@ Handles:
 - full archive import
 - deleting current app data
 
-### Edit (`/notes/:id/edit`)
+### Edit (`/catalog/notes/:id/edit`)
 
 Direct route for editing or reviewing one note outside the overlay flow.
 

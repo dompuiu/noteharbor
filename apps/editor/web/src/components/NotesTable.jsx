@@ -25,6 +25,7 @@ import {
   formatNoteAsTsvRow,
 } from "../lib/noteClipboard.js";
 import { isEditableElement } from "../lib/editableElement.js";
+import { CATALOG_ROUTES } from "../lib/routes.js";
 import {
   shouldHandOffToFilters,
   useFilterFocusMemory,
@@ -1415,7 +1416,7 @@ function NotesTable({
   function navigateToTableRoute(nextRoute, { replace = false } = {}) {
     const nextHash = buildTableHash(nextRoute);
     const nextUrl = `${location.pathname}${nextHash}`;
-    navigate(nextUrl || "/", { replace });
+    navigate(nextUrl || CATALOG_ROUTES.banknotes, { replace });
   }
 
   // Context carried on every slideshow URL: the filter+sort snapshot the
@@ -3693,7 +3694,7 @@ function NotesTable({
               aria-label="Import or export"
               className="icon-link"
               title="Import / Export"
-              to="/import"
+              to={CATALOG_ROUTES.importExport}
             >
               Import / Export
             </Link>
