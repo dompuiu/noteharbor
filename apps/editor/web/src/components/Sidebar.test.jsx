@@ -5,8 +5,6 @@ import { beforeEach, describe, expect, test } from "vitest";
 import { Sidebar } from "./Sidebar.jsx";
 import { CATALOG_ROUTES, PORTFOLIO_ROUTES } from "../lib/routes.js";
 
-const pinStorageKey = "noteharbor.sidebarPinned";
-
 function LocationProbe() {
   const location = useLocation();
   return <output data-testid="pathname">{location.pathname}</output>;
@@ -94,42 +92,6 @@ describe("Sidebar navigation groups", () => {
     expect(screen.getByTestId("pathname")).toHaveTextContent(
       CATALOG_ROUTES.importExport,
     );
-  });
-});
-
-describe("Sidebar pin", () => {
-  test("toggles and reports its expanded state", async () => {
-    const user = userEvent.setup();
-    renderSidebar(CATALOG_ROUTES.banknotes);
-
-    const pin = screen.getByRole("button", {
-      name: "Keep sidebar expanded",
-    });
-    expect(pin).toHaveAttribute("aria-expanded", "false");
-
-    await user.click(pin);
-
-    const expandedPin = screen.getByRole("button", {
-      name: "Collapse sidebar",
-    });
-    expect(expandedPin).toHaveAttribute("aria-expanded", "true");
-  });
-
-  test("persists the pinned state across reloads", async () => {
-    const user = userEvent.setup();
-    const { unmount } = renderSidebar(CATALOG_ROUTES.banknotes);
-
-    await user.click(
-      screen.getByRole("button", { name: "Keep sidebar expanded" }),
-    );
-    expect(window.localStorage.getItem(pinStorageKey)).toBe("true");
-
-    unmount();
-    renderSidebar(CATALOG_ROUTES.banknotes);
-
-    expect(
-      screen.getByRole("button", { name: "Collapse sidebar" }),
-    ).toHaveAttribute("aria-expanded", "true");
   });
 });
 

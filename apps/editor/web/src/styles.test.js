@@ -78,17 +78,24 @@ describe("sidebar styles", () => {
     expect(styles).toMatch(
       /\.sidebar\s*\{[^}]*width:\s*var\(--sidebar-rail-width\)/,
     );
-    expect(styles).toMatch(
-      /\.sidebar-dock--pinned\s*\{[^}]*width:\s*var\(--sidebar-expanded-width\)/,
-    );
   });
 
   test("expands on hover and on keyboard focus entering the rail", () => {
+    expect(styles).toMatch(/\.sidebar-dock:hover\s+\.sidebar/);
+    expect(styles).toMatch(/\.sidebar-dock:has\(:focus-visible\)\s+\.sidebar/);
+  });
+
+  test("hangs the links off an indented rule under each group label", () => {
+    const links = styles.match(/\.sidebar-group-links\s*\{([^}]*)\}/);
+    expect(links).not.toBeNull();
+    expect(links[1]).toMatch(/margin-left:/);
+    expect(links[1]).toMatch(/padding-left:/);
+    expect(links[1]).toMatch(/border-left:\s*1\.5px\s+solid/);
+  });
+
+  test("separates the groups with a rule", () => {
     expect(styles).toMatch(
-      /\.sidebar-dock:not\(\.sidebar-dock--pinned\):hover\s+\.sidebar/,
-    );
-    expect(styles).toMatch(
-      /\.sidebar-dock:not\(\.sidebar-dock--pinned\):has\(:focus-visible\)\s+\.sidebar/,
+      /\.sidebar-group\s*\+\s*\.sidebar-group\s*\{[^}]*border-top:/,
     );
   });
 
@@ -111,8 +118,8 @@ describe("sidebar styles", () => {
 
     const drawerZ = Number(
       styles.match(
-        /\.sidebar,\s*\n\s*\.sidebar-dock--pinned \.sidebar\s*\{([^}]*)\}/,
-      )?.[1].match(/z-index:\s*(\d+)/)?.[1],
+        /\.sidebar-dock--drawer-open \.sidebar\s*\{[^}]*z-index:\s*(\d+)/,
+      )?.[1],
     );
     const backdropZ = Number(
       styles.match(/\.sidebar-backdrop\s*\{[^}]*z-index:\s*(\d+)/)?.[1],
@@ -121,10 +128,8 @@ describe("sidebar styles", () => {
   });
 
   test("the closed drawer is hidden from the tab order", () => {
-    const closedDrawer = styles.match(
-      /\.sidebar,\s*\n\s*\.sidebar-dock--pinned \.sidebar\s*\{([^}]*)\}/,
+    expect(styles).toMatch(
+      /\.sidebar\s*\{[^}]*visibility:\s*hidden/,
     );
-    expect(closedDrawer).not.toBeNull();
-    expect(closedDrawer[1]).toMatch(/visibility:\s*hidden/);
   });
 });

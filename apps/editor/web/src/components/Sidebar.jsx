@@ -3,12 +3,9 @@ import { Link, useLocation } from "react-router-dom";
 import { CATALOG_ROUTES, PORTFOLIO_ROUTES } from "../lib/routes.js";
 
 // The Editor's persistent chrome. It renders on every route beside the main
-// region: a 64px rail that expands to 288px on hover or keyboard focus, pins
-// open on demand (persisted across reloads), and becomes an overlay drawer on
-// narrow screens. It owns its own open/pinned state so the shell only has to
-// place it.
-const sidebarPinStorageKey = "noteharbor.sidebarPinned";
-
+// region: a 64px rail that expands to 288px on hover or keyboard focus and
+// becomes an overlay drawer on narrow screens. It owns its own drawer state so
+// the shell only has to place it.
 const SIDEBAR_GROUPS = [
   {
     id: "catalog",
@@ -37,22 +34,6 @@ const SIDEBAR_GROUPS = [
   },
 ];
 
-function readStoredPin() {
-  if (typeof window === "undefined") {
-    return false;
-  }
-
-  return window.localStorage.getItem(sidebarPinStorageKey) === "true";
-}
-
-function writeStoredPin(pinned) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(sidebarPinStorageKey, String(pinned));
-}
-
 function isItemActive(item, pathname) {
   if (item.matches) {
     return item.matches(pathname);
@@ -78,25 +59,6 @@ function NoteHarborMark() {
   );
 }
 
-function ChevronIcon({ direction }) {
-  return (
-    <svg
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.7"
-      viewBox="0 0 24 24"
-    >
-      {direction === "left" ? (
-        <path d="M14.5 6 8.5 12l6 6" />
-      ) : (
-        <path d="M9.5 6 15.5 12l-6 6" />
-      )}
-    </svg>
-  );
-}
-
 function HamburgerIcon() {
   return (
     <svg
@@ -114,17 +76,8 @@ function HamburgerIcon() {
 
 function Sidebar() {
   const { pathname } = useLocation();
-  const [pinned, setPinned] = useState(readStoredPin);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const hamburgerRef = useRef(null);
-
-  function togglePinned() {
-    setPinned((current) => {
-      const next = !current;
-      writeStoredPin(next);
-      return next;
-    });
-  }
 
   function closeDrawer({ restoreFocus = false } = {}) {
     setDrawerOpen(false);
@@ -150,14 +103,7 @@ function Sidebar() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [drawerOpen]);
 
-  const dockClassName = [
-    "sidebar-dock",
-    pinned ? "sidebar-dock--pinned" : "",
-    drawerOpen ? "sidebar-dock--drawer-open" : "",
-  ]
-    .filter(Boolean)
-    .join(" ");
-  const pinLabel = pinned ? "Collapse sidebar" : "Keep sidebar expanded";
+  const dockClassName = `sidebar-dock${drawerOpen ? " sidebar-dock--drawer-open" : ""}`;
   const drawerLabel = drawerOpen ? "Close navigation" : "Open navigation";
 
   return (
@@ -189,19 +135,9 @@ function Sidebar() {
               <span aria-hidden="true" className="sidebar-mark">
                 <NoteHarborMark />
               </span>
+              {/* The wordmark only appears once the rail expands. */}
               <span className="sidebar-wordmark">Note Harbor</span>
             </div>
-            <button
-              aria-controls="app-sidebar"
-              aria-expanded={pinned}
-              aria-label={pinLabel}
-              className="sidebar-pin"
-              onClick={togglePinned}
-              title={pinLabel}
-              type="button"
-            >
-              <ChevronIcon direction={pinned ? "left" : "right"} />
-            </button>
           </div>
 
           <div className="sidebar-nav">
@@ -218,21 +154,23 @@ function Sidebar() {
                 >
                   {group.label}
                 </p>
-                {group.items.map((item) => {
-                  const active = isItemActive(item, pathname);
+                <div className="sidebar-group-links">
+                  {group.items.map((item) => {
+                    const active = isItemActive(item, pathname);
 
-                  return (
-                    <Link
-                      aria-current={active ? "page" : undefined}
-                      className={`sidebar-link${active ? " sidebar-link--active" : ""}`}
-                      key={item.to}
-                      onClick={() => closeDrawer()}
-                      to={item.to}
-                    >
-                      {item.label}
-                    </Link>
-                  );
-                })}
+                    return (
+                      <Link
+                        aria-current={active ? "page" : undefined}
+                        className={`sidebar-link${active ? " sidebar-link--active" : ""}`}
+                        key={item.to}
+                        onClick={() => closeDrawer()}
+                        to={item.to}
+                      >
+                        {item.label}
+                      </Link>
+                    );
+                  })}
+                </div>
               </div>
             ))}
           </div>

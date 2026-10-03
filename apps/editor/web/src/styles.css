@@ -134,7 +134,7 @@ input[type="radio"] {
   padding: 16px 24px;
 }
 
-/* ── Catalog sidebar: rail, pin, and narrow-screen drawer ─────────────── */
+/* ── Catalog sidebar: rail and narrow-screen drawer ───────────────────── */
 .sidebar-dock {
   position: relative;
   flex: 0 0 auto;
@@ -202,39 +202,6 @@ input[type="radio"] {
   white-space: nowrap;
 }
 
-.sidebar-pin {
-  position: absolute;
-  top: 50%;
-  right: 8px;
-  transform: translateY(-50%);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  padding: 0;
-  border: 0;
-  border-radius: 9px;
-  background: transparent;
-  color: var(--text-muted);
-  opacity: 0;
-  pointer-events: none;
-  transition:
-    opacity 0.12s ease,
-    background 0.12s ease,
-    color 0.12s ease;
-}
-
-.sidebar-pin:hover {
-  background: var(--surface-3);
-  color: var(--accent-strong);
-}
-
-.sidebar-pin svg {
-  width: 17px;
-  height: 17px;
-}
-
 .sidebar-nav {
   flex: 1 1 auto;
   min-height: 0;
@@ -243,7 +210,7 @@ input[type="radio"] {
   padding: 12px 10px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 4px;
   opacity: 0;
   pointer-events: none;
 }
@@ -252,6 +219,12 @@ input[type="radio"] {
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.sidebar-group + .sidebar-group {
+  margin-top: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
 }
 
 .sidebar-group-label {
@@ -264,14 +237,24 @@ input[type="radio"] {
   color: var(--text-faint);
 }
 
+/* The links hang off their group label, down an indented rule. */
+.sidebar-group-links {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  margin-left: 20px;
+  padding-left: 12px;
+  border-left: 1.5px solid var(--border);
+}
+
 .sidebar-link {
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 9px;
-  border-radius: 9px;
+  padding: 7px 9px;
+  border-radius: 8px;
   color: var(--text-muted);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
@@ -296,44 +279,27 @@ input[type="radio"] {
 }
 
 /* Wide screens: the dock stays in flow. The rail expands over the content on
-   hover or keyboard focus, and pushes the content only when pinned. */
+   hover or keyboard focus; it is never pinned, so it never pushes content. */
 @media (min-width: 901px) {
-  .sidebar-dock--pinned {
-    width: var(--sidebar-expanded-width);
-  }
-
-  .sidebar-dock:not(.sidebar-dock--pinned):hover .sidebar,
-  .sidebar-dock:not(.sidebar-dock--pinned):has(:focus-visible) .sidebar {
+  .sidebar-dock:hover .sidebar,
+  .sidebar-dock:has(:focus-visible) .sidebar {
     width: var(--sidebar-expanded-width);
     box-shadow: var(--shadow-lg);
   }
 
-  .sidebar-dock--pinned .sidebar {
-    width: var(--sidebar-expanded-width);
-  }
-
-  .sidebar-dock--pinned .sidebar-wordmark,
-  .sidebar-dock:not(.sidebar-dock--pinned):hover .sidebar-wordmark,
-  .sidebar-dock:not(.sidebar-dock--pinned):has(:focus-visible) .sidebar-wordmark {
+  .sidebar-dock:hover .sidebar-wordmark,
+  .sidebar-dock:has(:focus-visible) .sidebar-wordmark {
     display: block;
   }
 
-  .sidebar-dock--pinned .sidebar-nav,
-  .sidebar-dock:not(.sidebar-dock--pinned):hover .sidebar-nav,
-  .sidebar-dock:not(.sidebar-dock--pinned):has(:focus-visible) .sidebar-nav {
-    opacity: 1;
-    pointer-events: auto;
-  }
-
-  .sidebar-dock--pinned .sidebar-pin,
-  .sidebar-dock:not(.sidebar-dock--pinned):hover .sidebar-pin,
-  .sidebar-dock:not(.sidebar-dock--pinned):has(:focus-visible) .sidebar-pin {
+  .sidebar-dock:hover .sidebar-nav,
+  .sidebar-dock:has(:focus-visible) .sidebar-nav {
     opacity: 1;
     pointer-events: auto;
   }
 
   /* Collapsed: show only the mark, centred, and keep the rail visually bare. */
-  .sidebar-dock:not(.sidebar-dock--pinned):not(:hover):not(:has(:focus-visible)) .sidebar-head {
+  .sidebar-dock:not(:hover):not(:has(:focus-visible)) .sidebar-head {
     justify-content: center;
     padding: 0;
   }
@@ -341,23 +307,21 @@ input[type="radio"] {
 
 /* Narrow screens: the rail becomes an overlay drawer opened by the hamburger. */
 @media (max-width: 900px) {
-  .sidebar-dock,
-  .sidebar-dock--pinned {
+  .sidebar-dock {
     width: 0;
   }
 
-  .sidebar,
-  .sidebar-dock--pinned .sidebar {
+  .sidebar {
     width: var(--sidebar-expanded-width);
     transform: translateX(-100%);
     visibility: hidden;
     box-shadow: var(--shadow-lg);
-    z-index: 70;
   }
 
   .sidebar-dock--drawer-open .sidebar {
     transform: translateX(0);
     visibility: visible;
+    z-index: 70;
   }
 
   .sidebar-dock .sidebar-wordmark {
@@ -367,10 +331,6 @@ input[type="radio"] {
   .sidebar-dock .sidebar-nav {
     opacity: 1;
     pointer-events: auto;
-  }
-
-  .sidebar-pin {
-    display: none;
   }
 
   .sidebar-hamburger {
@@ -436,7 +396,6 @@ input[type="radio"] {
 @media (prefers-reduced-motion: reduce) {
   .sidebar-dock,
   .sidebar,
-  .sidebar-pin,
   .sidebar-link {
     transition: none;
   }
