@@ -126,6 +126,37 @@ describe("NamedRecordsTable rendering", () => {
 
     expect(screen.getByText("No collections yet.")).toBeInTheDocument();
   });
+
+  test("renders caller-provided extra columns", () => {
+    render(
+      <NamedRecordsTable
+        ariaLabel="Records"
+        extraColumns={[
+          {
+            key: "count",
+            header: "Notes",
+            className: "named-records-count-cell",
+            render: (record) => record.id * 10,
+          },
+        ]}
+        onCreate={vi.fn()}
+        onDelete={vi.fn()}
+        onSetDefault={vi.fn()}
+        onUpdate={vi.fn()}
+        records={baseRecords}
+      />,
+    );
+
+    const cells = Array.from(
+      screen.getByRole("table").querySelectorAll("tbody .named-records-count-cell"),
+      (cell) => cell.textContent,
+    );
+
+    expect(cells).toEqual(["10", "20", "30"]);
+    expect(
+      screen.getByRole("columnheader", { name: "Notes" }),
+    ).toBeInTheDocument();
+  });
 });
 
 describe("NamedRecordsTable default flag", () => {
@@ -475,6 +506,13 @@ describe("NamedRecordsTable reordering", () => {
     renderTable();
 
     expect(screen.queryByLabelText("Move Alpha")).not.toBeInTheDocument();
+  });
+
+  test("the drag handle shows the banknote table's six dots", () => {
+    render(<Harness onReorder={vi.fn()} />);
+
+    const handle = screen.getByLabelText("Move Alpha");
+    expect(handle.querySelectorAll(".drag-handle-dots span")).toHaveLength(6);
   });
 
   test("dropping a row hands the caller the new id order", async () => {

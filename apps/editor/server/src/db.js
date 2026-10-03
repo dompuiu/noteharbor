@@ -529,19 +529,40 @@ function initializeSchema(database) {
 function createStatements(database) {
   return {
     listCollectionsStatement: database.prepare(`
-      SELECT id, name, is_default, display_order, created_at, updated_at
+      SELECT
+        collections.id,
+        collections.name,
+        collections.is_default,
+        collections.display_order,
+        collections.created_at,
+        collections.updated_at,
+        (SELECT COUNT(*) FROM banknotes WHERE banknotes.collection_id = collections.id) AS note_count
       FROM collections
       ORDER BY display_order ASC, id ASC
     `),
     getDefaultCollectionStatement: database.prepare(`
-      SELECT id, name, is_default, display_order, created_at, updated_at
+      SELECT
+        collections.id,
+        collections.name,
+        collections.is_default,
+        collections.display_order,
+        collections.created_at,
+        collections.updated_at,
+        (SELECT COUNT(*) FROM banknotes WHERE banknotes.collection_id = collections.id) AS note_count
       FROM collections
       WHERE is_default = 1
       ORDER BY id ASC
       LIMIT 1
     `),
     getCollectionStatement: database.prepare(`
-      SELECT id, name, is_default, display_order, created_at, updated_at
+      SELECT
+        collections.id,
+        collections.name,
+        collections.is_default,
+        collections.display_order,
+        collections.created_at,
+        collections.updated_at,
+        (SELECT COUNT(*) FROM banknotes WHERE banknotes.collection_id = collections.id) AS note_count
       FROM collections
       WHERE id = ?
     `),

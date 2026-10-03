@@ -25,6 +25,24 @@ function manualNames() {
     .map((collection) => collection.name);
 }
 
+function notePayload(collectionId) {
+  return {
+    collection_id: collectionId,
+    denomination: '',
+    issue_date: '',
+    catalog_number: '',
+    grading_company: '',
+    grade: '',
+    watermark: '',
+    serial: '',
+    url: '',
+    notes: '',
+    tags: [],
+    scraped_data: null,
+    images: []
+  };
+}
+
 test('collections keep a manual order: new rows append and defaults do not re-sort', () => {
   const second = db.createCollection('Manual Second');
   db.createCollection('Manual First');
@@ -49,6 +67,22 @@ test('collections keep a manual order: new rows append and defaults do not re-so
     db.reorderCollections(reversed).map((collection) => collection.id),
     reversed
   );
+});
+
+test('getAllCollections reports how many notes each collection holds', () => {
+  const a = db.createCollection('Counts A');
+  const b = db.createCollection('Counts B');
+
+  db.createNote(notePayload(a.id));
+  db.createNote(notePayload(a.id));
+  db.createNote(notePayload(b.id));
+
+  const counts = new Map(
+    db.getAllCollections().map((collection) => [collection.id, collection.note_count])
+  );
+
+  assert.equal(counts.get(a.id), 2);
+  assert.equal(counts.get(b.id), 1);
 });
 
 test('reorderCollections rejects lists that are not a full permutation', () => {

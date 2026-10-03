@@ -20,6 +20,7 @@ const PAGE_FALLBACK_ROWS = 10;
 function NamedRecordsTable({
   ariaLabel = "Named records",
   emptyText = "No records yet.",
+  extraColumns = [],
   itemLabel = "record",
   itemLabelPlural = "records",
   loading = false,
@@ -65,7 +66,8 @@ function NamedRecordsTable({
   const [focusRequest, setFocusRequest] = useState(null);
 
   const canReorder = Boolean(onReorder);
-  const totalColumnCount = (canReorder ? 1 : 0) + 3;
+  const totalColumnCount =
+    (canReorder ? 1 : 0) + 2 + extraColumns.length + 1;
 
   editingIdRef.current = editingId;
 
@@ -595,6 +597,15 @@ function NamedRecordsTable({
             <tr>
               {canReorder ? <th className="named-records-drag-cell" /> : null}
               <th scope="col">Name</th>
+              {extraColumns.map((column) => (
+                <th
+                  className={column.className}
+                  key={column.key}
+                  scope="col"
+                >
+                  {column.header}
+                </th>
+              ))}
               <th scope="col">Default</th>
               <th scope="col">Actions</th>
             </tr>
@@ -780,6 +791,7 @@ function NamedRecordsTable({
                             <span />
                             <span />
                             <span />
+                            <span />
                           </span>
                         </button>
                       </td>
@@ -800,6 +812,11 @@ function NamedRecordsTable({
                       record.name
                     )}
                   </td>
+                  {extraColumns.map((column) => (
+                    <td className={column.className} key={column.key}>
+                      {column.render(record)}
+                    </td>
+                  ))}
                   <td className="named-records-default-cell">
                     <button
                       aria-label={
@@ -818,7 +835,7 @@ function NamedRecordsTable({
                   </td>
                   <td className="named-records-actions-cell">
                     {isEditing ? (
-                      <>
+                      <div className="inline-actions">
                         <button
                           className="button button-primary"
                           disabled={isBusy}
@@ -835,7 +852,7 @@ function NamedRecordsTable({
                         >
                           Cancel
                         </button>
-                      </>
+                      </div>
                     ) : (
                       <div className="inline-actions">
                         <button
@@ -938,24 +955,29 @@ function NamedRecordsTable({
                     value={draftName}
                   />
                 </td>
+                {extraColumns.map((column) => (
+                  <td className={column.className} key={column.key} />
+                ))}
                 <td className="named-records-default-cell" />
                 <td className="named-records-actions-cell">
-                  <button
-                    className="button button-primary"
-                    disabled={saving}
-                    onClick={() => void commitAdd()}
-                    type="button"
-                  >
-                    Add
-                  </button>
-                  <button
-                    className="button"
-                    disabled={saving}
-                    onClick={cancelAdd}
-                    type="button"
-                  >
-                    Cancel
-                  </button>
+                  <div className="inline-actions">
+                    <button
+                      className="button button-primary"
+                      disabled={saving}
+                      onClick={() => void commitAdd()}
+                      type="button"
+                    >
+                      Add
+                    </button>
+                    <button
+                      className="button"
+                      disabled={saving}
+                      onClick={cancelAdd}
+                      type="button"
+                    >
+                      Cancel
+                    </button>
+                  </div>
                 </td>
               </tr>
             ) : null}

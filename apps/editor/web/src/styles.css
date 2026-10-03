@@ -2662,12 +2662,19 @@ kbd {
   text-align: center;
 }
 
+.named-records-count-cell {
+  width: 64px;
+  text-align: right;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
 .named-records-table th.named-records-drag-cell,
 .named-records-table td.named-records-drag-cell {
   position: relative;
-  width: 30px;
-  min-width: 30px;
-  max-width: 30px;
+  width: 26px;
+  min-width: 26px;
+  max-width: 26px;
   padding: 0;
   overflow: hidden;
 }

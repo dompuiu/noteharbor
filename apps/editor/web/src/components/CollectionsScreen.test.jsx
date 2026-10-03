@@ -14,8 +14,8 @@ function collectionsContext(overrides = {}) {
     activeCollection: { id: 1, is_default: 1, name: "Default" },
     activeCollectionId: 1,
     collections: [
-      { id: 1, is_default: 1, name: "Default" },
-      { id: 2, is_default: 0, name: "Archive" },
+      { id: 1, is_default: 1, name: "Default", note_count: 3 },
+      { id: 2, is_default: 0, name: "Archive", note_count: 0 },
     ],
     collectionsError: "",
     createCollection: vi.fn(),
@@ -56,6 +56,17 @@ describe("CollectionsScreen", () => {
     expect(
       screen.getByRole("button", { name: "Mark Archive as default" }),
     ).toBeInTheDocument();
+  });
+
+  test("shows how many notes each collection holds", () => {
+    render(<CollectionsScreen />);
+
+    const counts = Array.from(
+      screen.getByRole("table").querySelectorAll("tbody .named-records-count-cell"),
+      (cell) => cell.textContent,
+    );
+
+    expect(counts).toEqual(["3", "0"]);
   });
 
   test("creating a collection goes through the context", async () => {

@@ -245,7 +245,7 @@ Notes, tags, and CSV import are scoped per collection. `GET/POST/PUT/DELETE /api
 
 ```
 GET /api/collections
--> { collections: [{ id, name, is_default, display_order, created_at, updated_at }, ...] }
+-> { collections: [{ id, name, is_default, display_order, note_count, created_at, updated_at }, ...] }
 
 POST /api/collections
 Body: { name }

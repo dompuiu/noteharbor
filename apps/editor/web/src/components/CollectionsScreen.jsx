@@ -20,7 +20,17 @@ function CollectionsScreen() {
     id: collection.id,
     isDefault: Number(collection.is_default) === 1,
     name: collection.name,
+    noteCount: Number(collection.note_count ?? 0),
   }));
+
+  const extraColumns = [
+    {
+      key: "notes",
+      header: "Notes",
+      className: "named-records-count-cell",
+      render: (record) => record.noteCount,
+    },
+  ];
 
   return (
     <section className="screen-stack narrow-stack collections-screen">
@@ -44,6 +54,7 @@ function CollectionsScreen() {
         <NamedRecordsTable
           ariaLabel="Collections"
           emptyText="No collections yet. Add your first collection to get started."
+          extraColumns={extraColumns}
           itemLabel="collection"
           itemLabelPlural="collections"
           loading={loadingCollections}
