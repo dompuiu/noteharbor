@@ -36,6 +36,8 @@
   --radius-lg: 16px;
   --radius-xl: 20px;
   --radius-pill: 999px;
+  --sidebar-rail-width: 64px;
+  --sidebar-expanded-width: 288px;
   --shadow-sm: 0 1px 2px rgba(62, 44, 20, 0.07);
   --shadow-md: 0 8px 24px rgba(62, 44, 20, 0.12);
   --shadow-lg: 0 24px 48px rgba(62, 44, 20, 0.18);
@@ -107,28 +109,334 @@ input[type="radio"] {
 }
 
 .app-shell {
-  width: min(1400px, calc(100vw - 32px));
-  margin: 0 auto;
-  padding: 16px 0;
+  display: flex;
+  flex-direction: row;
+  width: 100%;
   height: 100vh;
+  overflow: hidden;
+}
+
+.app-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 
-.app-shell--wide {
-  width: 100%;
-  max-width: none;
-  margin: 0;
-  padding-left: 16px;
-  padding-right: 16px;
-}
-
-.app-shell > main {
+.app-main > main {
   flex: 1 1 auto;
   min-height: 0;
   display: flex;
   flex-direction: column;
   overflow: hidden;
+  padding: 16px 24px;
+}
+
+/* ── Catalog sidebar: rail, pin, and narrow-screen drawer ─────────────── */
+.sidebar-dock {
+  position: relative;
+  flex: 0 0 auto;
+  width: var(--sidebar-rail-width);
+  transition: width 0.18s cubic-bezier(0.4, 0, 0.2, 1);
+  z-index: 40;
+}
+
+.sidebar {
+  position: absolute;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  width: var(--sidebar-rail-width);
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-right: 1px solid var(--border);
+  transition:
+    width 0.18s cubic-bezier(0.4, 0, 0.2, 1),
+    box-shadow 0.18s ease,
+    transform 0.18s ease;
+  z-index: 40;
+}
+
+.sidebar-head {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 58px;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.sidebar-mark {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  display: grid;
+  place-items: center;
+  color: var(--accent-ink);
+  background: linear-gradient(140deg, hsl(28 55% 50%), hsl(28 62% 32%));
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.28), var(--shadow-sm);
+}
+
+.sidebar-mark svg {
+  width: 17px;
+  height: 17px;
+}
+
+.sidebar-wordmark {
+  display: none;
+  font-size: 13.5px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+.sidebar-pin {
+  position: absolute;
+  top: 50%;
+  right: 8px;
+  transform: translateY(-50%);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--text-muted);
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.sidebar-pin:hover {
+  background: var(--surface-3);
+  color: var(--accent-strong);
+}
+
+.sidebar-pin svg {
+  width: 17px;
+  height: 17px;
+}
+
+.sidebar-nav {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  opacity: 0;
+  pointer-events: none;
+}
+
+.sidebar-group {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-group-label {
+  margin: 0;
+  padding: 2px 9px 6px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--text-faint);
+}
+
+.sidebar-link {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 9px;
+  border-radius: 9px;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  white-space: nowrap;
+  transition:
+    background 0.12s ease,
+    color 0.12s ease;
+}
+
+.sidebar-link:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.sidebar-link--active {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.sidebar-hamburger,
+.sidebar-backdrop {
+  display: none;
+}
+
+/* Wide screens: the dock stays in flow. The rail expands over the content on
+   hover or keyboard focus, and pushes the content only when pinned. */
+@media (min-width: 901px) {
+  .sidebar-dock--pinned {
+    width: var(--sidebar-expanded-width);
+  }
+
+  .sidebar-dock:not(.sidebar-dock--pinned):hover .sidebar,
+  .sidebar-dock:not(.sidebar-dock--pinned):has(:focus-visible) .sidebar {
+    width: var(--sidebar-expanded-width);
+    box-shadow: var(--shadow-lg);
+  }
+
+  .sidebar-dock--pinned .sidebar {
+    width: var(--sidebar-expanded-width);
+  }
+
+  .sidebar-dock--pinned .sidebar-wordmark,
+  .sidebar-dock:not(.sidebar-dock--pinned):hover .sidebar-wordmark,
+  .sidebar-dock:not(.sidebar-dock--pinned):has(:focus-visible) .sidebar-wordmark {
+    display: block;
+  }
+
+  .sidebar-dock--pinned .sidebar-nav,
+  .sidebar-dock:not(.sidebar-dock--pinned):hover .sidebar-nav,
+  .sidebar-dock:not(.sidebar-dock--pinned):has(:focus-visible) .sidebar-nav {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .sidebar-dock--pinned .sidebar-pin,
+  .sidebar-dock:not(.sidebar-dock--pinned):hover .sidebar-pin,
+  .sidebar-dock:not(.sidebar-dock--pinned):has(:focus-visible) .sidebar-pin {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  /* Collapsed: show only the mark, centred, and keep the rail visually bare. */
+  .sidebar-dock:not(.sidebar-dock--pinned):not(:hover):not(:has(:focus-visible)) .sidebar-head {
+    justify-content: center;
+    padding: 0;
+  }
+}
+
+/* Narrow screens: the rail becomes an overlay drawer opened by the hamburger. */
+@media (max-width: 900px) {
+  .sidebar-dock,
+  .sidebar-dock--pinned {
+    width: 0;
+  }
+
+  .sidebar,
+  .sidebar-dock--pinned .sidebar {
+    width: var(--sidebar-expanded-width);
+    transform: translateX(-100%);
+    box-shadow: var(--shadow-lg);
+    z-index: 70;
+  }
+
+  .sidebar-dock--drawer-open .sidebar {
+    transform: translateX(0);
+  }
+
+  .sidebar-dock .sidebar-wordmark {
+    display: block;
+  }
+
+  .sidebar-dock .sidebar-nav {
+    opacity: 1;
+    pointer-events: auto;
+  }
+
+  .sidebar-pin {
+    display: none;
+  }
+
+  .sidebar-hamburger {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    z-index: 80;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: 1px solid var(--border-control);
+    border-radius: var(--radius-md);
+    background: var(--surface);
+    color: var(--text);
+    box-shadow: var(--shadow-sm);
+  }
+
+  .sidebar-hamburger svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  /* Keep the toggle visible above the drawer; inset the header so the brand
+     clears it. */
+  .sidebar-dock--drawer-open .sidebar-head {
+    padding-left: 64px;
+  }
+
+  .sidebar-backdrop {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 65;
+    background: rgba(32, 25, 19, 0.42);
+  }
+
+  .app-main > main {
+    padding: 64px 16px 16px;
+  }
+}
+
+.portfolio-stub {
+  max-width: 560px;
+  margin: 0 auto;
+  padding: 32px;
+  text-align: center;
+  border: 1px dashed var(--border-control);
+  border-radius: var(--radius-lg);
+}
+
+.portfolio-stub h2 {
+  margin: 0 0 8px;
+}
+
+.portfolio-stub p {
+  margin: 0;
+  font-size: 13.5px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sidebar-dock,
+  .sidebar {
+    transition: none;
+  }
 }
 
 .site-header {
@@ -2189,11 +2497,6 @@ button.tag {
   .scrape-conflict-footer {
     flex-direction: column-reverse;
     align-items: stretch;
-  }
-
-  .app-shell {
-    width: min(100vw - 20px, 1400px);
-    padding-top: 10px;
   }
 
   .site-branding {

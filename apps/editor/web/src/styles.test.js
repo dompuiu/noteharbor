@@ -70,3 +70,33 @@ describe("table styles", () => {
     );
   });
 });
+
+describe("sidebar styles", () => {
+  test("defines the collapsed rail and expanded widths", () => {
+    expect(styles).toMatch(/--sidebar-rail-width:\s*64px/);
+    expect(styles).toMatch(/--sidebar-expanded-width:\s*288px/);
+    expect(styles).toMatch(
+      /\.sidebar\s*\{[^}]*width:\s*var\(--sidebar-rail-width\)/,
+    );
+    expect(styles).toMatch(
+      /\.sidebar-dock--pinned\s*\{[^}]*width:\s*var\(--sidebar-expanded-width\)/,
+    );
+  });
+
+  test("expands on hover and on keyboard focus entering the rail", () => {
+    expect(styles).toMatch(
+      /\.sidebar-dock:not\(\.sidebar-dock--pinned\):hover\s+\.sidebar/,
+    );
+    expect(styles).toMatch(
+      /\.sidebar-dock:not\(\.sidebar-dock--pinned\):has\(:focus-visible\)\s+\.sidebar/,
+    );
+  });
+
+  test("the reduced-motion block drops the sidebar transition", () => {
+    const block = styles.match(
+      /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/,
+    );
+    expect(block).not.toBeNull();
+    expect(block[1]).toMatch(/\.sidebar\s*\{[^}]*transition:\s*none/);
+  });
+});

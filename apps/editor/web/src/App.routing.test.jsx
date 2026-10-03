@@ -32,7 +32,7 @@ vi.mock("./components/NoteEditForm.jsx", () => ({
 import { ShellContent } from "./App.jsx";
 import { CollectionsProvider } from "./lib/collections.jsx";
 import { getCollections } from "./lib/api.js";
-import { CATALOG_ROUTES } from "./lib/routes.js";
+import { CATALOG_ROUTES, PORTFOLIO_ROUTES } from "./lib/routes.js";
 
 function LocationProbe() {
   const location = useLocation();
@@ -100,6 +100,37 @@ describe("Root redirect", () => {
       expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
     });
     expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
+  });
+});
+
+describe("Portfolio destinations", () => {
+  test("serves the categories placeholder at /portfolio/categories", async () => {
+    renderAt(PORTFOLIO_ROUTES.categories);
+
+    expect(
+      await screen.findByText("Categories are coming soon"),
+    ).toBeInTheDocument();
+    expect(currentPath()).toBe("/portfolio/categories");
+  });
+
+  test("serves the groupings placeholder at /portfolio/groupings", async () => {
+    renderAt(PORTFOLIO_ROUTES.groupings);
+
+    expect(
+      await screen.findByText("Groupings are coming soon"),
+    ).toBeInTheDocument();
+    expect(currentPath()).toBe("/portfolio/groupings");
+  });
+
+  test("renders the sidebar navigation on every route", async () => {
+    renderAt(CATALOG_ROUTES.collections);
+
+    expect(
+      await screen.findByRole("navigation", { name: "Sections" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Categories" }),
+    ).toBeInTheDocument();
   });
 });
 
