@@ -5,6 +5,7 @@ import {
   Routes,
   useLocation,
 } from "react-router-dom";
+import { CollectionsScreen } from "./components/CollectionsScreen.jsx";
 import { ImportScreen } from "./components/ImportScreen.jsx";
 import { NoteEditForm } from "./components/NoteEditForm.jsx";
 import { NotesTable } from "./components/NotesTable.jsx";
@@ -49,6 +50,10 @@ function ShellContent() {
                   )
             }
             path={CATALOG_ROUTES.banknotes}
+          />
+          <Route
+            element={<CollectionsScreen />}
+            path={CATALOG_ROUTES.collections}
           />
           <Route
             element={(

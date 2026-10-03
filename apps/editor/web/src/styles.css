@@ -2604,3 +2604,158 @@ kbd {
     grid-row: auto;
   }
 }
+
+/* ── Named records table ─────────────────────────────────────────────
+   A compact table of named records (Collections today, Categories and
+   Groupings later). It shares the table's focus/zebra language but not the
+   wide banknote table's fixed columns, so it sizes to its panel. */
+.collections-panel {
+  min-height: 0;
+}
+
+.named-records {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.named-records-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.named-records-table-wrap {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+/* The banknote table forces a 1200px minimum; this one must fit its panel. */
+.named-records-table {
+  width: 100%;
+  min-width: 0;
+}
+
+.named-records-table th,
+.named-records-table td {
+  padding: 9px 12px;
+  text-align: left;
+}
+
+.named-records-table thead th {
+  font-size: 0.76rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+
+.named-records-select-cell {
+  width: 44px;
+  text-align: center;
+}
+
+.named-records-default-cell {
+  width: 76px;
+  text-align: center;
+}
+
+.named-records-actions-cell {
+  width: 1%;
+  white-space: nowrap;
+  text-align: right;
+}
+
+.named-records-actions-cell .button {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+}
+
+.named-record-row {
+  transition: background 0.15s ease;
+}
+
+.named-record-row:hover > td,
+.named-record-row:focus-visible > td,
+.named-record-row--focused > td {
+  background: var(--accent-soft);
+}
+
+.named-record-row:focus-visible {
+  outline: none;
+}
+
+.named-record-row:focus-visible > td,
+.named-record-row--focused > td {
+  box-shadow:
+    inset 0 1px 0 var(--accent),
+    inset 0 -1px 0 var(--accent);
+}
+
+.named-record-row:focus-visible > td:first-child,
+.named-record-row--focused > td:first-child {
+  box-shadow:
+    inset 0 1px 0 var(--accent),
+    inset 0 -1px 0 var(--accent),
+    inset 1px 0 0 var(--accent);
+}
+
+.named-record-row:focus-visible > td:last-child,
+.named-record-row--focused > td:last-child {
+  box-shadow:
+    inset 0 1px 0 var(--accent),
+    inset 0 -1px 0 var(--accent),
+    inset -1px 0 0 var(--accent);
+}
+
+.named-records-name-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+}
+
+.named-record-star {
+  padding: 4px 6px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-faint);
+  font-size: 1.05rem;
+  line-height: 1;
+}
+
+.named-record-star--on {
+  color: var(--accent);
+}
+
+.named-record-star:disabled {
+  cursor: default;
+}
+
+.named-records-empty-row td {
+  border-bottom: 0;
+}
+
+.named-records-empty-cell {
+  padding: 32px 16px;
+  color: var(--text-muted);
+  text-align: center;
+}
+
+@media (max-width: 640px) {
+  .named-records-actions-cell .button {
+    padding: 4px 8px;
+    font-size: 0.76rem;
+  }
+}

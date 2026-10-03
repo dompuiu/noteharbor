@@ -17,6 +17,10 @@ vi.mock("./components/NotesTable.jsx", () => ({
   NotesTable: () => <div>Banknotes screen</div>,
 }));
 
+vi.mock("./components/CollectionsScreen.jsx", () => ({
+  CollectionsScreen: () => <div>Collections screen</div>,
+}));
+
 vi.mock("./components/ImportScreen.jsx", () => ({
   ImportScreen: () => <div>Import and export screen</div>,
 }));
@@ -64,6 +68,13 @@ describe("Catalog route prefixes", () => {
 
     expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
     expect(currentPath()).toBe("/catalog/banknotes");
+  });
+
+  test("serves the collections screen at /catalog/collections", async () => {
+    renderAt(CATALOG_ROUTES.collections);
+
+    expect(await screen.findByText("Collections screen")).toBeInTheDocument();
+    expect(currentPath()).toBe("/catalog/collections");
   });
 
   test("serves import and export at /catalog/import-export", async () => {
