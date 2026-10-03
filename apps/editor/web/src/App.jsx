@@ -4,18 +4,12 @@ import {
   Route,
   Routes,
   useLocation,
-  useParams,
 } from "react-router-dom";
 import { ImportScreen } from "./components/ImportScreen.jsx";
 import { NoteEditForm } from "./components/NoteEditForm.jsx";
 import { NotesTable } from "./components/NotesTable.jsx";
 import { CollectionsProvider, useCollections } from "./lib/collections.jsx";
 import { CATALOG_ROUTES } from "./lib/routes.js";
-
-function LegacyNoteEditRedirect() {
-  const { id } = useParams();
-  return <Navigate replace to={CATALOG_ROUTES.noteEdit(id)} />;
-}
 
 function ShellContent() {
   const { pathname } = useLocation();
@@ -86,11 +80,6 @@ function ShellContent() {
             element={<Navigate replace to={CATALOG_ROUTES.banknotes} />}
             path="/"
           />
-          <Route
-            element={<Navigate replace to={CATALOG_ROUTES.importExport} />}
-            path="/import"
-          />
-          <Route element={<LegacyNoteEditRedirect />} path="/notes/:id/edit" />
         </Routes>
       </main>
     </div>

@@ -81,7 +81,7 @@ describe("Catalog route prefixes", () => {
   });
 });
 
-describe("Legacy path redirects", () => {
+describe("Root redirect", () => {
   test("/ redirects to /catalog/banknotes", async () => {
     renderAt("/");
 
@@ -89,24 +89,6 @@ describe("Legacy path redirects", () => {
       expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
     });
     expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
-  });
-
-  test("/import redirects to /catalog/import-export", async () => {
-    renderAt("/import");
-
-    await waitFor(() => {
-      expect(currentPath()).toBe(CATALOG_ROUTES.importExport);
-    });
-    expect(await screen.findByText("Import and export screen")).toBeInTheDocument();
-  });
-
-  test("/notes/:id/edit redirects to /catalog/notes/:id/edit", async () => {
-    renderAt("/notes/7/edit");
-
-    await waitFor(() => {
-      expect(currentPath()).toBe("/catalog/notes/7/edit");
-    });
-    expect(await screen.findByText("Note editor screen")).toBeInTheDocument();
   });
 });
 
