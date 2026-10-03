@@ -1,5 +1,5 @@
 import { useRef, useState } from "react";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NamedRecordsTable } from "./NamedRecordsTable.jsx";
@@ -16,6 +16,7 @@ function Harness({
   initialRecords = baseRecords,
   onCreate = vi.fn(),
   onDelete = vi.fn(),
+  onReorder,
   onSetDefault = vi.fn(),
   onUpdate = vi.fn(),
 }) {
@@ -39,6 +40,18 @@ function Harness({
         await onDelete(id);
         setRecords((current) => current.filter((record) => record.id !== id));
       }}
+      onReorder={
+        onReorder
+          ? async (ids) => {
+              await onReorder(ids);
+              setRecords((current) =>
+                ids
+                  .map((id) => current.find((record) => record.id === id))
+                  .filter(Boolean),
+              );
+            }
+          : undefined
+      }
       onSetDefault={async (id) => {
         await onSetDefault(id);
         setRecords((current) =>
@@ -66,6 +79,21 @@ function rowFor(name) {
 
 function renderTable() {
   return render(<Harness />);
+}
+
+function dragEvent(type, props) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.assign(event, props);
+  return event;
+}
+
+function makeDataTransfer() {
+  return {
+    effectAllowed: "",
+    setData: vi.fn(),
+    setDragImage: vi.fn(),
+    getData: vi.fn(() => ""),
+  };
 }
 
 beforeEach(() => {
@@ -265,57 +293,6 @@ describe("NamedRecordsTable delete", () => {
   });
 });
 
-describe("NamedRecordsTable selection", () => {
-  test("a row checkbox toggles that row only", async () => {
-    const user = userEvent.setup();
-    renderTable();
-
-    const beta = screen.getByRole("checkbox", { name: "Select Beta" });
-    await user.click(beta);
-
-    expect(beta).toBeChecked();
-    expect(
-      screen.getByRole("checkbox", { name: "Select Alpha" }),
-    ).not.toBeChecked();
-    expect(screen.getByText("1 of 3 selected")).toBeInTheDocument();
-  });
-
-  test("select all toggles every row and back", async () => {
-    const user = userEvent.setup();
-    renderTable();
-
-    const selectAll = screen.getByRole("checkbox", {
-      name: "Select all collections",
-    });
-    await user.click(selectAll);
-
-    expect(screen.getByRole("checkbox", { name: "Select Alpha" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Select Beta" })).toBeChecked();
-    expect(screen.getByRole("checkbox", { name: "Select Gamma" })).toBeChecked();
-    expect(screen.getByText("3 of 3 selected")).toBeInTheDocument();
-
-    await user.click(selectAll);
-
-    expect(
-      screen.getByRole("checkbox", { name: "Select Alpha" }),
-    ).not.toBeChecked();
-    expect(screen.getByText("0 of 3 selected")).toBeInTheDocument();
-  });
-
-  test("a partial selection marks the select-all box indeterminate", async () => {
-    const user = userEvent.setup();
-    renderTable();
-
-    await user.click(screen.getByRole("checkbox", { name: "Select Beta" }));
-
-    const selectAll = screen.getByRole("checkbox", {
-      name: "Select all collections",
-    });
-    expect(selectAll.indeterminate).toBe(true);
-    expect(selectAll).not.toBeChecked();
-  });
-});
-
 describe("NamedRecordsTable keyboard navigation", () => {
   test("ArrowDown / ArrowUp move the row cursor", async () => {
     const user = userEvent.setup();
@@ -355,5 +332,251 @@ describe("NamedRecordsTable keyboard navigation", () => {
     rowFor("Gamma").focus();
     await user.keyboard("{ArrowDown}");
     expect(rowFor("Gamma")).toHaveFocus();
+  });
+
+  test("Home and End jump to the first and last row", async () => {
+    const user = userEvent.setup();
+    renderTable();
+
+    rowFor("Beta").focus();
+
+    await user.keyboard("{End}");
+    expect(rowFor("Gamma")).toHaveFocus();
+
+    await user.keyboard("{Home}");
+    expect(rowFor("Alpha")).toHaveFocus();
+  });
+
+  test("PageDown and PageUp move a page and clamp", async () => {
+    const user = userEvent.setup();
+    renderTable();
+
+    rowFor("Alpha").focus();
+
+    await user.keyboard("{PageDown}");
+    expect(rowFor("Gamma")).toHaveFocus();
+
+    await user.keyboard("{PageUp}");
+    expect(rowFor("Alpha")).toHaveFocus();
+  });
+
+  test("Shift+Arrow does not pull the row focus", async () => {
+    const user = userEvent.setup();
+    renderTable();
+
+    rowFor("Alpha").focus();
+
+    await user.keyboard("{Shift>}{ArrowDown}{/Shift}");
+    await user.keyboard("{Shift>}{ArrowUp}{/Shift}");
+
+    expect(rowFor("Alpha")).toHaveFocus();
+  });
+
+  test("Escape on a focused row drops the cursor to the table anchor", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+
+    rowFor("Alpha").focus();
+    await user.keyboard("{Escape}");
+
+    const anchor = container.querySelector(".table-focus-anchor");
+    expect(anchor).toHaveFocus();
+    expect(rowFor("Alpha")).not.toHaveClass("named-record-row--focused");
+  });
+
+  test("ArrowDown from an unfocused screen starts on the first row", async () => {
+    const user = userEvent.setup();
+    renderTable();
+
+    document.body.focus();
+    await user.keyboard("{ArrowDown}");
+
+    expect(rowFor("Alpha")).toHaveFocus();
+  });
+
+  test("a mouse press focuses a row without painting the cursor", async () => {
+    const user = userEvent.setup();
+    renderTable();
+
+    const beta = rowFor("Beta");
+    act(() => {
+      fireEvent.mouseDown(beta);
+      beta.focus();
+      fireEvent.mouseUp(beta);
+    });
+
+    expect(beta).toHaveFocus();
+    expect(beta).not.toHaveClass("named-record-row--focused");
+
+    await user.keyboard("{ArrowDown}");
+    expect(rowFor("Gamma")).toHaveFocus();
+    expect(rowFor("Gamma")).toHaveClass("named-record-row--focused");
+  });
+});
+
+describe("NamedRecordsTable shortcuts", () => {
+  test("`a` opens the add row and focuses its input", async () => {
+    const user = userEvent.setup();
+    renderTable();
+
+    await user.keyboard("a");
+
+    expect(
+      screen.getByRole("textbox", { name: "New collection name" }),
+    ).toHaveFocus();
+  });
+
+  test("`e` begins editing the focused row", async () => {
+    const user = userEvent.setup();
+    renderTable();
+
+    rowFor("Beta").focus();
+    await user.keyboard("e");
+
+    expect(
+      screen.getByRole("textbox", { name: "Rename Beta" }),
+    ).toHaveFocus();
+  });
+
+  test("`d` deletes the focused row after confirmation", async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn();
+    render(<Harness onDelete={onDelete} />);
+
+    rowFor("Beta").focus();
+    await user.keyboard("d");
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: 'Delete "Beta"?' }),
+    ).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+    expect(onDelete).toHaveBeenCalledWith(2);
+  });
+
+  test("`a`/`e`/`d` do nothing while typing in a field", async () => {
+    const user = userEvent.setup();
+    const onDelete = vi.fn();
+    render(<Harness onDelete={onDelete} />);
+
+    await user.click(screen.getByRole("button", { name: "Rename Beta" }));
+    const input = screen.getByRole("textbox", { name: "Rename Beta" });
+    await user.type(input, "aead");
+
+    expect(input).toHaveValue("Betaaead");
+    expect(onDelete).not.toHaveBeenCalled();
+  });
+});
+
+describe("NamedRecordsTable reordering", () => {
+  test("no drag handles appear when the caller does not accept reorders", () => {
+    renderTable();
+
+    expect(screen.queryByLabelText("Move Alpha")).not.toBeInTheDocument();
+  });
+
+  test("dropping a row hands the caller the new id order", async () => {
+    const onReorder = vi.fn().mockResolvedValue(undefined);
+    const { container } = render(<Harness onReorder={onReorder} />);
+
+    const handle = screen.getByLabelText("Move Alpha");
+    const targetRow = rowFor("Gamma");
+    const dataTransfer = makeDataTransfer();
+
+    await act(async () => {
+      handle.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+    });
+
+    await act(async () => {
+      targetRow.dispatchEvent(
+        dragEvent("dragover", { clientY: 400, dataTransfer }),
+      );
+    });
+
+    expect(
+      container.querySelector(".table-drop-placeholder-row"),
+    ).not.toBeNull();
+
+    await act(async () => {
+      targetRow.dispatchEvent(
+        dragEvent("drop", { clientY: 400, dataTransfer }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(onReorder).toHaveBeenCalledWith([2, 3, 1]);
+    });
+
+    await waitFor(() => {
+      const names = Array.from(
+        container.querySelectorAll("tbody tr.named-record-row .named-records-name-cell"),
+        (cell) => cell.textContent,
+      );
+      expect(names).toEqual(["Beta", "Gamma", "Alpha"]);
+    });
+  });
+
+  test("dropping a row back where it started does not persist a no-op order", async () => {
+    const onReorder = vi.fn().mockResolvedValue(undefined);
+    render(<Harness onReorder={onReorder} />);
+
+    const handle = screen.getByLabelText("Move Beta");
+    const targetRow = rowFor("Gamma");
+    const dataTransfer = makeDataTransfer();
+
+    await act(async () => {
+      handle.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+    });
+    await act(async () => {
+      // A negative clientY is above the row's (all-zero) rect midpoint, so
+      // the computed placement is "before" — which leaves the order unchanged.
+      targetRow.dispatchEvent(
+        dragEvent("dragover", { clientY: -5, dataTransfer }),
+      );
+    });
+    await act(async () => {
+      targetRow.dispatchEvent(
+        dragEvent("drop", { clientY: -5, dataTransfer }),
+      );
+    });
+
+    expect(onReorder).not.toHaveBeenCalled();
+  });
+
+  test("hovering the placeholder keeps the drop target steady", async () => {
+    const onReorder = vi.fn().mockResolvedValue(undefined);
+    const { container } = render(<Harness onReorder={onReorder} />);
+
+    const handle = screen.getByLabelText("Move Alpha");
+    const targetRow = rowFor("Gamma");
+    const dataTransfer = makeDataTransfer();
+
+    await act(async () => {
+      handle.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+    });
+    await act(async () => {
+      targetRow.dispatchEvent(
+        dragEvent("dragover", { clientY: 400, dataTransfer }),
+      );
+    });
+
+    const placeholder = container.querySelector(".table-drop-placeholder-row");
+    expect(placeholder).not.toBeNull();
+
+    await act(async () => {
+      targetRow.dispatchEvent(
+        dragEvent("dragleave", {
+          clientY: 400,
+          dataTransfer,
+          relatedTarget: placeholder,
+        }),
+      );
+    });
+
+    expect(
+      container.querySelector(".table-drop-placeholder-row"),
+    ).not.toBeNull();
   });
 });

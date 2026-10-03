@@ -199,6 +199,16 @@ async function setDefaultCollection(collectionId) {
   return handleResponse(response);
 }
 
+async function reorderCollections(ids) {
+  const response = await fetch('/api/collections/reorder', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ ids })
+  });
+
+  return handleResponse(response);
+}
+
 async function getNotes(collectionId) {
   const response = await fetch(notesBasePath(collectionId));
   return handleResponse(response);
@@ -373,6 +383,7 @@ export {
   importCsv,
   moveNote,
   renameCollection,
+  reorderCollections,
   reorderNotes,
   scrapePreview,
   setDefaultCollection,

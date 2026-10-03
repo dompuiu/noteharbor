@@ -4,6 +4,7 @@ import {
   deleteCollection,
   getCollections,
   renameCollection,
+  reorderCollections,
   setDefaultCollection,
 } from './api.js';
 
@@ -112,6 +113,16 @@ function CollectionsProvider({ children }) {
     await refreshCollections({ preferredCollectionId: collectionId });
   }
 
+  async function handleReorderCollections(ids) {
+    const payload = await reorderCollections(ids);
+    const nextCollections = payload.collections ?? [];
+    // Apply the server's order directly instead of round-tripping through
+    // refreshCollections: a reorder is not a load, and flipping the loading
+    // flag would blank the table mid-drag.
+    setCollections(nextCollections);
+    return nextCollections;
+  }
+
   async function handleDeleteCollection(collectionId) {
     const index = collections.findIndex((collection) => collection.id === collectionId);
     const fallbackCollection =
@@ -150,6 +161,7 @@ function CollectionsProvider({ children }) {
       loadingCollections,
       refreshCollections,
       renameCollection: handleRenameCollection,
+      reorderCollections: handleReorderCollections,
       selectCollection,
       setDefaultCollection: handleSetDefaultCollection,
     }),

@@ -12,6 +12,7 @@ function CollectionsScreen() {
     createCollection,
     deleteCollection,
     renameCollection,
+    reorderCollections,
     setDefaultCollection,
   } = useCollections();
 
@@ -48,6 +49,7 @@ function CollectionsScreen() {
           loading={loadingCollections}
           onCreate={createCollection}
           onDelete={deleteCollection}
+          onReorder={reorderCollections}
           onSetDefault={setDefaultCollection}
           onUpdate={renameCollection}
           records={records}

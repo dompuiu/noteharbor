@@ -54,6 +54,7 @@ function ensureCollectionsTable(database) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
       is_default INTEGER NOT NULL DEFAULT 0,
+      display_order INTEGER,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
@@ -62,17 +63,57 @@ function ensureCollectionsTable(database) {
       ON collections(name COLLATE NOCASE);
   `);
 
-  const columns = database.prepare(`PRAGMA table_info(collections)`).all();
+  let columns = database.prepare(`PRAGMA table_info(collections)`).all();
 
   if (!columns.some((column) => column.name === 'is_default')) {
     database.exec(`ALTER TABLE collections ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0`);
+  }
+
+  if (!columns.some((column) => column.name === 'display_order')) {
+    database.exec(`ALTER TABLE collections ADD COLUMN display_order INTEGER`);
+    columns = database.prepare(`PRAGMA table_info(collections)`).all();
   }
 
   database.exec(`
     CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_single_default
       ON collections(is_default)
       WHERE is_default = 1;
+
+    CREATE INDEX IF NOT EXISTS idx_collections_display_order
+      ON collections(display_order, id);
   `);
+
+  // Backfill the manual order for collections that never had one, keeping
+  // their existing id order. Runs on every open so a partial backfill (or a
+  // collection inserted before the column existed) self-heals.
+  const missing = database.prepare(`
+    SELECT id
+    FROM collections
+    WHERE display_order IS NULL
+    ORDER BY id ASC
+  `).all();
+
+  if (!missing.length) {
+    return;
+  }
+
+  const maxRow = database.prepare(`SELECT COALESCE(MAX(display_order), 0) AS value FROM collections`).get();
+  const assignDisplayOrder = database.prepare(`
+    UPDATE collections
+    SET display_order = @display_order
+    WHERE id = @id
+  `);
+
+  const backfillCollections = database.transaction((rows) => {
+    let nextDisplayOrder = Number(maxRow?.value ?? 0) + 1;
+
+    for (const row of rows) {
+      assignDisplayOrder.run({ id: row.id, display_order: nextDisplayOrder });
+      nextDisplayOrder += 1;
+    }
+  });
+
+  backfillCollections(missing);
 }
 
 function ensureDefaultCollection(database) {
@@ -107,8 +148,14 @@ function ensureDefaultCollection(database) {
   }
 
   const inserted = database.prepare(`
-    INSERT INTO collections (name, is_default, created_at, updated_at)
-    VALUES (?, 1, datetime('now'), datetime('now'))
+    INSERT INTO collections (name, is_default, display_order, created_at, updated_at)
+    VALUES (
+      ?,
+      1,
+      (SELECT COALESCE(MAX(display_order), 0) + 1 FROM collections),
+      datetime('now'),
+      datetime('now')
+    )
   `).run(DEFAULT_COLLECTION_NAME);
 
   return Number(inserted.lastInsertRowid);
@@ -482,25 +529,37 @@ function initializeSchema(database) {
 function createStatements(database) {
   return {
     listCollectionsStatement: database.prepare(`
-      SELECT id, name, is_default, created_at, updated_at
+      SELECT id, name, is_default, display_order, created_at, updated_at
       FROM collections
-      ORDER BY is_default DESC, name COLLATE NOCASE ASC, id ASC
+      ORDER BY display_order ASC, id ASC
     `),
     getDefaultCollectionStatement: database.prepare(`
-      SELECT id, name, is_default, created_at, updated_at
+      SELECT id, name, is_default, display_order, created_at, updated_at
       FROM collections
       WHERE is_default = 1
       ORDER BY id ASC
       LIMIT 1
     `),
     getCollectionStatement: database.prepare(`
-      SELECT id, name, is_default, created_at, updated_at
+      SELECT id, name, is_default, display_order, created_at, updated_at
       FROM collections
       WHERE id = ?
     `),
     createCollectionStatement: database.prepare(`
-      INSERT INTO collections (name, is_default, created_at, updated_at)
-      VALUES (@name, 0, datetime('now'), datetime('now'))
+      INSERT INTO collections (name, is_default, display_order, created_at, updated_at)
+      VALUES (
+        @name,
+        0,
+        (SELECT COALESCE(MAX(display_order), 0) + 1 FROM collections),
+        datetime('now'),
+        datetime('now')
+      )
+    `),
+    updateCollectionDisplayOrderStatement: database.prepare(`
+      UPDATE collections
+      SET display_order = @display_order,
+          updated_at = datetime('now')
+      WHERE id = @id
     `),
     renameCollectionStatement: database.prepare(`
       UPDATE collections
@@ -1006,6 +1065,37 @@ function deleteCollectionById(id) {
   }
 }
 
+function reorderCollections(ids) {
+  getDatabase();
+  const normalizedIds = Array.isArray(ids) ? ids.map((id) => Number(id)) : [];
+  const existingIds = getAllCollections().map((collection) => collection.id);
+
+  if (!normalizedIds.length || normalizedIds.length !== existingIds.length) {
+    throw new Error('Reorder request must include every collection exactly once.');
+  }
+
+  const nextIdsSet = new Set(normalizedIds);
+
+  if (
+    nextIdsSet.size !== normalizedIds.length ||
+    existingIds.some((id) => !nextIdsSet.has(id))
+  ) {
+    throw new Error('Reorder request must include every collection exactly once.');
+  }
+
+  const transaction = db.transaction((nextIds) => {
+    nextIds.forEach((id, index) => {
+      statements.updateCollectionDisplayOrderStatement.run({
+        id,
+        display_order: index + 1
+      });
+    });
+  });
+
+  transaction(normalizedIds);
+  return getAllCollections();
+}
+
 function getAllNotes(collectionId = null) {
   getDatabase();
   const normalizedCollectionId = resolveCollectionId(collectionId);
@@ -1423,6 +1513,7 @@ export {
   openDatabase,
   reloadDatabase,
   renameCollectionById,
+  reorderCollections,
   reorderNotes,
   setDefaultCollectionById,
   replaceNoteTags,

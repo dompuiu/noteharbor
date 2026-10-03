@@ -1,12 +1,22 @@
-import { useEffect, useRef, useState } from "react";
+import { Fragment, useEffect, useRef, useState } from "react";
 import { useConfirmation } from "./ConfirmDialog.jsx";
+import { isEditableElement } from "../lib/editableElement.js";
+
+// The banknote table's page keys land on the first row of the next screenful.
+// A records table is short enough not to need virtualization, so paging is a
+// plain offset of one viewport of rows; this is the fallback when the viewport
+// cannot be measured (notably jsdom).
+const PAGE_FALLBACK_ROWS = 10;
 
 // A table of named records: one row per record, a name field, and a default
-// flag. Each row carries a selection checkbox, a default star, and rename /
-// delete actions. The component owns row selection, the keyboard cursor, and
-// in-place editing, and reports every change through callbacks so the caller
-// keeps owning the record list. It is deliberately free of any domain
-// coupling — Categories and Groupings can pass their own records and verbs.
+// flag. Each row carries a default star and rename / delete actions. The
+// component owns the keyboard cursor and in-place editing, and reports every
+// change through callbacks so the caller keeps owning the record list. Its
+// keyboard model mirrors the banknote table — a window-level cursor with
+// ↑/↓/j/k, Home/End, PgUp/PgDn, `a` to add, `e` to rename, `d` to delete,
+// Enter/Space to edit, and Escape to drop the cursor to the table anchor. It
+// is deliberately free of any domain coupling — Categories and Groupings can
+// pass their own records and verbs.
 function NamedRecordsTable({
   ariaLabel = "Named records",
   emptyText = "No records yet.",
@@ -15,6 +25,7 @@ function NamedRecordsTable({
   loading = false,
   onCreate,
   onDelete,
+  onReorder,
   onSetDefault,
   onUpdate,
   records,
@@ -23,9 +34,21 @@ function NamedRecordsTable({
   const addButtonRef = useRef(null);
   const addInputRef = useRef(null);
   const rowRefs = useRef(new Map());
-  const selectAllRef = useRef(null);
+  const tableWrapRef = useRef(null);
+  // The cursor id lives in a ref as well as state: the global key handler
+  // reads it without re-subscribing on every keystroke, and a mouse press
+  // (which must not paint the highlight) still records where the keyboard
+  // would resume.
+  const focusedIdRef = useRef(null);
+  // The id of the row being edited, reachable from handlers without rebuilding
+  // their closures on every keystroke.
+  const editingIdRef = useRef(null);
+  // True between a row's mousedown and mouseup, so clicking a row focuses it
+  // without claiming the keyboard cursor highlight.
+  const mouseFocusSuppressRef = useRef(false);
+  // The floating clone shown under the pointer while a row is dragged.
+  const dragPreviewRef = useRef(null);
 
-  const [selectedIds, setSelectedIds] = useState([]);
   const [focusedId, setFocusedId] = useState(null);
   const [editingId, setEditingId] = useState(null);
   const [draftName, setDraftName] = useState("");
@@ -33,35 +56,18 @@ function NamedRecordsTable({
   const [busyId, setBusyId] = useState(null);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [draggedId, setDraggedId] = useState(null);
+  const [dropTarget, setDropTarget] = useState(null);
   const { confirm, dialog, isOpen: confirmOpen } = useConfirmation();
   // A focus intent that has to wait for `records` to reflect the change that
   // produced it (a created row, a deleted row's neighbour). A missing row
   // means "not yet", not "give up", so the request survives until it lands.
   const [focusRequest, setFocusRequest] = useState(null);
-  // The id of the row being edited, reachable from handlers without rebuilding
-  // their closures on every keystroke.
-  const editingIdRef = useRef(null);
+
+  const canReorder = Boolean(onReorder);
+  const totalColumnCount = (canReorder ? 1 : 0) + 3;
+
   editingIdRef.current = editingId;
-
-  const selectedIdSet = new Set(selectedIds);
-  const selectedCount = records.reduce(
-    (count, record) => (selectedIdSet.has(record.id) ? count + 1 : count),
-    0,
-  );
-  const allSelected = records.length > 0 && selectedCount === records.length;
-  const someSelected = selectedCount > 0 && !allSelected;
-
-  useEffect(() => {
-    setSelectedIds((current) =>
-      current.filter((id) => records.some((record) => record.id === id)),
-    );
-  }, [records]);
-
-  useEffect(() => {
-    if (selectAllRef.current) {
-      selectAllRef.current.indeterminate = someSelected;
-    }
-  }, [someSelected]);
 
   useEffect(() => {
     if (isAdding) {
@@ -108,13 +114,32 @@ function NamedRecordsTable({
     element.focus();
   }, [focusRequest, records]);
 
+  // Release the mouse-press latch even when the release happens outside the
+  // row (or outside the window) — otherwise the next focus would silently
+  // skip painting the cursor once.
+  useEffect(() => {
+    function releaseMouseFocusSuppression() {
+      mouseFocusSuppressRef.current = false;
+    }
+
+    window.addEventListener("mouseup", releaseMouseFocusSuppression);
+    return () =>
+      window.removeEventListener("mouseup", releaseMouseFocusSuppression);
+  }, []);
+
   function focusRow(id) {
     const element = rowRefs.current.get(id);
 
     if (element) {
       element.focus();
+      focusedIdRef.current = id;
       setFocusedId(id);
     }
+  }
+
+  function clearCursor() {
+    focusedIdRef.current = null;
+    setFocusedId(null);
   }
 
   function moveFocus(offset) {
@@ -123,7 +148,7 @@ function NamedRecordsTable({
     }
 
     const currentIndex = records.findIndex(
-      (record) => record.id === focusedId,
+      (record) => record.id === focusedIdRef.current,
     );
     const baseIndex = currentIndex >= 0 ? currentIndex : offset > 0 ? -1 : 0;
     const nextIndex = Math.min(
@@ -134,16 +159,118 @@ function NamedRecordsTable({
     focusRow(records[nextIndex].id);
   }
 
-  function toggleSelected(id) {
-    setSelectedIds((current) =>
-      current.includes(id)
-        ? current.filter((value) => value !== id)
-        : [...current, id],
+  // PgUp/PgDn move one viewport of rows. The viewport is the scroll region
+  // minus its (sticky) header, measured in rows; when it cannot be measured
+  // (jsdom reports a zero-height box) a fixed page keeps the keys useful.
+  function pageFocus(direction) {
+    if (!records.length) {
+      return;
+    }
+
+    const wrap = tableWrapRef.current;
+    const headerHeight =
+      wrap?.querySelector("thead")?.offsetHeight ?? 0;
+    const rowHeight =
+      wrap?.querySelector("tbody tr.named-record-row")?.offsetHeight || 43;
+    const viewport = (wrap?.clientHeight ?? 0) - headerHeight;
+    const pageSize =
+      viewport > 0
+        ? Math.max(1, Math.floor(viewport / rowHeight))
+        : PAGE_FALLBACK_ROWS;
+
+    moveFocus(direction * pageSize);
+  }
+
+  function clearDragPreview() {
+    if (dragPreviewRef.current) {
+      dragPreviewRef.current.remove();
+      dragPreviewRef.current = null;
+    }
+  }
+
+  function clearDragState() {
+    clearDragPreview();
+    setDraggedId(null);
+    setDropTarget(null);
+    // A drag can end without a mouseup over the row, so release the
+    // press-suppresses-highlight latch here too.
+    mouseFocusSuppressRef.current = false;
+  }
+
+  function updateDropTarget(recordId, event) {
+    const row = rowRefs.current.get(recordId);
+
+    if (!row) {
+      return;
+    }
+
+    const bounds = row.getBoundingClientRect();
+    const placement =
+      event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+
+    setDropTarget((current) =>
+      current?.recordId === recordId && current?.placement === placement
+        ? current
+        : { recordId, placement },
     );
   }
 
-  function toggleAllSelected() {
-    setSelectedIds(allSelected ? [] : records.map((record) => record.id));
+  // Commit a drop by handing the new id order to the caller. The caller owns
+  // the record list, so the table never reorders its own copy; the row keeps
+  // its key and React moves the same DOM node (and its focus) to the new slot.
+  async function handleReorder(targetRecordId, placement) {
+    if (!canReorder || draggedId == null) {
+      clearDragState();
+      return;
+    }
+
+    const startIndex = records.findIndex(
+      (record) => record.id === draggedId,
+    );
+    const targetIndex = records.findIndex(
+      (record) => record.id === targetRecordId,
+    );
+
+    if (startIndex < 0 || targetIndex < 0) {
+      clearDragState();
+      return;
+    }
+
+    const rawInsertIndex = targetIndex + (placement === "after" ? 1 : 0);
+
+    if (
+      (placement === "before" && startIndex === targetIndex) ||
+      (placement === "after" && startIndex === targetIndex + 1)
+    ) {
+      clearDragState();
+      return;
+    }
+
+    const nextRecords = [...records];
+    const [movedRecord] = nextRecords.splice(startIndex, 1);
+    const insertIndex =
+      startIndex < rawInsertIndex ? rawInsertIndex - 1 : rawInsertIndex;
+    nextRecords.splice(insertIndex, 0, movedRecord);
+
+    // Drops that land the row back where it started (the guard above only
+    // catches immediate neighbours) must not persist a no-op.
+    const unchanged = nextRecords.every(
+      (record, index) => record.id === records[index].id,
+    );
+
+    clearDragState();
+
+    if (unchanged) {
+      return;
+    }
+
+    setError("");
+
+    try {
+      await onReorder(nextRecords.map((record) => record.id));
+    } catch (reorderError) {
+      setError(reorderError.message);
+    }
   }
 
   // The trimmed draft, or null after reporting a missing name. Both commit
@@ -258,9 +385,6 @@ function NamedRecordsTable({
 
     try {
       await onDelete(record.id);
-      setSelectedIds((current) =>
-        current.filter((id) => id !== record.id),
-      );
       setFocusRequest(neighbour ? { id: neighbour.id } : { anchor: true });
     } catch (deleteError) {
       setError(deleteError.message);
@@ -287,31 +411,16 @@ function NamedRecordsTable({
   }
 
   function handleRowKeyDown(event, record) {
+    // Only the row itself edits. Tab can move focus onto a control inside the
+    // row (star, rename, delete), and those must activate themselves instead
+    // of the row swallowing Enter/Space as it bubbles up.
     if (event.target !== event.currentTarget) {
       return;
     }
 
-    if (event.key === "ArrowDown" || event.key === "j") {
-      event.preventDefault();
-      moveFocus(1);
-      return;
-    }
-
-    if (event.key === "ArrowUp" || event.key === "k") {
-      event.preventDefault();
-      moveFocus(-1);
-      return;
-    }
-
-    if (event.key === "Enter") {
+    if (event.key === "Enter" || event.key === " ") {
       event.preventDefault();
       beginEdit(record);
-      return;
-    }
-
-    if (event.key === "Escape" && editingIdRef.current === record.id) {
-      event.preventDefault();
-      cancelEdit({ refocus: true });
     }
   }
 
@@ -341,12 +450,125 @@ function NamedRecordsTable({
     }
   }
 
+  // The banknote table's window-level key handling, scaled to a list that
+  // never virtualizes. Editable fields keep their own keys; nested controls
+  // hold focus so their Enter/Space wins; e/d only fire when the row itself
+  // is the active element.
+  useEffect(() => {
+    function handleGlobalKeyDown(event) {
+      if (confirmOpen) {
+        return;
+      }
+
+      if (
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        isEditableElement(event.target)
+      ) {
+        return;
+      }
+
+      // Row focus only moves for the plain keys: a held Shift rests the
+      // cursor where it is, matching the banknote table.
+      if (!event.shiftKey && (event.key === "ArrowDown" || event.key === "j")) {
+        event.preventDefault();
+        moveFocus(1);
+        return;
+      }
+
+      if (!event.shiftKey && (event.key === "ArrowUp" || event.key === "k")) {
+        event.preventDefault();
+        moveFocus(-1);
+        return;
+      }
+
+      if (event.key === "PageDown" || event.key === "PageUp") {
+        event.preventDefault();
+        pageFocus(event.key === "PageDown" ? 1 : -1);
+        return;
+      }
+
+      if (event.key === "Home" || event.key === "End") {
+        event.preventDefault();
+        const record =
+          event.key === "Home" ? records[0] : records[records.length - 1];
+
+        if (record) {
+          focusRow(record.id);
+        }
+        return;
+      }
+
+      if (event.key === "Escape") {
+        const focusedElement =
+          focusedIdRef.current == null
+            ? null
+            : rowRefs.current.get(focusedIdRef.current);
+
+        if (focusedElement && document.activeElement === focusedElement) {
+          event.preventDefault();
+          anchorRef.current?.focus({ preventScroll: true });
+          clearCursor();
+        }
+        return;
+      }
+
+      if (event.key === "a") {
+        if (isAdding) {
+          return;
+        }
+
+        event.preventDefault();
+        beginAdd();
+        return;
+      }
+
+      const focusedElement =
+        focusedIdRef.current == null
+          ? null
+          : rowRefs.current.get(focusedIdRef.current);
+      const rowHasFocus =
+        Boolean(focusedElement) &&
+        document.activeElement === focusedElement;
+
+      if (!rowHasFocus) {
+        return;
+      }
+
+      const record = records.find(
+        (entry) => entry.id === focusedIdRef.current,
+      );
+
+      if (!record) {
+        return;
+      }
+
+      if (event.key === "e") {
+        event.preventDefault();
+        beginEdit(record);
+        return;
+      }
+
+      if (event.key === "d") {
+        event.preventDefault();
+        void requestDelete(record);
+      }
+    }
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [confirmOpen, records, isAdding]);
+
   return (
     <section className="named-records" aria-label={ariaLabel}>
       {dialog}
       <div className="named-records-toolbar">
         <button
-          className="button button-primary"
+          aria-label={`Add ${itemLabel}`}
+          className="icon-link button-primary"
+          data-shortcut="a"
           disabled={saving || Boolean(busyId) || confirmOpen || isAdding}
           onClick={beginAdd}
           ref={addButtonRef}
@@ -354,12 +576,14 @@ function NamedRecordsTable({
         >
           Add {itemLabel}
         </button>
-        <span aria-live="polite" className="muted">
-          {selectedCount} of {records.length} selected
-        </span>
+        <p className="table-helper-text">
+          Press <kbd>&uarr;</kbd>/<kbd>&darr;</kbd> to browse rows,{" "}
+          <kbd>a</kbd> to add, or <kbd>e</kbd>/<kbd>d</kbd> to rename/delete a
+          focused row.
+        </p>
       </div>
 
-      <div className="named-records-table-wrap">
+      <div className="named-records-table-wrap" ref={tableWrapRef}>
         <span
           aria-hidden="true"
           className="table-focus-anchor"
@@ -369,63 +593,198 @@ function NamedRecordsTable({
         <table className="named-records-table">
           <thead>
             <tr>
-              <th className="named-records-select-cell" scope="col">
-                <input
-                  aria-label={`Select all ${itemLabelPlural}`}
-                  checked={allSelected}
-                  onChange={toggleAllSelected}
-                  ref={selectAllRef}
-                  type="checkbox"
-                />
-              </th>
+              {canReorder ? <th className="named-records-drag-cell" /> : null}
               <th scope="col">Name</th>
               <th scope="col">Default</th>
               <th scope="col">Actions</th>
             </tr>
           </thead>
-          <tbody>
+          <tbody
+            onDragOver={(event) => {
+              if (!canReorder || draggedId === null) {
+                return;
+              }
+
+              event.preventDefault();
+            }}
+            onDrop={(event) => {
+              // A row's own drop already handled (and default-prevented) this,
+              // so only a drop on the placeholder reaches here.
+              if (
+                event.defaultPrevented ||
+                !canReorder ||
+                draggedId === null ||
+                !dropTarget
+              ) {
+                return;
+              }
+
+              event.preventDefault();
+              void handleReorder(dropTarget.recordId, dropTarget.placement);
+            }}
+          >
             {records.map((record) => {
               const isEditing = editingId === record.id;
               const isFocused = focusedId === record.id;
               const isBusy = busyId === record.id;
+              const isDragging = draggedId === record.id;
+              const showPlaceholderBefore =
+                dropTarget?.recordId === record.id &&
+                dropTarget.placement === "before";
+              const showPlaceholderAfter =
+                dropTarget?.recordId === record.id &&
+                dropTarget.placement === "after";
 
               return (
-                <tr
-                  className={`named-record-row${isFocused ? " named-record-row--focused" : ""}${isEditing ? " named-record-row--editing" : ""}`}
-                  key={record.id}
-                  onBlur={(event) => {
-                    if (event.currentTarget.contains(event.relatedTarget)) {
-                      return;
-                    }
+                <Fragment key={record.id}>
+                  {showPlaceholderBefore ? (
+                    <tr
+                      aria-hidden="true"
+                      className="table-drop-placeholder-row"
+                    >
+                      <td
+                        className="table-drop-placeholder-cell"
+                        colSpan={totalColumnCount}
+                      >
+                        <span className="table-drop-placeholder-line" />
+                      </td>
+                    </tr>
+                  ) : null}
+                  <tr
+                    className={`named-record-row${isFocused ? " named-record-row--focused" : ""}${isEditing ? " named-record-row--editing" : ""}${isDragging ? " named-record-row--dragging" : ""}`}
+                    onBlur={(event) => {
+                      if (event.currentTarget.contains(event.relatedTarget)) {
+                        return;
+                      }
 
-                    setFocusedId((current) =>
-                      current === record.id ? null : current,
-                    );
+                      focusedIdRef.current =
+                        focusedIdRef.current === record.id
+                          ? null
+                          : focusedIdRef.current;
+                      setFocusedId((current) =>
+                        current === record.id ? null : current,
+                      );
 
-                    if (editingIdRef.current === record.id) {
-                      cancelEdit();
-                    }
-                  }}
-                  onFocus={() => setFocusedId(record.id)}
-                  onKeyDown={(event) => handleRowKeyDown(event, record)}
-                  ref={(element) => {
-                    if (element) {
-                      rowRefs.current.set(record.id, element);
-                    } else {
-                      rowRefs.current.delete(record.id);
-                    }
-                  }}
-                  tabIndex={0}
-                >
-                  <td className="named-records-select-cell">
-                    <input
-                      aria-label={`Select ${record.name}`}
-                      checked={selectedIdSet.has(record.id)}
-                      onChange={() => toggleSelected(record.id)}
-                      type="checkbox"
-                    />
-                  </td>
-                  <td className="named-records-name-cell">
+                      if (editingIdRef.current === record.id) {
+                        cancelEdit();
+                      }
+                    }}
+                    onDragLeave={(event) => {
+                      // The placeholder is a sibling row in this tbody, so
+                      // moving onto it (or a neighbour) must not clear the
+                      // target — that would unmount the placeholder and loop.
+                      const body = event.currentTarget.closest("tbody");
+
+                      if (
+                        event.relatedTarget &&
+                        body?.contains(event.relatedTarget)
+                      ) {
+                        return;
+                      }
+
+                      setDropTarget((current) =>
+                        current?.recordId === record.id ? null : current,
+                      );
+                    }}
+                    onDragOver={(event) => {
+                      if (!canReorder || draggedId === null) {
+                        return;
+                      }
+
+                      event.preventDefault();
+                      updateDropTarget(record.id, event);
+                    }}
+                    onDrop={(event) => {
+                      event.preventDefault();
+                      const bounds =
+                        event.currentTarget.getBoundingClientRect();
+                      const nextPlacement =
+                        dropTarget?.recordId === record.id
+                          ? dropTarget.placement
+                          : event.clientY < bounds.top + bounds.height / 2
+                            ? "before"
+                            : "after";
+                      void handleReorder(record.id, nextPlacement);
+                    }}
+                    onFocus={() => {
+                      focusedIdRef.current = record.id;
+
+                      if (mouseFocusSuppressRef.current) {
+                        mouseFocusSuppressRef.current = false;
+                      } else {
+                        setFocusedId(record.id);
+                      }
+                    }}
+                    onKeyDown={(event) => handleRowKeyDown(event, record)}
+                    onMouseDown={() => {
+                      mouseFocusSuppressRef.current = true;
+                    }}
+                    onMouseUp={() => {
+                      mouseFocusSuppressRef.current = false;
+                    }}
+                    ref={(element) => {
+                      if (element) {
+                        rowRefs.current.set(record.id, element);
+                      } else {
+                        rowRefs.current.delete(record.id);
+                      }
+                    }}
+                    tabIndex={0}
+                  >
+                    {canReorder ? (
+                      <td className="named-records-drag-cell">
+                        <button
+                          aria-label={`Move ${record.name}`}
+                          className="drag-handle"
+                          draggable
+                          onClick={(event) => event.stopPropagation()}
+                          onDragEnd={clearDragState}
+                          onDragStart={(event) => {
+                            const row = rowRefs.current.get(record.id);
+
+                            clearDragPreview();
+                            event.stopPropagation();
+                            event.dataTransfer.effectAllowed = "move";
+                            event.dataTransfer.setData(
+                              "text/plain",
+                              String(record.id),
+                            );
+
+                            if (row) {
+                              const preview = row.cloneNode(true);
+                              preview.classList.add("table-drag-preview");
+                              preview.style.width = `${row.getBoundingClientRect().width}px`;
+                              document.body.appendChild(preview);
+                              dragPreviewRef.current = preview;
+                              event.dataTransfer.setDragImage(
+                                preview,
+                                24,
+                                24,
+                              );
+                            }
+
+                            setDraggedId(record.id);
+                            setDropTarget({
+                              recordId: record.id,
+                              placement: "before",
+                            });
+                          }}
+                          type="button"
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="drag-handle-dots"
+                          >
+                            <span />
+                            <span />
+                            <span />
+                            <span />
+                            <span />
+                          </span>
+                        </button>
+                      </td>
+                    ) : null}
+                    <td className="named-records-name-cell">
                     {isEditing ? (
                       <input
                         aria-label={`Rename ${record.name}`}
@@ -478,35 +837,95 @@ function NamedRecordsTable({
                         </button>
                       </>
                     ) : (
-                      <>
+                      <div className="inline-actions">
                         <button
                           aria-label={`Rename ${record.name}`}
-                          className="button"
+                          className="icon-link"
+                          data-shortcut="e"
                           disabled={isBusy}
                           onClick={() => beginEdit(record)}
                           type="button"
                         >
-                          Rename
+                          <svg
+                            aria-hidden="true"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            width="16"
+                          >
+                            <path
+                              d="M4 20h4l10-10-4-4L4 16v4z"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            />
+                            <path
+                              d="M12 6l4 4"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            />
+                          </svg>
                         </button>
                         <button
                           aria-label={`Delete ${record.name}`}
-                          className="button button-danger-soft"
+                          className="icon-link"
+                          data-shortcut="d"
                           disabled={isBusy}
                           onClick={() => void requestDelete(record)}
                           type="button"
                         >
-                          Delete
+                          <svg
+                            aria-hidden="true"
+                            height="16"
+                            viewBox="0 0 24 24"
+                            width="16"
+                          >
+                            <path
+                              d="M5 7h14"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            />
+                            <path
+                              d="M9 7V5h6v2"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            />
+                            <path
+                              d="M8 7l1 12h6l1-12"
+                              fill="none"
+                              stroke="currentColor"
+                              strokeWidth="2"
+                            />
+                          </svg>
                         </button>
-                      </>
+                      </div>
                     )}
                   </td>
                 </tr>
+                  {showPlaceholderAfter ? (
+                    <tr
+                      aria-hidden="true"
+                      className="table-drop-placeholder-row"
+                    >
+                      <td
+                        className="table-drop-placeholder-cell"
+                        colSpan={totalColumnCount}
+                      >
+                        <span className="table-drop-placeholder-line" />
+                      </td>
+                    </tr>
+                  ) : null}
+                </Fragment>
               );
             })}
 
             {isAdding ? (
               <tr className="named-record-row named-record-row--editing">
-                <td className="named-records-select-cell" />
+                {canReorder ? (
+                  <td className="named-records-drag-cell" />
+                ) : null}
                 <td className="named-records-name-cell">
                   <input
                     aria-label={`New ${itemLabel} name`}
@@ -543,7 +962,10 @@ function NamedRecordsTable({
 
             {!records.length && !isAdding && !loading ? (
               <tr className="named-records-empty-row">
-                <td className="named-records-empty-cell" colSpan={4}>
+                <td
+                  className="named-records-empty-cell"
+                  colSpan={totalColumnCount}
+                >
                   {emptyText}
                 </td>
               </tr>

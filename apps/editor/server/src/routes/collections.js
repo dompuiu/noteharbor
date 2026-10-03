@@ -5,6 +5,7 @@ import {
   getAllCollections,
   getCollectionById,
   renameCollectionById,
+  reorderCollections,
   setDefaultCollectionById
 } from '../db.js';
 
@@ -29,6 +30,22 @@ collectionsRouter.post('/', (request, response) => {
   try {
     const collection = createCollection(name);
     response.status(201).json({ collection });
+  } catch (error) {
+    response.status(400).json({ error: error.message });
+  }
+});
+
+collectionsRouter.post('/reorder', (request, response) => {
+  const ids = Array.isArray(request.body.ids) ? request.body.ids : null;
+
+  if (!ids) {
+    response.status(400).json({ error: 'A full ordered list of collection IDs is required.' });
+    return;
+  }
+
+  try {
+    const collections = reorderCollections(ids);
+    response.json({ collections });
   } catch (error) {
     response.status(400).json({ error: error.message });
   }

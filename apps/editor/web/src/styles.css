@@ -2657,14 +2657,23 @@ kbd {
   color: var(--text-muted);
 }
 
-.named-records-select-cell {
-  width: 44px;
-  text-align: center;
-}
-
 .named-records-default-cell {
   width: 76px;
   text-align: center;
+}
+
+.named-records-table th.named-records-drag-cell,
+.named-records-table td.named-records-drag-cell {
+  position: relative;
+  width: 30px;
+  min-width: 30px;
+  max-width: 30px;
+  padding: 0;
+  overflow: hidden;
+}
+
+.named-record-row--dragging {
+  opacity: 0.38;
 }
 
 .named-records-actions-cell {

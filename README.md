@@ -202,6 +202,7 @@ Notes support multiple, independent collections (separate archives within one da
 | `id` | INTEGER PK | Auto-increment |
 | `name` | TEXT | Unique, case-insensitive |
 | `is_default` | INTEGER | `1` for the default collection; at most one row can have this set |
+| `display_order` | INTEGER | Manual ordering; new collections append, and marking a default does not re-sort |
 | `created_at` | TEXT | SQLite datetime |
 | `updated_at` | TEXT | SQLite datetime |
 
@@ -244,11 +245,15 @@ Notes, tags, and CSV import are scoped per collection. `GET/POST/PUT/DELETE /api
 
 ```
 GET /api/collections
--> { collections: [{ id, name, is_default, created_at, updated_at }, ...] }
+-> { collections: [{ id, name, is_default, display_order, created_at, updated_at }, ...] }
 
 POST /api/collections
 Body: { name }
 -> 201 { collection }
+
+POST /api/collections/reorder
+Body: { ids: [id, ...] }   // every collection, in the new order
+-> { collections }
 
 PUT /api/collections/:collectionId
 Body: { name }

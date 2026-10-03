@@ -22,6 +22,7 @@ function collectionsContext(overrides = {}) {
     deleteCollection: vi.fn(),
     loadingCollections: false,
     renameCollection: vi.fn(),
+    reorderCollections: vi.fn(),
     selectCollection: vi.fn(),
     setDefaultCollection: vi.fn(),
     ...overrides,
@@ -110,6 +111,14 @@ describe("CollectionsScreen", () => {
     );
 
     expect(setDefaultCollection).toHaveBeenCalledWith(2);
+  });
+
+  test("offers a drag handle per row wired to reordering", () => {
+    render(<CollectionsScreen />);
+
+    expect(
+      screen.getByRole("button", { name: "Move Archive" }),
+    ).toBeInTheDocument();
   });
 
   test("shows the loading and error states", () => {
