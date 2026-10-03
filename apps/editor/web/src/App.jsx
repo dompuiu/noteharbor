@@ -34,12 +34,8 @@ function ShellContent() {
     activeCollectionId,
     collections,
     collectionsError,
-    createCollection,
-    deleteCollection,
     loadingCollections,
-    renameCollection,
     selectCollection,
-    setDefaultCollection,
   } = useCollections();
 
   const shouldForceImport = !loadingCollections && collections.length === 0;
@@ -79,11 +75,7 @@ function ShellContent() {
                   collections={collections}
                   collectionsError={collectionsError}
                   loadingCollections={loadingCollections}
-                  onCreateCollection={createCollection}
-                  onDeleteCollection={deleteCollection}
-                  onRenameCollection={renameCollection}
                   onSelectCollection={selectCollection}
-                  onSetDefaultCollection={setDefaultCollection}
                   showBackToTable={!shouldForceImport}
                 />
               )}

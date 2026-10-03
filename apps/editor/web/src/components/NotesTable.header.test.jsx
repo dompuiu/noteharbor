@@ -99,6 +99,26 @@ beforeEach(() => {
   });
 });
 
+describe("NotesTable header controls", () => {
+  test("keeps the collection selector and Add note above the table", async () => {
+    renderTable();
+
+    const select = await screen.findByLabelText("Active collection");
+    expect(select).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add note" })).toBeInTheDocument();
+  });
+
+  test("no longer shows the Import / Export link", async () => {
+    renderTable();
+
+    await screen.findByLabelText("Active collection");
+
+    expect(
+      screen.queryByRole("link", { name: "Import or export" }),
+    ).not.toBeInTheDocument();
+  });
+});
+
 describe("NotesTable header emphasis", () => {
   test("sort button labels render uppercase in markup", async () => {
     const { container } = renderTable();

@@ -11,7 +11,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   deleteNote,
   getNotes,
@@ -3699,14 +3699,6 @@ function NotesTable({
             >
               Add note
             </button>
-            <Link
-              aria-label="Import or export"
-              className="icon-link"
-              title="Import / Export"
-              to={CATALOG_ROUTES.importExport}
-            >
-              Import / Export
-            </Link>
             <button
               aria-label="Keyboard shortcuts"
               className="icon-link"

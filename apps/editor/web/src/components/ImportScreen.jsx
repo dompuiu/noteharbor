@@ -48,11 +48,7 @@ function ImportScreen({
   collections,
   collectionsError,
   loadingCollections,
-  onCreateCollection,
-  onDeleteCollection,
-  onRenameCollection,
   onSelectCollection,
-  onSetDefaultCollection,
   showBackToTable = true,
 }) {
   const navigate = useNavigate();
@@ -79,8 +75,6 @@ function ImportScreen({
     startedAt: null,
     details: null
   });
-  const [collectionNameDraft, setCollectionNameDraft] = useState('');
-  const [collectionActionLoading, setCollectionActionLoading] = useState(false);
   const [selectedExportCollectionIds, setSelectedExportCollectionIds] = useState([]);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
@@ -323,92 +317,6 @@ function ImportScreen({
     }
   }
 
-  async function handleCreateCollection() {
-    const nextName = collectionNameDraft.trim();
-
-    if (!nextName) {
-      setError('Collection name is required.');
-      return;
-    }
-
-    setCollectionActionLoading(true);
-    setError('');
-
-    try {
-      await onCreateCollection(nextName);
-      setCollectionNameDraft('');
-    } catch (actionError) {
-      setError(actionError.message);
-    } finally {
-      setCollectionActionLoading(false);
-    }
-  }
-
-  async function handleRenameCollection() {
-    const nextName = collectionNameDraft.trim();
-
-    if (!nextName || !activeCollectionId) {
-      setError('Select a collection and provide a new name.');
-      return;
-    }
-
-    setCollectionActionLoading(true);
-    setError('');
-
-    try {
-      await onRenameCollection(activeCollectionId, nextName);
-      setCollectionNameDraft('');
-    } catch (actionError) {
-      setError(actionError.message);
-    } finally {
-      setCollectionActionLoading(false);
-    }
-  }
-
-  async function handleSetDefaultCollection() {
-    if (!activeCollectionId) {
-      return;
-    }
-
-    setCollectionActionLoading(true);
-    setError('');
-
-    try {
-      await onSetDefaultCollection(activeCollectionId);
-    } catch (actionError) {
-      setError(actionError.message);
-    } finally {
-      setCollectionActionLoading(false);
-    }
-  }
-
-  async function handleDeleteCollection() {
-    if (!activeCollectionId) {
-      return;
-    }
-
-    const confirmed = await requestConfirmation({
-      title: `Delete collection "${activeCollection?.name}" and all its notes/images?`,
-      confirmLabel: 'Delete',
-    });
-
-    if (!confirmed) {
-      return;
-    }
-
-    setCollectionActionLoading(true);
-    setError('');
-
-    try {
-      await onDeleteCollection(activeCollectionId);
-      setCollectionNameDraft('');
-    } catch (actionError) {
-      setError(actionError.message);
-    } finally {
-      setCollectionActionLoading(false);
-    }
-  }
-
   const scrollFadeClass = canScrollUp && canScrollDown
     ? ' import-panel-scroll--fade-both'
     : canScrollUp
@@ -447,8 +355,9 @@ function ImportScreen({
           <div className="inline-select-group">
             <span>Active collection</span>
             <select
+              aria-label="Active collection"
               className="select-input"
-              disabled={loadingCollections || isBusy || collectionActionLoading || !collections.length}
+              disabled={loadingCollections || isBusy || !collections.length}
               onChange={(event) => onSelectCollection(Number(event.target.value))}
               value={activeCollectionId ?? ''}
             >
@@ -458,46 +367,6 @@ function ImportScreen({
                 </option>
               ))}
             </select>
-          </div>
-          <div className="inline-select-group">
-            <input
-              className="select-input"
-              onChange={(event) => setCollectionNameDraft(event.target.value)}
-              placeholder="Collection name"
-              value={collectionNameDraft}
-            />
-            <button
-              className="button"
-              disabled={isBusy || collectionActionLoading}
-              onClick={handleCreateCollection}
-              type="button"
-            >
-              Create
-            </button>
-            <button
-              className="button"
-              disabled={isBusy || collectionActionLoading || !activeCollectionId}
-              onClick={handleRenameCollection}
-              type="button"
-            >
-              Rename
-            </button>
-            <button
-              className="button"
-              disabled={isBusy || collectionActionLoading || !activeCollectionId || Number(activeCollection?.is_default) === 1}
-              onClick={handleSetDefaultCollection}
-              type="button"
-            >
-              {Number(activeCollection?.is_default) === 1 ? 'Default' : 'Set default'}
-            </button>
-            <button
-              className="button button-danger"
-              disabled={isBusy || collectionActionLoading || !activeCollectionId}
-              onClick={handleDeleteCollection}
-              type="button"
-            >
-              Delete
-            </button>
           </div>
         </div>
 
