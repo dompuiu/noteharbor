@@ -140,7 +140,6 @@ input[type="radio"] {
   flex: 0 0 auto;
   width: var(--sidebar-rail-width);
   transition: width 0.18s cubic-bezier(0.4, 0, 0.2, 1);
-  z-index: 40;
 }
 
 .sidebar {
@@ -351,12 +350,14 @@ input[type="radio"] {
   .sidebar-dock--pinned .sidebar {
     width: var(--sidebar-expanded-width);
     transform: translateX(-100%);
+    visibility: hidden;
     box-shadow: var(--shadow-lg);
     z-index: 70;
   }
 
   .sidebar-dock--drawer-open .sidebar {
     transform: translateX(0);
+    visibility: visible;
   }
 
   .sidebar-dock .sidebar-wordmark {
@@ -434,7 +435,9 @@ input[type="radio"] {
 
 @media (prefers-reduced-motion: reduce) {
   .sidebar-dock,
-  .sidebar {
+  .sidebar,
+  .sidebar-pin,
+  .sidebar-link {
     transition: none;
   }
 }

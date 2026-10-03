@@ -25,6 +25,7 @@ The iOS and desktop builds of the Viewer. Uses the same screen names as the Edit
 
 **Table screen**:
 The Editor's main screen: the collection's notes as a table, with search, filtering, reordering, and bulk actions.
+_Sidebar label_: Banknotes
 _Avoid_: Notes table, list view
 
 **Import screen**:
@@ -46,6 +47,23 @@ _Avoid_: Lightbox, 2nd level slideshow
 **Zoom view**:
 The Image popover's rendering of a note image at its natural pixel size (1:1), only when that size exceeds the available space; the image is pannable within the stage but never shown smaller than the fit view.
 _Avoid_: Full size, 100% zoom, lightbox zoom
+
+## Editor navigation
+
+**Catalog**:
+The Editor's management hub in the sidebar: Banknotes, Collections, and Import/Export.
+_Avoid_: Manage
+
+**Portfolio**:
+The Editor's presentation hub in the sidebar: Categories and Groupings.
+_Avoid_: Showcase
+
+**Categories**:
+A placeholder Portfolio destination; its data model and behaviour are not defined yet.
+_Avoid_: (as a synonym for Tag)
+
+**Groupings**:
+A placeholder Portfolio destination; its data model and behaviour are not defined yet.
 
 ## Viewer screens
 

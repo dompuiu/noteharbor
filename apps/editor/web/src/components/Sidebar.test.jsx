@@ -22,7 +22,7 @@ function renderSidebar(path) {
 }
 
 function drawerToggle() {
-  return screen.getByRole("button", { name: "Open navigation" });
+  return screen.getByRole("button", { name: /navigation/ });
 }
 
 beforeEach(() => {

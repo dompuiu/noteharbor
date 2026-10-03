@@ -13,6 +13,21 @@ import { Sidebar } from "./components/Sidebar.jsx";
 import { CollectionsProvider, useCollections } from "./lib/collections.jsx";
 import { CATALOG_ROUTES, PORTFOLIO_ROUTES } from "./lib/routes.js";
 
+// The two Portfolio destinations are undefined for now, so their copy stays a
+// neutral "coming soon" rather than describing behaviour the spec hasn't set.
+const PORTFOLIO_PAGES = [
+  {
+    description: "The Categories destination is a placeholder for now.",
+    path: PORTFOLIO_ROUTES.categories,
+    title: "Categories",
+  },
+  {
+    description: "The Groupings destination is a placeholder for now.",
+    path: PORTFOLIO_ROUTES.groupings,
+    title: "Groupings",
+  },
+];
+
 function ShellContent() {
   const {
     activeCollection,
@@ -82,24 +97,18 @@ function ShellContent() {
               }
               path={CATALOG_ROUTES.noteEdit(":id")}
             />
-            <Route
-              element={(
-                <PortfolioScreen
-                  description="Categories will group notes by theme. This destination is not built yet."
-                  title="Categories"
-                />
-              )}
-              path={PORTFOLIO_ROUTES.categories}
-            />
-            <Route
-              element={(
-                <PortfolioScreen
-                  description="Groupings will save named sets of notes. This destination is not built yet."
-                  title="Groupings"
-                />
-              )}
-              path={PORTFOLIO_ROUTES.groupings}
-            />
+            {PORTFOLIO_PAGES.map((page) => (
+              <Route
+                element={
+                  <PortfolioScreen
+                    description={page.description}
+                    title={page.title}
+                  />
+                }
+                key={page.path}
+                path={page.path}
+              />
+            ))}
             <Route
               element={<Navigate replace to={CATALOG_ROUTES.banknotes} />}
               path="/"

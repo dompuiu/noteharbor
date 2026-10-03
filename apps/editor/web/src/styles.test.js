@@ -97,6 +97,34 @@ describe("sidebar styles", () => {
       /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/,
     );
     expect(block).not.toBeNull();
-    expect(block[1]).toMatch(/\.sidebar\s*\{[^}]*transition:\s*none/);
+    expect(block[1]).toMatch(/\.sidebar[\s,{]/);
+    expect(block[1]).toMatch(/transition:\s*none/);
+  });
+
+  // jsdom does not hit-test, so the drawer's stacking and its tab order are
+  // pinned here. The dock must not create a stacking context, or it traps the
+  // drawer's z-index below the sibling backdrop.
+  test("the drawer stacks above its backdrop", () => {
+    const dock = styles.match(/\.sidebar-dock\s*\{([^}]*)\}/);
+    expect(dock).not.toBeNull();
+    expect(dock[1]).not.toMatch(/z-index/);
+
+    const drawerZ = Number(
+      styles.match(
+        /\.sidebar,\s*\n\s*\.sidebar-dock--pinned \.sidebar\s*\{([^}]*)\}/,
+      )?.[1].match(/z-index:\s*(\d+)/)?.[1],
+    );
+    const backdropZ = Number(
+      styles.match(/\.sidebar-backdrop\s*\{[^}]*z-index:\s*(\d+)/)?.[1],
+    );
+    expect(drawerZ).toBeGreaterThan(backdropZ);
+  });
+
+  test("the closed drawer is hidden from the tab order", () => {
+    const closedDrawer = styles.match(
+      /\.sidebar,\s*\n\s*\.sidebar-dock--pinned \.sidebar\s*\{([^}]*)\}/,
+    );
+    expect(closedDrawer).not.toBeNull();
+    expect(closedDrawer[1]).toMatch(/visibility:\s*hidden/);
   });
 });

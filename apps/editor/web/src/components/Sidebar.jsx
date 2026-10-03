@@ -61,7 +61,7 @@ function isItemActive(item, pathname) {
   return pathname === item.to || pathname.startsWith(`${item.to}/`);
 }
 
-function MarkIcon() {
+function NoteHarborMark() {
   return (
     <svg
       fill="none"
@@ -158,13 +158,14 @@ function Sidebar() {
     .filter(Boolean)
     .join(" ");
   const pinLabel = pinned ? "Collapse sidebar" : "Keep sidebar expanded";
+  const drawerLabel = drawerOpen ? "Close navigation" : "Open navigation";
 
   return (
     <>
       <button
         aria-controls="app-sidebar"
         aria-expanded={drawerOpen}
-        aria-label="Open navigation"
+        aria-label={drawerLabel}
         className="sidebar-hamburger"
         onClick={() => setDrawerOpen((open) => !open)}
         ref={hamburgerRef}
@@ -186,7 +187,7 @@ function Sidebar() {
           <div className="sidebar-head">
             <div className="sidebar-brand">
               <span aria-hidden="true" className="sidebar-mark">
-                <MarkIcon />
+                <NoteHarborMark />
               </span>
               <span className="sidebar-wordmark">Note Harbor</span>
             </div>
