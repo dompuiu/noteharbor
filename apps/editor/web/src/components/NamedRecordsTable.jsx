@@ -611,6 +611,12 @@ function NamedRecordsTable({
             </tr>
           </thead>
           <tbody
+            onMouseDown={() => {
+              // A press anywhere in the table (drag handle included) records
+              // that the coming focus is mouse-driven, so it focuses a row
+              // without claiming the keyboard-cursor highlight.
+              mouseFocusSuppressRef.current = true;
+            }}
             onDragOver={(event) => {
               if (!canReorder || draggedId === null) {
                 return;

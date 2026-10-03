@@ -95,22 +95,65 @@ function CollectionsProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Reconcile the list from a single server row after a mutation, rather than
+  // refetching every collection. A full refresh flips `loadingCollections`
+  // (blanking the table), resets the active collection, and can drop the
+  // caller's just-landed focus — none of which a one-row change should do.
+  function applyCollectionRow(updatedCollection) {
+    if (!updatedCollection) {
+      return;
+    }
+
+    setCollections((current) => {
+      const exists = current.some(
+        (collection) => collection.id === updatedCollection.id,
+      );
+
+      if (!exists) {
+        return [...current, updatedCollection];
+      }
+
+      return current.map((collection) =>
+        collection.id === updatedCollection.id
+          ? { ...collection, ...updatedCollection }
+          : collection,
+      );
+    });
+  }
+
   async function handleCreateCollection(name) {
     const payload = await createCollection(name);
     const createdCollection = payload.collection;
-    await refreshCollections({ preferredCollectionId: createdCollection?.id ?? null });
+    applyCollectionRow(createdCollection);
+
+    // The default is where new notes land, so a brand-new collection becomes
+    // the active one — but only that switch, not a whole reload.
+    if (createdCollection?.id != null) {
+      setActiveCollectionId(createdCollection.id);
+      writeStoredCollectionId(createdCollection.id);
+    }
+
     return createdCollection;
   }
 
   async function handleRenameCollection(collectionId, name) {
     const payload = await renameCollection(collectionId, name);
-    await refreshCollections({ preferredCollectionId: collectionId });
+    applyCollectionRow(payload.collection);
     return payload.collection;
   }
 
   async function handleSetDefaultCollection(collectionId) {
-    await setDefaultCollection(collectionId);
-    await refreshCollections({ preferredCollectionId: collectionId });
+    const payload = await setDefaultCollection(collectionId);
+
+    // Exactly one collection is the default, so clear the others locally too.
+    setCollections((current) =>
+      current.map((collection) => ({
+        ...collection,
+        is_default: collection.id === collectionId ? 1 : 0,
+      })),
+    );
+    applyCollectionRow(payload.collection);
+    return payload.collection;
   }
 
   async function handleReorderCollections(ids) {
@@ -132,7 +175,18 @@ function CollectionsProvider({ children }) {
       null;
 
     await deleteCollection(collectionId);
-    await refreshCollections({ preferredCollectionId: fallbackCollection?.id ?? null });
+
+    const remaining = collections.filter(
+      (collection) => collection.id !== collectionId,
+    );
+    setCollections(remaining);
+
+    // Only move the active collection if the one being deleted held it.
+    if (activeCollectionId === collectionId) {
+      const nextActiveId = fallbackCollection?.id ?? null;
+      setActiveCollectionId(nextActiveId);
+      writeStoredCollectionId(nextActiveId);
+    }
   }
 
   function selectCollection(collectionId) {
