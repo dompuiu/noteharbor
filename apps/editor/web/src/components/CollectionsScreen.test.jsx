@@ -21,6 +21,7 @@ function collectionsContext(overrides = {}) {
     createCollection: vi.fn(),
     deleteCollection: vi.fn(),
     loadingCollections: false,
+    refreshCollections: vi.fn(),
     renameCollection: vi.fn(),
     reorderCollections: vi.fn(),
     selectCollection: vi.fn(),
@@ -67,6 +68,14 @@ describe("CollectionsScreen", () => {
     );
 
     expect(counts).toEqual(["3", "0"]);
+  });
+
+  test("refreshes collections on entry so the note counts are current", () => {
+    const refreshCollections = vi.fn();
+    useCollections.mockReturnValue(collectionsContext({ refreshCollections }));
+    render(<CollectionsScreen />);
+
+    expect(refreshCollections).toHaveBeenCalled();
   });
 
   test("creating a collection goes through the context", async () => {

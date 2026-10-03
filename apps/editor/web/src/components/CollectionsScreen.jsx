@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useCollections } from "../lib/collections.jsx";
 import { NamedRecordsTable } from "./NamedRecordsTable.jsx";
 
@@ -11,10 +12,18 @@ function CollectionsScreen() {
     loadingCollections,
     createCollection,
     deleteCollection,
+    refreshCollections,
     renameCollection,
     reorderCollections,
     setDefaultCollection,
   } = useCollections();
+
+  // The provider loads once at app start, so a visit after notes were added or
+  // moved would otherwise show stale note counts. Refresh on entry.
+  useEffect(() => {
+    refreshCollections();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const records = collections.map((collection) => ({
     id: collection.id,
