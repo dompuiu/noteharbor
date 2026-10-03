@@ -86,7 +86,14 @@ const shortcutGroups = [
   },
   {
     title: "Everywhere",
-    items: [{ keys: ["?"], description: "Toggle this help" }],
+    items: [
+      { keys: ["?"], description: "Toggle this help" },
+      {
+        keys: ["b"],
+        description:
+          "Open the sidebar and navigate it with ↑/↓ or j/k, Enter, then Esc",
+      },
+    ],
   },
 ];
 

@@ -466,7 +466,10 @@ function NamedRecordsTable({
         event.metaKey ||
         event.ctrlKey ||
         event.altKey ||
-        isEditableElement(event.target)
+        isEditableElement(event.target) ||
+        // The sidebar owns its keys while it holds focus.
+        event.target instanceof Element &&
+          event.target.closest("#app-sidebar")
       ) {
         return;
       }

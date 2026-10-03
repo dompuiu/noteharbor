@@ -5,6 +5,14 @@ import { beforeEach, describe, expect, test } from "vitest";
 import { Sidebar } from "./Sidebar.jsx";
 import { CATALOG_ROUTES, PORTFOLIO_ROUTES } from "../lib/routes.js";
 
+const LINKS = [
+  "Banknotes",
+  "Collections",
+  "Import / Export",
+  "Categories",
+  "Groupings",
+];
+
 function LocationProbe() {
   const location = useLocation();
   return <output data-testid="pathname">{location.pathname}</output>;
@@ -28,32 +36,24 @@ beforeEach(() => {
 });
 
 describe("Sidebar navigation groups", () => {
-  test("exposes a labelled navigation landmark with both groups", () => {
+  test("exposes a labelled navigation landmark", () => {
     renderSidebar(CATALOG_ROUTES.banknotes);
 
     expect(
       screen.getByRole("navigation", { name: "Sections" }),
     ).toBeInTheDocument();
-    expect(
-      screen.getByRole("group", { name: "Catalog" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.getByRole("group", { name: "Portfolio" }),
-    ).toBeInTheDocument();
   });
 
-  test("renders every Catalog and Portfolio destination", () => {
-    renderSidebar(CATALOG_ROUTES.banknotes);
+  test("renders one link and one icon per destination", () => {
+    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
 
-    for (const label of [
-      "Banknotes",
-      "Collections",
-      "Import / Export",
-      "Categories",
-      "Groupings",
-    ]) {
-      expect(screen.getByRole("link", { name: label })).toBeInTheDocument();
+    for (const label of LINKS) {
+      expect(screen.getAllByRole("link", { name: label })).toHaveLength(1);
     }
+
+    expect(container.querySelectorAll(".sidebar-link .sidebar-ic svg")).toHaveLength(
+      LINKS.length,
+    );
   });
 
   test("marks the active destination as the current page", () => {
@@ -92,6 +92,129 @@ describe("Sidebar navigation groups", () => {
     expect(screen.getByTestId("pathname")).toHaveTextContent(
       CATALOG_ROUTES.importExport,
     );
+  });
+});
+
+describe("Sidebar keyboard cursor", () => {
+  test("`b` opens the rail on the active option", async () => {
+    const user = userEvent.setup();
+    renderSidebar(CATALOG_ROUTES.collections);
+
+    await user.keyboard("{b}");
+
+    expect(
+      screen
+        .getByRole("link", { name: "Collections" })
+        .classList.contains("sidebar-link--cursor"),
+    ).toBe(true);
+    expect(document.activeElement).toHaveTextContent("Collections");
+  });
+
+  test("`/` is left for the table filter, not the sidebar", async () => {
+    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+
+    // `/` stays with the table filter; firing it must not open the rail.
+    window.dispatchEvent(
+      new KeyboardEvent("keydown", { bubbles: true, key: "/" }),
+    );
+
+    expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
+  });
+
+  test("j/k and arrows move the cursor between options", async () => {
+    const user = userEvent.setup();
+    renderSidebar(CATALOG_ROUTES.banknotes);
+
+    await user.keyboard("{b}"); // Banknotes
+    await user.keyboard("{j}"); // Collections
+    expect(document.activeElement).toHaveTextContent("Collections");
+
+    await user.keyboard("{k}"); // back to Banknotes
+    expect(document.activeElement).toHaveTextContent("Banknotes");
+  });
+
+  test("Home and End jump to the ends", async () => {
+    const user = userEvent.setup();
+    renderSidebar(CATALOG_ROUTES.banknotes);
+
+    await user.keyboard("{b}");
+    await user.keyboard("{End}");
+    expect(document.activeElement).toHaveTextContent("Groupings");
+
+    await user.keyboard("{Home}");
+    expect(document.activeElement).toHaveTextContent("Banknotes");
+  });
+
+  test("Enter follows the focused option", async () => {
+    const user = userEvent.setup();
+    renderSidebar(CATALOG_ROUTES.banknotes);
+
+    await user.keyboard("{b}"); // Banknotes
+    await user.keyboard("{j}"); // Collections
+    await user.keyboard("{Enter}");
+
+    expect(screen.getByTestId("pathname")).toHaveTextContent(
+      CATALOG_ROUTES.collections,
+    );
+  });
+
+  test("Escape clears the cursor and returns control to the page", async () => {
+    const user = userEvent.setup();
+    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+
+    await user.keyboard("{b}");
+    expect(container.querySelector(".sidebar-link--cursor")).not.toBeNull();
+
+    await user.keyboard("{Escape}");
+
+    expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
+    expect(document.activeElement).not.toBe(screen.getByRole("navigation"));
+  });
+
+  test("leaving the rail with Tab collapses the cursor", async () => {
+    const user = userEvent.setup();
+    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+
+    await user.keyboard("{b}");
+    expect(container.querySelector(".sidebar-link--cursor")).not.toBeNull();
+
+    // Step off the last option outward.
+    await user.keyboard("{End}");
+    await user.keyboard("{Tab}");
+
+    expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
+  });
+
+  test("`b` does nothing while a table row has focus", async () => {
+    const user = userEvent.setup();
+    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+
+    // Focus any real control outside the sidebar, then press "b".
+    const outside = document.createElement("button");
+    document.body.append(outside);
+    outside.focus();
+    await user.keyboard("{b}");
+
+    expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
+    expect(document.activeElement).toBe(outside);
+    outside.remove();
+  });
+
+  test("Escape returns focus off the rail, not onto a hidden link", async () => {
+    const user = userEvent.setup();
+    renderSidebar(CATALOG_ROUTES.banknotes);
+
+    await user.keyboard("{b}");
+    await user.keyboard("{Escape}");
+
+    expect(document.activeElement).not.toBe(
+      screen.getByRole("navigation", { name: "Sections" }),
+    );
+    expect(
+      screen
+        .getByRole("link", { name: "Banknotes" })
+        .classList.contains("sidebar-link--cursor"),
+    ).toBe(false);
   });
 });
 

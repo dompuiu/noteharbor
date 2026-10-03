@@ -211,8 +211,6 @@ input[type="radio"] {
   display: flex;
   flex-direction: column;
   gap: 4px;
-  opacity: 0;
-  pointer-events: none;
 }
 
 .sidebar-group {
@@ -247,9 +245,23 @@ input[type="radio"] {
   border-left: 1.5px solid var(--border);
 }
 
+.sidebar-ic {
+  flex: 0 0 auto;
+  width: 22px;
+  height: 22px;
+  display: grid;
+  place-items: center;
+}
+
+.sidebar-ic svg {
+  width: 18px;
+  height: 18px;
+}
+
 .sidebar-link {
   display: flex;
   align-items: center;
+  gap: 11px;
   width: 100%;
   padding: 7px 9px;
   border-radius: 8px;
@@ -263,6 +275,11 @@ input[type="radio"] {
     color 0.12s ease;
 }
 
+.sidebar-link-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .sidebar-link:hover {
   background: var(--surface-3);
   color: var(--text);
@@ -271,6 +288,37 @@ input[type="radio"] {
 .sidebar-link--active {
   background: var(--accent-soft);
   color: var(--accent-strong);
+}
+
+.sidebar-link--cursor {
+  background: var(--surface-3);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
+.sidebar-link--active.sidebar-link--cursor {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+/* Collapsed: icon-only rail. Labels and the group headings drop away, and the
+   indented rule flattens so the icons centre in the 64px rail. */
+.sidebar-dock .sidebar-link-label,
+.sidebar-dock .sidebar-group-label {
+  display: none;
+}
+
+.sidebar-dock .sidebar-link {
+  justify-content: center;
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.sidebar-dock .sidebar-group-links {
+  margin-left: 0;
+  padding-left: 0;
+  border-left: 0;
+  align-items: center;
 }
 
 .sidebar-hamburger,
@@ -298,7 +346,35 @@ input[type="radio"] {
     pointer-events: auto;
   }
 
-  /* Collapsed: show only the mark, centred, and keep the rail visually bare. */
+  /* Expanded, the labels return and the indent rule comes back. */
+  .sidebar-dock:hover .sidebar-link-label,
+  .sidebar-dock:hover .sidebar-group-label,
+  .sidebar-dock:has(:focus-visible) .sidebar-link-label,
+  .sidebar-dock:has(:focus-visible) .sidebar-group-label {
+    display: block;
+  }
+
+  .sidebar-dock:hover .sidebar-link,
+  .sidebar-dock:has(:focus-visible) .sidebar-link {
+    justify-content: flex-start;
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+
+  .sidebar-dock:hover .sidebar-group-links,
+  .sidebar-dock:has(:focus-visible) .sidebar-group-links {
+    margin-left: 20px;
+    padding-left: 12px;
+    border-left: 1.5px solid var(--border);
+  }
+
+  /* Collapsed, the cursor's link is the one cleared among the icons; the bare
+     rail otherwise shows just the brand mark plus each link's own icon. */
+  .sidebar-dock:not(:hover):not(:has(:focus-visible)) .sidebar-link--cursor {
+    display: inline-flex;
+  }
+
+  /* Collapsed: centre the brand mark and keep the rail visually bare. */
   .sidebar-dock:not(:hover):not(:has(:focus-visible)) .sidebar-head {
     justify-content: center;
     padding: 0;
@@ -328,9 +404,22 @@ input[type="radio"] {
     display: block;
   }
 
-  .sidebar-dock .sidebar-nav {
-    opacity: 1;
-    pointer-events: auto;
+  /* The drawer always shows the labelled rows, never the icon-only rail. */
+  .sidebar-dock .sidebar-link-label,
+  .sidebar-dock .sidebar-group-label {
+    display: block;
+  }
+
+  .sidebar-dock .sidebar-link {
+    justify-content: flex-start;
+    padding-left: 9px;
+    padding-right: 9px;
+  }
+
+  .sidebar-dock .sidebar-group-links {
+    margin-left: 20px;
+    padding-left: 12px;
+    border-left: 1.5px solid var(--border);
   }
 
   .sidebar-hamburger {

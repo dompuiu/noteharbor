@@ -99,6 +99,21 @@ describe("sidebar styles", () => {
     );
   });
 
+  test("hides the labels and indent rule on the collapsed rail", () => {
+    expect(styles).toMatch(
+      /\.sidebar-dock \.sidebar-link-label,\s*\n?\s*\.sidebar-dock \.sidebar-group-label\s*\{[^}]*display:\s*none/,
+    );
+    expect(styles).toMatch(
+      /\.sidebar-dock \.sidebar-group-links\s*\{[^}]*border-left:\s*0/,
+    );
+  });
+
+  test("the cursor link is ringed so focus is visible", () => {
+    expect(styles).toMatch(
+      /\.sidebar-link--cursor\s*\{[^}]*box-shadow:\s*inset 0 0 0 1\.5px var\(--accent\)/,
+    );
+  });
+
   test("the reduced-motion block drops the sidebar transition", () => {
     const block = styles.match(
       /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/,

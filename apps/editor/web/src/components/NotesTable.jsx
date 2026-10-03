@@ -2409,6 +2409,15 @@ function NotesTable({
       const tableKeysActive =
         !slideshowRouteActive && !editorOverlayOpen;
 
+      // The sidebar owns its keys while it holds focus. Bail before any of the
+      // table's single-key handling so the rail's cursor and navigation win.
+      if (
+        event.target instanceof Element &&
+        event.target.closest("#app-sidebar")
+      ) {
+        return;
+      }
+
       // Cmd/Ctrl/Shift + Left/Right (or h/l) jumps to the first/last column,
       // like the Viewer. Checked before the modifier guard below so it is not
       // swallowed. The uppercase spellings cover a held Shift and Caps Lock.
