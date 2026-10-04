@@ -1,5 +1,5 @@
-import { MemoryRouter } from "react-router-dom";
-import { render, screen } from "@testing-library/react";
+import { MemoryRouter, useLocation } from "react-router-dom";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
 import { CATALOG_ROUTES } from "../lib/routes.js";
@@ -36,9 +36,15 @@ class FakeResizeObserver {
   disconnect() {}
 }
 
+function HashProbe() {
+  const location = useLocation();
+  return <output data-testid="hash">{location.hash}</output>;
+}
+
 function renderEmptyLibrary() {
   return render(
     <MemoryRouter>
+      <HashProbe />
       <NotesTable
         activeCollection={null}
         activeCollectionId={null}
@@ -90,5 +96,15 @@ describe("NotesTable with no collections", () => {
 
     expect(screen.queryByLabelText("Active collection")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add note" })).toBeDisabled();
+  });
+
+  test("the a shortcut does not open the create form", async () => {
+    renderEmptyLibrary();
+
+    await screen.findByText(/No collections yet/);
+
+    fireEvent.keyDown(document.body, { key: "a" });
+
+    expect(screen.getByTestId("hash").textContent).toBe("");
   });
 });

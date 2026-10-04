@@ -806,6 +806,12 @@ input[type="radio"] {
   overflow: hidden;
 }
 
+/* The connection notice is a short message in a full-height panel, so centre
+   it rather than leaving it stranded at the top. */
+.connection-error .panel {
+  justify-content: center;
+}
+
 .panel-heading {
   display: flex;
   justify-content: space-between;
@@ -1012,6 +1018,16 @@ td {
   padding: 32px 16px;
   color: var(--text-muted);
   text-align: center;
+}
+
+/* The empty-library prompt sits in the table's centred empty cell, so its
+   actions line up under the message. */
+.no-collections-prompt .inline-actions {
+  margin-top: 12px;
+}
+
+.table-empty-cell .no-collections-prompt .inline-actions {
+  justify-content: center;
 }
 
 .table-thumb {

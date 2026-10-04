@@ -2573,6 +2573,12 @@ function NotesTable({
       // action so the shortcut still works from an empty focus state or right
       // after the row cursor was cleared.
       if (event.key === "a") {
+        // An empty library has no collection to create a note in. The toolbar
+        // button is disabled; the shortcut has to match it.
+        if (noCollections) {
+          return;
+        }
+
         event.preventDefault();
 
         if (focusWithinFocusedRow) {
@@ -2621,6 +2627,7 @@ function NotesTable({
     creatingNote,
     editingNoteId,
     hasActiveFilters,
+    noCollections,
     orderedNotes,
     rowVirtualizer,
     slideshowRouteActive,

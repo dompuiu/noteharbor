@@ -77,9 +77,16 @@ function ShellContent() {
   // The sidebar's Escape/Tab-out hands focus here, so it lands inside the page
   // rather than on <body>. Inert and visually hidden; Tab skips past it.
   const pageFocusRef = useRef(null);
+  // A degraded server can answer slowly; a check that lands after unmount must
+  // not write state (or overwrite a later retry).
+  const mountedRef = useRef(true);
 
   async function checkConnection({ refreshOnSuccess = false } = {}) {
     const result = await getHealth();
+
+    if (!mountedRef.current) {
+      return;
+    }
 
     if (!result.connected) {
       setConnection({ status: "disconnected", reason: result.reason });
@@ -90,6 +97,10 @@ function ShellContent() {
     // here is what actually brings the data back after an outage.
     if (refreshOnSuccess) {
       await refreshCollections();
+
+      if (!mountedRef.current) {
+        return;
+      }
     }
 
     setConnection({ status: "ok" });
@@ -97,6 +108,10 @@ function ShellContent() {
 
   useEffect(() => {
     checkConnection();
+
+    return () => {
+      mountedRef.current = false;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

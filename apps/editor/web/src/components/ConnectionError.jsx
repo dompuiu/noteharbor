@@ -32,12 +32,16 @@ function ConnectionError({ checking = false, onRetry, reason }) {
   }, [reason]);
 
   return (
-    <section className="screen-stack narrow-stack connection-error" role="alert">
+    <section className="screen-stack narrow-stack connection-error">
+      {/* The live region wraps only the message, so the Retry control is not
+          inside an assertive alert. */}
       <div className="panel">
-        <h1 ref={headingRef} tabIndex={-1}>
-          {heading}
-        </h1>
-        <p className="muted">{body}</p>
+        <div role="alert">
+          <h1 ref={headingRef} tabIndex={-1}>
+            {heading}
+          </h1>
+          <p className="muted">{body}</p>
+        </div>
         <div className="inline-actions">
           <button
             className="button button-primary"
