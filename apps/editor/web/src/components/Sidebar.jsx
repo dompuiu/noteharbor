@@ -275,8 +275,11 @@ function Sidebar({ pageFocusRef }) {
   }, [drawerOpen]);
 
   function handleLinkClick() {
+    // A click means "I'm leaving the rail". The browser focuses a clicked
+    // link, so without this the collapsed rail would keep keyboard focus and
+    // claim the arrow keys. Close the drawer and hand focus to the page.
     closeDrawer();
-    setCursorIndex(null);
+    leaveCursor();
   }
 
   const dockClassName = `sidebar-dock${drawerOpen ? " sidebar-dock--drawer-open" : ""}`;

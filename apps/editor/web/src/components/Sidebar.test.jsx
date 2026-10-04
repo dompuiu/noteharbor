@@ -128,6 +128,30 @@ describe("Sidebar navigation groups", () => {
       CATALOG_ROUTES.importExport,
     );
   });
+
+  test("a link click moves focus into the page, off the rail", async () => {
+    const user = userEvent.setup();
+    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+
+    await user.click(screen.getByRole("link", { name: "Collections" }));
+
+    // The rail is collapsed after the click, so focus belongs in the page.
+    expect(document.activeElement).toBe(screen.getByTestId("page-anchor"));
+    expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
+  });
+
+  test("after a link click, an arrow key does not reopen the rail", async () => {
+    const user = userEvent.setup();
+    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+
+    // Reproduces the report: click a destination, then press ↓. Focus is now
+    // in the page, so the sidebar must not claim the key and open its cursor.
+    await user.click(screen.getByRole("link", { name: "Collections" }));
+    await user.keyboard("{ArrowDown}");
+
+    expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
+    expect(document.activeElement).toBe(screen.getByTestId("page-anchor"));
+  });
 });
 
 describe("Sidebar keyboard cursor", () => {
