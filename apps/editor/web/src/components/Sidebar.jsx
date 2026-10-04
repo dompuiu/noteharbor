@@ -9,8 +9,8 @@ import { CATALOG_ROUTES, PORTFOLIO_ROUTES } from "../lib/routes.js";
 // Keyboard model (matches the tables): with nothing focused, "b" opens the
 // rail and puts the cursor on the current option. ↑/↓ and j/k move the cursor;
 // Home/End jump; Enter follows the option; Escape returns focus to the page and
-// collapses the rail. Tab still reaches every option, and leaving the rail
-// collapses it.
+// collapses the rail. Tab cycles the options like ↓, and Shift+Tab like ↑, both
+// wrapping off the ends, so the rail is left with Escape.
 
 // Per-destination icons, lifted from the settled layout-D prototype.
 const ICONS = {
@@ -157,7 +157,14 @@ function Sidebar({ pageFocusRef }) {
 
   useEffect(() => {
     function handleKeyDown(event) {
-      if (event.metaKey || event.ctrlKey || event.altKey || event.shiftKey) {
+      // Shift is part of Shift+Tab, which the rail handles; every other
+      // shifted key is left to the browser.
+      if (
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        (event.shiftKey && event.key !== "Tab")
+      ) {
         return;
       }
 
@@ -193,21 +200,21 @@ function Sidebar({ pageFocusRef }) {
         return;
       }
 
-      if (event.key === "Tab") {
-        const atStart = cursorIndex === 0;
-        const atEnd = cursorIndex === LINKS.length - 1;
-
-        if ((event.shiftKey && atStart) || (!event.shiftKey && atEnd)) {
-          // Returning to the page closes the rail and hands focus back.
-          event.preventDefault();
-          leaveCursor();
-        }
-        return;
-      }
-
       const count = LINKS.length;
+      // Tab only takes over once the cursor is active ("b" opened the rail);
+      // otherwise it keeps its native tab order. With the cursor on, Tab
+      // mirrors the arrows and wraps off the ends, so Escape is the way out.
+      const tabActive = event.key === "Tab" && cursorIndex !== null;
+      const forward =
+        event.key === "ArrowDown" ||
+        event.key === "j" ||
+        (tabActive && !event.shiftKey);
+      const backward =
+        event.key === "ArrowUp" ||
+        event.key === "k" ||
+        (tabActive && event.shiftKey);
 
-      if (event.key === "ArrowDown" || event.key === "j") {
+      if (forward) {
         event.preventDefault();
         setCursorIndex((current) =>
           current === null ? 0 : (current + 1) % count,
@@ -215,7 +222,7 @@ function Sidebar({ pageFocusRef }) {
         return;
       }
 
-      if (event.key === "ArrowUp" || event.key === "k") {
+      if (backward) {
         event.preventDefault();
         setCursorIndex((current) =>
           current === null ? 0 : (current - 1 + count) % count,

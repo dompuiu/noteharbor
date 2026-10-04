@@ -206,18 +206,45 @@ describe("Sidebar keyboard cursor", () => {
     expect(document.activeElement).not.toBe(screen.getByRole("navigation"));
   });
 
-  test("leaving the rail with Tab collapses the cursor", async () => {
+  test("Tab off the last option wraps to the first, like ArrowDown", async () => {
     const user = userEvent.setup();
     const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
 
     await user.keyboard("{b}");
-    expect(container.querySelector(".sidebar-link--cursor")).not.toBeNull();
-
-    // Step off the last option outward.
     await user.keyboard("{End}");
+    expect(document.activeElement).toHaveTextContent("Groupings");
+
+    await user.keyboard("{Tab}");
+
+    // Tab stays in the rail and wraps, matching ArrowDown.
+    expect(container.querySelector(".sidebar-link--cursor")).not.toBeNull();
+    expect(document.activeElement).toHaveTextContent("Banknotes");
+  });
+
+  test("Shift+Tab off the first option wraps to the last, like ArrowUp", async () => {
+    const user = userEvent.setup();
+    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+
+    await user.keyboard("{b}");
+    await user.keyboard("{Home}");
+    expect(document.activeElement).toHaveTextContent("Banknotes");
+
+    await user.keyboard("{Shift>}{Tab}{/Shift}");
+
+    expect(container.querySelector(".sidebar-link--cursor")).not.toBeNull();
+    expect(document.activeElement).toHaveTextContent("Groupings");
+  });
+
+  test("Tab keeps its native order until the cursor is active", async () => {
+    const user = userEvent.setup();
+    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+
+    // No "b": a plain Tab through the rail must not be captured or wrap.
+    screen.getByRole("link", { name: "Banknotes" }).focus();
     await user.keyboard("{Tab}");
 
     expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
+    expect(document.activeElement).toHaveTextContent("Collections");
   });
 
   test("`b` does nothing while another control has focus", async () => {
