@@ -163,6 +163,32 @@ async function getCollections() {
   return handleResponse(response);
 }
 
+// Distils `/api/health` into the shell's connection state. A thrown fetch means
+// the editor server itself is unreachable; a 503 means the server answered but
+// its database did not; anything else unexpected is reported generically.
+async function getHealth() {
+  let response;
+
+  try {
+    response = await fetch('/api/health');
+  } catch {
+    return { connected: false, reason: 'server' };
+  }
+
+  if (response.status === 503) {
+    return { connected: false, reason: 'database' };
+  }
+
+  if (!response.ok) {
+    return { connected: false, reason: 'generic' };
+  }
+
+  const payload = await response.json().catch(() => ({}));
+  return payload?.ok === true
+    ? { connected: true }
+    : { connected: false, reason: 'generic' };
+}
+
 async function createCollection(name) {
   const response = await fetch('/api/collections', {
     method: 'POST',
@@ -410,6 +436,7 @@ export {
   deleteNote,
   downloadArchive,
   getCollections,
+  getHealth,
   getNote,
   getNotes,
   getOperationStatus,

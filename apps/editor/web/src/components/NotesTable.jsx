@@ -40,6 +40,7 @@ import {
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
+import { NoCollectionsPrompt } from "./NoCollectionsPrompt.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 import { TagsField } from "./TagsField.jsx";
 
@@ -1239,6 +1240,11 @@ function NotesTable({
   const showSelection = true;
   const showReorder = true;
   const showActions = true;
+  // An empty library is not an outage: the load succeeded and returned no
+  // collections, so there is genuinely nothing to show yet. A failed load
+  // keeps its inline `collectionsError` instead.
+  const noCollections =
+    !loadingCollections && !collectionsError && collections.length === 0;
   const visibleColumns = useMemo(
     () => [...baseColumns, scrapeStatusColumn],
     [],
@@ -3674,26 +3680,29 @@ function NotesTable({
             </p>
           </div>
           <div className="inline-actions">
-            <select
-              aria-label="Active collection"
-              className="select-input"
-              disabled={loadingCollections || !collections.length}
-              onChange={(event) =>
-                onSelectCollection(Number(event.target.value))
-              }
-              value={activeCollectionId ?? ""}
-            >
-              {collections.map((collection) => (
-                <option key={collection.id} value={collection.id}>
-                  {Number(collection.is_default) === 1 ? "★ " : ""}
-                  {collection.name}
-                </option>
-              ))}
-            </select>
+            {collections.length ? (
+              <select
+                aria-label="Active collection"
+                className="select-input"
+                disabled={loadingCollections}
+                onChange={(event) =>
+                  onSelectCollection(Number(event.target.value))
+                }
+                value={activeCollectionId ?? ""}
+              >
+                {collections.map((collection) => (
+                  <option key={collection.id} value={collection.id}>
+                    {Number(collection.is_default) === 1 ? "★ " : ""}
+                    {collection.name}
+                  </option>
+                ))}
+              </select>
+            ) : null}
             <button
               aria-label="Add note"
               className="icon-link button-primary"
               data-shortcut="a"
+              disabled={noCollections}
               onClick={openCreateNote}
               type="button"
             >
@@ -4001,9 +4010,13 @@ function NotesTable({
                             className="table-empty-cell"
                             colSpan={totalColumnCount}
                           >
-                            {notes.length
-                              ? "No notes match the current view."
-                              : "No notes are stored yet. Use Import / Export to import data or add your first banknote."}
+                            {noCollections ? (
+                              <NoCollectionsPrompt />
+                            ) : notes.length ? (
+                              "No notes match the current view."
+                            ) : (
+                              "No notes are stored yet. Use Import / Export to import data or add your first banknote."
+                            )}
                           </td>
                         </tr>
                       ) : null}

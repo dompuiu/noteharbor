@@ -1,14 +1,16 @@
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 // The routing tests assert where each path lands, not what the screens render,
-// so the screens are stubbed out. Only the collections payload drives the
-// no-collections guard.
+// so the screens are stubbed out. The health mock drives the shell's
+// connection gate; the collections payload drives the empty-library state.
 vi.mock("./lib/api.js", () => ({
   createCollection: vi.fn(),
   deleteCollection: vi.fn(),
   getCollections: vi.fn(),
+  getHealth: vi.fn(),
   renameCollection: vi.fn(),
   setDefaultCollection: vi.fn(),
 }));
@@ -31,7 +33,7 @@ vi.mock("./components/NoteEditForm.jsx", () => ({
 
 import { ShellContent } from "./App.jsx";
 import { CollectionsProvider } from "./lib/collections.jsx";
-import { getCollections } from "./lib/api.js";
+import { getCollections, getHealth } from "./lib/api.js";
 import { CATALOG_ROUTES, PORTFOLIO_ROUTES } from "./lib/routes.js";
 
 function LocationProbe() {
@@ -57,6 +59,7 @@ function currentPath() {
 beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.clear();
+  getHealth.mockResolvedValue({ connected: true });
   getCollections.mockResolvedValue({
     collections: [{ id: 1, is_default: 1, name: "Default" }],
   });
@@ -103,6 +106,17 @@ describe("Root redirect", () => {
   });
 });
 
+describe("Unknown routes", () => {
+  test("an unknown path lands on the first sidebar destination", async () => {
+    renderAt("/catalog/banknotes3");
+
+    await waitFor(() => {
+      expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+    });
+    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
+  });
+});
+
 describe("Portfolio destinations", () => {
   test("serves the categories placeholder at /portfolio/categories", async () => {
     renderAt(PORTFOLIO_ROUTES.categories);
@@ -134,14 +148,56 @@ describe("Portfolio destinations", () => {
   });
 });
 
-describe("No-collections guard", () => {
-  test("sends an empty library to /catalog/import-export", async () => {
+describe("Empty library", () => {
+  test("an empty library stays on the banknote table", async () => {
     getCollections.mockResolvedValue({ collections: [] });
     renderAt(CATALOG_ROUTES.banknotes);
 
-    await waitFor(() => {
-      expect(currentPath()).toBe(CATALOG_ROUTES.importExport);
-    });
-    expect(await screen.findByText("Import and export screen")).toBeInTheDocument();
+    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
+    expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+  });
+});
+
+describe("Connection state", () => {
+  test("a missing editor server reports the server problem", async () => {
+    getHealth.mockResolvedValue({ connected: false, reason: "server" });
+    renderAt(CATALOG_ROUTES.banknotes);
+
+    expect(
+      await screen.findByText("Can't reach the editor server."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Banknotes screen")).not.toBeInTheDocument();
+  });
+
+  test("a database that does not answer reports the database problem", async () => {
+    getHealth.mockResolvedValue({ connected: false, reason: "database" });
+    renderAt(CATALOG_ROUTES.banknotes);
+
+    expect(
+      await screen.findByText("Can't reach the database."),
+    ).toBeInTheDocument();
+  });
+
+  test("an unexpected health response reports a generic problem", async () => {
+    getHealth.mockResolvedValue({ connected: false, reason: "generic" });
+    renderAt(CATALOG_ROUTES.banknotes);
+
+    expect(
+      await screen.findByText("Can't check the connection."),
+    ).toBeInTheDocument();
+  });
+
+  test("retrying after the server returns loads the page", async () => {
+    const user = userEvent.setup();
+    getHealth
+      .mockResolvedValueOnce({ connected: false, reason: "server" })
+      .mockResolvedValueOnce({ connected: true });
+    renderAt(CATALOG_ROUTES.banknotes);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Try again" }),
+    );
+
+    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
   });
 });

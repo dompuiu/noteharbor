@@ -4,7 +4,11 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test } from "vitest";
 import { Sidebar } from "./Sidebar.jsx";
-import { CATALOG_ROUTES, PORTFOLIO_ROUTES } from "../lib/routes.js";
+import {
+  CATALOG_ROUTES,
+  DEFAULT_DESTINATION,
+  PORTFOLIO_ROUTES,
+} from "../lib/routes.js";
 
 const LINKS = [
   "Banknotes",
@@ -89,6 +93,15 @@ describe("Sidebar navigation groups", () => {
     const portfolioLabel = container.querySelector("#sidebar-group-portfolio");
     expect(portfolioLabel).toHaveTextContent("Portfolio");
     expect(portfolioLabel.querySelector(".sidebar-group-ic svg")).not.toBeNull();
+  });
+
+  test("the first destination is the default route", () => {
+    renderSidebar(CATALOG_ROUTES.banknotes);
+
+    expect(screen.getByRole("link", { name: LINKS[0] })).toHaveAttribute(
+      "href",
+      DEFAULT_DESTINATION,
+    );
   });
 
   test("marks the active destination as the current page", () => {
