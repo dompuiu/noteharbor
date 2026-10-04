@@ -59,7 +59,7 @@ This starts:
 
 ### Use a Windows Chrome from WSL via CDP
 
-The packaged desktop app (Windows and macOS) has its own "Open Chrome" button that launches a CDP-enabled Chrome for you — see [Build the Electron editor](#build-the-electron-editor). The steps below are for running the editor server directly (e.g. `pnpm dev` in WSL), where nothing launches Chrome automatically.
+The packaged desktop app (Windows and macOS) launches its own CDP-enabled Chrome automatically when you use Auto Populate, so no manual setup is needed there — see [Build the Electron editor](#build-the-electron-editor). The steps below are for running the editor server directly (e.g. `pnpm dev` in WSL), where nothing launches Chrome automatically.
 
 If you run the editor server in WSL but want to see and interact with a Windows Chrome window for bot checks, launch Chrome on Windows with remote debugging enabled and point the server at it. The scraper reads the current HTML from the already open tab whose URL matches the requested note URL.
 
@@ -118,7 +118,7 @@ The Electron package:
 - bundles the current `data/` directory
 - copies bundled data into the user-data folder when the packaged app is newer
 
-On Windows and macOS, the packaged app can launch its own CDP-enabled Chrome via the "Open Chrome" button next to the URL field, so no manual CDP setup is needed for scraping there. See `NOTE_HARBOR_CHROME_PATH` in [Environment variables](#environment-variables) if Chrome isn't found at its standard install location.
+On Windows and macOS, the packaged app launches its own CDP-enabled Chrome automatically when you use Auto Populate, so no manual CDP setup is needed for scraping there. See `NOTE_HARBOR_CHROME_PATH` in [Environment variables](#environment-variables) if Chrome isn't found at its standard install location.
 
 For Windows artifacts, build on Windows:
 
