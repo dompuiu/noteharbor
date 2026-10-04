@@ -335,6 +335,13 @@ input[type="radio"] {
   color: var(--accent-strong);
 }
 
+/* The cursor link already draws its own ring. Drop the global
+   :focus-visible outline here so the two do not stack into a double border.
+   Plain Tab focus (no cursor) keeps the outline, so focus stays visible. */
+.sidebar-link--cursor:focus-visible {
+  outline: none;
+}
+
 /* Collapsed: icon-only rail. Link labels drop away, but each category keeps
    its tinted marker so the sections stay legible as categories. The indented
    rule flattens so the icons centre in the 64px rail. */

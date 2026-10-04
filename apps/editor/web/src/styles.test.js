@@ -144,6 +144,15 @@ describe("sidebar styles", () => {
     );
   });
 
+  test("the cursor ring replaces the default focus outline", () => {
+    // The cursor link already draws its own ring, so the global
+    // :focus-visible outline would double it. The outline is dropped only on
+    // the cursor link; a plain Tab focus keeps the browser outline.
+    expect(styles).toMatch(
+      /\.sidebar-link--cursor:focus-visible\s*\{[^}]*outline:\s*none/,
+    );
+  });
+
   test("the reduced-motion block drops the sidebar transition", () => {
     const block = styles.match(
       /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/,
