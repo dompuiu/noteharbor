@@ -242,16 +242,38 @@ class _ImageLightboxState extends State<ImageLightbox> {
                               Expanded(
                                 child: Align(
                                   alignment: Alignment.centerLeft,
-                                  child: Text(
-                                    item.label,
-                                    style: const TextStyle(
-                                      fontFamily: 'Inter',
-                                      color: ViewerPalette.darkText,
-                                      fontSize: 17,
-                                      fontWeight: FontWeight.w800,
-                                      letterSpacing: -0.2,
-                                    ),
-                                    overflow: TextOverflow.ellipsis,
+                                  child: Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.start,
+                                    children: [
+                                      Text(
+                                        item.label,
+                                        style: const TextStyle(
+                                          fontFamily: 'Inter',
+                                          color: ViewerPalette.darkText,
+                                          fontSize: 17,
+                                          fontWeight: FontWeight.w800,
+                                          letterSpacing: -0.2,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                      if (item.note.issueDate
+                                          .trim()
+                                          .isNotEmpty) ...[
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          item.note.issueDate,
+                                          style: const TextStyle(
+                                            fontFamily: 'Inter',
+                                            color: ViewerPalette.darkMuted,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                      ],
+                                    ],
                                   ),
                                 ),
                               ),

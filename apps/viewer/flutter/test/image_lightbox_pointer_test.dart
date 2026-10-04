@@ -11,12 +11,12 @@ import 'package:note_harbor_viewer/models/note_record.dart';
 void main() {
   const imagePath = 'noteharbor-pointer-test.png';
 
-  NoteRecord pointerNote({required int id}) {
+  NoteRecord pointerNote({required int id, String issueDate = ''}) {
     return NoteRecord.fromJson(<String, dynamic>{
       'id': id,
       'displayOrder': id,
       'denomination': 'Test',
-      'issueDate': '',
+      'issueDate': issueDate,
       'catalogNumber': 'KB-$id',
       'gradingCompany': '',
       'grade': '',
@@ -54,6 +54,7 @@ void main() {
     WidgetTester tester, {
     required int count,
     int initialIndex = 0,
+    String issueDate = '',
   }) async {
     tester.view.physicalSize = const Size(800, 600);
     tester.view.devicePixelRatio = 1.0;
@@ -61,7 +62,10 @@ void main() {
 
     await seedLargeImage(tester);
 
-    final notes = [for (var id = 1; id <= count; id++) pointerNote(id: id)];
+    final notes = [
+      for (var id = 1; id <= count; id++)
+        pointerNote(id: id, issueDate: issueDate),
+    ];
     final items = <ImageSequenceItem>[
       for (final note in notes)
         ImageSequenceItem(note: note, image: note.fullFor('front')),
@@ -138,6 +142,24 @@ void main() {
     await tester.drag(find.byType(PageView), const Offset(-600, 0));
     await tester.pumpAndSettle();
     expect(find.text('1 / 3'), findsOneWidget);
+  });
+
+  testWidgets('the header shows the note date beneath the title', (
+    WidgetTester tester,
+  ) async {
+    await pumpLightbox(tester, count: 1, issueDate: '1966');
+
+    expect(find.text('Test - KB-1'), findsOneWidget);
+    expect(find.text('1966'), findsOneWidget);
+  });
+
+  testWidgets('the header omits the date line when the note has no date', (
+    WidgetTester tester,
+  ) async {
+    await pumpLightbox(tester, count: 1);
+
+    expect(find.text('Test - KB-1'), findsOneWidget);
+    expect(find.text('1966'), findsNothing);
   });
 }
 
