@@ -25,6 +25,7 @@ import {
   formatNoteAsTsvRow,
 } from "../lib/noteClipboard.js";
 import { isEditableElement } from "../lib/editableElement.js";
+import { isEmptyLibrary } from "../lib/libraryState.js";
 import { CATALOG_ROUTES } from "../lib/routes.js";
 import {
   shouldHandOffToFilters,
@@ -1240,11 +1241,13 @@ function NotesTable({
   const showSelection = true;
   const showReorder = true;
   const showActions = true;
-  // An empty library is not an outage: the load succeeded and returned no
-  // collections, so there is genuinely nothing to show yet. A failed load
-  // keeps its inline `collectionsError` instead.
-  const noCollections =
-    !loadingCollections && !collectionsError && collections.length === 0;
+  // An empty library is not an outage; a failed load keeps its inline
+  // `collectionsError` instead.
+  const noCollections = isEmptyLibrary({
+    collections,
+    collectionsError,
+    loadingCollections,
+  });
   const visibleColumns = useMemo(
     () => [...baseColumns, scrapeStatusColumn],
     [],
@@ -3680,11 +3683,11 @@ function NotesTable({
             </p>
           </div>
           <div className="inline-actions">
-            {collections.length ? (
+            {noCollections ? null : (
               <select
                 aria-label="Active collection"
                 className="select-input"
-                disabled={loadingCollections}
+                disabled={loadingCollections || !collections.length}
                 onChange={(event) =>
                   onSelectCollection(Number(event.target.value))
                 }
@@ -3697,7 +3700,7 @@ function NotesTable({
                   </option>
                 ))}
               </select>
-            ) : null}
+            )}
             <button
               aria-label="Add note"
               className="icon-link button-primary"

@@ -29,7 +29,7 @@ function ConnectionError({ checking = false, onRetry, reason }) {
   // or screen-reader user is left on an element that no longer exists.
   useEffect(() => {
     headingRef.current?.focus();
-  }, []);
+  }, [reason]);
 
   return (
     <section className="screen-stack narrow-stack connection-error" role="alert">

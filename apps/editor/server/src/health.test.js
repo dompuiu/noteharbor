@@ -34,3 +34,18 @@ test('health reports unavailable when the database ping throws', () => {
     { status: 503, body: { ok: false } }
   );
 });
+
+test('the health route answers 200 with ok:true when the database answers', async () => {
+  const { server, port } = await serverModule.startServer({
+    host: '127.0.0.1',
+    port: 0
+  });
+
+  try {
+    const response = await fetch(`http://127.0.0.1:${port}/api/health`);
+    assert.equal(response.status, 200);
+    assert.deepEqual(await response.json(), { ok: true });
+  } finally {
+    await new Promise((resolve) => server.close(resolve));
+  }
+});

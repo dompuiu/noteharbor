@@ -15,6 +15,7 @@ import { PortfolioScreen } from "./components/PortfolioScreen.jsx";
 import { Sidebar } from "./components/Sidebar.jsx";
 import { getHealth } from "./lib/api.js";
 import { CollectionsProvider, useCollections } from "./lib/collections.jsx";
+import { isEmptyLibrary } from "./lib/libraryState.js";
 import {
   CATALOG_ROUTES,
   DEFAULT_DESTINATION,
@@ -45,7 +46,6 @@ function NoteEditorDestination({ emptyLibrary, selectedCollectionId }) {
         <div className="panel">
           <div className="panel-heading">
             <div className="panel-heading-copy">
-              <p className="eyebrow">Catalog</p>
               <h1>Banknotes</h1>
             </div>
           </div>
@@ -107,8 +107,11 @@ function ShellContent() {
     );
   }
 
-  const showEmptyLibrary =
-    !loadingCollections && !collectionsError && collections.length === 0;
+  const showEmptyLibrary = isEmptyLibrary({
+    collections,
+    collectionsError,
+    loadingCollections,
+  });
 
   return (
     <div className="app-shell">

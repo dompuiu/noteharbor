@@ -156,6 +156,14 @@ describe("Empty library", () => {
     expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
     expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
   });
+
+  test("the note editor shows the empty-library prompt, not a dead form", async () => {
+    getCollections.mockResolvedValue({ collections: [] });
+    renderAt(CATALOG_ROUTES.noteEdit(7));
+
+    expect(await screen.findByText(/No collections yet/)).toBeInTheDocument();
+    expect(screen.queryByText("Note editor screen")).not.toBeInTheDocument();
+  });
 });
 
 describe("Connection state", () => {

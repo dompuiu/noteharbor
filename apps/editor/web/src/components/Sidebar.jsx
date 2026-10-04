@@ -1,6 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
-import { CATALOG_ROUTES, PORTFOLIO_ROUTES } from "../lib/routes.js";
+import {
+  CATALOG_ROUTES,
+  DEFAULT_DESTINATION,
+  PORTFOLIO_ROUTES,
+} from "../lib/routes.js";
 
 // The Editor's persistent chrome. It renders on every route beside the main
 // region: a 64px rail of destination icons that expands to 288px on hover or
@@ -39,11 +43,11 @@ const CATALOG_GROUP = {
     {
       icon: "banknote",
       label: "Banknotes",
-      to: CATALOG_ROUTES.banknotes,
+      to: DEFAULT_DESTINATION,
       // The note editor is a Catalog > Banknotes child, so it keeps the
       // Banknotes destination highlighted.
       matches: (pathname) =>
-        pathname === CATALOG_ROUTES.banknotes ||
+        pathname === DEFAULT_DESTINATION ||
         pathname.startsWith("/catalog/notes/"),
     },
     { icon: "folders", label: "Collections", to: CATALOG_ROUTES.collections },

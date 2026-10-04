@@ -179,7 +179,7 @@ async function getHealth() {
     return { connected: false, reason: 'database' };
   }
 
-  if (!response.ok) {
+  if (response.status !== 200) {
     return { connected: false, reason: 'generic' };
   }
 
