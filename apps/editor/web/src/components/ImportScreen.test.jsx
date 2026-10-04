@@ -66,6 +66,23 @@ describe("ImportScreen collection controls", () => {
     expect(onSelectCollection).toHaveBeenCalledWith(2);
   });
 
+  test("places the target selector inside the CSV import card it feeds", async () => {
+    renderImportScreen();
+
+    const select = await screen.findByLabelText("Active collection");
+    const csvCard = select.closest("form");
+
+    expect(csvCard).not.toBeNull();
+    expect(csvCard).toHaveTextContent("CSV Import");
+    // The archive card is a separate form and must not host the selector.
+    expect(
+      screen
+        .getByText("Archive Import and Export")
+        .closest("form")
+        .contains(select),
+    ).toBe(false);
+  });
+
   test("no longer offers create, rename, delete, or set-default controls", async () => {
     renderImportScreen();
 

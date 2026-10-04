@@ -1593,21 +1593,6 @@ td.drag-cell {
   display: none;
 }
 
-.collection-admin-row {
-  display: grid;
-  grid-template-columns: 1fr;
-  gap: 12px;
-  margin-bottom: 4px;
-}
-
-.collection-admin-row .inline-select-group span {
-  font-weight: 700;
-}
-
-.collection-admin-row .select-input {
-  min-width: 180px;
-}
-
 .import-sections {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -1621,6 +1606,16 @@ td.drag-cell {
   border: 1px solid var(--border);
   background: var(--surface-2);
   min-height: 0;
+}
+
+/* The CSV card's import target: the label reads like the card's other field
+   labels, and the selector keeps a comfortable width beside it. */
+.import-card .inline-select-group span {
+  font-weight: 700;
+}
+
+.import-card .inline-select-group .select-input {
+  min-width: 180px;
 }
 
 .archive-picker-row {

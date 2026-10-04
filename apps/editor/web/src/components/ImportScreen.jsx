@@ -351,25 +351,6 @@ function ImportScreen({
           ) : null}
         </div>
 
-        <div className="collection-admin-row">
-          <div className="inline-select-group">
-            <span>Active collection</span>
-            <select
-              aria-label="Active collection"
-              className="select-input"
-              disabled={loadingCollections || isBusy || !collections.length}
-              onChange={(event) => onSelectCollection(Number(event.target.value))}
-              value={activeCollectionId ?? ''}
-            >
-              {collections.map((collection) => (
-                <option key={collection.id} value={collection.id}>
-                  {Number(collection.is_default) === 1 ? '★ ' : ''}{collection.name}
-                </option>
-              ))}
-            </select>
-          </div>
-        </div>
-
         {loadingCollections ? <p>Loading collections...</p> : null}
         {collectionsError ? <p className="error-text">{collectionsError}</p> : null}
         {isBusy ? <p className="warning-text">{busyMessage}</p> : null}
@@ -387,6 +368,23 @@ function ImportScreen({
                 notes missing from the CSV are deleted, tags are replaced from the CSV, and rows after
                 `Ignore after this line` are skipped.
               </p>
+            </div>
+
+            <div className="inline-select-group full-span">
+              <span>Import into</span>
+              <select
+                aria-label="Active collection"
+                className="select-input"
+                disabled={loadingCollections || isBusy || !collections.length}
+                onChange={(event) => onSelectCollection(Number(event.target.value))}
+                value={activeCollectionId ?? ''}
+              >
+                {collections.map((collection) => (
+                  <option key={collection.id} value={collection.id}>
+                    {Number(collection.is_default) === 1 ? '★ ' : ''}{collection.name}
+                  </option>
+                ))}
+              </select>
             </div>
 
             <div className="field-block full-span">
