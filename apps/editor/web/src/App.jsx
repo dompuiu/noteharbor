@@ -1,3 +1,4 @@
+import { useRef } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -39,12 +40,21 @@ function ShellContent() {
   } = useCollections();
 
   const shouldForceImport = !loadingCollections && collections.length === 0;
+  // The sidebar's Escape/Tab-out hands focus here, so it lands inside the page
+  // rather than on <body>. Inert and visually hidden; Tab skips past it.
+  const pageFocusRef = useRef(null);
 
   return (
     <div className="app-shell">
-      <Sidebar />
+      <Sidebar pageFocusRef={pageFocusRef} />
       <div className="app-main">
         <main>
+          <span
+            aria-hidden="true"
+            className="page-focus-anchor"
+            ref={pageFocusRef}
+            tabIndex={-1}
+          />
           <Routes>
             <Route
               element={

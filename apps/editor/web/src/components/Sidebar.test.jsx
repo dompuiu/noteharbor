@@ -1,3 +1,4 @@
+import { createRef } from "react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -18,13 +19,26 @@ function LocationProbe() {
   return <output data-testid="pathname">{location.pathname}</output>;
 }
 
+// Mirrors App's shell: the sidebar sits beside a main region whose first
+// child is the inert focus anchor that Escape hands focus to.
 function renderSidebar(path) {
-  return render(
+  const pageFocusRef = createRef();
+  const view = render(
     <MemoryRouter initialEntries={[path]}>
       <LocationProbe />
-      <Sidebar />
+      <Sidebar pageFocusRef={pageFocusRef} />
+      <main>
+        <span
+          className="page-focus-anchor"
+          data-testid="page-anchor"
+          ref={pageFocusRef}
+          tabIndex={-1}
+        />
+      </main>
     </MemoryRouter>,
   );
+
+  return { ...view, pageFocusRef };
 }
 
 function drawerToggle() {
@@ -54,6 +68,27 @@ describe("Sidebar navigation groups", () => {
     expect(container.querySelectorAll(".sidebar-link .sidebar-ic svg")).toHaveLength(
       LINKS.length,
     );
+  });
+
+  test("gives each category a marker icon beside its name", () => {
+    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+
+    // Two section markers, one per category, kept out of the link list so a
+    // category never reads as a destination.
+    const markers = container.querySelectorAll(
+      ".sidebar-group-label .sidebar-group-ic svg",
+    );
+    expect(markers).toHaveLength(2);
+    expect(container.querySelectorAll(".sidebar-link .sidebar-group-ic"))
+      .toHaveLength(0);
+
+    const catalogLabel = container.querySelector("#sidebar-group-catalog");
+    expect(catalogLabel).toHaveTextContent("Catalog");
+    expect(catalogLabel.querySelector(".sidebar-group-ic svg")).not.toBeNull();
+
+    const portfolioLabel = container.querySelector("#sidebar-group-portfolio");
+    expect(portfolioLabel).toHaveTextContent("Portfolio");
+    expect(portfolioLabel.querySelector(".sidebar-group-ic svg")).not.toBeNull();
   });
 
   test("marks the active destination as the current page", () => {
@@ -185,7 +220,7 @@ describe("Sidebar keyboard cursor", () => {
     expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
   });
 
-  test("`b` does nothing while a table row has focus", async () => {
+  test("`b` does nothing while another control has focus", async () => {
     const user = userEvent.setup();
     const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
 
@@ -198,6 +233,47 @@ describe("Sidebar keyboard cursor", () => {
     expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
     expect(document.activeElement).toBe(outside);
     outside.remove();
+  });
+
+  test("`b` does nothing while a table row has focus", async () => {
+    const user = userEvent.setup();
+    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+
+    // The banknote table's rows are focusable <tr>s inside the table shell.
+    const shell = document.createElement("div");
+    shell.className = "table-shell";
+    shell.innerHTML =
+      '<table><tbody><tr class="table-row-link" tabindex="0"></tr></tbody></table>';
+    document.body.append(shell);
+    const row = shell.querySelector("tr");
+    row.focus();
+
+    await user.keyboard("{b}");
+
+    expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
+    expect(document.activeElement).toBe(row);
+    shell.remove();
+  });
+
+  test("`b` opens the rail when focus rests on the table's empty-row anchor", async () => {
+    const user = userEvent.setup();
+    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+
+    // Pressing Escape on a focused row parks focus on an inert anchor inside
+    // the table shell. Visually nothing is focused, so "b" must still open
+    // the rail exactly as it does on a fresh page load.
+    const shell = document.createElement("div");
+    shell.className = "table-shell";
+    shell.innerHTML = '<span class="table-focus-anchor" tabindex="-1"></span>';
+    document.body.append(shell);
+    const anchor = shell.querySelector(".table-focus-anchor");
+    anchor.focus();
+
+    await user.keyboard("{b}");
+
+    expect(container.querySelector(".sidebar-link--cursor")).not.toBeNull();
+    expect(document.activeElement).toHaveTextContent("Banknotes");
+    shell.remove();
   });
 
   test("Escape returns focus off the rail, not onto a hidden link", async () => {
@@ -215,6 +291,18 @@ describe("Sidebar keyboard cursor", () => {
         .getByRole("link", { name: "Banknotes" })
         .classList.contains("sidebar-link--cursor"),
     ).toBe(false);
+  });
+
+  test("Escape hands focus to the page content", async () => {
+    const user = userEvent.setup();
+    renderSidebar(CATALOG_ROUTES.importExport);
+
+    await user.keyboard("{b}");
+    expect(document.activeElement).toHaveTextContent("Import / Export");
+
+    await user.keyboard("{Escape}");
+
+    expect(document.activeElement).toBe(screen.getByTestId("page-anchor"));
   });
 });
 

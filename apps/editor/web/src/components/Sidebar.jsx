@@ -15,17 +15,26 @@ import { CATALOG_ROUTES, PORTFOLIO_ROUTES } from "../lib/routes.js";
 // Per-destination icons, lifted from the settled layout-D prototype.
 const ICONS = {
   banknote:
-    '<rect x="2.5" y="6" width="19" height="12" rx="2.3"/><circle cx="12" cy="12" r="2.6"/><path d="M6.2 9.6h.01M17.8 14.4h.01"/>',
-  folder:
-    '<path d="M3.5 7.2c0-.9.8-1.7 1.7-1.7h3.2c.5 0 1 .2 1.3.6l.9 1h7.2c.9 0 1.7.8 1.7 1.7v7.4c0 .9-.8 1.7-1.7 1.7H5.2c-.9 0-1.7-.8-1.7-1.7z"/>',
+    '<rect width="20" height="12" x="2" y="6" rx="2"/><circle cx="12" cy="12" r="2"/><path d="M6 12h.01M18 12h.01"/>',
+  folders:
+    '<path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/><path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>',
   swap: '<path d="M7.5 4.5v13M7.5 4.5 4.6 7.6M7.5 4.5l2.9 3.1M16.5 19.5v-13M16.5 19.5l2.9-3.1M16.5 19.5l-2.9-3.1"/>',
   grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/>',
   layers:
     '<path d="M12 3.5 21 8l-9 4.5L3 8z"/><path d="M3.8 12.2 12 16.3l8.2-4.1"/><path d="M3.8 16.2 12 20.3l8.2-4.1"/>',
+  // Section markers for the two sidebar categories. They read as hubs, not
+  // as destinations: a stack of books for Catalog, a pile of pictures for
+  // Portfolio. Both are Lucide glyphs, matching the destination icons.
+  catalog:
+    '<rect width="8" height="18" x="3" y="3" rx="1"/><path d="M7 3v18"/><path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z"/>',
+  portfolio:
+    '<path d="m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16"/><path d="M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2"/><circle cx="13" cy="7" r="1" fill="currentColor"/><rect x="8" y="2" width="14" height="14" rx="2"/>',
 };
 
 const CATALOG_GROUP = {
   id: "catalog",
+  icon: "catalog",
+  label: "Catalog",
   items: [
     {
       icon: "banknote",
@@ -37,13 +46,15 @@ const CATALOG_GROUP = {
         pathname === CATALOG_ROUTES.banknotes ||
         pathname.startsWith("/catalog/notes/"),
     },
-    { icon: "folder", label: "Collections", to: CATALOG_ROUTES.collections },
+    { icon: "folders", label: "Collections", to: CATALOG_ROUTES.collections },
     { icon: "swap", label: "Import / Export", to: CATALOG_ROUTES.importExport },
   ],
 };
 
 const PORTFOLIO_GROUP = {
   id: "portfolio",
+  icon: "portfolio",
+  label: "Portfolio",
   items: [
     { icon: "grid", label: "Categories", to: PORTFOLIO_ROUTES.categories },
     { icon: "layers", label: "Groupings", to: PORTFOLIO_ROUTES.groupings },
@@ -61,9 +72,9 @@ function isItemActive(item, pathname) {
   return pathname === item.to || pathname.startsWith(`${item.to}/`);
 }
 
-function ItemIcon({ icon }) {
+function ItemIcon({ className = "sidebar-ic", icon }) {
   return (
-    <span aria-hidden="true" className="sidebar-ic">
+    <span aria-hidden="true" className={className}>
       <svg
         dangerouslySetInnerHTML={{ __html: ICONS[icon] }}
         fill="none"
@@ -92,7 +103,7 @@ function HamburgerIcon() {
   );
 }
 
-function Sidebar() {
+function Sidebar({ pageFocusRef }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -122,11 +133,17 @@ function Sidebar() {
     setCursorIndex(activeIndex === -1 ? 0 : activeIndex);
   }
 
+  // Leaving the rail hands focus back to the page content. The shell puts an
+  // inert focus anchor at the top of <main>, so focus lands inside the page
+  // rather than on <body>; Tab then continues from there.
   function leaveCursor() {
-    if (document.activeElement instanceof HTMLElement) {
+    setCursorIndex(null);
+
+    if (pageFocusRef?.current) {
+      pageFocusRef.current.focus({ preventScroll: true });
+    } else if (document.activeElement instanceof HTMLElement) {
       document.activeElement.blur();
     }
-    setCursorIndex(null);
   }
 
   // Move DOM focus with the cursor so Tab/Escape and screen readers track it.
@@ -151,12 +168,16 @@ function Sidebar() {
       if (!inSidebar) {
         // "b" opens the rail unless something else owns the keyboard. The
         // tables keep their own keys, so bail when focus sits in an editable
-        // field, inside a table, or on any other focusable control.
+        // field, on a table row, or on any other focusable control. "Inside a
+        // table" is matched via the <table> itself: the shell's inert
+        // `.table-focus-anchor`, where focus rests after Escape clears a row
+        // cursor, sits beside the <table>, so that empty-row state still reads
+        // as "nothing focused" and "b" opens the rail.
         const active = document.activeElement;
         const ownsKeyboard =
           active instanceof HTMLElement &&
           active.closest(
-            "input, textarea, select, [contenteditable], button, a, table, .table-shell, [role='dialog']",
+            "input, textarea, select, [contenteditable], button, a, table, [role='dialog']",
           );
 
         if (!ownsKeyboard && event.key === "b") {
@@ -313,7 +334,8 @@ function Sidebar() {
                   className="sidebar-group-label"
                   id={`sidebar-group-${group.id}`}
                 >
-                  {group.label}
+                  <ItemIcon className="sidebar-group-ic" icon={group.icon} />
+                  <span className="sidebar-group-name">{group.label}</span>
                 </p>
                 <div className="sidebar-group-links">
                   {group.items.map((item) => {

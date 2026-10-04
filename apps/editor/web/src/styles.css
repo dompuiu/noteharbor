@@ -226,13 +226,47 @@ input[type="radio"] {
 }
 
 .sidebar-group-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
   margin: 0;
-  padding: 2px 9px 6px;
+  padding: 10px 9px 6px;
   font-size: 9.5px;
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
   color: var(--text-faint);
+}
+
+/* The category marker. It is the group's own icon, not a destination: an
+   accent-tinted round chip that stays put on the collapsed rail while the
+   name drops away. The ring and circular shape set it apart from a page
+   link, whose active pill is a wider, unringed rounded rectangle.
+   The group supplies its own top padding, so the label overrides the `<p>`
+   margin reset below with `padding: 10px 9px 6px`; that box is identical
+   collapsed and expanded — only the name's `display` toggles — so the
+   marker never shifts as the rail opens. */
+.sidebar-group-ic {
+  flex: 0 0 auto;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  display: grid;
+  place-items: center;
+  color: var(--accent-strong);
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1.5px rgba(150, 98, 47, 0.35);
+}
+
+.sidebar-group-ic svg {
+  width: 13px;
+  height: 13px;
+}
+
+.sidebar-group-name {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 /* The links hang off their group label, down an indented rule. */
@@ -301,10 +335,11 @@ input[type="radio"] {
   color: var(--accent-strong);
 }
 
-/* Collapsed: icon-only rail. Labels and the group headings drop away, and the
-   indented rule flattens so the icons centre in the 64px rail. */
+/* Collapsed: icon-only rail. Link labels drop away, but each category keeps
+   its tinted marker so the sections stay legible as categories. The indented
+   rule flattens so the icons centre in the 64px rail. */
 .sidebar-dock .sidebar-link-label,
-.sidebar-dock .sidebar-group-label {
+.sidebar-dock .sidebar-group-name {
   display: none;
 }
 
@@ -346,11 +381,11 @@ input[type="radio"] {
     pointer-events: auto;
   }
 
-  /* Expanded, the labels return and the indent rule comes back. */
+  /* Expanded, the names return and the indent rule comes back. */
   .sidebar-dock:hover .sidebar-link-label,
-  .sidebar-dock:hover .sidebar-group-label,
+  .sidebar-dock:hover .sidebar-group-name,
   .sidebar-dock:has(:focus-visible) .sidebar-link-label,
-  .sidebar-dock:has(:focus-visible) .sidebar-group-label {
+  .sidebar-dock:has(:focus-visible) .sidebar-group-name {
     display: block;
   }
 
@@ -374,10 +409,17 @@ input[type="radio"] {
     display: inline-flex;
   }
 
-  /* Collapsed: centre the brand mark and keep the rail visually bare. */
+  /* Collapsed: centre the brand mark and each category's marker, and keep
+     the rail visually bare. The label keeps its base padding, so its box —
+     and the marker inside it — is identical to the expanded state; only the
+     name's `display` toggles. */
   .sidebar-dock:not(:hover):not(:has(:focus-visible)) .sidebar-head {
     justify-content: center;
     padding: 0;
+  }
+
+  .sidebar-dock:not(:hover):not(:has(:focus-visible)) .sidebar-group-label {
+    justify-content: center;
   }
 }
 
@@ -406,7 +448,7 @@ input[type="radio"] {
 
   /* The drawer always shows the labelled rows, never the icon-only rail. */
   .sidebar-dock .sidebar-link-label,
-  .sidebar-dock .sidebar-group-label {
+  .sidebar-dock .sidebar-group-name {
     display: block;
   }
 
@@ -916,7 +958,8 @@ th.table-gutter-cell {
   background: var(--scroll-thumb-hover);
 }
 
-.table-focus-anchor {
+.table-focus-anchor,
+.page-focus-anchor {
   position: absolute;
   width: 1px;
   height: 1px;

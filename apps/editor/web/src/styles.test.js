@@ -99,12 +99,42 @@ describe("sidebar styles", () => {
     );
   });
 
-  test("hides the labels and indent rule on the collapsed rail", () => {
+  test("hides the link labels and names on the collapsed rail", () => {
     expect(styles).toMatch(
-      /\.sidebar-dock \.sidebar-link-label,\s*\n?\s*\.sidebar-dock \.sidebar-group-label\s*\{[^}]*display:\s*none/,
+      /\.sidebar-dock \.sidebar-link-label,\s*\n?\s*\.sidebar-dock \.sidebar-group-name\s*\{[^}]*display:\s*none/,
     );
     expect(styles).toMatch(
       /\.sidebar-dock \.sidebar-group-links\s*\{[^}]*border-left:\s*0/,
+    );
+  });
+
+  // The collapsed rail keeps each category's marker while the name drops away,
+  // so the sections stay readable as categories rather than anonymous glyphs.
+  test("keeps the category marker visible and accent-tinted when collapsed", () => {
+    const marker = styles.match(/\.sidebar-group-ic\s*\{([^}]*)\}/);
+    expect(marker).not.toBeNull();
+    expect(marker[1]).toMatch(/background:\s*var\(--accent-soft\)/);
+    expect(marker[1]).toMatch(/color:\s*var\(--accent-strong\)/);
+    expect(marker[1]).toMatch(/border-radius:\s*50%/);
+    // The name, not the marker, is what hides.
+    expect(styles).not.toMatch(
+      /\.sidebar-dock \.sidebar-group-label\s*\{[^}]*display:\s*none/,
+    );
+    expect(styles).toMatch(
+      /\.sidebar-dock:not\(:hover\):not\(:has\(:focus-visible\)\) \.sidebar-group-label\s*\{[^}]*justify-content:\s*center/,
+    );
+  });
+
+  // Opening the rail must not shift the marker. The label's padding is fixed
+  // across states, and only the name toggles, so hover never moves the icon.
+  test("the category marker does not jump when the rail expands", () => {
+    const label = styles.match(/\.sidebar-group-label\s*\{([^}]*)\}/);
+    expect(label).not.toBeNull();
+    expect(label[1]).toMatch(/padding:\s*10px 9px 6px/);
+    // Collapsed keeps that box and only centres within it via justify-content;
+    // no rule overrides the label's padding on hover/collapse.
+    expect(styles).not.toMatch(
+      /\.sidebar-dock:hover \.sidebar-group-label\s*\{[^}]*padding/,
     );
   });
 
