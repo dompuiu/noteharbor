@@ -71,7 +71,7 @@ function getScraperForNote(note) {
  * Returns { scraper, parsed } without writing anything to disk or DB.
  * Throws if no scraper matches the URL or if fetching/parsing fails.
  */
-async function scrapeUrl(noteOrUrl) {
+async function scrapeUrl(noteOrUrl, options = {}) {
   const note =
     typeof noteOrUrl === "string"
       ? { url: noteOrUrl, grading_company: "" }
@@ -86,7 +86,8 @@ async function scrapeUrl(noteOrUrl) {
   const html = await fetchHtml({
     url,
     cdpUrl: getBrowserCdpUrl(),
-    waitSeconds: DEFAULT_WAIT_SECONDS
+    waitSeconds: DEFAULT_WAIT_SECONDS,
+    openIfMissing: options.openIfMissing,
   });
   const parsed = scraper.parse(html, url);
 
@@ -215,7 +216,7 @@ scrapeRouter.post("/preview", async (request, response) => {
   }
 
   try {
-    const { parsed } = await scrapeUrl(url);
+    const { parsed } = await scrapeUrl(url, { openIfMissing: true });
 
     response.json({
       scraped_data: parsed.details,
