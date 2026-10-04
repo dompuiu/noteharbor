@@ -5,7 +5,7 @@ try { process.loadEnvFile(); } catch { /* no .env file, use defaults */ }
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import cors from 'cors';
 import express from 'express';
-import { IMAGES_DIR, ROOT_DIR } from './db.js';
+import { IMAGES_DIR, ROOT_DIR, pingDatabase } from './db.js';
 import { archiveRouter } from './routes/archive.js';
 import { collectionsRouter } from './routes/collections.js';
 import { importRouter } from './routes/import.js';
@@ -30,6 +30,18 @@ function shouldServeWebDist() {
   return parseBooleanEnv(process.env.NOTE_HARBOR_SERVE_WEB_DIST);
 }
 
+// The probe the client uses to tell "database unreachable" apart from an empty
+// library. `ping` is injectable so both outcomes are testable without having to
+// break a real database.
+function checkHealth(ping = pingDatabase) {
+  try {
+    ping();
+    return { status: 200, body: { ok: true } };
+  } catch {
+    return { status: 503, body: { ok: false } };
+  }
+}
+
 function createApp() {
   const app = express();
   const webDistDir = resolveWebDistDir();
@@ -52,7 +64,8 @@ function createApp() {
   app.use('/api/scrape', scrapeRouter);
 
   app.get('/api/health', (_request, response) => {
-    response.json({ ok: true });
+    const { status, body } = checkHealth();
+    response.status(status).json(body);
   });
 
   if (shouldServeWebDist() && fs.existsSync(webEntryPath)) {
@@ -90,6 +103,7 @@ if (isDirectRun) {
 }
 
 export {
+  checkHealth,
   createApp,
   resolveWebDistDir,
   startServer

@@ -811,6 +811,14 @@ function getDatabase() {
   return openDatabase();
 }
 
+// A cheap round-trip that proves the database file is open and answering. Used
+// by the health check so an unreadable or unopenable database is reported
+// rather than surfacing later as a failed request.
+function pingDatabase() {
+  const database = getDatabase();
+  database.prepare('SELECT 1 AS ok').get();
+}
+
 function closeDatabase() {
   if (!db) {
     return;
@@ -1532,6 +1540,7 @@ export {
   migrateBanknotesForeignKey,
   moveNoteToCollection,
   openDatabase,
+  pingDatabase,
   reloadDatabase,
   renameCollectionById,
   reorderCollections,
