@@ -87,15 +87,21 @@ function reasonForStatus(status) {
   return status === 503 ? 'database' : 'generic';
 }
 
+// A failed request carries why it failed so the shell can show the right
+// connection message; the message itself falls back to the generic copy.
+function connectionError(reason, message) {
+  const error = new Error(message || 'Request failed.');
+  error.reason = reason;
+  return error;
+}
+
 async function handleResponse(response) {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    const error = new Error(payload.error || 'Request failed.');
     // The shell reads its connection state from the collections load, so a
     // failure has to say whether the server answered but its database did not.
-    error.reason = reasonForStatus(response.status);
-    throw error;
+    throw connectionError(reasonForStatus(response.status), payload.error);
   }
 
   return payload;
@@ -176,9 +182,7 @@ async function getCollections() {
     response = await fetch('/api/collections');
   } catch {
     // Nothing answered at all, which the shell reports as a server problem.
-    const error = new Error('Request failed.');
-    error.reason = 'server';
-    throw error;
+    throw connectionError('server');
   }
 
   return handleResponse(response);

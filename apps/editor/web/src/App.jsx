@@ -105,8 +105,12 @@ function ShellContent() {
     }
   }
 
-  const disconnectedReason =
-    retryReason ?? (collectionsError ? collectionsErrorReason ?? "generic" : null);
+  // A pinned retry reason is the most recent check, so it wins over the reason
+  // recorded by the collections load.
+  const loadReason = collectionsError
+    ? collectionsErrorReason ?? "generic"
+    : null;
+  const disconnectedReason = retryReason ?? loadReason;
 
   const showEmptyLibrary = isEmptyLibrary({
     collections,
