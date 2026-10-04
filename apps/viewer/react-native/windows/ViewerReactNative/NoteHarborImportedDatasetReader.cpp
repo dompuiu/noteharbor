@@ -759,6 +759,9 @@ void NoteHarborImportedDatasetReader::readImportedDataset(
 
   const bool hasCollectionsTable = TableExists(database.value, "collections");
   const bool banknotesHasCollectionId = ColumnExists(database.value, "banknotes", "collection_id");
+  // Newer editor archives omit the retired scrape columns; fall back to NULLs.
+  const bool banknotesHasScrapeStatus = ColumnExists(database.value, "banknotes", "scrape_status");
+  const bool banknotesHasScrapeError = ColumnExists(database.value, "banknotes", "scrape_error");
 
   auto collections = hasCollectionsTable ? LoadCollections(database.value) : std::vector<CollectionRecord>{{1, "Default", true}};
   if (collections.empty()) {
@@ -768,11 +771,20 @@ void NoteHarborImportedDatasetReader::readImportedDataset(
   auto tagsByNoteId = LoadTags(database.value);
   std::unordered_map<int, int> noteCountByCollectionId;
 
-  auto noteStatement = Prepare(
-      database.value,
-      banknotesHasCollectionId
-          ? "SELECT id, collection_id, display_order, denomination, issue_date, catalog_number, grading_company, grade, watermark, serial, url, notes, scraped_data, images, scrape_status, scrape_error FROM banknotes ORDER BY collection_id ASC, display_order ASC, id ASC"
-          : "SELECT id, display_order, denomination, issue_date, catalog_number, grading_company, grade, watermark, serial, url, notes, scraped_data, images, scrape_status, scrape_error FROM banknotes ORDER BY display_order ASC, id ASC");
+  // Columns are read positionally below, so this list and the reader must
+  // stay in lockstep; NULL aliases keep the order stable when a column is absent.
+  const std::string noteSelect =
+      std::string("SELECT id") +
+      (banknotesHasCollectionId ? ", collection_id" : "") +
+      ", display_order, denomination, issue_date, catalog_number, grading_company, grade, watermark, serial, url, notes, scraped_data, images" +
+      (banknotesHasScrapeStatus ? ", scrape_status" : ", NULL AS scrape_status") +
+      (banknotesHasScrapeError ? ", scrape_error" : ", NULL AS scrape_error") +
+      " FROM banknotes" +
+      (banknotesHasCollectionId
+           ? " ORDER BY collection_id ASC, display_order ASC, id ASC"
+           : " ORDER BY display_order ASC, id ASC");
+
+  auto noteStatement = Prepare(database.value, noteSelect.c_str());
   if (!noteStatement.has_value()) {
     result.Reject("Unable to read imported dataset notes.");
     return;

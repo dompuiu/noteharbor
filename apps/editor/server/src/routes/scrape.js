@@ -1,12 +1,5 @@
 import { Router } from "express";
-import { getNotesByIds, updateScrapeResult } from "../db.js";
 import { fetchHtml } from "../fetchHtml.js";
-import {
-  beginOperation,
-  createOperationConflictError,
-  endOperation,
-  getOperationStatus,
-} from "../operationState.js";
 import { PCGSScraper } from "../scrapers/pcgs.js";
 import { PMGScraper } from "../scrapers/pmg.js";
 import { TQGScraper } from "../scrapers/tqg.js";
@@ -15,32 +8,10 @@ const scrapeRouter = Router();
 const DEFAULT_WAIT_SECONDS = 2;
 const DEFAULT_BROWSER_CDP_URL = "http://localhost:9222";
 
-const scrapeState = {
-  status: "idle",
-  total: 0,
-  completed: 0,
-  currentNoteId: null,
-  items: [],
-  startedAt: null,
-  finishedAt: null,
-  error: null,
-};
-
 function getBrowserCdpUrl() {
   return (
     process.env.NOTE_HARBOR_BROWSER_CDP_URL?.trim() || DEFAULT_BROWSER_CDP_URL
   );
-}
-
-function setIdleState() {
-  scrapeState.status = "idle";
-  scrapeState.total = 0;
-  scrapeState.completed = 0;
-  scrapeState.currentNoteId = null;
-  scrapeState.items = [];
-  scrapeState.startedAt = null;
-  scrapeState.finishedAt = null;
-  scrapeState.error = null;
 }
 
 /**
@@ -94,118 +65,6 @@ async function scrapeUrl(noteOrUrl, options = {}) {
 
   return { scraper, parsed };
 }
-
-async function runScrapeJob(notes) {
-  beginOperation("scraping", { total: notes.length });
-
-  try {
-    scrapeState.status = "running";
-    scrapeState.total = notes.length;
-    scrapeState.completed = 0;
-    scrapeState.startedAt = new Date().toISOString();
-    scrapeState.finishedAt = null;
-    scrapeState.error = null;
-    scrapeState.items = notes.map((note) => ({
-      noteId: note.id,
-      label: `${note.denomination || "Unknown"} - ${note.catalog_number || "No catalog"} - ${note.serial || "No serial"}`,
-      status: "queued",
-      error: null,
-    }));
-
-    for (const note of notes) {
-      const stateItem = scrapeState.items.find(
-        (item) => item.noteId === note.id,
-      );
-      scrapeState.currentNoteId = note.id;
-
-      if (stateItem) stateItem.status = "running";
-
-      try {
-        const { scraper, parsed } = await scrapeUrl(note);
-        const images = await scraper.downloadImages(parsed);
-
-        updateScrapeResult({
-          id: note.id,
-          scrapedData: parsed.details,
-          images,
-          scrapeStatus: "done",
-          scrapeError: null,
-        });
-        if (stateItem) {
-          stateItem.status = "done";
-          stateItem.error = null;
-        }
-      } catch (error) {
-        updateScrapeResult({
-          id: note.id,
-          scrapedData: null,
-          images: note.images,
-          scrapeStatus: "failed",
-          scrapeError: error.message,
-        });
-        if (stateItem) {
-          stateItem.status = "failed";
-          stateItem.error = error.message;
-        }
-      } finally {
-        scrapeState.completed += 1;
-      }
-    }
-
-    scrapeState.status = "done";
-    scrapeState.currentNoteId = null;
-    scrapeState.finishedAt = new Date().toISOString();
-  } finally {
-    endOperation("scraping");
-  }
-}
-
-scrapeRouter.get("/status", (_request, response) => {
-  response.json({
-    ...scrapeState,
-    currentOperation: getOperationStatus().currentOperation,
-  });
-});
-
-scrapeRouter.post("/start", async (request, response) => {
-  try {
-    if (scrapeState.status === "running") {
-      throw createOperationConflictError("Scraping");
-    }
-
-    if (getOperationStatus().isBusy) {
-      throw createOperationConflictError("Scraping");
-    }
-  } catch (error) {
-    response
-      .status(error.statusCode || 409)
-      .json({ error: error.message, currentOperation: error.currentOperation });
-    return;
-  }
-
-  const ids = Array.isArray(request.body.ids)
-    ? request.body.ids.map(Number).filter(Boolean)
-    : [];
-  const notes = getNotesByIds(ids).filter((note) => note.url);
-
-  if (!notes.length) {
-    response
-      .status(400)
-      .json({ error: "Please select at least one note with a URL." });
-    return;
-  }
-
-  setIdleState();
-  runScrapeJob(notes).catch((error) => {
-    scrapeState.status = "done";
-    scrapeState.currentNoteId = null;
-    scrapeState.finishedAt = new Date().toISOString();
-    scrapeState.error = error.message;
-    console.error(error);
-  });
-
-  response.json({ message: "Scrape job started.", total: notes.length });
-});
 
 scrapeRouter.post("/preview", async (request, response) => {
   const url =

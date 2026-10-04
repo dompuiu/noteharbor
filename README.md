@@ -224,10 +224,10 @@ Notes support multiple, independent collections (separate archives within one da
 | `notes` | TEXT | User notes |
 | `scraped_data` | TEXT | JSON object |
 | `images` | TEXT | JSON array of stored images |
-| `scrape_status` | TEXT | `pending`, `done`, `failed` |
-| `scrape_error` | TEXT | Last scrape error |
 | `created_at` | TEXT | SQLite datetime |
 | `updated_at` | TEXT | SQLite datetime |
+
+`scrape_status` and `scrape_error` are retired. An existing editor database may still carry them, but exported archives omit them, and import accepts archives both with and without them.
 
 There is no unique `(catalog_number, serial)` constraint anymore. CSV import matches existing notes by URL first, then by company/catalog/serial, then by a broader normalized identity.
 
@@ -393,25 +393,12 @@ DELETE /api/archive/data
 ### Scraping
 
 ```
-GET /api/scrape/status
--> {
-     status: "idle" | "running" | "done",
-     total: number,
-     completed: number,
-     currentNoteId: number | null,
-     items: [{ noteId, label, status, error }],
-     startedAt: string | null,
-     finishedAt: string | null,
-     error: string | null,
-     currentOperation: string
-   }
-
-POST /api/scrape/start
-Body: { ids: [number, ...] }
--> { message: "Scrape job started.", total }
+POST /api/scrape/preview
+Body: { url, timeoutMs? }
+-> { scraped_data, images: [{ type, variant, sourceUrl }] }
 ```
 
-Supported sources currently include PMG, PCGS, and TQG. Unsupported notes are marked failed.
+Autopopulate in the Note editor calls this to fill a note from a grading company URL. Supported sources currently include PMG, PCGS, and TQG.
 
 ---
 
@@ -428,9 +415,9 @@ fetchHtml.js (Node.js / Playwright)
     v
 scrapers/pmg.js, pcgs.js, or tqg.js
     |
-    | parse details + download images
+    | parse details + image source URLs
     v
-db.js updateScrapeResult(...)
+POST /api/scrape/preview -> Note editor autopopulate
 ```
 
 ### `src/fetchHtml.js`
@@ -463,7 +450,7 @@ Primary editor screen with:
 
 - filterable and sortable table view, including an autocompleting tags filter and a "+N" overflow popover for rows with many tags
 - thumbnail previews
-- bulk selection and bulk actions
+- bulk selection and delete
 - drag-and-drop manual reordering in the default view
 - inline create/edit overlay
 - slideshow launch by clicking a row

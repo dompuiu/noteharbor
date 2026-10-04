@@ -9,13 +9,10 @@ vi.mock("../lib/api.js", () => ({
   deleteNote: vi.fn(),
   getNote: vi.fn(),
   getNotes: vi.fn(),
-  getOperationStatus: vi.fn(),
-  getScrapeStatus: vi.fn(),
   getTags: vi.fn(),
   moveNote: vi.fn(),
   reorderNotes: vi.fn(),
   scrapePreview: vi.fn(),
-  startScrape: vi.fn(),
   updateNote: vi.fn(),
 }));
 
@@ -46,8 +43,6 @@ import {
   createNote,
   getNote,
   getNotes,
-  getOperationStatus,
-  getScrapeStatus,
   getTags,
   reorderNotes,
   updateNote,
@@ -68,7 +63,6 @@ function note(id, denomination) {
     url: null,
     images: [],
     tags: [],
-    scrape_status: "idle",
   };
 }
 
@@ -161,11 +155,6 @@ beforeEach(() => {
     note: { ...notesDb.find((entry) => entry.id === id) },
   }));
   getTags.mockResolvedValue({ tags: [] });
-  getScrapeStatus.mockResolvedValue({ status: "idle", items: [] });
-  getOperationStatus.mockResolvedValue({
-    currentOperation: "idle",
-    isBusy: false,
-  });
   createNote.mockImplementation(async (payload) => {
     const created = note(99, payload.denomination || "NEW");
     notesDb = [...notesDb, created];

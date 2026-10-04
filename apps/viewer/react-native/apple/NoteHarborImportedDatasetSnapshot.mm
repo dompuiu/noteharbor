@@ -204,6 +204,9 @@ NSDictionary *NHBuildImportedDatasetSnapshot(NSDictionary *location, NSError **e
 
     BOOL hasCollectionsTable = NHTableExists(database, @"collections");
     BOOL banknotesHasCollectionId = NHColumnExists(database, @"banknotes", @"collection_id");
+    // Newer editor archives omit the retired scrape columns; fall back to NULLs.
+    BOOL banknotesHasScrapeStatus = NHColumnExists(database, @"banknotes", @"scrape_status");
+    BOOL banknotesHasScrapeError = NHColumnExists(database, @"banknotes", @"scrape_error");
     NSArray<NSDictionary<NSString *, id> *> *collections = hasCollectionsTable ? NHLoadCollections(database) : @[@{
       @"id": @1,
       @"name": @"Default",
@@ -223,9 +226,18 @@ NSDictionary *NHBuildImportedDatasetSnapshot(NSDictionary *location, NSError **e
     NSMutableDictionary<NSNumber *, NSNumber *> *noteCounts = [NSMutableDictionary dictionary];
     NSMutableArray<NSDictionary<NSString *, id> *> *notes = [NSMutableArray array];
 
-    NSString *query = banknotesHasCollectionId
-      ? @"SELECT id, collection_id, display_order, denomination, issue_date, catalog_number, grading_company, grade, watermark, serial, url, notes, scraped_data, images, scrape_status, scrape_error FROM banknotes ORDER BY collection_id ASC, display_order ASC, id ASC"
-      : @"SELECT id, display_order, denomination, issue_date, catalog_number, grading_company, grade, watermark, serial, url, notes, scraped_data, images, scrape_status, scrape_error FROM banknotes ORDER BY display_order ASC, id ASC";
+    // Columns are read positionally below, so this list and the reader must
+    // stay in lockstep; NULL aliases keep the order stable when a column is absent.
+    NSMutableString *query = [NSMutableString stringWithString:@"SELECT id"];
+    if (banknotesHasCollectionId) {
+      [query appendString:@", collection_id"];
+    }
+    [query appendString:@", display_order, denomination, issue_date, catalog_number, grading_company, grade, watermark, serial, url, notes, scraped_data, images"];
+    [query appendString:banknotesHasScrapeStatus ? @", scrape_status" : @", NULL AS scrape_status"];
+    [query appendString:banknotesHasScrapeError ? @", scrape_error" : @", NULL AS scrape_error"];
+    [query appendString:banknotesHasCollectionId
+        ? @" FROM banknotes ORDER BY collection_id ASC, display_order ASC, id ASC"
+        : @" FROM banknotes ORDER BY display_order ASC, id ASC"];
     sqlite3_stmt *statement = NULL;
 
     if (sqlite3_prepare_v2(database, query.UTF8String, -1, &statement, NULL) != SQLITE_OK) {

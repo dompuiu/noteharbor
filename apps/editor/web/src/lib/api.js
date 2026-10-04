@@ -434,21 +434,6 @@ async function scrapePreview(url, { timeoutMs } = {}) {
   }
 }
 
-async function startScrape(ids) {
-  const response = await fetch('/api/scrape/start', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ ids })
-  });
-
-  return handleResponse(response);
-}
-
-async function getScrapeStatus() {
-  const response = await fetch('/api/scrape/status');
-  return handleResponse(response);
-}
-
 export {
   clearAppData,
   createCollection,
@@ -461,7 +446,6 @@ export {
   getNote,
   getNotes,
   getOperationStatus,
-  getScrapeStatus,
   getTags,
   importArchive,
   importCsv,
@@ -472,6 +456,5 @@ export {
   scrapePreview,
   scrapeTimeoutMessage,
   setDefaultCollection,
-  startScrape,
   updateNote
 };

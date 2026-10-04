@@ -4,7 +4,12 @@ import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { mergeArchiveIntoStagedData, renumberSnapshot, sanitizeSnapshotImages } from './routes/archive.js';
+import {
+  mergeArchiveIntoStagedData,
+  renumberSnapshot,
+  sanitizeSnapshotImages,
+  stripScrapeColumns
+} from './routes/archive.js';
 
 function createLegacyStagedDataDir() {
   const stageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'nh-archive-test-'));
@@ -322,5 +327,87 @@ test('importing a legacy archive with thumbnails preserves all images', () => {
   } finally {
     fs.rmSync(stageRoot, { recursive: true, force: true });
     fs.rmSync(archiveRoot, { recursive: true, force: true });
+  }
+});
+
+test('importing an archive without scrape columns populates the staged note', () => {
+  const { stageRoot, stagedDataDir } = createLegacyStagedDataDir();
+  const archiveRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'nh-nocol-src-'));
+  const archiveDataDir = path.join(archiveRoot, 'data');
+  fs.mkdirSync(path.join(archiveDataDir, 'images'), { recursive: true });
+
+  const archiveDb = new Database(path.join(archiveDataDir, 'banknotes.db'));
+  try {
+    archiveDb.exec(`
+      CREATE TABLE collections (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, is_default INTEGER NOT NULL DEFAULT 0);
+      CREATE TABLE banknotes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        collection_id INTEGER,
+        display_order INTEGER,
+        denomination TEXT,
+        issue_date TEXT,
+        catalog_number TEXT,
+        grading_company TEXT,
+        grade TEXT,
+        watermark TEXT,
+        serial TEXT,
+        url TEXT,
+        notes TEXT,
+        scraped_data TEXT,
+        images TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      );
+      CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, collection_id INTEGER NOT NULL);
+      CREATE TABLE banknote_tags (banknote_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (banknote_id, tag_id));
+    `);
+    archiveDb.prepare(`INSERT INTO collections (id, name, is_default) VALUES (5, 'No Scrape Columns', 0)`).run();
+    archiveDb.prepare(`INSERT INTO banknotes (id, collection_id, display_order, denomination, images) VALUES (5, 5, 1, '50 Lei', '[]')`).run();
+  } finally {
+    archiveDb.close();
+  }
+
+  try {
+    mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir);
+
+    const db = new Database(path.join(stagedDataDir, 'banknotes.db'), { readonly: true });
+    try {
+      const note = db.prepare(`SELECT denomination, scrape_status, scrape_error FROM banknotes WHERE denomination = '50 Lei'`).get();
+      assert.equal(note.denomination, '50 Lei');
+      assert.equal(note.scrape_status, 'pending');
+      assert.equal(note.scrape_error, null);
+    } finally {
+      db.close();
+    }
+  } finally {
+    fs.rmSync(stageRoot, { recursive: true, force: true });
+    fs.rmSync(archiveRoot, { recursive: true, force: true });
+  }
+});
+
+test('stripScrapeColumns drops the scrape columns and preserves the notes', () => {
+  const db = new Database(':memory:');
+  try {
+    db.exec(`
+      CREATE TABLE banknotes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        denomination TEXT,
+        scrape_status TEXT DEFAULT 'pending',
+        scrape_error TEXT
+      );
+      INSERT INTO banknotes (denomination, scrape_status, scrape_error) VALUES ('10 Lei', 'failed', 'boom');
+    `);
+
+    stripScrapeColumns(db);
+
+    const columns = db.prepare(`PRAGMA table_info(banknotes)`).all().map((column) => column.name);
+    assert.deepEqual(columns, ['id', 'denomination']);
+    assert.equal(db.prepare(`SELECT denomination FROM banknotes`).get().denomination, '10 Lei');
+
+    // Running again on a snapshot that already lacks the columns is a no-op.
+    stripScrapeColumns(db);
+    assert.equal(db.prepare(`SELECT COUNT(*) AS value FROM banknotes`).get().value, 1);
+  } finally {
+    db.close();
   }
 });

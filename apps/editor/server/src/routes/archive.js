@@ -298,6 +298,23 @@ function sanitizeSnapshotImages(database) {
   }
 }
 
+// The scrape columns belong to the retired bulk-scrape feature. The editor DB
+// keeps them, but an exported archive must not carry them, so a snapshot is
+// rewritten without them whenever they are still present.
+const retiredScrapeColumns = ['scrape_error', 'scrape_status'];
+
+function stripScrapeColumns(database) {
+  const existingColumns = new Set(
+    database.prepare(`PRAGMA table_info(banknotes)`).all().map((column) => column.name)
+  );
+
+  for (const column of retiredScrapeColumns) {
+    if (existingColumns.has(column)) {
+      database.exec(`ALTER TABLE banknotes DROP COLUMN ${column}`);
+    }
+  }
+}
+
 function remapNoteImagePath(localPath, oldNoteId, newNoteId) {
   const prefix = `${IMAGE_API_PREFIX}notes/${oldNoteId}/`;
 
@@ -484,6 +501,8 @@ function buildFilteredExportSnapshot(snapshotDbPath, selectedCollectionIds, temp
 
     const { copyPlan } = renumberSnapshot(snapshotDatabase);
 
+    stripScrapeColumns(snapshotDatabase);
+
     const foreignKeyErrors = snapshotDatabase.prepare(`PRAGMA foreign_key_check`).all();
 
     if (foreignKeyErrors.length) {
@@ -600,13 +619,11 @@ function mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir) {
         notes,
         scraped_data,
         images,
-        scrape_status,
-        scrape_error,
         created_at,
         updated_at
       )
       VALUES (
-        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+        ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
         COALESCE(?, datetime('now')),
         COALESCE(?, datetime('now'))
       )
@@ -690,8 +707,6 @@ function mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir) {
             notes,
             scraped_data,
             images,
-            scrape_status,
-            scrape_error,
             created_at,
             updated_at
           FROM banknotes
@@ -716,8 +731,6 @@ function mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir) {
             archiveNote.notes ?? null,
             archiveNote.scraped_data ?? null,
             '[]',
-            archiveNote.scrape_status ?? 'pending',
-            archiveNote.scrape_error ?? null,
             archiveNote.created_at ?? null,
             archiveNote.updated_at ?? null
           );
@@ -918,4 +931,4 @@ archiveRouter.delete('/data', async (_request, response) => {
   }
 });
 
-export { archiveRouter, buildFilteredExportSnapshot, mergeArchiveIntoStagedData, renumberSnapshot, sanitizeSnapshotImages };
+export { archiveRouter, buildFilteredExportSnapshot, mergeArchiveIntoStagedData, renumberSnapshot, sanitizeSnapshotImages, stripScrapeColumns };

@@ -9,13 +9,10 @@ vi.mock("../lib/api.js", () => ({
   deleteNote: vi.fn(),
   getNote: vi.fn(),
   getNotes: vi.fn(),
-  getOperationStatus: vi.fn(),
-  getScrapeStatus: vi.fn(),
   getTags: vi.fn(),
   moveNote: vi.fn(),
   reorderNotes: vi.fn(),
   scrapePreview: vi.fn(),
-  startScrape: vi.fn(),
   updateNote: vi.fn(),
 }));
 
@@ -50,8 +47,6 @@ import {
   deleteNote,
   getNote,
   getNotes,
-  getOperationStatus,
-  getScrapeStatus,
   getTags,
   moveNote,
   reorderNotes,
@@ -76,7 +71,6 @@ function note(id, denomination) {
     url: null,
     images: [],
     tags: [],
-    scrape_status: "idle",
   };
 }
 
@@ -157,11 +151,6 @@ beforeEach(() => {
     note: { ...notesDb.find((entry) => entry.id === id) },
   }));
   getTags.mockResolvedValue({ tags: [] });
-  getScrapeStatus.mockResolvedValue({ status: "idle", items: [] });
-  getOperationStatus.mockResolvedValue({
-    currentOperation: "idle",
-    isBusy: false,
-  });
   deleteNote.mockImplementation(async (id) => {
     notesDb = notesDb.filter((entry) => entry.id !== id);
   });
@@ -232,8 +221,7 @@ describe("Delete keeps the cursor on the table", () => {
 
     await user.click(screen.getByRole("checkbox", { name: "Select AAAA" }));
     await user.click(screen.getByRole("checkbox", { name: "Select BBBB" }));
-    await user.selectOptions(screen.getByLabelText("Bulk action"), "delete");
-    await user.click(screen.getByRole("button", { name: "Apply" }));
+    await user.click(screen.getByRole("button", { name: "Delete selected" }));
     await confirmDelete(user);
 
     await waitFor(() => {
@@ -452,34 +440,6 @@ describe("The note editor hands the cursor back", () => {
     });
   });
 
-  test("a background refresh does not move focus", async () => {
-    // Polling is the one path that swaps the note list without a user
-    // action; it must leave the keyboard cursor where the user put it.
-    getOperationStatus.mockResolvedValue({
-      currentOperation: "scraping",
-      isBusy: true,
-    });
-    getScrapeStatus.mockResolvedValue({ status: "running", items: [] });
-
-    const user = userEvent.setup();
-    renderTable();
-
-    const row = await rowFor("BBBB");
-    await act(async () => {
-      row.focus();
-    });
-    await waitFor(() => {
-      expect(row).toHaveClass("table-row-link--active");
-    });
-
-    // Let the 2s poll tick and replace the list under the focused row.
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 2200));
-    });
-
-    expect(row).toHaveFocus();
-    expect(row).toHaveClass("table-row-link--active");
-  });
 });
 
 describe("Note editor Escape", () => {

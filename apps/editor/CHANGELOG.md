@@ -2,6 +2,14 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [Unreleased]
+
+### Removed
+
+- Table screen: the bulk "Scrape selected" action, the "Select next unscraped" control and its count selector, and the "Scraped" column, along with the scrape polling and status badges behind them.
+- Server: `GET /api/scrape/status` and `POST /api/scrape/start`, plus the `updateScrapeResult` DB helper and the scraper `downloadImages()` methods they used. Autopopulate via `POST /api/scrape/preview` is unchanged.
+- Exported archives no longer contain the `scrape_status` and `scrape_error` columns. Import accepts archives with or without them, and the editor keeps the columns in its own database for compatibility.
+
 ## [1.18.0] - 2026-10-01
 
 ### Added

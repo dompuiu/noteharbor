@@ -31,8 +31,6 @@ const noteFields = `
   notes,
   scraped_data,
   images,
-  scrape_status,
-  scrape_error,
   created_at,
   updated_at
 `;
@@ -726,15 +724,6 @@ function createStatements(database) {
           updated_at = datetime('now')
       WHERE id = @id
     `),
-    updateScrapeStatement: database.prepare(`
-      UPDATE banknotes
-      SET scraped_data = @scraped_data,
-          images = @images,
-          scrape_status = @scrape_status,
-          scrape_error = @scrape_error,
-          updated_at = datetime('now')
-      WHERE id = @id
-    `),
     deleteNoteStatement: database.prepare(`DELETE FROM banknotes WHERE id = ?`),
     compactDisplayOrderAfterDeleteStatement: database.prepare(`
       UPDATE banknotes
@@ -1162,19 +1151,6 @@ function getNoteById(id, collectionId = null) {
   return rowToNote(row, buildTagMap(normalizedCollectionId));
 }
 
-function getNotesByIds(ids) {
-  getDatabase();
-
-  if (!ids.length) {
-    return [];
-  }
-
-  const placeholders = Object.fromEntries(ids.map((id, index) => [`id${index}`, id]));
-  const statement = db.prepare(`SELECT ${noteFields} FROM banknotes WHERE id IN (${ids.map((_, index) => `@id${index}`).join(', ')})`);
-  const tagMap = buildTagMap();
-  return statement.all(placeholders).map((row) => rowToNote(row, tagMap));
-}
-
 function getAllTags(collectionId = null) {
   getDatabase();
   const normalizedCollectionId = resolveCollectionId(collectionId);
@@ -1378,23 +1354,6 @@ function createNote(note) {
   return getNoteById(noteId, collectionId);
 }
 
-function updateScrapeResult({ id, scrapedData, images, scrapeStatus, scrapeError }) {
-  getDatabase();
-  const normalizedImages = normalizeImages(images ?? []);
-
-  statements.updateScrapeStatement.run({
-    id,
-    scraped_data: scrapedData ? JSON.stringify(scrapedData) : null,
-    images: JSON.stringify(normalizedImages),
-    scrape_status: scrapeStatus,
-    scrape_error: scrapeError ?? null
-  });
-
-  removeStaleManagedFiles(IMAGES_DIR, id, normalizedImages);
-
-  return getNoteById(id);
-}
-
 function deleteNote(id, collectionId = null) {
   getDatabase();
   const existing = getNoteById(id, collectionId);
@@ -1535,7 +1494,6 @@ export {
   getDatabase,
   getDefaultCollectionId,
   getNoteById,
-  getNotesByIds,
   importNotes,
   migrateBanknotesForeignKey,
   moveNoteToCollection,
@@ -1548,6 +1506,5 @@ export {
   setDefaultCollectionById,
   replaceNoteTags,
   updateNote,
-  updateScrapeResult,
   verifyDatabaseFile
 };

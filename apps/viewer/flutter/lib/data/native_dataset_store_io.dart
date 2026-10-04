@@ -383,6 +383,16 @@ bool _tableExists(Database database, String tableName) {
   return rows.isNotEmpty;
 }
 
+bool _columnExists(Database database, String tableName, String columnName) {
+  final rows = database.select('PRAGMA table_info($tableName)');
+  for (final row in rows) {
+    if ('${row['name']}'.toLowerCase() == columnName.toLowerCase()) {
+      return true;
+    }
+  }
+  return false;
+}
+
 List<Map<String, Object?>> _loadArchiveCollections(Database database) {
   if (!_tableExists(database, 'collections')) {
     throw StateError('Archive must include collections metadata.');
@@ -519,6 +529,14 @@ Future<void> _mergeArchiveIntoDataset({
   try {
     stagedDatabase.execute('PRAGMA foreign_keys = ON');
 
+    // Newer editor archives omit the retired scrape columns. The staged
+    // dataset is a copy of either the archive (first import) or the previous
+    // dataset, so both sides have to be probed independently.
+    final archiveHasScrapeStatus = _columnExists(archiveDatabase, 'banknotes', 'scrape_status');
+    final archiveHasScrapeError = _columnExists(archiveDatabase, 'banknotes', 'scrape_error');
+    final stagedHasScrapeStatus = _columnExists(stagedDatabase, 'banknotes', 'scrape_status');
+    final stagedHasScrapeError = _columnExists(stagedDatabase, 'banknotes', 'scrape_error');
+
     final archiveCollections = _loadArchiveCollections(archiveDatabase);
 
     final findCollectionByName = statements._track(stagedDatabase.prepare('''
@@ -564,35 +582,41 @@ Future<void> _mergeArchiveIntoDataset({
         notes,
         scraped_data,
         images,
-        scrape_status,
-        scrape_error,
+        ${archiveHasScrapeStatus ? 'scrape_status,' : 'NULL AS scrape_status,'}
+        ${archiveHasScrapeError ? 'scrape_error,' : 'NULL AS scrape_error,'}
         created_at,
         updated_at
       FROM banknotes
       WHERE collection_id = ?
       ORDER BY display_order ASC, id ASC
     '''));
+    final insertNoteColumns = <String>[
+      'collection_id',
+      'display_order',
+      'denomination',
+      'issue_date',
+      'catalog_number',
+      'grading_company',
+      'grade',
+      'watermark',
+      'serial',
+      'url',
+      'notes',
+      'scraped_data',
+      'images',
+      if (stagedHasScrapeStatus) 'scrape_status',
+      if (stagedHasScrapeError) 'scrape_error',
+      'created_at',
+      'updated_at',
+    ];
+    final insertNoteValues = <String>[
+      ...List<String>.filled(insertNoteColumns.length - 2, '?'),
+      "COALESCE(?, datetime('now'))",
+      "COALESCE(?, datetime('now'))",
+    ];
     final insertNote = statements._track(stagedDatabase.prepare('''
-      INSERT INTO banknotes (
-        collection_id,
-        display_order,
-        denomination,
-        issue_date,
-        catalog_number,
-        grading_company,
-        grade,
-        watermark,
-        serial,
-        url,
-        notes,
-        scraped_data,
-        images,
-        scrape_status,
-        scrape_error,
-        created_at,
-        updated_at
-      )
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, COALESCE(?, datetime('now')), COALESCE(?, datetime('now')))
+      INSERT INTO banknotes (${insertNoteColumns.join(', ')})
+      VALUES (${insertNoteValues.join(', ')})
     '''));
     final updateNoteImages = statements._track(stagedDatabase.prepare('''
       UPDATE banknotes
@@ -675,8 +699,8 @@ Future<void> _mergeArchiveIntoDataset({
           noteRow['notes'],
           noteRow['scraped_data'],
           '[]',
-          noteRow['scrape_status'] ?? 'pending',
-          noteRow['scrape_error'],
+          if (stagedHasScrapeStatus) noteRow['scrape_status'] ?? 'pending',
+          if (stagedHasScrapeError) noteRow['scrape_error'],
           noteRow['created_at'],
           noteRow['updated_at'],
         ]);

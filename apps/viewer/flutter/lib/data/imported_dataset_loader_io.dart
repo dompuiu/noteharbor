@@ -21,6 +21,11 @@ class ImportedDatasetLoader {
       final hasCollectionsTable = _tableExists(database, 'collections');
       final banknotesHasCollectionId =
           _columnExists(database, 'banknotes', 'collection_id');
+      // Newer editor archives omit the retired scrape columns; tolerate both.
+      final banknotesHasScrapeStatus =
+          _columnExists(database, 'banknotes', 'scrape_status');
+      final banknotesHasScrapeError =
+          _columnExists(database, 'banknotes', 'scrape_error');
 
       final defaultCollectionId = hasCollectionsTable
           ? _resolveDefaultCollectionId(database)
@@ -70,8 +75,8 @@ class ImportedDatasetLoader {
           notes,
           scraped_data,
           images,
-          scrape_status,
-          scrape_error,
+          ${banknotesHasScrapeStatus ? 'scrape_status,' : ''}
+          ${banknotesHasScrapeError ? 'scrape_error,' : ''}
           created_at,
           updated_at
         FROM banknotes
@@ -111,8 +116,12 @@ class ImportedDatasetLoader {
             'serial': _stringValue(row['serial']),
             'url': _stringValue(row['url']),
             'notes': _stringValue(row['notes']),
-            'scrapeStatus': _stringValue(row['scrape_status']),
-            'scrapeError': _stringValue(row['scrape_error']),
+            'scrapeStatus': banknotesHasScrapeStatus
+                ? _stringValue(row['scrape_status'])
+                : '',
+            'scrapeError': banknotesHasScrapeError
+                ? _stringValue(row['scrape_error'])
+                : '',
             'scrapedData': _parseJsonValue(row['scraped_data']),
             'tags': tagMap[noteId]
                     ?.map((tag) => {'id': tag.id, 'name': tag.name})

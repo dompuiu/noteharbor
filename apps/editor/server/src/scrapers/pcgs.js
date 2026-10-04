@@ -163,19 +163,6 @@ class PCGSScraper extends BaseScraper {
       images: extractEmbeddedImages(embeddedData)
     };
   }
-
-  async downloadImages(parsedResult) {
-    const savedImages = [];
-
-    for (const image of parsedResult.images) {
-      const savedImage = await this.downloadImage(image.url, image.side, image.variant);
-      if (savedImage) {
-        savedImages.push(savedImage);
-      }
-    }
-
-    return savedImages;
-  }
 }
 
 export { PCGSScraper };

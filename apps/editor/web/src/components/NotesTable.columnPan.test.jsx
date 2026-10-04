@@ -7,10 +7,7 @@ import { NotesTable } from "./NotesTable.jsx";
 vi.mock("../lib/api.js", () => ({
   deleteNote: vi.fn(),
   getNotes: vi.fn(),
-  getOperationStatus: vi.fn(),
   reorderNotes: vi.fn(),
-  getScrapeStatus: vi.fn(),
-  startScrape: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-virtual", () => ({
@@ -32,8 +29,6 @@ vi.mock("@tanstack/react-virtual", () => ({
 
 import {
   getNotes,
-  getOperationStatus,
-  getScrapeStatus,
 } from "../lib/api.js";
 
 class FakeResizeObserver {
@@ -90,14 +85,8 @@ beforeEach(() => {
         url: null,
         images: [],
         tags: [],
-        scrape_status: "idle",
       },
     ],
-  });
-  getScrapeStatus.mockResolvedValue({ status: "idle", items: [] });
-  getOperationStatus.mockResolvedValue({
-    currentOperation: "idle",
-    isBusy: false,
   });
 });
 
@@ -114,7 +103,6 @@ function notePayload(id, denomination) {
     url: null,
     images: [],
     tags: [],
-    scrape_status: "idle",
   };
 }
 

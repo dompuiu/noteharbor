@@ -15,10 +15,7 @@ import { useLocation, useNavigate } from "react-router-dom";
 import {
   deleteNote,
   getNotes,
-  getOperationStatus,
   reorderNotes as saveNotesOrder,
-  getScrapeStatus,
-  startScrape,
 } from "../lib/api.js";
 import {
   copyTextToClipboard,
@@ -58,10 +55,8 @@ const baseColumns = [
   ["serial", "Serial"],
   ["tags", "Tags"],
 ];
-const scrapeStatusColumn = ["scrape_status", "Scraped"];
-const columns = [...baseColumns, ["scrape_status", "Scraped"]];
+const columns = baseColumns;
 
-const selectCountOptions = [5, 10, 25, 50];
 const tableStateStorageKey = "noteharbor.notesTableState";
 const validSortKeys = new Set(["id", ...columns.map(([key]) => key)]);
 const rowHeightEstimate = 43;
@@ -533,79 +528,6 @@ function loadSavedTableState() {
   }
 }
 
-function statusLabel(status) {
-  if (!status) {
-    return "pending";
-  }
-
-  return String(status).replace(/_/g, " ");
-}
-
-function statusIcon(status) {
-  switch (status) {
-    case "done":
-      return "✓";
-    case "manual":
-      return "●";
-    case "failed":
-      return "✕";
-    case "running":
-      return "↻";
-    case "queued":
-      return "…";
-    case "pending":
-    case "idle":
-    default:
-      return "○";
-  }
-}
-
-function activeScrapeJob(status) {
-  return status?.status === "running" ? status : null;
-}
-
-function imageStatus(note) {
-  const images = Array.isArray(note.images) ? note.images : [];
-
-  if (!images.length) {
-    return "pending";
-  }
-
-  if (
-    images.some(
-      (image) => image.origin === "uploaded" || image.origin === "generated",
-    )
-  ) {
-    return "manual";
-  }
-
-  if (images.every((image) => image.origin === "scraped")) {
-    return "done";
-  }
-
-  return "pending";
-}
-
-function displayScrapeStatus(note, scrapeJob) {
-  if (!scrapeJob) {
-    return note.scrape_status === "failed" ? "failed" : imageStatus(note);
-  }
-
-  if (scrapeJob.currentNoteId === note.id) {
-    return "running";
-  }
-
-  const item = (scrapeJob.items ?? []).find(
-    (entry) => entry.noteId === note.id,
-  );
-
-  if (item?.status === "queued") {
-    return "queued";
-  }
-
-  return note.scrape_status === "failed" ? "failed" : imageStatus(note);
-}
-
 function valueToString(note, key) {
   if (key === "tags") {
     return note.tags.map((tag) => tag.name).join(", ");
@@ -743,20 +665,12 @@ const rowSortCollator = new Intl.Collator(undefined, {
   sensitivity: "base",
 });
 
-function filterNotesByFilters(noteList, filterObj, scrapeJob) {
+function filterNotesByFilters(noteList, filterObj) {
   const activeFilters = filterObj ?? {};
   return noteList.filter((note) =>
     columns.every(([key]) => {
       if (key === "tags") {
         return matchesTagFilter(note, activeFilters[key]);
-      }
-
-      if (key === "scrape_status") {
-        return matchesFilterValue(
-          displayScrapeStatus(note, scrapeJob),
-          activeFilters[key],
-          "includes",
-        );
       }
 
       const supportsMultipleValues =
@@ -798,9 +712,9 @@ function sortNotesBySort(noteList, key, direction) {
   });
 }
 
-function applyTableView(noteList, filterObj, key, direction, scrapeJob) {
+function applyTableView(noteList, filterObj, key, direction) {
   return sortNotesBySort(
-    filterNotesByFilters(noteList, filterObj, scrapeJob),
+    filterNotesByFilters(noteList, filterObj),
     key,
     direction,
   );
@@ -1189,13 +1103,6 @@ function NotesTable({
   const [selectedIds, setSelectedIds] = useState(
     () => initialTableStateRef.current?.selectedIds ?? [],
   );
-  const [selectNextCount, setSelectNextCount] = useState(10);
-  const [bulkAction, setBulkAction] = useState("scrape");
-  const [scrapeJob, setScrapeJob] = useState(null);
-  const [operationStatus, setOperationStatus] = useState({
-    currentOperation: "idle",
-    isBusy: false,
-  });
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
   const [moveToast, setMoveToast] = useState("");
@@ -1248,10 +1155,7 @@ function NotesTable({
     collectionsError,
     loadingCollections,
   });
-  const visibleColumns = useMemo(
-    () => [...baseColumns, scrapeStatusColumn],
-    [],
-  );
+  const visibleColumns = baseColumns;
   const filterColumnKeys = useMemo(
     () => visibleColumns.map(([key]) => key),
     [visibleColumns],
@@ -1262,9 +1166,6 @@ function NotesTable({
     getFilterRef,
     rememberFilter,
   } = useFilterFocusMemory(filterColumnKeys);
-  const showScrapeStatusColumn = visibleColumns.some(
-    ([key]) => key === "scrape_status",
-  );
   const filterRowHeight = Object.keys(columnFilterHeights).length
     ? Math.max(32, ...Object.values(columnFilterHeights))
     : null;
@@ -1292,8 +1193,8 @@ function NotesTable({
   // the filter reset below, which answers only to collection changes).
   currentRouteRef.current = currentRoute;
   const orderedNotes = useMemo(
-    () => applyTableView(notes, filters, sortKey, sortDirection, scrapeJob),
-    [filters, notes, scrapeJob, sortDirection, sortKey],
+    () => applyTableView(notes, filters, sortKey, sortDirection),
+    [filters, notes, sortDirection, sortKey],
   );
   // The painted row list lags one step behind the filter state: inputs,
   // chips, and counts stay instant while the heavy row re-mount happens in
@@ -1418,9 +1319,8 @@ function NotesTable({
       contextFilters,
       contextSortKey,
       contextSortDirection,
-      scrapeJob,
     );
-  }, [currentRoute, notes, scrapeJob]);
+  }, [currentRoute, notes]);
 
   function navigateToTableRoute(nextRoute, { replace = false } = {}) {
     const nextHash = buildTableHash(nextRoute);
@@ -1505,19 +1405,12 @@ function NotesTable({
     setLoading(true);
     setLoadError("");
 
-    const initialLoad = Promise.all([
-      getNotes(activeCollectionId),
-      getScrapeStatus(),
-      getOperationStatus(),
-    ]).then(([notesPayload, statusPayload, operationPayload]) => {
-      if (active) {
-        setNotes(notesPayload.notes);
-        setScrapeJob(activeScrapeJob(statusPayload));
-        setOperationStatus(operationPayload);
-      }
-    });
-
-    initialLoad
+    getNotes(activeCollectionId)
+      .then((notesPayload) => {
+        if (active) {
+          setNotes(notesPayload.notes);
+        }
+      })
       .catch((fetchError) => {
         if (active) {
           setLoadError(fetchError.message);
@@ -1594,32 +1487,6 @@ function NotesTable({
 
     setFilters({});
   }, [activeCollectionId]);
-
-  useEffect(() => {
-    if (!operationStatus.isBusy && !scrapeJob) {
-      return undefined;
-    }
-
-    const timer = window.setInterval(async () => {
-      try {
-        const [nextStatus, notesPayload, nextOperationStatus] =
-          await Promise.all([
-            getScrapeStatus(),
-            getNotes(activeCollectionId),
-            getOperationStatus(),
-          ]);
-        const nextScrapeJob = activeScrapeJob(nextStatus);
-
-        setNotes(notesPayload.notes);
-        setScrapeJob(nextScrapeJob);
-        setOperationStatus(nextOperationStatus);
-      } catch {
-        // Ignore transient polling errors.
-      }
-    }, 2000);
-
-    return () => window.clearInterval(timer);
-  }, [activeCollectionId, operationStatus.isBusy, scrapeJob]);
 
   useEffect(() => {
     if (!slideshowRouteActive || !slideshowNotes.length) {
@@ -3290,19 +3157,7 @@ function NotesTable({
     }
   }
 
-  function selectNextUnscraped() {
-    const nextIds = orderedNotes
-      .filter(
-        (note) =>
-          note.scrape_status === "failed" || imageStatus(note) !== "done",
-      )
-      .slice(0, selectNextCount)
-      .map((note) => note.id);
-
-    setSelectedIds(nextIds);
-  }
-
-  async function handleBulkAction() {
+  async function handleBulkDelete() {
     if (!selectedIds.length || bulkLoading) {
       return;
     }
@@ -3311,63 +3166,27 @@ function NotesTable({
     setBulkLoading(true);
 
     try {
-      if (bulkAction === "delete") {
-        const confirmed = await requestConfirmation({
-          title: `Delete ${selectedIds.length} selected note${selectedIds.length === 1 ? "" : "s"}?`,
-          confirmLabel: "Delete",
-        });
+      const confirmed = await requestConfirmation({
+        title: `Delete ${selectedIds.length} selected note${selectedIds.length === 1 ? "" : "s"}?`,
+        confirmLabel: "Delete",
+      });
 
-        if (!confirmed) {
-          return;
-        }
-
-        // Land the cursor where the selection started: the row that takes
-        // the topmost deleted slot, or the new last row when the selection
-        // ran to the end.
-        const removal = deleteFocusAfterRemoval(orderedNotes, selectedIds);
-
-        await Promise.all(
-          selectedIds.map((id) => deleteNote(id, activeCollectionId)),
-        );
-        // Request the landing focus before the refetch sets the list, so the
-        // request can never be flushed after the render it belongs to.
-        landFocusAfterDelete(removal);
-        await loadNotes();
-        clearSelection();
+      if (!confirmed) {
         return;
       }
 
-      if (operationStatus.isBusy) {
-        throw new Error(
-          `Scraping is unavailable while ${String(operationStatus.currentOperation).replace(/_/g, " ")} is in progress.`,
-        );
-      }
+      // Land the cursor where the selection started: the row that takes
+      // the topmost deleted slot, or the new last row when the selection
+      // ran to the end.
+      const removal = deleteFocusAfterRemoval(orderedNotes, selectedIds);
 
-      const payload = await startScrape(selectedIds);
-      setOperationStatus({
-        currentOperation: "scraping",
-        isBusy: true,
-        startedAt: new Date().toISOString(),
-        details: {
-          total: payload.total,
-        },
-      });
-      setScrapeJob({
-        status: "running",
-        total: payload.total,
-        completed: 0,
-        currentNoteId: null,
-        items: notes
-          .filter((note) => selectedIds.includes(note.id))
-          .map((note) => ({
-            noteId: note.id,
-            label: [note.denomination, note.catalog_number, note.serial]
-              .filter(Boolean)
-              .join(" - "),
-            status: "queued",
-            error: null,
-          })),
-      });
+      await Promise.all(
+        selectedIds.map((id) => deleteNote(id, activeCollectionId)),
+      );
+      // Request the landing focus before the refetch sets the list, so the
+      // request can never be flushed after the render it belongs to.
+      landFocusAfterDelete(removal);
+      await loadNotes();
       clearSelection();
     } catch (actionError) {
       // A failed bulk action must not leave a focus request behind for the
@@ -3784,12 +3603,6 @@ function NotesTable({
             {moveToast}
           </div>
         ) : null}
-        {operationStatus.isBusy ? (
-          <p className="warning-text">
-            Current operation:{" "}
-            {String(operationStatus.currentOperation).replace(/_/g, " ")}.
-          </p>
-        ) : null}
 
         {!loading && !loadError ? (
           <>
@@ -3804,28 +3617,6 @@ function NotesTable({
                     Reset filters, sorting, and selection
                   </button>
                 ) : null}
-                <select
-                  aria-label="Select next count"
-                  className="select-input"
-                  onChange={(event) =>
-                    setSelectNextCount(Number(event.target.value))
-                  }
-                  value={selectNextCount}
-                >
-                  {selectCountOptions.map((count) => (
-                    <option key={count} value={count}>
-                      {count}
-                    </option>
-                  ))}
-                </select>
-                <button
-                  className="button"
-                  disabled={operationStatus.isBusy}
-                  onClick={selectNextUnscraped}
-                  type="button"
-                >
-                  Select next unscraped
-                </button>
               </div>
               <p className="table-helper-text">
                 {reorderLoading
@@ -3838,26 +3629,13 @@ function NotesTable({
               </p>
               {selectedIds.length ? (
                 <div className="inline-select-group inline-select-group--bulk">
-                  <select
-                    aria-label="Bulk action"
-                    className="select-input"
-                    onChange={(event) => setBulkAction(event.target.value)}
-                    value={bulkAction}
-                  >
-                    <option value="scrape">Scrape selected</option>
-                    <option value="delete">Delete selected</option>
-                  </select>
                   <button
                     className="button button-primary"
-                    disabled={
-                      bulkLoading ||
-                      operationStatus.isBusy ||
-                      Boolean(scrapeJob)
-                    }
-                    onClick={handleBulkAction}
+                    disabled={bulkLoading}
+                    onClick={handleBulkDelete}
                     type="button"
                   >
-                    {bulkLoading ? "Working..." : "Apply"}
+                    {bulkLoading ? "Working..." : "Delete selected"}
                   </button>
                 </div>
               ) : null}
@@ -3919,11 +3697,7 @@ function NotesTable({
                         {visibleColumns.map(([key, label]) => (
                           <th
                             className={
-                              key === "scrape_status"
-                                ? "scrape-status-column"
-                                : key === "tags"
-                                  ? "tags-column"
-                                  : undefined
+                              key === "tags" ? "tags-column" : undefined
                             }
                             key={key}
                           >
@@ -3959,16 +3733,7 @@ function NotesTable({
 
                           return (
                             <th
-                              className={
-                                [
-                                  key === "scrape_status"
-                                    ? "scrape-status-column"
-                                    : null,
-                                  isTagsColumn ? "tags-column" : null,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" ") || undefined
-                              }
+                              className={isTagsColumn ? "tags-column" : undefined}
                               key={`${key}-filter`}
                             >
                               {isTagsColumn ? (
@@ -4073,10 +3838,6 @@ function NotesTable({
                       ) : null}
                       {virtualRows.map((virtualRow) => {
                         const note = deferredOrderedNotes[virtualRow.index];
-                        const noteScrapeStatus = displayScrapeStatus(
-                          note,
-                          scrapeJob,
-                        );
                         const displayImage = pickFirstAvailableImage(note, [
                           ["front", "thumbnail"],
                           ["front", "full"],
@@ -4421,18 +4182,6 @@ function NotesTable({
                                   tags={note.tags}
                                 />
                               </td>
-                              {showScrapeStatusColumn ? (
-                                <td className="scrape-status-column">
-                                  <span
-                                    aria-label={statusLabel(noteScrapeStatus)}
-                                    className={`scrape-badge scrape-badge--${noteScrapeStatus}`}
-                                    role="img"
-                                    title={statusLabel(noteScrapeStatus)}
-                                  >
-                                    {statusIcon(noteScrapeStatus)}
-                                  </span>
-                                </td>
-                              ) : null}
                               {showActions ? (
                                 <td>
                                   <div className="inline-actions">

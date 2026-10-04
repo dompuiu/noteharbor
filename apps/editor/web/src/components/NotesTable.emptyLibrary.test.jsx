@@ -7,10 +7,7 @@ import { CATALOG_ROUTES } from "../lib/routes.js";
 vi.mock("../lib/api.js", () => ({
   deleteNote: vi.fn(),
   getNotes: vi.fn(),
-  getOperationStatus: vi.fn(),
   reorderNotes: vi.fn(),
-  getScrapeStatus: vi.fn(),
-  startScrape: vi.fn(),
 }));
 
 vi.mock("@tanstack/react-virtual", () => ({
