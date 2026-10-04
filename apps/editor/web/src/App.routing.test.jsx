@@ -5,8 +5,8 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 // The routing tests assert where each path lands, not what the screens render,
-// so the screens are stubbed out. The health mock drives the shell's
-// connection gate; the collections payload drives the empty-library state.
+// so the screens are stubbed out. The collections mock drives the shell's
+// connection state and the empty-library state; health is only used on retry.
 vi.mock("./lib/api.js", () => ({
   createCollection: vi.fn(),
   deleteCollection: vi.fn(),
@@ -184,8 +184,14 @@ describe("Empty library", () => {
 });
 
 describe("Connection state", () => {
+  function connectionError(reason) {
+    const error = new Error("Request failed.");
+    error.reason = reason;
+    return error;
+  }
+
   test("a missing editor server reports the server problem", async () => {
-    getHealth.mockResolvedValue({ connected: false, reason: "server" });
+    getCollections.mockRejectedValue(connectionError("server"));
     renderAt(CATALOG_ROUTES.banknotes);
 
     expect(
@@ -195,7 +201,7 @@ describe("Connection state", () => {
   });
 
   test("a database that does not answer reports the database problem", async () => {
-    getHealth.mockResolvedValue({ connected: false, reason: "database" });
+    getCollections.mockRejectedValue(connectionError("database"));
     renderAt(CATALOG_ROUTES.banknotes);
 
     expect(
@@ -203,8 +209,8 @@ describe("Connection state", () => {
     ).toBeInTheDocument();
   });
 
-  test("an unexpected health response reports a generic problem", async () => {
-    getHealth.mockResolvedValue({ connected: false, reason: "generic" });
+  test("an unexpected load failure reports a generic problem", async () => {
+    getCollections.mockRejectedValue(connectionError("generic"));
     renderAt(CATALOG_ROUTES.banknotes);
 
     expect(
@@ -212,11 +218,20 @@ describe("Connection state", () => {
     ).toBeInTheDocument();
   });
 
+  test("renders the page without waiting for a separate health probe", async () => {
+    // The load never settles: the page must still paint (and no probe run),
+    // which is the regression that gating the shell on /api/health introduced.
+    getCollections.mockReturnValue(new Promise(() => {}));
+    renderAt(CATALOG_ROUTES.banknotes);
+
+    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
+    expect(getHealth).not.toHaveBeenCalled();
+  });
+
   test("retrying after the server returns loads the page", async () => {
     const user = userEvent.setup();
-    getHealth
-      .mockResolvedValueOnce({ connected: false, reason: "server" })
-      .mockResolvedValueOnce({ connected: true });
+    getCollections.mockRejectedValueOnce(connectionError("server"));
+    getHealth.mockResolvedValue({ connected: true });
     renderAt(CATALOG_ROUTES.banknotes);
 
     await user.click(
@@ -226,10 +241,26 @@ describe("Connection state", () => {
     expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
   });
 
-  test("leaves the connecting state under StrictMode", async () => {
+  test("a retry that still cannot reach the database keeps that problem", async () => {
+    const user = userEvent.setup();
+    getCollections.mockRejectedValue(connectionError("server"));
+    getHealth.mockResolvedValue({ connected: false, reason: "database" });
+    renderAt(CATALOG_ROUTES.banknotes);
+
+    await user.click(
+      await screen.findByRole("button", { name: "Try again" }),
+    );
+
+    expect(
+      await screen.findByText("Can't reach the database."),
+    ).toBeInTheDocument();
+  });
+
+  test("paints the page under StrictMode without a health probe", async () => {
+    getCollections.mockReturnValue(new Promise(() => {}));
     renderAtInStrictMode(CATALOG_ROUTES.banknotes);
 
     expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
-    expect(screen.queryByText("Connecting...")).not.toBeInTheDocument();
+    expect(getHealth).not.toHaveBeenCalled();
   });
 });

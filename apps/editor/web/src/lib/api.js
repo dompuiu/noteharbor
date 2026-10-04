@@ -80,11 +80,22 @@ function buildNoteRequestOptions(method, payload) {
   };
 }
 
+// The one translation from an HTTP status to the shell's connection vocabulary.
+// A 503 is the database-aware health signal (/api/health and the DB error
+// handler); anything else the server answered is reported generically.
+function reasonForStatus(status) {
+  return status === 503 ? 'database' : 'generic';
+}
+
 async function handleResponse(response) {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    throw new Error(payload.error || 'Request failed.');
+    const error = new Error(payload.error || 'Request failed.');
+    // The shell reads its connection state from the collections load, so a
+    // failure has to say whether the server answered but its database did not.
+    error.reason = reasonForStatus(response.status);
+    throw error;
   }
 
   return payload;
@@ -159,7 +170,17 @@ function importBasePath(collectionId) {
 }
 
 async function getCollections() {
-  const response = await fetch('/api/collections');
+  let response;
+
+  try {
+    response = await fetch('/api/collections');
+  } catch {
+    // Nothing answered at all, which the shell reports as a server problem.
+    const error = new Error('Request failed.');
+    error.reason = 'server';
+    throw error;
+  }
+
   return handleResponse(response);
 }
 
@@ -175,12 +196,8 @@ async function getHealth() {
     return { connected: false, reason: 'server' };
   }
 
-  if (response.status === 503) {
-    return { connected: false, reason: 'database' };
-  }
-
   if (response.status !== 200) {
-    return { connected: false, reason: 'generic' };
+    return { connected: false, reason: reasonForStatus(response.status) };
   }
 
   const payload = await response.json().catch(() => ({}));

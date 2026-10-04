@@ -25,7 +25,12 @@ import { CollectionsProvider, useCollections } from "./collections.jsx";
 let context;
 function Probe() {
   context = useCollections();
-  return <output data-testid="names">{context.collections.map((c) => c.name).join(",")}</output>;
+  return (
+    <>
+      <output data-testid="names">{context.collections.map((c) => c.name).join(",")}</output>
+      <output data-testid="reason">{context.collectionsErrorReason ?? ""}</output>
+    </>
+  );
 }
 
 function renderProvider() {
@@ -120,5 +125,39 @@ describe("CollectionsProvider mutations", () => {
     expect(screen.getByTestId("names")).toHaveTextContent("Archive");
     expect(getCollections.mock.calls.length).toBe(loadsBefore);
     expect(context.activeCollectionId).toBe(2);
+  });
+});
+
+describe("CollectionsProvider connection reason", () => {
+  test("records why a failed load failed so the shell can report it", async () => {
+    const error = new Error("Request failed.");
+    error.reason = "database";
+    getCollections.mockRejectedValue(error);
+
+    renderProvider();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("reason")).toHaveTextContent("database");
+    });
+    expect(screen.getByTestId("names")).toHaveTextContent("");
+  });
+
+  test("clears the reason once a load succeeds", async () => {
+    const error = new Error("Request failed.");
+    error.reason = "server";
+    getCollections.mockRejectedValueOnce(error);
+
+    renderProvider();
+
+    await waitFor(() => {
+      expect(screen.getByTestId("reason")).toHaveTextContent("server");
+    });
+
+    await act(async () => {
+      await context.refreshCollections();
+    });
+
+    expect(screen.getByTestId("reason")).toHaveTextContent("");
+    expect(screen.getByTestId("names")).toHaveTextContent("Default,Archive");
   });
 });

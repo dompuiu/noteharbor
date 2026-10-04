@@ -66,10 +66,15 @@ function CollectionsProvider({ children }) {
   const [activeCollectionId, setActiveCollectionId] = useState(() => readStoredCollectionId());
   const [loadingCollections, setLoadingCollections] = useState(true);
   const [collectionsError, setCollectionsError] = useState('');
+  // Why the last load failed, in the shell's connection vocabulary ('server',
+  // 'database', 'generic'). The shell reads its connection state from this load
+  // instead of running a separate health probe before the first paint.
+  const [collectionsErrorReason, setCollectionsErrorReason] = useState(null);
 
   async function refreshCollections({ preferredCollectionId } = {}) {
     setLoadingCollections(true);
     setCollectionsError('');
+    setCollectionsErrorReason(null);
 
     try {
       const payload = await getCollections();
@@ -85,6 +90,7 @@ function CollectionsProvider({ children }) {
       writeStoredCollectionId(nextActiveCollectionId);
     } catch (error) {
       setCollectionsError(error.message);
+      setCollectionsErrorReason(error.reason ?? 'generic');
     } finally {
       setLoadingCollections(false);
     }
@@ -210,6 +216,7 @@ function CollectionsProvider({ children }) {
       activeCollectionId,
       collections,
       collectionsError,
+      collectionsErrorReason,
       createCollection: handleCreateCollection,
       deleteCollection: handleDeleteCollection,
       loadingCollections,
@@ -224,6 +231,7 @@ function CollectionsProvider({ children }) {
       activeCollectionId,
       collections,
       collectionsError,
+      collectionsErrorReason,
       loadingCollections,
     ],
   );

@@ -64,67 +64,49 @@ function ShellContent() {
     activeCollectionId,
     collections,
     collectionsError,
+    collectionsErrorReason,
     loadingCollections,
     refreshCollections,
     selectCollection,
   } = useCollections();
 
-  // The shared chrome can't work without the server behind it, so the whole
-  // main region answers to one connection check rather than each screen
-  // reporting the same outage differently.
-  const [connection, setConnection] = useState({ status: "checking" });
+  // The connection state is read from the collections load the provider already
+  // performs on mount, so no health probe sits in front of the first paint.
+  // A failed manual retry can pin its own reason until the next successful load.
+  const [retryReason, setRetryReason] = useState(null);
   const [checkingConnection, setCheckingConnection] = useState(false);
   // The sidebar's Escape/Tab-out hands focus here, so it lands inside the page
   // rather than on <body>. Inert and visually hidden; Tab skips past it.
   const pageFocusRef = useRef(null);
-  // A degraded server can answer slowly; a check that lands after unmount must
-  // not write state (or overwrite a later retry).
-  const mountedRef = useRef(true);
 
-  async function checkConnection({ refreshOnSuccess = false } = {}) {
-    const result = await getHealth();
-
-    if (!mountedRef.current) {
-      return;
+  // A failed retry pins its reason; a collections load that later succeeds
+  // proves the connection is back, so drop the pin.
+  useEffect(() => {
+    if (!collectionsError && !loadingCollections) {
+      setRetryReason(null);
     }
+  }, [collectionsError, loadingCollections]);
 
-    if (!result.connected) {
-      setConnection({ status: "disconnected", reason: result.reason });
-      return;
-    }
+  async function handleRetry() {
+    setCheckingConnection(true);
 
-    // Only on a retry: the provider already loaded on mount, so re-running it
-    // here is what actually brings the data back after an outage.
-    if (refreshOnSuccess) {
-      await refreshCollections();
+    try {
+      const result = await getHealth();
 
-      if (!mountedRef.current) {
+      if (!result.connected) {
+        setRetryReason(result.reason ?? "generic");
         return;
       }
+
+      setRetryReason(null);
+      await refreshCollections();
+    } finally {
+      setCheckingConnection(false);
     }
-
-    setConnection({ status: "ok" });
   }
 
-  useEffect(() => {
-    // Re-arm on every effect run. StrictMode mounts, runs cleanup, then runs the
-    // effect again; without this the second check would see the ref left false
-    // by the first cleanup and never leave the "checking" state.
-    mountedRef.current = true;
-    checkConnection();
-
-    return () => {
-      mountedRef.current = false;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  function handleRetry() {
-    setCheckingConnection(true);
-    checkConnection({ refreshOnSuccess: true }).finally(() =>
-      setCheckingConnection(false),
-    );
-  }
+  const disconnectedReason =
+    retryReason ?? (collectionsError ? collectionsErrorReason ?? "generic" : null);
 
   const showEmptyLibrary = isEmptyLibrary({
     collections,
@@ -143,19 +125,13 @@ function ShellContent() {
             ref={pageFocusRef}
             tabIndex={-1}
           />
-          {connection.status === "checking" ? (
-            <p aria-live="polite" className="muted" role="status">
-              Connecting...
-            </p>
-          ) : null}
-          {connection.status === "disconnected" ? (
+          {disconnectedReason ? (
             <ConnectionError
               checking={checkingConnection}
               onRetry={handleRetry}
-              reason={connection.reason}
+              reason={disconnectedReason}
             />
-          ) : null}
-          {connection.status === "ok" ? (
+          ) : (
             <Routes>
               <Route
                 element={
@@ -213,7 +189,7 @@ function ShellContent() {
                 path="*"
               />
             </Routes>
-          ) : null}
+          )}
         </main>
       </div>
     </div>

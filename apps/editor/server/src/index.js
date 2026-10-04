@@ -42,6 +42,41 @@ function checkHealth(ping = pingDatabase) {
   }
 }
 
+// better-sqlite3 reports failures with a SQLITE_* code. Only the availability
+// codes mean the database can't be reached — constraint failures are client
+// mistakes, not an outage. The client reads the shell's connection state from
+// the collections load, so map availability errors to 503, the same signal
+// /api/health uses.
+const DATABASE_UNAVAILABLE_PREFIXES = [
+  'SQLITE_BUSY',
+  'SQLITE_CANTOPEN',
+  'SQLITE_CORRUPT',
+  'SQLITE_IOERR',
+  'SQLITE_LOCKED',
+  'SQLITE_NOTADB',
+  'SQLITE_PERM',
+  'SQLITE_READONLY'
+];
+
+function isDatabaseUnavailable(error) {
+  if (typeof error?.code !== 'string') {
+    return false;
+  }
+
+  return DATABASE_UNAVAILABLE_PREFIXES.some(
+    (prefix) => error.code === prefix || error.code.startsWith(`${prefix}_`)
+  );
+}
+
+function databaseErrorHandler(error, _request, response, next) {
+  if (isDatabaseUnavailable(error)) {
+    response.status(503).json({ error: 'Database unavailable.' });
+    return;
+  }
+
+  next(error);
+}
+
 function createApp() {
   const app = express();
   const webDistDir = resolveWebDistDir();
@@ -67,6 +102,8 @@ function createApp() {
     const { status, body } = checkHealth();
     response.status(status).json(body);
   });
+
+  app.use(databaseErrorHandler);
 
   if (shouldServeWebDist() && fs.existsSync(webEntryPath)) {
     app.use(express.static(webDistDir));
@@ -105,6 +142,8 @@ if (isDirectRun) {
 export {
   checkHealth,
   createApp,
+  databaseErrorHandler,
+  isDatabaseUnavailable,
   resolveWebDistDir,
   startServer
 };
