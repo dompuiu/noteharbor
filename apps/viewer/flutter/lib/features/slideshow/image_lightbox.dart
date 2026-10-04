@@ -551,6 +551,12 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
   static const double _kZoomEpsilon = 1e-3;
   static const double _kPanOverflowFraction = 0.05;
 
+  /// How close to the fit size (as a fraction of it) a narrowing pinch must
+  /// get before it is drawn all the way back to fit. Pinching out rarely lands
+  /// exactly on fit, and any leftover zoom keeps the sequence unswipeable until
+  /// a double tap resets it.
+  static const double _kFitSnapFraction = 0.1;
+
   final Map<int, Offset> _activePointers = <int, Offset>{};
   ImageStream? _imageStream;
   ImageStreamListener? _imageStreamListener;
@@ -562,6 +568,9 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
   Offset _offset = Offset.zero;
   Offset? _lastFocalPoint;
   double? _lastSpan;
+  // The scale when the current pinch began, so a pinch that narrows the image
+  // can be told apart from one that enlarges it.
+  double? _pinchStartScale;
   bool _isPannable = false;
   int? _dragPointer;
   Offset? _dragStartPosition;
@@ -590,6 +599,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
       _offset = Offset.zero;
       _lastFocalPoint = null;
       _lastSpan = null;
+      _pinchStartScale = null;
       _cancelDrag();
       _isPannable = false;
       _resolveImage();
@@ -753,6 +763,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
     _activePointers[event.pointer] = event.localPosition;
     if (_activePointers.length >= 2) {
       _cancelDrag();
+      _pinchStartScale ??= _scale;
       _lastFocalPoint = _currentFocalPoint();
       _lastSpan = _currentSpan();
       _syncPageScroll();
@@ -808,6 +819,16 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
       nextScale = (_scale * (span / previousSpan)).clamp(1.0, maxScale);
     }
 
+    // A pinch that is narrowing the image and has reached within
+    // [_kFitSnapFraction] of fit is drawn the rest of the way, so releasing it
+    // leaves the image swipeable instead of a few pixels above fit.
+    final startScale = _pinchStartScale;
+    final snapToFit = startScale != null &&
+        _pinchSettlesToFit(scale: nextScale, startScale: startScale);
+    if (snapToFit) {
+      nextScale = 1;
+    }
+
     var nextOffset = _offset + focalDelta;
     nextOffset = _offsetForScale(
       focalPoint: focalPoint,
@@ -820,12 +841,14 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
 
     setState(() {
       _scale = nextScale;
-      _offset = _clampOffset(
-        offset: nextOffset,
-        viewport: viewport,
-        contentSize: _fittedContentSize(viewport),
-        scale: _scale,
-      );
+      _offset = snapToFit
+          ? Offset.zero
+          : _clampOffset(
+              offset: nextOffset,
+              viewport: viewport,
+              contentSize: _fittedContentSize(viewport),
+              scale: _scale,
+            );
     });
 
     _lastFocalPoint = focalPoint;
@@ -841,9 +864,37 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
     if (_activePointers.length < 2) {
       _lastFocalPoint = null;
       _lastSpan = null;
+      _settlePinchToFit();
     }
     _syncPageScroll();
   }
+
+  /// Settles a pinch that ended just short of fit onto fit. The snap is applied
+  /// live during the pinch, but a dropped final move event can leave the last
+  /// scale a little above fit, so this catches the release as well.
+  void _settlePinchToFit() {
+    final startScale = _pinchStartScale;
+    _pinchStartScale = null;
+    if (startScale == null ||
+        !_pinchSettlesToFit(scale: _scale, startScale: startScale)) {
+      return;
+    }
+
+    setState(() {
+      _scale = 1;
+      _offset = Offset.zero;
+    });
+  }
+
+  /// Whether a pinch that started at [startScale] and has been drawn down to
+  /// [scale] is narrowing the image and is close enough to fit to settle onto
+  /// it. A pinch that is enlarging the image is never snapped, so the first few
+  /// percent of a deliberate zoom-in are not swallowed.
+  bool _pinchSettlesToFit({
+    required double scale,
+    required double startScale,
+  }) =>
+      scale < startScale && scale <= 1 + _kFitSnapFraction;
 
   void _handlePointerSignal(PointerSignalEvent event) {
     if (event is! PointerScrollEvent) {

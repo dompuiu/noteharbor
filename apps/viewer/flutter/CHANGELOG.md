@@ -8,6 +8,10 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 - Image popover: the note's date is now shown on a smaller line beneath the denomination and catalog number in the header.
 
+### Fixed
+
+- Image popover: a pinch that settles within 10% of the fit size now snaps the rest of the way to fit, so the sequence stays swipeable instead of resting a few pixels above fit until a double tap.
+
 ## [1.9.2] - 2026-10-01
 
 ### Changed

@@ -172,6 +172,69 @@ void main() {
     expect(_maxZoom(tester), closeTo(1.0, 0.001));
   });
 
+  testWidgets('a narrowing pinch that stops near fit snaps back to fit', (
+    tester,
+  ) async {
+    await pumpMultiItemPopover(tester);
+    await _zoomInWithKeyboard(tester);
+    expect(_maxZoom(tester), greaterThan(1.0));
+
+    final center = tester.getCenter(find.byType(PageView));
+    final first = await tester.startGesture(
+      center + const Offset(-200, 0),
+      pointer: 1,
+    );
+    final second = await tester.startGesture(
+      center + const Offset(200, 0),
+      pointer: 2,
+    );
+
+    // Draw the fingers together until the image is within the snap margin of
+    // fit but not all the way: without the snap this rests just above 1 and
+    // leaves the sequence unswipeable until a double tap.
+    await first.moveTo(center + const Offset(-95, 0));
+    await second.moveTo(center + const Offset(95, 0));
+    await tester.pump();
+
+    expect(_maxZoom(tester), closeTo(1.0, 0.001));
+
+    await first.up();
+    await second.up();
+    await tester.pumpAndSettle();
+
+    // The sequence is swipeable again without a reset.
+    await tester.drag(find.byType(PageView), const Offset(-600, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 2'), findsOneWidget);
+  });
+
+  testWidgets('a narrowing pinch can still stop at a real zoom stop', (
+    tester,
+  ) async {
+    await pumpPopover(tester);
+    await _zoomInWithKeyboard(tester);
+    expect(_maxZoom(tester), greaterThan(1.0));
+
+    final center = tester.getCenter(find.byType(PageView));
+    // Start wider so the pinch lands well outside the snap margin.
+    final first = await tester.startGesture(
+      center + const Offset(-200, 0),
+      pointer: 1,
+    );
+    final second = await tester.startGesture(
+      center + const Offset(200, 0),
+      pointer: 2,
+    );
+    await first.moveTo(center + const Offset(-150, 0));
+    await second.moveTo(center + const Offset(150, 0));
+    await tester.pump();
+    await first.up();
+    await second.up();
+    await tester.pumpAndSettle();
+
+    expect(_maxZoom(tester), greaterThan(1 + 0.1));
+  });
+
   testWidgets('dragging a zoomed image pans it', (tester) async {
     await pumpPopover(tester);
     await _zoomInWithKeyboard(tester);
