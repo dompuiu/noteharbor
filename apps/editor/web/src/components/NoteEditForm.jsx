@@ -8,6 +8,7 @@ import {
   moveNote,
   reorderNotes,
   scrapePreview,
+  scrapeTimeoutMessage,
   updateNote,
 } from "../lib/api.js";
 import { useCollections } from "../lib/collections.jsx";
@@ -26,6 +27,7 @@ import { TagsField } from "./TagsField.jsx";
 
 const SCRAPE_BROWSER_POLL_INTERVAL_MS = 500;
 const SCRAPE_BROWSER_POLL_TIMEOUT_MS = 10000;
+const SCRAPE_NAVIGATION_TIMEOUT_MS = 30000;
 const SCRAPE_FIELD_LABELS = {
   denomination: "Denomination",
   issue_date: "Date",
@@ -277,7 +279,7 @@ function NoteEditForm({
   const [pendingScrapedImages, setPendingScrapedImages] = useState({});
   const [scrapeBrowserStatus, setScrapeBrowserStatus] = useState({
     supported: false,
-    available: true,
+    available: false,
     launching: false,
     error: null,
   });
@@ -286,6 +288,7 @@ function NoteEditForm({
   const formElementRef = useRef(null);
   const scrapeToastTimer = useRef(null);
   const scrapeBrowserPollTimer = useRef(null);
+  const scrapeBrowserReadyPromise = useRef(null);
   const saveIntentRef = useRef("stay");
   const baselineSignatureRef = useRef(null);
   const desktopBridge = getDesktopBridge();
@@ -343,10 +346,7 @@ function NoteEditForm({
     positionNeedsReference && positionReferenceId === null;
   const canNavigatePrevious = Boolean(previousNoteId) && !saving;
   const canNavigateNext = Boolean(nextNoteId) && !saving;
-  const canScrapeUrl =
-    !scraping &&
-    Boolean(form.url.trim()) &&
-    (hasDesktopScrapeLauncher ? scrapeBrowserStatus.available : true);
+  const canScrapeUrl = !scraping && Boolean(form.url.trim());
   const movingToDifferentCollection =
     !isCreateMode && destinationCollectionId !== selectedCollectionId;
   // While moving to a different collection, the position picker reflects that
@@ -975,8 +975,22 @@ function NoteEditForm({
     setScrapeToast(null);
 
     try {
-      const result = await scrapePreview(form.url);
+      const browserReady = await ensureScrapeBrowserReady();
+      if (!browserReady) {
+        return;
+      }
+
+      const result = await scrapePreview(form.url, {
+        timeoutMs: SCRAPE_NAVIGATION_TIMEOUT_MS,
+      });
       const mappedUpdates = mapScrapedFields(result.scraped_data, form.url);
+
+      if (Object.keys(mappedUpdates).length === 0) {
+        showScrapeToast(
+          "No fields were found on the page. If Chrome is showing a CAPTCHA or a setup screen, complete it and try Auto Populate again.",
+        );
+        return;
+      }
 
       setForm((current) => {
         const { autoFillUpdates, conflicts } = resolveScrapeUpdates(
@@ -1005,7 +1019,9 @@ function NoteEditForm({
       }
       setPendingScrapedImages(nextScrapedImages);
     } catch (err) {
-      showScrapeToast(err.message || "Scraping failed.");
+      const message = err.message || "Scraping failed.";
+      const timedOut = /timed out|timeout .*exceeded/i.test(message);
+      showScrapeToast(timedOut ? scrapeTimeoutMessage : message);
     } finally {
       setScraping(false);
     }
@@ -1052,46 +1068,81 @@ function NoteEditForm({
     closeScrapeConflictOverlay();
   }
 
-  async function handleOpenScrapeBrowser() {
-    if (!desktopBridge) {
-      showScrapeToast("The Electron desktop bridge is not available in this window.");
-      return;
+  async function ensureScrapeBrowserReady() {
+    if (!hasDesktopScrapeLauncher) {
+      return true;
     }
 
-    setScrapeBrowserStatus((current) => ({
-      ...current,
-      launching: true,
-      error: null,
-    }));
-    setScrapeToast(null);
-    clearScrapeBrowserPollTimer();
+    if (scrapeBrowserReadyPromise.current) {
+      return scrapeBrowserReadyPromise.current;
+    }
 
-    try {
-      const status = await desktopBridge.openScrapeBrowser();
-      setScrapeBrowserStatus(status);
+    if (scrapeBrowserStatus.available) {
+      return true;
+    }
 
-      if (status.error) {
-        showScrapeToast(status.error);
-        return;
+    if (!desktopBridge) {
+      showScrapeToast("The Electron desktop bridge is not available in this window.");
+      return false;
+    }
+
+    scrapeBrowserReadyPromise.current = (async () => {
+      // Re-check against a fresh status: React state can lag behind a browser
+      // that is already up (e.g. a previous launch that just finished).
+      const current = await loadScrapeBrowserStatus();
+      if (current?.available) {
+        return true;
       }
 
-      if (!status.available) {
+      setScrapeBrowserStatus((state) => ({
+        ...state,
+        launching: true,
+        error: null,
+      }));
+      clearScrapeBrowserPollTimer();
+
+      try {
+        const status = await desktopBridge.openScrapeBrowser();
+        setScrapeBrowserStatus(status);
+
+        if (status.error) {
+          showScrapeToast(status.error);
+          return false;
+        }
+
+        if (status.available) {
+          return true;
+        }
+
         const becameAvailable = await pollForScrapeBrowserAvailability();
         if (!becameAvailable) {
           showScrapeToast(
             "Chrome opened, but remote debugging on port 9222 is not ready yet.",
           );
         }
+        return becameAvailable;
+      } catch (launchError) {
+        setScrapeBrowserStatus((state) => ({
+          ...state,
+          launching: false,
+          available: false,
+          error: launchError.message || "Could not open Chrome for scraping.",
+        }));
+        showScrapeToast(
+          launchError.message || "Could not open Chrome for scraping.",
+        );
+        return false;
       }
-    } catch (launchError) {
-      setScrapeBrowserStatus((current) => ({
-        ...current,
-        launching: false,
-        available: false,
-        error: launchError.message || "Could not open Chrome for scraping.",
-      }));
-      showScrapeToast(launchError.message || "Could not open Chrome for scraping.");
-    }
+    })().finally(() => {
+      scrapeBrowserReadyPromise.current = null;
+    });
+
+    return scrapeBrowserReadyPromise.current;
+  }
+
+  async function handleOpenScrapeBrowser() {
+    setScrapeToast(null);
+    await ensureScrapeBrowserReady();
   }
 
   function getPastedImageFile(event) {
@@ -1641,11 +1692,7 @@ function NoteEditForm({
                 className="button"
                 disabled={!canScrapeUrl}
                 onClick={handleAutoPopulate}
-                title={
-                  hasDesktopScrapeLauncher && !scrapeBrowserStatus.available
-                    ? scrapeBrowserStatus.error || "Open Chrome for scraping first"
-                    : "Auto Populate fields from URL"
-                }
+                title="Auto Populate fields from URL — opens Chrome and the tab if needed"
                 type="button"
               >
                 {scraping ? (

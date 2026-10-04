@@ -88,6 +88,7 @@ async function scrapeUrl(noteOrUrl, options = {}) {
     cdpUrl: getBrowserCdpUrl(),
     waitSeconds: DEFAULT_WAIT_SECONDS,
     openIfMissing: options.openIfMissing,
+    navigationTimeoutMs: options.navigationTimeoutMs,
   });
   const parsed = scraper.parse(html, url);
 
@@ -216,7 +217,10 @@ scrapeRouter.post("/preview", async (request, response) => {
   }
 
   try {
-    const { parsed } = await scrapeUrl(url, { openIfMissing: true });
+    const { parsed } = await scrapeUrl(url, {
+      openIfMissing: true,
+      navigationTimeoutMs: request.body?.timeoutMs,
+    });
 
     response.json({
       scraped_data: parsed.details,

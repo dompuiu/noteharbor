@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { resolveOpenPage } from './fetchHtml.js';
+import { normalizeNavigationTimeoutMs, resolveOpenPage } from './fetchHtml.js';
 
 function createPage(url) {
   const page = {
@@ -8,8 +8,8 @@ function createPage(url) {
     gotoCalls: [],
     broughtToFront: false,
     url: () => page.currentUrl,
-    goto: async (target) => {
-      page.gotoCalls.push(target);
+    goto: async (target, options) => {
+      page.gotoCalls.push({ target, options });
       page.currentUrl = target;
     },
     bringToFront: async () => {
@@ -77,9 +77,46 @@ test('resolveOpenPage opens and navigates a new tab when openIfMissing is true',
     openIfMissing: true
   });
 
-  assert.deepEqual(page.gotoCalls, ['https://www.pmgnotes.com/certlookup/999']);
+  assert.deepEqual(page.gotoCalls, [
+    {
+      target: 'https://www.pmgnotes.com/certlookup/999',
+      options: { waitUntil: 'domcontentloaded', timeout: 30000 }
+    }
+  ]);
   assert.equal(page.url(), 'https://www.pmgnotes.com/certlookup/999');
   assert.equal(page.broughtToFront, true);
+});
+
+test('resolveOpenPage forwards a custom navigation timeout to goto', async () => {
+  const context = createContext([]);
+  const browser = createBrowser([context]);
+
+  const page = await resolveOpenPage(browser, 'https://www.pmgnotes.com/certlookup/999', {
+    openIfMissing: true,
+    navigationTimeoutMs: 45000
+  });
+
+  assert.deepEqual(page.gotoCalls, [
+    {
+      target: 'https://www.pmgnotes.com/certlookup/999',
+      options: { waitUntil: 'domcontentloaded', timeout: 45000 }
+    }
+  ]);
+});
+
+test('normalizeNavigationTimeoutMs falls back to the default for missing or invalid values', () => {
+  assert.equal(normalizeNavigationTimeoutMs(undefined), 30000);
+  assert.equal(normalizeNavigationTimeoutMs(null), 30000);
+  assert.equal(normalizeNavigationTimeoutMs('nope'), 30000);
+  assert.equal(normalizeNavigationTimeoutMs(0), 30000);
+  assert.equal(normalizeNavigationTimeoutMs(-10), 30000);
+});
+
+test('normalizeNavigationTimeoutMs clamps to the allowed range', () => {
+  assert.equal(normalizeNavigationTimeoutMs(1000), 5000);
+  assert.equal(normalizeNavigationTimeoutMs(60000), 60000);
+  assert.equal(normalizeNavigationTimeoutMs(999999), 120000);
+  assert.equal(normalizeNavigationTimeoutMs('45000'), 45000);
 });
 
 test('resolveOpenPage leaves the new tab open when navigation fails', async () => {
@@ -117,6 +154,18 @@ test('resolveOpenPage still reuses a matching tab when openIfMissing is true', a
 
   assert.equal(page, target);
   assert.equal(context.pages().length, 1);
+});
+
+test('resolveOpenPage refuses to open a non-web URL', async () => {
+  const context = createContext([]);
+  const browser = createBrowser([context]);
+
+  await assert.rejects(
+    resolveOpenPage(browser, 'file:///etc/passwd', { openIfMissing: true }),
+    /Refusing to open a non-web URL/
+  );
+
+  assert.deepEqual(context.pages(), []);
 });
 
 test('resolveOpenPage rejects a missing requested URL', async () => {

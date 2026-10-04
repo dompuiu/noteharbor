@@ -341,14 +341,50 @@ async function getTags(collectionId) {
   return handleResponse(response);
 }
 
-async function scrapePreview(url) {
-  const response = await fetch('/api/scrape/preview', {
-    method: 'POST',
-    headers,
-    body: JSON.stringify({ url })
-  });
+const SCRAPE_PREVIEW_TIMEOUT_BUFFER_MS = 5000;
+const SCRAPE_NAVIGATION_TIMEOUT_MAX_MS = 120000;
 
-  return handleResponse(response);
+const scrapeTimeoutMessage =
+  'Autopopulate timed out before the page loaded. Check the Chrome window for a ' +
+  'new-profile setup screen or a bot check, then try again.';
+
+async function scrapePreview(url, { timeoutMs } = {}) {
+  const clampedTimeoutMs = Number.isFinite(timeoutMs) && timeoutMs > 0
+    ? Math.min(timeoutMs, SCRAPE_NAVIGATION_TIMEOUT_MAX_MS)
+    : null;
+
+  const controller = new AbortController();
+  const abortTimer = clampedTimeoutMs
+    ? setTimeout(
+        () => controller.abort(),
+        clampedTimeoutMs + SCRAPE_PREVIEW_TIMEOUT_BUFFER_MS
+      )
+    : null;
+
+  try {
+    const response = await fetch('/api/scrape/preview', {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({ url, timeoutMs: clampedTimeoutMs }),
+      signal: controller.signal
+    });
+
+    return await handleResponse(response);
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error(scrapeTimeoutMessage);
+    }
+
+    if (/timed out|timeout .*exceeded/i.test(error.message || '')) {
+      throw new Error(scrapeTimeoutMessage);
+    }
+
+    throw error;
+  } finally {
+    if (abortTimer) {
+      clearTimeout(abortTimer);
+    }
+  }
 }
 
 async function startScrape(ids) {
@@ -386,6 +422,7 @@ export {
   reorderCollections,
   reorderNotes,
   scrapePreview,
+  scrapeTimeoutMessage,
   setDefaultCollection,
   startScrape,
   updateNote

@@ -1,5 +1,22 @@
 import { chromium } from 'playwright-core';
 
+const DEFAULT_NAVIGATION_TIMEOUT_MS = 30000;
+const MIN_NAVIGATION_TIMEOUT_MS = 5000;
+const MAX_NAVIGATION_TIMEOUT_MS = 120000;
+
+function normalizeNavigationTimeoutMs(value) {
+  const parsed = Number(value);
+
+  if (!Number.isFinite(parsed) || parsed <= 0) {
+    return DEFAULT_NAVIGATION_TIMEOUT_MS;
+  }
+
+  return Math.min(
+    Math.max(Math.round(parsed), MIN_NAVIGATION_TIMEOUT_MS),
+    MAX_NAVIGATION_TIMEOUT_MS
+  );
+}
+
 function buildCdpHint(cdpUrl) {
   return [
     'Unable to reach the configured CDP browser endpoint.',
@@ -31,9 +48,21 @@ function findMatchingOpenPage(realPages, normalizedRequestedUrl) {
   );
 }
 
-async function openMissingPage(context, requestedUrl) {
+function isHttpUrl(url) {
+  try {
+    return ['http:', 'https:'].includes(new URL(url).protocol);
+  } catch {
+    return false;
+  }
+}
+
+async function openMissingPage(context, requestedUrl, navigationTimeoutMs) {
   if (!context) {
     throw new Error('The connected browser has no context to open a new tab in.');
+  }
+
+  if (!isHttpUrl(requestedUrl)) {
+    throw new Error(`Refusing to open a non-web URL: ${requestedUrl}`);
   }
 
   const page = await context.newPage();
@@ -41,13 +70,21 @@ async function openMissingPage(context, requestedUrl) {
   await page.bringToFront();
 
   // If navigation fails the tab is left open so the user can see what broke;
-  // the error propagates to the caller as a scrape failure.
-  await page.goto(requestedUrl, { waitUntil: 'domcontentloaded' });
+  // the error propagates to the caller as a scrape failure. The timeout bounds
+  // a stuck load (first-run profile screens, bot checks, dead hosts).
+  await page.goto(requestedUrl, {
+    waitUntil: 'domcontentloaded',
+    timeout: navigationTimeoutMs
+  });
 
   return page;
 }
 
-async function resolveOpenPage(browser, requestedUrl, { openIfMissing = false } = {}) {
+async function resolveOpenPage(
+  browser,
+  requestedUrl,
+  { openIfMissing = false, navigationTimeoutMs = DEFAULT_NAVIGATION_TIMEOUT_MS } = {}
+) {
   const normalizedRequestedUrl = normalizeUrl(requestedUrl);
 
   if (!normalizedRequestedUrl) {
@@ -64,7 +101,7 @@ async function resolveOpenPage(browser, requestedUrl, { openIfMissing = false } 
   }
 
   if (openIfMissing) {
-    return openMissingPage(contexts[0], requestedUrl);
+    return openMissingPage(contexts[0], requestedUrl, navigationTimeoutMs);
   }
 
   throw new Error(
@@ -76,10 +113,12 @@ async function resolveOpenPage(browser, requestedUrl, { openIfMissing = false } 
   );
 }
 
-async function fetchHtml({ url, cdpUrl, waitSeconds, openIfMissing = false }) {
+async function fetchHtml({ url, cdpUrl, waitSeconds, openIfMissing = false, navigationTimeoutMs }) {
   if (typeof waitSeconds !== 'number' || Number.isNaN(waitSeconds) || waitSeconds < 0) {
     throw new Error('waitSeconds must be a non-negative number');
   }
+
+  const resolvedNavigationTimeoutMs = normalizeNavigationTimeoutMs(navigationTimeoutMs);
 
   if (!cdpUrl) {
     throw new Error('A CDP URL is required');
@@ -95,7 +134,10 @@ async function fetchHtml({ url, cdpUrl, waitSeconds, openIfMissing = false }) {
   }
 
   try {
-    const page = await resolveOpenPage(browser, url, { openIfMissing });
+    const page = await resolveOpenPage(browser, url, {
+      openIfMissing,
+      navigationTimeoutMs: resolvedNavigationTimeoutMs
+    });
 
     if (waitSeconds > 0) {
       await page.waitForTimeout(waitSeconds * 1000);
@@ -107,4 +149,4 @@ async function fetchHtml({ url, cdpUrl, waitSeconds, openIfMissing = false }) {
   }
 }
 
-export { fetchHtml, resolveOpenPage };
+export { fetchHtml, normalizeNavigationTimeoutMs, resolveOpenPage };
