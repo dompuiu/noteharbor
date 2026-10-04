@@ -1,14 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
-import { clearAppData, downloadArchive, getOperationStatus, importArchive, importCsv } from '../lib/api.js';
-import { CATALOG_ROUTES } from '../lib/routes.js';
-import { useConfirmation } from './ConfirmDialog.jsx';
+import { useEffect, useRef, useState } from "react";
+import {
+  clearAppData,
+  downloadArchive,
+  getOperationStatus,
+  importArchive,
+  importCsv,
+} from "../lib/api.js";
+import { CATALOG_ROUTES } from "../lib/routes.js";
+import { useConfirmation } from "./ConfirmDialog.jsx";
 
 function getPastedCsvFile(event) {
   const items = Array.from(event.clipboardData?.items ?? []);
-  const fileItem = items.find((item) => item.kind === 'file');
+  const fileItem = items.find((item) => item.kind === "file");
   const file = fileItem?.getAsFile() ?? null;
 
-  if (file && (file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv'))) {
+  if (
+    file &&
+    (file.type === "text/csv" || file.name.toLowerCase().endsWith(".csv"))
+  ) {
     return file;
   }
 
@@ -16,20 +25,29 @@ function getPastedCsvFile(event) {
 }
 
 function getPastedCsvText(event) {
-  return event.clipboardData?.getData('text/plain')?.trim() ?? '';
+  return event.clipboardData?.getData("text/plain")?.trim() ?? "";
 }
 
 function getDroppedCsvFile(event) {
   const files = Array.from(event.dataTransfer?.files ?? []);
-  return files.find((file) => file.type === 'text/csv' || file.name.toLowerCase().endsWith('.csv')) ?? null;
+  return (
+    files.find(
+      (file) =>
+        file.type === "text/csv" || file.name.toLowerCase().endsWith(".csv"),
+    ) ?? null
+  );
 }
 
 function getDroppedCsvText(event) {
-  return event.dataTransfer?.getData('text/plain')?.trim() ?? '';
+  return event.dataTransfer?.getData("text/plain")?.trim() ?? "";
 }
 
 function isArchiveFile(file) {
-  return Boolean(file && (file.type === 'application/zip' || file.name.toLowerCase().endsWith('.zip')));
+  return Boolean(
+    file &&
+      (file.type === "application/zip" ||
+        file.name.toLowerCase().endsWith(".zip")),
+  );
 }
 
 function getDroppedArchiveFile(event) {
@@ -38,7 +56,7 @@ function getDroppedArchiveFile(event) {
 }
 
 function formatOperationLabel(operation) {
-  return String(operation || 'idle').replace(/_/g, ' ');
+  return String(operation || "idle").replace(/_/g, " ");
 }
 
 function ImportScreen({
@@ -53,13 +71,13 @@ function ImportScreen({
   const archiveInputRef = useRef(null);
   const panelScrollRef = useRef(null);
   const [csvSource, setCsvSource] = useState(null);
-  const [csvSourceLabel, setCsvSourceLabel] = useState('');
+  const [csvSourceLabel, setCsvSourceLabel] = useState("");
   const [archiveSource, setArchiveSource] = useState(null);
   const [csvDropActive, setCsvDropActive] = useState(false);
   const [archiveDropActive, setArchiveDropActive] = useState(false);
   const [csvResult, setCsvResult] = useState(null);
   const [archiveResult, setArchiveResult] = useState(null);
-  const [error, setError] = useState('');
+  const [error, setError] = useState("");
   const [submittingCsv, setSubmittingCsv] = useState(false);
   const [submittingArchive, setSubmittingArchive] = useState(false);
   const [exportingArchive, setExportingArchive] = useState(false);
@@ -67,12 +85,13 @@ function ImportScreen({
   const [archiveUploadProgress, setArchiveUploadProgress] = useState(null);
   const [clearingData, setClearingData] = useState(false);
   const [operationStatus, setOperationStatus] = useState({
-    currentOperation: 'idle',
+    currentOperation: "idle",
     isBusy: false,
     startedAt: null,
-    details: null
+    details: null,
   });
-  const [selectedExportCollectionIds, setSelectedExportCollectionIds] = useState([]);
+  const [selectedExportCollectionIds, setSelectedExportCollectionIds] =
+    useState([]);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
   const {
@@ -85,23 +104,25 @@ function ImportScreen({
   const isTransferring = submittingCsv || submittingArchive || exportingArchive;
   const busyMessage = isBusy
     ? `This action is unavailable while ${formatOperationLabel(operationStatus.currentOperation)} is in progress.`
-    : '';
+    : "";
 
   function setCsvImportSource(nextSource, label) {
     setCsvSource(nextSource);
     setCsvSourceLabel(label);
     setCsvResult(null);
-    setError('');
+    setError("");
   }
 
   function setArchiveImportSource(nextSource) {
     setArchiveSource(nextSource);
     setArchiveResult(null);
-    setError('');
+    setError("");
   }
 
   useEffect(() => {
-    const validIds = collections.map((collection) => Number(collection.id)).filter((id) => Number.isInteger(id) && id > 0);
+    const validIds = collections
+      .map((collection) => Number(collection.id))
+      .filter((id) => Number.isInteger(id) && id > 0);
 
     setSelectedExportCollectionIds((current) => {
       const currentSet = new Set(current);
@@ -111,7 +132,10 @@ function ImportScreen({
         return validIds;
       }
 
-      if (retained.length === current.length && retained.every((id, index) => id === current[index])) {
+      if (
+        retained.length === current.length &&
+        retained.every((id, index) => id === current[index])
+      ) {
         return current;
       }
 
@@ -129,7 +153,8 @@ function ImportScreen({
     }
 
     const nextCanScrollUp = element.scrollTop > 1;
-    const remaining = element.scrollHeight - element.clientHeight - element.scrollTop;
+    const remaining =
+      element.scrollHeight - element.clientHeight - element.scrollTop;
     const nextCanScrollDown = remaining > 1;
 
     setCanScrollUp(nextCanScrollUp);
@@ -140,11 +165,11 @@ function ImportScreen({
     updatePanelScrollFades();
 
     const timer = window.setTimeout(updatePanelScrollFades, 0);
-    window.addEventListener('resize', updatePanelScrollFades);
+    window.addEventListener("resize", updatePanelScrollFades);
 
     return () => {
       window.clearTimeout(timer);
-      window.removeEventListener('resize', updatePanelScrollFades);
+      window.removeEventListener("resize", updatePanelScrollFades);
     };
   }, [
     archiveResult,
@@ -184,7 +209,7 @@ function ImportScreen({
     event.preventDefault();
 
     if (!csvSource) {
-      setError('Choose, drop, or paste a CSV before importing.');
+      setError("Choose, drop, or paste a CSV before importing.");
       return;
     }
 
@@ -195,12 +220,16 @@ function ImportScreen({
 
     setSubmittingCsv(true);
     setCsvUploadProgress(null);
-    setError('');
+    setError("");
     setCsvResult(null);
     setArchiveResult(null);
 
     try {
-      const payload = await importCsv(csvSource, activeCollectionId, setCsvUploadProgress);
+      const payload = await importCsv(
+        csvSource,
+        activeCollectionId,
+        setCsvUploadProgress,
+      );
       setCsvResult(payload);
     } catch (importError) {
       setError(importError.message);
@@ -214,7 +243,7 @@ function ImportScreen({
     event.preventDefault();
 
     if (!archiveSource) {
-      setError('Choose a .zip archive before importing.');
+      setError("Choose a .zip archive before importing.");
       return;
     }
 
@@ -225,9 +254,9 @@ function ImportScreen({
 
     const confirmed = await requestConfirmation({
       title:
-        'Importing an archive will replace collections that exist in the archive (by name).',
-      body: 'Collections missing from the archive stay untouched. Continue?',
-      confirmLabel: 'Import',
+        "Importing an archive will replace collections that exist in the archive (by name).",
+      body: "Collections missing from the archive stay untouched. Continue?",
+      confirmLabel: "Import",
     });
 
     if (!confirmed) {
@@ -236,7 +265,7 @@ function ImportScreen({
 
     setSubmittingArchive(true);
     setArchiveUploadProgress(null);
-    setError('');
+    setError("");
     setCsvResult(null);
     setArchiveResult(null);
 
@@ -259,12 +288,15 @@ function ImportScreen({
     }
 
     setExportingArchive(true);
-    setError('');
+    setError("");
     setArchiveResult(null);
 
     try {
       const payload = await downloadArchive(selectedExportCollectionIds);
-      setArchiveResult({ exported: payload.filename, selectedCount: selectedExportCollectionIds.length });
+      setArchiveResult({
+        exported: payload.filename,
+        selectedCount: selectedExportCollectionIds.length,
+      });
     } catch (exportError) {
       setError(exportError.message);
     } finally {
@@ -279,9 +311,9 @@ function ImportScreen({
     }
 
     const confirmed = await requestConfirmation({
-      title: 'Delete all current app data and pictures?',
-      body: 'This cannot be undone.',
-      confirmLabel: 'Delete data',
+      title: "Delete all current app data and pictures?",
+      body: "This cannot be undone.",
+      confirmLabel: "Delete data",
     });
 
     if (!confirmed) {
@@ -289,7 +321,7 @@ function ImportScreen({
     }
 
     setClearingData(true);
-    setError('');
+    setError("");
     setCsvResult(null);
     setArchiveResult(null);
 
@@ -303,13 +335,14 @@ function ImportScreen({
     }
   }
 
-  const scrollFadeClass = canScrollUp && canScrollDown
-    ? ' import-panel-scroll--fade-both'
-    : canScrollUp
-      ? ' import-panel-scroll--fade-top'
-      : canScrollDown
-        ? ' import-panel-scroll--fade-bottom'
-        : '';
+  const scrollFadeClass =
+    canScrollUp && canScrollDown
+      ? " import-panel-scroll--fade-both"
+      : canScrollUp
+        ? " import-panel-scroll--fade-top"
+        : canScrollDown
+          ? " import-panel-scroll--fade-bottom"
+          : "";
 
   return (
     <section className="screen-stack narrow-stack import-screen">
@@ -321,373 +354,496 @@ function ImportScreen({
           ref={panelScrollRef}
         >
           <div className="panel-heading">
-          <div>
-            <p className="eyebrow">Import and Export</p>
-            <h1>Move your collection data</h1>
-            <p>
-              CSV import updates notes from spreadsheet rows. Archive export can include selected
-              collections only, and archive import replaces local collections that exist in the archive
-              (matched by name) while leaving other collections untouched.
-            </p>
-          </div>
-        </div>
-
-        {loadingCollections ? <p>Loading collections...</p> : null}
-        {collectionsError ? <p className="error-text">{collectionsError}</p> : null}
-        {isBusy ? <p className="warning-text">{busyMessage}</p> : null}
-        <p className="warning-text">
-          Archive import is destructive for collections present in the archive: local data for those collections is replaced.
-        </p>
-
-        <div className="import-sections">
-          <form className="form-grid import-card" onSubmit={handleCsvSubmit}>
-            <div className="full-span">
-              <p className="eyebrow">CSV Import</p>
-              <h2>Upload CSV into active collection</h2>
+            <div>
+              <p className="eyebrow">Import and Export</p>
+              <h1>Manage your collection data</h1>
               <p>
-                Existing notes in <strong>{activeCollection?.name ?? 'selected collection'}</strong> are updated in place,
-                notes missing from the CSV are deleted, tags are replaced from the CSV, and rows after
-                `Ignore after this line` are skipped.
+                CSV import updates notes from spreadsheet rows. Archive export
+                can include selected collections only, and archive import
+                replaces local collections that exist in the archive (matched by
+                name) while leaving other collections untouched.
               </p>
             </div>
+          </div>
 
-            <div className="inline-select-group full-span">
-              <span>Import into</span>
-              <select
-                aria-label="Active collection"
-                className="select-input"
-                disabled={loadingCollections || isBusy || !collections.length}
-                onChange={(event) => onSelectCollection(Number(event.target.value))}
-                value={activeCollectionId ?? ''}
-              >
-                {collections.map((collection) => (
-                  <option key={collection.id} value={collection.id}>
-                    {Number(collection.is_default) === 1 ? '★ ' : ''}{collection.name}
-                  </option>
-                ))}
-              </select>
-            </div>
+          {loadingCollections ? <p>Loading collections...</p> : null}
+          {collectionsError ? (
+            <p className="error-text">{collectionsError}</p>
+          ) : null}
+          {isBusy ? <p className="warning-text">{busyMessage}</p> : null}
+          <p className="warning-text">
+            Archive import is destructive for collections present in the
+            archive: local data for those collections is replaced.
+          </p>
 
-            <div className="field-block full-span">
+          <div className="import-sections">
+            <form className="form-grid import-card" onSubmit={handleCsvSubmit}>
+              <div className="full-span">
+                <p className="eyebrow">CSV Import</p>
+                <h2>Upload CSV into active collection</h2>
+                <p>
+                  Existing notes in{" "}
+                  <strong>
+                    {activeCollection?.name ?? "selected collection"}
+                  </strong>{" "}
+                  are updated in place, notes missing from the CSV are deleted,
+                  tags are replaced from the CSV, and rows after `Ignore after
+                  this line` are skipped.
+                </p>
+              </div>
+
+              <div className="inline-select-group full-span">
+                <span>Import into</span>
+                <select
+                  aria-label="Active collection"
+                  className="select-input"
+                  disabled={loadingCollections || isBusy || !collections.length}
+                  onChange={(event) =>
+                    onSelectCollection(Number(event.target.value))
+                  }
+                  value={activeCollectionId ?? ""}
+                >
+                  {collections.map((collection) => (
+                    <option key={collection.id} value={collection.id}>
+                      {Number(collection.is_default) === 1 ? "★ " : ""}
+                      {collection.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="field-block full-span">
                 <span>CSV source</span>
-              <div
-                className={`image-dropzone import-dropzone${csvDropActive ? ' image-dropzone--active' : ''}`}
-                onClick={() => {
-                  if (!isBusy) {
-                    csvInputRef.current?.click();
-                  }
-                }}
-                onDragEnter={(event) => {
-                  event.preventDefault();
-                  setCsvDropActive(true);
-                }}
-                onDragLeave={(event) => {
-                  if (event.currentTarget.contains(event.relatedTarget)) {
-                    return;
-                  }
-
-                  setCsvDropActive(false);
-                }}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setCsvDropActive(true);
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  setCsvDropActive(false);
-
-                  if (isBusy) {
-                    return;
-                  }
-
-                  const droppedFile = getDroppedCsvFile(event);
-                  if (droppedFile) {
-                    setCsvImportSource(droppedFile, droppedFile.name);
-                    return;
-                  }
-
-                  const droppedText = getDroppedCsvText(event);
-                  if (droppedText) {
-                    setCsvImportSource(droppedText, 'Pasted CSV text');
-                  }
-                }}
-                onPaste={(event) => {
-                  if (isBusy) {
-                    return;
-                  }
-
-                  const pastedFile = getPastedCsvFile(event);
-                  if (pastedFile) {
-                    event.preventDefault();
-                    setCsvImportSource(pastedFile, pastedFile.name);
-                    return;
-                  }
-
-                  const pastedText = getPastedCsvText(event);
-                  if (pastedText) {
-                    event.preventDefault();
-                    setCsvImportSource(pastedText, 'Pasted CSV text');
-                  }
-                }}
-                onFocus={() => setCsvDropActive(true)}
-                onBlur={() => setCsvDropActive(false)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
+                <div
+                  className={`image-dropzone import-dropzone${csvDropActive ? " image-dropzone--active" : ""}`}
+                  onClick={() => {
                     if (!isBusy) {
                       csvInputRef.current?.click();
                     }
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-              >
-                <div className="import-dropzone-content">
-                  <strong>{csvSourceLabel || 'Drop CSV here or press Ctrl+V'}</strong>
-                  <p className="muted import-dropzone-help">Supports `.csv` files and pasted CSV text.</p>
+                  }}
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    setCsvDropActive(true);
+                  }}
+                  onDragLeave={(event) => {
+                    if (event.currentTarget.contains(event.relatedTarget)) {
+                      return;
+                    }
+
+                    setCsvDropActive(false);
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setCsvDropActive(true);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setCsvDropActive(false);
+
+                    if (isBusy) {
+                      return;
+                    }
+
+                    const droppedFile = getDroppedCsvFile(event);
+                    if (droppedFile) {
+                      setCsvImportSource(droppedFile, droppedFile.name);
+                      return;
+                    }
+
+                    const droppedText = getDroppedCsvText(event);
+                    if (droppedText) {
+                      setCsvImportSource(droppedText, "Pasted CSV text");
+                    }
+                  }}
+                  onPaste={(event) => {
+                    if (isBusy) {
+                      return;
+                    }
+
+                    const pastedFile = getPastedCsvFile(event);
+                    if (pastedFile) {
+                      event.preventDefault();
+                      setCsvImportSource(pastedFile, pastedFile.name);
+                      return;
+                    }
+
+                    const pastedText = getPastedCsvText(event);
+                    if (pastedText) {
+                      event.preventDefault();
+                      setCsvImportSource(pastedText, "Pasted CSV text");
+                    }
+                  }}
+                  onFocus={() => setCsvDropActive(true)}
+                  onBlur={() => setCsvDropActive(false)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      if (!isBusy) {
+                        csvInputRef.current?.click();
+                      }
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="import-dropzone-content">
+                    <strong>
+                      {csvSourceLabel || "Drop CSV here or press Ctrl+V"}
+                    </strong>
+                    <p className="muted import-dropzone-help">
+                      Supports `.csv` files and pasted CSV text.
+                    </p>
+                  </div>
+                </div>
+                <div className="import-actions">
+                  <button
+                    className="button"
+                    disabled={isBusy}
+                    onClick={() => csvInputRef.current?.click()}
+                    type="button"
+                  >
+                    Choose file
+                  </button>
+                  <button
+                    className="button"
+                    disabled={!csvSource || isBusy}
+                    onClick={() => {
+                      setCsvSource(null);
+                      setCsvSourceLabel("");
+                      if (csvInputRef.current) {
+                        csvInputRef.current.value = "";
+                      }
+                    }}
+                    type="button"
+                  >
+                    Clear
+                  </button>
+                  <input
+                    accept=".csv,text/csv"
+                    className="image-slot-input"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      if (file) {
+                        setCsvImportSource(file, file.name);
+                      }
+                    }}
+                    ref={csvInputRef}
+                    type="file"
+                  />
                 </div>
               </div>
-              <div className="import-actions">
-                <button className="button" disabled={isBusy} onClick={() => csvInputRef.current?.click()} type="button">
-                  Choose file
-                </button>
-                <button
-                  className="button"
-                  disabled={!csvSource || isBusy}
-                  onClick={() => {
-                    setCsvSource(null);
-                    setCsvSourceLabel('');
-                    if (csvInputRef.current) {
-                      csvInputRef.current.value = '';
-                    }
-                  }}
-                  type="button"
-                >
-                  Clear
-                </button>
-                <input
-                  accept=".csv,text/csv"
-                  className="image-slot-input"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0] ?? null;
-                    if (file) {
-                      setCsvImportSource(file, file.name);
-                    }
-                  }}
-                  ref={csvInputRef}
-                  type="file"
-                />
+
+              <button
+                className="button button-primary import-submit"
+                disabled={submittingCsv || isBusy || !activeCollectionId}
+                type="submit"
+                aria-busy={submittingCsv}
+              >
+                {submittingCsv ? (
+                  <>
+                    <span
+                      className="scrape-spinner button-spinner"
+                      aria-hidden="true"
+                    />
+                    <span>Importing...</span>
+                  </>
+                ) : (
+                  "Import CSV"
+                )}
+              </button>
+            </form>
+
+            <form
+              className="form-grid import-card"
+              onSubmit={handleArchiveImport}
+            >
+              <div className="full-span">
+                <p className="eyebrow">Archive Import and Export</p>
+                <h2>Download or import archive data</h2>
+                <p>
+                  Export downloads a `.zip` with `banknotes.db` and only images
+                  referenced by selected collections. Import always reads all
+                  collections from the archive and replaces matching collection
+                  names in the current data.
+                </p>
+                <p className="warning-text import-card-warning">
+                  You can also delete the current app data and start from an
+                  empty collection.
+                </p>
               </div>
-            </div>
 
-            <button className="button button-primary import-submit" disabled={submittingCsv || isBusy || !activeCollectionId} type="submit" aria-busy={submittingCsv}>
-              {submittingCsv ? (
-                <>
-                  <span className="scrape-spinner button-spinner" aria-hidden="true" />
-                  <span>Importing...</span>
-                </>
-              ) : 'Import CSV'}
-            </button>
-          </form>
-
-          <form className="form-grid import-card" onSubmit={handleArchiveImport}>
-            <div className="full-span">
-              <p className="eyebrow">Archive Import and Export</p>
-              <h2>Download or import archive data</h2>
-              <p>
-                Export downloads a `.zip` with `banknotes.db` and only images referenced by selected
-                collections. Import always reads all collections from the archive and replaces matching
-                collection names in the current data.
-              </p>
-              <p className="warning-text import-card-warning">
-                You can also delete the current app data and start from an empty collection.
-              </p>
-            </div>
-
-            <div className="field-block full-span">
-              <span>Archive source</span>
-              <div
-                className={`image-dropzone import-dropzone${archiveDropActive ? ' image-dropzone--active' : ''}`}
-                onClick={() => {
-                  if (!isBusy) {
-                    archiveInputRef.current?.click();
-                  }
-                }}
-                onDragEnter={(event) => {
-                  event.preventDefault();
-                  setArchiveDropActive(true);
-                }}
-                onDragLeave={(event) => {
-                  if (event.currentTarget.contains(event.relatedTarget)) {
-                    return;
-                  }
-
-                  setArchiveDropActive(false);
-                }}
-                onDragOver={(event) => {
-                  event.preventDefault();
-                  setArchiveDropActive(true);
-                }}
-                onDrop={(event) => {
-                  event.preventDefault();
-                  setArchiveDropActive(false);
-
-                  if (isBusy) {
-                    return;
-                  }
-
-                  const droppedFile = getDroppedArchiveFile(event);
-                  if (droppedFile) {
-                    setArchiveImportSource(droppedFile);
-                  }
-                }}
-                onFocus={() => setArchiveDropActive(true)}
-                onBlur={() => setArchiveDropActive(false)}
-                onKeyDown={(event) => {
-                  if (event.key === 'Enter' || event.key === ' ') {
-                    event.preventDefault();
+              <div className="field-block full-span">
+                <span>Archive source</span>
+                <div
+                  className={`image-dropzone import-dropzone${archiveDropActive ? " image-dropzone--active" : ""}`}
+                  onClick={() => {
                     if (!isBusy) {
                       archiveInputRef.current?.click();
                     }
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-              >
-                <div className="import-dropzone-content">
-                  <strong>{archiveSource?.name || 'Drop archive here or choose a file'}</strong>
-                  <p className="muted import-dropzone-help">Supports `.zip` archives exported from Note Harbor Editor.</p>
+                  }}
+                  onDragEnter={(event) => {
+                    event.preventDefault();
+                    setArchiveDropActive(true);
+                  }}
+                  onDragLeave={(event) => {
+                    if (event.currentTarget.contains(event.relatedTarget)) {
+                      return;
+                    }
+
+                    setArchiveDropActive(false);
+                  }}
+                  onDragOver={(event) => {
+                    event.preventDefault();
+                    setArchiveDropActive(true);
+                  }}
+                  onDrop={(event) => {
+                    event.preventDefault();
+                    setArchiveDropActive(false);
+
+                    if (isBusy) {
+                      return;
+                    }
+
+                    const droppedFile = getDroppedArchiveFile(event);
+                    if (droppedFile) {
+                      setArchiveImportSource(droppedFile);
+                    }
+                  }}
+                  onFocus={() => setArchiveDropActive(true)}
+                  onBlur={() => setArchiveDropActive(false)}
+                  onKeyDown={(event) => {
+                    if (event.key === "Enter" || event.key === " ") {
+                      event.preventDefault();
+                      if (!isBusy) {
+                        archiveInputRef.current?.click();
+                      }
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                >
+                  <div className="import-dropzone-content">
+                    <strong>
+                      {archiveSource?.name ||
+                        "Drop archive here or choose a file"}
+                    </strong>
+                    <p className="muted import-dropzone-help">
+                      Supports `.zip` archives exported from Note Harbor Editor.
+                    </p>
+                  </div>
+                </div>
+                <div className="import-actions">
+                  <button
+                    className="button"
+                    disabled={isBusy}
+                    onClick={() => archiveInputRef.current?.click()}
+                    type="button"
+                  >
+                    Choose archive
+                  </button>
+                  <button
+                    className="button"
+                    disabled={!archiveSource || isBusy}
+                    onClick={() => {
+                      setArchiveImportSource(null);
+                      if (archiveInputRef.current) {
+                        archiveInputRef.current.value = "";
+                      }
+                    }}
+                    type="button"
+                  >
+                    Clear
+                  </button>
+                  <input
+                    accept=".zip,application/zip"
+                    className="image-slot-input"
+                    onChange={(event) => {
+                      const file = event.target.files?.[0] ?? null;
+                      if (isArchiveFile(file)) {
+                        setArchiveImportSource(file);
+                      }
+                    }}
+                    ref={archiveInputRef}
+                    type="file"
+                  />
                 </div>
               </div>
-              <div className="import-actions">
-                <button className="button" disabled={isBusy} onClick={() => archiveInputRef.current?.click()} type="button">
-                  Choose archive
-                </button>
+
+              {collections.length ? (
+                <div className="field-block full-span">
+                  <span>Collections to export</span>
+                  <div
+                    className="export-collection-list"
+                    role="group"
+                    aria-label="Collections to export"
+                  >
+                    {collections.map((collection) => {
+                      const collectionId = Number(collection.id);
+                      const checked =
+                        selectedExportCollectionIds.includes(collectionId);
+
+                      return (
+                        <label
+                          className="export-collection-option"
+                          key={collection.id}
+                        >
+                          <input
+                            checked={checked}
+                            disabled={isBusy || exportingArchive}
+                            onChange={(event) => {
+                              setSelectedExportCollectionIds((current) => {
+                                if (event.target.checked) {
+                                  if (current.includes(collectionId)) {
+                                    return current;
+                                  }
+                                  return [...current, collectionId];
+                                }
+
+                                return current.filter(
+                                  (id) => id !== collectionId,
+                                );
+                              });
+                            }}
+                            type="checkbox"
+                          />
+                          <span>{collection.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              <div className="import-actions full-span">
                 <button
                   className="button"
-                  disabled={!archiveSource || isBusy}
-                  onClick={() => {
-                    setArchiveImportSource(null);
-                    if (archiveInputRef.current) {
-                      archiveInputRef.current.value = '';
-                    }
-                  }}
+                  disabled={
+                    exportingArchive ||
+                    isBusy ||
+                    !selectedExportCollectionIds.length
+                  }
+                  onClick={handleArchiveExport}
                   type="button"
                 >
-                  Clear
+                  Download archive
                 </button>
-                <input
-                  accept=".zip,application/zip"
-                  className="image-slot-input"
-                  onChange={(event) => {
-                    const file = event.target.files?.[0] ?? null;
-                    if (isArchiveFile(file)) {
-                      setArchiveImportSource(file);
-                    }
-                  }}
-                  ref={archiveInputRef}
-                  type="file"
-                />
+                <button
+                  className="button button-primary"
+                  disabled={submittingArchive || isBusy || !archiveSource}
+                  type="submit"
+                >
+                  Import archive
+                </button>
+                <button
+                  className="button button-danger"
+                  disabled={clearingData || isBusy}
+                  onClick={handleClearData}
+                  type="button"
+                >
+                  {clearingData ? "Deleting data..." : "Delete current data"}
+                </button>
               </div>
-            </div>
-
-            {collections.length ? (
-              <div className="field-block full-span">
-                <span>Collections to export</span>
-                <div className="export-collection-list" role="group" aria-label="Collections to export">
-                  {collections.map((collection) => {
-                    const collectionId = Number(collection.id);
-                    const checked = selectedExportCollectionIds.includes(collectionId);
-
-                    return (
-                      <label className="export-collection-option" key={collection.id}>
-                        <input
-                          checked={checked}
-                          disabled={isBusy || exportingArchive}
-                          onChange={(event) => {
-                            setSelectedExportCollectionIds((current) => {
-                              if (event.target.checked) {
-                                if (current.includes(collectionId)) {
-                                  return current;
-                                }
-                                return [...current, collectionId];
-                              }
-
-                              return current.filter((id) => id !== collectionId);
-                            });
-                          }}
-                          type="checkbox"
-                        />
-                        <span>{collection.name}</span>
-                      </label>
-                    );
-                  })}
-                </div>
-              </div>
-            ) : null}
-
-            <div className="import-actions full-span">
-              <button className="button" disabled={exportingArchive || isBusy || !selectedExportCollectionIds.length} onClick={handleArchiveExport} type="button">
-                Download archive
-              </button>
-              <button className="button button-primary" disabled={submittingArchive || isBusy || !archiveSource} type="submit">
-                Import archive
-              </button>
-              <button className="button button-danger" disabled={clearingData || isBusy} onClick={handleClearData} type="button">
-                {clearingData ? 'Deleting data...' : 'Delete current data'}
-              </button>
-            </div>
-          </form>
-        </div>
-
-        {error ? <p className="error-text">{error}</p> : null}
-
-        {csvResult ? (
-          <div className="result-card">
-            <h2>CSV import finished</h2>
-            <p>Added: {csvResult.imported}</p>
-            <p>Updated: {csvResult.updated}</p>
-            <p>Deleted: {csvResult.deleted}</p>
-            <p>Ignored rows: {csvResult.ignored}</p>
-            <p>Rows used for ordering: {csvResult.ordered}</p>
-            <p>Total rows scanned: {csvResult.total}</p>
+            </form>
           </div>
-        ) : null}
 
-        {archiveResult?.exported ? (
-          <div className="result-card">
-            <h2>Archive export started</h2>
-            <p>Downloaded: {archiveResult.exported}</p>
-            <p>Collections included: {archiveResult.selectedCount ?? collections.length}</p>
-          </div>
-        ) : null}
+          {error ? <p className="error-text">{error}</p> : null}
+
+          {csvResult ? (
+            <div className="result-card">
+              <h2>CSV import finished</h2>
+              <p>Added: {csvResult.imported}</p>
+              <p>Updated: {csvResult.updated}</p>
+              <p>Deleted: {csvResult.deleted}</p>
+              <p>Ignored rows: {csvResult.ignored}</p>
+              <p>Rows used for ordering: {csvResult.ordered}</p>
+              <p>Total rows scanned: {csvResult.total}</p>
+            </div>
+          ) : null}
+
+          {archiveResult?.exported ? (
+            <div className="result-card">
+              <h2>Archive export started</h2>
+              <p>Downloaded: {archiveResult.exported}</p>
+              <p>
+                Collections included:{" "}
+                {archiveResult.selectedCount ?? collections.length}
+              </p>
+            </div>
+          ) : null}
         </div>
       </div>
       {isTransferring ? (
-        <div className="import-progress-overlay" role="alertdialog" aria-modal="true" aria-live="polite" aria-label={submittingCsv ? 'Importing CSV' : submittingArchive ? 'Importing archive' : 'Preparing archive export'}>
+        <div
+          className="import-progress-overlay"
+          role="alertdialog"
+          aria-modal="true"
+          aria-live="polite"
+          aria-label={
+            submittingCsv
+              ? "Importing CSV"
+              : submittingArchive
+                ? "Importing archive"
+                : "Preparing archive export"
+          }
+        >
           <div className="import-progress-card">
-            <span className="scrape-spinner import-progress-spinner" aria-hidden="true" />
+            <span
+              className="scrape-spinner import-progress-spinner"
+              aria-hidden="true"
+            />
             <p className="import-progress-title">
-              {submittingCsv ? 'Importing CSV...' : submittingArchive ? 'Importing archive...' : 'Preparing export...'}
+              {submittingCsv
+                ? "Importing CSV..."
+                : submittingArchive
+                  ? "Importing archive..."
+                  : "Preparing export..."}
             </p>
-            {submittingCsv && csvSourceLabel ? <p className="muted import-progress-detail">{csvSourceLabel}</p> : null}
-            {submittingArchive && archiveSource?.name ? <p className="muted import-progress-detail">{archiveSource.name}</p> : null}
-            {exportingArchive ? <p className="muted import-progress-detail">{selectedExportCollectionIds.length} collection(s) selected</p> : null}
-            {(submittingCsv ? csvUploadProgress : submittingArchive ? archiveUploadProgress : null)?.phase === 'uploading'
-              && Number.isInteger((submittingCsv ? csvUploadProgress : archiveUploadProgress)?.percent) ? (
+            {submittingCsv && csvSourceLabel ? (
+              <p className="muted import-progress-detail">{csvSourceLabel}</p>
+            ) : null}
+            {submittingArchive && archiveSource?.name ? (
+              <p className="muted import-progress-detail">
+                {archiveSource.name}
+              </p>
+            ) : null}
+            {exportingArchive ? (
+              <p className="muted import-progress-detail">
+                {selectedExportCollectionIds.length} collection(s) selected
+              </p>
+            ) : null}
+            {(submittingCsv
+              ? csvUploadProgress
+              : submittingArchive
+                ? archiveUploadProgress
+                : null
+            )?.phase === "uploading" &&
+            Number.isInteger(
+              (submittingCsv ? csvUploadProgress : archiveUploadProgress)
+                ?.percent,
+            ) ? (
               <div className="import-progress-meter">
                 <progress
-                  value={(submittingCsv ? csvUploadProgress : archiveUploadProgress).percent}
+                  value={
+                    (submittingCsv ? csvUploadProgress : archiveUploadProgress)
+                      .percent
+                  }
                   max="100"
                   aria-label="Upload progress"
                 />
-                <span className="muted">{(submittingCsv ? csvUploadProgress : archiveUploadProgress).percent}% uploaded</span>
+                <span className="muted">
+                  {
+                    (submittingCsv ? csvUploadProgress : archiveUploadProgress)
+                      .percent
+                  }
+                  % uploaded
+                </span>
               </div>
             ) : (
               <p className="muted import-progress-detail">
-                {((submittingCsv ? csvUploadProgress : archiveUploadProgress)?.phase === 'processing')
-                  ? 'Upload complete. Processing on server...'
-                  : 'Working...'}
+                {(submittingCsv ? csvUploadProgress : archiveUploadProgress)
+                  ?.phase === "processing"
+                  ? "Upload complete. Processing on server..."
+                  : "Working..."}
               </p>
             )}
           </div>
