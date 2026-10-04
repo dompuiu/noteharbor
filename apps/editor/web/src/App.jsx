@@ -107,6 +107,10 @@ function ShellContent() {
   }
 
   useEffect(() => {
+    // Re-arm on every effect run. StrictMode mounts, runs cleanup, then runs the
+    // effect again; without this the second check would see the ref left false
+    // by the first cleanup and never leave the "checking" state.
+    mountedRef.current = true;
     checkConnection();
 
     return () => {

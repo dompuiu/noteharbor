@@ -1,3 +1,4 @@
+import { StrictMode } from "react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
@@ -49,6 +50,22 @@ function renderAt(path) {
         <ShellContent />
       </CollectionsProvider>
     </MemoryRouter>,
+  );
+}
+
+// Mirrors main.jsx, which mounts the app inside StrictMode. StrictMode runs the
+// mount effect, its cleanup, then the effect again, which is exactly what used
+// to strand the shell in the "Connecting..." state.
+function renderAtInStrictMode(path) {
+  return render(
+    <StrictMode>
+      <MemoryRouter initialEntries={[path]}>
+        <LocationProbe />
+        <CollectionsProvider>
+          <ShellContent />
+        </CollectionsProvider>
+      </MemoryRouter>
+    </StrictMode>,
   );
 }
 
@@ -207,5 +224,12 @@ describe("Connection state", () => {
     );
 
     expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
+  });
+
+  test("leaves the connecting state under StrictMode", async () => {
+    renderAtInStrictMode(CATALOG_ROUTES.banknotes);
+
+    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
+    expect(screen.queryByText("Connecting...")).not.toBeInTheDocument();
   });
 });
