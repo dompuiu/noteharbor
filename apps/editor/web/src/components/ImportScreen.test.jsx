@@ -1,4 +1,4 @@
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -19,6 +19,11 @@ const collections = [
   { id: 2, is_default: 0, name: "Extras" },
 ];
 
+function LocationProbe() {
+  const location = useLocation();
+  return <span data-testid="location">{location.pathname}</span>;
+}
+
 function renderImportScreen(overrides = {}) {
   const props = {
     activeCollection: collections[0],
@@ -27,13 +32,13 @@ function renderImportScreen(overrides = {}) {
     collectionsError: "",
     loadingCollections: false,
     onSelectCollection: vi.fn(),
-    showBackToTable: true,
     ...overrides,
   };
 
   render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={["/catalog/import-export"]}>
       <ImportScreen {...props} />
+      <LocationProbe />
     </MemoryRouter>,
   );
 
@@ -93,5 +98,31 @@ describe("ImportScreen collection controls", () => {
     expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Set default" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+  });
+});
+
+describe("ImportScreen navigation affordances", () => {
+  test("no longer shows a Back to table link", async () => {
+    renderImportScreen();
+
+    await screen.findByLabelText("Active collection");
+
+    expect(screen.queryByRole("link", { name: /back to table/i })).toBeNull();
+  });
+
+  test("Escape stays on the import screen", async () => {
+    const user = userEvent.setup();
+    renderImportScreen();
+
+    await screen.findByLabelText("Active collection");
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "/catalog/import-export",
+    );
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.getByTestId("location")).toHaveTextContent(
+      "/catalog/import-export",
+    );
   });
 });

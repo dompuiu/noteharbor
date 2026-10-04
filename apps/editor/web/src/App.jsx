@@ -76,7 +76,6 @@ function ShellContent() {
                   collectionsError={collectionsError}
                   loadingCollections={loadingCollections}
                   onSelectCollection={selectCollection}
-                  showBackToTable={!shouldForceImport}
                 />
               )}
               path={CATALOG_ROUTES.importExport}

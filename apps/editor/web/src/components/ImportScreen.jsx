@@ -1,5 +1,4 @@
 import { useEffect, useRef, useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
 import { clearAppData, downloadArchive, getOperationStatus, importArchive, importCsv } from '../lib/api.js';
 import { CATALOG_ROUTES } from '../lib/routes.js';
 import { useConfirmation } from './ConfirmDialog.jsx';
@@ -49,9 +48,7 @@ function ImportScreen({
   collectionsError,
   loadingCollections,
   onSelectCollection,
-  showBackToTable = true,
 }) {
-  const navigate = useNavigate();
   const csvInputRef = useRef(null);
   const archiveInputRef = useRef(null);
   const panelScrollRef = useRef(null);
@@ -102,17 +99,6 @@ function ImportScreen({
     setArchiveResult(null);
     setError('');
   }
-
-  useEffect(() => {
-    function handleKeyDown(event) {
-      if (event.key === 'Escape' && !isTransferring && !confirmOpen) {
-        navigate(CATALOG_ROUTES.banknotes);
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [navigate, isTransferring, confirmOpen]);
 
   useEffect(() => {
     const validIds = collections.map((collection) => Number(collection.id)).filter((id) => Number.isInteger(id) && id > 0);
@@ -344,11 +330,6 @@ function ImportScreen({
               (matched by name) while leaving other collections untouched.
             </p>
           </div>
-          {showBackToTable ? (
-            <Link className="button" to={CATALOG_ROUTES.banknotes}>
-              Back to table
-            </Link>
-          ) : null}
         </div>
 
         {loadingCollections ? <p>Loading collections...</p> : null}
