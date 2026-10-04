@@ -2003,21 +2003,30 @@ button.tag {
   }
 }
 
-.slideshow-screen {
-  min-height: calc(100vh - 64px);
-  background: var(--on-dark-bg);
+/* The Note slideshow floats over the app the same way the image preview does:
+   a full-viewport scrim with the slideshow panel on top of it. The sidebar and
+   the rest of the app stay visible (and hoverable) behind the scrim instead of
+   being covered by an opaque, screen-filling panel. */
+.slideshow-screen--overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  overflow: auto;
+  padding: 16px;
+  background: rgba(0, 0, 0, 0.88);
+  /* The scrim owns the on-dark text colour so the image preview, which renders
+     as its own fixed layer inside this section, inherits it too. */
   color: var(--on-dark-text);
+}
+
+/* The panel keeps the dark surface and fills the scrim, so the slideshow uses
+   the same estate the old near-full-viewport panel did. */
+.slideshow-screen--overlay .slideshow-panel {
+  min-height: calc(100vh - 32px);
+  background: var(--on-dark-bg);
   border-radius: var(--radius-lg);
   border: 1px solid var(--on-dark-border-strong);
   padding: 24px;
-}
-
-.slideshow-screen--overlay {
-  position: fixed;
-  inset: 16px;
-  min-height: 0;
-  z-index: 100;
-  overflow: auto;
 }
 
 .edit-note-overlay {
@@ -2585,7 +2594,11 @@ button.tag {
   }
 
   .slideshow-screen--overlay {
-    inset: 10px;
+    padding: 10px;
+  }
+
+  .slideshow-screen--overlay .slideshow-panel {
+    min-height: calc(100vh - 20px);
   }
 
   .edit-note-overlay {

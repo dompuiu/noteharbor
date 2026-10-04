@@ -187,3 +187,30 @@ describe("sidebar styles", () => {
     );
   });
 });
+
+describe("slideshow overlay styles", () => {
+  // The slideshow floats over the app like the image preview: a full-viewport
+  // scrim with the slideshow panel on top, so the sidebar stays visible and
+  // hoverable behind it instead of being covered by an opaque panel.
+  test("scrims the viewport with the image-preview tint", () => {
+    const overlay = styles.match(/\.slideshow-screen--overlay\s*\{([^}]*)\}/);
+    expect(overlay).not.toBeNull();
+    expect(overlay[1]).toMatch(/position:\s*fixed/);
+    expect(overlay[1]).toMatch(/inset:\s*0/);
+    expect(overlay[1]).toMatch(/background:\s*rgba\(0,\s*0,\s*0,\s*0\.88\)/);
+    // The scrim carries the on-dark text colour so the image preview, which is
+    // a sibling of the panel, still inherits readable light text.
+    expect(overlay[1]).toMatch(/color:\s*var\(--on-dark-text\)/);
+  });
+
+  // The panel fills the scrim so the slideshow keeps the estate the old
+  // near-full-viewport panel had.
+  test("the slideshow panel fills the scrim", () => {
+    const panel = styles.match(
+      /\.slideshow-screen--overlay \.slideshow-panel\s*\{([^}]*)\}/,
+    );
+    expect(panel).not.toBeNull();
+    expect(panel[1]).toMatch(/background:\s*var\(--on-dark-bg\)/);
+    expect(panel[1]).toMatch(/min-height:\s*calc\(100vh/);
+  });
+});

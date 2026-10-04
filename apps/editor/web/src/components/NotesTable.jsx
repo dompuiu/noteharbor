@@ -3575,6 +3575,46 @@ function NotesTable({
     );
   }
 
+  // The absolute sibling of movePreview: jump straight to the Nth page of the
+  // preview sequence (front/back across every note), so the popover's counter
+  // can be typed into. `position` is 1-based, matching how the counter reads.
+  function jumpToPreview(position) {
+    if (
+      !slideshowRouteActive ||
+      !slideshowNotes.length ||
+      !currentRoute.previewKind
+    ) {
+      return;
+    }
+
+    const previewKinds = ["front", "back"].filter((kind) =>
+      validPreviewKinds.has(kind),
+    );
+    const perNote = previewKinds.length;
+
+    if (!perNote) {
+      return;
+    }
+
+    const target = Math.min(
+      Math.max(position, 1),
+      slideshowNotes.length * perNote,
+    );
+    const nextNoteIndex = Math.floor((target - 1) / perNote);
+    const nextItemIndex = (target - 1) % perNote;
+    const nextNote = slideshowNotes[nextNoteIndex];
+
+    if (!nextNote) {
+      return;
+    }
+
+    navigateToTableRoute(
+      slideshowRoute(nextNote.id, {
+        previewKind: previewKinds[nextItemIndex],
+      }),
+    );
+  }
+
   // The absolute sibling of movePreview: jump straight to the first or last
   // page of the same positional sequence, without counting steps. Returns
   // whether the preview moved, so its key handler only suppresses the key's
@@ -3629,6 +3669,7 @@ function NotesTable({
           onOpenPreview={openPreview}
           onClosePreview={closePreview}
           onMovePreview={movePreview}
+          onJumpPreview={jumpToPreview}
           onPreviewEnd={() => jumpPreview("end")}
           onPreviewStart={() => jumpPreview("start")}
           previewKind={currentRoute.previewKind}

@@ -334,6 +334,28 @@ describe("Adding from the Note slideshow", () => {
     });
   });
 
+  test("the image preview's counter jumps to a typed page", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await openSlideshowOn(user, "AAAA");
+
+    await user.keyboard("{Enter}");
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1/preview/front");
+    });
+
+    await user.click(
+      screen.getByRole("textbox", { name: "Image position" }),
+    );
+    const input = screen.getByRole("textbox", { name: "Image position" });
+    await user.type(input, "4{Enter}");
+
+    // The 4th page in a front/back-per-note sequence is the second note's back.
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/2/preview/back");
+    });
+  });
+
   test("a starts adding and e opens the note on screen", async () => {
     const user = userEvent.setup();
     renderTable();

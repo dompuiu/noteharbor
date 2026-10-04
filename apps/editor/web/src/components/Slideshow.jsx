@@ -151,9 +151,11 @@ function ImagePopover({
   alt,
   canGoNext,
   canGoPrevious,
-  counterLabel,
+  counterPosition,
+  counterTotal,
   noteLabel,
   onClose,
+  onJump,
   onNext,
   onPrevious,
   onPreviewEnd,
@@ -575,7 +577,14 @@ function ImagePopover({
             <p className="image-popover-note-label">{noteLabel}</p>
           </div>
           <div className="image-popover-actions">
-            <div className="counter-pill">{counterLabel}</div>
+            <NoteCounter
+              jumpLabel="Image position"
+              onJump={onJump}
+              position={counterPosition}
+              showArrows={false}
+              total={counterTotal}
+              variant="dark"
+            />
             <button
               aria-label="Close preview"
               className="icon-link icon-link--on-dark image-popover-close"
@@ -649,6 +658,7 @@ function Slideshow({
   onCopy,
   onEdit,
   onJump,
+  onJumpPreview,
   onClosePreview,
   onMovePreview,
   onOpenPreview,
@@ -829,9 +839,11 @@ function Slideshow({
           alt={previewItem.alt}
           canGoNext={totalPreviewCount > 1}
           canGoPrevious={totalPreviewCount > 1}
-          counterLabel={`${previewSequenceIndex} / ${totalPreviewCount}`}
+          counterPosition={previewSequenceIndex}
+          counterTotal={totalPreviewCount}
           noteLabel={`${getNoteDisplayLabel(previewNote)} - ${previewItem.label}`}
           onClose={() => onClosePreview?.(note.id)}
+          onJump={onJumpPreview}
           onNext={() => onMovePreview?.(1)}
           onPrevious={() => onMovePreview?.(-1)}
           onPreviewEnd={onPreviewEnd}
@@ -841,176 +853,178 @@ function Slideshow({
         />
       )}
 
-      <div className="slideshow-topbar">
-        <div className="slideshow-topbar-actions">
-          <NoteCounter
-            jumpLabel="Note position"
-            onJump={onJump}
-            position={currentIndex + 1}
-            showArrows={false}
-            total={notes.length}
-            variant="dark"
-          />
-          <button
-            aria-label="Copy note details"
-            className="icon-link icon-link--on-dark"
-            onClick={handleCopyNoteDetails}
-            title="Copy note details"
-            type="button"
-          >
-            <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
-              <rect
-                fill="none"
-                height="10"
-                rx="2"
-                stroke="currentColor"
-                strokeWidth="2"
-                width="10"
-                x="9"
-                y="9"
-              />
-              <rect
-                fill="none"
-                height="10"
-                rx="2"
-                stroke="currentColor"
-                strokeWidth="2"
-                width="10"
-                x="5"
-                y="5"
-              />
-            </svg>
-          </button>
-          <button
-            aria-label="Add note"
-            className="icon-link icon-link--on-dark"
-            onClick={() => onAdd?.(note.id)}
-            title="Add note before this one (a)"
-            type="button"
-          >
-            Add note
-          </button>
-          <button
-            aria-label="Edit note"
-            className="icon-link icon-link--on-dark"
-            onClick={() => onEdit?.(note.id)}
-            title="Edit note (e)"
-            type="button"
-          >
-            Edit note
-          </button>
-          <button
-            aria-label="Close slideshow"
-            className="icon-link icon-link--on-dark"
-            data-shortcut="Esc"
-            onClick={onClose}
-            title="Close slideshow"
-            type="button"
-          >
-            Close
-          </button>
-        </div>
-      </div>
-
-      <div className="slideshow-layout">
-        <button
-          aria-label="Previous note"
-          className="arrow-button"
-          onClick={() => moveSlideshow(-1)}
-          title="Previous note (←)"
-          type="button"
-        >
-          <span aria-hidden="true">&larr;</span>
-        </button>
-
-        <div className="slide-card">
-          <div className="slide-images">
-            {previewItems.map((item, itemIndex) => (
-              <button
-                key={item.kind}
-                aria-label={`Enlarge ${item.label.toLowerCase()} image`}
-                className="slide-thumb-btn"
-                onClick={() => onOpenPreview?.(note.id, item.kind)}
-                title="Click to enlarge"
-                type="button"
-              >
-                {item.thumb ? (
-                  <img alt={item.alt} src={item.thumb} />
-                ) : (
-                  <div className="slide-thumb-placeholder">
-                    No scraped image yet
-                  </div>
-                )}
-                <span className="slide-thumb-label">{item.label}</span>
-              </button>
-            ))}
+      <div className="slideshow-panel">
+        <div className="slideshow-topbar">
+          <div className="slideshow-topbar-actions">
+            <NoteCounter
+              jumpLabel="Note position"
+              onJump={onJump}
+              position={currentIndex + 1}
+              showArrows={false}
+              total={notes.length}
+              variant="dark"
+            />
+            <button
+              aria-label="Copy note details"
+              className="icon-link icon-link--on-dark"
+              onClick={handleCopyNoteDetails}
+              title="Copy note details"
+              type="button"
+            >
+              <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
+                <rect
+                  fill="none"
+                  height="10"
+                  rx="2"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  width="10"
+                  x="9"
+                  y="9"
+                />
+                <rect
+                  fill="none"
+                  height="10"
+                  rx="2"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  width="10"
+                  x="5"
+                  y="5"
+                />
+              </svg>
+            </button>
+            <button
+              aria-label="Add note"
+              className="icon-link icon-link--on-dark"
+              onClick={() => onAdd?.(note.id)}
+              title="Add note before this one (a)"
+              type="button"
+            >
+              Add note
+            </button>
+            <button
+              aria-label="Edit note"
+              className="icon-link icon-link--on-dark"
+              onClick={() => onEdit?.(note.id)}
+              title="Edit note (e)"
+              type="button"
+            >
+              Edit note
+            </button>
+            <button
+              aria-label="Close slideshow"
+              className="icon-link icon-link--on-dark"
+              data-shortcut="Esc"
+              onClick={onClose}
+              title="Close slideshow"
+              type="button"
+            >
+              Close
+            </button>
           </div>
-
-          <div className="slide-meta">
-            <div>
-              <p className="eyebrow">
-                {note.grading_company || "Collection note"}
-              </p>
-              <h1>{note.denomination}</h1>
-              <p>{note.issue_date}</p>
-            </div>
-            <div className="detail-grid">
-              <p>
-                <strong>Catalog:</strong> {note.catalog_number || "-"}
-              </p>
-              <p>
-                <strong>Grade:</strong> {note.grade || "-"}
-              </p>
-              <p>
-                <strong>Serial:</strong> {note.serial || "-"}
-              </p>
-              <p>
-                <strong>Watermark:</strong> {note.watermark || "-"}
-              </p>
-            </div>
-            {scrapedDetailEntries.length ? (
-              <div className="scraped-details-panel">
-                <p className="eyebrow">{scrapePanelTitle}</p>
-                <div className="scraped-details-grid">
-                  {scrapedDetailEntries.map(([key, value]) => (
-                    <p key={key}>
-                      <strong>{formatScrapedLabel(key)}:</strong>{" "}
-                      {key === "source_url" && isHttpUrl(value) ? (
-                        <a
-                          href={String(value)}
-                          rel="noreferrer"
-                          target="_blank"
-                        >
-                          {String(value)}
-                        </a>
-                      ) : (
-                        String(value)
-                      )}
-                    </p>
-                  ))}
-                </div>
-              </div>
-            ) : null}
-            <p>{note.notes || "No extra notes."}</p>
-            <div className="tag-list">
-              {note.tags.map((tag) => (
-                <span className="tag" key={tag.id || tag.name}>
-                  {tag.name}
-                </span>
+        </div>
+  
+        <div className="slideshow-layout">
+          <button
+            aria-label="Previous note"
+            className="arrow-button"
+            onClick={() => moveSlideshow(-1)}
+            title="Previous note (←)"
+            type="button"
+          >
+            <span aria-hidden="true">&larr;</span>
+          </button>
+  
+          <div className="slide-card">
+            <div className="slide-images">
+              {previewItems.map((item, itemIndex) => (
+                <button
+                  key={item.kind}
+                  aria-label={`Enlarge ${item.label.toLowerCase()} image`}
+                  className="slide-thumb-btn"
+                  onClick={() => onOpenPreview?.(note.id, item.kind)}
+                  title="Click to enlarge"
+                  type="button"
+                >
+                  {item.thumb ? (
+                    <img alt={item.alt} src={item.thumb} />
+                  ) : (
+                    <div className="slide-thumb-placeholder">
+                      No scraped image yet
+                    </div>
+                  )}
+                  <span className="slide-thumb-label">{item.label}</span>
+                </button>
               ))}
             </div>
+  
+            <div className="slide-meta">
+              <div>
+                <p className="eyebrow">
+                  {note.grading_company || "Collection note"}
+                </p>
+                <h1>{note.denomination}</h1>
+                <p>{note.issue_date}</p>
+              </div>
+              <div className="detail-grid">
+                <p>
+                  <strong>Catalog:</strong> {note.catalog_number || "-"}
+                </p>
+                <p>
+                  <strong>Grade:</strong> {note.grade || "-"}
+                </p>
+                <p>
+                  <strong>Serial:</strong> {note.serial || "-"}
+                </p>
+                <p>
+                  <strong>Watermark:</strong> {note.watermark || "-"}
+                </p>
+              </div>
+              {scrapedDetailEntries.length ? (
+                <div className="scraped-details-panel">
+                  <p className="eyebrow">{scrapePanelTitle}</p>
+                  <div className="scraped-details-grid">
+                    {scrapedDetailEntries.map(([key, value]) => (
+                      <p key={key}>
+                        <strong>{formatScrapedLabel(key)}:</strong>{" "}
+                        {key === "source_url" && isHttpUrl(value) ? (
+                          <a
+                            href={String(value)}
+                            rel="noreferrer"
+                            target="_blank"
+                          >
+                            {String(value)}
+                          </a>
+                        ) : (
+                          String(value)
+                        )}
+                      </p>
+                    ))}
+                  </div>
+                </div>
+              ) : null}
+              <p>{note.notes || "No extra notes."}</p>
+              <div className="tag-list">
+                {note.tags.map((tag) => (
+                  <span className="tag" key={tag.id || tag.name}>
+                    {tag.name}
+                  </span>
+                ))}
+              </div>
+            </div>
           </div>
+  
+          <button
+            aria-label="Next note"
+            className="arrow-button"
+            onClick={() => moveSlideshow(1)}
+            title="Next note (→)"
+            type="button"
+          >
+            <span aria-hidden="true">&rarr;</span>
+          </button>
         </div>
-
-        <button
-          aria-label="Next note"
-          className="arrow-button"
-          onClick={() => moveSlideshow(1)}
-          title="Next note (→)"
-          type="button"
-        >
-          <span aria-hidden="true">&rarr;</span>
-        </button>
       </div>
     </section>
   );
