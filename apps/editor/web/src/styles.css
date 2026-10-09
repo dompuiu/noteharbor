@@ -927,9 +927,9 @@ input[type="radio"] {
 
 /* The `+` tiles (edit mode only). The 2px dashed border and the
    accent label follow the authoring prototype's plus-tile; the tokens keep
-   the app's warm palette. Every tile fills its grid cell so `+ Add notes` and
-   `+ New grouping` share one row height instead of one towering over the
-   other. */
+   the app's warm palette. The two `+` actions share one grid cell stacked
+   vertically (`.showcase-add-tiles`), so `+ Add notes` sits directly above
+   `+ Add grouping` instead of beside it. */
 .showcase-tile {
   display: flex;
   align-items: center;
@@ -1127,12 +1127,36 @@ input[type="radio"] {
   white-space: nowrap;
 }
 
-/* The edit-mode contents of one node nest in the parent grid. Both `+` tiles
-   share one height and fill their grid cell, so neither towers over the
-   other. */
+/* The edit-mode contents of one node nest in the parent grid. The stacked
+   `+` actions fill one grid cell, so the pair reads as a single note-sized
+   tile whether it sits beside notes or wraps onto its own row. The minimum
+   tracks the note editor height (half the column width for the 2/1 image
+   plus the card padding, caption, and action row) via the grid's own
+   `--showcase-card-min`, so the cell keeps note height on every photo size. */
 .showcase-node-items {
   width: 100%;
   margin-top: 4px;
+}
+
+.showcase-add-tiles {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  height: 100%;
+  min-height: calc(var(--showcase-card-min, 200px) / 2 + 154px);
+}
+
+.showcase-add-tiles > .showcase-tile {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 72px;
+}
+
+.showcase-add-tiles > .showcase-category-combobox {
+  flex: 1 1 0;
+  height: auto;
+  min-height: 72px;
 }
 
 .showcase-tile--note {

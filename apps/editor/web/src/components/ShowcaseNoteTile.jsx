@@ -1,5 +1,6 @@
-// The edit-only `+ notes` tile. It is note-sized so it sits in the node's grid
-// right after the notes; clicking it opens the picker for this node.
+// The edit-only `+ notes` tile. It stacks with the grouping tile inside
+// `.showcase-add-tiles`, so it fills half of one note-sized grid cell;
+// clicking it opens the picker for this node.
 function ShowcaseNoteTile({ onClick }) {
   return (
     <button

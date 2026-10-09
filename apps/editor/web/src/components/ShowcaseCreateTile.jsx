@@ -4,10 +4,13 @@ import { useState } from "react";
 // Category tile also offers the shared label pool as combobox suggestions while
 // a Grouping tile takes a name only. `noun` drives the rendered labels
 // ("Create a category" / "create a category") and the error wording.
+// `closedLabel` overrides both the closed button's accessible name and its
+// visible text (the grouping tile reads `+ Add grouping`).
 function ShowcaseCreateTile({
   noun,
   inputLabel,
   addLabel,
+  closedLabel = null,
   suggestions = [],
   combobox = false,
   centered = false,
@@ -21,7 +24,7 @@ function ShowcaseCreateTile({
   if (!open) {
     return (
       <button
-        aria-label={`Create a ${noun}`}
+        aria-label={closedLabel ?? `Create a ${noun}`}
         className={`showcase-tile showcase-tile--create${centered ? " showcase-tile--centered" : ""}`}
         onClick={() => setOpen(true)}
         type="button"
@@ -29,7 +32,7 @@ function ShowcaseCreateTile({
         <span aria-hidden="true" className="showcase-tile-plus">
           +
         </span>
-        {`New ${noun}`}
+        {closedLabel ?? `New ${noun}`}
       </button>
     );
   }

@@ -1,10 +1,9 @@
 import { ShowcaseGrid } from "./ShowcaseGrid.jsx";
+import { ShowcaseAddTiles } from "./ShowcaseAddTiles.jsx";
 import { ShowcaseGroupingCard } from "./ShowcaseGroupingCard.jsx";
 import { ShowcaseGroupingEditor } from "./ShowcaseGroupingEditor.jsx";
-import { ShowcaseGroupingTile } from "./ShowcaseGroupingTile.jsx";
 import { ShowcaseNoteCard } from "./ShowcaseNoteCard.jsx";
 import { ShowcaseNoteEditor } from "./ShowcaseNoteEditor.jsx";
-import { ShowcaseNoteTile } from "./ShowcaseNoteTile.jsx";
 import { ShowcaseNodeEditor } from "./ShowcaseNodeEditor.jsx";
 import { ShowcaseReorderableCell } from "./ShowcaseReorderableCell.jsx";
 import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
@@ -109,12 +108,10 @@ function ShowcaseCategorySection({
           })}
 
           {editMode ? (
-            <>
-              <ShowcaseNoteTile onClick={() => onAddNotes(category)} />
-              <ShowcaseGroupingTile
-                onAdd={(name) => onAddGrouping(category.id, name)}
-              />
-            </>
+            <ShowcaseAddTiles
+              onAddGrouping={(name) => onAddGrouping(category.id, name)}
+              onAddNotes={() => onAddNotes(category)}
+            />
           ) : null}
         </ShowcaseGrid>
       ) : (
@@ -122,9 +119,9 @@ function ShowcaseCategorySection({
           <p className="showcase-empty-text muted">No notes here yet.</p>
           {editMode ? (
             <ShowcaseGrid size={photoSize}>
-              <ShowcaseNoteTile onClick={() => onAddNotes(category)} />
-              <ShowcaseGroupingTile
-                onAdd={(name) => onAddGrouping(category.id, name)}
+              <ShowcaseAddTiles
+                onAddGrouping={(name) => onAddGrouping(category.id, name)}
+                onAddNotes={() => onAddNotes(category)}
               />
             </ShowcaseGrid>
           ) : null}

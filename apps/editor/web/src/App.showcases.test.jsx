@@ -196,7 +196,7 @@ describe("Showcase modes", () => {
       screen.getByRole("button", { name: "Add notes" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Create a grouping" }),
+      screen.getByRole("button", { name: "Add grouping" }),
     ).toBeInTheDocument();
   });
 

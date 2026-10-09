@@ -31,15 +31,14 @@ import { useCollections } from "../lib/collections.jsx";
 import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
 import { ShowcaseCategorySection } from "./ShowcaseCategorySection.jsx";
 import { ShowcaseCategoryTile } from "./ShowcaseCategoryTile.jsx";
+import { ShowcaseAddTiles } from "./ShowcaseAddTiles.jsx";
 import { ShowcaseBreadcrumb } from "./ShowcaseBreadcrumb.jsx";
 import { ShowcaseGrid } from "./ShowcaseGrid.jsx";
 import { ShowcaseGroupingCard } from "./ShowcaseGroupingCard.jsx";
 import { ShowcaseGroupingEditor } from "./ShowcaseGroupingEditor.jsx";
-import { ShowcaseGroupingTile } from "./ShowcaseGroupingTile.jsx";
 import { ShowcaseNoteCard } from "./ShowcaseNoteCard.jsx";
 import { ShowcaseNoteEditor } from "./ShowcaseNoteEditor.jsx";
 import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
-import { ShowcaseNoteTile } from "./ShowcaseNoteTile.jsx";
 import { ShowcasePhotoSizeControl } from "./ShowcasePhotoSizeControl.jsx";
 import { ShowcaseReorderableCell } from "./ShowcaseReorderableCell.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
@@ -784,7 +783,7 @@ function ShowcaseScreen({ mode }) {
 
         if (event.key === "g") {
           sectionRef.current
-            ?.querySelector('[aria-label="Create a grouping"]')
+            ?.querySelector('[aria-label="Add grouping"]')
             ?.click();
           return;
         }
@@ -1152,12 +1151,10 @@ function ShowcaseScreen({ mode }) {
                 })}
 
                 {editMode && displayNode ? (
-                  <>
-                    <ShowcaseNoteTile
-                      onClick={() => handleOpenNotePicker(displayNode)}
-                    />
-                    <ShowcaseGroupingTile onAdd={handleAddGrouping} />
-                  </>
+                  <ShowcaseAddTiles
+                    onAddGrouping={handleAddGrouping}
+                    onAddNotes={() => handleOpenNotePicker(displayNode)}
+                  />
                 ) : null}
               </ShowcaseGrid>
             )}

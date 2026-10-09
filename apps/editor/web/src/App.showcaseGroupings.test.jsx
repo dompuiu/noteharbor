@@ -326,7 +326,7 @@ describe("editing groupings on the canvas", () => {
     await screen.findByRole("button", { name: "Open grouping Sub" });
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Create a grouping" }),
+      screen.getByRole("button", { name: "Add grouping" }),
     );
     await userEvent.type(screen.getByLabelText("Grouping name"), "New group");
     await userEvent.click(screen.getByRole("button", { name: "Add grouping" }));
