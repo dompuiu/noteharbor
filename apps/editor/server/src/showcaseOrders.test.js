@@ -194,6 +194,34 @@ test('PUT /api/nodes/order rejects an unknown showcase or parent', async () => {
   assert.match(unknownParent.body.error, /parent/i);
 });
 
+test('PUT /api/nodes/order accepts only the canonical request keys', async () => {
+  const showcase = await createShowcase('Canonical keys');
+  const first = await placeCategory(showcase.id, 'Canonical A');
+  const second = await placeCategory(showcase.id, 'Canonical B');
+
+  // `parent_id` / `ids` are not the contract: with only the aliases present the
+  // request has no child list and is rejected.
+  const aliased = await api('/api/nodes/order', {
+    method: 'PUT',
+    body: JSON.stringify({
+      showcase_id: showcase.id,
+      parent_id: null,
+      ids: [second.id, first.id]
+    })
+  });
+  assert.equal(aliased.response.status, 400);
+
+  const canonical = await api('/api/nodes/order', {
+    method: 'PUT',
+    body: JSON.stringify({
+      showcase_id: showcase.id,
+      parent_node_id: null,
+      node_ids: [second.id, first.id]
+    })
+  });
+  assert.equal(canonical.response.status, 200);
+});
+
 // Database seam --------------------------------------------------------------
 
 test('reorderShowcaseNodes persists positions across a database reopen', () => {

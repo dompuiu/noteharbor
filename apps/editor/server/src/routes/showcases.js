@@ -178,14 +178,11 @@ nodesRouter.put('/order', (request, response) => {
     return;
   }
 
-  // Null/omitted parent means the top level. Accept `parent_id` too so the
-  // route matches the add-node descriptor's key.
-  const rawParent = request.body?.parent_node_id ?? request.body?.parent_id ?? null;
+  // Null/omitted parent means the top level.
+  const rawParent = request.body?.parent_node_id ?? null;
   const nodeIds = Array.isArray(request.body?.node_ids)
     ? request.body.node_ids
-    : Array.isArray(request.body?.ids)
-      ? request.body.ids
-      : null;
+    : null;
 
   if (!nodeIds) {
     response
