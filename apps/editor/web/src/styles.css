@@ -775,6 +775,69 @@ input[type="radio"] {
   gap: 8px;
 }
 
+/* Edit mode wraps each draggable card in a reorder cell: the grip handle is the
+   drag source and the cell is the drop target. The hovered edge shows the line
+   the drop will land on; the dragged cell dims. */
+.showcase-reorder-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.showcase-reorder-handle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: grab;
+}
+
+.showcase-reorder-handle:hover,
+.showcase-reorder-handle:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.showcase-reorder-handle:active {
+  cursor: grabbing;
+}
+
+.showcase-reorder-grip {
+  line-height: 1;
+}
+
+.showcase-reorder-cell--dragging {
+  opacity: 0.5;
+}
+
+.showcase-reorder-cell--drop-before::after,
+.showcase-reorder-cell--drop-after::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+
+.showcase-reorder-cell--drop-before::after {
+  left: -8px;
+}
+
+.showcase-reorder-cell--drop-after::after {
+  right: -8px;
+}
+
 /* The `+ create a category` tile and its combobox (edit mode only). */
 .showcase-tile {
   display: flex;
