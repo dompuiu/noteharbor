@@ -55,7 +55,7 @@ import {
 } from "./lib/api.js";
 import { CollectionsProvider } from "./lib/collections.jsx";
 import { ShowcasesProvider } from "./lib/showcases.jsx";
-import { PORTFOLIO_ROUTES } from "./lib/routes.js";
+import { SHOWCASE_ROUTES } from "./lib/routes.js";
 
 const SUMMER_NODE = {
   id: 10,
@@ -119,7 +119,7 @@ beforeEach(() => {
 
 describe("the showcase category canvas", () => {
   test("edit mode shows a name-only card per top-level category", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     expect(
       await screen.findByRole("button", { name: "Open category Summer" }),
@@ -130,7 +130,7 @@ describe("the showcase category canvas", () => {
   });
 
   test("view mode shows the read-only card and no add tile", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
     expect(
       await screen.findByRole("button", { name: "Open category Summer" }),
@@ -142,7 +142,7 @@ describe("the showcase category canvas", () => {
 
   test("adding a typed name creates the label and places it", async () => {
     const user = userEvent.setup();
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     await user.click(
       await screen.findByRole("button", { name: "Create a category" }),
@@ -162,7 +162,7 @@ describe("the showcase category canvas", () => {
 
   test("picking an existing label fills the field", async () => {
     const user = userEvent.setup();
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     await user.click(
       await screen.findByRole("button", { name: "Create a category" }),
@@ -174,7 +174,7 @@ describe("the showcase category canvas", () => {
 
   test("renaming a placement renames the shared label", async () => {
     const user = userEvent.setup();
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     await user.click(
       await screen.findByRole("button", { name: "Rename Summer" }),
@@ -192,7 +192,7 @@ describe("the showcase category canvas", () => {
 
   test("removing a placement drops it and keeps the add tile", async () => {
     const user = userEvent.setup();
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     await user.click(
       await screen.findByRole("button", { name: "Remove Summer" }),

@@ -22,7 +22,7 @@ import { Sidebar } from "./Sidebar.jsx";
 import {
   CATALOG_ROUTES,
   DEFAULT_DESTINATION,
-  PORTFOLIO_ROUTES,
+  SHOWCASE_ROUTES,
 } from "../lib/routes.js";
 
 // The sidebar's static destinations plus one link per loaded showcase. The
@@ -160,7 +160,7 @@ describe("Sidebar navigation groups", () => {
   });
 
   test("highlights the open showcase, in view and edit mode", async () => {
-    await renderSidebar(PORTFOLIO_ROUTES.showcase(2));
+    await renderSidebar(SHOWCASE_ROUTES.showcase(2));
 
     expect(
       screen.getByRole("link", { name: "Vienna" }),
@@ -192,7 +192,7 @@ describe("Sidebar navigation groups", () => {
     // promise; wait for the route rather than assuming it has flushed.
     await waitFor(() => {
       expect(screen.getByTestId("pathname")).toHaveTextContent(
-        PORTFOLIO_ROUTES.showcaseEdit(9),
+        SHOWCASE_ROUTES.showcaseEdit(9),
       );
     });
   });

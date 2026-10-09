@@ -47,7 +47,7 @@ import { ShellContent } from "./App.jsx";
 import { getCategories, getCollections, getHealth, getShowcases, getShowcaseTree } from "./lib/api.js";
 import { CollectionsProvider } from "./lib/collections.jsx";
 import { ShowcasesProvider } from "./lib/showcases.jsx";
-import { PORTFOLIO_ROUTES } from "./lib/routes.js";
+import { SHOWCASE_ROUTES } from "./lib/routes.js";
 
 const PHOTO_SIZE_STORAGE_KEY = "noteharbor.showcasePhotoSize";
 
@@ -87,7 +87,7 @@ beforeEach(() => {
 
 describe("the showcase photo size control", () => {
   test("offers Small, Medium, and Large with Small the default", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
     const group = await screen.findByRole("group", { name: "Photo size" });
     expect(within(group).getByRole("radio", { name: "Small" })).toBeChecked();
@@ -98,7 +98,7 @@ describe("the showcase photo size control", () => {
 
   test("resizes the grid and is remembered across a reload", async () => {
     const user = userEvent.setup();
-    const view = renderAt(PORTFOLIO_ROUTES.showcase(1));
+    const view = renderAt(SHOWCASE_ROUTES.showcase(1));
 
     await screen.findByRole("group", { name: "Photo size" });
     await user.click(photoSizeGroup().getByRole("radio", { name: "Large" }));
@@ -108,7 +108,7 @@ describe("the showcase photo size control", () => {
 
     // Simulate a reload: remount against the same browser storage.
     view.unmount();
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
     await screen.findByRole("group", { name: "Photo size" });
     expect(photoSizeGroup().getByRole("radio", { name: "Large" })).toBeChecked();
@@ -117,7 +117,7 @@ describe("the showcase photo size control", () => {
 
   test("resizes the grid in edit mode too", async () => {
     const user = userEvent.setup();
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     await screen.findByRole("group", { name: "Photo size" });
     await user.click(photoSizeGroup().getByRole("radio", { name: "Medium" }));
@@ -127,7 +127,7 @@ describe("the showcase photo size control", () => {
 
   test("an unknown remembered value falls back to Small", async () => {
     window.localStorage.setItem(PHOTO_SIZE_STORAGE_KEY, "gigantic");
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
     await screen.findByRole("group", { name: "Photo size" });
     expect(photoSizeGroup().getByRole("radio", { name: "Small" })).toBeChecked();

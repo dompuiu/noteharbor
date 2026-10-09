@@ -53,7 +53,7 @@ import {
 } from "./lib/api.js";
 import { CollectionsProvider } from "./lib/collections.jsx";
 import { ShowcasesProvider } from "./lib/showcases.jsx";
-import { PORTFOLIO_ROUTES } from "./lib/routes.js";
+import { SHOWCASE_ROUTES } from "./lib/routes.js";
 
 const NOTE_A = {
   id: 100,
@@ -199,7 +199,7 @@ beforeEach(() => {
 
 describe("showcase child reordering", () => {
   test("edit mode shows a drag handle on each note and grouping", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await openSummer();
 
     expect(reorderLabels()).toEqual([
@@ -210,7 +210,7 @@ describe("showcase child reordering", () => {
   });
 
   test("dragging a grouping past its notes interleaves them in one order", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await openSummer();
 
     const source = screen.getByRole("button", { name: "Reorder Sub" });
@@ -243,7 +243,7 @@ describe("showcase child reordering", () => {
   });
 
   test("a drag that lands a card back where it started persists nothing", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await openSummer();
 
     const source = screen.getByRole("button", { name: "Reorder Sub" });

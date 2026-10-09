@@ -56,7 +56,7 @@ import {
 } from "./lib/api.js";
 import { CollectionsProvider } from "./lib/collections.jsx";
 import { ShowcasesProvider } from "./lib/showcases.jsx";
-import { PORTFOLIO_ROUTES } from "./lib/routes.js";
+import { SHOWCASE_ROUTES } from "./lib/routes.js";
 
 const FRONT = (id) => ({
   type: "front",
@@ -198,7 +198,7 @@ async function summerCard() {
 
 describe("moving card focus", () => {
   test("the arrow keys walk the cards in grid order", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     const summer = await summerCard();
     const vienna = screen.getByRole("button", { name: "Open category Vienna" });
 
@@ -213,7 +213,7 @@ describe("moving card focus", () => {
   });
 
   test("h/j/k/l move the focus like the arrow keys", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     const summer = await summerCard();
     const vienna = screen.getByRole("button", { name: "Open category Vienna" });
 
@@ -228,7 +228,7 @@ describe("moving card focus", () => {
   });
 
   test("Home and End focus the first and last card", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     const summer = await summerCard();
     const vienna = screen.getByRole("button", { name: "Open category Vienna" });
 
@@ -244,7 +244,7 @@ describe("moving card focus", () => {
       showcase_id: 1,
       nodes: manyCategories(12),
     });
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
     const cards = await screen.findAllByRole("button", {
       name: /^Open category /,
@@ -277,7 +277,7 @@ function search() {
 
 describe("opening the focused card", () => {
   test("Enter opens a focused category card in view mode", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     const summer = await summerCard();
 
     act(() => summer.focus());
@@ -287,7 +287,7 @@ describe("opening the focused card", () => {
   });
 
   test("Enter opens an edit-mode grouping, which has no single click of its own", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await openSummer();
 
     const sub = screen.getByRole("button", { name: "Open grouping Sub" });
@@ -304,7 +304,7 @@ describe("opening the focused card", () => {
   });
 
   test("Enter and Space flip a view-mode note card instead of drilling", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
 
     const card = screen.getByRole("button", { name: "1 leu, 1917" });
@@ -323,7 +323,7 @@ describe("opening the focused card", () => {
 
 describe("Escape and focus restoration", () => {
   test("Escape clears the card focus, then goes up a level", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
 
     const sub = screen.getByRole("button", { name: "Open grouping Sub" });
@@ -339,7 +339,7 @@ describe("Escape and focus restoration", () => {
   });
 
   test("focus returns to the card you drilled from after going up", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await openSummer();
 
     const sub = screen.getByRole("button", { name: "Open grouping Sub" });
@@ -361,7 +361,7 @@ describe("Escape and focus restoration", () => {
   });
 
   test("the Up control restores focus to the card you left", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
 
     await userEvent.click(
@@ -381,7 +381,7 @@ describe("Escape and focus restoration", () => {
 
 describe("editing from the keyboard", () => {
   async function focusSub() {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await openSummer();
 
     const sub = screen.getByRole("button", { name: "Open grouping Sub" });
@@ -426,7 +426,7 @@ describe("editing from the keyboard", () => {
   });
 
   test("the single-key actions do nothing in view mode", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
 
     act(() =>
@@ -461,7 +461,7 @@ function manyCategories(count) {
 
 describe("guards", () => {
   test("the shortcuts stay out of a text field", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     const nameField = await screen.findByLabelText("Showcase name");
 
     act(() => nameField.focus());
@@ -474,7 +474,7 @@ describe("guards", () => {
   });
 
   test("an open dialog disables the card shortcuts", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await openSummer();
 
     const sub = screen.getByRole("button", { name: "Open grouping Sub" });
@@ -492,7 +492,7 @@ describe("guards", () => {
   });
 
   test("an open confirmation dialog also disables the card shortcuts", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await summerCard();
 
     await userEvent.click(
@@ -510,7 +510,7 @@ describe("guards", () => {
   });
 
   test("a Meta/Ctrl chord is left to the browser", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await openSummer();
 
     const sub = screen.getByRole("button", { name: "Open grouping Sub" });
@@ -524,7 +524,7 @@ describe("guards", () => {
   });
 
   test("the sidebar keeps its own keys", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await summerCard();
 
     const sidebar = document.getElementById("app-sidebar");
@@ -540,7 +540,7 @@ describe("guards", () => {
 describe("the note picker", () => {
   test("/ focuses the picker's filter field from another control", async () => {
     getNotes.mockResolvedValue({ notes: [NOTE_WITH_BACK] });
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await openSummer();
 
     const sub = screen.getByRole("button", { name: "Open grouping Sub" });
@@ -556,7 +556,7 @@ describe("the note picker", () => {
   });
 
   test("a slash typed in the filter field stays a slash", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await openSummer();
 
     const sub = screen.getByRole("button", { name: "Open grouping Sub" });
@@ -573,7 +573,7 @@ describe("the note picker", () => {
 
 describe("shortcut help", () => {
   test("? opens the shortcut help with the Showcase keys", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await summerCard();
 
     fireEvent.keyDown(document.body, { key: "?" });
@@ -586,7 +586,7 @@ describe("shortcut help", () => {
   });
 
   test("the cards ignore the shortcuts while the help is open", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     const summer = await summerCard();
     const vienna = screen.getByRole("button", { name: "Open category Vienna" });
 

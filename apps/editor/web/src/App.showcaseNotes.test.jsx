@@ -57,7 +57,7 @@ import {
 } from "./lib/api.js";
 import { CollectionsProvider } from "./lib/collections.jsx";
 import { ShowcasesProvider } from "./lib/showcases.jsx";
-import { PORTFOLIO_ROUTES } from "./lib/routes.js";
+import { SHOWCASE_ROUTES } from "./lib/routes.js";
 
 function note(overrides) {
   return {
@@ -115,7 +115,12 @@ function renderAt(path) {
 
 async function openPicker() {
   const user = userEvent.setup();
-  renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+  renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+  // Nothing expands inline, so the category must be opened before its notes
+  // (and the `+ notes` tile) are on the canvas.
+  await user.click(
+    await screen.findByRole("button", { name: "Open category Summer" }),
+  );
   await user.click(await screen.findByRole("button", { name: "Add notes" }));
   return { user, dialog: await screen.findByRole("dialog", { name: "Add notes" }) };
 }
@@ -208,6 +213,8 @@ describe("the note picker", () => {
     expect(
       await screen.findByRole("button", { name: "1 leu, 1917" }),
     ).toBeInTheDocument();
+    // The header total updates with the tree.
+    expect(screen.getByText("3 notes")).toBeInTheDocument();
   });
 
   test("Deselect all removes only the currently filtered picks", async () => {

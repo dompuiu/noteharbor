@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useNavigate, useParams } from "react-router-dom";
+import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   createCategory,
   createShowcaseNode,
@@ -13,9 +13,19 @@ import { isEditableElement } from "../lib/editableElement.js";
 import { usePhotoSize } from "../lib/photoSize.js";
 import {
   DEFAULT_DESTINATION,
-  PORTFOLIO_ROUTES,
+  SHOWCASE_ROUTES,
   showcaseNodeSearch,
 } from "../lib/routes.js";
+import {
+  appendChildren,
+  countNoteNodes,
+  findNodeById,
+  findNodeIdPath,
+  findNodePath,
+  removeNodeTree,
+  reorderNodeTree,
+  updateNodeTree,
+} from "../lib/showcaseTree.js";
 import { useShowcases } from "../lib/showcases.jsx";
 import { useCollections } from "../lib/collections.jsx";
 import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
@@ -27,10 +37,10 @@ import { ShowcaseGrid } from "./ShowcaseGrid.jsx";
 import { ShowcaseGroupingCard } from "./ShowcaseGroupingCard.jsx";
 import { ShowcaseGroupingEditor } from "./ShowcaseGroupingEditor.jsx";
 import { ShowcaseGroupingTile } from "./ShowcaseGroupingTile.jsx";
-import { ShowcaseNodeItems } from "./ShowcaseNodeItems.jsx";
 import { ShowcaseNoteCard } from "./ShowcaseNoteCard.jsx";
 import { ShowcaseNoteEditor } from "./ShowcaseNoteEditor.jsx";
 import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
+import { ShowcaseNoteTile } from "./ShowcaseNoteTile.jsx";
 import { ShowcasePhotoSizeControl } from "./ShowcasePhotoSizeControl.jsx";
 import { ShowcaseReorderableCell } from "./ShowcaseReorderableCell.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
@@ -40,160 +50,11 @@ import { useConfirmation } from "./ConfirmDialog.jsx";
 // read-only presentation; edit mode adds the authoring controls. Both share the
 // same shell, grid, and cards so the two never drift. Categories sit at the top
 // level; a Category or Grouping opens into its own level (nothing expands
-// inline), and each node also carries its notes and the note picker.
+// inline — ticket 09 / user story 41), and edit mode drills one level at a time
+// exactly like view mode, with the drill kept in memory.
 function upsertCategory(categories, category) {
   const others = categories.filter((entry) => entry.id !== category.id);
   return [...others, category].sort((a, b) => a.name.localeCompare(b.name));
-}
-
-// Walk the tree by the drilled node ids. A stale id (e.g. a node removed in
-// another tab) stops the walk at the last resolvable level.
-function findNodePath(nodes, ids) {
-  const path = [];
-  let level = nodes;
-
-  for (const id of ids) {
-    const node = level.find((entry) => entry.id === id);
-
-    if (!node) {
-      break;
-    }
-
-    path.push(node);
-    level = node.children ?? [];
-  }
-
-  return path;
-}
-
-// The id chain from the root to `targetId`, or [] when it is not in this tree.
-// View mode derives its drill state from the `?node=` parameter through this.
-function findNodeIdPath(nodes, targetId) {
-  for (const node of nodes) {
-    if (node.id === targetId) {
-      return [node.id];
-    }
-
-    const nested = findNodeIdPath(node.children ?? [], targetId);
-
-    if (nested.length) {
-      return [node.id, ...nested];
-    }
-  }
-
-  return [];
-}
-
-// Replace one node anywhere in the tree, keeping the same references when the
-// id is not present so React does not re-render untouched branches.
-function updateNodeTree(nodes, nodeId, update) {
-  let changed = false;
-  const next = nodes.map((node) => {
-    if (node.id === nodeId) {
-      changed = true;
-      return update(node);
-    }
-
-    if (node.children?.length) {
-      const children = updateNodeTree(node.children, nodeId, update);
-
-      if (children !== node.children) {
-        changed = true;
-        return { ...node, children };
-      }
-    }
-
-    return node;
-  });
-
-  return changed ? next : nodes;
-}
-
-function removeNodeTree(nodes, nodeId) {
-  let changed = false;
-  const next = [];
-
-  for (const node of nodes) {
-    if (node.id === nodeId) {
-      changed = true;
-      continue;
-    }
-
-    if (node.children?.length) {
-      const children = removeNodeTree(node.children, nodeId);
-
-      if (children !== node.children) {
-        changed = true;
-        next.push({ ...node, children });
-        continue;
-      }
-    }
-
-    next.push(node);
-  }
-
-  return changed ? next : nodes;
-}
-
-function findNodeById(nodes, nodeId) {
-  for (const node of nodes) {
-    if (node.id === nodeId) {
-      return node;
-    }
-
-    const found = findNodeById(node.children ?? [], nodeId);
-
-    if (found) {
-      return found;
-    }
-  }
-
-  return null;
-}
-
-// Apply a batch of just-added children under their parent, anywhere in the tree,
-// from the server's rows — no full refetch.
-function appendChildren(nodes, parentId, added) {
-  return nodes.map((node) => {
-    if (node.id === parentId) {
-      return { ...node, children: [...(node.children ?? []), ...added] };
-    }
-
-    if (node.children?.length) {
-      return { ...node, children: appendChildren(node.children, parentId, added) };
-    }
-
-    return node;
-  });
-}
-
-// Put a parent's children into the given id order, keeping any node the caller
-// omitted at the end (defensive: the server rejects a partial list anyway).
-function applyChildOrder(children, orderedIds) {
-  const byId = new Map(children.map((node) => [node.id, node]));
-
-  for (const nodeId of orderedIds) {
-    byId.delete(nodeId);
-  }
-
-  const ordered = orderedIds
-    .map((nodeId) => children.find((node) => node.id === nodeId))
-    .filter(Boolean);
-
-  return [...ordered, ...byId.values()];
-}
-
-// Apply a reorder to the local tree without refetching: the top level when the
-// parent is null, otherwise the matching parent's children.
-function reorderNodeTree(nodes, parentId, orderedIds) {
-  if (parentId == null) {
-    return applyChildOrder(nodes, orderedIds);
-  }
-
-  return updateNodeTree(nodes, parentId, (parent) => ({
-    ...parent,
-    children: applyChildOrder(parent.children ?? [], orderedIds),
-  }));
 }
 
 // The drag handle's accessible name for a note node.
@@ -383,7 +244,7 @@ function ShowcaseScreen({ mode }) {
       const { nextShowcaseId } = await deleteShowcase(showcase.id);
 
       if (nextShowcaseId != null) {
-        navigate(PORTFOLIO_ROUTES.showcaseEdit(nextShowcaseId));
+        navigate(SHOWCASE_ROUTES.showcaseEdit(nextShowcaseId));
       } else {
         navigate(DEFAULT_DESTINATION);
       }
@@ -574,6 +435,48 @@ function ShowcaseScreen({ mode }) {
   async function handleRemoveNote(noteNode) {
     await deleteNode(noteNode.id);
     setNodes((current) => removeNodeTree(current, noteNode.id));
+  }
+
+  // Set the current Grouping's manual cover to a direct-child note (user story
+  // 37). The server answers with the updated node; splice it into the tree so
+  // `cover_note` (and the card's cover) reflects the choice without a refetch.
+  async function handleSetCover(noteNode) {
+    if (!currentNode || currentNode.node_type !== "grouping") {
+      return;
+    }
+
+    const coverNoteId = noteNode.note_id ?? noteNode.note?.id ?? null;
+    const { node: updated } = await updateNode(currentNode.id, {
+      cover_note_id: coverNoteId,
+    });
+
+    setNodes((current) =>
+      updateNodeTree(current, currentNode.id, (entry) => ({
+        ...entry,
+        ...(updated ?? {}),
+        // The server's single-node row has no children; keep the local subtree.
+        children: entry.children,
+      })),
+    );
+  }
+
+  // Clearing returns the Grouping to its derived cover (ticket 09).
+  async function handleClearCover() {
+    if (!currentNode || currentNode.node_type !== "grouping") {
+      return;
+    }
+
+    const { node: updated } = await updateNode(currentNode.id, {
+      cover_note_id: null,
+    });
+
+    setNodes((current) =>
+      updateNodeTree(current, currentNode.id, (entry) => ({
+        ...entry,
+        ...(updated ?? {}),
+        children: entry.children,
+      })),
+    );
   }
 
   // --- Keyboard navigation ------------------------------------------------
@@ -794,9 +697,10 @@ function ShowcaseScreen({ mode }) {
         return;
       }
 
-      // Edit mode's single-key actions act on the focused card's cell: `a`
-      // opens its note picker, `e` its rename field, `d` its remove control. `g`
-      // is the current level's add-grouping tile, which is not inside a cell.
+      // Edit mode's single-key actions act on the focused card: `a` opens the
+      // note picker for that card's node (a Category or Grouping; a note cannot
+      // hold notes), `e` its rename field, `d` its remove control. `g` is the
+      // current level's add-grouping tile, which is not inside a cell.
       if (
         editMode &&
         (event.key === "a" ||
@@ -814,7 +718,18 @@ function ShowcaseScreen({ mode }) {
         const cell = card.closest(".showcase-cell");
 
         if (event.key === "a") {
-          cell?.querySelector(".showcase-tile--note")?.click();
+          const nodeId =
+            card.dataset?.showcaseNodeId != null
+              ? Number(card.dataset.showcaseNodeId)
+              : null;
+          const node = Number.isInteger(nodeId)
+            ? findNodeById(nodes, nodeId)
+            : null;
+
+          if (node && node.node_type !== "note") {
+            setPickerNodeId(node.id);
+          }
+
           return;
         }
 
@@ -882,6 +797,9 @@ function ShowcaseScreen({ mode }) {
   const availableCategories = categories.filter(
     (category) => !placedCategoryIds.has(category.id),
   );
+  // The header's muted total (presentation spec §1): the loaded tree's note
+  // count, or the showcase row's count until the tree arrives.
+  const noteCount = loading ? showcase?.note_count ?? 0 : countNoteNodes(nodes);
 
   return (
     <section className="screen-stack showcase-screen" ref={sectionRef}>
@@ -902,6 +820,7 @@ function ShowcaseScreen({ mode }) {
             ) : (
               <h1>{showcaseName}</h1>
             )}
+            <p className="muted showcase-note-count">{`${noteCount} notes`}</p>
           </div>
           <div className="showcase-photo-size">
             <ShowcasePhotoSizeControl
@@ -909,8 +828,20 @@ function ShowcaseScreen({ mode }) {
               value={photoSize}
             />
           </div>
-          {editMode && showcase ? (
-            <div className="panel-heading-actions">
+          <div className="panel-heading-actions">
+            {editMode ? (
+              <Link className="button" to={SHOWCASE_ROUTES.showcase(showcaseId)}>
+                View
+              </Link>
+            ) : (
+              <Link
+                className="button"
+                to={SHOWCASE_ROUTES.showcaseEdit(showcaseId)}
+              >
+                Edit
+              </Link>
+            )}
+            {editMode && showcase ? (
               <button
                 className="button button-danger"
                 disabled={deleting}
@@ -919,8 +850,8 @@ function ShowcaseScreen({ mode }) {
               >
                 Delete showcase
               </button>
-            </div>
-          ) : null}
+            ) : null}
+          </div>
         </div>
 
         {/* Politeness only: the current level is announced on every entry. */}
@@ -960,6 +891,25 @@ function ShowcaseScreen({ mode }) {
               />
             ) : null}
 
+            {editMode && currentNode?.node_type === "grouping" ? (
+              <div className="showcase-node-cover">
+                <span className="muted">
+                  {currentNode.cover_note_id != null
+                    ? "Cover set by hand."
+                    : "Cover derives from the first note."}
+                </span>
+                {currentNode.cover_note_id != null ? (
+                  <button
+                    className="button"
+                    onClick={handleClearCover}
+                    type="button"
+                  >
+                    Clear cover
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
+
             <ShowcaseGrid size={photoSize}>
               {currentChildren.map((node) => {
                 if (node.node_type === "category") {
@@ -970,13 +920,7 @@ function ShowcaseScreen({ mode }) {
                       onOpen={() => openNode(node)}
                       onRemove={handleRemoveCategory}
                       onRename={handleRenameCategory}
-                    >
-                      <ShowcaseNodeItems
-                        node={node}
-                        onAddNotes={handleOpenNotePicker}
-                        onRemoveNote={handleRemoveNote}
-                      />
-                    </ShowcaseCategoryEditor>
+                    />
                   ) : (
                     <ShowcaseCategoryCard
                       key={node.id}
@@ -1000,13 +944,7 @@ function ShowcaseScreen({ mode }) {
                         onOpen={() => openNode(node)}
                         onRemove={handleRemoveGrouping}
                         onRename={handleRenameGrouping}
-                      >
-                        <ShowcaseNodeItems
-                          node={node}
-                          onAddNotes={handleOpenNotePicker}
-                          onRemoveNote={handleRemoveNote}
-                        />
-                      </ShowcaseGroupingEditor>
+                      />
                     </ShowcaseReorderableCell>
                   ) : (
                     <ShowcaseGroupingCard
@@ -1028,6 +966,11 @@ function ShowcaseScreen({ mode }) {
                       <ShowcaseNoteEditor
                         node={node}
                         onRemove={handleRemoveNote}
+                        onSetCover={
+                          currentNode?.node_type === "grouping"
+                            ? handleSetCover
+                            : undefined
+                        }
                       />
                     </ShowcaseReorderableCell>
                   ) : (
@@ -1051,7 +994,10 @@ function ShowcaseScreen({ mode }) {
               ) : null}
 
               {editMode && currentNode ? (
-                <ShowcaseGroupingTile onAdd={handleAddGrouping} />
+                <>
+                  <ShowcaseNoteTile onClick={() => handleOpenNotePicker(currentNode)} />
+                  <ShowcaseGroupingTile onAdd={handleAddGrouping} />
+                </>
               ) : null}
             </ShowcaseGrid>
           </>

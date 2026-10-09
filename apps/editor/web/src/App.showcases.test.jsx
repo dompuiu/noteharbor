@@ -56,7 +56,7 @@ import {
 } from "./lib/api.js";
 import { CollectionsProvider } from "./lib/collections.jsx";
 import { ShowcasesProvider } from "./lib/showcases.jsx";
-import { CATALOG_ROUTES, PORTFOLIO_ROUTES } from "./lib/routes.js";
+import { CATALOG_ROUTES, SHOWCASE_ROUTES } from "./lib/routes.js";
 
 function LocationProbe() {
   const location = useLocation();
@@ -113,7 +113,7 @@ describe("Showcases sidebar section", () => {
   });
 
   test("marks the open showcase as the current page, including in edit mode", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(2));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(2));
 
     const vienna = await screen.findByRole("link", { name: "Vienna" });
     expect(vienna).toHaveAttribute("aria-current", "page");
@@ -133,7 +133,7 @@ describe("Creating a showcase", () => {
     );
 
     await waitFor(() => {
-      expect(currentPath()).toBe(PORTFOLIO_ROUTES.showcaseEdit(9));
+      expect(currentPath()).toBe(SHOWCASE_ROUTES.showcaseEdit(9));
     });
     expect(createShowcase).toHaveBeenCalled();
 
@@ -146,7 +146,7 @@ describe("Creating a showcase", () => {
 
 describe("Showcase modes", () => {
   test("the view route renders the empty-showcase message", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
     expect(
       await screen.findByText("This showcase is empty."),
@@ -154,7 +154,7 @@ describe("Showcase modes", () => {
   });
 
   test("the edit route renders the empty-showcase message and a name field", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     expect(
       await screen.findByText("This showcase is empty."),
@@ -162,6 +162,62 @@ describe("Showcase modes", () => {
     expect(
       screen.getByLabelText("Showcase name"),
     ).toBeInTheDocument();
+  });
+
+  test("the view header links to edit and the edit header links back", async () => {
+    const user = userEvent.setup();
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    await user.click(await screen.findByRole("link", { name: "Edit" }));
+    expect(currentPath()).toBe(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    await user.click(await screen.findByRole("link", { name: "View" }));
+    expect(currentPath()).toBe(SHOWCASE_ROUTES.showcase(1));
+  });
+
+  test("the header shows the total note count of the loaded tree", async () => {
+    getShowcaseTree.mockResolvedValue({
+      showcase_id: 1,
+      nodes: [
+        {
+          id: 10,
+          node_type: "category",
+          name: "Summer",
+          category_id: 1,
+          parent_node_id: null,
+          note_id: null,
+          cover_note_id: null,
+          position: 1,
+          note: null,
+          cover_note: null,
+          children: [
+            {
+              id: 40,
+              node_type: "note",
+              name: null,
+              parent_node_id: 10,
+              note_id: 100,
+              note: { id: 100, denomination: "1", issue_date: "1917" },
+              cover_note: null,
+              children: [],
+            },
+            {
+              id: 41,
+              node_type: "note",
+              name: null,
+              parent_node_id: 10,
+              note_id: 101,
+              note: { id: 101, denomination: "5", issue_date: "1920" },
+              cover_note: null,
+              children: [],
+            },
+          ],
+        },
+      ],
+    });
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    expect(await screen.findByText("2 notes")).toBeInTheDocument();
   });
 });
 
@@ -171,7 +227,7 @@ describe("Renaming a showcase", () => {
     renameShowcase.mockResolvedValue({
       showcase: { id: 1, name: "Winter", display_order: 1 },
     });
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     // The field must show the loaded showcase before it is edited.
     await screen.findByRole("link", { name: "Summer" });
@@ -194,7 +250,7 @@ describe("Renaming a showcase", () => {
     renameShowcase.mockResolvedValue({
       showcase: { id: 1, name: "Spring", display_order: 1 },
     });
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     await screen.findByRole("link", { name: "Summer" });
     const field = screen.getByLabelText("Showcase name");
@@ -212,7 +268,7 @@ describe("Deleting a showcase", () => {
   test("confirms, deletes, and opens the next showcase in order", async () => {
     const user = userEvent.setup();
     deleteShowcase.mockResolvedValue({ success: true });
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     await user.click(
       await screen.findByRole("button", { name: "Delete showcase" }),
@@ -225,7 +281,7 @@ describe("Deleting a showcase", () => {
       expect(deleteShowcase).toHaveBeenCalledWith(1);
     });
     await waitFor(() => {
-      expect(currentPath()).toBe(PORTFOLIO_ROUTES.showcaseEdit(2));
+      expect(currentPath()).toBe(SHOWCASE_ROUTES.showcaseEdit(2));
     });
   });
 
@@ -233,7 +289,7 @@ describe("Deleting a showcase", () => {
     const user = userEvent.setup();
     getShowcases.mockResolvedValue({ showcases: [{ id: 1, name: "Only" }] });
     deleteShowcase.mockResolvedValue({ success: true });
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     await user.click(
       await screen.findByRole("button", { name: "Delete showcase" }),
@@ -249,7 +305,7 @@ describe("Deleting a showcase", () => {
 
   test("cancelling the confirmation keeps the showcase", async () => {
     const user = userEvent.setup();
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     await user.click(
       await screen.findByRole("button", { name: "Delete showcase" }),
@@ -265,7 +321,7 @@ describe("Deleting a showcase", () => {
   });
 });
 
-describe("Retired Portfolio routes", () => {
+describe("Retired routes", () => {
   test("/portfolio/categories falls through to Banknotes", async () => {
     renderAt("/portfolio/categories");
 

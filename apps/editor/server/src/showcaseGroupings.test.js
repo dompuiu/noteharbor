@@ -249,6 +249,32 @@ test('PUT /api/nodes/:id sets a grouping cover and null clears it', async () => 
   assert.equal(clear.body.node.cover_note, null);
 });
 
+test('PUT /api/nodes/:id rejects a cover that is unknown or not on a grouping', async () => {
+  const showcase = await createShowcase('Cover guards');
+  const category = await placeCategory(showcase.id, 'Cover guard parent');
+  const { body: grouped } = await addGrouping(showcase.id, category.id, 'Guard group');
+  const collection = db.createCollection('Cover guard notes');
+  const note = seedNote(collection.id);
+
+  const unknownNote = await api(`/api/nodes/${grouped.node.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ cover_note_id: 999999 })
+  });
+  assert.equal(unknownNote.response.status, 400);
+  assert.match(unknownNote.body.error, /not found/i);
+
+  // The guessed note id must not have replaced the real (still unset) cover.
+  const { body: tree } = await api(`/api/showcases/${showcase.id}/tree`);
+  assert.equal(tree.nodes[0].children[0].cover_note_id, null);
+
+  const onCategory = await api(`/api/nodes/${category.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ cover_note_id: note.id })
+  });
+  assert.equal(onCategory.response.status, 400);
+  assert.match(onCategory.body.error, /grouping/i);
+});
+
 // Database seam --------------------------------------------------------------
 
 test('deleting a grouping at the database seam removes its whole subtree', () => {
