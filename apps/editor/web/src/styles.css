@@ -2588,8 +2588,11 @@ button.tag {
 }
 
 /* The panel keeps the dark surface and fills the scrim, so the slideshow uses
-   the same estate the old near-full-viewport panel did. */
+   the same estate the old near-full-viewport panel did. It holds the 1200px
+   app floor (minus the overlay's 16px side padding), so the slide grid never
+   squeezes on smaller windows: the overlay scrolls instead. */
 .slideshow-screen--overlay .slideshow-panel {
+  min-width: calc(1200px - 32px);
   min-height: calc(100vh - 32px);
   background: var(--on-dark-bg);
   border-radius: var(--radius-lg);
@@ -2605,13 +2608,19 @@ button.tag {
   place-items: start center;
   padding: 28px 24px 40px;
   background: var(--bg);
-  overflow-y: auto;
+  overflow: auto;
   overflow-anchor: none;
 }
 
+/* The frame holds its 900px width at every viewport size: smaller windows
+   scroll the overlay instead of squeezing the form. The auto inline margins
+   keep it centred with a reachable start when it overflows, unlike the
+   overlay's plain center placement, which would strand the left edge. */
 .edit-note-overlay-frame {
   width: 100%;
   max-width: 900px;
+  min-width: 900px;
+  margin-inline: auto;
   display: flex;
   justify-content: center;
   min-height: 0;
@@ -2637,6 +2646,7 @@ button.tag {
 
 .scrape-conflict-overlay-frame {
   max-width: 1120px;
+  min-width: 1120px;
 }
 
 .scrape-conflict-overlay-content {
@@ -2916,10 +2926,16 @@ button.tag {
   display: grid;
   place-items: center;
   padding: 24px;
+  overflow: auto;
 }
 
+/* The content holds its width at a 1200px viewport — min(1400px, 96vw) —
+   so smaller windows scroll the overlay instead of squeezing the stage. The
+   auto margins keep it centred with a reachable start when it overflows. */
 .image-popover-content {
   width: min(1400px, 96vw);
+  min-width: 1152px;
+  margin: auto;
   max-height: min(92vh, 960px);
   display: grid;
   gap: 18px;

@@ -226,4 +226,54 @@ describe("slideshow overlay styles", () => {
     expect(panel[1]).toMatch(/background:\s*var\(--on-dark-bg\)/);
     expect(panel[1]).toMatch(/min-height:\s*calc\(100vh/);
   });
+
+  // Fixed overlays size against the viewport, so the body's 1200px floor
+  // never reaches them. Each overlay freezes its content at its 1200px
+  // rendering and scrolls instead of reflowing on smaller windows.
+  test("the slideshow panel holds the 1200px floor", () => {
+    const panel = styles.match(
+      /\.slideshow-screen--overlay \.slideshow-panel\s*\{([^}]*)\}/,
+    );
+    expect(panel).not.toBeNull();
+    // 1200px minus the overlay's 16px side padding.
+    expect(panel[1]).toMatch(/min-width:\s*calc\(1200px - 32px\)/);
+  });
+
+  test("the edit-note overlay scrolls horizontally instead of squeezing", () => {
+    const overlay = styles.match(/\.edit-note-overlay\s*\{([^}]*)\}/);
+    expect(overlay).not.toBeNull();
+    expect(overlay[1]).toMatch(/overflow:\s*auto/);
+    expect(overlay[1]).not.toMatch(/overflow-y/);
+  });
+
+  test("the edit-note frame holds its 900px width", () => {
+    const frame = styles.match(/\.edit-note-overlay-frame\s*\{([^}]*)\}/);
+    expect(frame).not.toBeNull();
+    expect(frame[1]).toMatch(/min-width:\s*900px/);
+    // Auto inline margins keep the frame centred with a reachable start when
+    // it overflows, unlike the overlay's plain center placement.
+    expect(frame[1]).toMatch(/margin-inline:\s*auto/);
+  });
+
+  test("the scrape-conflict frame holds its 1120px width", () => {
+    const frame = styles.match(
+      /\.scrape-conflict-overlay-frame\s*\{([^}]*)\}/,
+    );
+    expect(frame).not.toBeNull();
+    expect(frame[1]).toMatch(/min-width:\s*1120px/);
+  });
+
+  test("the image popover scrolls instead of squeezing", () => {
+    const overlay = styles.match(/\.image-popover-overlay\s*\{([^}]*)\}/);
+    expect(overlay).not.toBeNull();
+    expect(overlay[1]).toMatch(/overflow:\s*auto/);
+  });
+
+  test("the image popover content holds its 1200px-viewport width", () => {
+    const content = styles.match(/\.image-popover-content\s*\{([^}]*)\}/);
+    expect(content).not.toBeNull();
+    // Its width at a 1200px viewport: min(1400px, 96vw).
+    expect(content[1]).toMatch(/min-width:\s*1152px/);
+    expect(content[1]).toMatch(/margin:\s*auto/);
+  });
 });
