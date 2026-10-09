@@ -383,9 +383,9 @@ describe("view/edit mode switching", () => {
     await waitFor(() => {
       expect(currentPath()).toBe(SHOWCASE_ROUTES.showcaseEdit(1));
     });
-    // The entry drill is adopted into memory, then dropped from the edit URL.
+    // The edit address keeps naming the drilled level.
     await waitFor(() => {
-      expect(currentSearch()).toBe("");
+      expect(currentSearch()).toBe("?node=20");
     });
     const breadcrumb = await screen.findByRole("navigation", {
       name: "Showcase breadcrumb",
@@ -414,6 +414,26 @@ describe("view/edit mode switching", () => {
     expect(
       screen.getByRole("button", { name: "10 lei, 1930" }),
     ).toBeInTheDocument();
+  });
+
+  test("a drilled edit URL restores the level on load", async () => {
+    renderAt(`${SHOWCASE_ROUTES.showcaseEdit(1)}?node=20`);
+
+    expect(
+      await screen.findByRole("button", { name: "10 lei, 1930" }),
+    ).toBeInTheDocument();
+    expect(currentSearch()).toBe("?node=20");
+  });
+
+  test("an unresolvable edit entry falls back to the root", async () => {
+    renderAt(`${SHOWCASE_ROUTES.showcaseEdit(1)}?node=999`);
+
+    expect(
+      await screen.findByRole("heading", { name: "Summer" }),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(currentSearch()).toBe("");
+    });
   });
 });
 

@@ -159,7 +159,16 @@ function renderAt(path) {
 
 function LocationProbe() {
   const location = useLocation();
-  return <output data-testid="pathname">{location.pathname}</output>;
+  return (
+    <>
+      <output data-testid="pathname">{location.pathname}</output>
+      <output data-testid="search">{location.search}</output>
+    </>
+  );
+}
+
+function currentSearch() {
+  return screen.getByTestId("search").textContent;
 }
 
 function groupingCard(name) {
@@ -283,7 +292,7 @@ describe("grouping drill navigation", () => {
     ).toBeInTheDocument();
   });
 
-  test("edit mode keeps the drill state in memory without changing the URL", async () => {
+  test("edit mode syncs the drill state to the URL without leaving the edit route", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await userEvent.dblClick(await screen.findByRole("button", { name: "Open grouping Sub" }));
 
@@ -291,6 +300,9 @@ describe("grouping drill navigation", () => {
     expect(screen.getByTestId("pathname")).toHaveTextContent(
       "/portfolio/showcases/1/edit",
     );
+    await waitFor(() => {
+      expect(currentSearch()).toBe("?node=20");
+    });
   });
 });
 

@@ -101,9 +101,8 @@ function ShowcaseScreen({ mode }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   // The drilled node ids, root first. View mode derives this from the URL
-  // below; edit mode keeps it in memory (the URL does not change during
-  // edits) but adopts the entry `?node=` once on mount, so arriving from the
-  // view mode's Edit toggle lands on the same level.
+  // below; edit mode keeps it in memory and live-syncs it back to `?node=`
+  // (see the sync effect), so both addresses name the same level.
   const [drillIds, setDrillIds] = useState([]);
   // Whether the entry `?node=` has been consumed (or found absent) already;
   // without this the mount effect would fight in-edit drill changes.
@@ -335,8 +334,9 @@ function ShowcaseScreen({ mode }) {
   }, [editMode, loading, navigate, nodeParam, nodes]);
 
   // Edit mode adopts the entry `?node=` into the in-memory drill once the tree
-  // loads, then drops it from the URL so the address stays free of drill state
-  // while editing.
+  // loads (the header Edit toggle carries it over; a drilled edit URL also
+  // restores on reload or share). The sync effect below keeps the address
+  // naming the level from then on.
   useEffect(() => {
     if (!editMode || loading || consumedEditEntryRef.current) {
       return;
@@ -353,9 +353,7 @@ function ShowcaseScreen({ mode }) {
     if (entryPath.length) {
       setDrillIds(entryPath);
     }
-
-    navigate({ search: "" }, { replace: true });
-  }, [editEntryNode, editMode, loading, navigate, nodes]);
+  }, [editEntryNode, editMode, loading, nodes]);
   // Announce each node entry through a polite live region; the root announces
   // the showcase itself.
   useEffect(() => {
@@ -839,6 +837,23 @@ function ShowcaseScreen({ mode }) {
   // when it is on the new level. A card that is no longer rendered is skipped,
   // so a drill into a node simply leaves focus unfocused.
   const drillKey = effectiveDrillIds.join("/");
+
+  // Edit mode live-syncs the in-memory drill to `?node=` so the address always
+  // names the current level: flipping the `view` / `edit` tail — by toggle or
+  // by hand — stays on the same level either way, and a drilled edit URL
+  // restores on reload or share. The sync replaces instead of pushing, so the
+  // browser Back button still leaves the screen instead of stepping the drill.
+  const editDrillSearch = showcaseNodeSearch(displayNode?.id ?? null);
+
+  useEffect(() => {
+    if (!editMode || loading) {
+      return;
+    }
+
+    if (location.search !== editDrillSearch) {
+      navigate({ search: editDrillSearch }, { replace: true });
+    }
+  }, [editDrillSearch, editMode, loading, location.search, navigate]);
 
   useEffect(() => {
     if (loading) {
