@@ -367,7 +367,24 @@ async function downloadArchive(collectionIds = null) {
   link.remove();
   window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
 
-  return { filename };
+  // A filtered export reports the showcases it could not include because they
+  // reached notes outside the selection. The header is JSON, percent-encoded
+  // by the server so a name stays header-safe.
+  const omittedHeader = response.headers.get('x-noteharbor-omitted-showcases');
+  let omittedShowcases = [];
+
+  if (omittedHeader) {
+    try {
+      const parsed = JSON.parse(decodeURIComponent(omittedHeader));
+      if (Array.isArray(parsed)) {
+        omittedShowcases = parsed.map((name) => String(name));
+      }
+    } catch {
+      omittedShowcases = [];
+    }
+  }
+
+  return { filename, omittedShowcases };
 }
 
 async function getOperationStatus() {
