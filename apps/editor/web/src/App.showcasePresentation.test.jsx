@@ -54,7 +54,7 @@ import {
 } from "./lib/api.js";
 import { CollectionsProvider } from "./lib/collections.jsx";
 import { ShowcasesProvider } from "./lib/showcases.jsx";
-import { PORTFOLIO_ROUTES } from "./lib/routes.js";
+import { SHOWCASE_ROUTES } from "./lib/routes.js";
 
 function shell() {
   return (
@@ -222,7 +222,7 @@ async function openSummer() {
 
 describe("browsing a showcase read-only", () => {
   test("lands on the Categories as name-only cards", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
     expect(
       await screen.findByRole("button", { name: "Open category Summer" }),
@@ -237,7 +237,7 @@ describe("browsing a showcase read-only", () => {
   });
 
   test("opening a Category shows its direct children in manual order", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
 
     const noteCard = screen.getByRole("button", { name: "1 leu, 1917" });
@@ -251,7 +251,7 @@ describe("browsing a showcase read-only", () => {
   });
 
   test("opening a Grouping shows its direct children", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
 
     await userEvent.click(
@@ -265,7 +265,7 @@ describe("browsing a showcase read-only", () => {
 
   test("an empty showcase shows its message", async () => {
     getShowcaseTree.mockResolvedValue({ showcase_id: 1, nodes: [] });
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
     expect(
       await screen.findByText("This showcase is empty."),
@@ -273,7 +273,7 @@ describe("browsing a showcase read-only", () => {
   });
 
   test("a node with no items shows its message", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
     await userEvent.click(
       await screen.findByRole("button", { name: "Open category Vienna" }),
@@ -285,7 +285,7 @@ describe("browsing a showcase read-only", () => {
 
 describe("view-mode URL sync", () => {
   test("the root has no node parameter and drilling adds one", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await screen.findByRole("button", { name: "Open category Summer" });
 
     expect(currentSearch()).toBe("");
@@ -295,7 +295,7 @@ describe("view-mode URL sync", () => {
   });
 
   test("Up and the breadcrumb each move up a level", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
     await userEvent.click(
       screen.getByRole("button", { name: "Open grouping Sub" }),
@@ -313,7 +313,7 @@ describe("view-mode URL sync", () => {
   });
 
   test("a deep link opens the node named in the URL", async () => {
-    renderAt(`${PORTFOLIO_ROUTES.showcase(1)}?node=20`);
+    renderAt(`${SHOWCASE_ROUTES.showcase(1)}?node=20`);
 
     expect(
       await screen.findByRole("button", { name: "10 lei, 1930" }),
@@ -321,7 +321,7 @@ describe("view-mode URL sync", () => {
   });
 
   test("each drill is a history entry so the browser Back button works", async () => {
-    window.history.replaceState(null, "", PORTFOLIO_ROUTES.showcase(1));
+    window.history.replaceState(null, "", SHOWCASE_ROUTES.showcase(1));
     render(<BrowserRouter>{shell()}</BrowserRouter>);
     await screen.findByRole("button", { name: "Open category Summer" });
 
@@ -345,7 +345,7 @@ describe("view-mode URL sync", () => {
   });
 
   test("edit mode keeps the drill state out of the URL", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await openSummer();
 
     expect(
@@ -357,7 +357,7 @@ describe("view-mode URL sync", () => {
 
 describe("entering a node", () => {
   test("announces the node name and item count in a polite live region", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     const status = await screen.findByRole("status");
     expect(status).toHaveAttribute("aria-live", "polite");
 
@@ -371,7 +371,7 @@ describe("entering a node", () => {
 
 describe("the note card in view mode", () => {
   async function openWithNote() {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
 
     return screen.getByRole("button", { name: "1 leu, 1917" });
@@ -436,7 +436,7 @@ describe("the note card in view mode", () => {
   });
 
   test("edit mode always shows the front, whatever the pointer does", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await openSummer();
 
     const card = await screen.findByRole("button", { name: "1 leu, 1917" });

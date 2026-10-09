@@ -149,7 +149,7 @@ describe("Unknown routes", () => {
   });
 });
 
-describe("Retired Portfolio destinations", () => {
+describe("Retired destinations", () => {
   test("/portfolio/categories falls through to Banknotes", async () => {
     renderAt("/portfolio/categories");
 

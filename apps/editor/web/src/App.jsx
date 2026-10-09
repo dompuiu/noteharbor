@@ -20,7 +20,7 @@ import { ShowcasesProvider } from "./lib/showcases.jsx";
 import {
   CATALOG_ROUTES,
   DEFAULT_DESTINATION,
-  PORTFOLIO_ROUTES,
+  SHOWCASE_ROUTES,
 } from "./lib/routes.js";
 
 // The note editor can't open onto a collection that doesn't exist, so an empty
@@ -164,11 +164,11 @@ function ShellContent() {
               />
               <Route
                 element={<ShowcaseScreen mode="view" />}
-                path={PORTFOLIO_ROUTES.showcase(":id")}
+                path={SHOWCASE_ROUTES.showcase(":id")}
               />
               <Route
                 element={<ShowcaseScreen mode="edit" />}
-                path={PORTFOLIO_ROUTES.showcaseEdit(":id")}
+                path={SHOWCASE_ROUTES.showcaseEdit(":id")}
               />
               <Route
                 element={<Navigate replace to={DEFAULT_DESTINATION} />}

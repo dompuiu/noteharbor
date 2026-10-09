@@ -4,7 +4,7 @@ import { useShowcases } from "../lib/showcases.jsx";
 import {
   CATALOG_ROUTES,
   DEFAULT_DESTINATION,
-  PORTFOLIO_ROUTES,
+  SHOWCASE_ROUTES,
 } from "../lib/routes.js";
 
 // The Editor's persistent chrome. It renders on every route beside the main
@@ -119,7 +119,7 @@ function Sidebar({ pageFocusRef }) {
     icon: "grid",
     key: `showcase-${showcase.id}`,
     label: showcase.name,
-    to: PORTFOLIO_ROUTES.showcase(showcase.id),
+    to: SHOWCASE_ROUTES.showcase(showcase.id),
     showcaseId: showcase.id,
   }));
 
@@ -149,7 +149,7 @@ function Sidebar({ pageFocusRef }) {
       const showcase = await createShowcase();
 
       if (showcase?.id != null) {
-        navigate(PORTFOLIO_ROUTES.showcaseEdit(showcase.id), {
+        navigate(SHOWCASE_ROUTES.showcaseEdit(showcase.id), {
           state: { justCreated: true },
         });
       }

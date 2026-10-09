@@ -8,7 +8,7 @@ export const CATALOG_ROUTES = {
 // The Showcases hub's routes. View mode is read-only; edit mode adds the
 // authoring controls. The `portfolio` prefix is kept for continuity with the
 // Catalog prefix, but the old `categories` / `groupings` destinations retire.
-export const PORTFOLIO_ROUTES = {
+export const SHOWCASE_ROUTES = {
   showcases: "/portfolio/showcases",
   showcase: (id) => `/portfolio/showcases/${id}`,
   showcaseEdit: (id) => `/portfolio/showcases/${id}/edit`,

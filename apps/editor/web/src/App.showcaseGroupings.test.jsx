@@ -54,7 +54,7 @@ import {
 } from "./lib/api.js";
 import { CollectionsProvider } from "./lib/collections.jsx";
 import { ShowcasesProvider } from "./lib/showcases.jsx";
-import { PORTFOLIO_ROUTES } from "./lib/routes.js";
+import { SHOWCASE_ROUTES } from "./lib/routes.js";
 
 const DERIVED_NOTE = {
   id: 100,
@@ -189,7 +189,7 @@ beforeEach(() => {
 
 describe("grouping drill navigation", () => {
   test("nothing expands inline: a grouping is hidden until its parent is opened", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
     expect(
       await screen.findByRole("button", { name: "Open category Summer" }),
@@ -200,14 +200,14 @@ describe("grouping drill navigation", () => {
   });
 
   test("opening a category shows its grouping cards", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
 
     expect(groupingCard("Sub")).toBeInTheDocument();
   });
 
   test("clicking a grouping drills in; Up and the breadcrumb go back", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
 
     await userEvent.click(groupingCard("Sub"));
@@ -235,7 +235,7 @@ describe("grouping drill navigation", () => {
   });
 
   test("the breadcrumb jumps straight to an ancestor level", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
     await userEvent.click(groupingCard("Sub"));
 
@@ -253,7 +253,7 @@ describe("grouping drill navigation", () => {
   });
 
   test("the showcase breadcrumb returns to the top level", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
 
     const breadcrumb = screen.getByRole("navigation", {
@@ -267,7 +267,7 @@ describe("grouping drill navigation", () => {
   });
 
   test("edit mode keeps the drill state in memory without changing the URL", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await openSummer();
     await userEvent.dblClick(groupingCard("Sub"));
 
@@ -280,7 +280,7 @@ describe("grouping drill navigation", () => {
 
 describe("grouping cover", () => {
   test("a grouping card shows the first note beneath it as its cover", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
 
     const image = groupingCard("Sub").querySelector("img");
@@ -295,7 +295,7 @@ describe("grouping cover", () => {
       showcase_id: 1,
       nodes: [summerTree({ coverNote: MANUAL_NOTE })],
     });
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
 
     const image = groupingCard("Sub").querySelector("img");
@@ -311,7 +311,7 @@ describe("grouping cover", () => {
       showcase_id: 1,
       nodes: [{ ...summerTree(), children: [emptyGrouping] }],
     });
-    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSummer();
 
     const card = groupingCard("Sub");
@@ -325,7 +325,7 @@ describe("editing groupings on the canvas", () => {
     createShowcaseNode.mockResolvedValue({
       node: groupingNode({ id: 40, name: "New group" }),
     });
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await openSummer();
 
     await userEvent.click(
@@ -348,7 +348,7 @@ describe("editing groupings on the canvas", () => {
     updateNode.mockResolvedValue({
       node: groupingNode({ id: 20, name: "Renamed" }),
     });
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await openSummer();
 
     await userEvent.click(
@@ -366,7 +366,7 @@ describe("editing groupings on the canvas", () => {
   });
 
   test("removing a grouping drops its subtree", async () => {
-    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await openSummer();
 
     await userEvent.click(
@@ -379,5 +379,66 @@ describe("editing groupings on the canvas", () => {
     expect(
       screen.queryByRole("button", { name: "Open grouping Sub" }),
     ).not.toBeInTheDocument();
+  });
+
+  test("drills one level at a time and never renders grandchildren inline", async () => {
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+    await openSummer();
+
+    // Sub's own child note and the deeper grouping are not on the Summer level.
+    expect(
+      screen.queryByRole("button", { name: "1, 2020" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open grouping Deep" }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.dblClick(groupingCard("Sub"));
+
+    expect(
+      await screen.findByRole("button", { name: "1, 2020" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open grouping Deep" }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("setting a grouping cover from the canvas", () => {
+  test("a direct-child note can be set as the cover and the cover cleared", async () => {
+    updateNode.mockImplementation(async (id, payload) => ({
+      node: {
+        ...groupingNode({ id, name: "Sub" }),
+        cover_note_id: payload.cover_note_id,
+        cover_note: payload.cover_note_id == null ? null : DERIVED_NOTE,
+      },
+    }));
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+    await openSummer();
+    await userEvent.dblClick(groupingCard("Sub"));
+
+    // The derived cover means no manual-cover control is shown yet.
+    expect(
+      screen.queryByRole("button", { name: "Clear cover" }),
+    ).not.toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Set as cover" }));
+
+    await waitFor(() => {
+      expect(updateNode).toHaveBeenCalledWith(20, { cover_note_id: 100 });
+    });
+
+    // The current node now reports the manual cover and offers to clear it.
+    const clear = await screen.findByRole("button", { name: "Clear cover" });
+    await userEvent.click(clear);
+
+    await waitFor(() => {
+      expect(updateNode).toHaveBeenCalledWith(20, { cover_note_id: null });
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Clear cover" }),
+      ).not.toBeInTheDocument();
+    });
   });
 });
