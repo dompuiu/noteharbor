@@ -1,5 +1,11 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react';
-import { createShowcase as createShowcaseRequest, getShowcases } from './api.js';
+import {
+  createShowcase as createShowcaseRequest,
+  deleteShowcase as deleteShowcaseRequest,
+  getShowcases,
+  renameShowcase as renameShowcaseRequest,
+  reorderShowcases as reorderShowcasesRequest,
+} from './api.js';
 
 const ShowcasesContext = createContext(null);
 
@@ -43,13 +49,63 @@ function ShowcasesProvider({ children }) {
     return createdShowcase;
   }
 
+  // Reconcile the list from a single server row after a mutation, rather than
+  // refetching every showcase. A full refresh flips `loadingShowcases`, which
+  // would blank the sidebar and the screen mid-edit.
+  function applyShowcaseRow(updatedShowcase) {
+    if (!updatedShowcase) {
+      return;
+    }
+
+    setShowcases((current) =>
+      current.map((showcase) =>
+        showcase.id === updatedShowcase.id
+          ? { ...showcase, ...updatedShowcase }
+          : showcase,
+      ),
+    );
+  }
+
+  async function handleRenameShowcase(showcaseId, name) {
+    const payload = await renameShowcaseRequest(showcaseId, name);
+    applyShowcaseRow(payload.showcase);
+    return payload.showcase;
+  }
+
+  async function handleReorderShowcases(ids) {
+    const payload = await reorderShowcasesRequest(ids);
+    const nextShowcases = payload.showcases ?? [];
+    // Apply the server's order directly instead of refetching: a reorder is
+    // not a load, and flipping the loading flag would blank the list mid-drag.
+    setShowcases(nextShowcases);
+    return nextShowcases;
+  }
+
+  // Deleting hands back the showcase that follows in display order so the
+  // caller can open it; when the deleted showcase was last, there is none and
+  // the caller falls back to Banknotes.
+  async function handleDeleteShowcase(showcaseId) {
+    const index = showcases.findIndex((showcase) => showcase.id === showcaseId);
+    const nextShowcase = showcases[index + 1] ?? null;
+
+    await deleteShowcaseRequest(showcaseId);
+    setShowcases((current) =>
+      current.filter((showcase) => showcase.id !== showcaseId),
+    );
+
+    return { nextShowcaseId: nextShowcase?.id ?? null };
+  }
+
   const value = useMemo(
     () => ({
       showcases,
       loadingShowcases,
       showcasesError,
       createShowcase: handleCreateShowcase,
+      deleteShowcase: handleDeleteShowcase,
       refreshShowcases,
+      renameShowcase: handleRenameShowcase,
+      reorderShowcases: handleReorderShowcases,
     }),
     [showcases, loadingShowcases, showcasesError],
   );

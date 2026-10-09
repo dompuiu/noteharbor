@@ -732,6 +732,19 @@ function createStatements(database) {
         datetime('now')
       )
     `),
+    renameShowcaseStatement: database.prepare(`
+      UPDATE showcases
+      SET name = @name,
+          updated_at = datetime('now')
+      WHERE id = @id
+    `),
+    deleteShowcaseStatement: database.prepare(`DELETE FROM showcases WHERE id = ?`),
+    updateShowcaseDisplayOrderStatement: database.prepare(`
+      UPDATE showcases
+      SET display_order = @display_order,
+          updated_at = datetime('now')
+      WHERE id = @id
+    `),
 
     listNotesStatement: database.prepare(`
       SELECT ${noteFields}
@@ -1301,6 +1314,82 @@ function createShowcase(name) {
   return getShowcaseById(showcaseId);
 }
 
+function ensureShowcaseExists(showcaseId) {
+  getDatabase();
+  const showcase = statements.getShowcaseStatement.get(Number(showcaseId));
+
+  if (!showcase) {
+    throw new Error('Showcase not found.');
+  }
+
+  return showcase;
+}
+
+function deleteShowcaseById(id) {
+  getDatabase();
+  const showcaseId = Number(id);
+  ensureShowcaseExists(showcaseId);
+
+  // `showcase_nodes.showcase_id` cascades, so deleting the showcase takes its
+  // whole tree with it.
+  statements.deleteShowcaseStatement.run(showcaseId);
+}
+
+function reorderShowcases(ids) {
+  getDatabase();
+  const normalizedIds = Array.isArray(ids) ? ids.map((id) => Number(id)) : [];
+  const existingIds = getAllShowcases().map((showcase) => showcase.id);
+
+  if (!normalizedIds.length || normalizedIds.length !== existingIds.length) {
+    throw new Error('Reorder request must include every showcase exactly once.');
+  }
+
+  const nextIdsSet = new Set(normalizedIds);
+
+  if (
+    nextIdsSet.size !== normalizedIds.length ||
+    existingIds.some((id) => !nextIdsSet.has(id))
+  ) {
+    throw new Error('Reorder request must include every showcase exactly once.');
+  }
+
+  const transaction = db.transaction((nextIds) => {
+    nextIds.forEach((id, index) => {
+      statements.updateShowcaseDisplayOrderStatement.run({
+        id,
+        display_order: index + 1
+      });
+    });
+  });
+
+  transaction(normalizedIds);
+  return getAllShowcases();
+}
+
+function renameShowcaseById(id, name) {
+  getDatabase();
+  const showcaseId = Number(id);
+  const normalizedName = normalizeShowcaseName(name);
+
+  if (!normalizedName) {
+    throw new Error('Showcase name is required.');
+  }
+
+  ensureShowcaseExists(showcaseId);
+
+  try {
+    statements.renameShowcaseStatement.run({ id: showcaseId, name: normalizedName });
+  } catch (error) {
+    if (String(error.message).includes('UNIQUE constraint failed: showcases.name')) {
+      throw new Error('A showcase with this name already exists.');
+    }
+
+    throw error;
+  }
+
+  return getShowcaseById(showcaseId);
+}
+
 function getAllNotes(collectionId = null) {
   getDatabase();
   const normalizedCollectionId = resolveCollectionId(collectionId);
@@ -1674,6 +1763,7 @@ export {
   createShowcase,
   deleteCollectionById,
   deleteNote,
+  deleteShowcaseById,
   ensureTag,
   getAllCollections,
   getAllNotes,
@@ -1691,8 +1781,10 @@ export {
   pingDatabase,
   reloadDatabase,
   renameCollectionById,
+  renameShowcaseById,
   reorderCollections,
   reorderNotes,
+  reorderShowcases,
   setDefaultCollectionById,
   replaceNoteTags,
   updateNote,

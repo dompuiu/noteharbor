@@ -1,5 +1,5 @@
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -10,11 +10,14 @@ vi.mock("./lib/api.js", () => ({
   createCollection: vi.fn(),
   createShowcase: vi.fn(),
   deleteCollection: vi.fn(),
+  deleteShowcase: vi.fn(),
   getCollections: vi.fn(),
   getHealth: vi.fn(),
   getShowcases: vi.fn(),
   renameCollection: vi.fn(),
+  renameShowcase: vi.fn(),
   reorderCollections: vi.fn(),
+  reorderShowcases: vi.fn(),
   setDefaultCollection: vi.fn(),
 }));
 
@@ -35,7 +38,14 @@ vi.mock("./components/NoteEditForm.jsx", () => ({
 }));
 
 import { ShellContent } from "./App.jsx";
-import { createShowcase, getCollections, getHealth, getShowcases } from "./lib/api.js";
+import {
+  createShowcase,
+  deleteShowcase,
+  getCollections,
+  getHealth,
+  getShowcases,
+  renameShowcase,
+} from "./lib/api.js";
 import { CollectionsProvider } from "./lib/collections.jsx";
 import { ShowcasesProvider } from "./lib/showcases.jsx";
 import { CATALOG_ROUTES, PORTFOLIO_ROUTES } from "./lib/routes.js";
@@ -142,6 +152,106 @@ describe("Showcase modes", () => {
     expect(
       screen.getByLabelText("Showcase name"),
     ).toBeInTheDocument();
+  });
+});
+
+describe("Renaming a showcase", () => {
+  test("saves the edit header name and updates the sidebar item", async () => {
+    const user = userEvent.setup();
+    renameShowcase.mockResolvedValue({
+      showcase: { id: 1, name: "Winter", display_order: 1 },
+    });
+    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+
+    // The field must show the loaded showcase before it is edited.
+    await screen.findByRole("link", { name: "Summer" });
+    const field = screen.getByLabelText("Showcase name");
+    await user.clear(field);
+    await user.type(field, "Winter{Enter}");
+
+    await waitFor(() => {
+      expect(renameShowcase).toHaveBeenCalledWith(1, "Winter");
+    });
+    expect(await screen.findByRole("link", { name: "Winter" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("link", { name: "Summer" }),
+    ).not.toBeInTheDocument();
+    expect(field).toHaveValue("Winter");
+  });
+
+  test("editing the name field and leaving it also saves", async () => {
+    const user = userEvent.setup();
+    renameShowcase.mockResolvedValue({
+      showcase: { id: 1, name: "Spring", display_order: 1 },
+    });
+    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+
+    await screen.findByRole("link", { name: "Summer" });
+    const field = screen.getByLabelText("Showcase name");
+    await user.clear(field);
+    await user.type(field, "Spring");
+    await user.tab();
+
+    await waitFor(() => {
+      expect(renameShowcase).toHaveBeenCalledWith(1, "Spring");
+    });
+  });
+});
+
+describe("Deleting a showcase", () => {
+  test("confirms, deletes, and opens the next showcase in order", async () => {
+    const user = userEvent.setup();
+    deleteShowcase.mockResolvedValue({ success: true });
+    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+
+    await user.click(
+      await screen.findByRole("button", { name: "Delete showcase" }),
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(deleteShowcase).toHaveBeenCalledWith(1);
+    });
+    await waitFor(() => {
+      expect(currentPath()).toBe(PORTFOLIO_ROUTES.showcaseEdit(2));
+    });
+  });
+
+  test("deleting the last remaining showcase goes to Banknotes", async () => {
+    const user = userEvent.setup();
+    getShowcases.mockResolvedValue({ showcases: [{ id: 1, name: "Only" }] });
+    deleteShowcase.mockResolvedValue({ success: true });
+    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+
+    await user.click(
+      await screen.findByRole("button", { name: "Delete showcase" }),
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+    });
+  });
+
+  test("cancelling the confirmation keeps the showcase", async () => {
+    const user = userEvent.setup();
+    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+
+    await user.click(
+      await screen.findByRole("button", { name: "Delete showcase" }),
+    );
+
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
+
+    expect(deleteShowcase).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("dialog"),
+    ).not.toBeInTheDocument();
   });
 });
 

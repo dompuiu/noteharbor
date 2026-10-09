@@ -140,6 +140,140 @@ test('GET /api/showcases lists showcases in display order with a note count', as
   );
 });
 
+test('PUT /api/showcases/:id renames a showcase', async () => {
+  const { body } = await createShowcase('Before rename');
+  const showcaseId = body.showcase.id;
+
+  const { response, body: payload } = await api(`/api/showcases/${showcaseId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name: 'After rename' })
+  });
+
+  assert.equal(response.status, 200);
+  assert.equal(payload.showcase.name, 'After rename');
+
+  const list = await api('/api/showcases');
+  assert.equal(
+    list.body.showcases.find((row) => row.id === showcaseId).name,
+    'After rename'
+  );
+});
+
+test('PUT /api/showcases/:id validates the id and the name', async () => {
+  const { body } = await createShowcase('Rename guards');
+  const showcaseId = body.showcase.id;
+
+  const emptyName = await api(`/api/showcases/${showcaseId}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name: '   ' })
+  });
+  assert.equal(emptyName.response.status, 400);
+
+  const badId = await api('/api/showcases/not-a-number', {
+    method: 'PUT',
+    body: JSON.stringify({ name: 'x' })
+  });
+  assert.equal(badId.response.status, 400);
+
+  const absent = await api('/api/showcases/999999', {
+    method: 'PUT',
+    body: JSON.stringify({ name: 'x' })
+  });
+  assert.equal(absent.response.status, 404);
+});
+
+test('PUT /api/showcases/:id rejects a duplicate name', async () => {
+  await createShowcase('Duplicate target');
+  const { body } = await createShowcase('Duplicate source');
+
+  const { response } = await api(`/api/showcases/${body.showcase.id}`, {
+    method: 'PUT',
+    body: JSON.stringify({ name: 'Duplicate target' })
+  });
+
+  assert.equal(response.status, 400);
+});
+
+test('DELETE /api/showcases/:id removes the showcase and cascades its nodes', async () => {
+  const { body } = await createShowcase('Doomed');
+  const showcaseId = body.showcase.id;
+
+  db.getDatabase()
+    .prepare(`
+      INSERT INTO showcase_nodes (showcase_id, node_type, position)
+      VALUES (?, 'grouping', 1)
+    `)
+    .run(showcaseId);
+
+  const { response } = await api(`/api/showcases/${showcaseId}`, {
+    method: 'DELETE'
+  });
+  assert.equal(response.status, 200);
+
+  const list = await api('/api/showcases');
+  assert.equal(
+    list.body.showcases.some((row) => row.id === showcaseId),
+    false
+  );
+
+  const orphanNodes = db
+    .getDatabase()
+    .prepare('SELECT COUNT(*) AS value FROM showcase_nodes WHERE showcase_id = ?')
+    .get(showcaseId);
+  assert.equal(orphanNodes.value, 0);
+
+  const again = await api(`/api/showcases/${showcaseId}`, { method: 'DELETE' });
+  assert.equal(again.response.status, 404);
+});
+
+test('PUT /api/showcases/order persists a full permutation across a reopen', async () => {
+  const before = await api('/api/showcases');
+  const ids = before.body.showcases.map((row) => row.id);
+  const reversed = [...ids].reverse();
+
+  const { response, body } = await api('/api/showcases/order', {
+    method: 'PUT',
+    body: JSON.stringify({ ids: reversed })
+  });
+
+  assert.equal(response.status, 200);
+  assert.deepEqual(body.showcases.map((row) => row.id), reversed);
+
+  db.reloadDatabase();
+
+  const after = await api('/api/showcases');
+  assert.deepEqual(after.body.showcases.map((row) => row.id), reversed);
+});
+
+test('PUT /api/showcases/order rejects anything but a full permutation', async () => {
+  const before = await api('/api/showcases');
+  const ids = before.body.showcases.map((row) => row.id);
+
+  const partial = await api('/api/showcases/order', {
+    method: 'PUT',
+    body: JSON.stringify({ ids: ids.slice(0, 1) })
+  });
+  assert.equal(partial.response.status, 400);
+
+  const duplicate = await api('/api/showcases/order', {
+    method: 'PUT',
+    body: JSON.stringify({ ids: [...ids, ids[0]] })
+  });
+  assert.equal(duplicate.response.status, 400);
+
+  const unknown = await api('/api/showcases/order', {
+    method: 'PUT',
+    body: JSON.stringify({ ids: [...ids.slice(0, -1), 999999] })
+  });
+  assert.equal(unknown.response.status, 400);
+
+  const missing = await api('/api/showcases/order', {
+    method: 'PUT',
+    body: JSON.stringify({})
+  });
+  assert.equal(missing.response.status, 400);
+});
+
 test('a category label can only be placed once in one showcase', async () => {
   const { body } = await createShowcase('Unique placements');
   const showcaseId = body.showcase.id;

@@ -101,11 +101,15 @@ function HamburgerIcon() {
 function Sidebar({ pageFocusRef }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { showcases, createShowcase } = useShowcases();
+  const { showcases, createShowcase, reorderShowcases } = useShowcases();
   const [drawerOpen, setDrawerOpen] = useState(false);
   // The keyboard cursor, distinct from DOM focus. Null means the rail is not
   // being navigated by keyboard.
   const [cursorIndex, setCursorIndex] = useState(null);
+  // Drag-and-drop state for reordering the showcase rows. `dropTarget` records
+  // whether the pointer sits above or below the hovered row's midpoint.
+  const [draggedShowcaseId, setDraggedShowcaseId] = useState(null);
+  const [showcaseDropTarget, setShowcaseDropTarget] = useState(null);
   const navRef = useRef(null);
   const linksRef = useRef([]);
   const hamburgerRef = useRef(null);
@@ -116,6 +120,7 @@ function Sidebar({ pageFocusRef }) {
     key: `showcase-${showcase.id}`,
     label: showcase.name,
     to: PORTFOLIO_ROUTES.showcase(showcase.id),
+    showcaseId: showcase.id,
   }));
 
   const newShowcaseItem = {
@@ -337,6 +342,85 @@ function Sidebar({ pageFocusRef }) {
     leaveCursor();
   }
 
+  function clearShowcaseDrag() {
+    setDraggedShowcaseId(null);
+    setShowcaseDropTarget(null);
+  }
+
+  function handleShowcaseDragStart(event, showcaseId) {
+    event.stopPropagation();
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(showcaseId));
+    setDraggedShowcaseId(showcaseId);
+    setShowcaseDropTarget({ showcaseId, placement: "before" });
+  }
+
+  function updateShowcaseDropTarget(showcaseId, event) {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const placement =
+      event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+
+    setShowcaseDropTarget((current) =>
+      current?.showcaseId === showcaseId && current?.placement === placement
+        ? current
+        : { showcaseId, placement },
+    );
+  }
+
+  // Commit a drop by handing the new id order to the provider. The sidebar
+  // never reorders its own copy; the provider applies the server's order, so a
+  // failed request leaves the visible order untouched.
+  async function handleShowcaseDrop(targetShowcaseId, placement) {
+    if (draggedShowcaseId == null) {
+      clearShowcaseDrag();
+      return;
+    }
+
+    const startIndex = showcases.findIndex(
+      (showcase) => showcase.id === draggedShowcaseId,
+    );
+    const targetIndex = showcases.findIndex(
+      (showcase) => showcase.id === targetShowcaseId,
+    );
+
+    if (startIndex < 0 || targetIndex < 0) {
+      clearShowcaseDrag();
+      return;
+    }
+
+    const rawInsertIndex = targetIndex + (placement === "after" ? 1 : 0);
+
+    if (
+      (placement === "before" && startIndex === targetIndex) ||
+      (placement === "after" && startIndex === targetIndex + 1)
+    ) {
+      clearShowcaseDrag();
+      return;
+    }
+
+    const nextShowcases = [...showcases];
+    const [movedShowcase] = nextShowcases.splice(startIndex, 1);
+    const insertIndex =
+      startIndex < rawInsertIndex ? rawInsertIndex - 1 : rawInsertIndex;
+    nextShowcases.splice(insertIndex, 0, movedShowcase);
+
+    const unchanged = nextShowcases.every(
+      (showcase, index) => showcase.id === showcases[index].id,
+    );
+
+    clearShowcaseDrag();
+
+    if (unchanged) {
+      return;
+    }
+
+    try {
+      await reorderShowcases(nextShowcases.map((showcase) => showcase.id));
+    } catch {
+      // The rail cannot surface an error; the next load reconciles the order.
+    }
+  }
+
   const dockClassName = `sidebar-dock${drawerOpen ? " sidebar-dock--drawer-open" : ""}`;
   const drawerLabel = drawerOpen ? "Close navigation" : "Open navigation";
 
@@ -407,10 +491,24 @@ function Sidebar({ pageFocusRef }) {
                     const index = entries.indexOf(item);
                     const active =
                       item.type !== "action" && isItemActive(item, pathname);
+                    const isShowcase = item.showcaseId != null;
+                    const dropPlacement =
+                      isShowcase &&
+                      showcaseDropTarget?.showcaseId === item.showcaseId
+                        ? showcaseDropTarget.placement
+                        : null;
                     const className = `sidebar-link${
                       active ? " sidebar-link--active" : ""
                     }${cursorIndex === index ? " sidebar-link--cursor" : ""}${
                       item.type === "action" ? " sidebar-link--action" : ""
+                    }${
+                      dropPlacement
+                        ? ` sidebar-link--drop-${dropPlacement}`
+                        : ""
+                    }${
+                      isShowcase && draggedShowcaseId === item.showcaseId
+                        ? " sidebar-link--dragging"
+                        : ""
                     }`;
 
                     if (item.type === "action") {
@@ -441,8 +539,76 @@ function Sidebar({ pageFocusRef }) {
                         aria-label={item.label}
                         className={className}
                         data-sidebar-index={index}
+                        draggable={isShowcase}
                         key={item.key ?? item.to}
                         onClick={handleLinkClick}
+                        onDragEnd={isShowcase ? clearShowcaseDrag : undefined}
+                        onDragLeave={
+                          isShowcase
+                            ? (event) => {
+                                const links =
+                                  event.currentTarget.parentElement;
+
+                                if (
+                                  event.relatedTarget &&
+                                  links?.contains(event.relatedTarget)
+                                ) {
+                                  return;
+                                }
+
+                                setShowcaseDropTarget((current) =>
+                                  current?.showcaseId === item.showcaseId
+                                    ? null
+                                    : current,
+                                );
+                              }
+                            : undefined
+                        }
+                        onDragOver={
+                          isShowcase
+                            ? (event) => {
+                                if (draggedShowcaseId == null) {
+                                  return;
+                                }
+
+                                event.preventDefault();
+                                updateShowcaseDropTarget(
+                                  item.showcaseId,
+                                  event,
+                                );
+                              }
+                            : undefined
+                        }
+                        onDragStart={
+                          isShowcase
+                            ? (event) =>
+                                handleShowcaseDragStart(
+                                  event,
+                                  item.showcaseId,
+                                )
+                            : undefined
+                        }
+                        onDrop={
+                          isShowcase
+                            ? (event) => {
+                                event.preventDefault();
+                                const bounds =
+                                  event.currentTarget.getBoundingClientRect();
+                                const placement =
+                                  showcaseDropTarget?.showcaseId ===
+                                  item.showcaseId
+                                    ? showcaseDropTarget.placement
+                                    : event.clientY <
+                                        bounds.top + bounds.height / 2
+                                      ? "before"
+                                      : "after";
+                                void handleShowcaseDrop(
+                                  item.showcaseId,
+                                  placement,
+                                );
+                              }
+                            : undefined
+                        }
                         ref={(node) => {
                           linksRef.current[index] = node;
                         }}
