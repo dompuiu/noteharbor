@@ -616,8 +616,8 @@ function createShowcaseExportSnapshotFile(dbPath) {
     createShowcaseTables(db);
     db.prepare(`INSERT INTO collections (id, name, is_default) VALUES (1, 'Keep', 1), (2, 'Drop', 0)`).run();
     db.prepare(`INSERT INTO banknotes (id, collection_id, display_order, denomination, images) VALUES (10, 1, 1, 'Kept Note', '[]'), (20, 2, 1, 'Dropped Note', '[]')`).run();
-    db.prepare(`INSERT INTO categories (id, name) VALUES (1, 'Shared Label'), (2, 'Only Dropped Label'), (3, 'Orphan Label')`).run();
-    db.prepare(`INSERT INTO showcases (id, name, display_order) VALUES (1, 'Kept Show', 1), (2, 'Dropped Show', 2)`).run();
+    db.prepare(`INSERT INTO categories (id, name) VALUES (1, 'Shared Label'), (2, 'Only Dropped Label'), (3, 'Cover Label')`).run();
+    db.prepare(`INSERT INTO showcases (id, name, display_order) VALUES (1, 'Kept Show', 1), (2, 'Dropped Show', 2), (3, 'Cover Only Show', 3)`).run();
     db.prepare(`
       INSERT INTO showcase_nodes
         (id, showcase_id, parent_node_id, node_type, category_id, name, note_id, cover_note_id, position)
@@ -626,7 +626,9 @@ function createShowcaseExportSnapshotFile(dbPath) {
         (12, 1, 11, 'note', NULL, NULL, 10, NULL, 1),
         (21, 2, NULL, 'category', 1, NULL, NULL, NULL, 1),
         (22, 2, 21, 'note', NULL, NULL, 20, NULL, 1),
-        (23, 2, NULL, 'category', 2, NULL, NULL, NULL, 2)
+        (23, 2, NULL, 'category', 2, NULL, NULL, NULL, 2),
+        (31, 3, NULL, 'category', 3, NULL, NULL, NULL, 1),
+        (32, 3, 31, 'grouping', NULL, 'Cover Group', NULL, 20, 1)
     `).run();
     db.pragma('foreign_keys = ON');
   } finally {
@@ -643,15 +645,18 @@ test('a filtered export omits an out-of-selection showcase, reports it, and drop
 
     const result = buildFilteredExportSnapshot(snapshotDbPath, [1], tempRoot);
 
-    assert.deepEqual(result.omittedShowcases, [{ id: 2, name: 'Dropped Show' }]);
+    assert.deepEqual(result.omittedShowcases, [
+      { id: 2, name: 'Dropped Show' },
+      { id: 3, name: 'Cover Only Show' }
+    ]);
     assert.equal(result.selectedCount, 1);
 
     const db = new Database(snapshotDbPath, { readonly: true });
     try {
       assert.deepEqual(db.prepare(`SELECT name FROM showcases ORDER BY id`).all().map((row) => row.name), ['Kept Show']);
       assert.deepEqual(db.prepare(`SELECT id FROM banknotes ORDER BY id`).all(), [{ id: 1 }]);
-      // 'Shared Label' survives on the kept Showcase; the dropped-only label
-      // and the pre-existing orphan label do not.
+      // 'Shared Label' survives on the kept Showcase; the labels used only by
+      // the omitted Showcases go with them.
       assert.deepEqual(
         db.prepare(`SELECT name FROM categories ORDER BY name`).all().map((row) => row.name),
         ['Shared Label']
