@@ -72,6 +72,19 @@ body {
   overflow-y: hidden;
 }
 
+/* A full-screen overlay owns scrolling while open: the body's bar would only
+   scroll the dimmed app behind it, stacking a second horizontal bar under the
+   overlay's own. Locking here leaves the overlay's bar as the single one.
+   The scrape-conflict overlay shares the edit-note base class, so it is
+   covered too. */
+body:has(
+  .edit-note-overlay,
+  .slideshow-screen--overlay,
+  .image-popover-overlay
+) {
+  overflow-x: hidden;
+}
+
 html,
 body,
 #root {

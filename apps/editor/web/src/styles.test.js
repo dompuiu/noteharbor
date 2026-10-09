@@ -276,4 +276,18 @@ describe("slideshow overlay styles", () => {
     expect(content[1]).toMatch(/min-width:\s*1152px/);
     expect(content[1]).toMatch(/margin:\s*auto/);
   });
+
+  // A full-screen overlay owns scrolling while open: the body's bar would
+  // only scroll the dimmed app behind it, stacking a second horizontal bar
+  // under the overlay's own. The body lock leaves the overlay's bar as the
+  // single one. `:has()` needs no ref-counting, so stacked overlays stay
+  // locked until the last one closes.
+  test("the body locks horizontal scrolling while an overlay is open", () => {
+    const lock = styles.match(/body:has\(([^)]*)\)\s*\{([^}]*)\}/);
+    expect(lock).not.toBeNull();
+    expect(lock[1]).toMatch(/\.edit-note-overlay/);
+    expect(lock[1]).toMatch(/\.slideshow-screen--overlay/);
+    expect(lock[1]).toMatch(/\.image-popover-overlay/);
+    expect(lock[2]).toMatch(/overflow-x:\s*hidden/);
+  });
 });
