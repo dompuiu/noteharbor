@@ -6,6 +6,7 @@ import {
   getCategories,
   getShowcaseTree,
   renameCategory,
+  reorderNodes,
   updateNode,
 } from "./api.js";
 
@@ -108,5 +109,41 @@ describe("showcase tree API calls", () => {
 
     await expect(deleteNode(5)).resolves.toEqual({ success: true });
     expect(fetchMock).toHaveBeenCalledWith("/api/nodes/5", { method: "DELETE" });
+  });
+
+  test("reorderNodes PUTs the parent and the full child order", async () => {
+    const fetchMock = stubFetch(async () =>
+      jsonResponse(200, { nodes: [] }),
+    );
+
+    await reorderNodes(3, 7, [5, 9, 4]);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/nodes/order", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        showcase_id: 3,
+        parent_node_id: 7,
+        node_ids: [5, 9, 4],
+      }),
+    });
+  });
+
+  test("reorderNodes sends a null parent for the top level", async () => {
+    const fetchMock = stubFetch(async () =>
+      jsonResponse(200, { nodes: [] }),
+    );
+
+    await reorderNodes(3, null, [5, 4]);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/nodes/order", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        showcase_id: 3,
+        parent_node_id: null,
+        node_ids: [5, 4],
+      }),
+    });
   });
 });

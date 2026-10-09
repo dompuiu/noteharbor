@@ -506,6 +506,20 @@ async function reorderShowcases(ids) {
   return handleResponse(response);
 }
 
+async function reorderNodes(showcaseId, parentNodeId, nodeIds) {
+  const response = await fetch('/api/nodes/order', {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({
+      showcase_id: showcaseId,
+      parent_node_id: parentNodeId ?? null,
+      node_ids: nodeIds
+    })
+  });
+
+  return handleResponse(response);
+}
+
 const SCRAPE_PREVIEW_TIMEOUT_BUFFER_MS = 5000;
 const SCRAPE_NAVIGATION_TIMEOUT_MAX_MS = 120000;
 
@@ -580,6 +594,7 @@ export {
   renameCollection,
   renameShowcase,
   reorderCollections,
+  reorderNodes,
   reorderNotes,
   reorderShowcases,
   scrapePreview,
