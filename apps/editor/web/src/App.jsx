@@ -11,31 +11,17 @@ import { ImportScreen } from "./components/ImportScreen.jsx";
 import { NoteEditForm } from "./components/NoteEditForm.jsx";
 import { NoCollectionsPrompt } from "./components/NoCollectionsPrompt.jsx";
 import { NotesTable } from "./components/NotesTable.jsx";
-import { PortfolioScreen } from "./components/PortfolioScreen.jsx";
+import { ShowcaseScreen } from "./components/ShowcaseScreen.jsx";
 import { Sidebar } from "./components/Sidebar.jsx";
 import { getHealth } from "./lib/api.js";
 import { CollectionsProvider, useCollections } from "./lib/collections.jsx";
 import { isEmptyLibrary } from "./lib/libraryState.js";
+import { ShowcasesProvider } from "./lib/showcases.jsx";
 import {
   CATALOG_ROUTES,
   DEFAULT_DESTINATION,
   PORTFOLIO_ROUTES,
 } from "./lib/routes.js";
-
-// The two Portfolio destinations are undefined for now, so their copy stays a
-// neutral "coming soon" rather than describing behaviour the spec hasn't set.
-const PORTFOLIO_PAGES = [
-  {
-    description: "The Categories destination is a placeholder for now.",
-    path: PORTFOLIO_ROUTES.categories,
-    title: "Categories",
-  },
-  {
-    description: "The Groupings destination is a placeholder for now.",
-    path: PORTFOLIO_ROUTES.groupings,
-    title: "Groupings",
-  },
-];
 
 // The note editor can't open onto a collection that doesn't exist, so an empty
 // library explains the two ways to get data instead of showing a dead form.
@@ -176,18 +162,14 @@ function ShellContent() {
                 }
                 path={CATALOG_ROUTES.noteEdit(":id")}
               />
-              {PORTFOLIO_PAGES.map((page) => (
-                <Route
-                  element={
-                    <PortfolioScreen
-                      description={page.description}
-                      title={page.title}
-                    />
-                  }
-                  key={page.path}
-                  path={page.path}
-                />
-              ))}
+              <Route
+                element={<ShowcaseScreen mode="view" />}
+                path={PORTFOLIO_ROUTES.showcase(":id")}
+              />
+              <Route
+                element={<ShowcaseScreen mode="edit" />}
+                path={PORTFOLIO_ROUTES.showcaseEdit(":id")}
+              />
               <Route
                 element={<Navigate replace to={DEFAULT_DESTINATION} />}
                 path="*"
@@ -203,7 +185,9 @@ function ShellContent() {
 function Shell() {
   return (
     <CollectionsProvider>
-      <ShellContent />
+      <ShowcasesProvider>
+        <ShellContent />
+      </ShowcasesProvider>
     </CollectionsProvider>
   );
 }
