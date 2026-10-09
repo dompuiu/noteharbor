@@ -59,7 +59,7 @@ function ShowcaseCategoryEditor({ node, onRemove, onRename, onOpen, children }) 
 
   return (
     <div className="showcase-cell">
-      <ShowcaseCategoryCard name={node.name} onOpen={onOpen} />
+      <ShowcaseCategoryCard name={node.name} nodeId={node.id} onOpen={onOpen} />
 
       {editing ? (
         <form className="showcase-cell-edit" onSubmit={handleRename}>

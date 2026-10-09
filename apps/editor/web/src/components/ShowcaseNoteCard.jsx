@@ -14,7 +14,7 @@ function pickBackImage(note) {
   );
 }
 
-function ShowcaseNoteCard({ note, mode = "view", pressed = false, onOpen }) {
+function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen }) {
   const editMode = mode === "edit";
   // `flipped` is the explicit front/back choice (a tap or Enter/Space); until
   // it is set the card follows the transient hover/focus reveal.
@@ -82,6 +82,7 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, onOpen }) {
       aria-label={label}
       aria-pressed={swapped}
       className={`showcase-card showcase-card--note${swapped ? " showcase-card--back" : ""}`}
+      data-showcase-node-id={nodeId}
       onBlur={handleBlur}
       onClick={handleClick}
       onFocus={handleFocus}

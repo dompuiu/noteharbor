@@ -598,6 +598,19 @@ function ShowcaseScreen({ mode }) {
     );
   }
 
+  // The card element itself is focused (not merely a control inside its cell).
+  // Enter/Space defer to the native button, so this must not treat a focused
+  // Rename/Remove button as its card.
+  function activeCardElement() {
+    const active = document.activeElement;
+
+    if (!(active instanceof Element) || !sectionRef.current?.contains(active)) {
+      return null;
+    }
+
+    return active.closest(".showcase-card");
+  }
+
   function moveCardFocus(offset) {
     const cards = showcaseCardElements();
 
@@ -720,12 +733,32 @@ function ShowcaseScreen({ mode }) {
       if (event.key === "PageDown" || event.key === "PageUp") {
         event.preventDefault();
         pageCardFocus(event.key === "PageDown" ? 1 : -1);
+        return;
+      }
+
+      if (event.key === "Enter" || event.key === " ") {
+        const card = activeCardElement();
+        const nodeId =
+          card?.dataset?.showcaseNodeId != null
+            ? Number(card.dataset.showcaseNodeId)
+            : null;
+        const node = Number.isInteger(nodeId)
+          ? findNodeById(nodes, nodeId)
+          : null;
+
+        // A native button opens on Enter/Space in every mode but the edit-mode
+        // grouping, which owns only a double-click handler. Handle just that
+        // case so a view-mode note card toggles exactly once.
+        if (editMode && node?.node_type === "grouping") {
+          event.preventDefault();
+          openNode(node);
+        }
       }
     }
 
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [confirmOpen, pickerNodeId, showShortcutsHelp]);
+  }, [confirmOpen, editMode, nodes, pickerNodeId, showShortcutsHelp]);
 
   const pickerNode =
     pickerNodeId == null ? null : findNodeById(nodes, pickerNodeId);
@@ -842,6 +875,7 @@ function ShowcaseScreen({ mode }) {
                     <ShowcaseCategoryCard
                       key={node.id}
                       name={node.name}
+                      nodeId={node.id}
                       onOpen={() => openNode(node)}
                     />
                   );
@@ -894,6 +928,7 @@ function ShowcaseScreen({ mode }) {
                     <ShowcaseNoteCard
                       key={node.id}
                       mode="view"
+                      nodeId={node.id}
                       note={node.note}
                     />
                   );

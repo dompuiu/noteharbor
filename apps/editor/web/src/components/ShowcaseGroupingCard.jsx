@@ -15,6 +15,7 @@ function ShowcaseGroupingCard({ node, onOpen, mode = "view" }) {
     <button
       aria-label={`Open grouping ${node.name}`}
       className="showcase-card showcase-card--grouping"
+      data-showcase-node-id={node.id}
       onClick={editMode ? undefined : onOpen}
       onDoubleClick={editMode ? onOpen : undefined}
       role="button"

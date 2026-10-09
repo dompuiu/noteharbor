@@ -144,7 +144,10 @@ function summerTree() {
           id: 20,
           name: "Sub",
           position: 2,
-          children: [noteNode(410, note(300, { denomination: "10 lei", issue_date: "1930" }), 1)],
+          children: [
+            noteNode(410, note(300, { denomination: "10 lei", issue_date: "1930" }), 1),
+            groupingNode({ id: 30, name: "Deep", position: 2 }),
+          ],
         }),
       ],
     }),
@@ -256,6 +259,62 @@ describe("moving card focus", () => {
 
     fireEvent.keyDown(document.body, { key: "PageUp" });
     expect(cards[0]).toHaveFocus();
+  });
+});
+
+async function openSummer() {
+  await userEvent.click(
+    await screen.findByRole("button", { name: "Open category Summer" }),
+  );
+}
+
+function search() {
+  return screen.getByTestId("search").textContent;
+}
+
+describe("opening the focused card", () => {
+  test("Enter opens a focused category card in view mode", async () => {
+    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    const summer = await summerCard();
+
+    act(() => summer.focus());
+    await userEvent.keyboard("{Enter}");
+
+    await waitFor(() => expect(search()).toBe("?node=10"));
+  });
+
+  test("Enter opens an edit-mode grouping, which has no single click of its own", async () => {
+    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    await openSummer();
+
+    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    expect(
+      screen.queryByRole("button", { name: "Open grouping Deep" }),
+    ).not.toBeInTheDocument();
+
+    act(() => sub.focus());
+    await userEvent.keyboard("{Enter}");
+
+    expect(
+      await screen.findByRole("button", { name: "Open grouping Deep" }),
+    ).toBeInTheDocument();
+  });
+
+  test("Enter and Space flip a view-mode note card instead of drilling", async () => {
+    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    await openSummer();
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    // Focus alone reveals the back; one activation keeps it flipped (a double
+    // handling would flip it straight back to the front).
+    act(() => card.focus());
+    await userEvent.keyboard("{Enter}");
+    expect(card).toHaveAttribute("aria-pressed", "true");
+    expect(search()).toBe("?node=10");
+
+    await userEvent.keyboard(" ");
+    expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(search()).toBe("?node=10");
   });
 });
 
