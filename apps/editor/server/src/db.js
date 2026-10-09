@@ -1391,8 +1391,35 @@ function reorderCollections(ids) {
   return getAllCollections();
 }
 
-function normalizeShowcaseName(name) {
+// Showcase names, category labels, and grouping names share one rule: trim and
+// collapse internal whitespace runs to a single space.
+function normalizeName(name) {
   return String(name ?? '').trim().replace(/\s+/g, ' ');
+}
+
+// Map a SQLite UNIQUE violation to a friendly message; rethrow anything else.
+function mapUniqueConstraintError(error, message) {
+  if (String(error?.message).includes('UNIQUE constraint failed')) {
+    throw new Error(message);
+  }
+
+  throw error;
+}
+
+// A reorder must name exactly the current children, each once, in any order. A
+// partial, duplicated, foreign, or non-positive list is rejected so a stale
+// drag never silently drops a card.
+function assertFullPermutation(currentIds, requestedIds, message) {
+  const requestedSet = new Set(requestedIds);
+
+  if (
+    requestedIds.length !== currentIds.length ||
+    requestedIds.some((id) => !Number.isInteger(id) || id <= 0) ||
+    requestedSet.size !== requestedIds.length ||
+    currentIds.some((id) => !requestedSet.has(id))
+  ) {
+    throw new Error(message);
+  }
 }
 
 // The default name for a new showcase. The unique index is case-insensitive,
@@ -1428,7 +1455,7 @@ function getShowcaseById(id) {
 
 function createShowcase(name) {
   getDatabase();
-  const normalizedName = normalizeShowcaseName(name) || nextDefaultShowcaseName();
+  const normalizedName = normalizeName(name) || nextDefaultShowcaseName();
 
   let showcaseId;
 
@@ -1436,11 +1463,7 @@ function createShowcase(name) {
     const result = statements.createShowcaseStatement.run({ name: normalizedName });
     showcaseId = Number(result.lastInsertRowid);
   } catch (error) {
-    if (String(error.message).includes('UNIQUE constraint failed: showcases.name')) {
-      throw new Error('A showcase with this name already exists.');
-    }
-
-    throw error;
+    mapUniqueConstraintError(error, 'A showcase with this name already exists.');
   }
 
   return getShowcaseById(showcaseId);
@@ -1450,10 +1473,6 @@ function createShowcase(name) {
 // it by reference (spec §Vocabulary). Creating a name that already exists
 // (ignoring case) returns the existing row instead of erroring, so the editor's
 // combobox can be "pick or type" without a duplicate check.
-function normalizeCategoryName(name) {
-  return String(name ?? '').trim().replace(/\s+/g, ' ');
-}
-
 function getAllCategories() {
   getDatabase();
   return statements.listCategoriesStatement.all();
@@ -1466,7 +1485,7 @@ function getCategoryById(id) {
 
 function createCategory(name) {
   getDatabase();
-  const normalizedName = normalizeCategoryName(name);
+  const normalizedName = normalizeName(name);
 
   if (!normalizedName) {
     throw new Error('Category name is required.');
@@ -1487,7 +1506,7 @@ function createCategory(name) {
 function renameCategory(id, name) {
   getDatabase();
   const categoryId = Number(id);
-  const normalizedName = normalizeCategoryName(name);
+  const normalizedName = normalizeName(name);
 
   if (!normalizedName) {
     throw new Error('Category name is required.');
@@ -1499,11 +1518,7 @@ function renameCategory(id, name) {
       name: normalizedName
     });
   } catch (error) {
-    if (String(error.message).includes('UNIQUE constraint failed: categories.name')) {
-      throw new Error('A category with this name already exists.');
-    }
-
-    throw error;
+    mapUniqueConstraintError(error, 'A category with this name already exists.');
   }
 
   return getCategoryById(categoryId);
@@ -1616,11 +1631,7 @@ function addCategoryPlacement(showcaseId, descriptor) {
     });
     nodeId = Number(result.lastInsertRowid);
   } catch (error) {
-    if (String(error.message).includes('UNIQUE constraint failed: showcase_nodes')) {
-      throw new Error('This category is already in the showcase.');
-    }
-
-    throw error;
+    mapUniqueConstraintError(error, 'This category is already in the showcase.');
   }
 
   return getShowcaseNodeById(nodeId);
@@ -1646,7 +1657,7 @@ function addGrouping(showcaseId, descriptor) {
     throw new Error('A grouping cannot be nested under a note.');
   }
 
-  const name = String(descriptor.name ?? '').trim().replace(/\s+/g, ' ');
+  const name = normalizeName(descriptor.name);
 
   if (!name) {
     throw new Error('Node name is required.');
@@ -1797,11 +1808,24 @@ function updateShowcaseNode(id, descriptor = {}) {
     return null;
   }
 
+  // A manual cover belongs to a Grouping and must name a Note that exists. A
+  // non-null value on a Category Placement or a note node is a client error, and
+  // so is an unknown note id; a null value clears the cover.
+  if (descriptor.cover_note_id != null) {
+    if (existing.node_type !== 'grouping') {
+      throw new Error('A cover note can only be set on a grouping.');
+    }
+
+    if (!getNoteById(Number(descriptor.cover_note_id))) {
+      throw new Error('Cover note not found.');
+    }
+  }
+
   if (existing.node_type === 'category') {
     renameCategory(existing.category_id, descriptor.name);
   } else if (existing.node_type === 'grouping') {
     if (descriptor.name !== undefined) {
-      const name = String(descriptor.name ?? '').trim().replace(/\s+/g, ' ');
+      const name = normalizeName(descriptor.name);
 
       if (!name) {
         throw new Error('Node name is required.');
@@ -1858,16 +1882,12 @@ function reorderShowcaseNodes(showcaseId, parentNodeId, orderedIds) {
     .all({ showcase_id: id, parent_node_id: parentId })
     .map((row) => row.id);
   const requested = Array.isArray(orderedIds) ? orderedIds.map((nodeId) => Number(nodeId)) : [];
-  const requestedSet = new Set(requested);
 
-  if (
-    requested.length !== currentIds.length ||
-    requested.some((nodeId) => !Number.isInteger(nodeId) || nodeId <= 0) ||
-    requestedSet.size !== requested.length ||
-    currentIds.some((nodeId) => !requestedSet.has(nodeId))
-  ) {
-    throw new Error('Reorder request must include every child exactly once.');
-  }
+  assertFullPermutation(
+    currentIds,
+    requested,
+    'Reorder request must include every child exactly once.'
+  );
 
   const transaction = db.transaction((nextIds) => {
     nextIds.forEach((nodeId, index) => {
@@ -1908,18 +1928,15 @@ function reorderShowcases(ids) {
   const normalizedIds = Array.isArray(ids) ? ids.map((id) => Number(id)) : [];
   const existingIds = getAllShowcases().map((showcase) => showcase.id);
 
-  if (!normalizedIds.length || normalizedIds.length !== existingIds.length) {
+  if (!normalizedIds.length) {
     throw new Error('Reorder request must include every showcase exactly once.');
   }
 
-  const nextIdsSet = new Set(normalizedIds);
-
-  if (
-    nextIdsSet.size !== normalizedIds.length ||
-    existingIds.some((id) => !nextIdsSet.has(id))
-  ) {
-    throw new Error('Reorder request must include every showcase exactly once.');
-  }
+  assertFullPermutation(
+    existingIds,
+    normalizedIds,
+    'Reorder request must include every showcase exactly once.'
+  );
 
   const transaction = db.transaction((nextIds) => {
     nextIds.forEach((id, index) => {
@@ -1937,7 +1954,7 @@ function reorderShowcases(ids) {
 function renameShowcaseById(id, name) {
   getDatabase();
   const showcaseId = Number(id);
-  const normalizedName = normalizeShowcaseName(name);
+  const normalizedName = normalizeName(name);
 
   if (!normalizedName) {
     throw new Error('Showcase name is required.');
@@ -1948,11 +1965,7 @@ function renameShowcaseById(id, name) {
   try {
     statements.renameShowcaseStatement.run({ id: showcaseId, name: normalizedName });
   } catch (error) {
-    if (String(error.message).includes('UNIQUE constraint failed: showcases.name')) {
-      throw new Error('A showcase with this name already exists.');
-    }
-
-    throw error;
+    mapUniqueConstraintError(error, 'A showcase with this name already exists.');
   }
 
   return getShowcaseById(showcaseId);
