@@ -614,6 +614,81 @@ input[type="radio"] {
   white-space: nowrap;
 }
 
+/* A Grouping card shows its cover image (the manual cover or the first note
+   beneath it) or a neutral gradient placeholder that still carries the name. */
+.showcase-card--grouping {
+  gap: 8px;
+}
+
+.showcase-card-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  object-fit: contain;
+}
+
+.showcase-card-cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  border-radius: var(--radius-md);
+}
+
+.showcase-card-cover--empty {
+  background: linear-gradient(135deg, var(--surface-3), var(--surface));
+  border: 1px solid var(--border-soft);
+}
+
+/* The drill navigation: Up plus a breadcrumb back through the ancestors. One
+   level shows at a time, so this is the only way up. */
+.showcase-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.showcase-breadcrumb-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  flex-wrap: wrap;
+}
+
+.showcase-breadcrumb-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.showcase-breadcrumb-sep {
+  color: var(--text-faint);
+}
+
+.showcase-breadcrumb-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  font: inherit;
+  cursor: pointer;
+}
+
+.showcase-breadcrumb-link:hover {
+  text-decoration: underline;
+}
+
+.showcase-breadcrumb-current {
+  color: var(--text);
+  font-weight: 600;
+}
+
 .showcase-cell {
   display: flex;
   flex-direction: column;
