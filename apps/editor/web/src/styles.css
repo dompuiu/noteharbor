@@ -353,6 +353,20 @@ input[type="radio"] {
   color: var(--accent-strong);
 }
 
+/* Showcase rows can be dragged to set their order. The hovered row shows a
+   line on the edge the drop will land on; the dragged row dims. */
+.sidebar-link--dragging {
+  opacity: 0.5;
+}
+
+.sidebar-link--drop-before {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+
+.sidebar-link--drop-after {
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+
 /* The cursor link already draws its own ring. Drop the global
    :focus-visible outline here so the two do not stack into a double border.
    Plain Tab focus (no cursor) keeps the outline, so focus stays visible. */
