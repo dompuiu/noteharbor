@@ -1497,8 +1497,9 @@ function renameCategory(id, name) {
 }
 
 // One node in its wire shape: the placement row plus the referenced Note (for a
-// note node) and its children. `name` is resolved from the label for a category.
-function buildShowcaseNode(row, note = null) {
+// note node) and the manual cover Note (for a grouping) and its children. `name`
+// is resolved from the label for a category.
+function buildShowcaseNode(row, note = null, coverNote = null) {
   return {
     id: row.id,
     node_type: row.node_type,
@@ -1509,6 +1510,7 @@ function buildShowcaseNode(row, note = null) {
     cover_note_id: row.cover_note_id ?? null,
     position: row.position ?? null,
     note: note ?? null,
+    cover_note: coverNote ?? null,
     children: []
   };
 }
@@ -1522,7 +1524,8 @@ function getShowcaseNodeById(id) {
   }
 
   const note = row.note_id != null ? getNoteById(row.note_id) : null;
-  return buildShowcaseNode(row, note);
+  const coverNote = row.cover_note_id != null ? getNoteById(row.cover_note_id) : null;
+  return buildShowcaseNode(row, note, coverNote);
 }
 
 // The whole tree of one Showcase, nested under its root nodes and ordered by
@@ -1536,7 +1539,14 @@ function getShowcaseTree(showcaseId) {
   const nodesById = new Map();
 
   for (const row of rows) {
-    nodesById.set(row.id, buildShowcaseNode(row, notesById.get(row.note_id) ?? null));
+    nodesById.set(
+      row.id,
+      buildShowcaseNode(
+        row,
+        notesById.get(row.note_id) ?? null,
+        notesById.get(row.cover_note_id) ?? null
+      )
+    );
   }
 
   const roots = [];
@@ -1603,6 +1613,53 @@ function addCategoryPlacement(showcaseId, descriptor) {
   return getShowcaseNodeById(nodeId);
 }
 
+// A Grouping is local to its parent (ADR 0001): it lives only under a Category
+// Placement or another Grouping in the same Showcase. It carries a name only;
+// its cover is derived or set later.
+function addGrouping(showcaseId, descriptor) {
+  const parentId = Number(descriptor.parent_id);
+
+  if (!Number.isInteger(parentId) || parentId <= 0) {
+    throw new Error('A parent node is required.');
+  }
+
+  const parent = statements.getShowcaseNodeStatement.get(parentId);
+
+  if (!parent || parent.showcase_id !== showcaseId) {
+    throw new Error('Parent node not found.');
+  }
+
+  if (parent.node_type === 'note') {
+    throw new Error('A grouping cannot be nested under a note.');
+  }
+
+  const name = String(descriptor.name ?? '').trim().replace(/\s+/g, ' ');
+
+  if (!name) {
+    throw new Error('Node name is required.');
+  }
+
+  const position = Number(
+    statements.nextShowcaseNodePositionStatement.get({
+      showcase_id: showcaseId,
+      parent_node_id: parentId
+    })?.value ?? 1
+  );
+
+  const result = statements.insertShowcaseNodeStatement.run({
+    showcase_id: showcaseId,
+    parent_node_id: parentId,
+    node_type: 'grouping',
+    category_id: null,
+    name,
+    note_id: null,
+    cover_note_id: null,
+    position
+  });
+
+  return getShowcaseNodeById(Number(result.lastInsertRowid));
+}
+
 // Extend this switch for a new node type. Ticket 09 adds `grouping`; ticket 10
 // adds the `notes` batch. The descriptor is the raw request body.
 function addShowcaseNode(showcaseId, descriptor = {}) {
@@ -1612,6 +1669,8 @@ function addShowcaseNode(showcaseId, descriptor = {}) {
   switch (type) {
     case 'category':
       return addCategoryPlacement(Number(showcaseId), descriptor);
+    case 'grouping':
+      return addGrouping(Number(showcaseId), descriptor);
     default:
       throw new Error(`Unsupported node type: ${String(type ?? '')}.`);
   }

@@ -14,17 +14,93 @@ import { useShowcases } from "../lib/showcases.jsx";
 import { ShowcaseCategoryCard } from "./ShowcaseCategoryCard.jsx";
 import { ShowcaseCategoryEditor } from "./ShowcaseCategoryEditor.jsx";
 import { ShowcaseCategoryTile } from "./ShowcaseCategoryTile.jsx";
+import { ShowcaseBreadcrumb } from "./ShowcaseBreadcrumb.jsx";
 import { ShowcaseGrid } from "./ShowcaseGrid.jsx";
+import { ShowcaseGroupingCard } from "./ShowcaseGroupingCard.jsx";
+import { ShowcaseGroupingEditor } from "./ShowcaseGroupingEditor.jsx";
+import { ShowcaseGroupingTile } from "./ShowcaseGroupingTile.jsx";
 import { ShowcasePhotoSizeControl } from "./ShowcasePhotoSizeControl.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 
 // One showcase, rendered in one of two near-identical modes. View mode is the
 // read-only presentation; edit mode adds the authoring controls. Both share the
-// same shell, grid, and cards so the two never drift. Ticket 08 places
-// Categories at the top level; group, note, and order controls follow.
+// same shell, grid, and cards so the two never drift. Categories sit at the top
+// level; a Category or Grouping opens into its own level (nothing expands
+// inline). Notes render in ticket 10.
 function upsertCategory(categories, category) {
   const others = categories.filter((entry) => entry.id !== category.id);
   return [...others, category].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+// Walk the tree by the drilled node ids. A stale id (e.g. a node removed in
+// another tab) stops the walk at the last resolvable level.
+function findNodePath(nodes, ids) {
+  const path = [];
+  let level = nodes;
+
+  for (const id of ids) {
+    const node = level.find((entry) => entry.id === id);
+
+    if (!node) {
+      break;
+    }
+
+    path.push(node);
+    level = node.children ?? [];
+  }
+
+  return path;
+}
+
+// Replace one node anywhere in the tree, keeping the same references when the
+// id is not present so React does not re-render untouched branches.
+function updateNodeTree(nodes, nodeId, update) {
+  let changed = false;
+  const next = nodes.map((node) => {
+    if (node.id === nodeId) {
+      changed = true;
+      return update(node);
+    }
+
+    if (node.children?.length) {
+      const children = updateNodeTree(node.children, nodeId, update);
+
+      if (children !== node.children) {
+        changed = true;
+        return { ...node, children };
+      }
+    }
+
+    return node;
+  });
+
+  return changed ? next : nodes;
+}
+
+function removeNodeTree(nodes, nodeId) {
+  let changed = false;
+  const next = [];
+
+  for (const node of nodes) {
+    if (node.id === nodeId) {
+      changed = true;
+      continue;
+    }
+
+    if (node.children?.length) {
+      const children = removeNodeTree(node.children, nodeId);
+
+      if (children !== node.children) {
+        changed = true;
+        next.push({ ...node, children });
+        continue;
+      }
+    }
+
+    next.push(node);
+  }
+
+  return changed ? next : nodes;
 }
 
 function ShowcaseScreen({ mode }) {
@@ -51,6 +127,13 @@ function ShowcaseScreen({ mode }) {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  // The drilled node ids, root first. Edit mode keeps this in memory (the URL
+  // does not change during edits); view-mode URL sync is ticket 12.
+  const [drillIds, setDrillIds] = useState([]);
+
+  useEffect(() => {
+    setDrillIds([]);
+  }, [showcaseId]);
 
   useEffect(() => {
     if (!justCreated) {
@@ -227,6 +310,62 @@ function ShowcaseScreen({ mode }) {
     setNodes((current) => current.filter((entry) => entry.id !== node.id));
   }
 
+  // The current drill level. `currentParentId` is the node a new Grouping is
+  // created under (null at the top level, where only Categories live).
+  const currentPath = findNodePath(nodes, drillIds);
+  const currentNode = currentPath.length
+    ? currentPath[currentPath.length - 1]
+    : null;
+  const currentParentId = currentNode ? currentNode.id : null;
+  const currentChildren = currentNode ? currentNode.children ?? [] : nodes;
+
+  function openNode(node) {
+    setDrillIds((current) => [...current, node.id]);
+  }
+
+  // `-1` is the Showcase root; any other index opens that breadcrumb level.
+  function navigateTo(targetIndex) {
+    setDrillIds((current) =>
+      targetIndex < 0 ? [] : current.slice(0, targetIndex + 1),
+    );
+  }
+
+  async function handleAddGrouping(name) {
+    const { node } = await createShowcaseNode(showcaseId, {
+      type: "grouping",
+      parent_id: currentParentId,
+      name,
+    });
+
+    if (node) {
+      setNodes((current) =>
+        updateNodeTree(current, currentParentId, (parent) => ({
+          ...parent,
+          children: [...(parent.children ?? []), node],
+        })),
+      );
+    }
+  }
+
+  async function handleRenameGrouping(node, name) {
+    const { node: updated } = await updateNode(node.id, { name });
+
+    setNodes((current) =>
+      updateNodeTree(current, node.id, (entry) => ({
+        ...entry,
+        ...(updated ?? {}),
+        name,
+        // The server's single-node row has no children; keep the local subtree.
+        children: entry.children,
+      })),
+    );
+  }
+
+  async function handleRemoveGrouping(node) {
+    await deleteNode(node.id);
+    setNodes((current) => removeNodeTree(current, node.id));
+  }
+
   const showEmpty = !loading && !loadError && nodes.length === 0;
   // A label can be placed at most once per Showcase, so do not suggest the ones
   // already on the canvas.
@@ -296,27 +435,69 @@ function ShowcaseScreen({ mode }) {
         ) : null}
 
         {!loading && !loadError ? (
-          <ShowcaseGrid size={photoSize}>
-            {nodes.map((node) =>
-              editMode ? (
-                <ShowcaseCategoryEditor
-                  key={node.id}
-                  node={node}
-                  onRemove={handleRemoveCategory}
-                  onRename={handleRenameCategory}
-                />
-              ) : (
-                <ShowcaseCategoryCard key={node.id} name={node.name} />
-              ),
-            )}
-
-            {editMode ? (
-              <ShowcaseCategoryTile
-                categories={availableCategories}
-                onAdd={handleAddCategory}
+          <>
+            {currentNode ? (
+              <ShowcaseBreadcrumb
+                showcaseName={showcaseName}
+                onNavigate={navigateTo}
+                path={currentPath}
               />
             ) : null}
-          </ShowcaseGrid>
+
+            <ShowcaseGrid size={photoSize}>
+              {currentChildren.map((node) => {
+                if (node.node_type === "category") {
+                  return editMode ? (
+                    <ShowcaseCategoryEditor
+                      key={node.id}
+                      node={node}
+                      onOpen={() => openNode(node)}
+                      onRemove={handleRemoveCategory}
+                      onRename={handleRenameCategory}
+                    />
+                  ) : (
+                    <ShowcaseCategoryCard
+                      key={node.id}
+                      name={node.name}
+                      onOpen={() => openNode(node)}
+                    />
+                  );
+                }
+
+                if (node.node_type === "grouping") {
+                  return editMode ? (
+                    <ShowcaseGroupingEditor
+                      key={node.id}
+                      node={node}
+                      onOpen={() => openNode(node)}
+                      onRemove={handleRemoveGrouping}
+                      onRename={handleRenameGrouping}
+                    />
+                  ) : (
+                    <ShowcaseGroupingCard
+                      key={node.id}
+                      node={node}
+                      onOpen={() => openNode(node)}
+                    />
+                  );
+                }
+
+                // Note cards arrive in ticket 10.
+                return null;
+              })}
+
+              {editMode && !currentNode ? (
+                <ShowcaseCategoryTile
+                  categories={availableCategories}
+                  onAdd={handleAddCategory}
+                />
+              ) : null}
+
+              {editMode && currentNode ? (
+                <ShowcaseGroupingTile onAdd={handleAddGrouping} />
+              ) : null}
+            </ShowcaseGrid>
+          </>
         ) : null}
       </div>
 
