@@ -54,16 +54,28 @@ _Avoid_: Full size, 100% zoom, lightbox zoom
 The Editor's management hub in the sidebar: Banknotes, Collections, and Import/Export.
 _Avoid_: Manage
 
-**Portfolio**:
-The Editor's presentation hub in the sidebar: Categories and Groupings.
-_Avoid_: Showcase
+**Showcases**:
+The Editor's presentation hub in the sidebar; it lists the workspace's Showcases and creates new ones.
+_Avoid_: Portfolio
 
-**Categories**:
-A placeholder Portfolio destination; its data model and behaviour are not defined yet.
-_Avoid_: (as a synonym for Tag)
+**Showcase**:
+A named presentation tree the Editor author builds from notes across collections, made of Categories and Groupings.
+_Avoid_: Album, gallery
 
-**Groupings**:
-A placeholder Portfolio destination; its data model and behaviour are not defined yet.
+**Category**:
+A reusable label from the workspace's shared pool; placing it into a Showcase creates a Placement that holds that showcase's own notes and groupings.
+_Avoid_: Tag, group
+
+**Grouping**:
+A standalone node inside a Showcase that nests further Groupings and notes; owned by its parent and never shared between Categories or Showcases.
+
+**Placement**:
+One occurrence of a Category inside a Showcase, owning the notes and groupings shown there.
+_Avoid_: Instance, occurrence
+
+**Cover image**:
+The one note image shown for a Grouping card; the Grouping may set its own, otherwise it derives the first note beneath it. Categories have no cover image — a Category card shows its name only.
+_Avoid_: Thumbnail, thumb
 
 ## Viewer screens
 
@@ -74,6 +86,10 @@ The Viewer's screens are a read-only **Table screen** and **Note slideshow** (wi
 **Note**:
 One physical banknote (or banknote group) in the collection: its denomination, issue date, catalog number, grading, and associated images.
 _Avoid_: Banknote, note_record, banknote row
+
+**Catalog family**:
+The set of notes whose catalog number shares a base number, each optionally followed by a single trailing letter: `22`, `22a`, `22b`, and `22s` are one family, while `220` and `221` are not.
+_Avoid_: Variation set
 
 **Collection**:
 A named group of notes forming one archive. Each note belongs to exactly one collection, and a collection's notes have an order.
