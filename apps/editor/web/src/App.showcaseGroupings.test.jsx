@@ -1,4 +1,4 @@
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation } from "react-router-dom";
 import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
@@ -147,6 +147,7 @@ function summerTree({ coverNote = null } = {}) {
 function renderAt(path) {
   return render(
     <MemoryRouter initialEntries={[path]}>
+      <LocationProbe />
       <CollectionsProvider>
         <ShowcasesProvider>
           <ShellContent />
@@ -154,6 +155,11 @@ function renderAt(path) {
       </CollectionsProvider>
     </MemoryRouter>,
   );
+}
+
+function LocationProbe() {
+  const location = useLocation();
+  return <output data-testid="pathname">{location.pathname}</output>;
 }
 
 function groupingCard(name) {
@@ -258,6 +264,17 @@ describe("grouping drill navigation", () => {
     expect(
       await screen.findByRole("button", { name: "Open category Summer" }),
     ).toBeInTheDocument();
+  });
+
+  test("edit mode keeps the drill state in memory without changing the URL", async () => {
+    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    await openSummer();
+    await userEvent.dblClick(groupingCard("Sub"));
+
+    expect(groupingCard("Deep")).toBeInTheDocument();
+    expect(screen.getByTestId("pathname")).toHaveTextContent(
+      "/portfolio/showcases/1/edit",
+    );
   });
 });
 
