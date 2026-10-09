@@ -220,4 +220,75 @@ describe("moving card focus", () => {
     fireEvent.keyDown(document.body, { key: "k" });
     expect(summer).toHaveFocus();
   });
+
+  test("Home and End focus the first and last card", async () => {
+    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    const summer = await summerCard();
+    const vienna = screen.getByRole("button", { name: "Open category Vienna" });
+
+    fireEvent.keyDown(document.body, { key: "End" });
+    expect(vienna).toHaveFocus();
+
+    fireEvent.keyDown(document.body, { key: "Home" });
+    expect(summer).toHaveFocus();
+  });
+
+  test("PageDown and PageUp move by a screen of rows", async () => {
+    getShowcaseTree.mockResolvedValue({
+      showcase_id: 1,
+      nodes: manyCategories(12),
+    });
+    renderAt(PORTFOLIO_ROUTES.showcase(1));
+
+    const cards = await screen.findAllByRole("button", {
+      name: /^Open category /,
+    });
+    stubGridRects(cards, 3, { height: 100 });
+    Object.defineProperty(window, "innerHeight", {
+      configurable: true,
+      value: 250,
+    });
+
+    act(() => cards[0].focus());
+
+    fireEvent.keyDown(document.body, { key: "PageDown" });
+    expect(cards[6]).toHaveFocus();
+
+    fireEvent.keyDown(document.body, { key: "PageUp" });
+    expect(cards[0]).toHaveFocus();
+  });
 });
+
+// Twelve categories in a single level, for the page-sized movement test.
+function manyCategories(count) {
+  return Array.from({ length: count }, (_, index) =>
+    categoryNode({
+      id: 100 + index,
+      name: `Category ${index + 1}`,
+      position: index + 1,
+    }),
+  );
+}
+
+// Assign every card a rect on a `columns`-wide grid so page movement can be
+// computed the way it is in a browser. jsdom reports all-zero rects otherwise.
+function stubGridRects(cards, columns, { width = 200, height = 100, gap = 0 }) {
+  const pitch = height + gap;
+
+  cards.forEach((card, index) => {
+    const column = index % columns;
+    const row = Math.floor(index / columns);
+
+    card.getBoundingClientRect = () => ({
+      top: row * pitch,
+      left: column * (width + gap),
+      width,
+      height,
+      right: column * (width + gap) + width,
+      bottom: row * pitch + height,
+      x: column * (width + gap),
+      y: row * pitch,
+    });
+  });
+}
+

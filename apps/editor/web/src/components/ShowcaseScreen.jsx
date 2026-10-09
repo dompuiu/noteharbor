@@ -627,6 +627,43 @@ function ShowcaseScreen({ mode }) {
     cards[clamped]?.focus();
   }
 
+  // How many cards a page step covers: the columns on the first row times the
+  // rows a viewport holds. Measured from the rendered cards; a layout that
+  // cannot be measured falls back to one row.
+  function cardPageStep(cards) {
+    if (cards.length < 2) {
+      return 1;
+    }
+
+    const rects = cards.map((card) => card.getBoundingClientRect());
+    const firstTop = rects[0].top;
+    const columns =
+      rects.filter((rect) => Math.abs(rect.top - firstTop) < 1).length || 1;
+    const tops = Array.from(
+      new Set(rects.map((rect) => Math.round(rect.top))),
+    ).sort((a, b) => a - b);
+    const pitch = tops.length > 1 ? tops[1] - tops[0] : rects[0].height;
+    const viewport = window.innerHeight || 0;
+    const rowsPerPage =
+      pitch > 0 && viewport > 0 ? Math.max(1, Math.floor(viewport / pitch)) : 1;
+
+    return Math.max(1, rowsPerPage * columns);
+  }
+
+  function pageCardFocus(direction) {
+    const cards = showcaseCardElements();
+
+    if (!cards.length) {
+      return;
+    }
+
+    const current = focusedShowcaseCard();
+    const currentIndex = current ? cards.indexOf(current) : -1;
+    const baseIndex = currentIndex >= 0 ? currentIndex : 0;
+
+    focusCardAt(baseIndex + direction * cardPageStep(cards));
+  }
+
   // One window listener drives card navigation and the edit actions, mirroring
   // the Banknotes table. Guards, in order: an open dialog, a text field, the
   // sidebar, and a Meta/Ctrl/Alt chord.
@@ -665,6 +702,24 @@ function ShowcaseScreen({ mode }) {
       if (up || previous) {
         event.preventDefault();
         moveCardFocus(-1);
+        return;
+      }
+
+      if (event.key === "Home") {
+        event.preventDefault();
+        focusCardAt(0);
+        return;
+      }
+
+      if (event.key === "End") {
+        event.preventDefault();
+        focusCardAt(showcaseCardElements().length - 1);
+        return;
+      }
+
+      if (event.key === "PageDown" || event.key === "PageUp") {
+        event.preventDefault();
+        pageCardFocus(event.key === "PageDown" ? 1 : -1);
       }
     }
 
