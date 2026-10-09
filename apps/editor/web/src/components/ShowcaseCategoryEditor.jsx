@@ -5,7 +5,7 @@ import { ShowcaseCategoryCard } from "./ShowcaseCategoryCard.jsx";
 // adds Rename / Remove, so the read-only presentation stays free of edit
 // affordances. Renaming the Placement renames the shared label server-side, so
 // every Showcase that places it shows the new name.
-function ShowcaseCategoryEditor({ node, onRemove, onRename }) {
+function ShowcaseCategoryEditor({ node, onRemove, onRename, children }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(node.name);
   const [busy, setBusy] = useState(false);
@@ -110,6 +110,8 @@ function ShowcaseCategoryEditor({ node, onRemove, onRename }) {
           {error}
         </p>
       ) : null}
+
+      {children}
     </div>
   );
 }

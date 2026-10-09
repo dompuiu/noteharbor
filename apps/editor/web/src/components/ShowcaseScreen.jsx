@@ -10,19 +10,64 @@ import {
 } from "../lib/api.js";
 import { DEFAULT_DESTINATION, PORTFOLIO_ROUTES } from "../lib/routes.js";
 import { useShowcases } from "../lib/showcases.jsx";
+import { useCollections } from "../lib/collections.jsx";
 import { ShowcaseCategoryCard } from "./ShowcaseCategoryCard.jsx";
 import { ShowcaseCategoryEditor } from "./ShowcaseCategoryEditor.jsx";
 import { ShowcaseCategoryTile } from "./ShowcaseCategoryTile.jsx";
 import { ShowcaseGrid } from "./ShowcaseGrid.jsx";
+import { ShowcaseNodeItems } from "./ShowcaseNodeItems.jsx";
+import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 
 // One showcase, rendered in one of two near-identical modes. View mode is the
 // read-only presentation; edit mode adds the authoring controls. Both share the
 // same shell, grid, and cards so the two never drift. Ticket 08 places
-// Categories at the top level; group, note, and order controls follow.
+// Categories at the top level; ticket 10 adds each node's notes and the picker.
 function upsertCategory(categories, category) {
   const others = categories.filter((entry) => entry.id !== category.id);
   return [...others, category].sort((a, b) => a.name.localeCompare(b.name));
+}
+
+function findNodeById(nodes, nodeId) {
+  for (const node of nodes) {
+    if (node.id === nodeId) {
+      return node;
+    }
+
+    const found = findNodeById(node.children ?? [], nodeId);
+
+    if (found) {
+      return found;
+    }
+  }
+
+  return null;
+}
+
+// Apply a batch of just-added children under their parent, anywhere in the tree,
+// from the server's rows — no full refetch.
+function appendChildren(nodes, parentId, added) {
+  return nodes.map((node) => {
+    if (node.id === parentId) {
+      return { ...node, children: [...(node.children ?? []), ...added] };
+    }
+
+    if (node.children?.length) {
+      return { ...node, children: appendChildren(node.children, parentId, added) };
+    }
+
+    return node;
+  });
+}
+
+function removeNodeById(nodes, nodeId) {
+  return nodes
+    .filter((node) => node.id !== nodeId)
+    .map((node) =>
+      node.children?.length
+        ? { ...node, children: removeNodeById(node.children, nodeId) }
+        : node,
+    );
 }
 
 function ShowcaseScreen({ mode }) {
@@ -42,6 +87,10 @@ function ShowcaseScreen({ mode }) {
   const [nameError, setNameError] = useState("");
   const [deleting, setDeleting] = useState(false);
   const { confirm, dialog } = useConfirmation();
+  const { collections } = useCollections();
+  // The picker's target node id (not the node object) so the open popup reads
+  // the node's current children after an add updates the tree.
+  const [pickerNodeId, setPickerNodeId] = useState(null);
 
   const [nodes, setNodes] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -223,6 +272,36 @@ function ShowcaseScreen({ mode }) {
     setNodes((current) => current.filter((entry) => entry.id !== node.id));
   }
 
+  function handleOpenNotePicker(node) {
+    setPickerNodeId(node.id);
+  }
+
+  // The notes batch returns every new node, so append them under the target in
+  // the given order without refetching the tree (mirrors the category add).
+  async function handleAddNotes(noteIds) {
+    if (pickerNodeId == null) {
+      return;
+    }
+
+    const { nodes: added } = await createShowcaseNode(showcaseId, {
+      type: "notes",
+      parent_id: pickerNodeId,
+      note_ids: noteIds,
+    });
+
+    if (added?.length) {
+      setNodes((current) => appendChildren(current, pickerNodeId, added));
+    }
+  }
+
+  async function handleRemoveNote(noteNode) {
+    await deleteNode(noteNode.id);
+    setNodes((current) => removeNodeById(current, noteNode.id));
+  }
+
+  const pickerNode =
+    pickerNodeId == null ? null : findNodeById(nodes, pickerNodeId);
+
   const showEmpty = !loading && !loadError && nodes.length === 0;
   // A label can be placed at most once per Showcase, so do not suggest the ones
   // already on the canvas.
@@ -294,7 +373,13 @@ function ShowcaseScreen({ mode }) {
                   node={node}
                   onRemove={handleRemoveCategory}
                   onRename={handleRenameCategory}
-                />
+                >
+                  <ShowcaseNodeItems
+                    node={node}
+                    onAddNotes={handleOpenNotePicker}
+                    onRemoveNote={handleRemoveNote}
+                  />
+                </ShowcaseCategoryEditor>
               ) : (
                 <ShowcaseCategoryCard key={node.id} name={node.name} />
               ),
@@ -309,6 +394,15 @@ function ShowcaseScreen({ mode }) {
           </ShowcaseGrid>
         ) : null}
       </div>
+
+      {pickerNode ? (
+        <ShowcaseNotePicker
+          collections={collections}
+          node={pickerNode}
+          onAdd={handleAddNotes}
+          onClose={() => setPickerNodeId(null)}
+        />
+      ) : null}
 
       {dialog}
     </section>
