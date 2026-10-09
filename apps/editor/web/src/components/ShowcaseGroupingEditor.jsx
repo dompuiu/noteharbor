@@ -7,7 +7,7 @@ import { ShowcaseNodeEditor } from "./ShowcaseNodeEditor.jsx";
 function ShowcaseGroupingEditor({ node, onRemove, onRename, onOpen, children }) {
   return (
     <ShowcaseNodeEditor
-      card={<ShowcaseGroupingCard mode="edit" node={node} onOpen={onOpen} />}
+      card={<ShowcaseGroupingCard node={node} onOpen={onOpen} />}
       node={node}
       noun="grouping"
       onRemove={onRemove}

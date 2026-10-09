@@ -279,7 +279,7 @@ describe("opening the focused card", () => {
     await waitFor(() => expect(search()).toBe("?node=20"));
   });
 
-  test("Enter opens an edit-mode grouping, which has no single click of its own", async () => {
+  test("Enter opens an edit-mode grouping through its single click", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     
     const sub = await screen.findByRole("button", { name: "Open grouping Sub" });

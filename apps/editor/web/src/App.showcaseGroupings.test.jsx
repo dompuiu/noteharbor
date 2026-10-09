@@ -294,7 +294,7 @@ describe("grouping drill navigation", () => {
 
   test("edit mode syncs the drill state to the URL without leaving the edit route", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await userEvent.dblClick(await screen.findByRole("button", { name: "Open grouping Sub" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Open grouping Sub" }));
 
     expect(groupingCard("Deep")).toBeInTheDocument();
     expect(screen.getByTestId("pathname")).toHaveTextContent(
@@ -418,7 +418,7 @@ describe("editing groupings on the canvas", () => {
       screen.queryByRole("button", { name: "Open grouping Deep" }),
     ).not.toBeInTheDocument();
 
-    await userEvent.dblClick(groupingCard("Sub"));
+    await userEvent.click(groupingCard("Sub"));
 
     expect(
       await screen.findByRole("button", { name: "1, 2020" }),
@@ -440,7 +440,7 @@ describe("setting a grouping cover from the canvas", () => {
     }));
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await screen.findByRole("button", { name: "Open grouping Sub" });
-    await userEvent.dblClick(groupingCard("Sub"));
+    await userEvent.click(groupingCard("Sub"));
 
     // The derived cover means no manual-cover control is shown yet.
     expect(

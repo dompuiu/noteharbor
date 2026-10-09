@@ -398,7 +398,7 @@ describe("view/edit mode switching", () => {
 
   test("the View toggle returns to the same drilled level", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await userEvent.dblClick(
+    await userEvent.click(
       await screen.findByRole("button", { name: "Open grouping Sub" }),
     );
     expect(
