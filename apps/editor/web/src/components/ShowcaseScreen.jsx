@@ -9,6 +9,7 @@ import {
   reorderNodes,
   updateNode,
 } from "../lib/api.js";
+import { isEditableElement } from "../lib/editableElement.js";
 import { usePhotoSize } from "../lib/photoSize.js";
 import {
   DEFAULT_DESTINATION,
@@ -32,6 +33,7 @@ import { ShowcaseNoteEditor } from "./ShowcaseNoteEditor.jsx";
 import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
 import { ShowcasePhotoSizeControl } from "./ShowcasePhotoSizeControl.jsx";
 import { ShowcaseReorderableCell } from "./ShowcaseReorderableCell.jsx";
+import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 
 // One showcase, rendered in one of two near-identical modes. View mode is the
@@ -218,13 +220,21 @@ function ShowcaseScreen({ mode }) {
   const [nameDraft, setNameDraft] = useState(showcaseName);
   const [nameError, setNameError] = useState("");
   const [deleting, setDeleting] = useState(false);
-  const { confirm, dialog } = useConfirmation();
+  const { confirm, dialog, isOpen: confirmOpen } = useConfirmation();
   const { collections } = useCollections();
   // The picker's target node id (not the node object) so the open popup reads
   // the node's current children after an add updates the tree.
   const [pickerNodeId, setPickerNodeId] = useState(null);
   // The photo size is a per-browser preference shared by view and edit mode.
   const [photoSize, setPhotoSize] = usePhotoSize();
+  // The shortcut help overlay. `?` opens it; it guards the card shortcuts.
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
+  // The screen element that owns the card grid; the keyboard listener scopes
+  // its card lookup to it so a card on another screen can never be reached.
+  const sectionRef = useRef(null);
+  // After a drill or an Up, focus the card for this node id when it is on the
+  // new level. Null means "do not restore".
+  const restoreFocusNodeIdRef = useRef(null);
 
   const [nodes, setNodes] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -558,6 +568,110 @@ function ShowcaseScreen({ mode }) {
     setNodes((current) => removeNodeTree(current, noteNode.id));
   }
 
+  // --- Keyboard navigation ------------------------------------------------
+  // Every card is a `.showcase-card`, and DOM order is the grid's reading
+  // order. All cards carry `tabIndex={0}` (no roving tabindex); the shortcuts
+  // only move `document.activeElement`.
+  function showcaseCardElements() {
+    const root = sectionRef.current;
+
+    if (!root) {
+      return [];
+    }
+
+    return Array.from(root.querySelectorAll(".showcase-card"));
+  }
+
+  // The card under focus, or the card of the cell the focused control sits in
+  // (a Rename/Remove/Reorder control belongs to the card's own cell).
+  function focusedShowcaseCard() {
+    const active = document.activeElement;
+
+    if (!(active instanceof Element) || !sectionRef.current?.contains(active)) {
+      return null;
+    }
+
+    return (
+      active.closest(".showcase-card") ??
+      active.closest(".showcase-cell")?.querySelector(".showcase-card") ??
+      null
+    );
+  }
+
+  function moveCardFocus(offset) {
+    const cards = showcaseCardElements();
+
+    if (!cards.length) {
+      return;
+    }
+
+    const current = focusedShowcaseCard();
+    const currentIndex = current ? cards.indexOf(current) : -1;
+    const baseIndex = currentIndex >= 0 ? currentIndex : offset > 0 ? -1 : 0;
+    const nextIndex = Math.min(
+      Math.max(baseIndex + offset, 0),
+      cards.length - 1,
+    );
+
+    cards[nextIndex]?.focus();
+  }
+
+  function focusCardAt(index) {
+    const cards = showcaseCardElements();
+
+    if (!cards.length) {
+      return;
+    }
+
+    const clamped = Math.min(Math.max(index, 0), cards.length - 1);
+    cards[clamped]?.focus();
+  }
+
+  // One window listener drives card navigation and the edit actions, mirroring
+  // the Banknotes table. Guards, in order: an open dialog, a text field, the
+  // sidebar, and a Meta/Ctrl/Alt chord.
+  useEffect(() => {
+    function handleGlobalKeyDown(event) {
+      if (showShortcutsHelp || pickerNodeId != null || confirmOpen) {
+        return;
+      }
+
+      if (isEditableElement(event.target)) {
+        return;
+      }
+
+      if (
+        event.target instanceof Element &&
+        event.target.closest("#app-sidebar")
+      ) {
+        return;
+      }
+
+      if (event.metaKey || event.ctrlKey || event.altKey) {
+        return;
+      }
+
+      const down = event.key === "ArrowDown" || event.key === "j";
+      const up = event.key === "ArrowUp" || event.key === "k";
+      const next = event.key === "ArrowRight" || event.key === "l";
+      const previous = event.key === "ArrowLeft" || event.key === "h";
+
+      if (down || next) {
+        event.preventDefault();
+        moveCardFocus(1);
+        return;
+      }
+
+      if (up || previous) {
+        event.preventDefault();
+        moveCardFocus(-1);
+      }
+    }
+
+    window.addEventListener("keydown", handleGlobalKeyDown);
+    return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+  }, [confirmOpen, pickerNodeId, showShortcutsHelp]);
+
   const pickerNode =
     pickerNodeId == null ? null : findNodeById(nodes, pickerNodeId);
 
@@ -576,7 +690,7 @@ function ShowcaseScreen({ mode }) {
   );
 
   return (
-    <section className="screen-stack showcase-screen">
+    <section className="screen-stack showcase-screen" ref={sectionRef}>
       <div className="panel">
         <div className="panel-heading">
           <div className="panel-heading-copy">
