@@ -1,11 +1,11 @@
 import { useState } from "react";
-import { ShowcaseCategoryCard } from "./ShowcaseCategoryCard.jsx";
+import { ShowcaseGroupingCard } from "./ShowcaseGroupingCard.jsx";
 
-// Edit-only controls for one Category Placement. It wraps the shared card and
-// adds Rename / Remove, so the read-only presentation stays free of edit
-// affordances. Renaming the Placement renames the shared label server-side, so
-// every Showcase that places it shows the new name.
-function ShowcaseCategoryEditor({ node, onRemove, onRename, onOpen }) {
+// Edit-only controls for one Grouping. It wraps the shared card and adds
+// Rename / Remove, so the read-only presentation stays free of edit
+// affordances. A Grouping is local to its parent, so a rename here never
+// touches another Showcase or Placement.
+function ShowcaseGroupingEditor({ node, onRemove, onRename, onOpen }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(node.name);
   const [busy, setBusy] = useState(false);
@@ -39,7 +39,7 @@ function ShowcaseCategoryEditor({ node, onRemove, onRename, onOpen }) {
       await onRename(node, trimmed);
       setEditing(false);
     } catch (renameError) {
-      setError(renameError.message || "Could not rename the category.");
+      setError(renameError.message || "Could not rename the grouping.");
     } finally {
       setBusy(false);
     }
@@ -52,14 +52,14 @@ function ShowcaseCategoryEditor({ node, onRemove, onRename, onOpen }) {
     try {
       await onRemove(node);
     } catch (removeError) {
-      setError(removeError.message || "Could not remove the category.");
+      setError(removeError.message || "Could not remove the grouping.");
       setBusy(false);
     }
   }
 
   return (
     <div className="showcase-cell">
-      <ShowcaseCategoryCard name={node.name} onOpen={onOpen} />
+      <ShowcaseGroupingCard node={node} onOpen={onOpen} />
 
       {editing ? (
         <form className="showcase-cell-edit" onSubmit={handleRename}>
@@ -74,11 +74,7 @@ function ShowcaseCategoryEditor({ node, onRemove, onRename, onOpen }) {
             <button className="button button-primary" disabled={busy} type="submit">
               Save
             </button>
-            <button
-              className="button"
-              onClick={cancelEditing}
-              type="button"
-            >
+            <button className="button" onClick={cancelEditing} type="button">
               Cancel
             </button>
           </div>
@@ -114,4 +110,4 @@ function ShowcaseCategoryEditor({ node, onRemove, onRename, onOpen }) {
   );
 }
 
-export { ShowcaseCategoryEditor };
+export { ShowcaseGroupingEditor };
