@@ -128,7 +128,7 @@ function Sidebar({ pageFocusRef }) {
     key: "new-showcase",
     label: "New showcase",
     type: "action",
-    visibleLabel: "+ New showcase",
+    visibleLabel: "New showcase",
   };
 
   const groups = [
@@ -546,8 +546,7 @@ function Sidebar({ pageFocusRef }) {
                         onDragLeave={
                           isShowcase
                             ? (event) => {
-                                const links =
-                                  event.currentTarget.parentElement;
+                                const links = event.currentTarget.parentElement;
 
                                 if (
                                   event.relatedTarget &&
@@ -582,10 +581,7 @@ function Sidebar({ pageFocusRef }) {
                         onDragStart={
                           isShowcase
                             ? (event) =>
-                                handleShowcaseDragStart(
-                                  event,
-                                  item.showcaseId,
-                                )
+                                handleShowcaseDragStart(event, item.showcaseId)
                             : undefined
                         }
                         onDrop={
