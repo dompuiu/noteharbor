@@ -483,6 +483,10 @@ function ShowcaseScreen({ mode }) {
   }
 
   function openNode(node) {
+    // Focus the card we leave from when it is on the new level (it is not, for
+    // a drill, but an Up back to this level restores it).
+    restoreFocusNodeIdRef.current = node.id;
+
     if (editMode) {
       setDrillIds((current) => [...current, node.id]);
       return;
@@ -493,6 +497,10 @@ function ShowcaseScreen({ mode }) {
 
   // `-1` is the Showcase root; any other index opens that breadcrumb level.
   function navigateTo(targetIndex) {
+    // Going up or sideways restores focus to the node we are leaving when its
+    // card is on the destination level.
+    restoreFocusNodeIdRef.current = currentNode?.id ?? null;
+
     if (editMode) {
       setDrillIds((current) =>
         targetIndex < 0 ? [] : current.slice(0, targetIndex + 1),
@@ -569,6 +577,10 @@ function ShowcaseScreen({ mode }) {
   }
 
   // --- Keyboard navigation ------------------------------------------------
+  // The number of levels deep the canvas is drilled. The Escape step uses it to
+  // decide whether there is a level to go up to.
+  const drillDepth = effectiveDrillIds.length;
+
   // Every card is a `.showcase-card`, and DOM order is the grid's reading
   // order. All cards carry `tabIndex={0}` (no roving tabindex); the shortcuts
   // only move `document.activeElement`.
@@ -753,12 +765,64 @@ function ShowcaseScreen({ mode }) {
           event.preventDefault();
           openNode(node);
         }
+        return;
+      }
+
+      if (event.key === "Escape") {
+        const card = focusedShowcaseCard();
+
+        if (card) {
+          event.preventDefault();
+
+          if (document.activeElement instanceof HTMLElement) {
+            document.activeElement.blur();
+          }
+
+          return;
+        }
+
+        if (drillDepth > 0) {
+          event.preventDefault();
+          navigateTo(drillDepth - 2);
+        }
       }
     }
 
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
-  }, [confirmOpen, editMode, nodes, pickerNodeId, showShortcutsHelp]);
+  }, [
+    confirmOpen,
+    drillDepth,
+    editMode,
+    nodes,
+    pickerNodeId,
+    showShortcutsHelp,
+  ]);
+
+  // After a drill or an Up, bring focus back to the card for the node we left
+  // when it is on the new level. A card that is no longer rendered is skipped,
+  // so a drill into a node simply leaves focus unfocused.
+  const drillKey = effectiveDrillIds.join("/");
+
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    const nodeId = restoreFocusNodeIdRef.current;
+
+    if (nodeId == null) {
+      return;
+    }
+
+    restoreFocusNodeIdRef.current = null;
+
+    const card = sectionRef.current?.querySelector(
+      `.showcase-card[data-showcase-node-id="${nodeId}"]`,
+    );
+
+    card?.focus();
+  }, [drillKey, loading]);
 
   const pickerNode =
     pickerNodeId == null ? null : findNodeById(nodes, pickerNodeId);

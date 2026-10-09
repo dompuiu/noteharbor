@@ -318,6 +318,46 @@ describe("opening the focused card", () => {
   });
 });
 
+describe("Escape and focus restoration", () => {
+  test("Escape clears the card focus, then goes up a level", async () => {
+    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    await openSummer();
+
+    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    act(() => sub.focus());
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(sub).not.toHaveFocus();
+    expect(search()).toBe("?node=10");
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    await waitFor(() => expect(search()).toBe(""));
+    expect(await summerCard()).toHaveFocus();
+  });
+
+  test("focus returns to the card you drilled from after going up", async () => {
+    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    await openSummer();
+
+    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    act(() => sub.focus());
+    await userEvent.keyboard("{Enter}");
+
+    expect(
+      await screen.findByRole("button", { name: "Open grouping Deep" }),
+    ).toBeInTheDocument();
+    expect(document.activeElement).toBe(document.body);
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Open grouping Sub" }),
+      ).toHaveFocus(),
+    );
+  });
+});
+
 // Twelve categories in a single level, for the page-sized movement test.
 function manyCategories(count) {
   return Array.from({ length: count }, (_, index) =>
