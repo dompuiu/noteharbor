@@ -867,7 +867,10 @@ function ShowcaseScreen({ mode }) {
     : countNoteNodes(nodes);
 
   return (
-    <section className="screen-stack showcase-screen" ref={sectionRef}>
+    <section
+      className={`screen-stack showcase-screen showcase-screen--${editMode ? "edit" : "view"}`}
+      ref={sectionRef}
+    >
       <div className="panel">
         <div className="panel-heading">
           <div className="panel-heading-copy">

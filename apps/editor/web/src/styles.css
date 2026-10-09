@@ -627,7 +627,9 @@ input[type="radio"] {
 }
 
 /* The shared presentation grid. The photo size (Small 200px / Medium 320px /
-   Large 480px) is a custom property so view and edit mode use one grid rule. */
+   Large 480px) is a custom property so view and edit mode use one grid rule.
+   Edit mode stretches its cells so cards and `+` tiles share one row height;
+   view mode keeps its natural card heights via `align-items: start` below. */
 .showcase-grid {
   display: grid;
   grid-template-columns: repeat(
@@ -635,17 +637,30 @@ input[type="radio"] {
     minmax(var(--showcase-card-min, 200px), 1fr)
   );
   gap: 16px;
+  align-items: stretch;
+}
+
+/* View mode keeps natural card heights; edit mode stretches so each bordered
+   cell and each dashed tile fills its row. */
+.showcase-screen:not(.showcase-screen--edit) .showcase-grid {
   align-items: start;
 }
 
 /* A top-level Category always renders expanded: a titled section holding its
-   inline grid. Sections stack with breathing room; the title is plain text
-   (no cover, no drill). */
+   inline grid. In edit mode the section is a bordered panel so the title, its
+   Rename / Remove, and its grid read as one group; view mode stays plain. */
 .showcase-category-section {
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 16px;
   margin-bottom: 32px;
+}
+
+.showcase-screen--edit .showcase-category-section {
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface-2);
 }
 
 .showcase-category-section:last-of-type {
@@ -656,6 +671,38 @@ input[type="radio"] {
   margin: 0;
   font-size: 1.125rem;
   font-weight: 700;
+}
+
+/* The edit-mode category header: title on the left, Rename / Remove on the
+   right, divided from the grid below so the buttons read as the title's own. */
+.showcase-category-section > .showcase-cell--category {
+  flex-direction: row;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  height: auto;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.showcase-category-section > .showcase-cell--category .showcase-category-title {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.showcase-category-section
+  > .showcase-cell--category
+  .showcase-cell-controls {
+  margin-left: auto;
+  margin-top: 0;
+  border-top: 0;
+  padding-top: 0;
+}
+
+.showcase-category-section > .showcase-cell--category .showcase-cell-edit,
+.showcase-category-section > .showcase-cell--category .showcase-error {
+  flex-basis: 100%;
 }
 
 .showcase-card {
@@ -767,6 +814,7 @@ input[type="radio"] {
   flex-direction: column;
   gap: 8px;
   min-width: 0;
+  height: 100%;
 }
 
 .showcase-cell-controls,
@@ -775,6 +823,21 @@ input[type="radio"] {
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
+  align-items: center;
+}
+
+/* The action row belongs to its card: a hairline above it plus bottom-pinned
+   alignment so every cell in a grid row ends on the same baseline. */
+.showcase-cell-controls {
+  border-top: 1px solid var(--border-soft);
+  padding-top: 8px;
+  margin-top: auto;
+}
+
+.showcase-cell-controls .button {
+  min-height: 30px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
 }
 
 .showcase-cell-edit {
@@ -783,19 +846,35 @@ input[type="radio"] {
   gap: 8px;
 }
 
-/* Edit mode wraps each draggable card in a reorder cell: the grip handle is the
-   drag source and the cell is the drop target. The hovered edge shows the line
-   the drop will land on; the dragged cell dims. */
+/* Edit mode wraps each draggable card in a reorder cell. The cell is the
+   bordered card so the grip, the preview, and the Rename / Remove read as one
+   item; the grip floats over the card's top-left corner so it never shifts the
+   grid alignment. The hovered edge shows the line the drop will land on; the
+   dragged cell dims. */
 .showcase-reorder-cell {
   position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
   min-width: 0;
+  height: 100%;
+  padding: 10px;
+  padding-top: 36px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.showcase-reorder-cell > .showcase-cell {
+  gap: 8px;
+  border: 0;
+  background: transparent;
 }
 
 .showcase-reorder-handle {
-  align-self: flex-start;
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -804,7 +883,7 @@ input[type="radio"] {
   padding: 0;
   border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
-  background: var(--surface);
+  background: var(--surface-2);
   color: var(--text-muted);
   cursor: grab;
 }
@@ -846,15 +925,19 @@ input[type="radio"] {
   right: -8px;
 }
 
-/* The `+ create a …` tiles (edit mode only). The 2px dashed border and the
+/* The `+` tiles (edit mode only). The 2px dashed border and the
    accent label follow the authoring prototype's plus-tile; the tokens keep
-   the app's warm palette. */
+   the app's warm palette. Every tile fills its grid cell so `+ Add notes` and
+   `+ New grouping` share one row height instead of one towering over the
+   other. */
 .showcase-tile {
   display: flex;
   align-items: center;
   justify-content: center;
   gap: 8px;
-  min-height: 96px;
+  width: 100%;
+  height: 100%;
+  min-height: 120px;
   padding: 16px;
   border: 2px dashed var(--border-control);
   border-radius: var(--radius-md);
@@ -944,6 +1027,7 @@ input[type="radio"] {
   display: flex;
   flex-direction: column;
   gap: 8px;
+  height: 100%;
   padding: 12px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -1043,16 +1127,24 @@ input[type="radio"] {
   white-space: nowrap;
 }
 
-/* The edit-mode contents of one node nest in the parent grid; the `+ notes` tile
-   is note-sized so it sits beside the notes. */
+/* The edit-mode contents of one node nest in the parent grid. Both `+` tiles
+   share one height and fill their grid cell, so neither towers over the
+   other. */
 .showcase-node-items {
   width: 100%;
   margin-top: 4px;
 }
 
 .showcase-tile--note {
-  min-height: 96px;
-  aspect-ratio: 2 / 1;
+  aspect-ratio: auto;
+  min-height: 120px;
+}
+
+/* The bottom-of-section `+ New category` tile spans the panel width with a
+   shorter profile than the in-grid tiles. */
+.showcase-category-section + .showcase-tile--create,
+.showcase-screen--edit > .panel > .showcase-tile--create {
+  min-height: 72px;
 }
 
 /* The note picker popup. */

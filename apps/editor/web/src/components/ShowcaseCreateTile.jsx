@@ -22,14 +22,14 @@ function ShowcaseCreateTile({
     return (
       <button
         aria-label={`Create a ${noun}`}
-        className={`showcase-tile${centered ? " showcase-tile--centered" : ""}`}
+        className={`showcase-tile showcase-tile--create${centered ? " showcase-tile--centered" : ""}`}
         onClick={() => setOpen(true)}
         type="button"
       >
         <span aria-hidden="true" className="showcase-tile-plus">
           +
         </span>
-        {`create a ${noun}`}
+        {`New ${noun}`}
       </button>
     );
   }

@@ -26,7 +26,7 @@ function ShowcaseNoteEditor({ node, onRemove, onSetCover }) {
   }
 
   return (
-    <div className="showcase-cell">
+    <div className="showcase-cell showcase-cell--note">
       <ShowcaseNoteCard mode="edit" note={note} nodeId={node.id} />
 
       <div className="showcase-cell-controls">

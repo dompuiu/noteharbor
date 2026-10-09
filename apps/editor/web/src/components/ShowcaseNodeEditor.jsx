@@ -58,7 +58,7 @@ function ShowcaseNodeEditor({ card, node, noun, onRemove, onRename, children }) 
   }
 
   return (
-    <div className="showcase-cell">
+    <div className={`showcase-cell showcase-cell--${noun}`}>
       {card}
 
       {editing ? (

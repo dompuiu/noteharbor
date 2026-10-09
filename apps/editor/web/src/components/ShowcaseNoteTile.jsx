@@ -11,7 +11,7 @@ function ShowcaseNoteTile({ onClick }) {
       <span aria-hidden="true" className="showcase-tile-plus">
         +
       </span>
-      notes
+      Add notes
     </button>
   );
 }
