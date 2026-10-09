@@ -367,7 +367,24 @@ async function downloadArchive(collectionIds = null) {
   link.remove();
   window.setTimeout(() => window.URL.revokeObjectURL(objectUrl), 1000);
 
-  return { filename };
+  // A filtered export reports the showcases it could not include because they
+  // reached notes outside the selection. The header is JSON, percent-encoded
+  // by the server so a name stays header-safe.
+  const omittedHeader = response.headers.get('x-noteharbor-omitted-showcases');
+  let omittedShowcases = [];
+
+  if (omittedHeader) {
+    try {
+      const parsed = JSON.parse(decodeURIComponent(omittedHeader));
+      if (Array.isArray(parsed)) {
+        omittedShowcases = parsed.map((name) => String(name));
+      }
+    } catch {
+      omittedShowcases = [];
+    }
+  }
+
+  return { filename, omittedShowcases };
 }
 
 async function getOperationStatus() {
@@ -385,6 +402,121 @@ async function clearAppData() {
 
 async function getTags(collectionId) {
   const response = await fetch(`${tagsBasePath(collectionId)}/suggestions`);
+  return handleResponse(response);
+}
+
+async function getShowcases() {
+  const response = await fetch('/api/showcases');
+  return handleResponse(response);
+}
+
+async function createShowcase(name) {
+  const response = await fetch('/api/showcases', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(name ? { name } : {})
+  });
+
+  return handleResponse(response);
+}
+
+async function getCategories() {
+  const response = await fetch('/api/categories');
+  return handleResponse(response);
+}
+
+async function createCategory(name) {
+  const response = await fetch('/api/categories', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ name })
+  });
+
+  return handleResponse(response);
+}
+
+async function renameCategory(id, name) {
+  const response = await fetch(`/api/categories/${id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ name })
+  });
+
+  return handleResponse(response);
+}
+
+async function getShowcaseTree(showcaseId) {
+  const response = await fetch(`/api/showcases/${showcaseId}/tree`);
+  return handleResponse(response);
+}
+
+async function createShowcaseNode(showcaseId, payload) {
+  const response = await fetch(`/api/showcases/${showcaseId}/nodes`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload)
+  });
+
+  return handleResponse(response);
+}
+
+async function updateNode(id, payload) {
+  const response = await fetch(`/api/nodes/${id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(payload)
+  });
+
+  return handleResponse(response);
+}
+
+async function deleteNode(id) {
+  const response = await fetch(`/api/nodes/${id}`, {
+    method: 'DELETE'
+  });
+
+  return handleResponse(response);
+}
+
+async function renameShowcase(showcaseId, name) {
+  const response = await fetch(`/api/showcases/${showcaseId}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ name })
+  });
+
+  return handleResponse(response);
+}
+
+async function deleteShowcase(showcaseId) {
+  const response = await fetch(`/api/showcases/${showcaseId}`, {
+    method: 'DELETE'
+  });
+
+  return handleResponse(response);
+}
+
+async function reorderShowcases(ids) {
+  const response = await fetch('/api/showcases/order', {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ ids })
+  });
+
+  return handleResponse(response);
+}
+
+async function reorderNodes(showcaseId, parentNodeId, nodeIds) {
+  const response = await fetch('/api/nodes/order', {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({
+      showcase_id: showcaseId,
+      parent_node_id: parentNodeId ?? null,
+      node_ids: nodeIds
+    })
+  });
+
   return handleResponse(response);
 }
 
@@ -436,25 +568,38 @@ async function scrapePreview(url, { timeoutMs } = {}) {
 
 export {
   clearAppData,
+  createCategory,
   createCollection,
   createNote,
+  createShowcase,
+  createShowcaseNode,
   deleteCollection,
+  deleteNode,
   deleteNote,
+  deleteShowcase,
   downloadArchive,
+  getCategories,
   getCollections,
   getHealth,
   getNote,
   getNotes,
   getOperationStatus,
+  getShowcaseTree,
+  getShowcases,
   getTags,
   importArchive,
   importCsv,
   moveNote,
+  renameCategory,
   renameCollection,
+  renameShowcase,
   reorderCollections,
+  reorderNodes,
   reorderNotes,
+  reorderShowcases,
   scrapePreview,
   scrapeTimeoutMessage,
   setDefaultCollection,
+  updateNode,
   updateNote
 };

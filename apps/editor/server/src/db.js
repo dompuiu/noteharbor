@@ -337,6 +337,98 @@ function migrateBanknotesForeignKey(database) {
   `);
 }
 
+// The Showcases node tree (ADR 0001). Additive and idempotent: only
+// `CREATE ... IF NOT EXISTS`, so an existing database keeps its rows and its
+// user version. A Showcase is a self-referential `showcase_nodes` tree over a
+// permanent, name-unique `categories` label pool and name-unique `showcases`.
+function ensureShowcasesSchema(database) {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_name_nocase
+      ON categories(name COLLATE NOCASE);
+
+    CREATE TABLE IF NOT EXISTS showcases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      display_order INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_showcases_name_nocase
+      ON showcases(name COLLATE NOCASE);
+
+    CREATE INDEX IF NOT EXISTS idx_showcases_display_order
+      ON showcases(display_order, id);
+
+    CREATE TABLE IF NOT EXISTS showcase_nodes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      showcase_id INTEGER NOT NULL REFERENCES showcases(id) ON DELETE CASCADE,
+      parent_node_id INTEGER REFERENCES showcase_nodes(id) ON DELETE CASCADE,
+      node_type TEXT NOT NULL CHECK (node_type IN ('category','grouping','note')),
+      category_id INTEGER REFERENCES categories(id) ON DELETE RESTRICT,
+      name TEXT,
+      note_id INTEGER REFERENCES banknotes(id) ON DELETE CASCADE,
+      cover_note_id INTEGER REFERENCES banknotes(id) ON DELETE SET NULL,
+      position INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_showcase_nodes_category_once
+      ON showcase_nodes(showcase_id, category_id) WHERE node_type = 'category';
+
+    CREATE INDEX IF NOT EXISTS idx_showcase_nodes_parent
+      ON showcase_nodes(parent_node_id, position, id);
+  `);
+
+  // Fill a null position, per sibling group, in id order. A fresh table has no
+  // rows, so this only self-heals a partially written tree.
+  const missing = database.prepare(`
+    SELECT id, showcase_id, parent_node_id
+    FROM showcase_nodes
+    WHERE position IS NULL
+    ORDER BY id ASC
+  `).all();
+
+  if (!missing.length) {
+    return;
+  }
+
+  const nextPositionStatement = database.prepare(`
+    SELECT COALESCE(MAX(position), 0) AS value
+    FROM showcase_nodes
+    WHERE showcase_id = @showcase_id
+      AND parent_node_id IS @parent_node_id
+  `);
+  const assignPositionStatement = database.prepare(`
+    UPDATE showcase_nodes
+    SET position = @position
+    WHERE id = @id
+  `);
+
+  const backfillPositions = database.transaction((rows) => {
+    for (const row of rows) {
+      const current = nextPositionStatement.get({
+        showcase_id: row.showcase_id,
+        parent_node_id: row.parent_node_id
+      });
+      assignPositionStatement.run({
+        id: row.id,
+        position: Number(current?.value ?? 0) + 1
+      });
+    }
+  });
+
+  backfillPositions(missing);
+}
+
 function initializeSchema(database) {
   database.pragma('foreign_keys = ON');
 
@@ -376,6 +468,10 @@ function initializeSchema(database) {
       PRIMARY KEY (banknote_id, tag_id)
     );
   `);
+
+  // The showcase tables reference `banknotes`, so they are created once the
+  // banknotes table exists (ADR 0001).
+  ensureShowcasesSchema(database);
 
   const defaultCollectionId = ensureDefaultCollection(database);
   ensureDefaultCollectionFlag(database, defaultCollectionId);
@@ -600,6 +696,187 @@ function createStatements(database) {
     `),
     deleteCollectionStatement: database.prepare(`DELETE FROM collections WHERE id = ?`),
     countCollectionsStatement: database.prepare(`SELECT COUNT(*) AS value FROM collections`),
+
+    listShowcasesStatement: database.prepare(`
+      SELECT
+        showcases.id,
+        showcases.name,
+        showcases.display_order,
+        showcases.created_at,
+        showcases.updated_at,
+        (SELECT COUNT(*) FROM showcase_nodes
+          WHERE showcase_nodes.showcase_id = showcases.id
+            AND showcase_nodes.node_type = 'note') AS note_count
+      FROM showcases
+      ORDER BY display_order ASC, id ASC
+    `),
+    getShowcaseStatement: database.prepare(`
+      SELECT
+        showcases.id,
+        showcases.name,
+        showcases.display_order,
+        showcases.created_at,
+        showcases.updated_at,
+        (SELECT COUNT(*) FROM showcase_nodes
+          WHERE showcase_nodes.showcase_id = showcases.id
+            AND showcase_nodes.node_type = 'note') AS note_count
+      FROM showcases
+      WHERE id = ?
+    `),
+    createShowcaseStatement: database.prepare(`
+      INSERT INTO showcases (name, display_order, created_at, updated_at)
+      VALUES (
+        @name,
+        (SELECT COALESCE(MAX(display_order), 0) + 1 FROM showcases),
+        datetime('now'),
+        datetime('now')
+      )
+    `),
+    renameShowcaseStatement: database.prepare(`
+      UPDATE showcases
+      SET name = @name,
+          updated_at = datetime('now')
+      WHERE id = @id
+    `),
+    deleteShowcaseStatement: database.prepare(`DELETE FROM showcases WHERE id = ?`),
+    updateShowcaseDisplayOrderStatement: database.prepare(`
+      UPDATE showcases
+      SET display_order = @display_order,
+          updated_at = datetime('now')
+      WHERE id = @id
+    `),
+
+    listCategoriesStatement: database.prepare(`
+      SELECT id, name, created_at, updated_at
+      FROM categories
+      ORDER BY name COLLATE NOCASE ASC, id ASC
+    `),
+    getCategoryByIdStatement: database.prepare(`
+      SELECT id, name, created_at, updated_at
+      FROM categories
+      WHERE id = ?
+    `),
+    getCategoryByNameStatement: database.prepare(`
+      SELECT id, name, created_at, updated_at
+      FROM categories
+      WHERE name = @name COLLATE NOCASE
+    `),
+    insertCategoryStatement: database.prepare(`
+      INSERT INTO categories (name, created_at, updated_at)
+      VALUES (@name, datetime('now'), datetime('now'))
+    `),
+    renameCategoryStatement: database.prepare(`
+      UPDATE categories
+      SET name = @name, updated_at = datetime('now')
+      WHERE id = @id
+    `),
+
+    // A category node's display name is the referenced label's name; a
+    // grouping carries its own. Ordered so the caller can nest without a sort.
+    listShowcaseNodesStatement: database.prepare(`
+      SELECT
+        showcase_nodes.id,
+        showcase_nodes.showcase_id,
+        showcase_nodes.parent_node_id,
+        showcase_nodes.node_type,
+        showcase_nodes.category_id,
+        showcase_nodes.note_id,
+        showcase_nodes.cover_note_id,
+        showcase_nodes.position,
+        CASE
+          WHEN showcase_nodes.node_type = 'category' THEN categories.name
+          ELSE showcase_nodes.name
+        END AS name
+      FROM showcase_nodes
+      LEFT JOIN categories ON categories.id = showcase_nodes.category_id
+      WHERE showcase_nodes.showcase_id = ?
+      ORDER BY showcase_nodes.position ASC, showcase_nodes.id ASC
+    `),
+    getShowcaseNodeStatement: database.prepare(`
+      SELECT
+        showcase_nodes.id,
+        showcase_nodes.showcase_id,
+        showcase_nodes.parent_node_id,
+        showcase_nodes.node_type,
+        showcase_nodes.category_id,
+        showcase_nodes.note_id,
+        showcase_nodes.cover_note_id,
+        showcase_nodes.position,
+        CASE
+          WHEN showcase_nodes.node_type = 'category' THEN categories.name
+          ELSE showcase_nodes.name
+        END AS name
+      FROM showcase_nodes
+      LEFT JOIN categories ON categories.id = showcase_nodes.category_id
+      WHERE showcase_nodes.id = ?
+    `),
+    // Every note the tree points at, either as a member or as a grouping cover.
+    listShowcaseNotesStatement: database.prepare(`
+      SELECT ${noteFields}
+      FROM banknotes
+      WHERE id IN (
+        SELECT note_id FROM showcase_nodes
+          WHERE showcase_id = @showcase_id AND note_id IS NOT NULL
+        UNION
+        SELECT cover_note_id FROM showcase_nodes
+          WHERE showcase_id = @showcase_id AND cover_note_id IS NOT NULL
+      )
+    `),
+    nextShowcaseNodePositionStatement: database.prepare(`
+      SELECT COALESCE(MAX(position), 0) + 1 AS value
+      FROM showcase_nodes
+      WHERE showcase_id = @showcase_id AND parent_node_id IS @parent_node_id
+    `),
+    insertShowcaseNodeStatement: database.prepare(`
+      INSERT INTO showcase_nodes (
+        showcase_id,
+        parent_node_id,
+        node_type,
+        category_id,
+        name,
+        note_id,
+        cover_note_id,
+        position,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        @showcase_id,
+        @parent_node_id,
+        @node_type,
+        @category_id,
+        @name,
+        @note_id,
+        @cover_note_id,
+        @position,
+        datetime('now'),
+        datetime('now')
+      )
+    `),
+    updateShowcaseNodeNameStatement: database.prepare(`
+      UPDATE showcase_nodes
+      SET name = @name, updated_at = datetime('now')
+      WHERE id = @id
+    `),
+    updateShowcaseNodeCoverStatement: database.prepare(`
+      UPDATE showcase_nodes
+      SET cover_note_id = @cover_note_id, updated_at = datetime('now')
+      WHERE id = @id
+    `),
+    updateShowcaseNodePositionStatement: database.prepare(`
+      UPDATE showcase_nodes
+      SET position = @position, updated_at = datetime('now')
+      WHERE id = @id
+    `),
+    // The children of one parent (the top level when the parent is null), in
+    // their stored order. Used to prove a reorder request is a full permutation.
+    listShowcaseChildIdsStatement: database.prepare(`
+      SELECT id
+      FROM showcase_nodes
+      WHERE showcase_id = @showcase_id AND parent_node_id IS @parent_node_id
+      ORDER BY position ASC, id ASC
+    `),
+    deleteShowcaseNodeStatement: database.prepare(`DELETE FROM showcase_nodes WHERE id = ?`),
 
     listNotesStatement: database.prepare(`
       SELECT ${noteFields}
@@ -1114,6 +1391,586 @@ function reorderCollections(ids) {
   return getAllCollections();
 }
 
+// Showcase names, category labels, and grouping names share one rule: trim and
+// collapse internal whitespace runs to a single space.
+function normalizeName(name) {
+  return String(name ?? '').trim().replace(/\s+/g, ' ');
+}
+
+// Map a SQLite UNIQUE violation to a friendly message; rethrow anything else.
+function mapUniqueConstraintError(error, message) {
+  if (String(error?.message).includes('UNIQUE constraint failed')) {
+    throw new Error(message);
+  }
+
+  throw error;
+}
+
+// A reorder must name exactly the current children, each once, in any order. A
+// partial, duplicated, foreign, or non-positive list is rejected so a stale
+// drag never silently drops a card.
+function assertFullPermutation(currentIds, requestedIds, message) {
+  const requestedSet = new Set(requestedIds);
+
+  if (
+    requestedIds.length !== currentIds.length ||
+    requestedIds.some((id) => !Number.isInteger(id) || id <= 0) ||
+    requestedSet.size !== requestedIds.length ||
+    currentIds.some((id) => !requestedSet.has(id))
+  ) {
+    throw new Error(message);
+  }
+}
+
+// The default name for a new showcase. The unique index is case-insensitive,
+// so the candidate set is compared case-insensitively too, and a collision
+// walks up `Showcase 2`, `Showcase 3`, …
+function nextDefaultShowcaseName() {
+  const taken = new Set(
+    getAllShowcases().map((showcase) => String(showcase.name).toLowerCase()),
+  );
+
+  if (!taken.has('showcase')) {
+    return 'Showcase';
+  }
+
+  let suffix = 2;
+
+  while (taken.has(`showcase ${suffix}`)) {
+    suffix += 1;
+  }
+
+  return `Showcase ${suffix}`;
+}
+
+function getAllShowcases() {
+  getDatabase();
+  return statements.listShowcasesStatement.all();
+}
+
+function getShowcaseById(id) {
+  getDatabase();
+  return statements.getShowcaseStatement.get(Number(id)) ?? null;
+}
+
+function createShowcase(name) {
+  getDatabase();
+  const normalizedName = normalizeName(name) || nextDefaultShowcaseName();
+
+  let showcaseId;
+
+  try {
+    const result = statements.createShowcaseStatement.run({ name: normalizedName });
+    showcaseId = Number(result.lastInsertRowid);
+  } catch (error) {
+    mapUniqueConstraintError(error, 'A showcase with this name already exists.');
+  }
+
+  return getShowcaseById(showcaseId);
+}
+
+// The shared label pool. A Category is a permanent row here; a Showcase places
+// it by reference (spec §Vocabulary). Creating a name that already exists
+// (ignoring case) returns the existing row instead of erroring, so the editor's
+// combobox can be "pick or type" without a duplicate check.
+function getAllCategories() {
+  getDatabase();
+  return statements.listCategoriesStatement.all();
+}
+
+function getCategoryById(id) {
+  getDatabase();
+  return statements.getCategoryByIdStatement.get(Number(id)) ?? null;
+}
+
+function createCategory(name) {
+  getDatabase();
+  const normalizedName = normalizeName(name);
+
+  if (!normalizedName) {
+    throw new Error('Category name is required.');
+  }
+
+  const existing = statements.getCategoryByNameStatement.get({
+    name: normalizedName
+  });
+
+  if (existing) {
+    return existing;
+  }
+
+  const result = statements.insertCategoryStatement.run({ name: normalizedName });
+  return getCategoryById(Number(result.lastInsertRowid));
+}
+
+function renameCategory(id, name) {
+  getDatabase();
+  const categoryId = Number(id);
+  const normalizedName = normalizeName(name);
+
+  if (!normalizedName) {
+    throw new Error('Category name is required.');
+  }
+
+  try {
+    statements.renameCategoryStatement.run({
+      id: categoryId,
+      name: normalizedName
+    });
+  } catch (error) {
+    mapUniqueConstraintError(error, 'A category with this name already exists.');
+  }
+
+  return getCategoryById(categoryId);
+}
+
+// One node in its wire shape: the placement row plus the referenced Note (for a
+// note node) and the manual cover Note (for a grouping) and its children. `name`
+// is resolved from the label for a category.
+function buildShowcaseNode(row, note = null, coverNote = null) {
+  return {
+    id: row.id,
+    node_type: row.node_type,
+    name: row.name ?? null,
+    category_id: row.category_id ?? null,
+    parent_node_id: row.parent_node_id ?? null,
+    note_id: row.note_id ?? null,
+    cover_note_id: row.cover_note_id ?? null,
+    position: row.position ?? null,
+    note: note ?? null,
+    cover_note: coverNote ?? null,
+    children: []
+  };
+}
+
+function getShowcaseNodeById(id) {
+  getDatabase();
+  const row = statements.getShowcaseNodeStatement.get(Number(id));
+
+  if (!row) {
+    return null;
+  }
+
+  const note = row.note_id != null ? getNoteById(row.note_id) : null;
+  const coverNote = row.cover_note_id != null ? getNoteById(row.cover_note_id) : null;
+  return buildShowcaseNode(row, note, coverNote);
+}
+
+// The whole tree of one Showcase, nested under its root nodes and ordered by
+// `position, id` at every level (ADR 0001).
+function getShowcaseTree(showcaseId) {
+  getDatabase();
+  const id = Number(showcaseId);
+  const rows = statements.listShowcaseNodesStatement.all(id);
+  const noteRows = statements.listShowcaseNotesStatement.all({ showcase_id: id });
+  const notesById = new Map(noteRows.map((note) => [note.id, rowToNote(note, new Map())]));
+  const nodesById = new Map();
+
+  for (const row of rows) {
+    nodesById.set(
+      row.id,
+      buildShowcaseNode(
+        row,
+        notesById.get(row.note_id) ?? null,
+        notesById.get(row.cover_note_id) ?? null
+      )
+    );
+  }
+
+  const roots = [];
+
+  for (const row of rows) {
+    const node = nodesById.get(row.id);
+
+    if (row.parent_node_id != null && nodesById.has(row.parent_node_id)) {
+      nodesById.get(row.parent_node_id).children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  return roots;
+}
+
+function addCategoryPlacement(showcaseId, descriptor) {
+  if (descriptor.parent_id != null) {
+    throw new Error('A category is placed at the top level.');
+  }
+
+  let category;
+
+  if (descriptor.category_id != null) {
+    category = getCategoryById(descriptor.category_id);
+
+    if (!category) {
+      throw new Error('Category not found.');
+    }
+  } else {
+    category = createCategory(descriptor.name);
+  }
+
+  const position = Number(
+    statements.nextShowcaseNodePositionStatement.get({
+      showcase_id: showcaseId,
+      parent_node_id: null
+    })?.value ?? 1
+  );
+
+  let nodeId;
+
+  try {
+    const result = statements.insertShowcaseNodeStatement.run({
+      showcase_id: showcaseId,
+      parent_node_id: null,
+      node_type: 'category',
+      category_id: category.id,
+      name: null,
+      note_id: null,
+      cover_note_id: null,
+      position
+    });
+    nodeId = Number(result.lastInsertRowid);
+  } catch (error) {
+    mapUniqueConstraintError(error, 'This category is already in the showcase.');
+  }
+
+  return getShowcaseNodeById(nodeId);
+}
+
+// A Grouping is local to its parent (ADR 0001): it lives only under a Category
+// Placement or another Grouping in the same Showcase. It carries a name only;
+// its cover is derived or set later.
+function addGrouping(showcaseId, descriptor) {
+  const parentId = Number(descriptor.parent_id);
+
+  if (!Number.isInteger(parentId) || parentId <= 0) {
+    throw new Error('A parent node is required.');
+  }
+
+  const parent = statements.getShowcaseNodeStatement.get(parentId);
+
+  if (!parent || parent.showcase_id !== showcaseId) {
+    throw new Error('Parent node not found.');
+  }
+
+  if (parent.node_type === 'note') {
+    throw new Error('A grouping cannot be nested under a note.');
+  }
+
+  const name = normalizeName(descriptor.name);
+
+  if (!name) {
+    throw new Error('Node name is required.');
+  }
+
+  const position = Number(
+    statements.nextShowcaseNodePositionStatement.get({
+      showcase_id: showcaseId,
+      parent_node_id: parentId
+    })?.value ?? 1
+  );
+
+  const result = statements.insertShowcaseNodeStatement.run({
+    showcase_id: showcaseId,
+    parent_node_id: parentId,
+    node_type: 'grouping',
+    category_id: null,
+    name,
+    note_id: null,
+    cover_note_id: null,
+    position
+  });
+
+  return getShowcaseNodeById(Number(result.lastInsertRowid));
+}
+
+// A batch of note nodes under one parent (a Category Placement or a grouping).
+// Notes are individual and always have a parent (ADR 0001). The batch appends
+// in the given order in one transaction; the picker sends the ids it has
+// accumulated across filter changes.
+function addNotesToNode(showcaseId, descriptor = {}) {
+  getDatabase();
+  const id = Number(showcaseId);
+  ensureShowcaseExists(id);
+
+  const rawParentId = descriptor.parent_id ?? descriptor.parent_node_id;
+
+  if (rawParentId == null) {
+    throw new Error('A parent node is required for notes.');
+  }
+
+  const parentId = Number(rawParentId);
+
+  if (!Number.isInteger(parentId) || parentId <= 0) {
+    throw new Error('A valid parent node is required.');
+  }
+
+  const parent = statements.getShowcaseNodeStatement.get(parentId);
+
+  if (!parent || parent.showcase_id !== id) {
+    throw new Error('Parent node not found.');
+  }
+
+  if (parent.node_type === 'note') {
+    throw new Error('A note node cannot hold notes.');
+  }
+
+  const rawNoteIds = Array.isArray(descriptor.note_ids) ? descriptor.note_ids : null;
+
+  if (!rawNoteIds || rawNoteIds.length === 0) {
+    throw new Error('At least one note is required.');
+  }
+
+  // Validate every note, drop duplicates while preserving the caller's order,
+  // and let one bad id fail the whole batch before anything is written.
+  const noteIds = [];
+  const seen = new Set();
+
+  for (const raw of rawNoteIds) {
+    const noteId = Number(raw);
+
+    if (!Number.isInteger(noteId) || noteId <= 0) {
+      throw new Error('A valid note id is required.');
+    }
+
+    if (seen.has(noteId)) {
+      continue;
+    }
+
+    if (!getNoteById(noteId)) {
+      throw new Error(`Note ${noteId} was not found.`);
+    }
+
+    seen.add(noteId);
+    noteIds.push(noteId);
+  }
+
+  if (!noteIds.length) {
+    throw new Error('At least one note is required.');
+  }
+
+  const startPosition = Number(
+    statements.nextShowcaseNodePositionStatement.get({
+      showcase_id: id,
+      parent_node_id: parentId
+    })?.value ?? 1
+  );
+
+  const insertBatch = db.transaction((ids, position) =>
+    ids.map((noteId, index) => {
+      const result = statements.insertShowcaseNodeStatement.run({
+        showcase_id: id,
+        parent_node_id: parentId,
+        node_type: 'note',
+        category_id: null,
+        name: null,
+        note_id: noteId,
+        cover_note_id: null,
+        position: position + index
+      });
+
+      return Number(result.lastInsertRowid);
+    })
+  );
+
+  const createdIds = insertBatch(noteIds, startPosition);
+  return createdIds.map((nodeId) => getShowcaseNodeById(nodeId));
+}
+
+// Extend this switch for a new node type. Ticket 09 adds `grouping`; ticket 10
+// adds the `notes` batch (which answers with an array of nodes). The descriptor
+// is the raw request body.
+function addShowcaseNode(showcaseId, descriptor = {}) {
+  getDatabase();
+  const type = descriptor.type ?? descriptor.node_type;
+
+  switch (type) {
+    case 'category':
+      return addCategoryPlacement(Number(showcaseId), descriptor);
+    case 'grouping':
+      return addGrouping(Number(showcaseId), descriptor);
+    case 'notes':
+      return addNotesToNode(Number(showcaseId), descriptor);
+    default:
+      throw new Error(`Unsupported node type: ${String(type ?? '')}.`);
+  }
+}
+
+// Rename a node, or set/clear a grouping's manual cover. A category has no
+// local name: renaming its placement renames the shared label, so every
+// Showcase that places it reads the new name.
+function updateShowcaseNode(id, descriptor = {}) {
+  getDatabase();
+  const nodeId = Number(id);
+  const existing = statements.getShowcaseNodeStatement.get(nodeId);
+
+  if (!existing) {
+    return null;
+  }
+
+  // A manual cover belongs to a Grouping and must name a Note that exists. A
+  // non-null value on a Category Placement or a note node is a client error, and
+  // so is an unknown note id; a null value clears the cover.
+  if (descriptor.cover_note_id != null) {
+    if (existing.node_type !== 'grouping') {
+      throw new Error('A cover note can only be set on a grouping.');
+    }
+
+    if (!getNoteById(Number(descriptor.cover_note_id))) {
+      throw new Error('Cover note not found.');
+    }
+  }
+
+  if (existing.node_type === 'category') {
+    renameCategory(existing.category_id, descriptor.name);
+  } else if (existing.node_type === 'grouping') {
+    if (descriptor.name !== undefined) {
+      const name = normalizeName(descriptor.name);
+
+      if (!name) {
+        throw new Error('Node name is required.');
+      }
+
+      statements.updateShowcaseNodeNameStatement.run({ id: nodeId, name });
+    }
+
+    if (descriptor.cover_note_id !== undefined) {
+      statements.updateShowcaseNodeCoverStatement.run({
+        id: nodeId,
+        cover_note_id:
+          descriptor.cover_note_id == null ? null : Number(descriptor.cover_note_id)
+      });
+    }
+  } else {
+    throw new Error('A note node cannot be renamed.');
+  }
+
+  return getShowcaseNodeById(nodeId);
+}
+
+function deleteShowcaseNode(id) {
+  getDatabase();
+  // The self-referential FK cascades the subtree (ADR 0001); the label stays.
+  const result = statements.deleteShowcaseNodeStatement.run(Number(id));
+  return result.changes > 0;
+}
+
+// Reorder the children of one node (the top level when `parentNodeId` is null).
+// The request must be a FULL permutation of the parent's current children, so a
+// stale or partial drag is rejected instead of silently dropping a card. Every
+// child receives a contiguous `position` from 1; mirrors `reorderShowcases`.
+function reorderShowcaseNodes(showcaseId, parentNodeId, orderedIds) {
+  getDatabase();
+  const id = Number(showcaseId);
+  ensureShowcaseExists(id);
+
+  const parentId = parentNodeId == null ? null : Number(parentNodeId);
+
+  if (parentId != null) {
+    if (!Number.isInteger(parentId) || parentId <= 0) {
+      throw new Error('A valid parent node is required.');
+    }
+
+    const parent = statements.getShowcaseNodeStatement.get(parentId);
+
+    if (!parent || parent.showcase_id !== id) {
+      throw new Error('Parent node not found.');
+    }
+  }
+
+  const currentIds = statements.listShowcaseChildIdsStatement
+    .all({ showcase_id: id, parent_node_id: parentId })
+    .map((row) => row.id);
+  const requested = Array.isArray(orderedIds) ? orderedIds.map((nodeId) => Number(nodeId)) : [];
+
+  assertFullPermutation(
+    currentIds,
+    requested,
+    'Reorder request must include every child exactly once.'
+  );
+
+  const transaction = db.transaction((nextIds) => {
+    nextIds.forEach((nodeId, index) => {
+      statements.updateShowcaseNodePositionStatement.run({
+        id: nodeId,
+        position: index + 1
+      });
+    });
+  });
+
+  transaction(requested);
+  return requested.map((nodeId) => getShowcaseNodeById(nodeId));
+}
+
+function ensureShowcaseExists(showcaseId) {
+  getDatabase();
+  const showcase = statements.getShowcaseStatement.get(Number(showcaseId));
+
+  if (!showcase) {
+    throw new Error('Showcase not found.');
+  }
+
+  return showcase;
+}
+
+function deleteShowcaseById(id) {
+  getDatabase();
+  const showcaseId = Number(id);
+  ensureShowcaseExists(showcaseId);
+
+  // `showcase_nodes.showcase_id` cascades, so deleting the showcase takes its
+  // whole tree with it.
+  statements.deleteShowcaseStatement.run(showcaseId);
+}
+
+function reorderShowcases(ids) {
+  getDatabase();
+  const normalizedIds = Array.isArray(ids) ? ids.map((id) => Number(id)) : [];
+  const existingIds = getAllShowcases().map((showcase) => showcase.id);
+
+  if (!normalizedIds.length) {
+    throw new Error('Reorder request must include every showcase exactly once.');
+  }
+
+  assertFullPermutation(
+    existingIds,
+    normalizedIds,
+    'Reorder request must include every showcase exactly once.'
+  );
+
+  const transaction = db.transaction((nextIds) => {
+    nextIds.forEach((id, index) => {
+      statements.updateShowcaseDisplayOrderStatement.run({
+        id,
+        display_order: index + 1
+      });
+    });
+  });
+
+  transaction(normalizedIds);
+  return getAllShowcases();
+}
+
+function renameShowcaseById(id, name) {
+  getDatabase();
+  const showcaseId = Number(id);
+  const normalizedName = normalizeName(name);
+
+  if (!normalizedName) {
+    throw new Error('Showcase name is required.');
+  }
+
+  ensureShowcaseExists(showcaseId);
+
+  try {
+    statements.renameShowcaseStatement.run({ id: showcaseId, name: normalizedName });
+  } catch (error) {
+    mapUniqueConstraintError(error, 'A showcase with this name already exists.');
+  }
+
+  return getShowcaseById(showcaseId);
+}
+
 function getAllNotes(collectionId = null) {
   getDatabase();
   const normalizedCollectionId = resolveCollectionId(collectionId);
@@ -1480,31 +2337,48 @@ export {
   DB_PATH,
   IMAGES_DIR,
   ROOT_DIR,
+  addNotesToNode,
+  addShowcaseNode,
   backupDatabase,
   closeDatabase,
+  createCategory,
   createCollection,
   createNote,
+  createShowcase,
   deleteCollectionById,
   deleteNote,
+  deleteShowcaseById,
+  deleteShowcaseNode,
   ensureTag,
+  getAllCategories,
   getAllCollections,
   getAllNotes,
+  getAllShowcases,
   getAllTags,
+  getCategoryById,
   getCollectionById,
   getDatabase,
   getDefaultCollectionId,
   getNoteById,
+  getShowcaseById,
+  getShowcaseNodeById,
+  getShowcaseTree,
   importNotes,
   migrateBanknotesForeignKey,
   moveNoteToCollection,
   openDatabase,
   pingDatabase,
   reloadDatabase,
+  renameCategory,
   renameCollectionById,
+  renameShowcaseById,
   reorderCollections,
   reorderNotes,
+  reorderShowcases,
+  reorderShowcaseNodes,
   setDefaultCollectionById,
   replaceNoteTags,
   updateNote,
+  updateShowcaseNode,
   verifyDatabaseFile
 };

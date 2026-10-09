@@ -1,14 +1,19 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useShowcases } from "../lib/showcases.jsx";
 import {
   CATALOG_ROUTES,
   DEFAULT_DESTINATION,
-  PORTFOLIO_ROUTES,
+  SHOWCASE_ROUTES,
 } from "../lib/routes.js";
 
 // The Editor's persistent chrome. It renders on every route beside the main
 // region: a 64px rail of destination icons that expands to 288px on hover or
 // keyboard focus, and becomes an overlay drawer on narrow screens.
+//
+// The Showcases group is data-driven: it lists the workspace's showcases (the
+// sidebar *is* the showcase list) plus a `+ New showcase` action that creates a
+// showcase and opens it in edit mode.
 //
 // Keyboard model (matches the tables): with nothing focused, "b" opens the
 // rail and puts the cursor on the current option. ↑/↓ and j/k move the cursor;
@@ -24,14 +29,13 @@ const ICONS = {
     '<path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/><path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>',
   swap: '<path d="M7.5 4.5v13M7.5 4.5 4.6 7.6M7.5 4.5l2.9 3.1M16.5 19.5v-13M16.5 19.5l2.9-3.1M16.5 19.5l-2.9-3.1"/>',
   grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/>',
-  layers:
-    '<path d="M12 3.5 21 8l-9 4.5L3 8z"/><path d="M3.8 12.2 12 16.3l8.2-4.1"/><path d="M3.8 16.2 12 20.3l8.2-4.1"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
   // Section markers for the two sidebar categories. They read as hubs, not
   // as destinations: a stack of books for Catalog, a pile of pictures for
-  // Portfolio. Both are Lucide glyphs, matching the destination icons.
+  // Showcases. Both are Lucide glyphs, matching the destination icons.
   catalog:
     '<rect width="8" height="18" x="3" y="3" rx="1"/><path d="M7 3v18"/><path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z"/>',
-  portfolio:
+  showcases:
     '<path d="m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16"/><path d="M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2"/><circle cx="13" cy="7" r="1" fill="currentColor"/><rect x="8" y="2" width="14" height="14" rx="2"/>',
 };
 
@@ -54,19 +58,6 @@ const CATALOG_GROUP = {
     { icon: "swap", label: "Import / Export", to: CATALOG_ROUTES.importExport },
   ],
 };
-
-const PORTFOLIO_GROUP = {
-  id: "portfolio",
-  icon: "portfolio",
-  label: "Portfolio",
-  items: [
-    { icon: "grid", label: "Categories", to: PORTFOLIO_ROUTES.categories },
-    { icon: "layers", label: "Groupings", to: PORTFOLIO_ROUTES.groupings },
-  ],
-};
-
-const GROUPS = [CATALOG_GROUP, PORTFOLIO_GROUP];
-const LINKS = [...CATALOG_GROUP.items, ...PORTFOLIO_GROUP.items];
 
 function isItemActive(item, pathname) {
   if (item.matches) {
@@ -110,13 +101,68 @@ function HamburgerIcon() {
 function Sidebar({ pageFocusRef }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
+  const { showcases, createShowcase, reorderShowcases } = useShowcases();
   const [drawerOpen, setDrawerOpen] = useState(false);
   // The keyboard cursor, distinct from DOM focus. Null means the rail is not
   // being navigated by keyboard.
   const [cursorIndex, setCursorIndex] = useState(null);
+  // Drag-and-drop state for reordering the showcase rows. `dropTarget` records
+  // whether the pointer sits above or below the hovered row's midpoint.
+  const [draggedShowcaseId, setDraggedShowcaseId] = useState(null);
+  const [showcaseDropTarget, setShowcaseDropTarget] = useState(null);
   const navRef = useRef(null);
   const linksRef = useRef([]);
   const hamburgerRef = useRef(null);
+
+  // The showcase rows, then the create action, hang off the Showcases group.
+  const showcaseItems = showcases.map((showcase) => ({
+    icon: "grid",
+    key: `showcase-${showcase.id}`,
+    label: showcase.name,
+    to: SHOWCASE_ROUTES.showcase(showcase.id),
+    showcaseId: showcase.id,
+  }));
+
+  const newShowcaseItem = {
+    icon: "plus",
+    key: "new-showcase",
+    label: "New showcase",
+    type: "action",
+    visibleLabel: "+ New showcase",
+  };
+
+  const groups = [
+    CATALOG_GROUP,
+    {
+      id: "showcases",
+      icon: "showcases",
+      label: "Showcases",
+      items: [...showcaseItems, newShowcaseItem],
+    },
+  ];
+
+  // One flat list drives the keyboard cursor, in DOM order.
+  const entries = groups.flatMap((group) => group.items);
+
+  async function handleNewShowcase() {
+    try {
+      const showcase = await createShowcase();
+
+      if (showcase?.id != null) {
+        navigate(SHOWCASE_ROUTES.showcaseEdit(showcase.id), {
+          state: { justCreated: true },
+        });
+      }
+    } catch {
+      // The rail cannot surface an error; leave the user where they are.
+    }
+  }
+
+  function handleActionClick() {
+    handleNewShowcase();
+    closeDrawer();
+    leaveCursor();
+  }
 
   function closeDrawer({ restoreFocus = false } = {}) {
     setDrawerOpen(false);
@@ -133,7 +179,9 @@ function Sidebar({ pageFocusRef }) {
       return;
     }
 
-    const activeIndex = LINKS.findIndex((item) => isItemActive(item, pathname));
+    const activeIndex = entries.findIndex(
+      (item) => item.type !== "action" && isItemActive(item, pathname),
+    );
     setCursorIndex(activeIndex === -1 ? 0 : activeIndex);
   }
 
@@ -204,7 +252,7 @@ function Sidebar({ pageFocusRef }) {
         return;
       }
 
-      const count = LINKS.length;
+      const count = entries.length;
       // Tab only takes over once the cursor is active ("b" opened the rail);
       // otherwise it keeps its native tab order. With the cursor on, Tab
       // mirrors the arrows and wraps off the ends, so Escape is the way out.
@@ -249,8 +297,16 @@ function Sidebar({ pageFocusRef }) {
       if (event.key === "Enter" || event.key === " ") {
         event.preventDefault();
 
-        if (cursorIndex !== null) {
-          navigate(LINKS[cursorIndex].to);
+        if (cursorIndex === null) {
+          return;
+        }
+
+        const entry = entries[cursorIndex];
+
+        if (entry?.type === "action") {
+          handleNewShowcase();
+        } else if (entry) {
+          navigate(entry.to);
         }
       }
     }
@@ -258,7 +314,7 @@ function Sidebar({ pageFocusRef }) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursorIndex, pathname]);
+  }, [cursorIndex, pathname, showcases]);
 
   // Escape closes the narrow-screen drawer and returns focus to the page.
   useEffect(() => {
@@ -284,6 +340,85 @@ function Sidebar({ pageFocusRef }) {
     // claim the arrow keys. Close the drawer and hand focus to the page.
     closeDrawer();
     leaveCursor();
+  }
+
+  function clearShowcaseDrag() {
+    setDraggedShowcaseId(null);
+    setShowcaseDropTarget(null);
+  }
+
+  function handleShowcaseDragStart(event, showcaseId) {
+    event.stopPropagation();
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(showcaseId));
+    setDraggedShowcaseId(showcaseId);
+    setShowcaseDropTarget({ showcaseId, placement: "before" });
+  }
+
+  function updateShowcaseDropTarget(showcaseId, event) {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const placement =
+      event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+
+    setShowcaseDropTarget((current) =>
+      current?.showcaseId === showcaseId && current?.placement === placement
+        ? current
+        : { showcaseId, placement },
+    );
+  }
+
+  // Commit a drop by handing the new id order to the provider. The sidebar
+  // never reorders its own copy; the provider applies the server's order, so a
+  // failed request leaves the visible order untouched.
+  async function handleShowcaseDrop(targetShowcaseId, placement) {
+    if (draggedShowcaseId == null) {
+      clearShowcaseDrag();
+      return;
+    }
+
+    const startIndex = showcases.findIndex(
+      (showcase) => showcase.id === draggedShowcaseId,
+    );
+    const targetIndex = showcases.findIndex(
+      (showcase) => showcase.id === targetShowcaseId,
+    );
+
+    if (startIndex < 0 || targetIndex < 0) {
+      clearShowcaseDrag();
+      return;
+    }
+
+    const rawInsertIndex = targetIndex + (placement === "after" ? 1 : 0);
+
+    if (
+      (placement === "before" && startIndex === targetIndex) ||
+      (placement === "after" && startIndex === targetIndex + 1)
+    ) {
+      clearShowcaseDrag();
+      return;
+    }
+
+    const nextShowcases = [...showcases];
+    const [movedShowcase] = nextShowcases.splice(startIndex, 1);
+    const insertIndex =
+      startIndex < rawInsertIndex ? rawInsertIndex - 1 : rawInsertIndex;
+    nextShowcases.splice(insertIndex, 0, movedShowcase);
+
+    const unchanged = nextShowcases.every(
+      (showcase, index) => showcase.id === showcases[index].id,
+    );
+
+    clearShowcaseDrag();
+
+    if (unchanged) {
+      return;
+    }
+
+    try {
+      await reorderShowcases(nextShowcases.map((showcase) => showcase.id));
+    } catch {
+      // The rail cannot surface an error; the next load reconciles the order.
+    }
   }
 
   const dockClassName = `sidebar-dock${drawerOpen ? " sidebar-dock--drawer-open" : ""}`;
@@ -337,7 +472,7 @@ function Sidebar({ pageFocusRef }) {
           </div>
 
           <div className="sidebar-nav">
-            {GROUPS.map((group) => (
+            {groups.map((group) => (
               <div
                 aria-labelledby={`sidebar-group-${group.id}`}
                 className="sidebar-group"
@@ -353,19 +488,127 @@ function Sidebar({ pageFocusRef }) {
                 </p>
                 <div className="sidebar-group-links">
                   {group.items.map((item) => {
-                    const index = LINKS.indexOf(item);
-                    const active = isItemActive(item, pathname);
+                    const index = entries.indexOf(item);
+                    const active =
+                      item.type !== "action" && isItemActive(item, pathname);
+                    const isShowcase = item.showcaseId != null;
+                    const dropPlacement =
+                      isShowcase &&
+                      showcaseDropTarget?.showcaseId === item.showcaseId
+                        ? showcaseDropTarget.placement
+                        : null;
+                    const className = `sidebar-link${
+                      active ? " sidebar-link--active" : ""
+                    }${cursorIndex === index ? " sidebar-link--cursor" : ""}${
+                      item.type === "action" ? " sidebar-link--action" : ""
+                    }${
+                      dropPlacement
+                        ? ` sidebar-link--drop-${dropPlacement}`
+                        : ""
+                    }${
+                      isShowcase && draggedShowcaseId === item.showcaseId
+                        ? " sidebar-link--dragging"
+                        : ""
+                    }`;
+
+                    if (item.type === "action") {
+                      return (
+                        <button
+                          aria-label={item.label}
+                          className={className}
+                          data-sidebar-index={index}
+                          key={item.key}
+                          onClick={handleActionClick}
+                          ref={(node) => {
+                            linksRef.current[index] = node;
+                          }}
+                          title={item.label}
+                          type="button"
+                        >
+                          <ItemIcon icon={item.icon} />
+                          <span className="sidebar-link-label">
+                            {item.visibleLabel ?? item.label}
+                          </span>
+                        </button>
+                      );
+                    }
 
                     return (
                       <Link
                         aria-current={active ? "page" : undefined}
                         aria-label={item.label}
-                        className={`sidebar-link${active ? " sidebar-link--active" : ""}${
-                          cursorIndex === index ? " sidebar-link--cursor" : ""
-                        }`}
+                        className={className}
                         data-sidebar-index={index}
-                        key={item.to}
+                        draggable={isShowcase}
+                        key={item.key ?? item.to}
                         onClick={handleLinkClick}
+                        onDragEnd={isShowcase ? clearShowcaseDrag : undefined}
+                        onDragLeave={
+                          isShowcase
+                            ? (event) => {
+                                const links =
+                                  event.currentTarget.parentElement;
+
+                                if (
+                                  event.relatedTarget &&
+                                  links?.contains(event.relatedTarget)
+                                ) {
+                                  return;
+                                }
+
+                                setShowcaseDropTarget((current) =>
+                                  current?.showcaseId === item.showcaseId
+                                    ? null
+                                    : current,
+                                );
+                              }
+                            : undefined
+                        }
+                        onDragOver={
+                          isShowcase
+                            ? (event) => {
+                                if (draggedShowcaseId == null) {
+                                  return;
+                                }
+
+                                event.preventDefault();
+                                updateShowcaseDropTarget(
+                                  item.showcaseId,
+                                  event,
+                                );
+                              }
+                            : undefined
+                        }
+                        onDragStart={
+                          isShowcase
+                            ? (event) =>
+                                handleShowcaseDragStart(
+                                  event,
+                                  item.showcaseId,
+                                )
+                            : undefined
+                        }
+                        onDrop={
+                          isShowcase
+                            ? (event) => {
+                                event.preventDefault();
+                                const bounds =
+                                  event.currentTarget.getBoundingClientRect();
+                                const placement =
+                                  showcaseDropTarget?.showcaseId ===
+                                  item.showcaseId
+                                    ? showcaseDropTarget.placement
+                                    : event.clientY <
+                                        bounds.top + bounds.height / 2
+                                      ? "before"
+                                      : "after";
+                                void handleShowcaseDrop(
+                                  item.showcaseId,
+                                  placement,
+                                );
+                              }
+                            : undefined
+                        }
                         ref={(node) => {
                           linksRef.current[index] = node;
                         }}

@@ -319,6 +319,24 @@ input[type="radio"] {
   color: var(--text);
 }
 
+/* The `+ New showcase` row is an action, not a destination: it is a button
+   styled to match the link rows, tinted with the accent to read as "add". */
+.sidebar-link--action {
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  color: var(--accent-strong);
+}
+
+.sidebar-link--action:hover {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
 .sidebar-link--active {
   background: var(--accent-soft);
   color: var(--accent-strong);
@@ -333,6 +351,20 @@ input[type="radio"] {
 .sidebar-link--active.sidebar-link--cursor {
   background: var(--accent-soft);
   color: var(--accent-strong);
+}
+
+/* Showcase rows can be dragged to set their order. The hovered row shows a
+   line on the edge the drop will land on; the dragged row dims. */
+.sidebar-link--dragging {
+  opacity: 0.5;
+}
+
+.sidebar-link--drop-before {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+
+.sidebar-link--drop-after {
+  box-shadow: inset 0 -2px 0 0 var(--accent);
 }
 
 /* The cursor link already draws its own ring. Drop the global
@@ -513,28 +545,588 @@ input[type="radio"] {
   }
 }
 
-.portfolio-stub {
-  max-width: 560px;
-  margin: 0 auto;
-  padding: 32px;
-  text-align: center;
-  border: 1px dashed var(--border-control);
-  border-radius: var(--radius-lg);
+.showcase-name-field {
+  width: 100%;
+  max-width: 420px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  font-size: 18px;
+  font-weight: 700;
 }
 
-.portfolio-stub h2 {
-  margin: 0 0 8px;
+.showcase-screen .panel-heading-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
 }
 
-.portfolio-stub p {
+.showcase-name-error {
+  margin-bottom: 12px;
+  color: var(--danger);
+}
+
+.showcase-empty {
+  padding: 24px 0;
+}
+
+/* The node-entry announcement is for assistive tech only. */
+.showcase-announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+/* The three-way note photo size control (Small 200px / Medium 320px / Large
+   480px). It sits in the showcase header in both view and edit mode and only
+   sets the grid's minimum card width. */
+.showcase-photo-size {
+  margin-left: auto;
+  align-self: center;
+}
+
+.showcase-photo-size-control {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   margin: 0;
-  font-size: 13.5px;
+  padding: 0;
+  border: 0;
+}
+
+.showcase-photo-size-legend {
+  padding: 0;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.1em;
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.showcase-photo-size-options {
+  display: inline-flex;
+  padding: 2px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-pill);
+  background: var(--surface);
+}
+
+.showcase-photo-size-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 12px;
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.showcase-photo-size-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.showcase-photo-size-option:has(input:checked) {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.showcase-photo-size-option:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The shared presentation grid. The photo size (Small 200px / Medium 320px /
+   Large 480px) is a custom property so view and edit mode use one grid rule. */
+.showcase-grid {
+  display: grid;
+  grid-template-columns: repeat(
+    auto-fill,
+    minmax(var(--showcase-card-min, 200px), 1fr)
+  );
+  gap: 16px;
+  align-items: start;
+}
+
+.showcase-card {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+  text-align: center;
+  cursor: pointer;
+}
+
+.showcase-card--category {
+  aspect-ratio: 2 / 1;
+}
+
+.showcase-card-name {
+  max-width: 100%;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* A Grouping card shows its cover image (the manual cover or the first note
+   beneath it) or a neutral gradient placeholder that still carries the name. */
+.showcase-card--grouping {
+  gap: 8px;
+}
+
+.showcase-card-image {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+  object-fit: contain;
+}
+
+.showcase-card-cover {
+  display: block;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  border-radius: var(--radius-md);
+}
+
+.showcase-card-cover--empty {
+  background: linear-gradient(135deg, var(--surface-3), var(--surface));
+  border: 1px solid var(--border-soft);
+}
+
+/* The drill navigation: Up plus a breadcrumb back through the ancestors. One
+   level shows at a time, so this is the only way up. */
+.showcase-breadcrumb {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 16px;
+  flex-wrap: wrap;
+}
+
+.showcase-breadcrumb-list {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  flex-wrap: wrap;
+}
+
+.showcase-breadcrumb-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.showcase-breadcrumb-sep {
+  color: var(--text-faint);
+}
+
+.showcase-breadcrumb-link {
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  font: inherit;
+  cursor: pointer;
+}
+
+.showcase-breadcrumb-link:hover {
+  text-decoration: underline;
+}
+
+.showcase-breadcrumb-current {
+  color: var(--text);
+  font-weight: 600;
+}
+
+.showcase-cell {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+}
+
+.showcase-cell-controls,
+.showcase-cell-edit-actions,
+.showcase-category-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.showcase-cell-edit {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* Edit mode wraps each draggable card in a reorder cell: the grip handle is the
+   drag source and the cell is the drop target. The hovered edge shows the line
+   the drop will land on; the dragged cell dims. */
+.showcase-reorder-cell {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.showcase-reorder-handle {
+  align-self: flex-start;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text-muted);
+  cursor: grab;
+}
+
+.showcase-reorder-handle:hover,
+.showcase-reorder-handle:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.showcase-reorder-handle:active {
+  cursor: grabbing;
+}
+
+.showcase-reorder-grip {
+  line-height: 1;
+}
+
+.showcase-reorder-cell--dragging {
+  opacity: 0.5;
+}
+
+.showcase-reorder-cell--drop-before::after,
+.showcase-reorder-cell--drop-after::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  border-radius: var(--radius-pill);
+  background: var(--accent);
+}
+
+.showcase-reorder-cell--drop-before::after {
+  left: -8px;
+}
+
+.showcase-reorder-cell--drop-after::after {
+  right: -8px;
+}
+
+/* The `+ create a category` tile and its combobox (edit mode only). */
+.showcase-tile {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 96px;
+  padding: 16px;
+  border: 1px dashed var(--border-control);
+  border-radius: var(--radius-md);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.showcase-tile:hover {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.showcase-tile-plus {
+  font-size: 1.1rem;
+  line-height: 1;
+}
+
+.showcase-category-combobox {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.showcase-category-input {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.showcase-category-options {
+  display: flex;
+  flex-direction: column;
+  max-height: 168px;
+  overflow-y: auto;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.showcase-category-option {
+  padding: 6px 10px;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.showcase-category-option:hover,
+.showcase-category-option:focus-visible {
+  background: var(--accent-soft);
+}
+
+.showcase-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: 0.88rem;
+}
+
+/* A Note card is the shared presentation ticket 12 reuses. Its image area keeps
+   the 2/1 banknote proportion; the caption is one ellipsised line. */
+.showcase-card--note {
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 10px;
+}
+
+.showcase-card-image {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.showcase-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* The Note card's front and back stack and cross-fade; only the shown side is
+   exposed to assistive tech (its sibling is aria-hidden). */
+.showcase-card-face {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.showcase-card-face--visible {
+  opacity: 1;
+}
+
+.showcase-card-no-image {
+  color: var(--text-faint);
+  font-size: 0.85rem;
+}
+
+.showcase-card-caption {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The edit-mode contents of one node nest in the parent grid; the `+ notes` tile
+   is note-sized so it sits beside the notes. */
+.showcase-node-items {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.showcase-tile--note {
+  min-height: 96px;
+  aspect-ratio: 2 / 1;
+}
+
+/* The note picker popup. */
+.showcase-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px;
+  background: rgba(28, 22, 16, 0.55);
+}
+
+.showcase-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(720px, 100%);
+  max-height: calc(100vh - 96px);
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.showcase-picker-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.showcase-picker-title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.showcase-picker-filter {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.showcase-picker-column,
+.showcase-picker-value {
+  padding: 8px 10px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.showcase-picker-value {
+  flex: 1 1 200px;
+  min-width: 160px;
+}
+
+.showcase-picker-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.showcase-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 80px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.showcase-picker-empty {
+  padding: 12px;
+}
+
+.showcase-note-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.showcase-note-row:hover {
+  background: var(--surface-2);
+}
+
+.showcase-note-row--added {
+  color: var(--text-muted);
+}
+
+.showcase-note-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase-note-row-pill {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.showcase-note-row-pill--added {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.showcase-picker-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
 }
 
 @media (prefers-reduced-motion: reduce) {
   .sidebar-dock,
   .sidebar,
   .sidebar-link {
+    transition: none;
+  }
+
+  .showcase-card-face {
     transition: none;
   }
 }

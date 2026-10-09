@@ -12,7 +12,7 @@ vi.mock("../lib/api.js", () => ({
   importCsv: vi.fn(),
 }));
 
-import { getOperationStatus } from "../lib/api.js";
+import { downloadArchive, getOperationStatus } from "../lib/api.js";
 
 const collections = [
   { id: 1, is_default: 1, name: "Default" },
@@ -98,6 +98,24 @@ describe("ImportScreen collection controls", () => {
     expect(screen.queryByRole("button", { name: "Rename" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Set default" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Delete" })).toBeNull();
+  });
+});
+
+describe("ImportScreen export reporting", () => {
+  test("reports the showcases a filtered export omitted", async () => {
+    const user = userEvent.setup();
+    downloadArchive.mockResolvedValue({
+      filename: "noteharbor-archive-2026-01-01.zip",
+      omittedShowcases: ["Outside Show"],
+    });
+    renderImportScreen();
+
+    await screen.findByLabelText("Active collection");
+    await user.click(screen.getByRole("button", { name: "Download archive" }));
+
+    expect(await screen.findByText(/Omitted showcases/)).toHaveTextContent(
+      "Outside Show",
+    );
   });
 });
 
