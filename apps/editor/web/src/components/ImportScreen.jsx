@@ -274,7 +274,9 @@ function ImportScreen({
                 Archive export can include selected collections only, and
                 archive import replaces local collections that exist in the
                 archive (matched by name) while leaving other collections
-                untouched.
+                untouched. Archive import is destructive for collections
+                present in the archive: local data for those collections is
+                replaced.
               </p>
             </div>
           </div>
@@ -284,10 +286,6 @@ function ImportScreen({
             <p className="error-text">{collectionsError}</p>
           ) : null}
           {isBusy ? <p className="warning-text">{busyMessage}</p> : null}
-          <p className="warning-text">
-            Archive import is destructive for collections present in the
-            archive: local data for those collections is replaced.
-          </p>
 
           <div className="import-sections">
             <form
