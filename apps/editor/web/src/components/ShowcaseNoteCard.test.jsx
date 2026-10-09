@@ -1,4 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { describe, expect, test } from "vitest";
 import { ShowcaseNoteCard } from "./ShowcaseNoteCard.jsx";
 
@@ -66,6 +67,23 @@ describe("ShowcaseNoteCard", () => {
     fireEvent.click(card);
     fireEvent.click(card);
 
+    expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "/api/images/notes/1/front-thumb.jpg?v=rev-1",
+    );
+  });
+
+  test("a mouse click never holds the back after the pointer leaves", async () => {
+    render(<ShowcaseNoteCard note={note()} />);
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    await userEvent.click(card);
+    // Focus must not stick to the clicked card, or the back preview would
+    // stay on after the pointer leaves (and move to the next clicked card).
+    expect(card).not.toHaveFocus();
+
+    await userEvent.unhover(card);
     expect(card).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByRole("img")).toHaveAttribute(
       "src",

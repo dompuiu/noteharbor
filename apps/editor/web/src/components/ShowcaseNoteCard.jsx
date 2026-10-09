@@ -41,6 +41,16 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
   const backLabel = label ? `${label} (back)` : "back";
 
   function handleClick(event) {
+    // A mouse click parks focus on the card, and focus alone previews the
+    // back — without this the back would stick after the pointer leaves, and
+    // clicking a second card would just move the stuck preview there.
+    // `detail` is the click count for a real pointer click and 0 for a
+    // keyboard-activated one, so keyboard focus (Tab / Enter / Space) keeps
+    // working while a mouse click never holds the preview.
+    if (!editMode && event.detail > 0) {
+      event.currentTarget.blur();
+    }
+
     onOpen?.(event);
   }
 
