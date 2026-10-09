@@ -863,6 +863,19 @@ function createStatements(database) {
       SET cover_note_id = @cover_note_id, updated_at = datetime('now')
       WHERE id = @id
     `),
+    updateShowcaseNodePositionStatement: database.prepare(`
+      UPDATE showcase_nodes
+      SET position = @position, updated_at = datetime('now')
+      WHERE id = @id
+    `),
+    // The children of one parent (the top level when the parent is null), in
+    // their stored order. Used to prove a reorder request is a full permutation.
+    listShowcaseChildIdsStatement: database.prepare(`
+      SELECT id
+      FROM showcase_nodes
+      WHERE showcase_id = @showcase_id AND parent_node_id IS @parent_node_id
+      ORDER BY position ASC, id ASC
+    `),
     deleteShowcaseNodeStatement: database.prepare(`DELETE FROM showcase_nodes WHERE id = ?`),
 
     listNotesStatement: database.prepare(`
@@ -1818,6 +1831,57 @@ function deleteShowcaseNode(id) {
   return result.changes > 0;
 }
 
+// Reorder the children of one node (the top level when `parentNodeId` is null).
+// The request must be a FULL permutation of the parent's current children, so a
+// stale or partial drag is rejected instead of silently dropping a card. Every
+// child receives a contiguous `position` from 1; mirrors `reorderShowcases`.
+function reorderShowcaseNodes(showcaseId, parentNodeId, orderedIds) {
+  getDatabase();
+  const id = Number(showcaseId);
+  ensureShowcaseExists(id);
+
+  const parentId = parentNodeId == null ? null : Number(parentNodeId);
+
+  if (parentId != null) {
+    if (!Number.isInteger(parentId) || parentId <= 0) {
+      throw new Error('A valid parent node is required.');
+    }
+
+    const parent = statements.getShowcaseNodeStatement.get(parentId);
+
+    if (!parent || parent.showcase_id !== id) {
+      throw new Error('Parent node not found.');
+    }
+  }
+
+  const currentIds = statements.listShowcaseChildIdsStatement
+    .all({ showcase_id: id, parent_node_id: parentId })
+    .map((row) => row.id);
+  const requested = Array.isArray(orderedIds) ? orderedIds.map((nodeId) => Number(nodeId)) : [];
+  const requestedSet = new Set(requested);
+
+  if (
+    requested.length !== currentIds.length ||
+    requested.some((nodeId) => !Number.isInteger(nodeId) || nodeId <= 0) ||
+    requestedSet.size !== requested.length ||
+    currentIds.some((nodeId) => !requestedSet.has(nodeId))
+  ) {
+    throw new Error('Reorder request must include every child exactly once.');
+  }
+
+  const transaction = db.transaction((nextIds) => {
+    nextIds.forEach((nodeId, index) => {
+      statements.updateShowcaseNodePositionStatement.run({
+        id: nodeId,
+        position: index + 1
+      });
+    });
+  });
+
+  transaction(requested);
+  return requested.map((nodeId) => getShowcaseNodeById(nodeId));
+}
+
 function ensureShowcaseExists(showcaseId) {
   getDatabase();
   const showcase = statements.getShowcaseStatement.get(Number(showcaseId));
@@ -2298,6 +2362,7 @@ export {
   reorderCollections,
   reorderNotes,
   reorderShowcases,
+  reorderShowcaseNodes,
   setDefaultCollectionById,
   replaceNoteTags,
   updateNote,

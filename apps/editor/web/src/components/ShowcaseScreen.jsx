@@ -6,12 +6,14 @@ import {
   deleteNode,
   getCategories,
   getShowcaseTree,
+  reorderNodes,
   updateNode,
 } from "../lib/api.js";
 import { usePhotoSize } from "../lib/photoSize.js";
 import { DEFAULT_DESTINATION, PORTFOLIO_ROUTES } from "../lib/routes.js";
 import { useShowcases } from "../lib/showcases.jsx";
 import { useCollections } from "../lib/collections.jsx";
+import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
 import { ShowcaseCategoryCard } from "./ShowcaseCategoryCard.jsx";
 import { ShowcaseCategoryEditor } from "./ShowcaseCategoryEditor.jsx";
 import { ShowcaseCategoryTile } from "./ShowcaseCategoryTile.jsx";
@@ -24,6 +26,7 @@ import { ShowcaseNodeItems } from "./ShowcaseNodeItems.jsx";
 import { ShowcaseNoteEditor } from "./ShowcaseNoteEditor.jsx";
 import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
 import { ShowcasePhotoSizeControl } from "./ShowcasePhotoSizeControl.jsx";
+import { ShowcaseReorderableCell } from "./ShowcaseReorderableCell.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 
 // One showcase, rendered in one of two near-identical modes. View mode is the
@@ -137,6 +140,43 @@ function appendChildren(nodes, parentId, added) {
 
     return node;
   });
+}
+
+// Put a parent's children into the given id order, keeping any node the caller
+// omitted at the end (defensive: the server rejects a partial list anyway).
+function applyChildOrder(children, orderedIds) {
+  const byId = new Map(children.map((node) => [node.id, node]));
+
+  for (const nodeId of orderedIds) {
+    byId.delete(nodeId);
+  }
+
+  const ordered = orderedIds
+    .map((nodeId) => children.find((node) => node.id === nodeId))
+    .filter(Boolean);
+
+  return [...ordered, ...byId.values()];
+}
+
+// Apply a reorder to the local tree without refetching: the top level when the
+// parent is null, otherwise the matching parent's children.
+function reorderNodeTree(nodes, parentId, orderedIds) {
+  if (parentId == null) {
+    return applyChildOrder(nodes, orderedIds);
+  }
+
+  return updateNodeTree(nodes, parentId, (parent) => ({
+    ...parent,
+    children: applyChildOrder(parent.children ?? [], orderedIds),
+  }));
+}
+
+// The drag handle's accessible name for a note node.
+function noteNodeLabel(node) {
+  const note = node.note ?? {};
+  return (
+    [note.denomination, note.issue_date].filter(Boolean).join(" ") || "note"
+  );
 }
 
 function ShowcaseScreen({ mode }) {
@@ -359,6 +399,23 @@ function ShowcaseScreen({ mode }) {
   const currentParentId = currentNode ? currentNode.id : null;
   const currentChildren = currentNode ? currentNode.children ?? [] : nodes;
 
+  // Dragging a note or a Grouping reorders it among the current level's
+  // children, so notes and groupings share one order. Categories only exist at
+  // the top level and are not draggable here (the sidebar owns showcase order).
+  const reorder = useShowcaseReorder({
+    nodes: currentChildren,
+    onReorder: handleReorderChildren,
+  });
+
+  async function handleReorderChildren(orderedIds) {
+    // Persist first, then reorder locally: a rejected request leaves the
+    // visible order untouched.
+    await reorderNodes(showcaseId, currentParentId, orderedIds);
+    setNodes((current) =>
+      reorderNodeTree(current, currentParentId, orderedIds),
+    );
+  }
+
   function openNode(node) {
     setDrillIds((current) => [...current, node.id]);
   }
@@ -542,19 +599,25 @@ function ShowcaseScreen({ mode }) {
 
                 if (node.node_type === "grouping") {
                   return editMode ? (
-                    <ShowcaseGroupingEditor
+                    <ShowcaseReorderableCell
                       key={node.id}
-                      node={node}
-                      onOpen={() => openNode(node)}
-                      onRemove={handleRemoveGrouping}
-                      onRename={handleRenameGrouping}
+                      label={node.name}
+                      nodeId={node.id}
+                      reorder={reorder}
                     >
-                      <ShowcaseNodeItems
+                      <ShowcaseGroupingEditor
                         node={node}
-                        onAddNotes={handleOpenNotePicker}
-                        onRemoveNote={handleRemoveNote}
-                      />
-                    </ShowcaseGroupingEditor>
+                        onOpen={() => openNode(node)}
+                        onRemove={handleRemoveGrouping}
+                        onRename={handleRenameGrouping}
+                      >
+                        <ShowcaseNodeItems
+                          node={node}
+                          onAddNotes={handleOpenNotePicker}
+                          onRemoveNote={handleRemoveNote}
+                        />
+                      </ShowcaseGroupingEditor>
+                    </ShowcaseReorderableCell>
                   ) : (
                     <ShowcaseGroupingCard
                       key={node.id}
@@ -566,11 +629,17 @@ function ShowcaseScreen({ mode }) {
 
                 if (node.node_type === "note") {
                   return editMode ? (
-                    <ShowcaseNoteEditor
+                    <ShowcaseReorderableCell
                       key={node.id}
-                      node={node}
-                      onRemove={handleRemoveNote}
-                    />
+                      label={noteNodeLabel(node)}
+                      nodeId={node.id}
+                      reorder={reorder}
+                    >
+                      <ShowcaseNoteEditor
+                        node={node}
+                        onRemove={handleRemoveNote}
+                      />
+                    </ShowcaseReorderableCell>
                   ) : null;
                 }
 
