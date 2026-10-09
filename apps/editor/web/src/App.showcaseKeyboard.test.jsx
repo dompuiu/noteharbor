@@ -295,20 +295,27 @@ describe("opening the focused card", () => {
     ).toBeInTheDocument();
   });
 
-  test("Enter and Space flip a view-mode note card instead of drilling", async () => {
+  test("Enter and Space never drill into a view-mode note card", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    
-    const card = await screen.findByRole("button", { name: "1 leu, 1917" });
-    // Focus alone reveals the back; one activation keeps it flipped (a double
-    // handling would flip it straight back to the front).
-    act(() => card.focus());
-    await userEvent.keyboard("{Enter}");
-    expect(card).toHaveAttribute("aria-pressed", "true");
-    expect(search()).toBe("");
 
-    await userEvent.keyboard(" ");
-    expect(card).toHaveAttribute("aria-pressed", "false");
+    const card = await screen.findByRole("button", { name: "1 leu, 1917" });
+    // Focus alone previews the back; activation must neither latch it nor
+    // drill, so blurring always returns to the front.
+    act(() => card.focus());
+    expect(card).toHaveAttribute("aria-pressed", "true");
+
+    await userEvent.keyboard("{Enter}");
     expect(search()).toBe("");
+    expect(card).toHaveAttribute("aria-pressed", "true");
+
+    act(() => card.blur());
+    expect(card).toHaveAttribute("aria-pressed", "false");
+
+    act(() => card.focus());
+    await userEvent.keyboard(" ");
+    expect(search()).toBe("");
+    act(() => card.blur());
+    expect(card).toHaveAttribute("aria-pressed", "false");
   });
 });
 

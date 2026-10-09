@@ -1,4 +1,4 @@
-import { render, screen } from "@testing-library/react";
+import { fireEvent, render, screen } from "@testing-library/react";
 import { describe, expect, test } from "vitest";
 import { ShowcaseNoteCard } from "./ShowcaseNoteCard.jsx";
 
@@ -52,6 +52,20 @@ describe("ShowcaseNoteCard", () => {
     render(<ShowcaseNoteCard mode="edit" note={note()} pressed />);
 
     const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "/api/images/notes/1/front-thumb.jpg?v=rev-1",
+    );
+  });
+
+  test("clicking never latches the back image", () => {
+    render(<ShowcaseNoteCard note={note()} />);
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    fireEvent.click(card);
+    fireEvent.click(card);
+
     expect(card).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByRole("img")).toHaveAttribute(
       "src",

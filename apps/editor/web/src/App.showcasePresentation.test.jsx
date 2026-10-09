@@ -494,21 +494,25 @@ describe("the note card in view mode", () => {
     );
   });
 
-  test("a tap swaps to the back and never navigates", async () => {
+  test("a tap leaves the front showing and never navigates", async () => {
     const card = await openWithNote();
     const searchBefore = currentSearch();
 
     fireEvent.click(card);
 
-    expect(card).toHaveAttribute("aria-pressed", "true");
+    expect(card).toHaveAttribute("aria-pressed", "false");
     expect(within(card).getByRole("img")).toHaveAttribute(
       "src",
-      "/api/images/notes/100/back.jpg?v=rev-100",
+      "/api/images/notes/100/front.jpg?v=rev-100",
     );
     expect(currentSearch()).toBe(searchBefore);
 
     fireEvent.click(card);
     expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(within(card).getByRole("img")).toHaveAttribute(
+      "src",
+      "/api/images/notes/100/front.jpg?v=rev-100",
+    );
   });
 
   test("a card is focusable and reports its label and pressed state", async () => {

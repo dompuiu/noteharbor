@@ -3,10 +3,10 @@ import { firstAvailableNoteImage, pickNoteImage } from "../lib/showcaseImages.js
 
 // The read-only Note card (presentation spec §3, §8). The front image is the
 // default; if there is no front it falls back to the back, else a muted
-// "No image". In view mode a hover, a focus, or a tap reveals the back when a
-// distinct one exists (the two faces cross-fade); edit mode never swaps. The
-// card is a button and never a link: activating it toggles the side, it never
-// opens the Note slideshow.
+// "No image". In view mode a hover or a focus transiently previews the back
+// when a distinct one exists (the two faces cross-fade); edit mode never
+// swaps. The card is a button and never a link: activating (click / Enter /
+// Space) never changes the image and never opens the Note slideshow.
 function pickBackImage(note) {
   return (
     pickNoteImage(note, "back", "thumbnail") ||
@@ -16,9 +16,6 @@ function pickBackImage(note) {
 
 function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen }) {
   const editMode = mode === "edit";
-  // `flipped` is the explicit front/back choice (a tap or Enter/Space); until
-  // it is set the card follows the transient hover/focus reveal.
-  const [flipped, setFlipped] = useState(null);
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
 
@@ -28,7 +25,7 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
   // image and never swaps (presentation spec §9).
   const hasDistinctBack = primary?.type === "front" && Boolean(back);
   const revealed = hovered || focused;
-  const active = pressed || (flipped !== null ? flipped : revealed);
+  const active = pressed || revealed;
   const swapped = !editMode && hasDistinctBack && active;
   const soleBack = primary?.type === "back";
   const frontPath = primary?.type === "front" ? primary.path : null;
@@ -44,10 +41,6 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
   const backLabel = label ? `${label} (back)` : "back";
 
   function handleClick(event) {
-    if (!editMode && hasDistinctBack) {
-      setFlipped((current) => !(current === true));
-    }
-
     onOpen?.(event);
   }
 
@@ -60,7 +53,6 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
   function handleMouseLeave() {
     if (!editMode) {
       setHovered(false);
-      setFlipped(null);
     }
   }
 
@@ -73,7 +65,6 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
   function handleBlur() {
     if (!editMode) {
       setFocused(false);
-      setFlipped(null);
     }
   }
 
