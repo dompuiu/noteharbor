@@ -1529,7 +1529,7 @@ function NoteEditForm({
             ) : null}
             {!isCreateMode && onDelete ? (
               <button
-                className="button"
+                className="button button-danger"
                 data-shortcut="Ctrl+D"
                 disabled={saving}
                 onClick={onDelete}
