@@ -210,6 +210,46 @@ describe("the note picker", () => {
     ).toBeInTheDocument();
   });
 
+  test("Deselect all removes only the currently filtered picks", async () => {
+    createShowcaseNode.mockResolvedValue({ nodes: [] });
+
+    const { user, dialog } = await openPicker();
+    const filter = screen.getByLabelText("Filter value");
+
+    await user.type(filter, "22");
+    await user.click(within(dialog).getByRole("button", { name: "Select all" }));
+    expect(
+      within(dialog).getByRole("button", { name: "Add selected (2)" }),
+    ).toBeInTheDocument();
+
+    await user.clear(filter);
+    await user.type(filter, "220");
+    await user.click(
+      within(dialog).getByRole("checkbox", { name: /2 lei · 1920/ }),
+    );
+    expect(
+      within(dialog).getByRole("button", { name: "Add selected (3)" }),
+    ).toBeInTheDocument();
+
+    // Deselect all only drops the 220 row; the earlier picks survive.
+    await user.click(within(dialog).getByRole("button", { name: "Deselect all" }));
+    expect(
+      within(dialog).getByRole("button", { name: "Add selected (2)" }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(dialog).getByRole("button", { name: "Add selected (2)" }),
+    );
+
+    await waitFor(() => {
+      expect(createShowcaseNode).toHaveBeenCalledWith(1, {
+        type: "notes",
+        parent_id: 10,
+        note_ids: [101, 102],
+      });
+    });
+  });
+
   test("Add & close adds the notes and closes the popup", async () => {
     createShowcaseNode.mockResolvedValue({
       nodes: [{ id: 204, node_type: "note", note_id: 104, note: NOTE_D, children: [] }],
