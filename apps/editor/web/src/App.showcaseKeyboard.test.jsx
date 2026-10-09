@@ -441,6 +441,44 @@ function manyCategories(count) {
   );
 }
 
+describe("shortcut help", () => {
+  test("? opens the shortcut help with the Showcase keys", async () => {
+    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    await summerCard();
+
+    fireEvent.keyDown(document.body, { key: "?" });
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Keyboard shortcuts",
+    });
+    expect(dialog).toHaveTextContent("Move focus between the cards");
+    expect(dialog).toHaveTextContent("Open the focused card");
+  });
+
+  test("the cards ignore the shortcuts while the help is open", async () => {
+    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    const summer = await summerCard();
+    const vienna = screen.getByRole("button", { name: "Open category Vienna" });
+
+    act(() => summer.focus());
+    fireEvent.keyDown(document.body, { key: "?" });
+    await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
+
+    fireEvent.keyDown(document.body, { key: "ArrowDown" });
+    expect(summer).toHaveFocus();
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "Keyboard shortcuts" }),
+      ).not.toBeInTheDocument(),
+    );
+
+    fireEvent.keyDown(document.body, { key: "ArrowDown" });
+    expect(vienna).toHaveFocus();
+  });
+});
+
 // Assign every card a rect on a `columns`-wide grid so page movement can be
 // computed the way it is in a browser. jsdom reports all-zero rects otherwise.
 function stubGridRects(cards, columns, { width = 200, height = 100, gap = 0 }) {

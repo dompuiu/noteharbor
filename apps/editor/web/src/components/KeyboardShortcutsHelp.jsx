@@ -85,6 +85,40 @@ const shortcutGroups = [
     ],
   },
   {
+    title: "Showcase",
+    items: [
+      {
+        keys: ["←", "↑", "→", "↓", "h", "j", "k", "l"],
+        description: "Move focus between the cards in grid order",
+      },
+      { keys: ["Home", "End"], description: "Focus the first / last card" },
+      {
+        keys: ["PgUp", "PgDn"],
+        description: "Move the focus by a screen of rows",
+      },
+      {
+        keys: ["Enter", "Space"],
+        description:
+          "Open the focused card; on a view-mode note card, flip front / back instead",
+      },
+      {
+        keys: ["Esc"],
+        description: "Clear the card focus, then go up one level",
+      },
+      {
+        keys: ["a"],
+        description: "Add notes to the focused card (edit mode)",
+      },
+      {
+        keys: ["g"],
+        description: "Add a grouping to the current level (edit mode)",
+      },
+      { keys: ["e"], description: "Rename the focused card (edit mode)" },
+      { keys: ["d"], description: "Remove the focused card (edit mode)" },
+      { keys: ["?"], description: "Toggle this help" },
+    ],
+  },
+  {
     title: "Everywhere",
     items: [
       { keys: ["?"], description: "Toggle this help" },

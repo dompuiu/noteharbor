@@ -713,6 +713,12 @@ function ShowcaseScreen({ mode }) {
         return;
       }
 
+      if (event.key === "?") {
+        event.preventDefault();
+        setShowShortcutsHelp(true);
+        return;
+      }
+
       const down = event.key === "ArrowDown" || event.key === "j";
       const up = event.key === "ArrowUp" || event.key === "k";
       const next = event.key === "ArrowRight" || event.key === "l";
@@ -1059,6 +1065,10 @@ function ShowcaseScreen({ mode }) {
           onAdd={handleAddNotes}
           onClose={() => setPickerNodeId(null)}
         />
+      ) : null}
+
+      {showShortcutsHelp ? (
+        <KeyboardShortcutsHelp onClose={() => setShowShortcutsHelp(false)} />
       ) : null}
 
       {dialog}
