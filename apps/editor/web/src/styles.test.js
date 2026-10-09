@@ -188,6 +188,30 @@ describe("sidebar styles", () => {
   });
 });
 
+describe("app minimum width", () => {
+  // The Editor targets desktop estates: below 1200px the layout breaks, so
+  // the app holds a 1200px floor and scrolls horizontally instead of
+  // squeezing.
+  test("the body holds the 1200px floor", () => {
+    const body = styles.match(/body\s*\{([^}]*)\}/);
+    expect(body).not.toBeNull();
+    expect(body[1]).toMatch(/min-width:\s*1200px/);
+  });
+
+  test("the body scrolls horizontally instead of clipping", () => {
+    const body = styles.match(/body\s*\{([^}]*)\}/);
+    expect(body).not.toBeNull();
+    expect(body[1]).toMatch(/overflow-x:\s*auto/);
+    expect(body[1]).not.toMatch(/overflow:\s*hidden/);
+  });
+
+  test("the app shell holds the 1200px floor", () => {
+    const shell = styles.match(/\.app-shell\s*\{([^}]*)\}/);
+    expect(shell).not.toBeNull();
+    expect(shell[1]).toMatch(/min-width:\s*1200px/);
+  });
+});
+
 describe("slideshow overlay styles", () => {
   // The slideshow floats over the app like the image preview: a full-viewport
   // scrim with the slideshow panel on top, so the sidebar stays visible and

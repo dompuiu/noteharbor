@@ -309,7 +309,7 @@ async function startEmbeddedServer() {
 const WINDOW_STATE_FILENAME = 'window-state.json';
 const DEFAULT_WINDOW_WIDTH = 1480;
 const DEFAULT_WINDOW_HEIGHT = 960;
-const MIN_WINDOW_WIDTH = 1100;
+const MIN_WINDOW_WIDTH = 1200;
 const MIN_WINDOW_HEIGHT = 720;
 
 function getWindowStatePath() {

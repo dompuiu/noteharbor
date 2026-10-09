@@ -67,7 +67,9 @@
 body {
   margin: 0;
   min-height: 100vh;
-  overflow: hidden;
+  min-width: 1200px;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
 html,
@@ -113,6 +115,7 @@ input[type="radio"] {
   display: flex;
   flex-direction: row;
   width: 100%;
+  min-width: 1200px;
   height: 100vh;
   overflow: hidden;
 }
