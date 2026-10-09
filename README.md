@@ -235,6 +235,47 @@ There is no unique `(catalog_number, serial)` constraint anymore. CSV import mat
 
 Tags are stored separately (scoped to a `collection_id`, unique per collection case-insensitively) and linked many-to-many through `banknote_tags`.
 
+### `categories`
+
+The workspace's shared Category labels. A Showcase places a label by reference, so renaming a label updates every Showcase that places it; labels are never deleted.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PK | Auto-increment |
+| `name` | TEXT | Unique, case-insensitive |
+| `created_at` | TEXT | SQLite datetime |
+| `updated_at` | TEXT | SQLite datetime |
+
+### `showcases`
+
+A named presentation tree.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PK | Auto-increment |
+| `name` | TEXT | Unique, case-insensitive |
+| `display_order` | INTEGER | Sidebar/creation order; new showcases append |
+| `created_at` | TEXT | SQLite datetime |
+| `updated_at` | TEXT | SQLite datetime |
+
+### `showcase_nodes`
+
+One self-referential ordered tree per Showcase (see [ADR 0001](docs/adr/0001-showcase-node-tree.md)). Each row is a Category Placement, a Grouping, or a note, distinguished by `node_type`; `position` orders the children of one parent.
+
+| Column | Type | Notes |
+|---|---|---|
+| `id` | INTEGER PK | Auto-increment |
+| `showcase_id` | INTEGER | FK to `showcases.id`, cascades on delete |
+| `parent_node_id` | INTEGER | FK to `showcase_nodes.id`, cascades on delete; null for a top-level Category Placement |
+| `node_type` | TEXT | `category`, `grouping`, or `note` |
+| `category_id` | INTEGER | FK to `categories.id` for a Category Placement; at most one per `(showcase_id, category_id)` |
+| `name` | TEXT | A Grouping's local name (a Category reads its label's name) |
+| `note_id` | INTEGER | FK to `banknotes.id` for a note node, cascades on delete |
+| `cover_note_id` | INTEGER | A Grouping's manual cover Note; FK to `banknotes.id`, set to null when the Note is deleted |
+| `position` | INTEGER | Order among the parent's children |
+| `created_at` | TEXT | SQLite datetime |
+| `updated_at` | TEXT | SQLite datetime |
+
 ---
 
 ## API Reference
@@ -336,6 +377,72 @@ GET /api/tags
 GET /api/tags/suggestions
 -> { tags: [{ id, name }, ...] }
 ```
+
+### Showcases
+
+A Showcase is a presentation tree of Category Placements, Groupings, and notes (see [ADR 0001](docs/adr/0001-showcase-node-tree.md)). `GET /api/showcases` includes a `note_count` per showcase.
+
+```
+GET /api/showcases
+-> { showcases: [{ id, name, display_order, note_count, created_at, updated_at }, ...] }
+
+POST /api/showcases
+Body: { name? }   // omitted name gets a unique default ("Showcase", "Showcase 2", …)
+-> 201 { showcase }
+
+PUT /api/showcases/order
+Body: { ids: [id, ...] }   // every showcase, in the new order
+-> { showcases }
+
+PUT /api/showcases/:showcaseId
+Body: { name }
+-> { showcase }
+
+DELETE /api/showcases/:showcaseId
+-> { success: true }
+
+GET /api/showcases/:showcaseId/tree
+-> { showcase_id, nodes: [ShowcaseNode, ...] }   // nested, ordered by position then id
+
+POST /api/showcases/:showcaseId/nodes
+Body: { type: "category", category_id } | { type: "category", name }
+    | { type: "grouping", parent_id, name }
+    | { type: "notes", parent_id, note_ids: [id, ...] }
+-> 201 { node }   // category / grouping
+-> 201 { nodes }  // notes batch, in the requested order
+
+PUT /api/nodes/order
+Body: { showcase_id, parent_node_id, node_ids: [id, ...] }   // parent_node_id null = top level; must be a full permutation
+-> { nodes }
+
+PUT /api/nodes/:nodeId
+Body: { name? }                     // a Grouping or Category Placement
+    | { cover_note_id: id | null }  // set / clear a Grouping's manual cover
+-> { node }
+
+DELETE /api/nodes/:nodeId
+-> { success: true }   // removes the node and its subtree; a Category label stays in the pool
+```
+
+`ShowcaseNode` is `{ id, node_type, name, category_id, parent_node_id, note_id, cover_note_id, position, note, cover_note, children: [ShowcaseNode, ...] }`, where `note` is the referenced note for a note node and `cover_note` is the manual cover for a Grouping.
+
+### Categories
+
+The shared Category label pool. Creating a name that already exists (ignoring case) returns the existing label.
+
+```
+GET /api/categories
+-> { categories: [{ id, name, created_at, updated_at }, ...] }
+
+POST /api/categories
+Body: { name }
+-> 201 { category }
+
+PUT /api/categories/:id
+Body: { name }
+-> { category }
+```
+
 
 ### Operations
 
@@ -470,6 +577,16 @@ Handles:
 ### Edit (`/catalog/notes/:id/edit`)
 
 Direct route for editing or reviewing one note outside the overlay flow.
+
+### Showcases (`/portfolio/showcases/:id` and `/portfolio/showcases/:id/edit`)
+
+The read-only presentation and its authoring canvas. Both browse one level at a time and look the same; edit mode adds the controls.
+
+- View mode is URL-synced: the current node is `?node=<nodeId>` (the root has no parameter), so Back and shared links work.
+- Edit mode keeps the drill state in memory; the URL does not change. It adds the `+ create a category` / `+ notes` / `+ grouping` tiles, drag handles, rename/remove controls, and a Grouping's manual-cover controls.
+- Nothing expands inline — a Category or Grouping is opened to show its direct children.
+- A three-way photo-size control (Small / Medium / Large) applies in both modes and is remembered per browser.
+- The header shows the showcase total note count and links between the two modes.
 
 ### Viewer Apps
 
