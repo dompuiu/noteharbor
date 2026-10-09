@@ -441,6 +441,84 @@ function manyCategories(count) {
   );
 }
 
+describe("guards", () => {
+  test("the shortcuts stay out of a text field", async () => {
+    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    const nameField = await screen.findByLabelText("Showcase name");
+
+    act(() => nameField.focus());
+    await userEvent.type(nameField, "gd");
+    fireEvent.keyDown(nameField, { key: "ArrowDown" });
+
+    expect(nameField).toHaveFocus();
+    expect(screen.queryByLabelText("Grouping name")).not.toBeInTheDocument();
+    expect(deleteNode).not.toHaveBeenCalled();
+  });
+
+  test("an open dialog disables the card shortcuts", async () => {
+    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    await openSummer();
+
+    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    act(() => sub.focus());
+    fireEvent.keyDown(document.body, { key: "a" });
+    await screen.findByRole("dialog", { name: "Add notes" });
+
+    fireEvent.keyDown(document.body, { key: "ArrowDown" });
+    fireEvent.keyDown(document.body, { key: "?" });
+
+    expect(document.activeElement.closest(".showcase-card")).toBeNull();
+    expect(
+      screen.queryByRole("dialog", { name: "Keyboard shortcuts" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("an open confirmation dialog also disables the card shortcuts", async () => {
+    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    await summerCard();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Delete showcase" }),
+    );
+    await screen.findByRole("dialog");
+
+    fireEvent.keyDown(document.body, { key: "ArrowDown" });
+    fireEvent.keyDown(document.body, { key: "?" });
+
+    expect(document.activeElement.closest(".showcase-card")).toBeNull();
+    expect(
+      screen.queryByRole("dialog", { name: "Keyboard shortcuts" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("a Meta/Ctrl chord is left to the browser", async () => {
+    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    await openSummer();
+
+    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    act(() => sub.focus());
+
+    fireEvent.keyDown(document.body, { key: "d", ctrlKey: true });
+    fireEvent.keyDown(sub, { key: "e", metaKey: true });
+
+    expect(deleteNode).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("New name for Sub")).not.toBeInTheDocument();
+  });
+
+  test("the sidebar keeps its own keys", async () => {
+    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    await summerCard();
+
+    const sidebar = document.getElementById("app-sidebar");
+    const link = sidebar.querySelector("a");
+
+    act(() => link.focus());
+    fireEvent.keyDown(link, { key: "ArrowDown" });
+
+    expect(document.activeElement.closest(".showcase-card")).toBeNull();
+  });
+});
+
 describe("the note picker", () => {
   test("/ focuses the picker's filter field from another control", async () => {
     getNotes.mockResolvedValue({ notes: [NOTE_WITH_BACK] });
