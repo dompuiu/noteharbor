@@ -3,17 +3,22 @@ import { resolveGroupingCover } from "../lib/showcaseCovers.js";
 
 // A Grouping card shows its cover: the manual cover when one is set, else the
 // first Note beneath the Grouping, else a neutral gradient placeholder that
-// still shows the name (presentation spec §3–4). Double-clicking the card opens
-// the Grouping, explorer-style (the ticket's drill gesture). It is
-// presentation-only; the edit controls live beside it, not inside it.
-function ShowcaseGroupingCard({ node, onOpen }) {
+// still shows the name (presentation spec §3–4). It is presentation-only; the
+// edit controls live beside it, not inside it. Activation differs by mode: the
+// read-only presentation opens on a single click / Enter / Space, while the
+// edit canvas keeps its double-click drill (ticket 09).
+function ShowcaseGroupingCard({ node, onOpen, mode = "view" }) {
+  const editMode = mode === "edit";
   const coverImage = firstAvailableNoteImage(resolveGroupingCover(node));
 
   return (
     <button
       aria-label={`Open grouping ${node.name}`}
       className="showcase-card showcase-card--grouping"
-      onDoubleClick={onOpen}
+      onClick={editMode ? undefined : onOpen}
+      onDoubleClick={editMode ? onOpen : undefined}
+      role="button"
+      tabIndex={0}
       type="button"
     >
       {coverImage ? (

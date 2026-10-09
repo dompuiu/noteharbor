@@ -206,11 +206,11 @@ describe("grouping drill navigation", () => {
     expect(groupingCard("Sub")).toBeInTheDocument();
   });
 
-  test("double-clicking a grouping drills in; Up and the breadcrumb go back", async () => {
+  test("clicking a grouping drills in; Up and the breadcrumb go back", async () => {
     renderAt(PORTFOLIO_ROUTES.showcase(1));
     await openSummer();
 
-    await userEvent.dblClick(groupingCard("Sub"));
+    await userEvent.click(groupingCard("Sub"));
 
     expect(
       await screen.findByRole("button", { name: "Open grouping Deep" }),
@@ -237,7 +237,7 @@ describe("grouping drill navigation", () => {
   test("the breadcrumb jumps straight to an ancestor level", async () => {
     renderAt(PORTFOLIO_ROUTES.showcase(1));
     await openSummer();
-    await userEvent.dblClick(groupingCard("Sub"));
+    await userEvent.click(groupingCard("Sub"));
 
     const breadcrumb = screen.getByRole("navigation", {
       name: "Showcase breadcrumb",

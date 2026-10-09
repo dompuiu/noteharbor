@@ -9,7 +9,11 @@ import {
   updateNode,
 } from "../lib/api.js";
 import { usePhotoSize } from "../lib/photoSize.js";
-import { DEFAULT_DESTINATION, PORTFOLIO_ROUTES } from "../lib/routes.js";
+import {
+  DEFAULT_DESTINATION,
+  PORTFOLIO_ROUTES,
+  showcaseNodeSearch,
+} from "../lib/routes.js";
 import { useShowcases } from "../lib/showcases.jsx";
 import { useCollections } from "../lib/collections.jsx";
 import { ShowcaseCategoryCard } from "./ShowcaseCategoryCard.jsx";
@@ -21,6 +25,7 @@ import { ShowcaseGroupingCard } from "./ShowcaseGroupingCard.jsx";
 import { ShowcaseGroupingEditor } from "./ShowcaseGroupingEditor.jsx";
 import { ShowcaseGroupingTile } from "./ShowcaseGroupingTile.jsx";
 import { ShowcaseNodeItems } from "./ShowcaseNodeItems.jsx";
+import { ShowcaseNoteCard } from "./ShowcaseNoteCard.jsx";
 import { ShowcaseNoteEditor } from "./ShowcaseNoteEditor.jsx";
 import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
 import { ShowcasePhotoSizeControl } from "./ShowcasePhotoSizeControl.jsx";
@@ -54,6 +59,24 @@ function findNodePath(nodes, ids) {
   }
 
   return path;
+}
+
+// The id chain from the root to `targetId`, or [] when it is not in this tree.
+// View mode derives its drill state from the `?node=` parameter through this.
+function findNodeIdPath(nodes, targetId) {
+  for (const node of nodes) {
+    if (node.id === targetId) {
+      return [node.id];
+    }
+
+    const nested = findNodeIdPath(node.children ?? [], targetId);
+
+    if (nested.length) {
+      return [node.id, ...nested];
+    }
+  }
+
+  return [];
 }
 
 // Replace one node anywhere in the tree, keeping the same references when the
@@ -168,8 +191,13 @@ function ShowcaseScreen({ mode }) {
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   // The drilled node ids, root first. Edit mode keeps this in memory (the URL
-  // does not change during edits); view-mode URL sync is ticket 12.
+  // does not change during edits); view mode derives it from the URL below.
   const [drillIds, setDrillIds] = useState([]);
+  // What the polite live region announces on each node entry.
+  const [announcement, setAnnouncement] = useState("");
+  const nodeParam = editMode
+    ? null
+    : new URLSearchParams(location.search).get("node");
 
   useEffect(() => {
     setDrillIds([]);
@@ -350,24 +378,64 @@ function ShowcaseScreen({ mode }) {
     setNodes((current) => current.filter((entry) => entry.id !== node.id));
   }
 
+  // View mode is URL-synced: `?node=<id>` names the current node and the root
+  // has no parameter. Edit mode keeps the drill in memory.
+  const urlDrillIds =
+    !editMode && nodeParam ? findNodeIdPath(nodes, Number(nodeParam)) : [];
+  const effectiveDrillIds = editMode ? drillIds : urlDrillIds;
   // The current drill level. `currentParentId` is the node a new Grouping is
   // created under (null at the top level, where only Categories live).
-  const currentPath = findNodePath(nodes, drillIds);
+  const currentPath = findNodePath(nodes, effectiveDrillIds);
   const currentNode = currentPath.length
     ? currentPath[currentPath.length - 1]
     : null;
   const currentParentId = currentNode ? currentNode.id : null;
   const currentChildren = currentNode ? currentNode.children ?? [] : nodes;
 
+  // A `?node=` that no longer resolves (a node removed in another tab, or a
+  // stale deep link) falls back to the root and drops the parameter.
+  useEffect(() => {
+    if (editMode || loading || !nodeParam) {
+      return;
+    }
+
+    if (findNodeIdPath(nodes, Number(nodeParam)).length === 0) {
+      navigate({ search: "" }, { replace: true });
+    }
+  }, [editMode, loading, navigate, nodeParam, nodes]);
+
+  // Announce each node entry through a polite live region; the root announces
+  // the showcase itself.
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    const name = currentNode ? currentNode.name : showcaseName;
+    setAnnouncement(`${name}, ${currentChildren.length} items`);
+  }, [currentChildren.length, currentNode, loading, showcaseName]);
+
   function openNode(node) {
-    setDrillIds((current) => [...current, node.id]);
+    if (editMode) {
+      setDrillIds((current) => [...current, node.id]);
+      return;
+    }
+
+    navigate({ search: showcaseNodeSearch(node.id) });
   }
 
   // `-1` is the Showcase root; any other index opens that breadcrumb level.
   function navigateTo(targetIndex) {
-    setDrillIds((current) =>
-      targetIndex < 0 ? [] : current.slice(0, targetIndex + 1),
-    );
+    if (editMode) {
+      setDrillIds((current) =>
+        targetIndex < 0 ? [] : current.slice(0, targetIndex + 1),
+      );
+      return;
+    }
+
+    const targetId =
+      targetIndex < 0 ? null : effectiveDrillIds[targetIndex] ?? null;
+    navigate({ search: showcaseNodeSearch(targetId) });
   }
 
   async function handleAddGrouping(name) {
@@ -437,6 +505,10 @@ function ShowcaseScreen({ mode }) {
     pickerNodeId == null ? null : findNodeById(nodes, pickerNodeId);
 
   const showEmpty = !loading && !loadError && nodes.length === 0;
+  // A resolvable node with nothing under it is not the same as an empty
+  // showcase: a Grouping holding only sub-Groupings is not empty.
+  const showEmptyNode =
+    !loading && !loadError && currentNode != null && currentChildren.length === 0;
   // A label can be placed at most once per Showcase, so do not suggest the ones
   // already on the canvas.
   const placedCategoryIds = new Set(
@@ -486,6 +558,11 @@ function ShowcaseScreen({ mode }) {
           ) : null}
         </div>
 
+        {/* Politeness only: the current level is announced on every entry. */}
+        <p aria-live="polite" className="showcase-announcer" role="status">
+          {announcement}
+        </p>
+
         {nameError ? (
           <p className="muted showcase-name-error" role="alert">
             {nameError}
@@ -502,6 +579,10 @@ function ShowcaseScreen({ mode }) {
 
         {showEmpty ? (
           <p className="muted showcase-empty">This showcase is empty.</p>
+        ) : null}
+
+        {showEmptyNode ? (
+          <p className="muted showcase-empty">No notes here yet.</p>
         ) : null}
 
         {!loading && !loadError ? (
@@ -571,7 +652,13 @@ function ShowcaseScreen({ mode }) {
                       node={node}
                       onRemove={handleRemoveNote}
                     />
-                  ) : null;
+                  ) : (
+                    <ShowcaseNoteCard
+                      key={node.id}
+                      mode="view"
+                      note={node.note}
+                    />
+                  );
                 }
 
                 return null;
