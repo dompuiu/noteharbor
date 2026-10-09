@@ -301,7 +301,7 @@ function ShowcaseScreen({ mode }) {
     ? currentPath[currentPath.length - 1]
     : null;
   const currentParentId = currentNode ? currentNode.id : null;
-  const currentChildren = currentNode ? currentNode.children ?? [] : nodes;
+  const currentChildren = currentNode ? (currentNode.children ?? []) : nodes;
 
   // A `?node=` that no longer resolves (a node removed in another tab, or a
   // stale deep link) falls back to the root and drops the parameter.
@@ -370,7 +370,7 @@ function ShowcaseScreen({ mode }) {
     }
 
     const targetId =
-      targetIndex < 0 ? null : effectiveDrillIds[targetIndex] ?? null;
+      targetIndex < 0 ? null : (effectiveDrillIds[targetIndex] ?? null);
     navigate({ search: showcaseNodeSearch(targetId) });
   }
 
@@ -785,34 +785,41 @@ function ShowcaseScreen({ mode }) {
     pickerNodeId == null ? null : findNodeById(nodes, pickerNodeId);
 
   const showEmpty = !loading && !loadError && nodes.length === 0;
-  // View mode keeps the plain muted message; edit mode uses the prototype's
-  // dashed empty-state box (copy + centered create button).
+  // Both modes share the dashed empty-state box so view mode never reads as
+  // a missing string; edit mode adds the create tile, view mode a hint plus
+  // a way forward.
   const showViewEmpty = showEmpty && !editMode;
   const showEditEmpty = showEmpty && editMode;
   // A resolvable node with nothing under it is not the same as an empty
   // showcase: a Grouping holding only sub-Groupings is not empty.
   const showEmptyNode =
-    !loading && !loadError && currentNode != null && currentChildren.length === 0;
+    !loading &&
+    !loadError &&
+    currentNode != null &&
+    currentChildren.length === 0;
   const showViewEmptyNode = showEmptyNode && !editMode;
   const showEditEmptyNode = showEmptyNode && editMode;
   // A label can be placed at most once per Showcase, so do not suggest the ones
   // already on the canvas.
   const placedCategoryIds = new Set(
-    nodes.map((node) => node.category_id).filter((categoryId) => categoryId != null),
+    nodes
+      .map((node) => node.category_id)
+      .filter((categoryId) => categoryId != null),
   );
   const availableCategories = categories.filter(
     (category) => !placedCategoryIds.has(category.id),
   );
   // The header's muted total (presentation spec §1): the loaded tree's note
   // count, or the showcase row's count until the tree arrives.
-  const noteCount = loading ? showcase?.note_count ?? 0 : countNoteNodes(nodes);
+  const noteCount = loading
+    ? (showcase?.note_count ?? 0)
+    : countNoteNodes(nodes);
 
   return (
     <section className="screen-stack showcase-screen" ref={sectionRef}>
       <div className="panel">
         <div className="panel-heading">
           <div className="panel-heading-copy">
-            <p className="eyebrow">Showcases</p>
             {editMode ? (
               <input
                 aria-label="Showcase name"
@@ -828,35 +835,40 @@ function ShowcaseScreen({ mode }) {
             )}
             <p className="muted showcase-note-count">{`${noteCount} notes`}</p>
           </div>
-          <div className="showcase-photo-size">
-            <ShowcasePhotoSizeControl
-              onChange={setPhotoSize}
-              value={photoSize}
-            />
-          </div>
-          <div className="panel-heading-actions">
-            {editMode ? (
-              <Link className="button" to={SHOWCASE_ROUTES.showcase(showcaseId)}>
-                View
-              </Link>
-            ) : (
-              <Link
-                className="button"
-                to={SHOWCASE_ROUTES.showcaseEdit(showcaseId)}
-              >
-                Edit
-              </Link>
-            )}
-            {editMode && showcase ? (
-              <button
-                className="button button-danger"
-                disabled={deleting}
-                onClick={handleDelete}
-                type="button"
-              >
-                Delete showcase
-              </button>
-            ) : null}
+          <div className="showcase-header-controls">
+            <div className="showcase-photo-size">
+              <ShowcasePhotoSizeControl
+                onChange={setPhotoSize}
+                value={photoSize}
+              />
+            </div>
+            <div className="panel-heading-actions">
+              {editMode ? (
+                <Link
+                  className="button"
+                  to={SHOWCASE_ROUTES.showcase(showcaseId)}
+                >
+                  View
+                </Link>
+              ) : (
+                <Link
+                  className="button"
+                  to={SHOWCASE_ROUTES.showcaseEdit(showcaseId)}
+                >
+                  Edit
+                </Link>
+              )}
+              {editMode && showcase ? (
+                <button
+                  className="button button-danger"
+                  disabled={deleting}
+                  onClick={handleDelete}
+                  type="button"
+                >
+                  Delete showcase
+                </button>
+              ) : null}
+            </div>
           </div>
         </div>
 
@@ -871,7 +883,9 @@ function ShowcaseScreen({ mode }) {
           </p>
         ) : null}
 
-        {loading ? <p className="muted showcase-empty">Loading showcase…</p> : null}
+        {loading ? (
+          <p className="muted showcase-empty">Loading showcase…</p>
+        ) : null}
 
         {!loading && loadError ? (
           <p className="showcase-error" role="alert">
@@ -880,15 +894,64 @@ function ShowcaseScreen({ mode }) {
         ) : null}
 
         {showViewEmpty ? (
-          <p className="muted showcase-empty">This showcase is empty.</p>
+          <div className="showcase-empty-box">
+            <svg
+              aria-hidden="true"
+              className="showcase-empty-art"
+              focusable="false"
+              height="48"
+              viewBox="0 0 48 48"
+              width="48"
+            >
+              <rect
+                height="26"
+                rx="3"
+                width="30"
+                x="9"
+                y="13"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              <rect
+                height="26"
+                rx="3"
+                width="30"
+                x="13"
+                y="9"
+                fill="var(--surface)"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              <circle cx="20" cy="17" fill="currentColor" r="2" />
+              <path
+                d="M15 29 L22 22 L27 27 L30 24 L35 29 Z"
+                fill="none"
+                stroke="currentColor"
+                strokeLinejoin="round"
+                strokeWidth="2"
+              />
+            </svg>
+            <p className="showcase-empty-title">This showcase is empty.</p>
+            <p className="showcase-empty-text muted">
+              Nothing to present yet. Add categories, groupings, and notes in
+              edit mode to start the story.
+            </p>
+            <div className="showcase-empty-actions">
+              <Link
+                className="button"
+                to={SHOWCASE_ROUTES.showcaseEdit(showcaseId)}
+              >
+                Edit showcase
+              </Link>
+            </div>
+          </div>
         ) : null}
 
         {showEditEmpty ? (
           <div className="showcase-empty-box">
             <p className="showcase-empty-text">
-              No categories yet. Reuse a category label or create a new one — a
-              reused label shares only its name; each showcase keeps its own
-              notes and groupings under it.
+              No categories yet. Reuse a label or create a new one.
             </p>
             <ShowcaseCategoryTile
               categories={availableCategories}
@@ -899,7 +962,13 @@ function ShowcaseScreen({ mode }) {
         ) : null}
 
         {showViewEmptyNode ? (
-          <p className="muted showcase-empty">No notes here yet.</p>
+          <div className="showcase-empty-box">
+            <p className="showcase-empty-title">No notes here yet.</p>
+            <p className="showcase-empty-text muted">
+              This level has nothing to present yet. Check back later or add
+              notes to it in edit mode.
+            </p>
+          </div>
         ) : null}
 
         {showEditEmptyNode ? (
@@ -1022,7 +1091,9 @@ function ShowcaseScreen({ mode }) {
 
               {editMode && currentNode ? (
                 <>
-                  <ShowcaseNoteTile onClick={() => handleOpenNotePicker(currentNode)} />
+                  <ShowcaseNoteTile
+                    onClick={() => handleOpenNotePicker(currentNode)}
+                  />
                   <ShowcaseGroupingTile onAdd={handleAddGrouping} />
                 </>
               ) : null}

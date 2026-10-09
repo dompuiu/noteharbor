@@ -157,7 +157,7 @@ describe("Showcase modes", () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     const copy = await screen.findByText(
-      "No categories yet. Reuse a category label or create a new one — a reused label shares only its name; each showcase keeps its own notes and groupings under it.",
+      "No categories yet. Reuse a label or create a new one.",
     );
     expect(copy.closest(".showcase-empty-box")).not.toBeNull();
     // The box owns the only create-category tile (no duplicate in the grid).

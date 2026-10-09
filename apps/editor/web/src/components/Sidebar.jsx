@@ -31,8 +31,9 @@ const ICONS = {
   grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   // Section markers for the two sidebar categories. They read as hubs, not
-  // as destinations: a stack of books for Catalog, a pile of pictures for
-  // Showcases. Both are Lucide glyphs, matching the destination icons.
+  // as destinations: a stack of books for Catalog, a grid for Showcases. Both
+  // are Lucide glyphs, matching the destination icons. Individual showcases
+  // use the pile-of-pictures glyph so each row reads as a showcase.
   catalog:
     '<rect width="8" height="18" x="3" y="3" rx="1"/><path d="M7 3v18"/><path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z"/>',
   showcases:
@@ -116,7 +117,7 @@ function Sidebar({ pageFocusRef }) {
 
   // The showcase rows, then the create action, hang off the Showcases group.
   const showcaseItems = showcases.map((showcase) => ({
-    icon: "grid",
+    icon: "showcases",
     key: `showcase-${showcase.id}`,
     label: showcase.name,
     to: SHOWCASE_ROUTES.showcase(showcase.id),
@@ -135,7 +136,7 @@ function Sidebar({ pageFocusRef }) {
     CATALOG_GROUP,
     {
       id: "showcases",
-      icon: "showcases",
+      icon: "grid",
       label: "Showcases",
       items: [...showcaseItems, newShowcaseItem],
     },
