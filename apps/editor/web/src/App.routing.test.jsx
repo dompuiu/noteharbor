@@ -8,15 +8,21 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 // so the screens are stubbed out. The collections mock drives the shell's
 // connection state and the empty-library state; health is only used on retry.
 vi.mock("./lib/api.js", () => ({
+  createCategory: vi.fn(),
   createCollection: vi.fn(),
   createShowcase: vi.fn(),
+  createShowcaseNode: vi.fn(),
   deleteCollection: vi.fn(),
+  deleteNode: vi.fn(),
+  getCategories: vi.fn(),
   getCollections: vi.fn(),
   getHealth: vi.fn(),
   getShowcases: vi.fn(),
+  getShowcaseTree: vi.fn(),
   renameCollection: vi.fn(),
   reorderCollections: vi.fn(),
   setDefaultCollection: vi.fn(),
+  updateNode: vi.fn(),
 }));
 
 vi.mock("./components/NotesTable.jsx", () => ({
