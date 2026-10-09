@@ -31,6 +31,7 @@ function ShowcaseNoteEditor({ node, onRemove }) {
         <button
           aria-label={`Remove note ${label}`.trim()}
           className="button button-danger-soft"
+          data-showcase-action="remove"
           disabled={busy}
           onClick={handleRemove}
           type="button"

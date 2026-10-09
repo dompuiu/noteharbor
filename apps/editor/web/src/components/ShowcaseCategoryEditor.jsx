@@ -88,6 +88,7 @@ function ShowcaseCategoryEditor({ node, onRemove, onRename, onOpen, children }) 
           <button
             aria-label={`Rename ${node.name}`}
             className="button"
+            data-showcase-action="rename"
             onClick={startEditing}
             type="button"
           >
@@ -96,6 +97,7 @@ function ShowcaseCategoryEditor({ node, onRemove, onRename, onOpen, children }) 
           <button
             aria-label={`Remove ${node.name}`}
             className="button button-danger-soft"
+            data-showcase-action="remove"
             disabled={busy}
             onClick={handleRemove}
             type="button"

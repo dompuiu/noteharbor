@@ -785,6 +785,42 @@ function ShowcaseScreen({ mode }) {
           event.preventDefault();
           navigateTo(drillDepth - 2);
         }
+        return;
+      }
+
+      // Edit mode's single-key actions act on the focused card's cell: `a`
+      // opens its note picker, `e` its rename field, `d` its remove control. `g`
+      // is the current level's add-grouping tile, which is not inside a cell.
+      if (
+        editMode &&
+        (event.key === "a" ||
+          event.key === "g" ||
+          event.key === "e" ||
+          event.key === "d")
+      ) {
+        const card = focusedShowcaseCard();
+
+        if (!card) {
+          return;
+        }
+
+        event.preventDefault();
+        const cell = card.closest(".showcase-cell");
+
+        if (event.key === "a") {
+          cell?.querySelector(".showcase-tile--note")?.click();
+          return;
+        }
+
+        if (event.key === "g") {
+          sectionRef.current
+            ?.querySelector('[aria-label="Create a grouping"]')
+            ?.click();
+          return;
+        }
+
+        const action = event.key === "e" ? "rename" : "remove";
+        cell?.querySelector(`[data-showcase-action="${action}"]`)?.click();
       }
     }
 

@@ -16,6 +16,7 @@ vi.mock("./lib/api.js", () => ({
   getCategories: vi.fn(),
   getCollections: vi.fn(),
   getHealth: vi.fn(),
+  getNotes: vi.fn(),
   getShowcases: vi.fn(),
   getShowcaseTree: vi.fn(),
   renameCategory: vi.fn(),
@@ -48,6 +49,7 @@ import {
   getCategories,
   getCollections,
   getHealth,
+  getNotes,
   getShowcases,
   getShowcaseTree,
   reorderNodes,
@@ -184,6 +186,7 @@ beforeEach(() => {
     showcases: [{ id: 1, name: "My showcase" }],
   });
   getCategories.mockResolvedValue({ categories: [] });
+  getNotes.mockResolvedValue({ notes: [] });
   getShowcaseTree.mockResolvedValue({ showcase_id: 1, nodes: summerTree() });
   deleteNode.mockResolvedValue({ success: true });
   reorderNodes.mockResolvedValue({ nodes: [] });
@@ -355,6 +358,75 @@ describe("Escape and focus restoration", () => {
         screen.getByRole("button", { name: "Open grouping Sub" }),
       ).toHaveFocus(),
     );
+  });
+});
+
+describe("editing from the keyboard", () => {
+  async function focusSub() {
+    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    await openSummer();
+
+    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    act(() => sub.focus());
+    return sub;
+  }
+
+  test("a opens the note picker for the focused card", async () => {
+    await focusSub();
+
+    fireEvent.keyDown(document.body, { key: "a" });
+
+    const dialog = await screen.findByRole("dialog", { name: "Add notes" });
+    expect(dialog).toHaveTextContent("Sub");
+  });
+
+  test("g reveals the create-a-grouping field", async () => {
+    await focusSub();
+
+    fireEvent.keyDown(document.body, { key: "g" });
+
+    expect(await screen.findByLabelText("Grouping name")).toBeInTheDocument();
+  });
+
+  test("e starts renaming the focused card", async () => {
+    await focusSub();
+
+    fireEvent.keyDown(document.body, { key: "e" });
+
+    expect(await screen.findByLabelText("New name for Sub")).toBeInTheDocument();
+  });
+
+  test("d removes the focused card", async () => {
+    await focusSub();
+
+    fireEvent.keyDown(document.body, { key: "d" });
+
+    await waitFor(() => expect(deleteNode).toHaveBeenCalledWith(20));
+    expect(
+      screen.queryByRole("button", { name: "Open grouping Sub" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("the single-key actions do nothing in view mode", async () => {
+    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    await openSummer();
+
+    act(() =>
+      screen.getByRole("button", { name: "Open grouping Sub" }).focus(),
+    );
+
+    for (const key of ["a", "g", "e", "d"]) {
+      fireEvent.keyDown(document.body, { key });
+    }
+
+    expect(deleteNode).not.toHaveBeenCalled();
+    expect(screen.queryByLabelText("Grouping name")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Add notes" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open grouping Sub" }),
+    ).toBeInTheDocument();
   });
 });
 
