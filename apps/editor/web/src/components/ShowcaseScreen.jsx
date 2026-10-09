@@ -42,6 +42,7 @@ function ShowcaseScreen({ mode }) {
                 aria-label="Showcase name"
                 className="showcase-name-field"
                 defaultValue={showcaseName}
+                key={showcaseName}
                 ref={nameFieldRef}
               />
             ) : (
