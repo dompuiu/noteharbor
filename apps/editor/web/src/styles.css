@@ -851,7 +851,9 @@ input[type="radio"] {
   right: -8px;
 }
 
-/* The `+ create a category` tile and its combobox (edit mode only). */
+/* The `+ create a …` tiles (edit mode only). The 2px dashed border and the
+   accent label follow the authoring prototype's plus-tile; the tokens keep
+   the app's warm palette. */
 .showcase-tile {
   display: flex;
   align-items: center;
@@ -859,11 +861,12 @@ input[type="radio"] {
   gap: 8px;
   min-height: 96px;
   padding: 16px;
-  border: 1px dashed var(--border-control);
+  border: 2px dashed var(--border-control);
   border-radius: var(--radius-md);
   background: transparent;
-  color: var(--text-muted);
+  color: var(--accent-strong);
   font: inherit;
+  font-size: 0.875rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -872,6 +875,44 @@ input[type="radio"] {
   border-color: var(--accent);
   background: var(--accent-soft);
   color: var(--accent-strong);
+}
+
+/* The centered tile lives inside the empty-state dashed box, matching the
+   prototype's max-width 320px centered `+ create a category` button. */
+.showcase-tile--centered {
+  width: 100%;
+  max-width: 320px;
+  min-height: 52px;
+  margin: 0 auto;
+}
+
+/* The empty-state dashed box (edit mode only). It mirrors the prototype's
+   `.dashed` canvas: a 2px dashed container with centered copy and one
+   centered create button. View mode keeps the plain muted message. */
+.showcase-empty-box {
+  margin-bottom: 16px;
+  padding: 24px;
+  border: 2px dashed var(--border-control);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  color: var(--text-muted);
+  text-align: center;
+}
+
+.showcase-empty-text {
+  margin: 0 0 14px;
+  font: inherit;
+}
+
+.showcase-empty-box .showcase-empty-text:last-child {
+  margin-bottom: 0;
+}
+
+.showcase-category-combobox--centered {
+  width: 100%;
+  max-width: 440px;
+  margin: 0 auto;
+  text-align: left;
 }
 
 .showcase-tile-plus {

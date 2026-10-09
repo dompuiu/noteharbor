@@ -153,14 +153,53 @@ describe("Showcase modes", () => {
     ).toBeInTheDocument();
   });
 
-  test("the edit route renders the empty-showcase message and a name field", async () => {
+  test("the edit route renders the prototype empty-state box and a name field", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
+    const copy = await screen.findByText(
+      "No categories yet. Reuse a category label or create a new one — a reused label shares only its name; each showcase keeps its own notes and groupings under it.",
+    );
+    expect(copy.closest(".showcase-empty-box")).not.toBeNull();
+    // The box owns the only create-category tile (no duplicate in the grid).
     expect(
-      await screen.findByText("This showcase is empty."),
+      screen.getAllByRole("button", { name: "Create a category" }),
+    ).toHaveLength(1);
+    expect(screen.getByLabelText("Showcase name")).toBeInTheDocument();
+  });
+
+  test("drilling into a new (empty) category shows the dashed empty box with add tiles", async () => {
+    const user = userEvent.setup();
+    getShowcaseTree.mockResolvedValue({
+      showcase_id: 1,
+      nodes: [
+        {
+          id: 10,
+          node_type: "category",
+          name: "Fresh",
+          category_id: 1,
+          parent_node_id: null,
+          note_id: null,
+          cover_note_id: null,
+          position: 1,
+          note: null,
+          cover_note: null,
+          children: [],
+        },
+      ],
+    });
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    await user.click(
+      await screen.findByRole("button", { name: "Open category Fresh" }),
+    );
+
+    const message = await screen.findByText("No notes here yet.");
+    expect(message.closest(".showcase-empty-box")).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Add notes" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByLabelText("Showcase name"),
+      screen.getByRole("button", { name: "Create a grouping" }),
     ).toBeInTheDocument();
   });
 

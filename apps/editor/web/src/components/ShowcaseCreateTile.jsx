@@ -10,6 +10,7 @@ function ShowcaseCreateTile({
   addLabel,
   suggestions = [],
   combobox = false,
+  centered = false,
   onAdd,
 }) {
   const [open, setOpen] = useState(false);
@@ -21,7 +22,7 @@ function ShowcaseCreateTile({
     return (
       <button
         aria-label={`Create a ${noun}`}
-        className="showcase-tile"
+        className={`showcase-tile${centered ? " showcase-tile--centered" : ""}`}
         onClick={() => setOpen(true)}
         type="button"
       >
@@ -68,7 +69,10 @@ function ShowcaseCreateTile({
   }
 
   return (
-    <form className="showcase-category-combobox" onSubmit={handleSubmit}>
+    <form
+      className={`showcase-category-combobox${centered ? " showcase-category-combobox--centered" : ""}`}
+      onSubmit={handleSubmit}
+    >
       <input
         aria-autocomplete={combobox ? "list" : undefined}
         aria-expanded={combobox ? visible.length > 0 : undefined}

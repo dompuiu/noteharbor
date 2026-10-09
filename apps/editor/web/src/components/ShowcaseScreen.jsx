@@ -785,10 +785,16 @@ function ShowcaseScreen({ mode }) {
     pickerNodeId == null ? null : findNodeById(nodes, pickerNodeId);
 
   const showEmpty = !loading && !loadError && nodes.length === 0;
+  // View mode keeps the plain muted message; edit mode uses the prototype's
+  // dashed empty-state box (copy + centered create button).
+  const showViewEmpty = showEmpty && !editMode;
+  const showEditEmpty = showEmpty && editMode;
   // A resolvable node with nothing under it is not the same as an empty
   // showcase: a Grouping holding only sub-Groupings is not empty.
   const showEmptyNode =
     !loading && !loadError && currentNode != null && currentChildren.length === 0;
+  const showViewEmptyNode = showEmptyNode && !editMode;
+  const showEditEmptyNode = showEmptyNode && editMode;
   // A label can be placed at most once per Showcase, so do not suggest the ones
   // already on the canvas.
   const placedCategoryIds = new Set(
@@ -873,12 +879,33 @@ function ShowcaseScreen({ mode }) {
           </p>
         ) : null}
 
-        {showEmpty ? (
+        {showViewEmpty ? (
           <p className="muted showcase-empty">This showcase is empty.</p>
         ) : null}
 
-        {showEmptyNode ? (
+        {showEditEmpty ? (
+          <div className="showcase-empty-box">
+            <p className="showcase-empty-text">
+              No categories yet. Reuse a category label or create a new one — a
+              reused label shares only its name; each showcase keeps its own
+              notes and groupings under it.
+            </p>
+            <ShowcaseCategoryTile
+              categories={availableCategories}
+              centered
+              onAdd={handleAddCategory}
+            />
+          </div>
+        ) : null}
+
+        {showViewEmptyNode ? (
           <p className="muted showcase-empty">No notes here yet.</p>
+        ) : null}
+
+        {showEditEmptyNode ? (
+          <div className="showcase-empty-box">
+            <p className="showcase-empty-text">No notes here yet.</p>
+          </div>
         ) : null}
 
         {!loading && !loadError ? (
@@ -986,7 +1013,7 @@ function ShowcaseScreen({ mode }) {
                 return null;
               })}
 
-              {editMode && !currentNode ? (
+              {editMode && !currentNode && !showEditEmpty ? (
                 <ShowcaseCategoryTile
                   categories={availableCategories}
                   onAdd={handleAddCategory}
