@@ -10,6 +10,7 @@ import {
   getShowcaseTree,
   renameShowcaseById,
   reorderShowcases,
+  reorderShowcaseNodes,
   updateShowcaseNode
 } from '../db.js';
 
@@ -169,6 +170,39 @@ showcasesRouter.post('/:id/nodes', (request, response) => {
   }
 });
 
+nodesRouter.put('/order', (request, response) => {
+  const showcaseId = parseId(request.body?.showcase_id);
+
+  if (showcaseId === null) {
+    response.status(400).json({ error: 'A valid showcase ID is required.' });
+    return;
+  }
+
+  // Null/omitted parent means the top level. Accept `parent_id` too so the
+  // route matches the add-node descriptor's key.
+  const rawParent = request.body?.parent_node_id ?? request.body?.parent_id ?? null;
+  const nodeIds = Array.isArray(request.body?.node_ids)
+    ? request.body.node_ids
+    : Array.isArray(request.body?.ids)
+      ? request.body.ids
+      : null;
+
+  if (!nodeIds) {
+    response
+      .status(400)
+      .json({ error: 'A full ordered list of child node IDs is required.' });
+    return;
+  }
+
+  try {
+    const nodes = reorderShowcaseNodes(showcaseId, rawParent, nodeIds);
+    response.json({ nodes });
+  } catch (error) {
+    response.status(400).json({ error: error.message });
+  }
+});
+
+// `/order` must sit before `/:id` or the literal would match the param.
 nodesRouter.put('/:id', (request, response) => {
   const nodeId = parseId(request.params.id);
 
