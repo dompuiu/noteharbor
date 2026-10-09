@@ -1,15 +1,22 @@
 import { createRef } from "react";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { render, screen } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../lib/api.js", () => ({
   createShowcase: vi.fn(),
+  deleteShowcase: vi.fn(),
   getShowcases: vi.fn(),
+  renameShowcase: vi.fn(),
+  reorderShowcases: vi.fn(),
 }));
 
-import { createShowcase, getShowcases } from "../lib/api.js";
+import {
+  createShowcase,
+  getShowcases,
+  reorderShowcases,
+} from "../lib/api.js";
 import { ShowcasesProvider } from "../lib/showcases.jsx";
 import { Sidebar } from "./Sidebar.jsx";
 import {
@@ -411,6 +418,98 @@ describe("Sidebar keyboard cursor", () => {
     await user.keyboard("{Escape}");
 
     expect(document.activeElement).toBe(screen.getByTestId("page-anchor"));
+  });
+});
+
+function dragEvent(type, props) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.assign(event, props);
+  return event;
+}
+
+function makeDataTransfer() {
+  return {
+    effectAllowed: "",
+    setData: vi.fn(),
+    setDragImage: vi.fn(),
+    getData: vi.fn(() => ""),
+  };
+}
+
+function showcaseLabels(container) {
+  return Array.from(
+    container.querySelectorAll(
+      '.sidebar-group[aria-labelledby="sidebar-group-showcases"] .sidebar-link-label',
+    ),
+    (element) => element.textContent,
+  );
+}
+
+describe("Sidebar showcase reordering", () => {
+  test("dropping one showcase onto another hands the provider the new order", async () => {
+    reorderShowcases.mockResolvedValue({
+      showcases: [
+        { id: 2, name: "Vienna" },
+        { id: 1, name: "Summer" },
+      ],
+    });
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
+
+    const summer = screen.getByRole("link", { name: "Summer" });
+    const vienna = screen.getByRole("link", { name: "Vienna" });
+    const dataTransfer = makeDataTransfer();
+
+    await act(async () => {
+      summer.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+    });
+    await act(async () => {
+      vienna.dispatchEvent(
+        dragEvent("dragover", { clientY: 400, dataTransfer }),
+      );
+    });
+    await act(async () => {
+      vienna.dispatchEvent(dragEvent("drop", { clientY: 400, dataTransfer }));
+    });
+
+    await waitFor(() => {
+      expect(reorderShowcases).toHaveBeenCalledWith([2, 1]);
+    });
+    await waitFor(() => {
+      expect(showcaseLabels(container)).toEqual([
+        "Vienna",
+        "Summer",
+        "+ New showcase",
+      ]);
+    });
+  });
+
+  test("a drop that lands a showcase back where it started persists nothing", async () => {
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
+
+    const summer = screen.getByRole("link", { name: "Summer" });
+    const vienna = screen.getByRole("link", { name: "Vienna" });
+    const dataTransfer = makeDataTransfer();
+
+    await act(async () => {
+      summer.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+    });
+    await act(async () => {
+      // A negative clientY is above the (all-zero) rect midpoint, so the
+      // placement is "before" — Summer stays immediately ahead of Vienna.
+      vienna.dispatchEvent(
+        dragEvent("dragover", { clientY: -5, dataTransfer }),
+      );
+    });
+    await act(async () => {
+      vienna.dispatchEvent(dragEvent("drop", { clientY: -5, dataTransfer }));
+    });
+
+    expect(reorderShowcases).not.toHaveBeenCalled();
+    expect(showcaseLabels(container)).toEqual([
+      "Summer",
+      "Vienna",
+      "+ New showcase",
+    ]);
   });
 });
 

@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { useLocation, useParams } from "react-router-dom";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   createCategory,
   createShowcaseNode,
@@ -8,11 +8,13 @@ import {
   getShowcaseTree,
   updateNode,
 } from "../lib/api.js";
+import { DEFAULT_DESTINATION, PORTFOLIO_ROUTES } from "../lib/routes.js";
 import { useShowcases } from "../lib/showcases.jsx";
 import { ShowcaseCategoryCard } from "./ShowcaseCategoryCard.jsx";
 import { ShowcaseCategoryEditor } from "./ShowcaseCategoryEditor.jsx";
 import { ShowcaseCategoryTile } from "./ShowcaseCategoryTile.jsx";
 import { ShowcaseGrid } from "./ShowcaseGrid.jsx";
+import { useConfirmation } from "./ConfirmDialog.jsx";
 
 // One showcase, rendered in one of two near-identical modes. View mode is the
 // read-only presentation; edit mode adds the authoring controls. Both share the
@@ -26,7 +28,8 @@ function upsertCategory(categories, category) {
 function ShowcaseScreen({ mode }) {
   const { id } = useParams();
   const location = useLocation();
-  const { showcases } = useShowcases();
+  const navigate = useNavigate();
+  const { showcases, deleteShowcase, renameShowcase } = useShowcases();
   const showcaseId = Number(id);
   const showcase = showcases.find((entry) => entry.id === showcaseId) ?? null;
   const showcaseName = showcase?.name ?? "Showcase";
@@ -35,6 +38,10 @@ function ShowcaseScreen({ mode }) {
   // so the user can name the showcase immediately.
   const justCreated = editMode && Boolean(location.state?.justCreated);
   const nameFieldRef = useRef(null);
+  const [nameDraft, setNameDraft] = useState(showcaseName);
+  const [nameError, setNameError] = useState("");
+  const [deleting, setDeleting] = useState(false);
+  const { confirm, dialog } = useConfirmation();
 
   const [nodes, setNodes] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -53,6 +60,18 @@ function ShowcaseScreen({ mode }) {
       field.select?.();
     }
   }, [justCreated]);
+
+  // The heading and the sidebar both read the provider's row, so a rename is
+  // reflected everywhere from one applied server row. Keep the local draft in
+  // step with it (a list load can arrive after the first render, and a saved
+  // rename normalises whitespace), but never clobber text the user is typing.
+  useEffect(() => {
+    if (document.activeElement === nameFieldRef.current) {
+      return;
+    }
+
+    setNameDraft(showcaseName);
+  }, [showcaseName]);
 
   useEffect(() => {
     let active = true;
@@ -95,6 +114,79 @@ function ShowcaseScreen({ mode }) {
       active = false;
     };
   }, [showcaseId, editMode]);
+
+  async function commitName() {
+    if (!showcase) {
+      return;
+    }
+
+    const trimmed = nameDraft.trim();
+
+    if (!trimmed) {
+      setNameDraft(showcase.name);
+      setNameError("A showcase name is required.");
+      return;
+    }
+
+    if (trimmed === showcase.name) {
+      setNameDraft(showcase.name);
+      setNameError("");
+      return;
+    }
+
+    try {
+      await renameShowcase(showcase.id, trimmed);
+      setNameError("");
+    } catch (error) {
+      setNameError(error.message);
+      setNameDraft(showcase.name);
+    }
+  }
+
+  function handleNameKeyDown(event) {
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commitName();
+      return;
+    }
+
+    if (event.key === "Escape") {
+      event.preventDefault();
+      setNameDraft(showcaseName);
+      setNameError("");
+    }
+  }
+
+  async function handleDelete() {
+    if (!showcase || deleting) {
+      return;
+    }
+
+    const confirmed = await confirm({
+      body: "This removes the showcase and everything in it. The notes stay in their collections.",
+      confirmLabel: "Delete",
+      title: `Delete "${showcase.name}"?`,
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    setDeleting(true);
+
+    try {
+      const { nextShowcaseId } = await deleteShowcase(showcase.id);
+
+      if (nextShowcaseId != null) {
+        navigate(PORTFOLIO_ROUTES.showcaseEdit(nextShowcaseId));
+      } else {
+        navigate(DEFAULT_DESTINATION);
+      }
+    } catch (error) {
+      setNameError(error.message);
+      setDeleting(false);
+    }
+  }
 
   // The label is get-or-create, so a typed name that matches an existing label
   // reuses it; the returned label id is what the placement references.
@@ -151,15 +243,35 @@ function ShowcaseScreen({ mode }) {
               <input
                 aria-label="Showcase name"
                 className="showcase-name-field"
-                defaultValue={showcaseName}
-                key={showcaseName}
+                onBlur={commitName}
+                onChange={(event) => setNameDraft(event.target.value)}
+                onKeyDown={handleNameKeyDown}
                 ref={nameFieldRef}
+                value={nameDraft}
               />
             ) : (
               <h1>{showcaseName}</h1>
             )}
           </div>
+          {editMode && showcase ? (
+            <div className="panel-heading-actions">
+              <button
+                className="button button-danger"
+                disabled={deleting}
+                onClick={handleDelete}
+                type="button"
+              >
+                Delete showcase
+              </button>
+            </div>
+          ) : null}
         </div>
+
+        {nameError ? (
+          <p className="muted showcase-name-error" role="alert">
+            {nameError}
+          </p>
+        ) : null}
 
         {loading ? <p className="muted showcase-empty">Loading showcase…</p> : null}
 
@@ -170,9 +282,7 @@ function ShowcaseScreen({ mode }) {
         ) : null}
 
         {showEmpty ? (
-          <p className="muted showcase-empty">
-            This showcase is empty.
-          </p>
+          <p className="muted showcase-empty">This showcase is empty.</p>
         ) : null}
 
         {!loading && !loadError ? (
@@ -199,6 +309,8 @@ function ShowcaseScreen({ mode }) {
           </ShowcaseGrid>
         ) : null}
       </div>
+
+      {dialog}
     </section>
   );
 }

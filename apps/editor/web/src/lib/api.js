@@ -461,6 +461,34 @@ async function deleteNode(id) {
   return handleResponse(response);
 }
 
+async function renameShowcase(showcaseId, name) {
+  const response = await fetch(`/api/showcases/${showcaseId}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ name })
+  });
+
+  return handleResponse(response);
+}
+
+async function deleteShowcase(showcaseId) {
+  const response = await fetch(`/api/showcases/${showcaseId}`, {
+    method: 'DELETE'
+  });
+
+  return handleResponse(response);
+}
+
+async function reorderShowcases(ids) {
+  const response = await fetch('/api/showcases/order', {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ ids })
+  });
+
+  return handleResponse(response);
+}
+
 const SCRAPE_PREVIEW_TIMEOUT_BUFFER_MS = 5000;
 const SCRAPE_NAVIGATION_TIMEOUT_MAX_MS = 120000;
 
@@ -517,6 +545,7 @@ export {
   deleteCollection,
   deleteNode,
   deleteNote,
+  deleteShowcase,
   downloadArchive,
   getCategories,
   getCollections,
@@ -532,8 +561,10 @@ export {
   moveNote,
   renameCategory,
   renameCollection,
+  renameShowcase,
   reorderCollections,
   reorderNotes,
+  reorderShowcases,
   scrapePreview,
   scrapeTimeoutMessage,
   setDefaultCollection,
