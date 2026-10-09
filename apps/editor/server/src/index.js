@@ -7,12 +7,13 @@ import cors from 'cors';
 import express from 'express';
 import { IMAGES_DIR, ROOT_DIR, pingDatabase } from './db.js';
 import { archiveRouter } from './routes/archive.js';
+import { categoriesRouter } from './routes/categories.js';
 import { collectionsRouter } from './routes/collections.js';
 import { importRouter } from './routes/import.js';
 import { notesRouter } from './routes/notes.js';
 import { operationsRouter } from './routes/operations.js';
 import { scrapeRouter } from './routes/scrape.js';
-import { showcasesRouter } from './routes/showcases.js';
+import { nodesRouter, showcasesRouter } from './routes/showcases.js';
 import { tagsRouter } from './routes/tags.js';
 
 const DEFAULT_HOST = '127.0.0.1';
@@ -88,12 +89,14 @@ function createApp() {
   app.use(express.urlencoded({ extended: true }));
 
   app.use('/api/archive', archiveRouter);
+  app.use('/api/categories', categoriesRouter);
   app.use('/api/images', express.static(IMAGES_DIR));
   app.use('/api/collections/:collectionId/import', importRouter);
   app.use('/api/collections/:collectionId/notes', notesRouter);
   app.use('/api/collections/:collectionId/tags', tagsRouter);
   app.use('/api/collections', collectionsRouter);
   app.use('/api/import', importRouter);
+  app.use('/api/nodes', nodesRouter);
   app.use('/api/notes', notesRouter);
   app.use('/api/operations', operationsRouter);
   app.use('/api/showcases', showcasesRouter);

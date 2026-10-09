@@ -403,6 +403,64 @@ async function createShowcase(name) {
   return handleResponse(response);
 }
 
+async function getCategories() {
+  const response = await fetch('/api/categories');
+  return handleResponse(response);
+}
+
+async function createCategory(name) {
+  const response = await fetch('/api/categories', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ name })
+  });
+
+  return handleResponse(response);
+}
+
+async function renameCategory(id, name) {
+  const response = await fetch(`/api/categories/${id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify({ name })
+  });
+
+  return handleResponse(response);
+}
+
+async function getShowcaseTree(showcaseId) {
+  const response = await fetch(`/api/showcases/${showcaseId}/tree`);
+  return handleResponse(response);
+}
+
+async function createShowcaseNode(showcaseId, payload) {
+  const response = await fetch(`/api/showcases/${showcaseId}/nodes`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(payload)
+  });
+
+  return handleResponse(response);
+}
+
+async function updateNode(id, payload) {
+  const response = await fetch(`/api/nodes/${id}`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(payload)
+  });
+
+  return handleResponse(response);
+}
+
+async function deleteNode(id) {
+  const response = await fetch(`/api/nodes/${id}`, {
+    method: 'DELETE'
+  });
+
+  return handleResponse(response);
+}
+
 async function renameShowcase(showcaseId, name) {
   const response = await fetch(`/api/showcases/${showcaseId}`, {
     method: 'PUT',
@@ -479,23 +537,29 @@ async function scrapePreview(url, { timeoutMs } = {}) {
 
 export {
   clearAppData,
+  createCategory,
   createCollection,
   createNote,
   createShowcase,
+  createShowcaseNode,
   deleteCollection,
+  deleteNode,
   deleteNote,
   deleteShowcase,
   downloadArchive,
+  getCategories,
   getCollections,
   getHealth,
   getNote,
   getNotes,
   getOperationStatus,
+  getShowcaseTree,
   getShowcases,
   getTags,
   importArchive,
   importCsv,
   moveNote,
+  renameCategory,
   renameCollection,
   renameShowcase,
   reorderCollections,
@@ -504,5 +568,6 @@ export {
   scrapePreview,
   scrapeTimeoutMessage,
   setDefaultCollection,
+  updateNode,
   updateNote
 };

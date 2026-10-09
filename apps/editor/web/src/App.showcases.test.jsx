@@ -7,18 +7,24 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 // the web API mocked. The other screens are stubbed so assertions land on the
 // showcase behaviour, not on their unrelated data loads.
 vi.mock("./lib/api.js", () => ({
+  createCategory: vi.fn(),
   createCollection: vi.fn(),
   createShowcase: vi.fn(),
+  createShowcaseNode: vi.fn(),
   deleteCollection: vi.fn(),
+  deleteNode: vi.fn(),
   deleteShowcase: vi.fn(),
+  getCategories: vi.fn(),
   getCollections: vi.fn(),
   getHealth: vi.fn(),
   getShowcases: vi.fn(),
+  getShowcaseTree: vi.fn(),
   renameCollection: vi.fn(),
   renameShowcase: vi.fn(),
   reorderCollections: vi.fn(),
   reorderShowcases: vi.fn(),
   setDefaultCollection: vi.fn(),
+  updateNode: vi.fn(),
 }));
 
 vi.mock("./components/NotesTable.jsx", () => ({
@@ -41,9 +47,11 @@ import { ShellContent } from "./App.jsx";
 import {
   createShowcase,
   deleteShowcase,
+  getCategories,
   getCollections,
   getHealth,
   getShowcases,
+  getShowcaseTree,
   renameShowcase,
 } from "./lib/api.js";
 import { CollectionsProvider } from "./lib/collections.jsx";
@@ -85,6 +93,8 @@ beforeEach(() => {
       { id: 2, name: "Vienna" },
     ],
   });
+  getShowcaseTree.mockResolvedValue({ showcase_id: 1, nodes: [] });
+  getCategories.mockResolvedValue({ categories: [] });
   createShowcase.mockResolvedValue({
     showcase: { id: 9, name: "Showcase" },
   });

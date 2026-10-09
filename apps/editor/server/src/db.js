@@ -746,6 +746,125 @@ function createStatements(database) {
       WHERE id = @id
     `),
 
+    listCategoriesStatement: database.prepare(`
+      SELECT id, name, created_at, updated_at
+      FROM categories
+      ORDER BY name COLLATE NOCASE ASC, id ASC
+    `),
+    getCategoryByIdStatement: database.prepare(`
+      SELECT id, name, created_at, updated_at
+      FROM categories
+      WHERE id = ?
+    `),
+    getCategoryByNameStatement: database.prepare(`
+      SELECT id, name, created_at, updated_at
+      FROM categories
+      WHERE name = @name COLLATE NOCASE
+    `),
+    insertCategoryStatement: database.prepare(`
+      INSERT INTO categories (name, created_at, updated_at)
+      VALUES (@name, datetime('now'), datetime('now'))
+    `),
+    renameCategoryStatement: database.prepare(`
+      UPDATE categories
+      SET name = @name, updated_at = datetime('now')
+      WHERE id = @id
+    `),
+
+    // A category node's display name is the referenced label's name; a
+    // grouping carries its own. Ordered so the caller can nest without a sort.
+    listShowcaseNodesStatement: database.prepare(`
+      SELECT
+        showcase_nodes.id,
+        showcase_nodes.showcase_id,
+        showcase_nodes.parent_node_id,
+        showcase_nodes.node_type,
+        showcase_nodes.category_id,
+        showcase_nodes.note_id,
+        showcase_nodes.cover_note_id,
+        showcase_nodes.position,
+        CASE
+          WHEN showcase_nodes.node_type = 'category' THEN categories.name
+          ELSE showcase_nodes.name
+        END AS name
+      FROM showcase_nodes
+      LEFT JOIN categories ON categories.id = showcase_nodes.category_id
+      WHERE showcase_nodes.showcase_id = ?
+      ORDER BY showcase_nodes.position ASC, showcase_nodes.id ASC
+    `),
+    getShowcaseNodeStatement: database.prepare(`
+      SELECT
+        showcase_nodes.id,
+        showcase_nodes.showcase_id,
+        showcase_nodes.parent_node_id,
+        showcase_nodes.node_type,
+        showcase_nodes.category_id,
+        showcase_nodes.note_id,
+        showcase_nodes.cover_note_id,
+        showcase_nodes.position,
+        CASE
+          WHEN showcase_nodes.node_type = 'category' THEN categories.name
+          ELSE showcase_nodes.name
+        END AS name
+      FROM showcase_nodes
+      LEFT JOIN categories ON categories.id = showcase_nodes.category_id
+      WHERE showcase_nodes.id = ?
+    `),
+    // Every note the tree points at, either as a member or as a grouping cover.
+    listShowcaseNotesStatement: database.prepare(`
+      SELECT ${noteFields}
+      FROM banknotes
+      WHERE id IN (
+        SELECT note_id FROM showcase_nodes
+          WHERE showcase_id = @showcase_id AND note_id IS NOT NULL
+        UNION
+        SELECT cover_note_id FROM showcase_nodes
+          WHERE showcase_id = @showcase_id AND cover_note_id IS NOT NULL
+      )
+    `),
+    nextShowcaseNodePositionStatement: database.prepare(`
+      SELECT COALESCE(MAX(position), 0) + 1 AS value
+      FROM showcase_nodes
+      WHERE showcase_id = @showcase_id AND parent_node_id IS @parent_node_id
+    `),
+    insertShowcaseNodeStatement: database.prepare(`
+      INSERT INTO showcase_nodes (
+        showcase_id,
+        parent_node_id,
+        node_type,
+        category_id,
+        name,
+        note_id,
+        cover_note_id,
+        position,
+        created_at,
+        updated_at
+      )
+      VALUES (
+        @showcase_id,
+        @parent_node_id,
+        @node_type,
+        @category_id,
+        @name,
+        @note_id,
+        @cover_note_id,
+        @position,
+        datetime('now'),
+        datetime('now')
+      )
+    `),
+    updateShowcaseNodeNameStatement: database.prepare(`
+      UPDATE showcase_nodes
+      SET name = @name, updated_at = datetime('now')
+      WHERE id = @id
+    `),
+    updateShowcaseNodeCoverStatement: database.prepare(`
+      UPDATE showcase_nodes
+      SET cover_note_id = @cover_note_id, updated_at = datetime('now')
+      WHERE id = @id
+    `),
+    deleteShowcaseNodeStatement: database.prepare(`DELETE FROM showcase_nodes WHERE id = ?`),
+
     listNotesStatement: database.prepare(`
       SELECT ${noteFields}
       FROM banknotes
@@ -1314,6 +1433,236 @@ function createShowcase(name) {
   return getShowcaseById(showcaseId);
 }
 
+// The shared label pool. A Category is a permanent row here; a Showcase places
+// it by reference (spec §Vocabulary). Creating a name that already exists
+// (ignoring case) returns the existing row instead of erroring, so the editor's
+// combobox can be "pick or type" without a duplicate check.
+function normalizeCategoryName(name) {
+  return String(name ?? '').trim().replace(/\s+/g, ' ');
+}
+
+function getAllCategories() {
+  getDatabase();
+  return statements.listCategoriesStatement.all();
+}
+
+function getCategoryById(id) {
+  getDatabase();
+  return statements.getCategoryByIdStatement.get(Number(id)) ?? null;
+}
+
+function createCategory(name) {
+  getDatabase();
+  const normalizedName = normalizeCategoryName(name);
+
+  if (!normalizedName) {
+    throw new Error('Category name is required.');
+  }
+
+  const existing = statements.getCategoryByNameStatement.get({
+    name: normalizedName
+  });
+
+  if (existing) {
+    return existing;
+  }
+
+  const result = statements.insertCategoryStatement.run({ name: normalizedName });
+  return getCategoryById(Number(result.lastInsertRowid));
+}
+
+function renameCategory(id, name) {
+  getDatabase();
+  const categoryId = Number(id);
+  const normalizedName = normalizeCategoryName(name);
+
+  if (!normalizedName) {
+    throw new Error('Category name is required.');
+  }
+
+  try {
+    statements.renameCategoryStatement.run({
+      id: categoryId,
+      name: normalizedName
+    });
+  } catch (error) {
+    if (String(error.message).includes('UNIQUE constraint failed: categories.name')) {
+      throw new Error('A category with this name already exists.');
+    }
+
+    throw error;
+  }
+
+  return getCategoryById(categoryId);
+}
+
+// One node in its wire shape: the placement row plus the referenced Note (for a
+// note node) and its children. `name` is resolved from the label for a category.
+function buildShowcaseNode(row, note = null) {
+  return {
+    id: row.id,
+    node_type: row.node_type,
+    name: row.name ?? null,
+    category_id: row.category_id ?? null,
+    parent_node_id: row.parent_node_id ?? null,
+    note_id: row.note_id ?? null,
+    cover_note_id: row.cover_note_id ?? null,
+    position: row.position ?? null,
+    note: note ?? null,
+    children: []
+  };
+}
+
+function getShowcaseNodeById(id) {
+  getDatabase();
+  const row = statements.getShowcaseNodeStatement.get(Number(id));
+
+  if (!row) {
+    return null;
+  }
+
+  const note = row.note_id != null ? getNoteById(row.note_id) : null;
+  return buildShowcaseNode(row, note);
+}
+
+// The whole tree of one Showcase, nested under its root nodes and ordered by
+// `position, id` at every level (ADR 0001).
+function getShowcaseTree(showcaseId) {
+  getDatabase();
+  const id = Number(showcaseId);
+  const rows = statements.listShowcaseNodesStatement.all(id);
+  const noteRows = statements.listShowcaseNotesStatement.all({ showcase_id: id });
+  const notesById = new Map(noteRows.map((note) => [note.id, rowToNote(note, new Map())]));
+  const nodesById = new Map();
+
+  for (const row of rows) {
+    nodesById.set(row.id, buildShowcaseNode(row, notesById.get(row.note_id) ?? null));
+  }
+
+  const roots = [];
+
+  for (const row of rows) {
+    const node = nodesById.get(row.id);
+
+    if (row.parent_node_id != null && nodesById.has(row.parent_node_id)) {
+      nodesById.get(row.parent_node_id).children.push(node);
+    } else {
+      roots.push(node);
+    }
+  }
+
+  return roots;
+}
+
+function addCategoryPlacement(showcaseId, descriptor) {
+  if (descriptor.parent_id != null) {
+    throw new Error('A category is placed at the top level.');
+  }
+
+  let category;
+
+  if (descriptor.category_id != null) {
+    category = getCategoryById(descriptor.category_id);
+
+    if (!category) {
+      throw new Error('Category not found.');
+    }
+  } else {
+    category = createCategory(descriptor.name);
+  }
+
+  const position = Number(
+    statements.nextShowcaseNodePositionStatement.get({
+      showcase_id: showcaseId,
+      parent_node_id: null
+    })?.value ?? 1
+  );
+
+  let nodeId;
+
+  try {
+    const result = statements.insertShowcaseNodeStatement.run({
+      showcase_id: showcaseId,
+      parent_node_id: null,
+      node_type: 'category',
+      category_id: category.id,
+      name: null,
+      note_id: null,
+      cover_note_id: null,
+      position
+    });
+    nodeId = Number(result.lastInsertRowid);
+  } catch (error) {
+    if (String(error.message).includes('UNIQUE constraint failed: showcase_nodes')) {
+      throw new Error('This category is already in the showcase.');
+    }
+
+    throw error;
+  }
+
+  return getShowcaseNodeById(nodeId);
+}
+
+// Extend this switch for a new node type. Ticket 09 adds `grouping`; ticket 10
+// adds the `notes` batch. The descriptor is the raw request body.
+function addShowcaseNode(showcaseId, descriptor = {}) {
+  getDatabase();
+  const type = descriptor.type ?? descriptor.node_type;
+
+  switch (type) {
+    case 'category':
+      return addCategoryPlacement(Number(showcaseId), descriptor);
+    default:
+      throw new Error(`Unsupported node type: ${String(type ?? '')}.`);
+  }
+}
+
+// Rename a node, or set/clear a grouping's manual cover. A category has no
+// local name: renaming its placement renames the shared label, so every
+// Showcase that places it reads the new name.
+function updateShowcaseNode(id, descriptor = {}) {
+  getDatabase();
+  const nodeId = Number(id);
+  const existing = statements.getShowcaseNodeStatement.get(nodeId);
+
+  if (!existing) {
+    return null;
+  }
+
+  if (existing.node_type === 'category') {
+    renameCategory(existing.category_id, descriptor.name);
+  } else if (existing.node_type === 'grouping') {
+    if (descriptor.name !== undefined) {
+      const name = String(descriptor.name ?? '').trim().replace(/\s+/g, ' ');
+
+      if (!name) {
+        throw new Error('Node name is required.');
+      }
+
+      statements.updateShowcaseNodeNameStatement.run({ id: nodeId, name });
+    }
+
+    if (descriptor.cover_note_id !== undefined) {
+      statements.updateShowcaseNodeCoverStatement.run({
+        id: nodeId,
+        cover_note_id:
+          descriptor.cover_note_id == null ? null : Number(descriptor.cover_note_id)
+      });
+    }
+  } else {
+    throw new Error('A note node cannot be renamed.');
+  }
+
+  return getShowcaseNodeById(nodeId);
+}
+
+function deleteShowcaseNode(id) {
+  getDatabase();
+  // The self-referential FK cascades the subtree (ADR 0001); the label stays.
+  const result = statements.deleteShowcaseNodeStatement.run(Number(id));
+  return result.changes > 0;
+}
+
 function ensureShowcaseExists(showcaseId) {
   getDatabase();
   const showcase = statements.getShowcaseStatement.get(Number(showcaseId));
@@ -1756,30 +2105,38 @@ export {
   DB_PATH,
   IMAGES_DIR,
   ROOT_DIR,
+  addShowcaseNode,
   backupDatabase,
   closeDatabase,
+  createCategory,
   createCollection,
   createNote,
   createShowcase,
   deleteCollectionById,
   deleteNote,
   deleteShowcaseById,
+  deleteShowcaseNode,
   ensureTag,
+  getAllCategories,
   getAllCollections,
   getAllNotes,
   getAllShowcases,
   getAllTags,
+  getCategoryById,
   getCollectionById,
   getDatabase,
   getDefaultCollectionId,
   getNoteById,
   getShowcaseById,
+  getShowcaseNodeById,
+  getShowcaseTree,
   importNotes,
   migrateBanknotesForeignKey,
   moveNoteToCollection,
   openDatabase,
   pingDatabase,
   reloadDatabase,
+  renameCategory,
   renameCollectionById,
   renameShowcaseById,
   reorderCollections,
@@ -1788,5 +2145,6 @@ export {
   setDefaultCollectionById,
   replaceNoteTags,
   updateNote,
+  updateShowcaseNode,
   verifyDatabaseFile
 };
