@@ -3,6 +3,8 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
+import Database from 'better-sqlite3';
+import unzipper from 'unzipper';
 
 // Ticket 15: a filtered export reports the Showcases it had to omit through a
 // response header, so the client can tell the user what did not travel. This
@@ -87,5 +89,55 @@ test('an unfiltered export reports no omitted showcases', async () => {
     assert.deepEqual(readOmittedShowcases(response), []);
   } finally {
     await response.arrayBuffer();
+  }
+});
+
+test('an unfiltered export carries the three showcase tables inside the archive', async () => {
+  const collection = db.createCollection('Archive Carry');
+  const note = createNote(collection.id, 'Carry');
+  const showcase = db.createShowcase('Carried Showcase');
+  const category = db.addShowcaseNode(showcase.id, { type: 'category', name: 'Carried Label' });
+  db.addShowcaseNode(showcase.id, { type: 'notes', parent_id: category.id, note_ids: [note.id] });
+
+  const response = await fetch(`${baseUrl}/api/archive/export`);
+  assert.equal(response.status, 200);
+
+  const archiveBuffer = Buffer.from(await response.arrayBuffer());
+  const directory = await unzipper.Open.buffer(archiveBuffer);
+  const dbEntry = directory.files.find((entry) => entry.path === 'banknotes.db');
+  assert.ok(dbEntry, 'expected the archive to contain banknotes.db');
+
+  const extractedDbPath = path.join(tempDir, 'exported-archive.db');
+  fs.writeFileSync(extractedDbPath, await dbEntry.buffer());
+
+  const archiveDb = new Database(extractedDbPath, { readonly: true });
+  try {
+    assert.ok(
+      archiveDb.prepare(`SELECT name FROM showcases ORDER BY id`).all().map((row) => row.name).includes('Carried Showcase')
+    );
+    assert.ok(
+      archiveDb.prepare(`SELECT name FROM categories ORDER BY id`).all().map((row) => row.name).includes('Carried Label')
+    );
+
+    const carriedNodes = archiveDb.prepare(`
+      SELECT node_type, note_id, category_id
+      FROM showcase_nodes
+      WHERE showcase_id = (SELECT id FROM showcases WHERE name = 'Carried Showcase')
+      ORDER BY id
+    `).all();
+    assert.equal(carriedNodes.length, 2);
+    assert.equal(carriedNodes[0].node_type, 'category');
+    assert.equal(
+      carriedNodes[0].category_id,
+      archiveDb.prepare(`SELECT id FROM categories WHERE name = 'Carried Label'`).get().id
+    );
+    assert.equal(carriedNodes[1].node_type, 'note');
+    assert.equal(
+      carriedNodes[1].note_id,
+      archiveDb.prepare(`SELECT id FROM banknotes WHERE denomination = 'Carry'`).get().id
+    );
+    assert.deepEqual(archiveDb.prepare(`PRAGMA foreign_key_check`).all(), []);
+  } finally {
+    archiveDb.close();
   }
 });
