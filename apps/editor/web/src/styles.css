@@ -2261,16 +2261,6 @@ td.drag-cell {
   min-height: 0;
 }
 
-/* The CSV card's import target: the label reads like the card's other field
-   labels, and the selector keeps a comfortable width beside it. */
-.import-card .inline-select-group span {
-  font-weight: 700;
-}
-
-.import-card .inline-select-group .select-input {
-  min-width: 180px;
-}
-
 .archive-picker-row {
   display: flex;
   gap: 12px;
@@ -2625,14 +2615,15 @@ button.tag {
   overflow-anchor: none;
 }
 
-/* The frame holds its 900px width at every viewport size: smaller windows
-   scroll the overlay instead of squeezing the form. The auto inline margins
-   keep it centred with a reachable start when it overflows, unlike the
-   overlay's plain center placement, which would strand the left edge. */
+/* The frame holds the 1200px app floor (minus the overlay's 24px side
+   padding) at every viewport size: smaller windows scroll the overlay
+   instead of squeezing the form, and the 900px form stays centred in that
+   1200px canvas. The auto inline margins keep it centred with a reachable
+   start when it overflows, unlike the overlay's plain center placement,
+   which would strand the left edge. */
 .edit-note-overlay-frame {
   width: 100%;
-  max-width: 900px;
-  min-width: 900px;
+  min-width: calc(1200px - 48px);
   margin-inline: auto;
   display: flex;
   justify-content: center;
@@ -2658,8 +2649,7 @@ button.tag {
 }
 
 .scrape-conflict-overlay-frame {
-  max-width: 1120px;
-  min-width: 1120px;
+  min-width: calc(1200px - 48px);
 }
 
 .scrape-conflict-overlay-content {

@@ -143,12 +143,9 @@ function ShellContent() {
               <Route
                 element={(
                   <ImportScreen
-                    activeCollection={activeCollection}
-                    activeCollectionId={activeCollectionId}
                     collections={collections}
                     collectionsError={collectionsError}
                     loadingCollections={loadingCollections}
-                    onSelectCollection={selectCollection}
                   />
                 )}
                 path={CATALOG_ROUTES.importExport}

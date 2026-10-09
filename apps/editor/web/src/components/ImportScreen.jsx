@@ -4,43 +4,9 @@ import {
   downloadArchive,
   getOperationStatus,
   importArchive,
-  importCsv,
 } from "../lib/api.js";
 import { CATALOG_ROUTES } from "../lib/routes.js";
 import { useConfirmation } from "./ConfirmDialog.jsx";
-
-function getPastedCsvFile(event) {
-  const items = Array.from(event.clipboardData?.items ?? []);
-  const fileItem = items.find((item) => item.kind === "file");
-  const file = fileItem?.getAsFile() ?? null;
-
-  if (
-    file &&
-    (file.type === "text/csv" || file.name.toLowerCase().endsWith(".csv"))
-  ) {
-    return file;
-  }
-
-  return null;
-}
-
-function getPastedCsvText(event) {
-  return event.clipboardData?.getData("text/plain")?.trim() ?? "";
-}
-
-function getDroppedCsvFile(event) {
-  const files = Array.from(event.dataTransfer?.files ?? []);
-  return (
-    files.find(
-      (file) =>
-        file.type === "text/csv" || file.name.toLowerCase().endsWith(".csv"),
-    ) ?? null
-  );
-}
-
-function getDroppedCsvText(event) {
-  return event.dataTransfer?.getData("text/plain")?.trim() ?? "";
-}
 
 function isArchiveFile(file) {
   return Boolean(
@@ -60,28 +26,18 @@ function formatOperationLabel(operation) {
 }
 
 function ImportScreen({
-  activeCollection,
-  activeCollectionId,
   collections,
   collectionsError,
   loadingCollections,
-  onSelectCollection,
 }) {
-  const csvInputRef = useRef(null);
   const archiveInputRef = useRef(null);
   const panelScrollRef = useRef(null);
-  const [csvSource, setCsvSource] = useState(null);
-  const [csvSourceLabel, setCsvSourceLabel] = useState("");
   const [archiveSource, setArchiveSource] = useState(null);
-  const [csvDropActive, setCsvDropActive] = useState(false);
   const [archiveDropActive, setArchiveDropActive] = useState(false);
-  const [csvResult, setCsvResult] = useState(null);
   const [archiveResult, setArchiveResult] = useState(null);
   const [error, setError] = useState("");
-  const [submittingCsv, setSubmittingCsv] = useState(false);
   const [submittingArchive, setSubmittingArchive] = useState(false);
   const [exportingArchive, setExportingArchive] = useState(false);
-  const [csvUploadProgress, setCsvUploadProgress] = useState(null);
   const [archiveUploadProgress, setArchiveUploadProgress] = useState(null);
   const [clearingData, setClearingData] = useState(false);
   const [operationStatus, setOperationStatus] = useState({
@@ -101,17 +57,10 @@ function ImportScreen({
   } = useConfirmation();
 
   const isBusy = operationStatus.isBusy;
-  const isTransferring = submittingCsv || submittingArchive || exportingArchive;
+  const isTransferring = submittingArchive || exportingArchive;
   const busyMessage = isBusy
     ? `This action is unavailable while ${formatOperationLabel(operationStatus.currentOperation)} is in progress.`
     : "";
-
-  function setCsvImportSource(nextSource, label) {
-    setCsvSource(nextSource);
-    setCsvSourceLabel(label);
-    setCsvResult(null);
-    setError("");
-  }
 
   function setArchiveImportSource(nextSource) {
     setArchiveSource(nextSource);
@@ -174,7 +123,6 @@ function ImportScreen({
   }, [
     archiveResult,
     collections.length,
-    csvResult,
     error,
     loadingCollections,
     selectedExportCollectionIds.length,
@@ -205,40 +153,6 @@ function ImportScreen({
     };
   }, [isTransferring]);
 
-  async function handleCsvSubmit(event) {
-    event.preventDefault();
-
-    if (!csvSource) {
-      setError("Choose, drop, or paste a CSV before importing.");
-      return;
-    }
-
-    if (isBusy) {
-      setError(busyMessage);
-      return;
-    }
-
-    setSubmittingCsv(true);
-    setCsvUploadProgress(null);
-    setError("");
-    setCsvResult(null);
-    setArchiveResult(null);
-
-    try {
-      const payload = await importCsv(
-        csvSource,
-        activeCollectionId,
-        setCsvUploadProgress,
-      );
-      setCsvResult(payload);
-    } catch (importError) {
-      setError(importError.message);
-    } finally {
-      setSubmittingCsv(false);
-      setCsvUploadProgress(null);
-    }
-  }
-
   async function handleArchiveImport(event) {
     event.preventDefault();
 
@@ -266,7 +180,6 @@ function ImportScreen({
     setSubmittingArchive(true);
     setArchiveUploadProgress(null);
     setError("");
-    setCsvResult(null);
     setArchiveResult(null);
 
     try {
@@ -323,7 +236,6 @@ function ImportScreen({
 
     setClearingData(true);
     setError("");
-    setCsvResult(null);
     setArchiveResult(null);
 
     try {
@@ -359,10 +271,10 @@ function ImportScreen({
               <p className="eyebrow">Import and Export</p>
               <h1>Manage your collection data</h1>
               <p>
-                CSV import updates notes from spreadsheet rows. Archive export
-                can include selected collections only, and archive import
-                replaces local collections that exist in the archive (matched by
-                name) while leaving other collections untouched.
+                Archive export can include selected collections only, and
+                archive import replaces local collections that exist in the
+                archive (matched by name) while leaving other collections
+                untouched.
               </p>
             </div>
           </div>
@@ -378,182 +290,6 @@ function ImportScreen({
           </p>
 
           <div className="import-sections">
-            <form className="form-grid import-card" onSubmit={handleCsvSubmit}>
-              <div className="full-span">
-                <p className="eyebrow">CSV Import</p>
-                <h2>Upload CSV into active collection</h2>
-                <p>
-                  Existing notes in{" "}
-                  <strong>
-                    {activeCollection?.name ?? "selected collection"}
-                  </strong>{" "}
-                  are updated in place, notes missing from the CSV are deleted,
-                  tags are replaced from the CSV, and rows after `Ignore after
-                  this line` are skipped.
-                </p>
-              </div>
-
-              <div className="inline-select-group full-span">
-                <span>Import into</span>
-                <select
-                  aria-label="Active collection"
-                  className="select-input"
-                  disabled={loadingCollections || isBusy || !collections.length}
-                  onChange={(event) =>
-                    onSelectCollection(Number(event.target.value))
-                  }
-                  value={activeCollectionId ?? ""}
-                >
-                  {collections.map((collection) => (
-                    <option key={collection.id} value={collection.id}>
-                      {Number(collection.is_default) === 1 ? "★ " : ""}
-                      {collection.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-
-              <div className="field-block full-span">
-                <span>CSV source</span>
-                <div
-                  className={`image-dropzone import-dropzone${csvDropActive ? " image-dropzone--active" : ""}`}
-                  onClick={() => {
-                    if (!isBusy) {
-                      csvInputRef.current?.click();
-                    }
-                  }}
-                  onDragEnter={(event) => {
-                    event.preventDefault();
-                    setCsvDropActive(true);
-                  }}
-                  onDragLeave={(event) => {
-                    if (event.currentTarget.contains(event.relatedTarget)) {
-                      return;
-                    }
-
-                    setCsvDropActive(false);
-                  }}
-                  onDragOver={(event) => {
-                    event.preventDefault();
-                    setCsvDropActive(true);
-                  }}
-                  onDrop={(event) => {
-                    event.preventDefault();
-                    setCsvDropActive(false);
-
-                    if (isBusy) {
-                      return;
-                    }
-
-                    const droppedFile = getDroppedCsvFile(event);
-                    if (droppedFile) {
-                      setCsvImportSource(droppedFile, droppedFile.name);
-                      return;
-                    }
-
-                    const droppedText = getDroppedCsvText(event);
-                    if (droppedText) {
-                      setCsvImportSource(droppedText, "Pasted CSV text");
-                    }
-                  }}
-                  onPaste={(event) => {
-                    if (isBusy) {
-                      return;
-                    }
-
-                    const pastedFile = getPastedCsvFile(event);
-                    if (pastedFile) {
-                      event.preventDefault();
-                      setCsvImportSource(pastedFile, pastedFile.name);
-                      return;
-                    }
-
-                    const pastedText = getPastedCsvText(event);
-                    if (pastedText) {
-                      event.preventDefault();
-                      setCsvImportSource(pastedText, "Pasted CSV text");
-                    }
-                  }}
-                  onFocus={() => setCsvDropActive(true)}
-                  onBlur={() => setCsvDropActive(false)}
-                  onKeyDown={(event) => {
-                    if (event.key === "Enter" || event.key === " ") {
-                      event.preventDefault();
-                      if (!isBusy) {
-                        csvInputRef.current?.click();
-                      }
-                    }
-                  }}
-                  role="button"
-                  tabIndex={0}
-                >
-                  <div className="import-dropzone-content">
-                    <strong>
-                      {csvSourceLabel || "Drop CSV here or press Ctrl+V"}
-                    </strong>
-                    <p className="muted import-dropzone-help">
-                      Supports `.csv` files and pasted CSV text.
-                    </p>
-                  </div>
-                </div>
-                <div className="import-actions">
-                  <button
-                    className="button"
-                    disabled={isBusy}
-                    onClick={() => csvInputRef.current?.click()}
-                    type="button"
-                  >
-                    Choose file
-                  </button>
-                  <button
-                    className="button"
-                    disabled={!csvSource || isBusy}
-                    onClick={() => {
-                      setCsvSource(null);
-                      setCsvSourceLabel("");
-                      if (csvInputRef.current) {
-                        csvInputRef.current.value = "";
-                      }
-                    }}
-                    type="button"
-                  >
-                    Clear
-                  </button>
-                  <input
-                    accept=".csv,text/csv"
-                    className="image-slot-input"
-                    onChange={(event) => {
-                      const file = event.target.files?.[0] ?? null;
-                      if (file) {
-                        setCsvImportSource(file, file.name);
-                      }
-                    }}
-                    ref={csvInputRef}
-                    type="file"
-                  />
-                </div>
-              </div>
-
-              <button
-                className="button button-primary import-submit"
-                disabled={submittingCsv || isBusy || !activeCollectionId}
-                type="submit"
-                aria-busy={submittingCsv}
-              >
-                {submittingCsv ? (
-                  <>
-                    <span
-                      className="scrape-spinner button-spinner"
-                      aria-hidden="true"
-                    />
-                    <span>Importing...</span>
-                  </>
-                ) : (
-                  "Import CSV"
-                )}
-              </button>
-            </form>
-
             <form
               className="form-grid import-card"
               onSubmit={handleArchiveImport}
@@ -749,18 +485,6 @@ function ImportScreen({
 
           {error ? <p className="error-text">{error}</p> : null}
 
-          {csvResult ? (
-            <div className="result-card">
-              <h2>CSV import finished</h2>
-              <p>Added: {csvResult.imported}</p>
-              <p>Updated: {csvResult.updated}</p>
-              <p>Deleted: {csvResult.deleted}</p>
-              <p>Ignored rows: {csvResult.ignored}</p>
-              <p>Rows used for ordering: {csvResult.ordered}</p>
-              <p>Total rows scanned: {csvResult.total}</p>
-            </div>
-          ) : null}
-
           {archiveResult?.exported ? (
             <div className="result-card">
               <h2>Archive export started</h2>
@@ -786,11 +510,7 @@ function ImportScreen({
           aria-modal="true"
           aria-live="polite"
           aria-label={
-            submittingCsv
-              ? "Importing CSV"
-              : submittingArchive
-                ? "Importing archive"
-                : "Preparing archive export"
+            submittingArchive ? "Importing archive" : "Preparing archive export"
           }
         >
           <div className="import-progress-card">
@@ -799,15 +519,8 @@ function ImportScreen({
               aria-hidden="true"
             />
             <p className="import-progress-title">
-              {submittingCsv
-                ? "Importing CSV..."
-                : submittingArchive
-                  ? "Importing archive..."
-                  : "Preparing export..."}
+              {submittingArchive ? "Importing archive..." : "Preparing export..."}
             </p>
-            {submittingCsv && csvSourceLabel ? (
-              <p className="muted import-progress-detail">{csvSourceLabel}</p>
-            ) : null}
             {submittingArchive && archiveSource?.name ? (
               <p className="muted import-progress-detail">
                 {archiveSource.name}
@@ -818,37 +531,21 @@ function ImportScreen({
                 {selectedExportCollectionIds.length} collection(s) selected
               </p>
             ) : null}
-            {(submittingCsv
-              ? csvUploadProgress
-              : submittingArchive
-                ? archiveUploadProgress
-                : null
-            )?.phase === "uploading" &&
-            Number.isInteger(
-              (submittingCsv ? csvUploadProgress : archiveUploadProgress)
-                ?.percent,
-            ) ? (
+            {submittingArchive && archiveUploadProgress?.phase === "uploading" &&
+            Number.isInteger(archiveUploadProgress?.percent) ? (
               <div className="import-progress-meter">
                 <progress
-                  value={
-                    (submittingCsv ? csvUploadProgress : archiveUploadProgress)
-                      .percent
-                  }
+                  value={archiveUploadProgress.percent}
                   max="100"
                   aria-label="Upload progress"
                 />
                 <span className="muted">
-                  {
-                    (submittingCsv ? csvUploadProgress : archiveUploadProgress)
-                      .percent
-                  }
-                  % uploaded
+                  {archiveUploadProgress.percent}% uploaded
                 </span>
               </div>
             ) : (
               <p className="muted import-progress-detail">
-                {(submittingCsv ? csvUploadProgress : archiveUploadProgress)
-                  ?.phase === "processing"
+                {archiveUploadProgress?.phase === "processing"
                   ? "Upload complete. Processing on server..."
                   : "Working..."}
               </p>

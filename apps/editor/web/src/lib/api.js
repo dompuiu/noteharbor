@@ -169,12 +169,6 @@ function tagsBasePath(collectionId) {
     : '/api/tags';
 }
 
-function importBasePath(collectionId) {
-  return Number.isInteger(collectionId)
-    ? `/api/collections/${collectionId}/import`
-    : '/api/import';
-}
-
 async function getCollections() {
   let response;
 
@@ -308,20 +302,6 @@ async function moveNote(id, collectionId, targetCollectionId, position) {
   });
 
   return handleResponse(response);
-}
-
-async function importCsv(source, collectionId, onProgress) {
-  const formData = new FormData();
-
-  if (isFileValue(source)) {
-    formData.append('file', source);
-  } else if (typeof source === 'string' && source.trim()) {
-    formData.append('csv_text', source);
-  } else {
-    throw new Error('Choose a CSV file or paste CSV text before importing.');
-  }
-
-  return postFormDataWithUploadProgress(importBasePath(collectionId), formData, onProgress);
 }
 
 async function importArchive(file, onProgress) {
@@ -588,7 +568,6 @@ export {
   getShowcases,
   getTags,
   importArchive,
-  importCsv,
   moveNote,
   renameCategory,
   renameCollection,

@@ -932,23 +932,6 @@ function createStatements(database) {
     clearNoteTagsStatement: database.prepare(`DELETE FROM banknote_tags WHERE banknote_id = ?`),
     insertNoteTagStatement: database.prepare(`INSERT OR IGNORE INTO banknote_tags (banknote_id, tag_id) VALUES (?, ?)`),
 
-    upsertBanknoteStatement: database.prepare(`
-      INSERT INTO banknotes (
-        collection_id,
-        display_order,
-        denomination,
-        issue_date,
-        catalog_number,
-        grading_company,
-        grade,
-        watermark,
-        serial,
-        url,
-        notes,
-        updated_at
-      )
-      VALUES (@collection_id, @display_order, @denomination, @issue_date, @catalog_number, @grading_company, @grade, @watermark, @serial, @url, @notes, datetime('now'))
-    `),
     insertNoteStatement: database.prepare(`
       INSERT INTO banknotes (
         collection_id,
@@ -1023,38 +1006,6 @@ function createStatements(database) {
     moveNoteCollectionStatement: database.prepare(`
       UPDATE banknotes
       SET collection_id = @collection_id,
-          updated_at = datetime('now')
-      WHERE id = @id
-    `),
-    listImportRowsStatement: database.prepare(`
-      SELECT
-        id,
-        collection_id,
-        display_order,
-        denomination,
-        issue_date,
-        catalog_number,
-        grading_company,
-        grade,
-        watermark,
-        serial,
-        url,
-        notes
-      FROM banknotes
-      WHERE collection_id = @collection_id
-      ORDER BY display_order ASC, id ASC
-    `),
-    updateImportedNoteStatement: database.prepare(`
-      UPDATE banknotes
-      SET denomination = @denomination,
-          issue_date = @issue_date,
-          catalog_number = @catalog_number,
-          grading_company = @grading_company,
-          grade = @grade,
-          watermark = @watermark,
-          serial = @serial,
-          url = @url,
-          notes = @notes,
           updated_at = datetime('now')
       WHERE id = @id
     `)
@@ -1141,34 +1092,6 @@ function parseJson(value, fallback) {
 
 function normalizeTagName(name) {
   return String(name ?? '').trim().replace(/\s+/g, ' ');
-}
-
-function normalizeImportValue(value) {
-  return String(value ?? '').trim().toLowerCase();
-}
-
-function buildImportIdentity(note) {
-  const url = normalizeImportValue(note.url);
-  if (url) {
-    return `url:${url}`;
-  }
-
-  const company = normalizeImportValue(note.grading_company);
-  const catalogNumber = normalizeImportValue(note.catalog_number);
-  const serial = normalizeImportValue(note.serial);
-
-  if (company && (catalogNumber || serial)) {
-    return `company:${company}|catalog:${catalogNumber}|serial:${serial}`;
-  }
-
-  return [
-    normalizeImportValue(note.denomination),
-    normalizeImportValue(note.issue_date),
-    catalogNumber,
-    company,
-    normalizeImportValue(note.watermark),
-    serial
-  ].join('|');
 }
 
 function rowToNote(row, tagMap) {
@@ -2062,98 +1985,6 @@ function replaceNoteTags(noteId, tagNames, collectionId = null) {
   transaction();
 }
 
-function importNotes(notes, collectionId = null) {
-  getDatabase();
-  const normalizedCollectionId = resolveCollectionId(collectionId);
-  ensureCollectionExists(normalizedCollectionId);
-
-  const transaction = db.transaction((rows) => {
-    const existingRows = statements.listImportRowsStatement.all({ collection_id: normalizedCollectionId });
-    const matchedIds = new Set();
-    const identityToRow = new Map();
-    let importedCount = 0;
-    let updatedCount = 0;
-    const deletedIds = [];
-    let nextDisplayOrder = 1;
-
-    for (const row of existingRows) {
-      identityToRow.set(buildImportIdentity(row), row);
-    }
-
-    for (const note of rows) {
-      const identity = buildImportIdentity(note);
-      const existing = identityToRow.get(identity);
-
-      if (existing) {
-        statements.updateImportedNoteStatement.run({
-          ...note,
-          id: existing.id
-        });
-        statements.updateDisplayOrderStatement.run({
-          id: existing.id,
-          display_order: nextDisplayOrder
-        });
-        replaceNoteTags(existing.id, note.tags, normalizedCollectionId);
-        matchedIds.add(existing.id);
-        identityToRow.set(identity, {
-          ...existing,
-          ...note,
-          id: existing.id,
-          collection_id: normalizedCollectionId,
-          display_order: nextDisplayOrder
-        });
-        updatedCount += 1;
-      } else {
-        const result = statements.upsertBanknoteStatement.run({
-          ...note,
-          collection_id: normalizedCollectionId,
-          display_order: nextDisplayOrder
-        });
-        const noteId = Number(result.lastInsertRowid);
-        replaceNoteTags(noteId, note.tags, normalizedCollectionId);
-
-        identityToRow.set(identity, {
-          id: noteId,
-          ...note,
-          collection_id: normalizedCollectionId,
-          display_order: nextDisplayOrder
-        });
-        importedCount += 1;
-      }
-
-      nextDisplayOrder += 1;
-    }
-
-    for (const row of existingRows) {
-      if (matchedIds.has(row.id)) {
-        continue;
-      }
-
-      statements.deleteNoteStatement.run(row.id);
-      deletedIds.push(row.id);
-    }
-
-    return {
-      imported: importedCount,
-      updated: updatedCount,
-      deleted: deletedIds.length,
-      deletedIds
-    };
-  });
-
-  const result = transaction(notes);
-
-  for (const noteId of result.deletedIds) {
-    removeManagedNoteImages(noteId);
-  }
-
-  return {
-    imported: result.imported,
-    updated: result.updated,
-    deleted: result.deleted
-  };
-}
-
 function getNextDisplayOrder(collectionId = null) {
   getDatabase();
   const normalizedCollectionId = resolveCollectionId(collectionId);
@@ -2363,7 +2194,6 @@ export {
   getShowcaseById,
   getShowcaseNodeById,
   getShowcaseTree,
-  importNotes,
   migrateBanknotesForeignKey,
   moveNoteToCollection,
   openDatabase,
