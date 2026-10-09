@@ -359,6 +359,24 @@ describe("Escape and focus restoration", () => {
       ).toHaveFocus(),
     );
   });
+
+  test("the Up control restores focus to the card you left", async () => {
+    renderAt(PORTFOLIO_ROUTES.showcase(1));
+    await openSummer();
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Open grouping Sub" }),
+    );
+    await screen.findByRole("button", { name: "10 lei, 1930" });
+
+    await userEvent.click(screen.getByRole("button", { name: "Up" }));
+
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Open grouping Sub" }),
+      ).toHaveFocus(),
+    );
+  });
 });
 
 describe("editing from the keyboard", () => {
