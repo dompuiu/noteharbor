@@ -8,12 +8,14 @@ import {
   getShowcaseTree,
   updateNode,
 } from "../lib/api.js";
+import { usePhotoSize } from "../lib/photoSize.js";
 import { DEFAULT_DESTINATION, PORTFOLIO_ROUTES } from "../lib/routes.js";
 import { useShowcases } from "../lib/showcases.jsx";
 import { ShowcaseCategoryCard } from "./ShowcaseCategoryCard.jsx";
 import { ShowcaseCategoryEditor } from "./ShowcaseCategoryEditor.jsx";
 import { ShowcaseCategoryTile } from "./ShowcaseCategoryTile.jsx";
 import { ShowcaseGrid } from "./ShowcaseGrid.jsx";
+import { ShowcasePhotoSizeControl } from "./ShowcasePhotoSizeControl.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 
 // One showcase, rendered in one of two near-identical modes. View mode is the
@@ -42,6 +44,8 @@ function ShowcaseScreen({ mode }) {
   const [nameError, setNameError] = useState("");
   const [deleting, setDeleting] = useState(false);
   const { confirm, dialog } = useConfirmation();
+  // The photo size is a per-browser preference shared by view and edit mode.
+  const [photoSize, setPhotoSize] = usePhotoSize();
 
   const [nodes, setNodes] = useState([]);
   const [categories, setCategories] = useState([]);
@@ -253,6 +257,12 @@ function ShowcaseScreen({ mode }) {
               <h1>{showcaseName}</h1>
             )}
           </div>
+          <div className="showcase-photo-size">
+            <ShowcasePhotoSizeControl
+              onChange={setPhotoSize}
+              value={photoSize}
+            />
+          </div>
           {editMode && showcase ? (
             <div className="panel-heading-actions">
               <button
@@ -286,7 +296,7 @@ function ShowcaseScreen({ mode }) {
         ) : null}
 
         {!loading && !loadError ? (
-          <ShowcaseGrid>
+          <ShowcaseGrid size={photoSize}>
             {nodes.map((node) =>
               editMode ? (
                 <ShowcaseCategoryEditor
