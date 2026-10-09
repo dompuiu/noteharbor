@@ -8,6 +8,8 @@ function ShowcaseCategoryCard({ name, onOpen }) {
       aria-label={`Open category ${name}`}
       className="showcase-card showcase-card--category"
       onClick={onOpen}
+      role="button"
+      tabIndex={0}
       type="button"
     >
       <span className="showcase-card-name">{name}</span>

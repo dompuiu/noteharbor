@@ -573,6 +573,19 @@ input[type="radio"] {
   padding: 24px 0;
 }
 
+/* The node-entry announcement is for assistive tech only. */
+.showcase-announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* The three-way note photo size control (Small 200px / Medium 320px / Large
    480px). It sits in the showcase header in both view and edit mode and only
    sets the grid's minimum card width. */
@@ -925,6 +938,7 @@ input[type="radio"] {
 }
 
 .showcase-card-image {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -939,6 +953,19 @@ input[type="radio"] {
   width: 100%;
   height: 100%;
   object-fit: contain;
+}
+
+/* The Note card's front and back stack and cross-fade; only the shown side is
+   exposed to assistive tech (its sibling is aria-hidden). */
+.showcase-card-face {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  transition: opacity 160ms ease;
+}
+
+.showcase-card-face--visible {
+  opacity: 1;
 }
 
 .showcase-card-no-image {
@@ -1096,6 +1123,10 @@ input[type="radio"] {
   .sidebar-dock,
   .sidebar,
   .sidebar-link {
+    transition: none;
+  }
+
+  .showcase-card-face {
     transition: none;
   }
 }

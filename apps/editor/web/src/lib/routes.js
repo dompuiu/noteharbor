@@ -14,6 +14,12 @@ export const PORTFOLIO_ROUTES = {
   showcaseEdit: (id) => `/portfolio/showcases/${id}/edit`,
 };
 
+// View-mode drill is URL-synced through a single query parameter: the current
+// node is `?node=<id>` and the root has no parameter. A null id clears it.
+export function showcaseNodeSearch(nodeId) {
+  return nodeId == null ? "" : `?node=${nodeId}`;
+}
+
 // Where an unknown route lands. This is the first destination of the first
 // sidebar group (Catalog > Banknotes); keep it in one place so the catch-all
 // and any future default agree.

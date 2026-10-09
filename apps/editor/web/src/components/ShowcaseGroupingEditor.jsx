@@ -59,7 +59,7 @@ function ShowcaseGroupingEditor({ node, onRemove, onRename, onOpen }) {
 
   return (
     <div className="showcase-cell">
-      <ShowcaseGroupingCard node={node} onOpen={onOpen} />
+      <ShowcaseGroupingCard mode="edit" node={node} onOpen={onOpen} />
 
       {editing ? (
         <form className="showcase-cell-edit" onSubmit={handleRename}>
