@@ -1603,8 +1603,102 @@ function addCategoryPlacement(showcaseId, descriptor) {
   return getShowcaseNodeById(nodeId);
 }
 
+// A batch of note nodes under one parent (a Category Placement or a grouping).
+// Notes are individual and always have a parent (ADR 0001). The batch appends
+// in the given order in one transaction; the picker sends the ids it has
+// accumulated across filter changes.
+function addNotesToNode(showcaseId, descriptor = {}) {
+  getDatabase();
+  const id = Number(showcaseId);
+  ensureShowcaseExists(id);
+
+  const rawParentId = descriptor.parent_id ?? descriptor.parent_node_id;
+
+  if (rawParentId == null) {
+    throw new Error('A parent node is required for notes.');
+  }
+
+  const parentId = Number(rawParentId);
+
+  if (!Number.isInteger(parentId) || parentId <= 0) {
+    throw new Error('A valid parent node is required.');
+  }
+
+  const parent = statements.getShowcaseNodeStatement.get(parentId);
+
+  if (!parent || parent.showcase_id !== id) {
+    throw new Error('Parent node not found.');
+  }
+
+  if (parent.node_type === 'note') {
+    throw new Error('A note node cannot hold notes.');
+  }
+
+  const rawNoteIds = Array.isArray(descriptor.note_ids) ? descriptor.note_ids : null;
+
+  if (!rawNoteIds || rawNoteIds.length === 0) {
+    throw new Error('At least one note is required.');
+  }
+
+  // Validate every note, drop duplicates while preserving the caller's order,
+  // and let one bad id fail the whole batch before anything is written.
+  const noteIds = [];
+  const seen = new Set();
+
+  for (const raw of rawNoteIds) {
+    const noteId = Number(raw);
+
+    if (!Number.isInteger(noteId) || noteId <= 0) {
+      throw new Error('A valid note id is required.');
+    }
+
+    if (seen.has(noteId)) {
+      continue;
+    }
+
+    if (!getNoteById(noteId)) {
+      throw new Error(`Note ${noteId} was not found.`);
+    }
+
+    seen.add(noteId);
+    noteIds.push(noteId);
+  }
+
+  if (!noteIds.length) {
+    throw new Error('At least one note is required.');
+  }
+
+  const startPosition = Number(
+    statements.nextShowcaseNodePositionStatement.get({
+      showcase_id: id,
+      parent_node_id: parentId
+    })?.value ?? 1
+  );
+
+  const insertBatch = db.transaction((ids, position) =>
+    ids.map((noteId, index) => {
+      const result = statements.insertShowcaseNodeStatement.run({
+        showcase_id: id,
+        parent_node_id: parentId,
+        node_type: 'note',
+        category_id: null,
+        name: null,
+        note_id: noteId,
+        cover_note_id: null,
+        position: position + index
+      });
+
+      return Number(result.lastInsertRowid);
+    })
+  );
+
+  const createdIds = insertBatch(noteIds, startPosition);
+  return createdIds.map((nodeId) => getShowcaseNodeById(nodeId));
+}
+
 // Extend this switch for a new node type. Ticket 09 adds `grouping`; ticket 10
-// adds the `notes` batch. The descriptor is the raw request body.
+// adds the `notes` batch (which answers with an array of nodes). The descriptor
+// is the raw request body.
 function addShowcaseNode(showcaseId, descriptor = {}) {
   getDatabase();
   const type = descriptor.type ?? descriptor.node_type;
@@ -1612,6 +1706,8 @@ function addShowcaseNode(showcaseId, descriptor = {}) {
   switch (type) {
     case 'category':
       return addCategoryPlacement(Number(showcaseId), descriptor);
+    case 'notes':
+      return addNotesToNode(Number(showcaseId), descriptor);
     default:
       throw new Error(`Unsupported node type: ${String(type ?? '')}.`);
   }
@@ -2105,6 +2201,7 @@ export {
   DB_PATH,
   IMAGES_DIR,
   ROOT_DIR,
+  addNotesToNode,
   addShowcaseNode,
   backupDatabase,
   closeDatabase,

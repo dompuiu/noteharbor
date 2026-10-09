@@ -139,9 +139,9 @@ showcasesRouter.get('/:id/tree', (request, response) => {
   });
 });
 
-// Add one node. The body's `type` selects the shape: `category` today, with
-// `grouping` (ticket 09) and the `notes` batch (ticket 10) to follow. The
-// server resolves or creates the Category label and appends at the end.
+// Add a node. The body's `type` selects the shape: `category`, `grouping`
+// (ticket 09), or the `notes` batch (ticket 10). A single node answers with
+// `{ node }`; the note batch answers with `{ nodes }` in the requested order.
 showcasesRouter.post('/:id/nodes', (request, response) => {
   const showcaseId = parseId(request.params.id);
 
@@ -156,8 +156,14 @@ showcasesRouter.post('/:id/nodes', (request, response) => {
   }
 
   try {
-    const node = addShowcaseNode(showcaseId, request.body ?? {});
-    response.status(201).json({ node });
+    const result = addShowcaseNode(showcaseId, request.body ?? {});
+
+    if (Array.isArray(result)) {
+      response.status(201).json({ nodes: result });
+      return;
+    }
+
+    response.status(201).json({ node: result });
   } catch (error) {
     response.status(400).json({ error: error.message });
   }
