@@ -853,6 +853,182 @@ input[type="radio"] {
   font-size: 0.88rem;
 }
 
+/* A Note card is the shared presentation ticket 12 reuses. Its image area keeps
+   the 2/1 banknote proportion; the caption is one ellipsised line. */
+.showcase-card--note {
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 10px;
+}
+
+.showcase-card-image {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.showcase-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.showcase-card-no-image {
+  color: var(--text-faint);
+  font-size: 0.85rem;
+}
+
+.showcase-card-caption {
+  max-width: 100%;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The edit-mode contents of one node nest in the parent grid; the `+ notes` tile
+   is note-sized so it sits beside the notes. */
+.showcase-node-items {
+  width: 100%;
+  margin-top: 4px;
+}
+
+.showcase-tile--note {
+  min-height: 96px;
+  aspect-ratio: 2 / 1;
+}
+
+/* The note picker popup. */
+.showcase-picker-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 150;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 48px 16px;
+  background: rgba(28, 22, 16, 0.55);
+}
+
+.showcase-picker {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(720px, 100%);
+  max-height: calc(100vh - 96px);
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.showcase-picker-head {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.showcase-picker-title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.showcase-picker-filter {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.showcase-picker-column,
+.showcase-picker-value {
+  padding: 8px 10px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  color: var(--text);
+  font: inherit;
+}
+
+.showcase-picker-value {
+  flex: 1 1 200px;
+  min-width: 160px;
+}
+
+.showcase-picker-hint {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.showcase-picker-list {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-height: 80px;
+  overflow-y: auto;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+}
+
+.showcase-picker-empty {
+  padding: 12px;
+}
+
+.showcase-note-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+}
+
+.showcase-note-row:hover {
+  background: var(--surface-2);
+}
+
+.showcase-note-row--added {
+  color: var(--text-muted);
+}
+
+.showcase-note-row-main {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase-note-row-pill {
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.showcase-note-row-pill--added {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.showcase-picker-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sidebar-dock,
   .sidebar,
