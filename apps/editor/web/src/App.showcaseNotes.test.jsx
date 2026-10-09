@@ -116,11 +116,8 @@ function renderAt(path) {
 async function openPicker() {
   const user = userEvent.setup();
   renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-  // Nothing expands inline, so the category must be opened before its notes
-  // (and the `+ notes` tile) are on the canvas.
-  await user.click(
-    await screen.findByRole("button", { name: "Open category Summer" }),
-  );
+  // Categories render expanded, so the `+ notes` tile is on the canvas without
+  // opening anything.
   await user.click(await screen.findByRole("button", { name: "Add notes" }));
   return { user, dialog: await screen.findByRole("dialog", { name: "Add notes" }) };
 }

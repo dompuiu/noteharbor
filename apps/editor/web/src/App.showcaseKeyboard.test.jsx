@@ -192,62 +192,61 @@ beforeEach(() => {
   reorderNodes.mockResolvedValue({ nodes: [] });
 });
 
-async function summerCard() {
-  return screen.findByRole("button", { name: "Open category Summer" });
+async function firstContentCards() {
+  const note = await screen.findByRole("button", { name: "1 leu, 1917" });
+  const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+  return { note, sub };
 }
 
 describe("moving card focus", () => {
   test("the arrow keys walk the cards in grid order", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    const summer = await summerCard();
-    const vienna = screen.getByRole("button", { name: "Open category Vienna" });
+    const { note, sub } = await firstContentCards();
 
     fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(summer).toHaveFocus();
+    expect(note).toHaveFocus();
 
     fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(vienna).toHaveFocus();
+    expect(sub).toHaveFocus();
 
     fireEvent.keyDown(document.body, { key: "ArrowUp" });
-    expect(summer).toHaveFocus();
+    expect(note).toHaveFocus();
   });
 
   test("h/j/k/l move the focus like the arrow keys", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    const summer = await summerCard();
-    const vienna = screen.getByRole("button", { name: "Open category Vienna" });
+    const { note, sub } = await firstContentCards();
 
     fireEvent.keyDown(document.body, { key: "j" });
-    expect(summer).toHaveFocus();
+    expect(note).toHaveFocus();
 
     fireEvent.keyDown(document.body, { key: "l" });
-    expect(vienna).toHaveFocus();
+    expect(sub).toHaveFocus();
 
     fireEvent.keyDown(document.body, { key: "k" });
-    expect(summer).toHaveFocus();
+    expect(note).toHaveFocus();
   });
 
   test("Home and End focus the first and last card", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    const summer = await summerCard();
-    const vienna = screen.getByRole("button", { name: "Open category Vienna" });
+    const { note, sub } = await firstContentCards();
 
     fireEvent.keyDown(document.body, { key: "End" });
-    expect(vienna).toHaveFocus();
+    expect(sub).toHaveFocus();
 
     fireEvent.keyDown(document.body, { key: "Home" });
-    expect(summer).toHaveFocus();
+    expect(note).toHaveFocus();
   });
 
   test("PageDown and PageUp move by a screen of rows", async () => {
     getShowcaseTree.mockResolvedValue({
       showcase_id: 1,
-      nodes: manyCategories(12),
+      nodes: [categoryNode({ id: 10, name: "Summer", children: manyNotes(12) })],
     });
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
     const cards = await screen.findAllByRole("button", {
-      name: /^Open category /,
+      name: /^1 leu, 1917 #/,
     });
     stubGridRects(cards, 3, { height: 100 });
     Object.defineProperty(window, "innerHeight", {
@@ -265,32 +264,25 @@ describe("moving card focus", () => {
   });
 });
 
-async function openSummer() {
-  await userEvent.click(
-    await screen.findByRole("button", { name: "Open category Summer" }),
-  );
-}
-
 function search() {
   return screen.getByTestId("search").textContent;
 }
 
 describe("opening the focused card", () => {
-  test("Enter opens a focused category card in view mode", async () => {
+  test("Enter opens a focused grouping card in view mode", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    const summer = await summerCard();
+    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
 
-    act(() => summer.focus());
+    act(() => sub.focus());
     await userEvent.keyboard("{Enter}");
 
-    await waitFor(() => expect(search()).toBe("?node=10"));
+    await waitFor(() => expect(search()).toBe("?node=20"));
   });
 
   test("Enter opens an edit-mode grouping, which has no single click of its own", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await openSummer();
-
-    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    
+    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
     expect(
       screen.queryByRole("button", { name: "Open grouping Deep" }),
     ).not.toBeInTheDocument();
@@ -305,44 +297,48 @@ describe("opening the focused card", () => {
 
   test("Enter and Space flip a view-mode note card instead of drilling", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await openSummer();
-
-    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    
+    const card = await screen.findByRole("button", { name: "1 leu, 1917" });
     // Focus alone reveals the back; one activation keeps it flipped (a double
     // handling would flip it straight back to the front).
     act(() => card.focus());
     await userEvent.keyboard("{Enter}");
     expect(card).toHaveAttribute("aria-pressed", "true");
-    expect(search()).toBe("?node=10");
+    expect(search()).toBe("");
 
     await userEvent.keyboard(" ");
     expect(card).toHaveAttribute("aria-pressed", "false");
-    expect(search()).toBe("?node=10");
+    expect(search()).toBe("");
   });
 });
 
 describe("Escape and focus restoration", () => {
   test("Escape clears the card focus, then goes up a level", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await openSummer();
 
-    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
-    act(() => sub.focus());
+    await userEvent.click(
+      await screen.findByRole("button", { name: "Open grouping Sub" }),
+    );
+    const deep = await screen.findByRole("button", {
+      name: "Open grouping Deep",
+    });
+    act(() => deep.focus());
 
     fireEvent.keyDown(document.body, { key: "Escape" });
-    expect(sub).not.toHaveFocus();
-    expect(search()).toBe("?node=10");
+    expect(deep).not.toHaveFocus();
+    expect(search()).toBe("?node=20");
 
     fireEvent.keyDown(document.body, { key: "Escape" });
     await waitFor(() => expect(search()).toBe(""));
-    expect(await summerCard()).toHaveFocus();
+    expect(
+      await screen.findByRole("button", { name: "Open grouping Sub" }),
+    ).toHaveFocus();
   });
 
   test("focus returns to the card you drilled from after going up", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await openSummer();
-
-    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    
+    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
     act(() => sub.focus());
     await userEvent.keyboard("{Enter}");
 
@@ -362,14 +358,13 @@ describe("Escape and focus restoration", () => {
 
   test("the Up control restores focus to the card you left", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await openSummer();
-
+    
     await userEvent.click(
-      screen.getByRole("button", { name: "Open grouping Sub" }),
+      await screen.findByRole("button", { name: "Open grouping Sub" }),
     );
     await screen.findByRole("button", { name: "10 lei, 1930" });
 
-    await userEvent.click(screen.getByRole("button", { name: "Up" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Up" }));
 
     await waitFor(() =>
       expect(
@@ -382,9 +377,8 @@ describe("Escape and focus restoration", () => {
 describe("editing from the keyboard", () => {
   async function focusSub() {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await openSummer();
-
-    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    
+    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
     act(() => sub.focus());
     return sub;
   }
@@ -427,11 +421,9 @@ describe("editing from the keyboard", () => {
 
   test("the single-key actions do nothing in view mode", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await openSummer();
 
-    act(() =>
-      screen.getByRole("button", { name: "Open grouping Sub" }).focus(),
-    );
+    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
+    act(() => sub.focus());
 
     for (const key of ["a", "g", "e", "d"]) {
       fireEvent.keyDown(document.body, { key });
@@ -448,14 +440,17 @@ describe("editing from the keyboard", () => {
   });
 });
 
-// Twelve categories in a single level, for the page-sized movement test.
-function manyCategories(count) {
+// Twelve notes in one category, for the page-sized movement test.
+function manyNotes(count) {
   return Array.from({ length: count }, (_, index) =>
-    categoryNode({
-      id: 100 + index,
-      name: `Category ${index + 1}`,
-      position: index + 1,
-    }),
+    noteNode(
+      500 + index,
+      note(900 + index, {
+        denomination: "1 leu",
+        issue_date: `1917 #${index + 1}`,
+      }),
+      index + 1,
+    ),
   );
 }
 
@@ -475,9 +470,8 @@ describe("guards", () => {
 
   test("an open dialog disables the card shortcuts", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await openSummer();
-
-    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    
+    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
     act(() => sub.focus());
     fireEvent.keyDown(document.body, { key: "a" });
     await screen.findByRole("dialog", { name: "Add notes" });
@@ -493,7 +487,7 @@ describe("guards", () => {
 
   test("an open confirmation dialog also disables the card shortcuts", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await summerCard();
+    await screen.findByRole("button", { name: "Open grouping Sub" });
 
     await userEvent.click(
       screen.getByRole("button", { name: "Delete showcase" }),
@@ -511,9 +505,8 @@ describe("guards", () => {
 
   test("a Meta/Ctrl chord is left to the browser", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await openSummer();
-
-    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    
+    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
     act(() => sub.focus());
 
     fireEvent.keyDown(document.body, { key: "d", ctrlKey: true });
@@ -525,7 +518,7 @@ describe("guards", () => {
 
   test("the sidebar keeps its own keys", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await summerCard();
+    await screen.findByRole("button", { name: "Open grouping Sub" });
 
     const sidebar = document.getElementById("app-sidebar");
     const link = sidebar.querySelector("a");
@@ -541,9 +534,8 @@ describe("the note picker", () => {
   test("/ focuses the picker's filter field from another control", async () => {
     getNotes.mockResolvedValue({ notes: [NOTE_WITH_BACK] });
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await openSummer();
-
-    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    
+    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
     act(() => sub.focus());
     fireEvent.keyDown(document.body, { key: "a" });
 
@@ -557,9 +549,8 @@ describe("the note picker", () => {
 
   test("a slash typed in the filter field stays a slash", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await openSummer();
-
-    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    
+    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
     act(() => sub.focus());
     fireEvent.keyDown(document.body, { key: "a" });
 
@@ -574,7 +565,7 @@ describe("the note picker", () => {
 describe("shortcut help", () => {
   test("? opens the shortcut help with the Showcase keys", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await summerCard();
+    await screen.findByRole("button", { name: "Open grouping Sub" });
 
     fireEvent.keyDown(document.body, { key: "?" });
 
@@ -587,15 +578,15 @@ describe("shortcut help", () => {
 
   test("the cards ignore the shortcuts while the help is open", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    const summer = await summerCard();
-    const vienna = screen.getByRole("button", { name: "Open category Vienna" });
+    const note = await screen.findByRole("button", { name: "1 leu, 1917" });
+    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
 
-    act(() => summer.focus());
+    act(() => note.focus());
     fireEvent.keyDown(document.body, { key: "?" });
     await screen.findByRole("dialog", { name: "Keyboard shortcuts" });
 
     fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(summer).toHaveFocus();
+    expect(note).toHaveFocus();
 
     fireEvent.keyDown(document.body, { key: "Escape" });
     await waitFor(() =>
@@ -605,7 +596,7 @@ describe("shortcut help", () => {
     );
 
     fireEvent.keyDown(document.body, { key: "ArrowDown" });
-    expect(vienna).toHaveFocus();
+    expect(sub).toHaveFocus();
   });
 });
 

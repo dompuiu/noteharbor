@@ -29,8 +29,7 @@ import {
 import { useShowcases } from "../lib/showcases.jsx";
 import { useCollections } from "../lib/collections.jsx";
 import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
-import { ShowcaseCategoryCard } from "./ShowcaseCategoryCard.jsx";
-import { ShowcaseCategoryEditor } from "./ShowcaseCategoryEditor.jsx";
+import { ShowcaseCategorySection } from "./ShowcaseCategorySection.jsx";
 import { ShowcaseCategoryTile } from "./ShowcaseCategoryTile.jsx";
 import { ShowcaseBreadcrumb } from "./ShowcaseBreadcrumb.jsx";
 import { ShowcaseGrid } from "./ShowcaseGrid.jsx";
@@ -49,9 +48,10 @@ import { useConfirmation } from "./ConfirmDialog.jsx";
 // One showcase, rendered in one of two near-identical modes. View mode is the
 // read-only presentation; edit mode adds the authoring controls. Both share the
 // same shell, grid, and cards so the two never drift. Categories sit at the top
-// level; a Category or Grouping opens into its own level (nothing expands
-// inline — ticket 09 / user story 41), and edit mode drills one level at a time
-// exactly like view mode, with the drill kept in memory.
+// level and always render expanded with their direct children inline; only
+// Groupings open into their own level (nothing else expands inline), and edit
+// mode drills into Groupings one level at a time exactly like view mode, with
+// the drill kept in memory.
 function upsertCategory(categories, category) {
   const others = categories.filter((entry) => entry.id !== category.id);
   return [...others, category].sort((a, b) => a.name.localeCompare(b.name));
@@ -303,6 +303,17 @@ function ShowcaseScreen({ mode }) {
   const currentParentId = currentNode ? currentNode.id : null;
   const currentChildren = currentNode ? (currentNode.children ?? []) : nodes;
 
+  // Categories always render expanded at the root, so a drill that lands on a
+  // Category (an old `?node=<categoryId>` link, or an edit drill from before)
+  // is shown as the expanded root instead of a single-category level.
+  const displayNode =
+    currentNode?.node_type === "category" ? null : currentNode;
+  const displayPath = displayNode ? currentPath : [];
+  const displayChildren = displayNode
+    ? (displayNode.children ?? [])
+    : nodes;
+  const isRootExpanded = displayNode == null;
+
   // A `?node=` that no longer resolves (a node removed in another tab, or a
   // stale deep link) falls back to the root and drops the parameter.
   useEffect(() => {
@@ -322,34 +333,46 @@ function ShowcaseScreen({ mode }) {
       return;
     }
 
-    const name = currentNode ? currentNode.name : showcaseName;
-    setAnnouncement(`${name}, ${currentChildren.length} items`);
-  }, [currentChildren.length, currentNode, loading, showcaseName]);
+    const name = displayNode ? displayNode.name : showcaseName;
+    setAnnouncement(`${name}, ${displayChildren.length} items`);
+  }, [displayChildren.length, displayNode, loading, showcaseName]);
 
   // Dragging a note or a Grouping reorders it among the current level's
   // children, so notes and groupings share one order. Categories only exist at
   // the top level and are not draggable here (the sidebar owns showcase order).
+  // The expanded root gives each Category section its own reorder state; this
+  // hook serves the drilled Grouping level.
   const reorder = useShowcaseReorder({
     nodes: currentChildren,
     onReorder: handleReorderChildren,
   });
 
   async function handleReorderChildren(orderedIds) {
+    await handleReorderChildrenFor(currentParentId, orderedIds);
+  }
+
+  async function handleReorderChildrenFor(parentId, orderedIds) {
     // Persist first, then reorder locally: a rejected request leaves the
     // visible order untouched.
-    await reorderNodes(showcaseId, currentParentId, orderedIds);
+    await reorderNodes(showcaseId, parentId, orderedIds);
     setNodes((current) =>
-      reorderNodeTree(current, currentParentId, orderedIds),
+      reorderNodeTree(current, parentId, orderedIds),
     );
   }
 
   function openNode(node) {
+    // Categories always render expanded, so they never drill. Groupings still
+    // open into their own level.
+    if (node?.node_type === "category") {
+      return;
+    }
+
     // Focus the card we leave from when it is on the new level (it is not, for
     // a drill, but an Up back to this level restores it).
     restoreFocusNodeIdRef.current = node.id;
 
     if (editMode) {
-      setDrillIds((current) => [...current, node.id]);
+      setDrillIds(findNodeIdPath(nodes, node.id));
       return;
     }
 
@@ -357,33 +380,59 @@ function ShowcaseScreen({ mode }) {
   }
 
   // `-1` is the Showcase root; any other index opens that breadcrumb level.
+  // A Category never has its own level (it renders expanded), so navigating to
+  // one lands on the root instead of a `?node=<categoryId>` URL.
   function navigateTo(targetIndex) {
     // Going up or sideways restores focus to the node we are leaving when its
     // card is on the destination level.
-    restoreFocusNodeIdRef.current = currentNode?.id ?? null;
+    restoreFocusNodeIdRef.current = displayNode?.id ?? null;
 
     if (editMode) {
-      setDrillIds((current) =>
-        targetIndex < 0 ? [] : current.slice(0, targetIndex + 1),
-      );
+      setDrillIds((current) => {
+        const next =
+          targetIndex < 0 ? [] : current.slice(0, targetIndex + 1);
+
+        while (next.length) {
+          const last = findNodeById(nodes, next[next.length - 1]);
+
+          if (last?.node_type === "category") {
+            next.pop();
+            continue;
+          }
+
+          break;
+        }
+
+        return next;
+      });
       return;
     }
 
-    const targetId =
+    const rawTargetId =
       targetIndex < 0 ? null : (effectiveDrillIds[targetIndex] ?? null);
+    const target =
+      rawTargetId == null ? null : findNodeById(nodes, rawTargetId);
+    const targetId =
+      target?.node_type === "category" ? null : rawTargetId;
     navigate({ search: showcaseNodeSearch(targetId) });
   }
 
   async function handleAddGrouping(name) {
+    await handleAddGroupingFor(currentParentId, name);
+  }
+
+  // The per-category add tile in the expanded root passes its own parent id;
+  // the drilled grouping level passes the current drill parent.
+  async function handleAddGroupingFor(parentId, name) {
     const { node } = await createShowcaseNode(showcaseId, {
       type: "grouping",
-      parent_id: currentParentId,
+      parent_id: parentId,
       name,
     });
 
     if (node) {
       setNodes((current) =>
-        updateNodeTree(current, currentParentId, (parent) => ({
+        updateNodeTree(current, parentId, (parent) => ({
           ...parent,
           children: [...(parent.children ?? []), node],
         })),
@@ -441,17 +490,17 @@ function ShowcaseScreen({ mode }) {
   // 37). The server answers with the updated node; splice it into the tree so
   // `cover_note` (and the card's cover) reflects the choice without a refetch.
   async function handleSetCover(noteNode) {
-    if (!currentNode || currentNode.node_type !== "grouping") {
+    if (!displayNode || displayNode.node_type !== "grouping") {
       return;
     }
 
     const coverNoteId = noteNode.note_id ?? noteNode.note?.id ?? null;
-    const { node: updated } = await updateNode(currentNode.id, {
+    const { node: updated } = await updateNode(displayNode.id, {
       cover_note_id: coverNoteId,
     });
 
     setNodes((current) =>
-      updateNodeTree(current, currentNode.id, (entry) => ({
+      updateNodeTree(current, displayNode.id, (entry) => ({
         ...entry,
         ...(updated ?? {}),
         // The server's single-node row has no children; keep the local subtree.
@@ -462,16 +511,16 @@ function ShowcaseScreen({ mode }) {
 
   // Clearing returns the Grouping to its derived cover (ticket 09).
   async function handleClearCover() {
-    if (!currentNode || currentNode.node_type !== "grouping") {
+    if (!displayNode || displayNode.node_type !== "grouping") {
       return;
     }
 
-    const { node: updated } = await updateNode(currentNode.id, {
+    const { node: updated } = await updateNode(displayNode.id, {
       cover_note_id: null,
     });
 
     setNodes((current) =>
-      updateNodeTree(current, currentNode.id, (entry) => ({
+      updateNodeTree(current, displayNode.id, (entry) => ({
         ...entry,
         ...(updated ?? {}),
         children: entry.children,
@@ -791,12 +840,14 @@ function ShowcaseScreen({ mode }) {
   const showViewEmpty = showEmpty && !editMode;
   const showEditEmpty = showEmpty && editMode;
   // A resolvable node with nothing under it is not the same as an empty
-  // showcase: a Grouping holding only sub-Groupings is not empty.
+  // showcase: a Grouping holding only sub-Groupings is not empty. Categories
+  // render expanded with their own per-section empty copy, so this only covers
+  // a drilled Grouping.
   const showEmptyNode =
     !loading &&
     !loadError &&
-    currentNode != null &&
-    currentChildren.length === 0;
+    displayNode != null &&
+    displayChildren.length === 0;
   const showViewEmptyNode = showEmptyNode && !editMode;
   const showEditEmptyNode = showEmptyNode && editMode;
   // A label can be placed at most once per Showcase, so do not suggest the ones
@@ -979,22 +1030,22 @@ function ShowcaseScreen({ mode }) {
 
         {!loading && !loadError ? (
           <>
-            {currentNode ? (
+            {displayNode ? (
               <ShowcaseBreadcrumb
                 showcaseName={showcaseName}
                 onNavigate={navigateTo}
-                path={currentPath}
+                path={displayPath}
               />
             ) : null}
 
-            {editMode && currentNode?.node_type === "grouping" ? (
+            {editMode && displayNode?.node_type === "grouping" ? (
               <div className="showcase-node-cover">
                 <span className="muted">
-                  {currentNode.cover_note_id != null
+                  {displayNode.cover_note_id != null
                     ? "Cover set by hand."
                     : "Cover derives from the first note."}
                 </span>
-                {currentNode.cover_note_id != null ? (
+                {displayNode.cover_note_id != null ? (
                   <button
                     className="button"
                     onClick={handleClearCover}
@@ -1006,98 +1057,107 @@ function ShowcaseScreen({ mode }) {
               </div>
             ) : null}
 
-            <ShowcaseGrid size={photoSize}>
-              {currentChildren.map((node) => {
-                if (node.node_type === "category") {
-                  return editMode ? (
-                    <ShowcaseCategoryEditor
+            {isRootExpanded ? (
+              <>
+                {nodes.map((node) => {
+                  if (node.node_type !== "category") {
+                    return null;
+                  }
+
+                  return (
+                    <ShowcaseCategorySection
+                      category={node}
+                      editMode={editMode}
                       key={node.id}
-                      node={node}
-                      onOpen={() => openNode(node)}
-                      onRemove={handleRemoveCategory}
-                      onRename={handleRenameCategory}
-                    />
-                  ) : (
-                    <ShowcaseCategoryCard
-                      key={node.id}
-                      name={node.name}
-                      nodeId={node.id}
-                      onOpen={() => openNode(node)}
+                      onAddGrouping={handleAddGroupingFor}
+                      onAddNotes={handleOpenNotePicker}
+                      onOpenGrouping={openNode}
+                      onRemoveCategory={handleRemoveCategory}
+                      onRemoveGrouping={handleRemoveGrouping}
+                      onRemoveNote={handleRemoveNote}
+                      onRenameCategory={handleRenameCategory}
+                      onRenameGrouping={handleRenameGrouping}
+                      onReorder={handleReorderChildrenFor}
+                      photoSize={photoSize}
                     />
                   );
-                }
+                })}
 
-                if (node.node_type === "grouping") {
-                  return editMode ? (
-                    <ShowcaseReorderableCell
-                      key={node.id}
-                      label={node.name}
-                      nodeId={node.id}
-                      reorder={reorder}
-                    >
-                      <ShowcaseGroupingEditor
+                {editMode && !showEditEmpty ? (
+                  <ShowcaseCategoryTile
+                    categories={availableCategories}
+                    onAdd={handleAddCategory}
+                  />
+                ) : null}
+              </>
+            ) : (
+              <ShowcaseGrid size={photoSize}>
+                {displayChildren.map((node) => {
+                  if (node.node_type === "grouping") {
+                    return editMode ? (
+                      <ShowcaseReorderableCell
+                        key={node.id}
+                        label={node.name}
+                        nodeId={node.id}
+                        reorder={reorder}
+                      >
+                        <ShowcaseGroupingEditor
+                          node={node}
+                          onOpen={() => openNode(node)}
+                          onRemove={handleRemoveGrouping}
+                          onRename={handleRenameGrouping}
+                        />
+                      </ShowcaseReorderableCell>
+                    ) : (
+                      <ShowcaseGroupingCard
+                        key={node.id}
                         node={node}
                         onOpen={() => openNode(node)}
-                        onRemove={handleRemoveGrouping}
-                        onRename={handleRenameGrouping}
                       />
-                    </ShowcaseReorderableCell>
-                  ) : (
-                    <ShowcaseGroupingCard
-                      key={node.id}
-                      node={node}
-                      onOpen={() => openNode(node)}
-                    />
-                  );
-                }
+                    );
+                  }
 
-                if (node.node_type === "note") {
-                  return editMode ? (
-                    <ShowcaseReorderableCell
-                      key={node.id}
-                      label={noteNodeLabel(node)}
-                      nodeId={node.id}
-                      reorder={reorder}
-                    >
-                      <ShowcaseNoteEditor
-                        node={node}
-                        onRemove={handleRemoveNote}
-                        onSetCover={
-                          currentNode?.node_type === "grouping"
-                            ? handleSetCover
-                            : undefined
-                        }
+                  if (node.node_type === "note") {
+                    return editMode ? (
+                      <ShowcaseReorderableCell
+                        key={node.id}
+                        label={noteNodeLabel(node)}
+                        nodeId={node.id}
+                        reorder={reorder}
+                      >
+                        <ShowcaseNoteEditor
+                          node={node}
+                          onRemove={handleRemoveNote}
+                          onSetCover={
+                            displayNode?.node_type === "grouping"
+                              ? handleSetCover
+                              : undefined
+                          }
+                        />
+                      </ShowcaseReorderableCell>
+                    ) : (
+                      <ShowcaseNoteCard
+                        key={node.id}
+                        mode="view"
+                        nodeId={node.id}
+                        note={node.note}
                       />
-                    </ShowcaseReorderableCell>
-                  ) : (
-                    <ShowcaseNoteCard
-                      key={node.id}
-                      mode="view"
-                      nodeId={node.id}
-                      note={node.note}
+                    );
+                  }
+
+                  return null;
+                })}
+
+                {editMode && displayNode ? (
+                  <>
+                    <ShowcaseNoteTile
+                      onClick={() => handleOpenNotePicker(displayNode)}
                     />
-                  );
-                }
-
-                return null;
-              })}
-
-              {editMode && !currentNode && !showEditEmpty ? (
-                <ShowcaseCategoryTile
-                  categories={availableCategories}
-                  onAdd={handleAddCategory}
-                />
-              ) : null}
-
-              {editMode && currentNode ? (
-                <>
-                  <ShowcaseNoteTile
-                    onClick={() => handleOpenNotePicker(currentNode)}
-                  />
-                  <ShowcaseGroupingTile onAdd={handleAddGrouping} />
-                </>
-              ) : null}
-            </ShowcaseGrid>
+                    <ShowcaseGroupingTile onAdd={handleAddGrouping} />
+                  </>
+                ) : null}
+              </ShowcaseGrid>
+            )}
           </>
         ) : null}
       </div>

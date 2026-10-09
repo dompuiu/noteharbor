@@ -638,6 +638,26 @@ input[type="radio"] {
   align-items: start;
 }
 
+/* A top-level Category always renders expanded: a titled section holding its
+   inline grid. Sections stack with breathing room; the title is plain text
+   (no cover, no drill). */
+.showcase-category-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 32px;
+}
+
+.showcase-category-section:last-of-type {
+  margin-bottom: 16px;
+}
+
+.showcase-category-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 700;
+}
+
 .showcase-card {
   display: flex;
   flex-direction: column;

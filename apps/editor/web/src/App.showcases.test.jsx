@@ -167,8 +167,7 @@ describe("Showcase modes", () => {
     expect(screen.getByLabelText("Showcase name")).toBeInTheDocument();
   });
 
-  test("drilling into a new (empty) category shows the dashed empty box with add tiles", async () => {
-    const user = userEvent.setup();
+  test("a new (empty) category shows inline with add tiles", async () => {
     getShowcaseTree.mockResolvedValue({
       showcase_id: 1,
       nodes: [
@@ -189,12 +188,10 @@ describe("Showcase modes", () => {
     });
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
-    await user.click(
-      await screen.findByRole("button", { name: "Open category Fresh" }),
-    );
-
-    const message = await screen.findByText("No notes here yet.");
-    expect(message.closest(".showcase-empty-box")).not.toBeNull();
+    expect(
+      await screen.findByRole("heading", { name: "Fresh" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("No notes here yet.")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Add notes" }),
     ).toBeInTheDocument();

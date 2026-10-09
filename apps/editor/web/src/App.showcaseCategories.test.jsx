@@ -118,22 +118,22 @@ beforeEach(() => {
 });
 
 describe("the showcase category canvas", () => {
-  test("edit mode shows a name-only card per top-level category", async () => {
+  test("edit mode shows an expanded section per top-level category", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     expect(
-      await screen.findByRole("button", { name: "Open category Summer" }),
+      await screen.findByRole("heading", { name: "Summer" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Create a category" }),
     ).toBeInTheDocument();
   });
 
-  test("view mode shows the read-only card and no add tile", async () => {
+  test("view mode shows the expanded section and no add tile", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
     expect(
-      await screen.findByRole("button", { name: "Open category Summer" }),
+      await screen.findByRole("heading", { name: "Summer" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Create a category" }),
@@ -156,7 +156,7 @@ describe("the showcase category canvas", () => {
       category_id: 5,
     });
     expect(
-      await screen.findByRole("button", { name: "Open category Winter" }),
+      await screen.findByRole("heading", { name: "Winter" }),
     ).toBeInTheDocument();
   });
 
@@ -186,7 +186,7 @@ describe("the showcase category canvas", () => {
 
     expect(updateNode).toHaveBeenCalledWith(10, { name: "Monsoon" });
     expect(
-      await screen.findByRole("button", { name: "Open category Monsoon" }),
+      await screen.findByRole("heading", { name: "Monsoon" }),
     ).toBeInTheDocument();
   });
 
@@ -200,7 +200,7 @@ describe("the showcase category canvas", () => {
 
     expect(deleteNode).toHaveBeenCalledWith(10);
     expect(
-      screen.queryByRole("button", { name: "Open category Summer" }),
+      screen.queryByRole("heading", { name: "Summer" }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Create a category" }),

@@ -166,10 +166,8 @@ function groupingCard(name) {
   return screen.getByRole("button", { name: `Open grouping ${name}` });
 }
 
-async function openSummer() {
-  await userEvent.click(
-    await screen.findByRole("button", { name: "Open category Summer" }),
-  );
+async function openSub() {
+  await userEvent.click(groupingCard("Sub"));
 }
 
 beforeEach(() => {
@@ -188,29 +186,31 @@ beforeEach(() => {
 });
 
 describe("grouping drill navigation", () => {
-  test("nothing expands inline: a grouping is hidden until its parent is opened", async () => {
+  test("categories expand inline but groupings still drill", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
     expect(
-      await screen.findByRole("button", { name: "Open category Summer" }),
+      await screen.findByRole("heading", { name: "Summer" }),
     ).toBeInTheDocument();
+    expect(groupingCard("Sub")).toBeInTheDocument();
+    // Sub's own children stay hidden until Sub is opened.
     expect(
-      screen.queryByRole("button", { name: "Open grouping Sub" }),
+      screen.queryByRole("button", { name: "Open grouping Deep" }),
     ).not.toBeInTheDocument();
   });
 
-  test("opening a category shows its grouping cards", async () => {
+  test("the expanded root shows its grouping cards", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await openSummer();
 
+    expect(await screen.findByRole("heading", { name: "Summer" }))
+      .toBeInTheDocument();
     expect(groupingCard("Sub")).toBeInTheDocument();
   });
 
   test("clicking a grouping drills in; Up and the breadcrumb go back", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await openSummer();
 
-    await userEvent.click(groupingCard("Sub"));
+    await userEvent.click(await screen.findByRole("button", { name: "Open grouping Sub" }));
 
     expect(
       await screen.findByRole("button", { name: "Open grouping Deep" }),
@@ -228,6 +228,8 @@ describe("grouping drill navigation", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Up" }));
 
+    expect(await screen.findByRole("heading", { name: "Summer" }))
+      .toBeInTheDocument();
     expect(groupingCard("Sub")).toBeInTheDocument();
     expect(
       screen.queryByRole("button", { name: "Open grouping Deep" }),
@@ -236,8 +238,7 @@ describe("grouping drill navigation", () => {
 
   test("the breadcrumb jumps straight to an ancestor level", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await openSummer();
-    await userEvent.click(groupingCard("Sub"));
+    await userEvent.click(await screen.findByRole("button", { name: "Open grouping Sub" }));
 
     const breadcrumb = screen.getByRole("navigation", {
       name: "Showcase breadcrumb",
@@ -248,13 +249,13 @@ describe("grouping drill navigation", () => {
       await screen.findByRole("button", { name: "Open grouping Sub" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Open category Summer" }),
+      screen.queryByRole("button", { name: "Open grouping Deep" }),
     ).not.toBeInTheDocument();
   });
 
   test("the showcase breadcrumb returns to the top level", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await openSummer();
+    await userEvent.click(await screen.findByRole("button", { name: "Open grouping Sub" }));
 
     const breadcrumb = screen.getByRole("navigation", {
       name: "Showcase breadcrumb",
@@ -262,14 +263,13 @@ describe("grouping drill navigation", () => {
     await userEvent.click(within(breadcrumb).getByText("My showcase"));
 
     expect(
-      await screen.findByRole("button", { name: "Open category Summer" }),
+      await screen.findByRole("heading", { name: "Summer" }),
     ).toBeInTheDocument();
   });
 
   test("edit mode keeps the drill state in memory without changing the URL", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await openSummer();
-    await userEvent.dblClick(groupingCard("Sub"));
+    await userEvent.dblClick(await screen.findByRole("button", { name: "Open grouping Sub" }));
 
     expect(groupingCard("Deep")).toBeInTheDocument();
     expect(screen.getByTestId("pathname")).toHaveTextContent(
@@ -281,9 +281,8 @@ describe("grouping drill navigation", () => {
 describe("grouping cover", () => {
   test("a grouping card shows the first note beneath it as its cover", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await openSummer();
 
-    const image = groupingCard("Sub").querySelector("img");
+    const image = (await screen.findByRole("button", { name: "Open grouping Sub" })).querySelector("img");
     expect(image).toHaveAttribute(
       "src",
       "/api/images/notes/100/front-thumbnail.jpg?v=2024-05-01",
@@ -296,9 +295,8 @@ describe("grouping cover", () => {
       nodes: [summerTree({ coverNote: MANUAL_NOTE })],
     });
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await openSummer();
 
-    const image = groupingCard("Sub").querySelector("img");
+    const image = (await screen.findByRole("button", { name: "Open grouping Sub" })).querySelector("img");
     expect(image).toHaveAttribute(
       "src",
       "/api/images/notes/200/front-thumbnail.jpg?v=2024-06-01",
@@ -312,9 +310,8 @@ describe("grouping cover", () => {
       nodes: [{ ...summerTree(), children: [emptyGrouping] }],
     });
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await openSummer();
 
-    const card = groupingCard("Sub");
+    const card = await screen.findByRole("button", { name: "Open grouping Sub" });
     expect(card).toHaveTextContent("Sub");
     expect(card.querySelector("img")).toBeNull();
   });
@@ -326,7 +323,7 @@ describe("editing groupings on the canvas", () => {
       node: groupingNode({ id: 40, name: "New group" }),
     });
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await openSummer();
+    await screen.findByRole("button", { name: "Open grouping Sub" });
 
     await userEvent.click(
       screen.getByRole("button", { name: "Create a grouping" }),
@@ -349,7 +346,7 @@ describe("editing groupings on the canvas", () => {
       node: groupingNode({ id: 20, name: "Renamed" }),
     });
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await openSummer();
+    await screen.findByRole("button", { name: "Open grouping Sub" });
 
     await userEvent.click(
       screen.getByRole("button", { name: "Rename Sub" }),
@@ -367,7 +364,7 @@ describe("editing groupings on the canvas", () => {
 
   test("removing a grouping drops its subtree", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await openSummer();
+    await screen.findByRole("button", { name: "Open grouping Sub" });
 
     await userEvent.click(
       screen.getByRole("button", { name: "Remove Sub" }),
@@ -383,7 +380,7 @@ describe("editing groupings on the canvas", () => {
 
   test("drills one level at a time and never renders grandchildren inline", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await openSummer();
+    await screen.findByRole("button", { name: "Open grouping Sub" });
 
     // Sub's own child note and the deeper grouping are not on the Summer level.
     expect(
@@ -414,7 +411,7 @@ describe("setting a grouping cover from the canvas", () => {
       },
     }));
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await openSummer();
+    await screen.findByRole("button", { name: "Open grouping Sub" });
     await userEvent.dblClick(groupingCard("Sub"));
 
     // The derived cover means no manual-cover control is shown yet.

@@ -214,49 +214,48 @@ beforeEach(() => {
   });
 });
 
-async function openSummer() {
+async function openSub() {
   await userEvent.click(
-    await screen.findByRole("button", { name: "Open category Summer" }),
+    await screen.findByRole("button", { name: "Open grouping Sub" }),
   );
 }
 
 describe("browsing a showcase read-only", () => {
-  test("lands on the Categories as name-only cards", async () => {
+  test("lands on expanded Categories with their contents inline", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
     expect(
-      await screen.findByRole("button", { name: "Open category Summer" }),
+      await screen.findByRole("heading", { name: "Summer" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Open category Vienna" }),
+      screen.getByRole("heading", { name: "Vienna" }),
     ).toBeInTheDocument();
-    // Nothing expands inline: a child grouping is hidden until its parent opens.
+    // A category always shows its contents: the child grouping and note are
+    // visible without opening anything.
     expect(
-      screen.queryByRole("button", { name: "Open grouping Sub" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Open grouping Sub" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "1 leu, 1917" }),
+    ).toBeInTheDocument();
   });
 
-  test("opening a Category shows its direct children in manual order", async () => {
+  test("a Category shows its direct children in manual order", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await openSummer();
 
-    const noteCard = screen.getByRole("button", { name: "1 leu, 1917" });
+    const noteCard = await screen.findByRole("button", { name: "1 leu, 1917" });
     const groupingCard = screen.getByRole("button", {
       name: "Open grouping Sub",
     });
 
-    const grid = screen.getByTestId("showcase-grid");
-    const cards = within(grid).getAllByRole("button");
+    const section = screen.getByRole("region", { name: "Category Summer" });
+    const cards = within(section).getAllByRole("button");
     expect(cards.indexOf(noteCard)).toBeLessThan(cards.indexOf(groupingCard));
   });
 
   test("opening a Grouping shows its direct children", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await openSummer();
-
-    await userEvent.click(
-      screen.getByRole("button", { name: "Open grouping Sub" }),
-    );
+    await openSub();
 
     expect(
       await screen.findByRole("button", { name: "10 lei, 1930" }),
@@ -272,38 +271,34 @@ describe("browsing a showcase read-only", () => {
     ).toBeInTheDocument();
   });
 
-  test("a node with no items shows its message", async () => {
+  test("an empty category shows its message inline", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
-    await userEvent.click(
-      await screen.findByRole("button", { name: "Open category Vienna" }),
-    );
-
-    expect(await screen.findByText("No notes here yet.")).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Vienna" });
+    expect(screen.getByText("No notes here yet.")).toBeInTheDocument();
   });
 });
 
 describe("view-mode URL sync", () => {
-  test("the root has no node parameter and drilling adds one", async () => {
+  test("the root has no node parameter and drilling a grouping adds one", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await screen.findByRole("button", { name: "Open category Summer" });
+    await screen.findByRole("heading", { name: "Summer" });
 
     expect(currentSearch()).toBe("");
 
-    await openSummer();
-    expect(currentSearch()).toBe("?node=10");
+    await openSub();
+    expect(currentSearch()).toBe("?node=20");
   });
 
-  test("Up and the breadcrumb each move up a level", async () => {
+  test("Up and the breadcrumb each move back to the expanded root", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await openSummer();
-    await userEvent.click(
-      screen.getByRole("button", { name: "Open grouping Sub" }),
-    );
+    await openSub();
     expect(currentSearch()).toBe("?node=20");
 
     await userEvent.click(screen.getByRole("button", { name: "Up" }));
-    expect(currentSearch()).toBe("?node=10");
+    expect(currentSearch()).toBe("");
+
+    await openSub();
 
     const breadcrumb = screen.getByRole("navigation", {
       name: "Showcase breadcrumb",
@@ -320,16 +315,27 @@ describe("view-mode URL sync", () => {
     ).toBeInTheDocument();
   });
 
+  test("a category deep link shows the expanded root", async () => {
+    renderAt(`${SHOWCASE_ROUTES.showcase(1)}?node=10`);
+
+    expect(
+      await screen.findByRole("heading", { name: "Summer" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open grouping Sub" }),
+    ).toBeInTheDocument();
+  });
+
   test("each drill is a history entry so the browser Back button works", async () => {
     window.history.replaceState(null, "", SHOWCASE_ROUTES.showcase(1));
     render(<BrowserRouter>{shell()}</BrowserRouter>);
-    await screen.findByRole("button", { name: "Open category Summer" });
+    await screen.findByRole("button", { name: "Open grouping Sub" });
 
     await userEvent.click(
-      screen.getByRole("button", { name: "Open category Summer" }),
+      screen.getByRole("button", { name: "Open grouping Sub" }),
     );
     await waitFor(() => {
-      expect(window.location.search).toBe("?node=10");
+      expect(window.location.search).toBe("?node=20");
     });
 
     await act(async () => {
@@ -340,13 +346,12 @@ describe("view-mode URL sync", () => {
       expect(window.location.search).toBe("");
     });
     expect(
-      await screen.findByRole("button", { name: "Open category Summer" }),
+      await screen.findByRole("heading", { name: "Summer" }),
     ).toBeInTheDocument();
   });
 
   test("edit mode keeps the drill state out of the URL", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await openSummer();
 
     expect(
       await screen.findByRole("button", { name: "Open grouping Sub" }),
@@ -356,15 +361,19 @@ describe("view-mode URL sync", () => {
 });
 
 describe("entering a node", () => {
-  test("announces the node name and item count in a polite live region", async () => {
+  test("announces the showcase and the drilled grouping in a polite live region", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
     const status = await screen.findByRole("status");
     expect(status).toHaveAttribute("aria-live", "polite");
 
-    await openSummer();
+    await waitFor(() => {
+      expect(status).toHaveTextContent("My showcase, 2 items");
+    });
+
+    await openSub();
 
     await waitFor(() => {
-      expect(status).toHaveTextContent("Summer, 2 items");
+      expect(status).toHaveTextContent("Sub, 1 items");
     });
   });
 });
@@ -372,9 +381,8 @@ describe("entering a node", () => {
 describe("the note card in view mode", () => {
   async function openWithNote() {
     renderAt(SHOWCASE_ROUTES.showcase(1));
-    await openSummer();
 
-    return screen.getByRole("button", { name: "1 leu, 1917" });
+    return screen.findByRole("button", { name: "1 leu, 1917" });
   }
 
   test("hovering swaps to the back and leaving returns to the front", async () => {
@@ -437,7 +445,6 @@ describe("the note card in view mode", () => {
 
   test("edit mode always shows the front, whatever the pointer does", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    await openSummer();
 
     const card = await screen.findByRole("button", { name: "1 leu, 1917" });
     await userEvent.hover(card);

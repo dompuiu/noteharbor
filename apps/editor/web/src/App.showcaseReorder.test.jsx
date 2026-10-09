@@ -177,9 +177,7 @@ function reorderLabels() {
 }
 
 async function openSummer() {
-  await userEvent.click(
-    await screen.findByRole("button", { name: "Open category Summer" }),
-  );
+  await screen.findByRole("button", { name: "Reorder Sub" });
 }
 
 beforeEach(() => {

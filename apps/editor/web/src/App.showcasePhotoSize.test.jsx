@@ -69,7 +69,7 @@ function photoSizeGroup() {
 
 function gridMinWidth() {
   return screen
-    .getByTestId("showcase-grid")
+    .getAllByTestId("showcase-grid")[0]
     .style.getPropertyValue("--showcase-card-min");
 }
 
@@ -81,7 +81,38 @@ beforeEach(() => {
     collections: [{ id: 1, is_default: 1, name: "Default" }],
   });
   getShowcases.mockResolvedValue({ showcases: [{ id: 1, name: "Summer" }] });
-  getShowcaseTree.mockResolvedValue({ showcase_id: 1, nodes: [] });
+  getShowcaseTree.mockResolvedValue({
+    showcase_id: 1,
+    nodes: [
+      {
+        id: 10,
+        node_type: "category",
+        name: "Summer",
+        category_id: 1,
+        parent_node_id: null,
+        note_id: null,
+        cover_note_id: null,
+        position: 1,
+        note: null,
+        cover_note: null,
+        children: [
+          {
+            id: 11,
+            node_type: "note",
+            name: null,
+            category_id: null,
+            parent_node_id: 10,
+            note_id: 100,
+            cover_note_id: null,
+            position: 1,
+            note: { id: 100, denomination: "1", issue_date: "1917", images: [] },
+            cover_note: null,
+            children: [],
+          },
+        ],
+      },
+    ],
+  });
   getCategories.mockResolvedValue({ categories: [] });
 });
 
