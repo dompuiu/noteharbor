@@ -544,6 +544,17 @@ input[type="radio"] {
   font-weight: 700;
 }
 
+.showcase-screen .panel-heading-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.showcase-name-error {
+  margin-bottom: 12px;
+  color: var(--danger);
+}
+
 .showcase-empty {
   padding: 24px 0;
 }
