@@ -25,12 +25,13 @@ function ShowcaseNoteEditor({ node, onRemove }) {
 
   return (
     <div className="showcase-cell">
-      <ShowcaseNoteCard mode="edit" note={note} />
+      <ShowcaseNoteCard mode="edit" note={note} nodeId={node.id} />
 
       <div className="showcase-cell-controls">
         <button
           aria-label={`Remove note ${label}`.trim()}
           className="button button-danger-soft"
+          data-showcase-action="remove"
           disabled={busy}
           onClick={handleRemove}
           type="button"
