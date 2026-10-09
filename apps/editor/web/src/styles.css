@@ -761,7 +761,7 @@ input[type="radio"] {
   border: 1px solid var(--border-soft);
 }
 
-/* The drill navigation: Up plus a breadcrumb back through the ancestors. One
+/* The drill navigation: a breadcrumb back through the ancestors. One
    level shows at a time, so this is the only way up. */
 .showcase-breadcrumb {
   display: flex;
@@ -807,6 +807,10 @@ input[type="radio"] {
 .showcase-breadcrumb-current {
   color: var(--text);
   font-weight: 600;
+}
+
+.showcase-breadcrumb-text {
+  color: var(--text);
 }
 
 .showcase-cell {

@@ -1,5 +1,5 @@
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -356,7 +356,7 @@ describe("Escape and focus restoration", () => {
     );
   });
 
-  test("the Up control restores focus to the card you left", async () => {
+  test("the breadcrumb restores focus to the card you left", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
     
     await userEvent.click(
@@ -364,7 +364,10 @@ describe("Escape and focus restoration", () => {
     );
     await screen.findByRole("button", { name: "10 lei, 1930" });
 
-    await userEvent.click(await screen.findByRole("button", { name: "Up" }));
+    const breadcrumb = screen.getByRole("navigation", {
+      name: "Showcase breadcrumb",
+    });
+    await userEvent.click(within(breadcrumb).getByText("My showcase"));
 
     await waitFor(() =>
       expect(

@@ -207,7 +207,7 @@ describe("grouping drill navigation", () => {
     expect(groupingCard("Sub")).toBeInTheDocument();
   });
 
-  test("clicking a grouping drills in; Up and the breadcrumb go back", async () => {
+  test("clicking a grouping drills in; the breadcrumb goes back", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
     await userEvent.click(await screen.findByRole("button", { name: "Open grouping Sub" }));
@@ -225,8 +225,11 @@ describe("grouping drill navigation", () => {
     expect(within(breadcrumb).getByText("My showcase")).toBeInTheDocument();
     expect(within(breadcrumb).getByText("Summer")).toBeInTheDocument();
     expect(within(breadcrumb).getByText("Sub")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Up" }),
+    ).not.toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("button", { name: "Up" }));
+    await userEvent.click(within(breadcrumb).getByText("My showcase"));
 
     expect(await screen.findByRole("heading", { name: "Summer" }))
       .toBeInTheDocument();
@@ -236,21 +239,34 @@ describe("grouping drill navigation", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("the breadcrumb jumps straight to an ancestor level", async () => {
+  test("the category segment is plain text and never navigates", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
     await userEvent.click(await screen.findByRole("button", { name: "Open grouping Sub" }));
+
+    const breadcrumb = await screen.findByRole("navigation", {
+      name: "Showcase breadcrumb",
+    });
+    // The category has no level of its own, so it renders as text, not a
+    // control — clicking it must not leave the grouping.
+    expect(
+      within(breadcrumb).queryByRole("button", { name: "Summer" }),
+    ).not.toBeInTheDocument();
+    expect(within(breadcrumb).getByText("Summer").tagName).toBe("SPAN");
+  });
+
+  test("the breadcrumb jumps straight to an ancestor grouping level", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    await userEvent.click(await screen.findByRole("button", { name: "Open grouping Sub" }));
+    await userEvent.click(await screen.findByRole("button", { name: "Open grouping Deep" }));
 
     const breadcrumb = screen.getByRole("navigation", {
       name: "Showcase breadcrumb",
     });
-    await userEvent.click(within(breadcrumb).getByText("Summer"));
+    await userEvent.click(within(breadcrumb).getByText("Sub"));
 
     expect(
-      await screen.findByRole("button", { name: "Open grouping Sub" }),
+      await screen.findByRole("button", { name: "Open grouping Deep" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Open grouping Deep" }),
-    ).not.toBeInTheDocument();
   });
 
   test("the showcase breadcrumb returns to the top level", async () => {

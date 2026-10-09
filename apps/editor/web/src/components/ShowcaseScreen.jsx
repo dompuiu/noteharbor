@@ -92,7 +92,7 @@ function ShowcaseScreen({ mode }) {
   // The screen element that owns the card grid; the keyboard listener scopes
   // its card lookup to it so a card on another screen can never be reached.
   const sectionRef = useRef(null);
-  // After a drill or an Up, focus the card for this node id when it is on the
+  // After a drill or a step back, focus the card for this node id when it is on the
   // new level. Null means "do not restore".
   const restoreFocusNodeIdRef = useRef(null);
 
@@ -367,7 +367,7 @@ function ShowcaseScreen({ mode }) {
     }
 
     // Focus the card we leave from when it is on the new level (it is not, for
-    // a drill, but an Up back to this level restores it).
+    // a drill, but a step back to this level restores it).
     restoreFocusNodeIdRef.current = node.id;
 
     if (editMode) {
@@ -804,7 +804,7 @@ function ShowcaseScreen({ mode }) {
     showShortcutsHelp,
   ]);
 
-  // After a drill or an Up, bring focus back to the card for the node we left
+  // After a drill or a step back, bring focus back to the card for the node we left
   // when it is on the new level. A card that is no longer rendered is skipped,
   // so a drill into a node simply leaves focus unfocused.
   const drillKey = effectiveDrillIds.join("/");

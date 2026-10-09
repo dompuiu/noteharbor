@@ -290,15 +290,12 @@ describe("view-mode URL sync", () => {
     expect(currentSearch()).toBe("?node=20");
   });
 
-  test("Up and the breadcrumb each move back to the expanded root", async () => {
+  test("the breadcrumb moves back to the expanded root", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
     await openSub();
     expect(currentSearch()).toBe("?node=20");
 
-    await userEvent.click(screen.getByRole("button", { name: "Up" }));
-    expect(currentSearch()).toBe("");
-
-    await openSub();
+    expect(screen.queryByRole("button", { name: "Up" })).not.toBeInTheDocument();
 
     const breadcrumb = screen.getByRole("navigation", {
       name: "Showcase breadcrumb",
