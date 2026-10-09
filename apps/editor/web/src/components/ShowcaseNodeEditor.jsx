@@ -71,11 +71,11 @@ function ShowcaseNodeEditor({ card, node, noun, onRemove, onRename, children }) 
             value={name}
           />
           <div className="showcase-cell-edit-actions">
-            <button className="button button-primary" disabled={busy} type="submit">
-              Save
-            </button>
             <button className="button" onClick={cancelEditing} type="button">
               Cancel
+            </button>
+            <button className="button button-primary" disabled={busy} type="submit">
+              Save
             </button>
           </div>
         </form>

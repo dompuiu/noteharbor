@@ -344,7 +344,7 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
 
         <div className="showcase-picker-actions">
           <button
-            className="button button-primary"
+            className="button"
             disabled={!selectedIds.size || busy}
             onClick={() => add(false)}
             type="button"
@@ -352,7 +352,7 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
             Add selected ({selectedIds.size})
           </button>
           <button
-            className="button"
+            className="button button-primary"
             disabled={!selectedIds.size || busy}
             onClick={() => add(true)}
             type="button"

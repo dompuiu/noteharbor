@@ -105,15 +105,15 @@ function ShowcaseCreateTile({
       ) : null}
 
       <div className="showcase-category-actions">
+        <button className="button" onClick={close} type="button">
+          Cancel
+        </button>
         <button
           className="button button-primary"
           disabled={busy || !name.trim()}
           type="submit"
         >
           {addLabel}
-        </button>
-        <button className="button" onClick={close} type="button">
-          Cancel
         </button>
       </div>
 

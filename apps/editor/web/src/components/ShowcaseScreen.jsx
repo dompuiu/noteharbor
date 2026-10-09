@@ -1016,14 +1016,16 @@ function ShowcaseScreen({ mode }) {
               Cancel discards both and returns to view. */}
               {editMode ? (
                 <>
-                  <button
-                    className="button button-primary"
-                    disabled={!dirty || saving || loading}
-                    onClick={handleSave}
-                    type="button"
-                  >
-                    {saving ? "Saving…" : "Save"}
-                  </button>
+                  {showcase ? (
+                    <button
+                      className="button button-danger"
+                      disabled={deleting}
+                      onClick={handleDelete}
+                      type="button"
+                    >
+                      Delete showcase
+                    </button>
+                  ) : null}
                   <button
                     className="button"
                     disabled={saving}
@@ -1031,6 +1033,14 @@ function ShowcaseScreen({ mode }) {
                     type="button"
                   >
                     Cancel
+                  </button>
+                  <button
+                    className="button button-primary"
+                    disabled={!dirty || saving || loading}
+                    onClick={handleSave}
+                    type="button"
+                  >
+                    {saving ? "Saving…" : "Save"}
                   </button>
                 </>
               ) : (
@@ -1044,16 +1054,6 @@ function ShowcaseScreen({ mode }) {
                   Edit
                 </Link>
               )}
-              {editMode && showcase ? (
-                <button
-                  className="button button-danger"
-                  disabled={deleting}
-                  onClick={handleDelete}
-                  type="button"
-                >
-                  Delete showcase
-                </button>
-              ) : null}
             </div>
           </div>
         </div>
