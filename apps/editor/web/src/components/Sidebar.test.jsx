@@ -482,7 +482,7 @@ describe("Sidebar showcase reordering", () => {
       expect(showcaseLabels(container)).toEqual([
         "Vienna",
         "Summer",
-        "+ New showcase",
+        "New showcase",
       ]);
     });
   });
@@ -512,7 +512,7 @@ describe("Sidebar showcase reordering", () => {
     expect(showcaseLabels(container)).toEqual([
       "Summer",
       "Vienna",
-      "+ New showcase",
+      "New showcase",
     ]);
   });
 });

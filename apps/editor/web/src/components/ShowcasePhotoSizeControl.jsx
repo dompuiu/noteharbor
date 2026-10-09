@@ -1,3 +1,4 @@
+import { useId } from "react";
 import { PHOTO_SIZE_OPTIONS } from "../lib/photoSize.js";
 
 // The card-width icon for each size: one frame outline that grows with the
@@ -38,13 +39,24 @@ function PhotoSizeIcon({ value }) {
   );
 }
 
-// The three-way note photo size control (Small / Medium / Large). It is a native
-// radio group so a keyboard or screen reader gets one-of-three semantics for
-// free; the screen owns the remembered value and this stays presentational.
+// The three-way note photo size control (Small / Medium / Large). It is a
+// labelled radio group so a keyboard or screen reader gets one-of-three
+// semantics; the screen owns the remembered value and this stays
+// presentational. A `div[role=group]` (not fieldset/legend) keeps the caption
+// and the pill on one flex row so the pill centers exactly with the header's
+// Edit/View button — a legend always renders on its own row above the pill.
 function ShowcasePhotoSizeControl({ onChange, value }) {
+  const labelId = useId();
+
   return (
-    <fieldset className="showcase-photo-size-control">
-      <legend className="showcase-photo-size-legend">Photo size</legend>
+    <div
+      aria-labelledby={labelId}
+      className="showcase-photo-size-control"
+      role="group"
+    >
+      <span className="showcase-photo-size-legend" id={labelId}>
+        Photo size
+      </span>
       <div className="showcase-photo-size-options">
         {PHOTO_SIZE_OPTIONS.map((option) => (
           <label
@@ -65,7 +77,7 @@ function ShowcasePhotoSizeControl({ onChange, value }) {
           </label>
         ))}
       </div>
-    </fieldset>
+    </div>
   );
 }
 
