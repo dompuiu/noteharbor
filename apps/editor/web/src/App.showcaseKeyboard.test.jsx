@@ -441,6 +441,40 @@ function manyCategories(count) {
   );
 }
 
+describe("the note picker", () => {
+  test("/ focuses the picker's filter field from another control", async () => {
+    getNotes.mockResolvedValue({ notes: [NOTE_WITH_BACK] });
+    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    await openSummer();
+
+    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    act(() => sub.focus());
+    fireEvent.keyDown(document.body, { key: "a" });
+
+    const checkbox = await screen.findByRole("checkbox");
+    act(() => checkbox.focus());
+
+    fireEvent.keyDown(checkbox, { key: "/" });
+
+    expect(screen.getByLabelText("Filter value")).toHaveFocus();
+  });
+
+  test("a slash typed in the filter field stays a slash", async () => {
+    renderAt(PORTFOLIO_ROUTES.showcaseEdit(1));
+    await openSummer();
+
+    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    act(() => sub.focus());
+    fireEvent.keyDown(document.body, { key: "a" });
+
+    const filter = await screen.findByLabelText("Filter value");
+    act(() => filter.focus());
+    await userEvent.keyboard("/");
+
+    expect(filter).toHaveValue("/");
+  });
+});
+
 describe("shortcut help", () => {
   test("? opens the shortcut help with the Showcase keys", async () => {
     renderAt(PORTFOLIO_ROUTES.showcase(1));

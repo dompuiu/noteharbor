@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getNotes } from "../lib/api.js";
 import { matchesCatalogFamily } from "../lib/catalogFamily.js";
 
@@ -77,8 +77,32 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [busy, setBusy] = useState(false);
   const [addError, setAddError] = useState("");
+  const filterRef = useRef(null);
 
   const collectionKey = collections.map((collection) => collection.id).join(",");
+
+  // `/` jumps to the filter field from anywhere in the popup (a checkbox, the
+  // column select, a button), while typing a slash inside the field itself is
+  // left alone.
+  useEffect(() => {
+    function handleKeyDown(event) {
+      if (
+        event.key !== "/" ||
+        event.metaKey ||
+        event.ctrlKey ||
+        event.altKey ||
+        event.target === filterRef.current
+      ) {
+        return;
+      }
+
+      event.preventDefault();
+      filterRef.current?.focus();
+    }
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, []);
 
   useEffect(() => {
     let active = true;
@@ -250,6 +274,7 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
             className="showcase-picker-value"
             onChange={(event) => setValue(event.target.value)}
             placeholder={activeColumn.placeholder}
+            ref={filterRef}
             type="text"
             value={value}
           />
