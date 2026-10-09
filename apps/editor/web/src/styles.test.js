@@ -246,21 +246,32 @@ describe("slideshow overlay styles", () => {
     expect(overlay[1]).not.toMatch(/overflow-y/);
   });
 
-  test("the edit-note frame holds its 900px width", () => {
+  test("the edit-note frame holds the 1200px floor with the form centred", () => {
     const frame = styles.match(/\.edit-note-overlay-frame\s*\{([^}]*)\}/);
     expect(frame).not.toBeNull();
-    expect(frame[1]).toMatch(/min-width:\s*900px/);
+    // 1200px minus the overlay's 24px side padding; the 900px form stays
+    // centred in that canvas via the frame's flex centering.
+    expect(frame[1]).toMatch(/min-width:\s*calc\(1200px - 48px\)/);
+    expect(frame[1]).toMatch(/justify-content:\s*center/);
     // Auto inline margins keep the frame centred with a reachable start when
     // it overflows, unlike the overlay's plain center placement.
     expect(frame[1]).toMatch(/margin-inline:\s*auto/);
   });
 
-  test("the scrape-conflict frame holds its 1120px width", () => {
+  test("the edit-note content stays 900px centred in the floor", () => {
+    const content = styles.match(
+      /\.edit-note-overlay-content\s*\{([^}]*)\}/,
+    );
+    expect(content).not.toBeNull();
+    expect(content[1]).toMatch(/width:\s*min\(100%,\s*900px\)/);
+  });
+
+  test("the scrape-conflict frame holds the 1200px floor", () => {
     const frame = styles.match(
       /\.scrape-conflict-overlay-frame\s*\{([^}]*)\}/,
     );
     expect(frame).not.toBeNull();
-    expect(frame[1]).toMatch(/min-width:\s*1120px/);
+    expect(frame[1]).toMatch(/min-width:\s*calc\(1200px - 48px\)/);
   });
 
   test("the image popover scrolls instead of squeezing", () => {
