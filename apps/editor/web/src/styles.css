@@ -1575,6 +1575,14 @@ input[type="radio"] {
   overflow: hidden;
 }
 
+/* The showcase canvas grows with its grids (categories render expanded), so
+   its panel scrolls vertically instead of cropping content taller than the
+   viewport. The higher specificity keeps this above the generic panel rule. */
+.screen-stack.showcase-screen > .panel {
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
 /* The connection notice is a short message in a full-height panel, so centre
    it rather than leaving it stranded at the top. */
 .connection-error .panel {

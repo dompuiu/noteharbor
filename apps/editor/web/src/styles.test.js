@@ -288,6 +288,14 @@ describe("slideshow overlay styles", () => {
     expect(content[1]).toMatch(/margin:\s*auto/);
   });
 
+  test("the showcase panel scrolls vertically instead of cropping", () => {
+    const panel = styles.match(
+      /\.screen-stack\.showcase-screen > \.panel\s*\{([^}]*)\}/,
+    );
+    expect(panel).not.toBeNull();
+    expect(panel[1]).toMatch(/overflow-y:\s*auto/);
+  });
+
   // A full-screen overlay owns scrolling while open: the body's bar would
   // only scroll the dimmed app behind it, stacking a second horizontal bar
   // under the overlay's own. The body lock leaves the overlay's bar as the
