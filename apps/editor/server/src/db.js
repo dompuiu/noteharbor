@@ -337,6 +337,98 @@ function migrateBanknotesForeignKey(database) {
   `);
 }
 
+// The Showcases node tree (ADR 0001). Additive and idempotent: only
+// `CREATE ... IF NOT EXISTS`, so an existing database keeps its rows and its
+// user version. A Showcase is a self-referential `showcase_nodes` tree over a
+// permanent, name-unique `categories` label pool and name-unique `showcases`.
+function ensureShowcasesSchema(database) {
+  database.exec(`
+    CREATE TABLE IF NOT EXISTS categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_categories_name_nocase
+      ON categories(name COLLATE NOCASE);
+
+    CREATE TABLE IF NOT EXISTS showcases (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      display_order INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_showcases_name_nocase
+      ON showcases(name COLLATE NOCASE);
+
+    CREATE INDEX IF NOT EXISTS idx_showcases_display_order
+      ON showcases(display_order, id);
+
+    CREATE TABLE IF NOT EXISTS showcase_nodes (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      showcase_id INTEGER NOT NULL REFERENCES showcases(id) ON DELETE CASCADE,
+      parent_node_id INTEGER REFERENCES showcase_nodes(id) ON DELETE CASCADE,
+      node_type TEXT NOT NULL CHECK (node_type IN ('category','grouping','note')),
+      category_id INTEGER REFERENCES categories(id) ON DELETE RESTRICT,
+      name TEXT,
+      note_id INTEGER REFERENCES banknotes(id) ON DELETE CASCADE,
+      cover_note_id INTEGER REFERENCES banknotes(id) ON DELETE SET NULL,
+      position INTEGER,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_showcase_nodes_category_once
+      ON showcase_nodes(showcase_id, category_id) WHERE node_type = 'category';
+
+    CREATE INDEX IF NOT EXISTS idx_showcase_nodes_parent
+      ON showcase_nodes(parent_node_id, position, id);
+  `);
+
+  // Fill a null position, per sibling group, in id order. A fresh table has no
+  // rows, so this only self-heals a partially written tree.
+  const missing = database.prepare(`
+    SELECT id, showcase_id, parent_node_id
+    FROM showcase_nodes
+    WHERE position IS NULL
+    ORDER BY id ASC
+  `).all();
+
+  if (!missing.length) {
+    return;
+  }
+
+  const nextPositionStatement = database.prepare(`
+    SELECT COALESCE(MAX(position), 0) AS value
+    FROM showcase_nodes
+    WHERE showcase_id = @showcase_id
+      AND parent_node_id IS @parent_node_id
+  `);
+  const assignPositionStatement = database.prepare(`
+    UPDATE showcase_nodes
+    SET position = @position
+    WHERE id = @id
+  `);
+
+  const backfillPositions = database.transaction((rows) => {
+    for (const row of rows) {
+      const current = nextPositionStatement.get({
+        showcase_id: row.showcase_id,
+        parent_node_id: row.parent_node_id
+      });
+      assignPositionStatement.run({
+        id: row.id,
+        position: Number(current?.value ?? 0) + 1
+      });
+    }
+  });
+
+  backfillPositions(missing);
+}
+
 function initializeSchema(database) {
   database.pragma('foreign_keys = ON');
 
@@ -376,6 +468,10 @@ function initializeSchema(database) {
       PRIMARY KEY (banknote_id, tag_id)
     );
   `);
+
+  // The showcase tables reference `banknotes`, so they are created once the
+  // banknotes table exists (ADR 0001).
+  ensureShowcasesSchema(database);
 
   const defaultCollectionId = ensureDefaultCollection(database);
   ensureDefaultCollectionFlag(database, defaultCollectionId);
@@ -600,6 +696,42 @@ function createStatements(database) {
     `),
     deleteCollectionStatement: database.prepare(`DELETE FROM collections WHERE id = ?`),
     countCollectionsStatement: database.prepare(`SELECT COUNT(*) AS value FROM collections`),
+
+    listShowcasesStatement: database.prepare(`
+      SELECT
+        showcases.id,
+        showcases.name,
+        showcases.display_order,
+        showcases.created_at,
+        showcases.updated_at,
+        (SELECT COUNT(*) FROM showcase_nodes
+          WHERE showcase_nodes.showcase_id = showcases.id
+            AND showcase_nodes.node_type = 'note') AS note_count
+      FROM showcases
+      ORDER BY display_order ASC, id ASC
+    `),
+    getShowcaseStatement: database.prepare(`
+      SELECT
+        showcases.id,
+        showcases.name,
+        showcases.display_order,
+        showcases.created_at,
+        showcases.updated_at,
+        (SELECT COUNT(*) FROM showcase_nodes
+          WHERE showcase_nodes.showcase_id = showcases.id
+            AND showcase_nodes.node_type = 'note') AS note_count
+      FROM showcases
+      WHERE id = ?
+    `),
+    createShowcaseStatement: database.prepare(`
+      INSERT INTO showcases (name, display_order, created_at, updated_at)
+      VALUES (
+        @name,
+        (SELECT COALESCE(MAX(display_order), 0) + 1 FROM showcases),
+        datetime('now'),
+        datetime('now')
+      )
+    `),
 
     listNotesStatement: database.prepare(`
       SELECT ${noteFields}
@@ -1114,6 +1246,61 @@ function reorderCollections(ids) {
   return getAllCollections();
 }
 
+function normalizeShowcaseName(name) {
+  return String(name ?? '').trim().replace(/\s+/g, ' ');
+}
+
+// The default name for a new showcase. The unique index is case-insensitive,
+// so the candidate set is compared case-insensitively too, and a collision
+// walks up `Showcase 2`, `Showcase 3`, …
+function nextDefaultShowcaseName() {
+  const taken = new Set(
+    getAllShowcases().map((showcase) => String(showcase.name).toLowerCase()),
+  );
+
+  if (!taken.has('showcase')) {
+    return 'Showcase';
+  }
+
+  let suffix = 2;
+
+  while (taken.has(`showcase ${suffix}`)) {
+    suffix += 1;
+  }
+
+  return `Showcase ${suffix}`;
+}
+
+function getAllShowcases() {
+  getDatabase();
+  return statements.listShowcasesStatement.all();
+}
+
+function getShowcaseById(id) {
+  getDatabase();
+  return statements.getShowcaseStatement.get(Number(id)) ?? null;
+}
+
+function createShowcase(name) {
+  getDatabase();
+  const normalizedName = normalizeShowcaseName(name) || nextDefaultShowcaseName();
+
+  let showcaseId;
+
+  try {
+    const result = statements.createShowcaseStatement.run({ name: normalizedName });
+    showcaseId = Number(result.lastInsertRowid);
+  } catch (error) {
+    if (String(error.message).includes('UNIQUE constraint failed: showcases.name')) {
+      throw new Error('A showcase with this name already exists.');
+    }
+
+    throw error;
+  }
+
+  return getShowcaseById(showcaseId);
+}
+
 function getAllNotes(collectionId = null) {
   getDatabase();
   const normalizedCollectionId = resolveCollectionId(collectionId);
@@ -1484,16 +1671,19 @@ export {
   closeDatabase,
   createCollection,
   createNote,
+  createShowcase,
   deleteCollectionById,
   deleteNote,
   ensureTag,
   getAllCollections,
   getAllNotes,
+  getAllShowcases,
   getAllTags,
   getCollectionById,
   getDatabase,
   getDefaultCollectionId,
   getNoteById,
+  getShowcaseById,
   importNotes,
   migrateBanknotesForeignKey,
   moveNoteToCollection,

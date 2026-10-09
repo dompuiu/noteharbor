@@ -12,6 +12,7 @@ import { importRouter } from './routes/import.js';
 import { notesRouter } from './routes/notes.js';
 import { operationsRouter } from './routes/operations.js';
 import { scrapeRouter } from './routes/scrape.js';
+import { showcasesRouter } from './routes/showcases.js';
 import { tagsRouter } from './routes/tags.js';
 
 const DEFAULT_HOST = '127.0.0.1';
@@ -95,6 +96,7 @@ function createApp() {
   app.use('/api/import', importRouter);
   app.use('/api/notes', notesRouter);
   app.use('/api/operations', operationsRouter);
+  app.use('/api/showcases', showcasesRouter);
   app.use('/api/tags', tagsRouter);
   app.use('/api/scrape', scrapeRouter);
 
