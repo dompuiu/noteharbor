@@ -296,6 +296,7 @@ function ImportScreen({
       setArchiveResult({
         exported: payload.filename,
         selectedCount: selectedExportCollectionIds.length,
+        omittedShowcases: payload.omittedShowcases ?? [],
       });
     } catch (exportError) {
       setError(exportError.message);
@@ -768,6 +769,12 @@ function ImportScreen({
                 Collections included:{" "}
                 {archiveResult.selectedCount ?? collections.length}
               </p>
+              {archiveResult.omittedShowcases?.length ? (
+                <p className="warning-text">
+                  Omitted showcases (they use notes outside the selection):{" "}
+                  {archiveResult.omittedShowcases.join(", ")}
+                </p>
+              ) : null}
             </div>
           ) : null}
         </div>

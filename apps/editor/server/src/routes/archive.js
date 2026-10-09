@@ -219,15 +219,27 @@ function swapInImportedData(stagedDataDir) {
   }
 }
 
-function archiveHasCollectionsTable(database) {
+function archiveHasTable(database, tableName) {
   const row = database.prepare(`
     SELECT name
     FROM sqlite_master
-    WHERE type = 'table' AND name = 'collections'
+    WHERE type = 'table' AND name = ?
     LIMIT 1
-  `).get();
+  `).get(tableName);
 
   return Boolean(row);
+}
+
+function archiveHasCollectionsTable(database) {
+  return archiveHasTable(database, 'collections');
+}
+
+// An archive written before the Showcases feature has none of the three
+// showcase tables, so every showcase step is gated on their presence.
+const showcaseTableNames = ['categories', 'showcases', 'showcase_nodes'];
+
+function archiveHasShowcasesTables(database) {
+  return showcaseTableNames.every((tableName) => archiveHasTable(database, tableName));
 }
 
 function listArchiveCollections(database) {
@@ -325,6 +337,69 @@ function remapNoteImagePath(localPath, oldNoteId, newNoteId) {
   return localPath;
 }
 
+function remapReference(map, value) {
+  return value == null ? null : map.get(Number(value)) ?? null;
+}
+
+// Showcase PKs are remapped from 1..N while `showcase_nodes.parent_node_id`
+// points back into the same table. The node ids are negated first so the new
+// 1..N ids cannot collide; pass one assigns each node its final id and remaps
+// every reference except the parent, and pass two resolves the parent now that
+// all ids are final.
+function renumberShowcaseTables(database, { categoryMap, showcaseMap, nodeMap, noteMap, nodeRows }) {
+  database.prepare(`UPDATE categories SET id = -id`).run();
+  database.prepare(`UPDATE showcases SET id = -id`).run();
+  database.prepare(`UPDATE showcase_nodes SET id = -id`).run();
+
+  const updateCategoryStatement = database.prepare(`UPDATE categories SET id = ? WHERE id = ?`);
+
+  for (const [oldId, newId] of categoryMap) {
+    updateCategoryStatement.run(newId, -oldId);
+  }
+
+  const updateShowcaseStatement = database.prepare(`UPDATE showcases SET id = ? WHERE id = ?`);
+
+  for (const [oldId, newId] of showcaseMap) {
+    updateShowcaseStatement.run(newId, -oldId);
+  }
+
+  const updateNodeStatement = database.prepare(`
+    UPDATE showcase_nodes
+    SET id = @new_id,
+        showcase_id = @showcase_id,
+        category_id = @category_id,
+        note_id = @note_id,
+        cover_note_id = @cover_note_id,
+        parent_node_id = NULL
+    WHERE id = @negated_id
+  `);
+
+  for (const row of nodeRows) {
+    const oldId = Number(row.id);
+    updateNodeStatement.run({
+      new_id: nodeMap.get(oldId),
+      showcase_id: remapReference(showcaseMap, row.showcase_id),
+      category_id: remapReference(categoryMap, row.category_id),
+      note_id: remapReference(noteMap, row.note_id),
+      cover_note_id: remapReference(noteMap, row.cover_note_id),
+      negated_id: -oldId
+    });
+  }
+
+  const updateNodeParentStatement = database.prepare(`
+    UPDATE showcase_nodes
+    SET parent_node_id = ?
+    WHERE id = ?
+  `);
+
+  for (const row of nodeRows) {
+    updateNodeParentStatement.run(
+      remapReference(nodeMap, row.parent_node_id),
+      nodeMap.get(Number(row.id))
+    );
+  }
+}
+
 function renumberSnapshot(database) {
   const collectionRows = database.prepare(`SELECT id FROM collections ORDER BY id ASC`).all();
   const collectionMap = new Map();
@@ -343,6 +418,32 @@ function renumberSnapshot(database) {
   tagRows.forEach((row, index) => tagMap.set(Number(row.id), index + 1));
 
   const linkRows = database.prepare(`SELECT banknote_id, tag_id FROM banknote_tags`).all();
+
+  // Showcases ride along in an archive when the three tables are present (a
+  // legacy archive simply has none). `categories` and `showcases` renumber like
+  // the other tables; `showcase_nodes` also remaps its self-referential parent
+  // in a second pass.
+  const hasShowcasesTables = archiveHasShowcasesTables(database);
+  const categoryRows = hasShowcasesTables
+    ? database.prepare(`SELECT id FROM categories ORDER BY id ASC`).all()
+    : [];
+  const showcaseRows = hasShowcasesTables
+    ? database.prepare(`SELECT id FROM showcases ORDER BY id ASC`).all()
+    : [];
+  const nodeRows = hasShowcasesTables
+    ? database.prepare(`
+        SELECT id, showcase_id, parent_node_id, category_id, note_id, cover_note_id
+        FROM showcase_nodes
+        ORDER BY id ASC
+      `).all()
+    : [];
+
+  const categoryMap = new Map();
+  categoryRows.forEach((row, index) => categoryMap.set(Number(row.id), index + 1));
+  const showcaseMap = new Map();
+  showcaseRows.forEach((row, index) => showcaseMap.set(Number(row.id), index + 1));
+  const nodeMap = new Map();
+  nodeRows.forEach((row, index) => nodeMap.set(Number(row.id), index + 1));
 
   database.pragma('foreign_keys = OFF');
 
@@ -423,7 +524,21 @@ function renumberSnapshot(database) {
       }
     }
 
-    for (const [table, map] of [['collections', collectionMap], ['banknotes', noteMap], ['tags', tagMap]]) {
+    if (hasShowcasesTables) {
+      renumberShowcaseTables(database, { categoryMap, showcaseMap, nodeMap, noteMap, nodeRows });
+    }
+
+    const sequenceTables = [
+      ['collections', collectionMap],
+      ['banknotes', noteMap],
+      ['tags', tagMap]
+    ];
+
+    if (hasShowcasesTables) {
+      sequenceTables.push(['categories', categoryMap], ['showcases', showcaseMap], ['showcase_nodes', nodeMap]);
+    }
+
+    for (const [table, map] of sequenceTables) {
       if (!map.size) {
         database.prepare(`DELETE FROM sqlite_sequence WHERE name = ?`).run(table);
         continue;
@@ -436,7 +551,7 @@ function renumberSnapshot(database) {
       }
     }
 
-    return { copyPlan, collectionMap, noteMap, tagMap };
+    return { copyPlan, collectionMap, noteMap, tagMap, categoryMap, showcaseMap, nodeMap };
   } finally {
     database.pragma('foreign_keys = ON');
   }
@@ -456,6 +571,72 @@ function copyImagePlanForExport(copyPlan, targetImagesDir) {
     fs.mkdirSync(path.dirname(targetPath), { recursive: true });
     fs.copyFileSync(sourcePath, targetPath);
   }
+}
+
+// A Showcase belongs in a filtered archive only while every note it points at
+// survives in the selection. A node points at a note through `note_id`
+// (category/grouping/note placement) and through `cover_note_id` (a grouping's
+// manual cover). A dangling or out-of-selection note makes the whole Showcase
+// inconsistent, so the Showcase is omitted rather than exported half-empty.
+function listShowcasesWithUnkeptNotes(database, keptCollectionIds) {
+  if (!keptCollectionIds.length) {
+    return [];
+  }
+
+  const placeholders = keptCollectionIds.map(() => '?').join(', ');
+  const rows = database.prepare(`
+    SELECT DISTINCT showcases.id AS id, showcases.name AS name
+    FROM showcases
+    INNER JOIN showcase_nodes ON showcase_nodes.showcase_id = showcases.id
+    WHERE (
+      showcase_nodes.note_id IS NOT NULL
+      AND showcase_nodes.note_id NOT IN (
+        SELECT id FROM banknotes WHERE collection_id IN (${placeholders})
+      )
+    ) OR (
+      showcase_nodes.cover_note_id IS NOT NULL
+      AND showcase_nodes.cover_note_id NOT IN (
+        SELECT id FROM banknotes WHERE collection_id IN (${placeholders})
+      )
+    )
+    ORDER BY showcases.id ASC
+  `).all(...keptCollectionIds, ...keptCollectionIds);
+
+  return rows.map((row) => ({ id: Number(row.id), name: String(row.name) }));
+}
+
+function omitShowcases(database, showcaseIds) {
+  if (!showcaseIds.length) {
+    return;
+  }
+
+  const placeholders = showcaseIds.map(() => '?').join(', ');
+  // Delete the nodes explicitly first so a legacy snapshot without the
+  // cascade constraint cannot leave orphaned nodes behind.
+  database.prepare(`DELETE FROM showcase_nodes WHERE showcase_id IN (${placeholders})`).run(...showcaseIds);
+  database.prepare(`DELETE FROM showcases WHERE id IN (${placeholders})`).run(...showcaseIds);
+}
+
+// A label is worth keeping only while some Placement still references it. A
+// filtered export drops the labels that the omitted Showcases took with them.
+function deleteUnplacedCategories(database) {
+  database.prepare(`
+    DELETE FROM categories
+    WHERE id NOT IN (
+      SELECT DISTINCT category_id
+      FROM showcase_nodes
+      WHERE category_id IS NOT NULL
+    )
+  `).run();
+}
+
+// The export reports its omitted Showcases through a response header. The name
+// list is JSON, then percent-encoded so a name containing a comma, quote, or
+// non-ASCII character stays header-safe. Ids are meaningless to a reader on
+// another machine (the export renumbers them), so only names travel.
+function encodeOmittedShowcasesHeader(omittedShowcases) {
+  const names = (omittedShowcases ?? []).map((showcase) => showcase.name);
+  return encodeURIComponent(JSON.stringify(names));
 }
 
 function buildFilteredExportSnapshot(snapshotDbPath, selectedCollectionIds, tempRoot) {
@@ -479,6 +660,19 @@ function buildFilteredExportSnapshot(snapshotDbPath, selectedCollectionIds, temp
     }
 
     const unselectedCollectionIds = allCollectionIds.filter((id) => !selectedSet.has(id));
+
+    // Filtering can strand a Showcase that reaches a note outside the
+    // selection. Prune those Showcases (and the labels they were the last
+    // Placement of) before any note is deleted, then report them. An
+    // unfiltered export keeps every row, so this runs only for a selection.
+    const omittedShowcases = [];
+
+    if (hasExplicitSelection && archiveHasShowcasesTables(snapshotDatabase)) {
+      const stranded = listShowcasesWithUnkeptNotes(snapshotDatabase, keptCollectionIds);
+      omitShowcases(snapshotDatabase, stranded.map((showcase) => showcase.id));
+      deleteUnplacedCategories(snapshotDatabase);
+      omittedShowcases.push(...stranded);
+    }
 
     if (unselectedCollectionIds.length) {
       const placeholders = unselectedCollectionIds.map(() => '?').join(', ');
@@ -517,7 +711,8 @@ function buildFilteredExportSnapshot(snapshotDbPath, selectedCollectionIds, temp
 
     return {
       imagesDir: exportImagesDir,
-      selectedCount: keptCollectionIds.length
+      selectedCount: keptCollectionIds.length,
+      omittedShowcases
     };
   } finally {
     snapshotDatabase.close();
@@ -554,6 +749,129 @@ function listArchiveTagsByNoteId(database, archiveCollectionId) {
   return tagsByNoteId;
 }
 
+// The Showcases side of an import. The archive may predate the feature (no
+// tables), so the caller only invokes this when both sides have the tables. A
+// label is matched by name (reused or inserted); a Showcase is matched by name
+// and skipped when it already exists, so an import only ever adds new
+// Showcases. Nodes are inserted in two passes: first every node row with its
+// references left unresolved, then a second pass that resolves the parent and
+// the category/note/cover references through the id maps.
+function importShowcases(archiveDatabase, stagedDatabase, noteMap) {
+  const showcaseRows = archiveDatabase.prepare(`
+    SELECT id, name
+    FROM showcases
+    ORDER BY display_order ASC, id ASC
+  `).all();
+
+  if (!showcaseRows.length) {
+    return;
+  }
+
+  const findCategoryByNameStatement = stagedDatabase.prepare(`
+    SELECT id FROM categories WHERE lower(name) = lower(?) ORDER BY id ASC LIMIT 1
+  `);
+  const insertCategoryStatement = stagedDatabase.prepare(`
+    INSERT INTO categories (name, created_at, updated_at)
+    VALUES (?, datetime('now'), datetime('now'))
+  `);
+  const findShowcaseByNameStatement = stagedDatabase.prepare(`
+    SELECT id FROM showcases WHERE lower(name) = lower(?) ORDER BY id ASC LIMIT 1
+  `);
+  const insertShowcaseStatement = stagedDatabase.prepare(`
+    INSERT INTO showcases (name, display_order, created_at, updated_at)
+    VALUES (?, (SELECT COALESCE(MAX(display_order), 0) + 1 FROM showcases), datetime('now'), datetime('now'))
+  `);
+  const insertNodeStatement = stagedDatabase.prepare(`
+    INSERT INTO showcase_nodes (
+      showcase_id, parent_node_id, node_type, category_id, name, note_id, cover_note_id, position, created_at, updated_at
+    )
+    VALUES (?, NULL, ?, NULL, ?, NULL, NULL, ?, datetime('now'), datetime('now'))
+  `);
+  const resolveNodeStatement = stagedDatabase.prepare(`
+    UPDATE showcase_nodes
+    SET parent_node_id = ?, category_id = ?, note_id = ?, cover_note_id = ?
+    WHERE id = ?
+  `);
+
+  const newShowcases = [];
+  for (const row of showcaseRows) {
+    if (findShowcaseByNameStatement.get(String(row.name))) {
+      continue;
+    }
+
+    newShowcases.push({ archiveId: Number(row.id), name: String(row.name) });
+  }
+
+  if (!newShowcases.length) {
+    return;
+  }
+
+  const archiveShowcaseIds = newShowcases.map((showcase) => showcase.archiveId);
+  const placeholders = archiveShowcaseIds.map(() => '?').join(', ');
+  const nodeRows = archiveDatabase.prepare(`
+    SELECT id, showcase_id, parent_node_id, node_type, category_id, name, note_id, cover_note_id, position
+    FROM showcase_nodes
+    WHERE showcase_id IN (${placeholders})
+    ORDER BY position ASC, id ASC
+  `).all(...archiveShowcaseIds);
+
+  // Build the label map first: reuse a matching label, else insert one.
+  const categoryMap = new Map();
+  const referencedCategoryIds = [...new Set(
+    nodeRows
+      .map((node) => node.category_id)
+      .filter((value) => value != null)
+      .map(Number)
+  )];
+  const findArchiveCategoryStatement = archiveDatabase.prepare(`SELECT id, name FROM categories WHERE id = ?`);
+
+  for (const archiveCategoryId of referencedCategoryIds) {
+    const archiveCategory = findArchiveCategoryStatement.get(archiveCategoryId);
+    const name = String(archiveCategory?.name ?? '').trim();
+
+    if (!name) {
+      continue;
+    }
+
+    const existing = findCategoryByNameStatement.get(name);
+    const stagedCategoryId = existing
+      ? Number(existing.id)
+      : Number(insertCategoryStatement.run(name).lastInsertRowid);
+
+    categoryMap.set(archiveCategoryId, stagedCategoryId);
+  }
+
+  const showcaseMap = new Map();
+  for (const showcase of newShowcases) {
+    const result = insertShowcaseStatement.run(showcase.name);
+    showcaseMap.set(showcase.archiveId, Number(result.lastInsertRowid));
+  }
+
+  // Pass one: insert every node with its references unresolved.
+  const nodeMap = new Map();
+
+  for (const node of nodeRows) {
+    const result = insertNodeStatement.run(
+      remapReference(showcaseMap, node.showcase_id),
+      node.node_type,
+      node.name ?? null,
+      node.position ?? null
+    );
+    nodeMap.set(Number(node.id), Number(result.lastInsertRowid));
+  }
+
+  // Pass two: resolve the parent and the references now that every id exists.
+  for (const node of nodeRows) {
+    resolveNodeStatement.run(
+      remapReference(nodeMap, node.parent_node_id),
+      remapReference(categoryMap, node.category_id),
+      remapReference(noteMap, node.note_id),
+      remapReference(noteMap, node.cover_note_id),
+      nodeMap.get(Number(node.id))
+    );
+  }
+}
+
 function mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir) {
   const archiveDbPath = path.join(archiveDataDir, 'banknotes.db');
   const archiveImagesDir = path.join(archiveDataDir, 'images');
@@ -565,6 +883,7 @@ function mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir) {
 
   const removedNoteIds = [];
   const imageCopyPlan = [];
+  const archiveToStagedNoteIds = new Map();
 
   try {
     stagedDatabase.pragma('foreign_keys = ON');
@@ -736,6 +1055,7 @@ function mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir) {
           );
 
           const stagedNoteId = Number(noteInsertResult.lastInsertRowid);
+          archiveToStagedNoteIds.set(Number(archiveNote.id), stagedNoteId);
           const parsedImages = parseImageRecords(archiveNote.images);
           const { rewritten, copyPlan } = rewriteImageRecordsForImportedNote(
             parsedImages,
@@ -760,6 +1080,12 @@ function mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir) {
 
           nextDisplayOrder += 1;
         }
+      }
+
+      // An archive written before the feature has no showcase tables; the
+      // staged database always has them (it is a copy of the live data dir).
+      if (archiveHasShowcasesTables(archiveDatabase) && archiveHasShowcasesTables(stagedDatabase)) {
+        importShowcases(archiveDatabase, stagedDatabase, archiveToStagedNoteIds);
       }
 
       if (importedDefaults.length) {
@@ -805,6 +1131,7 @@ archiveRouter.get('/export', async (request, response) => {
       response.setHeader('Pragma', 'no-cache');
       response.setHeader('Expires', '0');
       response.setHeader('Content-Disposition', `attachment; filename="noteharbor-archive-${new Date().toISOString().slice(0, 10)}.zip"`);
+      response.setHeader('X-NoteHarbor-Omitted-Showcases', encodeOmittedShowcasesHeader(filteredSnapshot.omittedShowcases));
 
       const archive = archiver('zip', { zlib: { level: 9 } });
 
