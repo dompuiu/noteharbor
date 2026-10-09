@@ -388,6 +388,21 @@ async function getTags(collectionId) {
   return handleResponse(response);
 }
 
+async function getShowcases() {
+  const response = await fetch('/api/showcases');
+  return handleResponse(response);
+}
+
+async function createShowcase(name) {
+  const response = await fetch('/api/showcases', {
+    method: 'POST',
+    headers,
+    body: JSON.stringify(name ? { name } : {})
+  });
+
+  return handleResponse(response);
+}
+
 const SCRAPE_PREVIEW_TIMEOUT_BUFFER_MS = 5000;
 const SCRAPE_NAVIGATION_TIMEOUT_MAX_MS = 120000;
 
@@ -438,6 +453,7 @@ export {
   clearAppData,
   createCollection,
   createNote,
+  createShowcase,
   deleteCollection,
   deleteNote,
   downloadArchive,
@@ -446,6 +462,7 @@ export {
   getNote,
   getNotes,
   getOperationStatus,
+  getShowcases,
   getTags,
   importArchive,
   importCsv,
