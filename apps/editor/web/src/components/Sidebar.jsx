@@ -9,7 +9,8 @@ import {
 
 // The Editor's persistent chrome. It renders on every route beside the main
 // region: a 64px rail of destination icons that expands to 288px on hover or
-// keyboard focus, and becomes an overlay drawer on narrow screens.
+// keyboard focus. The layout holds a fixed 1200px desktop floor, so the rail
+// never becomes a drawer: narrow windows scroll horizontally instead.
 //
 // The Showcases group is data-driven: it lists the workspace's showcases (the
 // sidebar *is* the showcase list) plus a `+ New showcase` action that creates a
@@ -84,26 +85,10 @@ function ItemIcon({ className = "sidebar-ic", icon }) {
   );
 }
 
-function HamburgerIcon() {
-  return (
-    <svg
-      fill="none"
-      stroke="currentColor"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      strokeWidth="1.7"
-      viewBox="0 0 24 24"
-    >
-      <path d="M4 7h16M4 12h16M4 17h16" />
-    </svg>
-  );
-}
-
 function Sidebar({ pageFocusRef }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
   const { showcases, createShowcase, reorderShowcases } = useShowcases();
-  const [drawerOpen, setDrawerOpen] = useState(false);
   // The keyboard cursor, distinct from DOM focus. Null means the rail is not
   // being navigated by keyboard.
   const [cursorIndex, setCursorIndex] = useState(null);
@@ -113,7 +98,6 @@ function Sidebar({ pageFocusRef }) {
   const [showcaseDropTarget, setShowcaseDropTarget] = useState(null);
   const navRef = useRef(null);
   const linksRef = useRef([]);
-  const hamburgerRef = useRef(null);
 
   // The showcase rows, then the create action, hang off the Showcases group.
   const showcaseItems = showcases.map((showcase) => ({
@@ -161,16 +145,7 @@ function Sidebar({ pageFocusRef }) {
 
   function handleActionClick() {
     handleNewShowcase();
-    closeDrawer();
     leaveCursor();
-  }
-
-  function closeDrawer({ restoreFocus = false } = {}) {
-    setDrawerOpen(false);
-
-    if (restoreFocus) {
-      hamburgerRef.current?.focus();
-    }
   }
 
   function openCursor() {
@@ -317,29 +292,10 @@ function Sidebar({ pageFocusRef }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cursorIndex, pathname, showcases]);
 
-  // Escape closes the narrow-screen drawer and returns focus to the page.
-  useEffect(() => {
-    if (!drawerOpen) {
-      return undefined;
-    }
-
-    function handleKeyDown(event) {
-      if (event.key === "Escape") {
-        event.preventDefault();
-        closeDrawer({ restoreFocus: true });
-      }
-    }
-
-    window.addEventListener("keydown", handleKeyDown);
-    return () => window.removeEventListener("keydown", handleKeyDown);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [drawerOpen]);
-
   function handleLinkClick() {
     // A click means "I'm leaving the rail". The browser focuses a clicked
     // link, so without this the collapsed rail would keep keyboard focus and
-    // claim the arrow keys. Close the drawer and hand focus to the page.
-    closeDrawer();
+    // claim the arrow keys. Hand focus to the page.
     leaveCursor();
   }
 
@@ -422,32 +378,8 @@ function Sidebar({ pageFocusRef }) {
     }
   }
 
-  const dockClassName = `sidebar-dock${drawerOpen ? " sidebar-dock--drawer-open" : ""}`;
-  const drawerLabel = drawerOpen ? "Close navigation" : "Open navigation";
-
   return (
-    <>
-      <button
-        aria-controls="app-sidebar"
-        aria-expanded={drawerOpen}
-        aria-label={drawerLabel}
-        className="sidebar-hamburger"
-        onClick={() => setDrawerOpen((open) => !open)}
-        ref={hamburgerRef}
-        type="button"
-      >
-        <HamburgerIcon />
-      </button>
-
-      {drawerOpen ? (
-        <div
-          aria-hidden="true"
-          className="sidebar-backdrop"
-          onClick={() => closeDrawer({ restoreFocus: true })}
-        />
-      ) : null}
-
-      <div className={dockClassName}>
+    <div className="sidebar-dock">
         <nav
           aria-label="Sections"
           className="sidebar"
@@ -622,8 +554,7 @@ function Sidebar({ pageFocusRef }) {
             ))}
           </div>
         </nav>
-      </div>
-    </>
+    </div>
   );
 }
 

@@ -66,10 +66,6 @@ async function renderSidebar(path) {
   return { ...view, pageFocusRef };
 }
 
-function drawerToggle() {
-  return screen.getByRole("button", { name: /navigation/ });
-}
-
 function newShowcaseButton() {
   return screen.getByRole("button", { name: "New showcase" });
 }
@@ -517,54 +513,3 @@ describe("Sidebar showcase reordering", () => {
   });
 });
 
-describe("Sidebar drawer", () => {
-  test("the hamburger opens and closes the drawer", async () => {
-    const user = userEvent.setup();
-    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
-
-    const toggle = drawerToggle();
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-
-    await user.click(toggle);
-
-    expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(
-      container.querySelector(".sidebar-dock--drawer-open"),
-    ).not.toBeNull();
-
-    await user.click(toggle);
-
-    expect(toggle).toHaveAttribute("aria-expanded", "false");
-    expect(
-      container.querySelector(".sidebar-dock--drawer-open"),
-    ).toBeNull();
-  });
-
-  test("Escape closes the drawer", async () => {
-    const user = userEvent.setup();
-    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
-
-    await user.click(drawerToggle());
-    expect(toggleIsOpen(container)).toBe(true);
-
-    await user.keyboard("{Escape}");
-
-    expect(drawerToggle()).toHaveAttribute("aria-expanded", "false");
-    expect(toggleIsOpen(container)).toBe(false);
-  });
-
-  test("selecting a destination closes the drawer", async () => {
-    const user = userEvent.setup();
-    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
-
-    await user.click(drawerToggle());
-    await user.click(screen.getByRole("link", { name: "Collections" }));
-
-    expect(drawerToggle()).toHaveAttribute("aria-expanded", "false");
-    expect(toggleIsOpen(container)).toBe(false);
-  });
-});
-
-function toggleIsOpen(container) {
-  return container.querySelector(".sidebar-dock--drawer-open") !== null;
-}

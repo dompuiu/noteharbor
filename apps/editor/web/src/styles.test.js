@@ -162,29 +162,18 @@ describe("sidebar styles", () => {
     expect(block[1]).toMatch(/transition:\s*none/);
   });
 
-  // jsdom does not hit-test, so the drawer's stacking and its tab order are
-  // pinned here. The dock must not create a stacking context, or it traps the
-  // drawer's z-index below the sibling backdrop.
-  test("the drawer stacks above its backdrop", () => {
-    const dock = styles.match(/\.sidebar-dock\s*\{([^}]*)\}/);
-    expect(dock).not.toBeNull();
-    expect(dock[1]).not.toMatch(/z-index/);
-
-    const drawerZ = Number(
-      styles.match(
-        /\.sidebar-dock--drawer-open \.sidebar\s*\{[^}]*z-index:\s*(\d+)/,
-      )?.[1],
-    );
-    const backdropZ = Number(
-      styles.match(/\.sidebar-backdrop\s*\{[^}]*z-index:\s*(\d+)/)?.[1],
-    );
-    expect(drawerZ).toBeGreaterThan(backdropZ);
+  // The Editor holds a fixed 1200px desktop layout at every viewport width:
+  // narrow windows scroll horizontally instead of reflowing, so there are no
+  // width-based media queries and no narrow-screen drawer to conflict with
+  // the "b" rail shortcut.
+  test("has no width-based media queries", () => {
+    expect(styles).not.toMatch(/@media\s*\((max|min)-width/);
   });
 
-  test("the closed drawer is hidden from the tab order", () => {
-    expect(styles).toMatch(
-      /\.sidebar\s*\{[^}]*visibility:\s*hidden/,
-    );
+  test("has no drawer, hamburger, or backdrop selectors", () => {
+    expect(styles).not.toMatch(/drawer-open/);
+    expect(styles).not.toMatch(/\.sidebar-hamburger/);
+    expect(styles).not.toMatch(/\.sidebar-backdrop/);
   });
 });
 
