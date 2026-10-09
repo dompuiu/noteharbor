@@ -100,11 +100,17 @@ function Sidebar({ pageFocusRef }) {
   const linksRef = useRef([]);
 
   // The showcase rows, then the create action, hang off the Showcases group.
+  // A showcase row stays highlighted in both of its modes: view and edit are
+  // siblings under the showcase, so a prefix check on the view URL no longer
+  // covers the edit one.
   const showcaseItems = showcases.map((showcase) => ({
     icon: "showcases",
     key: `showcase-${showcase.id}`,
     label: showcase.name,
     to: SHOWCASE_ROUTES.showcase(showcase.id),
+    matches: (pathname) =>
+      pathname === SHOWCASE_ROUTES.showcase(showcase.id) ||
+      pathname === SHOWCASE_ROUTES.showcaseEdit(showcase.id),
     showcaseId: showcase.id,
   }));
 

@@ -578,12 +578,12 @@ Handles:
 
 Direct route for editing or reviewing one note outside the overlay flow.
 
-### Showcases (`/portfolio/showcases/:id` and `/portfolio/showcases/:id/edit`)
+### Showcases (`/portfolio/showcases/:id/view` and `/portfolio/showcases/:id/edit`)
 
-The read-only presentation and its authoring canvas. Both browse one level at a time and look the same; edit mode adds the controls.
+The read-only presentation and its authoring canvas. Both browse one level at a time and look the same; edit mode adds the controls. The `view` / `edit` tail is a one-word swap, and the View/Edit toggle keeps the drilled level across modes.
 
-- View mode is URL-synced: the current node is `?node=<nodeId>` (the root has no parameter), so Back and shared links work.
-- Edit mode keeps the drill state in memory; the URL does not change. It adds the `+ create a category` / `+ notes` / `+ grouping` tiles, drag handles, rename/remove controls, and a Grouping's manual-cover controls.
+- View mode is URL-synced: the current node is `?node=<nodeId>` (the root has no parameter), so Back and shared links work. A bare `/portfolio/showcases/:id` URL redirects to the view mode with the query kept.
+- Edit mode keeps the drill state in memory; the URL does not change while editing (an entry `?node=` from the Edit toggle is adopted once, then dropped). It adds the `+ create a category` / `+ notes` / `+ grouping` tiles, drag handles, rename/remove controls, and a Grouping's manual-cover controls.
 - Nothing expands inline — a Category or Grouping is opened to show its direct children.
 - A three-way photo-size control (Small / Medium / Large) applies in both modes and is remembered per browser.
 - The header shows the showcase total note count and links between the two modes.

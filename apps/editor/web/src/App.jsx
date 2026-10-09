@@ -4,6 +4,8 @@ import {
   Navigate,
   Route,
   Routes,
+  useLocation,
+  useParams,
 } from "react-router-dom";
 import { CollectionsScreen } from "./components/CollectionsScreen.jsx";
 import { ConnectionError } from "./components/ConnectionError.jsx";
@@ -42,6 +44,20 @@ function NoteEditorDestination({ emptyLibrary, selectedCollectionId }) {
   }
 
   return <NoteEditForm selectedCollectionId={selectedCollectionId} />;
+}
+
+// A bare `/portfolio/showcases/:id` URL (the pre-`view`-segment shape, and any
+// hand-typed mode-less link) lands on the view mode with the query kept, so a
+// `?node=` deep link still drills.
+function LegacyShowcaseRedirect() {
+  const { id } = useParams();
+  const location = useLocation();
+  return (
+    <Navigate
+      replace
+      to={{ pathname: SHOWCASE_ROUTES.showcase(id), search: location.search }}
+    />
+  );
 }
 
 function ShellContent() {
@@ -166,6 +182,10 @@ function ShellContent() {
               <Route
                 element={<ShowcaseScreen mode="edit" />}
                 path={SHOWCASE_ROUTES.showcaseEdit(":id")}
+              />
+              <Route
+                element={<LegacyShowcaseRedirect />}
+                path="/portfolio/showcases/:id"
               />
               <Route
                 element={<Navigate replace to={DEFAULT_DESTINATION} />}

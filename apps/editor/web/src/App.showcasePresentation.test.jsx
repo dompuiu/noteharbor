@@ -357,6 +357,66 @@ describe("view-mode URL sync", () => {
   });
 });
 
+describe("view/edit mode switching", () => {
+  function currentPath() {
+    return screen.getByTestId("pathname").textContent;
+  }
+
+  test("a bare showcase URL redirects to the view mode with the drill kept", async () => {
+    renderAt("/portfolio/showcases/1?node=20");
+
+    await waitFor(() => {
+      expect(currentPath()).toBe(SHOWCASE_ROUTES.showcase(1));
+    });
+    expect(currentSearch()).toBe("?node=20");
+    expect(
+      await screen.findByRole("button", { name: "10 lei, 1930" }),
+    ).toBeInTheDocument();
+  });
+
+  test("the Edit toggle lands on the same drilled level", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    await openSub();
+
+    await userEvent.click(screen.getByRole("link", { name: "Edit" }));
+
+    await waitFor(() => {
+      expect(currentPath()).toBe(SHOWCASE_ROUTES.showcaseEdit(1));
+    });
+    // The entry drill is adopted into memory, then dropped from the edit URL.
+    await waitFor(() => {
+      expect(currentSearch()).toBe("");
+    });
+    const breadcrumb = await screen.findByRole("navigation", {
+      name: "Showcase breadcrumb",
+    });
+    expect(within(breadcrumb).getByText("Sub")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "10 lei, 1930" }),
+    ).toBeInTheDocument();
+  });
+
+  test("the View toggle returns to the same drilled level", async () => {
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+    await userEvent.dblClick(
+      await screen.findByRole("button", { name: "Open grouping Sub" }),
+    );
+    expect(
+      await screen.findByRole("button", { name: "10 lei, 1930" }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("link", { name: "View" }));
+
+    await waitFor(() => {
+      expect(currentPath()).toBe(SHOWCASE_ROUTES.showcase(1));
+    });
+    expect(currentSearch()).toBe("?node=20");
+    expect(
+      screen.getByRole("button", { name: "10 lei, 1930" }),
+    ).toBeInTheDocument();
+  });
+});
+
 describe("entering a node", () => {
   test("announces the showcase and the drilled grouping in a polite live region", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));

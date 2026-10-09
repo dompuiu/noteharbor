@@ -100,17 +100,26 @@ function ShowcaseScreen({ mode }) {
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  // The drilled node ids, root first. Edit mode keeps this in memory (the URL
-  // does not change during edits); view mode derives it from the URL below.
+  // The drilled node ids, root first. View mode derives this from the URL
+  // below; edit mode keeps it in memory (the URL does not change during
+  // edits) but adopts the entry `?node=` once on mount, so arriving from the
+  // view mode's Edit toggle lands on the same level.
   const [drillIds, setDrillIds] = useState([]);
+  // Whether the entry `?node=` has been consumed (or found absent) already;
+  // without this the mount effect would fight in-edit drill changes.
+  const consumedEditEntryRef = useRef(false);
   // What the polite live region announces on each node entry.
   const [announcement, setAnnouncement] = useState("");
-  const nodeParam = editMode
-    ? null
-    : new URLSearchParams(location.search).get("node");
+  // `?node=` names the entry drill. View mode derives its drill from it; edit
+  // mode adopts it once on mount (the header Edit toggle carries it over so
+  // the mode switch lands on the same level).
+  const entryNode = new URLSearchParams(location.search).get("node");
+  const nodeParam = editMode ? null : entryNode;
+  const editEntryNode = editMode ? entryNode : null;
 
   useEffect(() => {
     setDrillIds([]);
+    consumedEditEntryRef.current = false;
   }, [showcaseId]);
 
   useEffect(() => {
@@ -325,6 +334,28 @@ function ShowcaseScreen({ mode }) {
     }
   }, [editMode, loading, navigate, nodeParam, nodes]);
 
+  // Edit mode adopts the entry `?node=` into the in-memory drill once the tree
+  // loads, then drops it from the URL so the address stays free of drill state
+  // while editing.
+  useEffect(() => {
+    if (!editMode || loading || consumedEditEntryRef.current) {
+      return;
+    }
+
+    consumedEditEntryRef.current = true;
+
+    if (editEntryNode == null) {
+      return;
+    }
+
+    const entryPath = findNodeIdPath(nodes, Number(editEntryNode));
+
+    if (entryPath.length) {
+      setDrillIds(entryPath);
+    }
+
+    navigate({ search: "" }, { replace: true });
+  }, [editEntryNode, editMode, loading, navigate, nodes]);
   // Announce each node entry through a polite live region; the root announces
   // the showcase itself.
   useEffect(() => {
@@ -896,17 +927,26 @@ function ShowcaseScreen({ mode }) {
               />
             </div>
             <div className="panel-heading-actions">
+              {/* The mode toggle keeps the drill level: view carries it as
+              `?node=`, and edit writes the in-memory drill back into `?node=`
+              so the round trip lands on the same level. */}
               {editMode ? (
                 <Link
                   className="button"
-                  to={SHOWCASE_ROUTES.showcase(showcaseId)}
+                  to={{
+                    pathname: SHOWCASE_ROUTES.showcase(showcaseId),
+                    search: showcaseNodeSearch(displayNode?.id ?? null),
+                  }}
                 >
                   View
                 </Link>
               ) : (
                 <Link
                   className="button"
-                  to={SHOWCASE_ROUTES.showcaseEdit(showcaseId)}
+                  to={{
+                    pathname: SHOWCASE_ROUTES.showcaseEdit(showcaseId),
+                    search: location.search,
+                  }}
                 >
                   Edit
                 </Link>
