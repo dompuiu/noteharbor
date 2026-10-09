@@ -25,6 +25,7 @@ vi.mock("./lib/api.js", () => ({
   reorderShowcases: vi.fn(),
   setDefaultCollection: vi.fn(),
   updateNode: vi.fn(),
+  reorderNodes: vi.fn(),
 }));
 
 vi.mock("./components/NotesTable.jsx", () => ({

@@ -1,5 +1,5 @@
 import { MemoryRouter } from "react-router-dom";
-import { render, screen } from "@testing-library/react";
+import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -23,6 +23,7 @@ vi.mock("./lib/api.js", () => ({
   reorderCollections: vi.fn(),
   setDefaultCollection: vi.fn(),
   updateNode: vi.fn(),
+  reorderNodes: vi.fn(),
 }));
 
 vi.mock("./components/NotesTable.jsx", () => ({
@@ -140,8 +141,19 @@ describe("the showcase category canvas", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("adding a typed name creates the label and places it", async () => {
+  test("adding a typed name stages the placement and saves it on Save", async () => {
     const user = userEvent.setup();
+    createShowcaseNode.mockResolvedValue({
+      node: {
+        id: 50,
+        node_type: "category",
+        name: "Winter",
+        category_id: 5,
+        parent_node_id: null,
+        position: 2,
+        children: [],
+      },
+    });
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     await user.click(
@@ -150,14 +162,21 @@ describe("the showcase category canvas", () => {
     await user.type(screen.getByLabelText("Category name"), "Winter");
     await user.click(screen.getByRole("button", { name: "Add category" }));
 
-    expect(createCategory).toHaveBeenCalledWith("Winter");
-    expect(createShowcaseNode).toHaveBeenCalledWith(1, {
-      type: "category",
-      category_id: 5,
-    });
+    // Staging is local: the card shows with no network calls.
     expect(
       await screen.findByRole("heading", { name: "Winter" }),
     ).toBeInTheDocument();
+    expect(createCategory).not.toHaveBeenCalled();
+    expect(createShowcaseNode).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Save", exact: true }));
+
+    await waitFor(() => {
+      expect(createShowcaseNode).toHaveBeenCalledWith(1, {
+        type: "category",
+        name: "Winter",
+      });
+    });
   });
 
   test("picking an existing label fills the field", async () => {
@@ -172,7 +191,7 @@ describe("the showcase category canvas", () => {
     expect(screen.getByLabelText("Category name")).toHaveValue("Vienna");
   });
 
-  test("renaming a placement renames the shared label", async () => {
+  test("renaming a placement stages the rename and saves it on Save", async () => {
     const user = userEvent.setup();
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
@@ -182,15 +201,23 @@ describe("the showcase category canvas", () => {
     const input = screen.getByLabelText("New name for Summer");
     await user.clear(input);
     await user.type(input, "Monsoon");
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    // The cell Save applies the rename to the draft only.
+    const saves = screen.getAllByRole("button", { name: "Save" });
+    await user.click(saves[saves.length - 1]);
 
-    expect(updateNode).toHaveBeenCalledWith(10, { name: "Monsoon" });
     expect(
       await screen.findByRole("heading", { name: "Monsoon" }),
     ).toBeInTheDocument();
+    expect(updateNode).not.toHaveBeenCalled();
+
+    await user.click(screen.getAllByRole("button", { name: "Save" })[0]);
+
+    await waitFor(() => {
+      expect(updateNode).toHaveBeenCalledWith(10, { name: "Monsoon" });
+    });
   });
 
-  test("removing a placement drops it and keeps the add tile", async () => {
+  test("removing a placement stages the removal and deletes on Save", async () => {
     const user = userEvent.setup();
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
@@ -198,12 +225,18 @@ describe("the showcase category canvas", () => {
       await screen.findByRole("button", { name: "Remove Summer" }),
     );
 
-    expect(deleteNode).toHaveBeenCalledWith(10);
     expect(
       screen.queryByRole("heading", { name: "Summer" }),
     ).not.toBeInTheDocument();
+    expect(deleteNode).not.toHaveBeenCalled();
     expect(
       screen.getByRole("button", { name: "Create a category" }),
     ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(deleteNode).toHaveBeenCalledWith(10);
+    });
   });
 });

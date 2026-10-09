@@ -418,15 +418,19 @@ describe("editing from the keyboard", () => {
     expect(await screen.findByLabelText("New name for Sub")).toBeInTheDocument();
   });
 
-  test("d removes the focused card", async () => {
+  test("d stages the removal of the focused card and Save deletes it", async () => {
     await focusSub();
 
     fireEvent.keyDown(document.body, { key: "d" });
 
-    await waitFor(() => expect(deleteNode).toHaveBeenCalledWith(20));
     expect(
       screen.queryByRole("button", { name: "Open grouping Sub" }),
     ).not.toBeInTheDocument();
+    expect(deleteNode).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(deleteNode).toHaveBeenCalledWith(20));
   });
 
   test("the single-key actions do nothing in view mode", async () => {

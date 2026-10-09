@@ -27,6 +27,7 @@ vi.mock("./lib/api.js", () => ({
   reorderShowcases: vi.fn(),
   setDefaultCollection: vi.fn(),
   updateNode: vi.fn(),
+  reorderNodes: vi.fn(),
 }));
 
 vi.mock("./components/NotesTable.jsx", () => ({
@@ -196,15 +197,9 @@ describe("the note picker", () => {
       within(dialog).getByRole("button", { name: "Add selected (3)" }),
     );
 
-    await waitFor(() => {
-      expect(createShowcaseNode).toHaveBeenCalledWith(1, {
-        type: "notes",
-        parent_id: 10,
-        note_ids: [101, 102, 103],
-      });
-    });
-
-    // The popup stays open and the selection resets.
+    // Staging is local: the popup stays open, the selection resets, and the
+    // cards render with no network call.
+    expect(createShowcaseNode).not.toHaveBeenCalled();
     expect(within(dialog).getByRole("button", { name: "Add selected (0)" })).toBeInTheDocument();
     // The added note cards render on the canvas.
     expect(
@@ -212,6 +207,18 @@ describe("the note picker", () => {
     ).toBeInTheDocument();
     // The header total updates with the tree.
     expect(screen.getByText("3 notes")).toBeInTheDocument();
+
+    // Closing the picker and saving persists the batch.
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(createShowcaseNode).toHaveBeenCalledWith(1, {
+        type: "notes",
+        parent_id: 10,
+        note_ids: [101, 102, 103],
+      });
+    });
   });
 
   test("Deselect all removes only the currently filtered picks", async () => {
@@ -245,6 +252,11 @@ describe("the note picker", () => {
       within(dialog).getByRole("button", { name: "Add selected (2)" }),
     );
 
+    // Staged locally; Save persists the batch.
+    expect(createShowcaseNode).not.toHaveBeenCalled();
+    await user.click(screen.getByRole("button", { name: "Done" }));
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
     await waitFor(() => {
       expect(createShowcaseNode).toHaveBeenCalledWith(1, {
         type: "notes",
@@ -254,7 +266,7 @@ describe("the note picker", () => {
     });
   });
 
-  test("Add & close adds the notes and closes the popup", async () => {
+  test("Add & close stages the notes and Save persists them", async () => {
     createShowcaseNode.mockResolvedValue({
       nodes: [{ id: 204, node_type: "note", note_id: 104, note: NOTE_D, children: [] }],
     });
@@ -265,15 +277,19 @@ describe("the note picker", () => {
     await user.click(screen.getByRole("button", { name: "Select all" }));
     await user.click(screen.getByRole("button", { name: "Add & close" }));
 
+    expect(createShowcaseNode).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
     await waitFor(() => {
       expect(createShowcaseNode).toHaveBeenCalledWith(1, {
         type: "notes",
         parent_id: 10,
         note_ids: [104],
       });
-    });
-    await waitFor(() => {
-      expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
     });
   });
 });

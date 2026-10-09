@@ -23,6 +23,7 @@ vi.mock("./lib/api.js", () => ({
   reorderCollections: vi.fn(),
   setDefaultCollection: vi.fn(),
   updateNode: vi.fn(),
+  reorderNodes: vi.fn(),
 }));
 
 vi.mock("./components/NotesTable.jsx", () => ({
@@ -346,7 +347,7 @@ describe("grouping cover", () => {
 });
 
 describe("editing groupings on the canvas", () => {
-  test("creating a grouping posts it under the current node", async () => {
+  test("creating a grouping stages it and saves it on Save", async () => {
     createShowcaseNode.mockResolvedValue({
       node: groupingNode({ id: 40, name: "New group" }),
     });
@@ -359,6 +360,11 @@ describe("editing groupings on the canvas", () => {
     await userEvent.type(screen.getByLabelText("Grouping name"), "New group");
     await userEvent.click(screen.getByRole("button", { name: "Add grouping" }));
 
+    expect(groupingCard("New group")).toBeInTheDocument();
+    expect(createShowcaseNode).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
     await waitFor(() => {
       expect(createShowcaseNode).toHaveBeenCalledWith(1, {
         type: "grouping",
@@ -366,10 +372,9 @@ describe("editing groupings on the canvas", () => {
         name: "New group",
       });
     });
-    expect(groupingCard("New group")).toBeInTheDocument();
   });
 
-  test("renaming a grouping updates the card", async () => {
+  test("renaming a grouping stages the rename and saves it on Save", async () => {
     updateNode.mockResolvedValue({
       node: groupingNode({ id: 20, name: "Renamed" }),
     });
@@ -382,15 +387,20 @@ describe("editing groupings on the canvas", () => {
     const input = screen.getByLabelText("New name for Sub");
     await userEvent.clear(input);
     await userEvent.type(input, "Renamed");
-    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+    const saves = screen.getAllByRole("button", { name: "Save" });
+    await userEvent.click(saves[saves.length - 1]);
+
+    expect(groupingCard("Renamed")).toBeInTheDocument();
+    expect(updateNode).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getAllByRole("button", { name: "Save" })[0]);
 
     await waitFor(() => {
       expect(updateNode).toHaveBeenCalledWith(20, { name: "Renamed" });
     });
-    expect(groupingCard("Renamed")).toBeInTheDocument();
   });
 
-  test("removing a grouping drops its subtree", async () => {
+  test("removing a grouping stages the removal and deletes on Save", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await screen.findByRole("button", { name: "Open grouping Sub" });
 
@@ -398,12 +408,16 @@ describe("editing groupings on the canvas", () => {
       screen.getByRole("button", { name: "Remove Sub" }),
     );
 
-    await waitFor(() => {
-      expect(deleteNode).toHaveBeenCalledWith(20);
-    });
     expect(
       screen.queryByRole("button", { name: "Open grouping Sub" }),
     ).not.toBeInTheDocument();
+    expect(deleteNode).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(deleteNode).toHaveBeenCalledWith(20);
+    });
   });
 
   test("drills one level at a time and never renders grandchildren inline", async () => {
@@ -430,14 +444,7 @@ describe("editing groupings on the canvas", () => {
 });
 
 describe("setting a grouping cover from the canvas", () => {
-  test("a direct-child note can be set as the cover and the cover cleared", async () => {
-    updateNode.mockImplementation(async (id, payload) => ({
-      node: {
-        ...groupingNode({ id, name: "Sub" }),
-        cover_note_id: payload.cover_note_id,
-        cover_note: payload.cover_note_id == null ? null : DERIVED_NOTE,
-      },
-    }));
+  test("setting the cover stages it and saves it on Save", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await screen.findByRole("button", { name: "Open grouping Sub" });
     await userEvent.click(groupingCard("Sub"));
@@ -449,21 +456,42 @@ describe("setting a grouping cover from the canvas", () => {
 
     await userEvent.click(screen.getByRole("button", { name: "Set as cover" }));
 
+    // Staged locally: the clear control appears with no network call.
+    expect(updateNode).not.toHaveBeenCalled();
+    expect(
+      await screen.findByRole("button", { name: "Clear cover" }),
+    ).toBeInTheDocument();
+
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
     await waitFor(() => {
       expect(updateNode).toHaveBeenCalledWith(20, { cover_note_id: 100 });
     });
+  });
 
-    // The current node now reports the manual cover and offers to clear it.
+  test("clearing a manual cover stages it and saves it on Save", async () => {
+    getShowcaseTree.mockResolvedValue({
+      showcase_id: 1,
+      nodes: [summerTree({ coverNote: MANUAL_NOTE })],
+    });
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+    await screen.findByRole("button", { name: "Open grouping Sub" });
+    await userEvent.click(groupingCard("Sub"));
+
     const clear = await screen.findByRole("button", { name: "Clear cover" });
     await userEvent.click(clear);
 
     await waitFor(() => {
-      expect(updateNode).toHaveBeenCalledWith(20, { cover_note_id: null });
-    });
-    await waitFor(() => {
       expect(
         screen.queryByRole("button", { name: "Clear cover" }),
       ).not.toBeInTheDocument();
+    });
+    expect(updateNode).not.toHaveBeenCalled();
+
+    await userEvent.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(updateNode).toHaveBeenCalledWith(20, { cover_note_id: null });
     });
   });
 });

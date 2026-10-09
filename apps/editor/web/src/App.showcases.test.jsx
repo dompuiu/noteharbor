@@ -25,6 +25,7 @@ vi.mock("./lib/api.js", () => ({
   reorderShowcases: vi.fn(),
   setDefaultCollection: vi.fn(),
   updateNode: vi.fn(),
+  reorderNodes: vi.fn(),
 }));
 
 vi.mock("./components/NotesTable.jsx", () => ({
@@ -200,14 +201,19 @@ describe("Showcase modes", () => {
     ).toBeInTheDocument();
   });
 
-  test("the view header links to edit and the edit header links back", async () => {
+  test("the view header links to edit and the edit header offers Save and Cancel", async () => {
     const user = userEvent.setup();
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
     await user.click(await screen.findByRole("link", { name: "Edit" }));
     expect(currentPath()).toBe(SHOWCASE_ROUTES.showcaseEdit(1));
 
-    await user.click(await screen.findByRole("link", { name: "View" }));
+    // Edit mode stages changes: Save starts disabled, Cancel returns to view.
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeInTheDocument();
+    expect(screen.queryByRole("link", { name: "View" })).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
     expect(currentPath()).toBe(SHOWCASE_ROUTES.showcase(1));
   });
 
@@ -258,7 +264,7 @@ describe("Showcase modes", () => {
 });
 
 describe("Renaming a showcase", () => {
-  test("saves the edit header name and updates the sidebar item", async () => {
+  test("staging the edit header name saves on Save and updates the sidebar", async () => {
     const user = userEvent.setup();
     renameShowcase.mockResolvedValue({
       showcase: { id: 1, name: "Winter", display_order: 1 },
@@ -269,7 +275,13 @@ describe("Renaming a showcase", () => {
     await screen.findByRole("link", { name: "Summer" });
     const field = screen.getByLabelText("Showcase name");
     await user.clear(field);
-    await user.type(field, "Winter{Enter}");
+    await user.type(field, "Winter");
+
+    // Staging is local: nothing persists until Save.
+    expect(renameShowcase).not.toHaveBeenCalled();
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
 
     await waitFor(() => {
       expect(renameShowcase).toHaveBeenCalledWith(1, "Winter");
@@ -278,10 +290,12 @@ describe("Renaming a showcase", () => {
     expect(
       screen.queryByRole("link", { name: "Summer" }),
     ).not.toBeInTheDocument();
-    expect(field).toHaveValue("Winter");
+    await waitFor(() => {
+      expect(currentPath()).toBe(SHOWCASE_ROUTES.showcase(1));
+    });
   });
 
-  test("editing the name field and leaving it also saves", async () => {
+  test("Cancel discards a staged name without saving", async () => {
     const user = userEvent.setup();
     renameShowcase.mockResolvedValue({
       showcase: { id: 1, name: "Spring", display_order: 1 },
@@ -292,10 +306,12 @@ describe("Renaming a showcase", () => {
     const field = screen.getByLabelText("Showcase name");
     await user.clear(field);
     await user.type(field, "Spring");
-    await user.tab();
 
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(renameShowcase).not.toHaveBeenCalled();
     await waitFor(() => {
-      expect(renameShowcase).toHaveBeenCalledWith(1, "Spring");
+      expect(currentPath()).toBe(SHOWCASE_ROUTES.showcase(1));
     });
   });
 });

@@ -224,7 +224,7 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
     setAddError("");
 
     try {
-      await onAdd(ids);
+      await onAdd(ids, notes);
       setSelectedIds(new Set());
       setBusy(false);
 

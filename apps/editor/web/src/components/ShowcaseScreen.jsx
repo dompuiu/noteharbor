@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
-  createCategory,
   createShowcaseNode,
   deleteNode,
   getCategories,
@@ -26,6 +25,14 @@ import {
   reorderNodeTree,
   updateNodeTree,
 } from "../lib/showcaseTree.js";
+import {
+  isTempId,
+  makeDraftCategoryNode,
+  makeDraftGroupingNode,
+  makeDraftNoteNode,
+  resetTempIds,
+  saveShowcaseDraft,
+} from "../lib/showcaseDraft.js";
 import { useShowcases } from "../lib/showcases.jsx";
 import { useCollections } from "../lib/collections.jsx";
 import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
@@ -45,16 +52,8 @@ import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 
 // One showcase, rendered in one of two near-identical modes. View mode is the
-// read-only presentation; edit mode adds the authoring controls. Both share the
-// same shell, grid, and cards so the two never drift. Categories sit at the top
-// level and always render expanded with their direct children inline; only
-// Groupings open into their own level (nothing else expands inline), and edit
-// mode drills into Groupings one level at a time exactly like view mode, with
-// the drill kept in memory.
-function upsertCategory(categories, category) {
-  const others = categories.filter((entry) => entry.id !== category.id);
-  return [...others, category].sort((a, b) => a.name.localeCompare(b.name));
-}
+// read-only presentation; edit mode is a draft canvas with Save/Cancel.
+// Both share the same shell, grid, and cards so the two never drift.
 
 // The drag handle's accessible name for a note node.
 function noteNodeLabel(node) {
@@ -97,9 +96,15 @@ function ShowcaseScreen({ mode }) {
   const restoreFocusNodeIdRef = useRef(null);
 
   const [nodes, setNodes] = useState([]);
+  const [baselineNodes, setBaselineNodes] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
+  // Edit mode is a draft: every canvas change updates `nodes` only. Save
+  // replays the diff to the server; Cancel restores `baselineNodes`.
+  const [treeDirty, setTreeDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [saveError, setSaveError] = useState("");
   // The drilled node ids, root first. View mode derives this from the URL
   // below; edit mode keeps it in memory and live-syncs it back to `?node=`
   // (see the sync effect), so both addresses name the same level.
@@ -170,7 +175,11 @@ function ShowcaseScreen({ mode }) {
         }
 
         setNodes(tree.nodes ?? []);
+        setBaselineNodes(tree.nodes ?? []);
         setCategories(pool.categories ?? []);
+        setTreeDirty(false);
+        setSaveError("");
+        resetTempIds();
       } catch (error) {
         if (active) {
           setLoadError(error.message || "Could not load the showcase.");
@@ -188,7 +197,9 @@ function ShowcaseScreen({ mode }) {
     };
   }, [showcaseId, editMode]);
 
-  async function commitName() {
+  // In edit mode the name field is part of the draft: blur/Enter only validate
+  // locally, and Save persists the rename together with the tree.
+  function commitName() {
     if (!showcase) {
       return;
     }
@@ -196,7 +207,6 @@ function ShowcaseScreen({ mode }) {
     const trimmed = nameDraft.trim();
 
     if (!trimmed) {
-      setNameDraft(showcase.name);
       setNameError("A showcase name is required.");
       return;
     }
@@ -207,28 +217,30 @@ function ShowcaseScreen({ mode }) {
       return;
     }
 
-    try {
-      await renameShowcase(showcase.id, trimmed);
-      setNameError("");
-    } catch (error) {
-      setNameError(error.message);
-      setNameDraft(showcase.name);
-    }
+    setNameDraft(trimmed);
+    setNameError("");
   }
 
   function handleNameKeyDown(event) {
     if (event.key === "Enter") {
       event.preventDefault();
       commitName();
+      event.currentTarget?.blur?.();
       return;
     }
 
     if (event.key === "Escape") {
       event.preventDefault();
-      setNameDraft(showcaseName);
+      setNameDraft(showcase?.name ?? "Showcase");
       setNameError("");
     }
   }
+
+  const nameDirty =
+    editMode && showcase
+      ? nameDraft.trim() !== "" && nameDraft.trim() !== showcase.name
+      : false;
+  const dirty = editMode && (treeDirty || nameDirty);
 
   async function handleDelete() {
     if (!showcase || deleting) {
@@ -261,39 +273,54 @@ function ShowcaseScreen({ mode }) {
     }
   }
 
-  // The label is get-or-create, so a typed name that matches an existing label
-  // reuses it; the returned label id is what the placement references.
+  // Edit mode is a draft: adds/renames/removes only touch `nodes`. Save
+  // replays the diff; nothing here calls the network.
   async function handleAddCategory(name) {
-    const { category } = await createCategory(name);
-    const { node } = await createShowcaseNode(showcaseId, {
-      type: "category",
-      category_id: category.id,
+    const trimmed = String(name ?? "").trim();
+    if (!trimmed) {
+      throw new Error("Category name is required.");
+    }
+    const match = categories.find(
+      (entry) => entry.name.toLowerCase() === trimmed.toLowerCase(),
+    );
+    const alreadyPlaced = nodes.some((entry) =>
+      match
+        ? entry.category_id === match.id
+        : entry.node_type === "category" &&
+          String(entry.name ?? "").toLowerCase() === trimmed.toLowerCase(),
+    );
+    if (alreadyPlaced) {
+      throw new Error("This category is already in the showcase.");
+    }
+    const draft = makeDraftCategoryNode({
+      name: match ? match.name : trimmed,
+      categoryId: match ? match.id : null,
     });
-
-    if (node) {
-      setNodes((current) => [...current, node]);
-    }
-
-    if (category) {
-      setCategories((current) => upsertCategory(current, category));
-    }
+    setNodes((current) => [...current, draft]);
+    setTreeDirty(true);
+    setSaveError("");
   }
 
-  // Renaming a Placement renames the shared label, so keep the local card in
-  // step with the name the user chose.
   async function handleRenameCategory(node, name) {
-    const { node: updated } = await updateNode(node.id, { name });
-
+    const trimmed = String(name ?? "").trim();
     setNodes((current) =>
-      current.map((entry) =>
-        entry.id === node.id ? { ...entry, ...(updated ?? {}), name } : entry,
-      ),
+      updateNodeTree(current, node.id, (entry) => ({
+        ...entry,
+        name: trimmed,
+        _pendingCategoryName:
+          isTempId(entry.id) && entry.category_id == null ? trimmed : entry._pendingCategoryName ?? null,
+      })),
     );
+    setTreeDirty(true);
+    setSaveError("");
   }
 
   async function handleRemoveCategory(node) {
-    await deleteNode(node.id);
     setNodes((current) => current.filter((entry) => entry.id !== node.id));
+    // A removed drill level falls back to the root.
+    setDrillIds((current) => current.filter((id) => id !== node.id));
+    setTreeDirty(true);
+    setSaveError("");
   }
 
   // View mode is URL-synced: `?node=<id>` names the current node and the root
@@ -376,16 +403,16 @@ function ShowcaseScreen({ mode }) {
   });
 
   async function handleReorderChildren(orderedIds) {
-    await handleReorderChildrenFor(currentParentId, orderedIds);
+    handleReorderChildrenFor(currentParentId, orderedIds);
   }
 
-  async function handleReorderChildrenFor(parentId, orderedIds) {
-    // Persist first, then reorder locally: a rejected request leaves the
-    // visible order untouched.
-    await reorderNodes(showcaseId, parentId, orderedIds);
+  function handleReorderChildrenFor(parentId, orderedIds) {
+    // Draft only: the order persists on Save.
     setNodes((current) =>
       reorderNodeTree(current, parentId, orderedIds),
     );
+    setTreeDirty(true);
+    setSaveError("");
   }
 
   function openNode(node) {
@@ -446,114 +473,169 @@ function ShowcaseScreen({ mode }) {
   }
 
   async function handleAddGrouping(name) {
-    await handleAddGroupingFor(currentParentId, name);
+    handleAddGroupingFor(currentParentId, name);
   }
 
   // The per-category add tile in the expanded root passes its own parent id;
   // the drilled grouping level passes the current drill parent.
-  async function handleAddGroupingFor(parentId, name) {
-    const { node } = await createShowcaseNode(showcaseId, {
-      type: "grouping",
-      parent_id: parentId,
-      name,
-    });
-
-    if (node) {
-      setNodes((current) =>
-        updateNodeTree(current, parentId, (parent) => ({
-          ...parent,
-          children: [...(parent.children ?? []), node],
-        })),
-      );
+  function handleAddGroupingFor(parentId, name) {
+    const trimmed = String(name ?? "").trim();
+    if (!trimmed || parentId == null) {
+      return;
     }
+    const draft = makeDraftGroupingNode({ name: trimmed, parentId });
+    setNodes((current) =>
+      updateNodeTree(current, parentId, (parent) => ({
+        ...parent,
+        children: [...(parent.children ?? []), draft],
+      })),
+    );
+    setTreeDirty(true);
+    setSaveError("");
   }
 
   async function handleRenameGrouping(node, name) {
-    const { node: updated } = await updateNode(node.id, { name });
-
+    const trimmed = String(name ?? "").trim();
     setNodes((current) =>
       updateNodeTree(current, node.id, (entry) => ({
         ...entry,
-        ...(updated ?? {}),
-        name,
-        // The server's single-node row has no children; keep the local subtree.
+        name: trimmed,
         children: entry.children,
       })),
     );
+    setTreeDirty(true);
+    setSaveError("");
   }
 
   async function handleRemoveGrouping(node) {
-    await deleteNode(node.id);
     setNodes((current) => removeNodeTree(current, node.id));
+    setDrillIds((current) => current.filter((id) => id !== node.id));
+    setTreeDirty(true);
+    setSaveError("");
   }
 
   function handleOpenNotePicker(node) {
     setPickerNodeId(node.id);
   }
 
-  // The notes batch returns every new node, so append them under the target in
-  // the given order without refetching the tree (mirrors the category add).
-  async function handleAddNotes(noteIds) {
+  // Draft only: stage note nodes under the picker target. The picker passes
+  // its loaded notes so the cards render before Save.
+  async function handleAddNotes(noteIds, allNotes = []) {
     if (pickerNodeId == null) {
       return;
     }
-
-    const { nodes: added } = await createShowcaseNode(showcaseId, {
-      type: "notes",
-      parent_id: pickerNodeId,
-      note_ids: noteIds,
-    });
-
-    if (added?.length) {
-      setNodes((current) => appendChildren(current, pickerNodeId, added));
+    const byId = new Map((allNotes ?? []).map((note) => [note.id, note]));
+    const drafts = (noteIds ?? []).map((noteId) =>
+      makeDraftNoteNode({
+        note: byId.get(noteId) ?? { id: noteId },
+        parentId: pickerNodeId,
+      }),
+    );
+    if (!drafts.length) {
+      return;
     }
+    setNodes((current) => appendChildren(current, pickerNodeId, drafts));
+    setTreeDirty(true);
+    setSaveError("");
   }
 
   async function handleRemoveNote(noteNode) {
-    await deleteNode(noteNode.id);
     setNodes((current) => removeNodeTree(current, noteNode.id));
+    setTreeDirty(true);
+    setSaveError("");
   }
 
   // Set the current Grouping's manual cover to a direct-child note (user story
-  // 37). The server answers with the updated node; splice it into the tree so
-  // `cover_note` (and the card's cover) reflects the choice without a refetch.
-  async function handleSetCover(noteNode) {
+  // 37). Draft only: the cover persists on Save.
+  function handleSetCover(noteNode) {
     if (!displayNode || displayNode.node_type !== "grouping") {
       return;
     }
 
     const coverNoteId = noteNode.note_id ?? noteNode.note?.id ?? null;
-    const { node: updated } = await updateNode(displayNode.id, {
-      cover_note_id: coverNoteId,
-    });
-
     setNodes((current) =>
       updateNodeTree(current, displayNode.id, (entry) => ({
         ...entry,
-        ...(updated ?? {}),
-        // The server's single-node row has no children; keep the local subtree.
+        cover_note_id: coverNoteId,
+        cover_note: noteNode.note ?? entry.cover_note,
         children: entry.children,
       })),
     );
+    setTreeDirty(true);
+    setSaveError("");
   }
 
   // Clearing returns the Grouping to its derived cover (ticket 09).
-  async function handleClearCover() {
+  function handleClearCover() {
     if (!displayNode || displayNode.node_type !== "grouping") {
       return;
     }
 
-    const { node: updated } = await updateNode(displayNode.id, {
-      cover_note_id: null,
-    });
-
     setNodes((current) =>
       updateNodeTree(current, displayNode.id, (entry) => ({
         ...entry,
-        ...(updated ?? {}),
+        cover_note_id: null,
+        cover_note: null,
         children: entry.children,
       })),
     );
+    setTreeDirty(true);
+    setSaveError("");
+  }
+
+  async function handleSave() {
+    if (!editMode || saving || loading) {
+      return;
+    }
+    const trimmedName = nameDraft.trim();
+    if (!trimmedName) {
+      setNameError("A showcase name is required.");
+      return;
+    }
+    // Preserve the drilled level across the save when it is a saved node;
+    // staged (temporary) levels fall back to the root.
+    const savedDisplayId =
+      displayNode && !isTempId(displayNode.id) ? displayNode.id : null;
+    setSaving(true);
+    setSaveError("");
+    setNameError("");
+    try {
+      if (showcase && trimmedName !== showcase.name) {
+        await renameShowcase(showcase.id, trimmedName);
+      }
+      await saveShowcaseDraft({
+        showcaseId,
+        baselineNodes,
+        draftNodes: nodes,
+        api: { createShowcaseNode, updateNode, deleteNode, reorderNodes },
+      });
+      // The mode switch remounts the screen (see the route keys), so view
+      // loads the saved tree fresh; no local reset is needed here.
+      navigate({
+        pathname: SHOWCASE_ROUTES.showcase(showcaseId),
+        search: showcaseNodeSearch(savedDisplayId),
+      });
+    } catch (error) {
+      setSaveError(error.message || "Could not save the showcase.");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  function handleCancel() {
+    if (saving) {
+      return;
+    }
+    // Cancel discards the draft and returns to view on the same level when
+    // it is a saved node. The mode switch remounts the screen (see the route
+    // keys), so no local reset is needed: the draft state is discarded with
+    // the edit instance and view loads fresh from the entry `?node=`.
+    const cancelDisplayId =
+      displayNode && !isTempId(displayNode.id) ? displayNode.id : null;
+    navigate({
+      pathname: SHOWCASE_ROUTES.showcase(showcaseId),
+      search: showcaseNodeSearch(cancelDisplayId),
+    });
   }
 
   // --- Keyboard navigation ------------------------------------------------
@@ -813,11 +895,11 @@ function ShowcaseScreen({ mode }) {
   const drillKey = effectiveDrillIds.join("/");
 
   // Edit mode live-syncs the in-memory drill to `?node=` so the address always
-  // names the current level: flipping the `view` / `edit` tail — by toggle or
-  // by hand — stays on the same level either way, and a drilled edit URL
-  // restores on reload or share. The sync replaces instead of pushing, so the
-  // browser Back button still leaves the screen instead of stepping the drill.
-  const editDrillSearch = showcaseNodeSearch(displayNode?.id ?? null);
+  // names the current level. Staged (unsaved) nodes have temporary ids and are
+  // never written to the URL.
+  const editDrillSearch = showcaseNodeSearch(
+    displayNode && !isTempId(displayNode.id) ? displayNode.id : null,
+  );
 
   useEffect(() => {
     if (!editMode || loading) {
@@ -870,14 +952,21 @@ function ShowcaseScreen({ mode }) {
   const showViewEmptyNode = showEmptyNode && !editMode;
   const showEditEmptyNode = showEmptyNode && editMode;
   // A label can be placed at most once per Showcase, so do not suggest the ones
-  // already on the canvas.
+  // already on the canvas (including staged draft placements by name).
   const placedCategoryIds = new Set(
     nodes
       .map((node) => node.category_id)
       .filter((categoryId) => categoryId != null),
   );
+  const placedCategoryNames = new Set(
+    nodes
+      .filter((node) => node.node_type === "category")
+      .map((node) => String(node.name ?? "").toLowerCase()),
+  );
   const availableCategories = categories.filter(
-    (category) => !placedCategoryIds.has(category.id),
+    (category) =>
+      !placedCategoryIds.has(category.id) &&
+      !placedCategoryNames.has(String(category.name ?? "").toLowerCase()),
   );
   // The header's muted total (presentation spec §1): the loaded tree's note
   // count, or the showcase row's count until the tree arrives.
@@ -898,7 +987,11 @@ function ShowcaseScreen({ mode }) {
                 aria-label="Showcase name"
                 className="showcase-name-field"
                 onBlur={commitName}
-                onChange={(event) => setNameDraft(event.target.value)}
+                onChange={(event) => {
+                  setNameDraft(event.target.value);
+                  setNameError("");
+                  setSaveError("");
+                }}
                 onKeyDown={handleNameKeyDown}
                 ref={nameFieldRef}
                 value={nameDraft}
@@ -907,6 +1000,9 @@ function ShowcaseScreen({ mode }) {
               <h1>{showcaseName}</h1>
             )}
             <p className="muted showcase-note-count">{`${noteCount} notes`}</p>
+            {editMode && dirty && !loading ? (
+              <p className="muted showcase-dirty">Unsaved changes</p>
+            ) : null}
           </div>
           <div className="showcase-header-controls">
             <div className="showcase-photo-size">
@@ -916,19 +1012,27 @@ function ShowcaseScreen({ mode }) {
               />
             </div>
             <div className="panel-heading-actions">
-              {/* The mode toggle keeps the drill level: view carries it as
-              `?node=`, and edit writes the in-memory drill back into `?node=`
-              so the round trip lands on the same level. */}
+              {/* Edit mode is a draft: Save persists the canvas and the name,
+              Cancel discards both and returns to view. */}
               {editMode ? (
-                <Link
-                  className="button"
-                  to={{
-                    pathname: SHOWCASE_ROUTES.showcase(showcaseId),
-                    search: showcaseNodeSearch(displayNode?.id ?? null),
-                  }}
-                >
-                  View
-                </Link>
+                <>
+                  <button
+                    className="button button-primary"
+                    disabled={!dirty || saving || loading}
+                    onClick={handleSave}
+                    type="button"
+                  >
+                    {saving ? "Saving…" : "Save"}
+                  </button>
+                  <button
+                    className="button"
+                    disabled={saving}
+                    onClick={handleCancel}
+                    type="button"
+                  >
+                    Cancel
+                  </button>
+                </>
               ) : (
                 <Link
                   className="button"
@@ -962,6 +1066,12 @@ function ShowcaseScreen({ mode }) {
         {nameError ? (
           <p className="muted showcase-name-error" role="alert">
             {nameError}
+          </p>
+        ) : null}
+
+        {saveError ? (
+          <p className="showcase-error" role="alert">
+            {saveError}
           </p>
         ) : null}
 

@@ -207,7 +207,8 @@ describe("showcase child reordering", () => {
     ]);
   });
 
-  test("dragging a grouping past its notes interleaves them in one order", async () => {
+  test("dragging a grouping past its notes stages the order and saves it on Save", async () => {
+    const user = userEvent.setup();
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await openSummer();
 
@@ -230,14 +231,19 @@ describe("showcase child reordering", () => {
       );
     });
 
-    await waitFor(() => {
-      expect(reorderNodes).toHaveBeenCalledWith(1, 10, [11, 12, 20]);
-    });
+    // Staged locally: the order changes with no network call.
     expect(reorderLabels()).toEqual([
       "Reorder 1 2020",
       "Reorder 5 1990",
       "Reorder Sub",
     ]);
+    expect(reorderNodes).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(reorderNodes).toHaveBeenCalledWith(1, 10, [11, 12, 20]);
+    });
   });
 
   test("a drag that lands a card back where it started persists nothing", async () => {

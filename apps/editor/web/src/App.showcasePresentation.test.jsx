@@ -26,6 +26,7 @@ vi.mock("./lib/api.js", () => ({
   reorderShowcases: vi.fn(),
   setDefaultCollection: vi.fn(),
   updateNode: vi.fn(),
+  reorderNodes: vi.fn(),
 }));
 
 vi.mock("./components/NotesTable.jsx", () => ({
@@ -396,7 +397,7 @@ describe("view/edit mode switching", () => {
     ).toBeInTheDocument();
   });
 
-  test("the View toggle returns to the same drilled level", async () => {
+  test("Cancel returns to the same drilled level in view", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     await userEvent.click(
       await screen.findByRole("button", { name: "Open grouping Sub" }),
@@ -405,7 +406,7 @@ describe("view/edit mode switching", () => {
       await screen.findByRole("button", { name: "10 lei, 1930" }),
     ).toBeInTheDocument();
 
-    await userEvent.click(screen.getByRole("link", { name: "View" }));
+    await userEvent.click(screen.getByRole("button", { name: "Cancel" }));
 
     await waitFor(() => {
       expect(currentPath()).toBe(SHOWCASE_ROUTES.showcase(1));

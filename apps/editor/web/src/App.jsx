@@ -176,11 +176,11 @@ function ShellContent() {
                 path={CATALOG_ROUTES.noteEdit(":id")}
               />
               <Route
-                element={<ShowcaseScreen mode="view" />}
+                element={<ShowcaseScreen key="view" mode="view" />}
                 path={SHOWCASE_ROUTES.showcase(":id")}
               />
               <Route
-                element={<ShowcaseScreen mode="edit" />}
+                element={<ShowcaseScreen key="edit" mode="edit" />}
                 path={SHOWCASE_ROUTES.showcaseEdit(":id")}
               />
               <Route
