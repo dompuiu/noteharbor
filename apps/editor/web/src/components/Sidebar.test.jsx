@@ -188,9 +188,13 @@ describe("Sidebar navigation groups", () => {
     await user.click(newShowcaseButton());
 
     expect(createShowcase).toHaveBeenCalled();
-    expect(screen.getByTestId("pathname")).toHaveTextContent(
-      PORTFOLIO_ROUTES.showcaseEdit(9),
-    );
+    // The click handler creates the showcase, then navigates on the resolved
+    // promise; wait for the route rather than assuming it has flushed.
+    await waitFor(() => {
+      expect(screen.getByTestId("pathname")).toHaveTextContent(
+        PORTFOLIO_ROUTES.showcaseEdit(9),
+      );
+    });
   });
 
   test("a link click moves focus into the page, off the rail", async () => {
