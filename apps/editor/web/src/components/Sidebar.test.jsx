@@ -2,7 +2,15 @@ import { createRef } from "react";
 import { MemoryRouter, useLocation } from "react-router-dom";
 import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, test } from "vitest";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+
+vi.mock("../lib/api.js", () => ({
+  createShowcase: vi.fn(),
+  getShowcases: vi.fn(),
+}));
+
+import { createShowcase, getShowcases } from "../lib/api.js";
+import { ShowcasesProvider } from "../lib/showcases.jsx";
 import { Sidebar } from "./Sidebar.jsx";
 import {
   CATALOG_ROUTES,
@@ -10,12 +18,14 @@ import {
   PORTFOLIO_ROUTES,
 } from "../lib/routes.js";
 
+// The sidebar's static destinations plus one link per loaded showcase. The
+// `+ New showcase` row is a button, not a link, so it is asserted separately.
 const LINKS = [
   "Banknotes",
   "Collections",
   "Import / Export",
-  "Categories",
-  "Groupings",
+  "Summer",
+  "Vienna",
 ];
 
 function LocationProbe() {
@@ -25,12 +35,14 @@ function LocationProbe() {
 
 // Mirrors App's shell: the sidebar sits beside a main region whose first
 // child is the inert focus anchor that Escape hands focus to.
-function renderSidebar(path) {
+async function renderSidebar(path) {
   const pageFocusRef = createRef();
   const view = render(
     <MemoryRouter initialEntries={[path]}>
       <LocationProbe />
-      <Sidebar pageFocusRef={pageFocusRef} />
+      <ShowcasesProvider>
+        <Sidebar pageFocusRef={pageFocusRef} />
+      </ShowcasesProvider>
       <main>
         <span
           className="page-focus-anchor"
@@ -42,6 +54,8 @@ function renderSidebar(path) {
     </MemoryRouter>,
   );
 
+  // Wait for the data-driven showcase rows before interacting.
+  await screen.findByRole("link", { name: "Summer" });
   return { ...view, pageFocusRef };
 }
 
@@ -49,33 +63,48 @@ function drawerToggle() {
   return screen.getByRole("button", { name: /navigation/ });
 }
 
+function newShowcaseButton() {
+  return screen.getByRole("button", { name: "New showcase" });
+}
+
 beforeEach(() => {
+  vi.clearAllMocks();
   window.localStorage.clear();
+  getShowcases.mockResolvedValue({
+    showcases: [
+      { id: 1, name: "Summer" },
+      { id: 2, name: "Vienna" },
+    ],
+  });
+  createShowcase.mockResolvedValue({
+    showcase: { id: 9, name: "Showcase" },
+  });
 });
 
 describe("Sidebar navigation groups", () => {
-  test("exposes a labelled navigation landmark", () => {
-    renderSidebar(CATALOG_ROUTES.banknotes);
+  test("exposes a labelled navigation landmark", async () => {
+    await renderSidebar(CATALOG_ROUTES.banknotes);
 
     expect(
       screen.getByRole("navigation", { name: "Sections" }),
     ).toBeInTheDocument();
   });
 
-  test("renders one link and one icon per destination", () => {
-    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+  test("renders one link and one icon per destination", async () => {
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
 
     for (const label of LINKS) {
       expect(screen.getAllByRole("link", { name: label })).toHaveLength(1);
     }
 
+    // Every link plus the `+ New showcase` action row carries an icon.
     expect(container.querySelectorAll(".sidebar-link .sidebar-ic svg")).toHaveLength(
-      LINKS.length,
+      LINKS.length + 1,
     );
   });
 
-  test("gives each category a marker icon beside its name", () => {
-    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+  test("gives each category a marker icon beside its name", async () => {
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
 
     // Two section markers, one per category, kept out of the link list so a
     // category never reads as a destination.
@@ -90,13 +119,13 @@ describe("Sidebar navigation groups", () => {
     expect(catalogLabel).toHaveTextContent("Catalog");
     expect(catalogLabel.querySelector(".sidebar-group-ic svg")).not.toBeNull();
 
-    const portfolioLabel = container.querySelector("#sidebar-group-portfolio");
-    expect(portfolioLabel).toHaveTextContent("Portfolio");
-    expect(portfolioLabel.querySelector(".sidebar-group-ic svg")).not.toBeNull();
+    const showcasesLabel = container.querySelector("#sidebar-group-showcases");
+    expect(showcasesLabel).toHaveTextContent("Showcases");
+    expect(showcasesLabel.querySelector(".sidebar-group-ic svg")).not.toBeNull();
   });
 
-  test("the first destination is the default route", () => {
-    renderSidebar(CATALOG_ROUTES.banknotes);
+  test("the first destination is the default route", async () => {
+    await renderSidebar(CATALOG_ROUTES.banknotes);
 
     expect(screen.getByRole("link", { name: LINKS[0] })).toHaveAttribute(
       "href",
@@ -104,8 +133,8 @@ describe("Sidebar navigation groups", () => {
     );
   });
 
-  test("marks the active destination as the current page", () => {
-    renderSidebar(CATALOG_ROUTES.collections);
+  test("marks the active destination as the current page", async () => {
+    await renderSidebar(CATALOG_ROUTES.collections);
 
     expect(
       screen.getByRole("link", { name: "Collections" }),
@@ -115,25 +144,28 @@ describe("Sidebar navigation groups", () => {
     ).not.toHaveAttribute("aria-current");
   });
 
-  test("keeps Banknotes current while the note editor is open", () => {
-    renderSidebar(CATALOG_ROUTES.noteEdit(7));
+  test("keeps Banknotes current while the note editor is open", async () => {
+    await renderSidebar(CATALOG_ROUTES.noteEdit(7));
 
     expect(
       screen.getByRole("link", { name: "Banknotes" }),
     ).toHaveAttribute("aria-current", "page");
   });
 
-  test("highlights a Portfolio destination", () => {
-    renderSidebar(PORTFOLIO_ROUTES.categories);
+  test("highlights the open showcase, in view and edit mode", async () => {
+    await renderSidebar(PORTFOLIO_ROUTES.showcase(2));
 
     expect(
-      screen.getByRole("link", { name: "Categories" }),
+      screen.getByRole("link", { name: "Vienna" }),
     ).toHaveAttribute("aria-current", "page");
+    expect(
+      screen.getByRole("link", { name: "Summer" }),
+    ).not.toHaveAttribute("aria-current");
   });
 
   test("links navigate to the prefixed destinations", async () => {
     const user = userEvent.setup();
-    renderSidebar(CATALOG_ROUTES.banknotes);
+    await renderSidebar(CATALOG_ROUTES.banknotes);
 
     await user.click(screen.getByRole("link", { name: "Import / Export" }));
 
@@ -142,9 +174,21 @@ describe("Sidebar navigation groups", () => {
     );
   });
 
+  test("`+ New showcase` creates a showcase and opens its edit route", async () => {
+    const user = userEvent.setup();
+    await renderSidebar(CATALOG_ROUTES.banknotes);
+
+    await user.click(newShowcaseButton());
+
+    expect(createShowcase).toHaveBeenCalled();
+    expect(screen.getByTestId("pathname")).toHaveTextContent(
+      PORTFOLIO_ROUTES.showcaseEdit(9),
+    );
+  });
+
   test("a link click moves focus into the page, off the rail", async () => {
     const user = userEvent.setup();
-    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
 
     await user.click(screen.getByRole("link", { name: "Collections" }));
 
@@ -155,7 +199,7 @@ describe("Sidebar navigation groups", () => {
 
   test("after a link click, an arrow key does not reopen the rail", async () => {
     const user = userEvent.setup();
-    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
 
     // Reproduces the report: click a destination, then press ↓. Focus is now
     // in the page, so the sidebar must not claim the key and open its cursor.
@@ -170,7 +214,7 @@ describe("Sidebar navigation groups", () => {
 describe("Sidebar keyboard cursor", () => {
   test("`b` opens the rail on the active option", async () => {
     const user = userEvent.setup();
-    renderSidebar(CATALOG_ROUTES.collections);
+    await renderSidebar(CATALOG_ROUTES.collections);
 
     await user.keyboard("{b}");
 
@@ -183,7 +227,7 @@ describe("Sidebar keyboard cursor", () => {
   });
 
   test("`/` is left for the table filter, not the sidebar", async () => {
-    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
 
     // `/` stays with the table filter; firing it must not open the rail.
     window.dispatchEvent(
@@ -195,7 +239,7 @@ describe("Sidebar keyboard cursor", () => {
 
   test("j/k and arrows move the cursor between options", async () => {
     const user = userEvent.setup();
-    renderSidebar(CATALOG_ROUTES.banknotes);
+    await renderSidebar(CATALOG_ROUTES.banknotes);
 
     await user.keyboard("{b}"); // Banknotes
     await user.keyboard("{j}"); // Collections
@@ -207,11 +251,11 @@ describe("Sidebar keyboard cursor", () => {
 
   test("Home and End jump to the ends", async () => {
     const user = userEvent.setup();
-    renderSidebar(CATALOG_ROUTES.banknotes);
+    await renderSidebar(CATALOG_ROUTES.banknotes);
 
     await user.keyboard("{b}");
     await user.keyboard("{End}");
-    expect(document.activeElement).toHaveTextContent("Groupings");
+    expect(document.activeElement).toHaveTextContent("New showcase");
 
     await user.keyboard("{Home}");
     expect(document.activeElement).toHaveTextContent("Banknotes");
@@ -219,7 +263,7 @@ describe("Sidebar keyboard cursor", () => {
 
   test("Enter follows the focused option", async () => {
     const user = userEvent.setup();
-    renderSidebar(CATALOG_ROUTES.banknotes);
+    await renderSidebar(CATALOG_ROUTES.banknotes);
 
     await user.keyboard("{b}"); // Banknotes
     await user.keyboard("{j}"); // Collections
@@ -232,7 +276,7 @@ describe("Sidebar keyboard cursor", () => {
 
   test("Escape clears the cursor and returns control to the page", async () => {
     const user = userEvent.setup();
-    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
 
     await user.keyboard("{b}");
     expect(container.querySelector(".sidebar-link--cursor")).not.toBeNull();
@@ -245,11 +289,11 @@ describe("Sidebar keyboard cursor", () => {
 
   test("Tab off the last option wraps to the first, like ArrowDown", async () => {
     const user = userEvent.setup();
-    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
 
     await user.keyboard("{b}");
     await user.keyboard("{End}");
-    expect(document.activeElement).toHaveTextContent("Groupings");
+    expect(document.activeElement).toHaveTextContent("New showcase");
 
     await user.keyboard("{Tab}");
 
@@ -260,7 +304,7 @@ describe("Sidebar keyboard cursor", () => {
 
   test("Shift+Tab off the first option wraps to the last, like ArrowUp", async () => {
     const user = userEvent.setup();
-    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
 
     await user.keyboard("{b}");
     await user.keyboard("{Home}");
@@ -269,12 +313,12 @@ describe("Sidebar keyboard cursor", () => {
     await user.keyboard("{Shift>}{Tab}{/Shift}");
 
     expect(container.querySelector(".sidebar-link--cursor")).not.toBeNull();
-    expect(document.activeElement).toHaveTextContent("Groupings");
+    expect(document.activeElement).toHaveTextContent("New showcase");
   });
 
   test("Tab keeps its native order until the cursor is active", async () => {
     const user = userEvent.setup();
-    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
 
     // No "b": a plain Tab through the rail must not be captured or wrap.
     screen.getByRole("link", { name: "Banknotes" }).focus();
@@ -286,7 +330,7 @@ describe("Sidebar keyboard cursor", () => {
 
   test("`b` does nothing while another control has focus", async () => {
     const user = userEvent.setup();
-    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
 
     // Focus any real control outside the sidebar, then press "b".
     const outside = document.createElement("button");
@@ -301,7 +345,7 @@ describe("Sidebar keyboard cursor", () => {
 
   test("`b` does nothing while a table row has focus", async () => {
     const user = userEvent.setup();
-    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
 
     // The banknote table's rows are focusable <tr>s inside the table shell.
     const shell = document.createElement("div");
@@ -321,7 +365,7 @@ describe("Sidebar keyboard cursor", () => {
 
   test("`b` opens the rail when focus rests on the table's empty-row anchor", async () => {
     const user = userEvent.setup();
-    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
 
     // Pressing Escape on a focused row parks focus on an inert anchor inside
     // the table shell. Visually nothing is focused, so "b" must still open
@@ -342,7 +386,7 @@ describe("Sidebar keyboard cursor", () => {
 
   test("Escape returns focus off the rail, not onto a hidden link", async () => {
     const user = userEvent.setup();
-    renderSidebar(CATALOG_ROUTES.banknotes);
+    await renderSidebar(CATALOG_ROUTES.banknotes);
 
     await user.keyboard("{b}");
     await user.keyboard("{Escape}");
@@ -359,7 +403,7 @@ describe("Sidebar keyboard cursor", () => {
 
   test("Escape hands focus to the page content", async () => {
     const user = userEvent.setup();
-    renderSidebar(CATALOG_ROUTES.importExport);
+    await renderSidebar(CATALOG_ROUTES.importExport);
 
     await user.keyboard("{b}");
     expect(document.activeElement).toHaveTextContent("Import / Export");
@@ -373,7 +417,7 @@ describe("Sidebar keyboard cursor", () => {
 describe("Sidebar drawer", () => {
   test("the hamburger opens and closes the drawer", async () => {
     const user = userEvent.setup();
-    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
 
     const toggle = drawerToggle();
     expect(toggle).toHaveAttribute("aria-expanded", "false");
@@ -395,7 +439,7 @@ describe("Sidebar drawer", () => {
 
   test("Escape closes the drawer", async () => {
     const user = userEvent.setup();
-    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
 
     await user.click(drawerToggle());
     expect(toggleIsOpen(container)).toBe(true);
@@ -408,7 +452,7 @@ describe("Sidebar drawer", () => {
 
   test("selecting a destination closes the drawer", async () => {
     const user = userEvent.setup();
-    const { container } = renderSidebar(CATALOG_ROUTES.banknotes);
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
 
     await user.click(drawerToggle());
     await user.click(screen.getByRole("link", { name: "Collections" }));

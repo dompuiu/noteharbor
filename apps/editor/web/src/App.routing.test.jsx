@@ -9,10 +9,13 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 // connection state and the empty-library state; health is only used on retry.
 vi.mock("./lib/api.js", () => ({
   createCollection: vi.fn(),
+  createShowcase: vi.fn(),
   deleteCollection: vi.fn(),
   getCollections: vi.fn(),
   getHealth: vi.fn(),
+  getShowcases: vi.fn(),
   renameCollection: vi.fn(),
+  reorderCollections: vi.fn(),
   setDefaultCollection: vi.fn(),
 }));
 
@@ -34,8 +37,9 @@ vi.mock("./components/NoteEditForm.jsx", () => ({
 
 import { ShellContent } from "./App.jsx";
 import { CollectionsProvider } from "./lib/collections.jsx";
-import { getCollections, getHealth } from "./lib/api.js";
-import { CATALOG_ROUTES, PORTFOLIO_ROUTES } from "./lib/routes.js";
+import { ShowcasesProvider } from "./lib/showcases.jsx";
+import { getCollections, getHealth, getShowcases } from "./lib/api.js";
+import { CATALOG_ROUTES } from "./lib/routes.js";
 
 function LocationProbe() {
   const location = useLocation();
@@ -47,7 +51,9 @@ function renderAt(path) {
     <MemoryRouter initialEntries={[path]}>
       <LocationProbe />
       <CollectionsProvider>
-        <ShellContent />
+        <ShowcasesProvider>
+          <ShellContent />
+        </ShowcasesProvider>
       </CollectionsProvider>
     </MemoryRouter>,
   );
@@ -62,7 +68,9 @@ function renderAtInStrictMode(path) {
       <MemoryRouter initialEntries={[path]}>
         <LocationProbe />
         <CollectionsProvider>
-          <ShellContent />
+          <ShowcasesProvider>
+            <ShellContent />
+          </ShowcasesProvider>
         </CollectionsProvider>
       </MemoryRouter>
     </StrictMode>,
@@ -80,6 +88,7 @@ beforeEach(() => {
   getCollections.mockResolvedValue({
     collections: [{ id: 1, is_default: 1, name: "Default" }],
   });
+  getShowcases.mockResolvedValue({ showcases: [] });
 });
 
 describe("Catalog route prefixes", () => {
@@ -134,23 +143,23 @@ describe("Unknown routes", () => {
   });
 });
 
-describe("Portfolio destinations", () => {
-  test("serves the categories placeholder at /portfolio/categories", async () => {
-    renderAt(PORTFOLIO_ROUTES.categories);
+describe("Retired Portfolio destinations", () => {
+  test("/portfolio/categories falls through to Banknotes", async () => {
+    renderAt("/portfolio/categories");
 
-    expect(
-      await screen.findByText("Categories are coming soon"),
-    ).toBeInTheDocument();
-    expect(currentPath()).toBe("/portfolio/categories");
+    await waitFor(() => {
+      expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+    });
+    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
   });
 
-  test("serves the groupings placeholder at /portfolio/groupings", async () => {
-    renderAt(PORTFOLIO_ROUTES.groupings);
+  test("/portfolio/groupings falls through to Banknotes", async () => {
+    renderAt("/portfolio/groupings");
 
-    expect(
-      await screen.findByText("Groupings are coming soon"),
-    ).toBeInTheDocument();
-    expect(currentPath()).toBe("/portfolio/groupings");
+    await waitFor(() => {
+      expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+    });
+    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
   });
 
   test("renders the sidebar navigation on every route", async () => {
@@ -160,7 +169,7 @@ describe("Portfolio destinations", () => {
       await screen.findByRole("navigation", { name: "Sections" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Categories" }),
+      screen.getByRole("link", { name: "Banknotes" }),
     ).toBeInTheDocument();
   });
 });
