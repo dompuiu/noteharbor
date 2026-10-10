@@ -736,18 +736,19 @@ input[type="radio"] {
 
 /* A Grouping card shows its cover image (the manual cover or the first note
    beneath it) or a neutral gradient placeholder that still carries the name.
-   It shares the Note card's padding and footer metrics so the two stay the
-   same height in one grid row. Only tone separates them: the grouping rests
-   on the accent tint with an accent border and an accent-strong folder
-   footer, while a Note stays on the plain surface with a muted caption. The
-   footer icon is inline at 1em inside the shared 1.4 line so it never changes
-   the row height. */
+   It shares the Note card's surface, padding, and footer metrics so the two
+   stay the same height in one grid row. Only non-sized cues separate them: a
+   slim accent spine and accent border on the card plus an accent-strong
+   folder footer, while a Note stays plain with a muted caption. The footer
+   icon is inline at 1em inside the shared 1.4 line so it never changes the
+   row height. */
 .showcase-card--grouping {
   justify-content: flex-start;
   gap: 8px;
   padding: 10px;
   border-color: var(--border-control);
-  background: var(--accent-soft);
+  background: var(--surface);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .showcase-card--grouping .showcase-card-name {
@@ -773,15 +774,6 @@ input[type="radio"] {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.showcase-card-image {
-  display: block;
-  width: 100%;
-  aspect-ratio: 2 / 1;
-  border-radius: var(--radius-md);
-  background: var(--surface-2);
-  object-fit: contain;
 }
 
 .showcase-card-cover {
@@ -1124,6 +1116,10 @@ input[type="radio"] {
   padding: 10px;
 }
 
+/* The shared 2/1 image well. It is transparent so letterboxed photos blend
+   into the card instead of adding a third background tone. The rule doubles
+   as the Grouping cover `img` itself, hence `object-fit` lives here too (it
+   is inert on the Note's wrapper span). */
 .showcase-card-image {
   position: relative;
   display: flex;
@@ -1133,7 +1129,8 @@ input[type="radio"] {
   aspect-ratio: 2 / 1;
   overflow: hidden;
   border-radius: var(--radius-md);
-  background: var(--surface-2);
+  background: transparent;
+  object-fit: contain;
 }
 
 .showcase-card-image img {

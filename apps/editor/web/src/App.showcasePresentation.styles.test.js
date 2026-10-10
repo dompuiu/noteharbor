@@ -65,20 +65,25 @@ describe("showcase note/grouping card heights", () => {
     }
   });
 
-  test("grouping stays distinguishable by tone only, never by size", () => {
+  test("grouping stays distinguishable without changing size", () => {
     const grouping = styles.match(/\n\.showcase-card--grouping\s*\{([^}]*)\}/);
     const name = styles.match(
       /\n\.showcase-card--grouping \.showcase-card-name\s*\{([^}]*)\}/,
     );
     const icon = styles.match(/\n\.showcase-card-name-icon\s*\{([^}]*)\}/);
+    const image = styles.match(/\n\.showcase-card-image\s*\{([^}]*)\}/);
     expect(grouping).not.toBeNull();
-    expect(grouping[1]).toMatch(/background:\s*var\(--accent-soft\)/);
-    expect(grouping[1]).toMatch(/border-color:\s*var\(--border-control\)/);
+    expect(grouping[1]).toMatch(/background:\s*var\(--surface\)/);
+    expect(grouping[1]).toMatch(/box-shadow:\s*inset 3px 0 0 var\(--accent\)/);
     expect(name).not.toBeNull();
     expect(name[1]).toMatch(/color:\s*var\(--accent-strong\)/);
     expect(icon).not.toBeNull();
     expect(icon[1]).toMatch(/width:\s*1em/);
     expect(icon[1]).toMatch(/height:\s*1em/);
+    // The image well is transparent so letterboxed photos blend into the
+    // card instead of adding a third background tone.
+    expect(image).not.toBeNull();
+    expect(image[1]).toMatch(/background:\s*transparent/);
   });
 });
 
