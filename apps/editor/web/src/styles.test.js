@@ -225,6 +225,18 @@ describe("sidebar styles", () => {
     expect(expandedLabels[1]).toMatch(/animation:\s*sidebar-label-in/);
   });
 
+  test("the keyboard cursor replays a label animation as it moves", () => {
+    // Moving the cursor with the arrows outside hover only snaps the ring
+    // between rows, so the newly-cursored row's own text carries a replayed
+    // entrance: the class landing on a new row restarts its animation.
+    expect(styles).toMatch(/@keyframes\s+sidebar-cursor-in/);
+    const cursorLabel = styles.match(
+      /\.sidebar-link--cursor \.sidebar-link-label\s*\{([^}]*)\}/,
+    );
+    expect(cursorLabel).not.toBeNull();
+    expect(cursorLabel[1]).toMatch(/animation:\s*sidebar-cursor-in/);
+  });
+
   test("the cursor link is ringed so focus is visible", () => {
     expect(styles).toMatch(
       /\.sidebar-link--cursor\s*\{[^}]*box-shadow:\s*inset 0 0 0 1\.5px var\(--accent\)/,

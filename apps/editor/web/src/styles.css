@@ -599,6 +599,27 @@ input[type="radio"] {
   animation: sidebar-label-in 0.18s ease;
 }
 
+/* Arrow-key navigation outside hover only snaps the cursor ring between
+   rows, so the newly-cursored row's text replays its own entrance each
+   time the class lands. A distinct animation name is what restarts it:
+   the rail-open rule above already applies `sidebar-label-in`, and
+   re-applying the same name would not replay. The extra class beats the
+   rail-open selectors so the cursor row always plays this one. */
+@keyframes sidebar-cursor-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.sidebar-dock .sidebar-link.sidebar-link--cursor .sidebar-link-label {
+  animation: sidebar-cursor-in 0.15s ease;
+}
+
 /* Expanded, the reorder controls return with the names. */
 .sidebar-dock:hover .sidebar-reorder-toggle,
 .sidebar-dock:has(:focus-visible) .sidebar-reorder-toggle {
@@ -1880,7 +1901,8 @@ input[type="radio"] {
   .sidebar-dock:hover .sidebar-link-label,
   .sidebar-dock:hover .sidebar-group-name,
   .sidebar-dock:has(:focus-visible) .sidebar-link-label,
-  .sidebar-dock:has(:focus-visible) .sidebar-group-name {
+  .sidebar-dock:has(:focus-visible) .sidebar-group-name,
+  .sidebar-dock .sidebar-link.sidebar-link--cursor .sidebar-link-label {
     animation: none;
   }
 
