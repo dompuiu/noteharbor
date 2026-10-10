@@ -718,8 +718,14 @@ input[type="radio"] {
   min-width: 0;
 }
 
+/* The rename field never stretches past a readable width (the prototype's
+   320px tile token), no matter how wide the header row gets. */
+.showcase-node-input {
+  max-width: 320px;
+}
+
 .showcase-node-title .showcase-category-title {
-  flex: 1 1 auto;
+  flex: 0 1 auto;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
