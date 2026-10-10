@@ -865,7 +865,9 @@ input[type="radio"] {
   margin-top: auto;
 }
 
-.showcase-cell-controls .button {
+.showcase-cell-controls .button,
+.showcase-cell-edit-actions .button,
+.showcase-category-actions .button {
   min-height: 30px;
   padding: 4px 10px;
   font-size: 0.8rem;
