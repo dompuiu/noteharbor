@@ -17,6 +17,10 @@ function ShowcasesProvider({ children }) {
   const [showcases, setShowcases] = useState([]);
   const [loadingShowcases, setLoadingShowcases] = useState(true);
   const [showcasesError, setShowcasesError] = useState('');
+  // A not-yet-saved showcase started from `+ New showcase`. It renders as a
+  // draft row in the sidebar and an empty edit canvas; Save POSTs it, while
+  // Cancel or leaving the `new` route discards it without a request.
+  const [pendingShowcase, setPendingShowcase] = useState(null);
 
   async function refreshShowcases() {
     setLoadingShowcases(true);
@@ -44,9 +48,20 @@ function ShowcasesProvider({ children }) {
     if (createdShowcase) {
       // A new showcase has the highest display_order, so it appends.
       setShowcases((current) => [...current, createdShowcase]);
+      // A pending draft (if any) is now real; drop it so the sidebar shows
+      // only the server row.
+      setPendingShowcase(null);
     }
 
     return createdShowcase;
+  }
+
+  function beginPendingShowcase() {
+    setPendingShowcase((current) => current ?? { id: 'new', name: 'Showcase' });
+  }
+
+  function discardPendingShowcase() {
+    setPendingShowcase(null);
   }
 
   // Reconcile the list from a single server row after a mutation, rather than
@@ -101,13 +116,16 @@ function ShowcasesProvider({ children }) {
       showcases,
       loadingShowcases,
       showcasesError,
+      pendingShowcase,
+      beginPendingShowcase,
+      discardPendingShowcase,
       createShowcase: handleCreateShowcase,
       deleteShowcase: handleDeleteShowcase,
       refreshShowcases,
       renameShowcase: handleRenameShowcase,
       reorderShowcases: handleReorderShowcases,
     }),
-    [showcases, loadingShowcases, showcasesError],
+    [showcases, loadingShowcases, showcasesError, pendingShowcase],
   );
 
   return (

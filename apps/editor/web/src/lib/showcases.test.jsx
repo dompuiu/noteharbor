@@ -24,9 +24,12 @@ let context;
 function Probe() {
   context = useShowcases();
   return (
-    <output data-testid="names">
-      {context.showcases.map((showcase) => showcase.name).join(",")}
-    </output>
+    <>
+      <output data-testid="names">
+        {context.showcases.map((showcase) => showcase.name).join(",")}
+      </output>
+      <output data-testid="pending">{context.pendingShowcase?.name ?? ""}</output>
+    </>
   );
 }
 
@@ -147,5 +150,42 @@ describe("ShowcasesProvider", () => {
     expect(screen.getByTestId("names")).toHaveTextContent("Vienna,Summer");
     expect(reorderShowcases).toHaveBeenCalledWith([2, 1]);
     expect(getShowcases.mock.calls.length).toBe(loadsBefore);
+  });
+
+  test("a pending showcase stages without posting and discards cleanly", async () => {
+    renderProvider();
+    await screen.findByText("Summer,Vienna");
+
+    await act(async () => {
+      context.beginPendingShowcase();
+    });
+    expect(screen.getByTestId("pending")).toHaveTextContent("Showcase");
+    expect(createShowcase).not.toHaveBeenCalled();
+
+    await act(async () => {
+      context.discardPendingShowcase();
+    });
+    expect(screen.getByTestId("pending")).toHaveTextContent("");
+  });
+
+  test("creating clears a pending draft and appends the server row", async () => {
+    renderProvider();
+    await screen.findByText("Summer,Vienna");
+
+    await act(async () => {
+      context.beginPendingShowcase();
+    });
+    createShowcase.mockResolvedValue({
+      showcase: { id: 3, name: "Showcase 3" },
+    });
+
+    await act(async () => {
+      await context.createShowcase();
+    });
+
+    expect(screen.getByTestId("pending")).toHaveTextContent("");
+    expect(screen.getByTestId("names")).toHaveTextContent(
+      "Summer,Vienna,Showcase 3",
+    );
   });
 });

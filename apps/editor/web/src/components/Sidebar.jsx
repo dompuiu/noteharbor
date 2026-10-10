@@ -4,6 +4,7 @@ import { useShowcases } from "../lib/showcases.jsx";
 import {
   CATALOG_ROUTES,
   DEFAULT_DESTINATION,
+  NEW_SHOWCASE_ID,
   SHOWCASE_ROUTES,
 } from "../lib/routes.js";
 
@@ -88,7 +89,13 @@ function ItemIcon({ className = "sidebar-ic", icon }) {
 function Sidebar({ pageFocusRef }) {
   const { pathname } = useLocation();
   const navigate = useNavigate();
-  const { showcases, createShowcase, reorderShowcases } = useShowcases();
+  const {
+    showcases,
+    pendingShowcase,
+    beginPendingShowcase,
+    discardPendingShowcase,
+    reorderShowcases,
+  } = useShowcases();
   // The keyboard cursor, distinct from DOM focus. Null means the rail is not
   // being navigated by keyboard.
   const [cursorIndex, setCursorIndex] = useState(null);
@@ -102,7 +109,8 @@ function Sidebar({ pageFocusRef }) {
   // The showcase rows, then the create action, hang off the Showcases group.
   // A showcase row stays highlighted in both of its modes: view and edit are
   // siblings under the showcase, so a prefix check on the view URL no longer
-  // covers the edit one.
+  // covers the edit one. A pending (not-yet-saved) showcase renders as a draft
+  // row that vanishes on Cancel or on leaving its route.
   const showcaseItems = showcases.map((showcase) => ({
     icon: "showcases",
     key: `showcase-${showcase.id}`,
@@ -113,6 +121,19 @@ function Sidebar({ pageFocusRef }) {
       pathname === SHOWCASE_ROUTES.showcaseEdit(showcase.id),
     showcaseId: showcase.id,
   }));
+
+  if (pendingShowcase) {
+    showcaseItems.push({
+      icon: "showcases",
+      key: "showcase-new",
+      label: pendingShowcase.name,
+      to: SHOWCASE_ROUTES.showcaseEdit(NEW_SHOWCASE_ID),
+      matches: (pathname) =>
+        pathname === SHOWCASE_ROUTES.showcaseEdit(NEW_SHOWCASE_ID),
+      showcaseId: NEW_SHOWCASE_ID,
+      pending: true,
+    });
+  }
 
   const newShowcaseItem = {
     icon: "plus",
@@ -135,18 +156,15 @@ function Sidebar({ pageFocusRef }) {
   // One flat list drives the keyboard cursor, in DOM order.
   const entries = groups.flatMap((group) => group.items);
 
-  async function handleNewShowcase() {
-    try {
-      const showcase = await createShowcase();
+  const newShowcaseTo = SHOWCASE_ROUTES.showcaseEdit(NEW_SHOWCASE_ID);
 
-      if (showcase?.id != null) {
-        navigate(SHOWCASE_ROUTES.showcaseEdit(showcase.id), {
-          state: { justCreated: true },
-        });
-      }
-    } catch {
-      // The rail cannot surface an error; leave the user where they are.
-    }
+  function handleNewShowcase() {
+    // Deferred creation: stage a draft row and open its edit canvas. Nothing
+    // POSTs until Save; Cancel or leaving the route discards the draft.
+    beginPendingShowcase();
+    navigate(newShowcaseTo, {
+      state: { justCreated: true },
+    });
   }
 
   function handleActionClick() {
@@ -288,6 +306,9 @@ function Sidebar({ pageFocusRef }) {
         if (entry?.type === "action") {
           handleNewShowcase();
         } else if (entry) {
+          if (entry.to !== newShowcaseTo) {
+            discardPendingShowcase();
+          }
           navigate(entry.to);
         }
       }
@@ -296,14 +317,31 @@ function Sidebar({ pageFocusRef }) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursorIndex, pathname, showcases]);
+  }, [cursorIndex, pathname, showcases, pendingShowcase]);
 
-  function handleLinkClick() {
+  function handleLinkClick(to) {
     // A click means "I'm leaving the rail". The browser focuses a clicked
     // link, so without this the collapsed rail would keep keyboard focus and
-    // claim the arrow keys. Hand focus to the page.
+    // claim the arrow keys. Hand focus to the page. Leaving the draft route
+    // discards a not-yet-saved showcase so it never lingers.
+    if (to !== newShowcaseTo) {
+      discardPendingShowcase();
+    }
     leaveCursor();
   }
+
+  // Any route change away from the draft (browser back, typed URL, Cancel's
+  // own navigation already cleared it) drops the pending row. The effect only
+  // watches the pathname so staging the draft and navigating to it in one
+  // click never discards itself mid-flight.
+  const pendingRef = useRef(null);
+  pendingRef.current = pendingShowcase ? true : null;
+  useEffect(() => {
+    if (pendingRef.current && pathname !== newShowcaseTo) {
+      discardPendingShowcase();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pathname]);
 
   function clearShowcaseDrag() {
     setDraggedShowcaseId(null);
@@ -430,7 +468,9 @@ function Sidebar({ pageFocusRef }) {
                     const index = entries.indexOf(item);
                     const active =
                       item.type !== "action" && isItemActive(item, pathname);
-                    const isShowcase = item.showcaseId != null;
+                    // The pending draft row is display-only: it cannot be
+                    // dragged or become a drop target.
+                    const isShowcase = item.showcaseId != null && !item.pending;
                     const dropPlacement =
                       isShowcase &&
                       showcaseDropTarget?.showcaseId === item.showcaseId
@@ -480,7 +520,7 @@ function Sidebar({ pageFocusRef }) {
                         data-sidebar-index={index}
                         draggable={isShowcase}
                         key={item.key ?? item.to}
-                        onClick={handleLinkClick}
+                        onClick={() => handleLinkClick(item.to)}
                         onDragEnd={isShowcase ? clearShowcaseDrag : undefined}
                         onDragLeave={
                           isShowcase

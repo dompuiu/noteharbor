@@ -177,20 +177,36 @@ describe("Sidebar navigation groups", () => {
     );
   });
 
-  test("`+ New showcase` creates a showcase and opens its edit route", async () => {
+  test("`+ New showcase` stages a draft without posting and opens its edit route", async () => {
     const user = userEvent.setup();
     await renderSidebar(CATALOG_ROUTES.banknotes);
 
     await user.click(newShowcaseButton());
 
-    expect(createShowcase).toHaveBeenCalled();
-    // The click handler creates the showcase, then navigates on the resolved
-    // promise; wait for the route rather than assuming it has flushed.
+    // Deferred creation: nothing POSTs until Save.
+    expect(createShowcase).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(screen.getByTestId("pathname")).toHaveTextContent(
-        SHOWCASE_ROUTES.showcaseEdit(9),
+        SHOWCASE_ROUTES.showcaseEdit("new"),
       );
     });
+    // The draft is visible in the sidebar while it is pending.
+    expect(screen.getByRole("link", { name: "Showcase" })).toBeInTheDocument();
+  });
+
+  test("leaving the draft route discards the pending showcase", async () => {
+    const user = userEvent.setup();
+    await renderSidebar(CATALOG_ROUTES.banknotes);
+
+    await user.click(newShowcaseButton());
+    await screen.findByRole("link", { name: "Showcase" });
+
+    await user.click(screen.getByRole("link", { name: "Banknotes" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("link", { name: "Showcase" })).not.toBeInTheDocument();
+    });
+    expect(createShowcase).not.toHaveBeenCalled();
   });
 
   test("a link click moves focus into the page, off the rail", async () => {

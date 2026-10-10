@@ -12,6 +12,7 @@ import { isEditableElement } from "../lib/editableElement.js";
 import { usePhotoSize } from "../lib/photoSize.js";
 import {
   DEFAULT_DESTINATION,
+  NEW_SHOWCASE_ID,
   SHOWCASE_ROUTES,
   showcaseNodeSearch,
 } from "../lib/routes.js";
@@ -67,10 +68,25 @@ function ShowcaseScreen({ mode }) {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
-  const { showcases, deleteShowcase, renameShowcase } = useShowcases();
-  const showcaseId = Number(id);
-  const showcase = showcases.find((entry) => entry.id === showcaseId) ?? null;
-  const showcaseName = showcase?.name ?? "Showcase";
+  const {
+    showcases,
+    deleteShowcase,
+    renameShowcase,
+    createShowcase,
+    pendingShowcase,
+    beginPendingShowcase,
+    discardPendingShowcase,
+  } = useShowcases();
+  // `new` is the not-yet-saved draft from `+ New showcase`: no server row,
+  // no tree load; Save POSTs it, Cancel discards it.
+  const isNew = id === NEW_SHOWCASE_ID;
+  const showcaseId = isNew ? null : Number(id);
+  const showcase = isNew
+    ? null
+    : (showcases.find((entry) => entry.id === showcaseId) ?? null);
+  const showcaseName = isNew
+    ? (pendingShowcase?.name ?? "Showcase")
+    : (showcase?.name ?? "Showcase");
   const editMode = mode === "edit";
   // Arriving from `+ New showcase` opens the name field focused (and selected)
   // so the user can name the showcase immediately.
@@ -124,7 +140,7 @@ function ShowcaseScreen({ mode }) {
   useEffect(() => {
     setDrillIds([]);
     consumedEditEntryRef.current = false;
-  }, [showcaseId]);
+  }, [showcaseId, isNew]);
 
   useEffect(() => {
     if (!justCreated) {
@@ -151,8 +167,54 @@ function ShowcaseScreen({ mode }) {
     setNameDraft(showcaseName);
   }, [showcaseName]);
 
+  // A direct load of the draft URL (reload, share) has no provider draft yet;
+  // stage one so the sidebar row and the canvas agree.
+  useEffect(() => {
+    if (isNew && !pendingShowcase) {
+      beginPendingShowcase();
+    }
+  }, [isNew, pendingShowcase, beginPendingShowcase]);
+
   useEffect(() => {
     let active = true;
+
+    // The draft has no server tree: start empty and load only the label pool.
+    if (isNew) {
+      setLoading(true);
+      setLoadError("");
+
+      async function loadDraftPool() {
+        try {
+          const pool = editMode
+            ? await getCategories()
+            : { categories: [] };
+
+          if (!active) {
+            return;
+          }
+
+          setNodes([]);
+          setBaselineNodes([]);
+          setCategories(pool.categories ?? []);
+          setTreeDirty(false);
+          setSaveError("");
+          resetTempIds();
+        } catch (error) {
+          if (active) {
+            setLoadError(error.message || "Could not load the showcase.");
+          }
+        } finally {
+          if (active) {
+            setLoading(false);
+          }
+        }
+      }
+
+      loadDraftPool();
+      return () => {
+        active = false;
+      };
+    }
 
     if (!Number.isInteger(showcaseId) || showcaseId <= 0) {
       setNodes([]);
@@ -195,12 +257,12 @@ function ShowcaseScreen({ mode }) {
     return () => {
       active = false;
     };
-  }, [showcaseId, editMode]);
+  }, [showcaseId, editMode, isNew]);
 
   // In edit mode the name field is part of the draft: blur/Enter only validate
   // locally, and Save persists the rename together with the tree.
   function commitName() {
-    if (!showcase) {
+    if (!showcase && !isNew) {
       return;
     }
 
@@ -211,8 +273,12 @@ function ShowcaseScreen({ mode }) {
       return;
     }
 
-    if (trimmed === showcase.name) {
-      setNameDraft(showcase.name);
+    const currentName = isNew
+      ? (pendingShowcase?.name ?? "Showcase")
+      : showcase.name;
+
+    if (trimmed === currentName) {
+      setNameDraft(currentName);
       setNameError("");
       return;
     }
@@ -231,16 +297,20 @@ function ShowcaseScreen({ mode }) {
 
     if (event.key === "Escape") {
       event.preventDefault();
-      setNameDraft(showcase?.name ?? "Showcase");
+      setNameDraft(
+        isNew ? (pendingShowcase?.name ?? "Showcase") : (showcase?.name ?? "Showcase"),
+      );
       setNameError("");
     }
   }
 
   const nameDirty =
-    editMode && showcase
+    editMode && !isNew && showcase
       ? nameDraft.trim() !== "" && nameDraft.trim() !== showcase.name
       : false;
-  const dirty = editMode && (treeDirty || nameDirty);
+  // A draft showcase is itself unsaved, so Save stays enabled whenever the
+  // name is non-empty — even with an empty canvas.
+  const dirty = editMode && (isNew ? nameDraft.trim() !== "" : treeDirty || nameDirty);
 
   async function handleDelete() {
     if (!showcase || deleting) {
@@ -600,6 +670,29 @@ function ShowcaseScreen({ mode }) {
     setSaveError("");
     setNameError("");
     try {
+      if (isNew) {
+        // Deferred creation: the POST happens here, not on `+ New showcase`.
+        // An untouched "Showcase" name omits the name so the server picks a
+        // unique default instead of hitting the duplicate-name error.
+        const created = await createShowcase(
+          trimmedName === "Showcase" ? undefined : trimmedName,
+        );
+        if (created?.id == null) {
+          throw new Error("Could not save the showcase.");
+        }
+        await saveShowcaseDraft({
+          showcaseId: created.id,
+          baselineNodes: [],
+          draftNodes: nodes,
+          api: { createShowcaseNode, updateNode, deleteNode, reorderNodes },
+        });
+        // createShowcase clears the pending draft; land on the real view.
+        navigate({
+          pathname: SHOWCASE_ROUTES.showcase(created.id),
+          search: showcaseNodeSearch(savedDisplayId),
+        });
+        return;
+      }
       if (showcase && trimmedName !== showcase.name) {
         await renameShowcase(showcase.id, trimmedName);
       }
@@ -624,6 +717,13 @@ function ShowcaseScreen({ mode }) {
 
   function handleCancel() {
     if (saving) {
+      return;
+    }
+    // A draft showcase has no view to return to: discard it and go home so
+    // the sidebar row disappears with it.
+    if (isNew) {
+      discardPendingShowcase();
+      navigate(DEFAULT_DESTINATION);
       return;
     }
     // Cancel discards the draft and returns to view on the same level when

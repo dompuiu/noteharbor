@@ -125,7 +125,7 @@ describe("Showcases sidebar section", () => {
 });
 
 describe("Creating a showcase", () => {
-  test("posts a showcase and opens its edit route with the name field focused", async () => {
+  test("New showcase stages a draft without posting, with the name field focused", async () => {
     const user = userEvent.setup();
     renderAt(CATALOG_ROUTES.banknotes);
 
@@ -134,13 +134,92 @@ describe("Creating a showcase", () => {
     );
 
     await waitFor(() => {
-      expect(currentPath()).toBe(SHOWCASE_ROUTES.showcaseEdit(9));
+      expect(currentPath()).toBe(SHOWCASE_ROUTES.showcaseEdit("new"));
     });
-    expect(createShowcase).toHaveBeenCalled();
+    // Deferred creation: the server sees nothing until Save.
+    expect(createShowcase).not.toHaveBeenCalled();
+    // The draft row is visible in the sidebar while pending.
+    expect(await screen.findByRole("link", { name: "Showcase" })).toBeInTheDocument();
 
     const nameField = await screen.findByLabelText("Showcase name");
     await waitFor(() => {
       expect(nameField).toHaveFocus();
+    });
+  });
+
+  test("Save on a draft posts the showcase and opens its view route", async () => {
+    const user = userEvent.setup();
+    renderAt(CATALOG_ROUTES.banknotes);
+
+    await user.click(
+      await screen.findByRole("button", { name: "New showcase" }),
+    );
+    await screen.findByLabelText("Showcase name");
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(createShowcase).toHaveBeenCalled();
+    });
+    await waitFor(() => {
+      expect(currentPath()).toBe(SHOWCASE_ROUTES.showcase(9));
+    });
+    // The server row replaces the draft in the sidebar.
+    expect(await screen.findByRole("link", { name: "Showcase" })).toBeInTheDocument();
+  });
+
+  test("Save on a renamed draft posts the custom name", async () => {
+    const user = userEvent.setup();
+    renderAt(CATALOG_ROUTES.banknotes);
+
+    await user.click(
+      await screen.findByRole("button", { name: "New showcase" }),
+    );
+    const field = await screen.findByLabelText("Showcase name");
+    await user.clear(field);
+    await user.type(field, "Winter");
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => {
+      expect(createShowcase).toHaveBeenCalledWith("Winter");
+    });
+  });
+
+  test("Cancel on a draft discards it without posting and goes home", async () => {
+    const user = userEvent.setup();
+    renderAt(CATALOG_ROUTES.banknotes);
+
+    await user.click(
+      await screen.findByRole("button", { name: "New showcase" }),
+    );
+    await screen.findByLabelText("Showcase name");
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(createShowcase).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("link", { name: "Showcase" })).not.toBeInTheDocument();
+    });
+  });
+
+  test("leaving the draft for another sidebar option discards it without posting", async () => {
+    const user = userEvent.setup();
+    renderAt(CATALOG_ROUTES.banknotes);
+
+    await user.click(
+      await screen.findByRole("button", { name: "New showcase" }),
+    );
+    await screen.findByLabelText("Showcase name");
+
+    await user.click(await screen.findByRole("link", { name: "Summer" }));
+
+    expect(createShowcase).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.queryByRole("link", { name: "Showcase" })).not.toBeInTheDocument();
     });
   });
 });
