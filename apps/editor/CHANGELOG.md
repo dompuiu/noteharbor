@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.0.2] - 2026-10-10
+
+### Fixed
+
+- Import: archive import in the packaged desktop app no longer fails with `NotFoundError: Not Found` on the post-import navigation to the collections screen. The server's SPA fallback passed the absolute entry path to `sendFile`, which treats the `.build` directory in the packaged web build path as a dotfile and 404s; the entry is now served with dotfiles allowed. `sendFile` failures and unknown `/api` routes answer JSON errors instead of HTML error pages.
+
 ## [2.0.1] - 2026-10-10
 
 ### Fixed
