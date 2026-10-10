@@ -4,7 +4,7 @@ import path from 'node:path';
 import { pipeline } from 'node:stream/promises';
 import { Router } from 'express';
 import multer from 'multer';
-import archiver from 'archiver';
+import { ZipArchive } from 'archiver';
 import unzipper from 'unzipper';
 import Database from 'better-sqlite3';
 import {
@@ -1107,7 +1107,7 @@ archiveRouter.get('/export', async (request, response) => {
       response.setHeader('Content-Disposition', `attachment; filename="noteharbor-archive-${new Date().toISOString().slice(0, 10)}.zip"`);
       response.setHeader('X-NoteHarbor-Omitted-Showcases', encodeOmittedShowcasesHeader(filteredSnapshot.omittedShowcases));
 
-      const archive = archiver('zip', { zlib: { level: 9 } });
+      const archive = new ZipArchive({ zlib: { level: 9 } });
 
       await new Promise((resolve, reject) => {
         let settled = false;

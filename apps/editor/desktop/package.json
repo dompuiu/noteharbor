@@ -14,21 +14,21 @@
     "pack": "pnpm run build:web && pnpm run prepare:package && pnpm run reset:native-stamps && electron-builder install-app-deps && electron-builder --dir"
   },
   "dependencies": {
-    "@img/sharp-darwin-arm64": "0.34.5",
-    "@img/sharp-win32-x64": "0.34.5",
-    "archiver": "^7.0.1",
-    "better-sqlite3": "^12.8.0",
+    "@img/sharp-darwin-arm64": "0.35.5",
+    "@img/sharp-win32-x64": "0.35.5",
+    "archiver": "^8.0.0",
+    "better-sqlite3": "^13.0.3",
     "cheerio": "^1.2.0",
     "cors": "^2.8.6",
-    "express": "^5.2.1",
-    "multer": "^2.1.1",
-    "playwright-core": "^1.60.0",
-    "sharp": "^0.34.5",
-    "unzipper": "^0.12.3"
+    "express": "^5.3.0",
+    "multer": "^2.4.0",
+    "playwright-core": "^1.64.0",
+    "sharp": "^0.35.5",
+    "unzipper": "^0.12.5"
   },
   "devDependencies": {
-    "electron": "^41.0.4",
-    "electron-builder": "^26.8.1"
+    "electron": "^44.7.0",
+    "electron-builder": "^26.15.3"
   },
   "build": {
     "appId": "com.noteharbor.editor",
