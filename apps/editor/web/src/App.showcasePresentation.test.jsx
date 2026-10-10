@@ -33,8 +33,8 @@ vi.mock("./components/NotesTable.jsx", () => ({
   NotesTable: () => <div>Banknotes screen</div>,
 }));
 
-vi.mock("./components/CollectionsScreen.jsx", () => ({
-  CollectionsScreen: () => <div>Collections screen</div>,
+vi.mock("./components/CollectionScreen.jsx", () => ({
+  CollectionScreen: () => <div>Collection screen</div>,
 }));
 
 vi.mock("./components/ImportScreen.jsx", () => ({

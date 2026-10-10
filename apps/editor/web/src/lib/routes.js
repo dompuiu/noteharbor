@@ -1,6 +1,8 @@
 export const CATALOG_ROUTES = {
   banknotes: "/catalog/banknotes",
   collections: "/catalog/collections",
+  collection: (id) => `/catalog/collections/${id}/view`,
+  collectionEdit: (id) => `/catalog/collections/${id}/edit`,
   importExport: "/catalog/import-export",
   noteEdit: (id) => `/catalog/notes/${id}/edit`,
 };
@@ -27,6 +29,12 @@ export function showcaseNodeSearch(nodeId) {
 // showcase and navigates to its real id, while Cancel (or leaving the route)
 // discards the draft without touching the server.
 export const NEW_SHOWCASE_ID = "new";
+
+// A not-yet-saved collection lives at this id. `+ New collection` opens
+// `/catalog/collections/new/edit` with a sidebar draft row; Save POSTs the
+// collection and navigates to its real id, while Cancel (or leaving the route)
+// discards the draft without touching the server.
+export const NEW_COLLECTION_ID = "new";
 
 // Where an unknown route lands. This is the first destination of the first
 // sidebar group (Catalog > Banknotes); keep it in one place so the catch-all

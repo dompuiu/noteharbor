@@ -1177,13 +1177,31 @@ function getCollectionById(id) {
   return statements.getCollectionStatement.get(Number(id)) ?? null;
 }
 
+// The default name for a new collection. Mirrors showcases: the unique index
+// is case-insensitive, so candidates compare case-insensitively and a
+// collision walks up `Collection 2`, `Collection 3`, …
+function nextDefaultCollectionName() {
+  const taken = new Set(
+    getAllCollections().map((collection) => String(collection.name).toLowerCase()),
+  );
+
+  if (!taken.has('collection')) {
+    return 'Collection';
+  }
+
+  let suffix = 2;
+
+  while (taken.has(`collection ${suffix}`)) {
+    suffix += 1;
+  }
+
+  return `Collection ${suffix}`;
+}
+
 function createCollection(name) {
   getDatabase();
-  const normalizedName = normalizeCollectionName(name);
-
-  if (!normalizedName) {
-    throw new Error('Collection name is required.');
-  }
+  const normalizedName =
+    normalizeCollectionName(name) || nextDefaultCollectionName();
 
   let collectionId;
 

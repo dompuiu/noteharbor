@@ -70,6 +70,10 @@ function CollectionsProvider({ children }) {
   // 'database', 'generic'). The shell reads its connection state from this load
   // instead of running a separate health probe before the first paint.
   const [collectionsErrorReason, setCollectionsErrorReason] = useState(null);
+  // A not-yet-saved collection started from `+ New collection`. It renders as
+  // a draft row in the sidebar and an empty edit canvas; Save POSTs it, while
+  // Cancel or leaving the `new` route discards it without a request.
+  const [pendingCollection, setPendingCollection] = useState(null);
 
   async function refreshCollections({ preferredCollectionId } = {}) {
     setLoadingCollections(true);
@@ -130,7 +134,13 @@ function CollectionsProvider({ children }) {
   async function handleCreateCollection(name) {
     const payload = await createCollection(name);
     const createdCollection = payload.collection;
-    applyCollectionRow(createdCollection);
+
+    if (createdCollection) {
+      applyCollectionRow(createdCollection);
+      // A pending draft (if any) is now real; drop it so the sidebar shows
+      // only the server row.
+      setPendingCollection(null);
+    }
 
     // The default is where new notes land, so a brand-new collection becomes
     // the active one — but only that switch, not a whole reload.
@@ -140,6 +150,14 @@ function CollectionsProvider({ children }) {
     }
 
     return createdCollection;
+  }
+
+  function beginPendingCollection() {
+    setPendingCollection((current) => current ?? { id: 'new', name: 'Collection' });
+  }
+
+  function discardPendingCollection() {
+    setPendingCollection(null);
   }
 
   async function handleRenameCollection(collectionId, name) {
@@ -174,7 +192,7 @@ function CollectionsProvider({ children }) {
 
   async function handleDeleteCollection(collectionId) {
     const index = collections.findIndex((collection) => collection.id === collectionId);
-    const fallbackCollection =
+    const nextCollection =
       collections[index + 1] ??
       collections[index - 1] ??
       collections.find((collection) => collection.id !== collectionId) ??
@@ -189,10 +207,12 @@ function CollectionsProvider({ children }) {
 
     // Only move the active collection if the one being deleted held it.
     if (activeCollectionId === collectionId) {
-      const nextActiveId = fallbackCollection?.id ?? null;
+      const nextActiveId = nextCollection?.id ?? null;
       setActiveCollectionId(nextActiveId);
       writeStoredCollectionId(nextActiveId);
     }
+
+    return { nextCollectionId: nextCollection?.id ?? null };
   }
 
   function selectCollection(collectionId) {
@@ -220,6 +240,9 @@ function CollectionsProvider({ children }) {
       createCollection: handleCreateCollection,
       deleteCollection: handleDeleteCollection,
       loadingCollections,
+      pendingCollection,
+      beginPendingCollection,
+      discardPendingCollection,
       refreshCollections,
       renameCollection: handleRenameCollection,
       reorderCollections: handleReorderCollections,
@@ -233,6 +256,7 @@ function CollectionsProvider({ children }) {
       collectionsError,
       collectionsErrorReason,
       loadingCollections,
+      pendingCollection,
     ],
   );
 

@@ -2,7 +2,7 @@ import { MemoryRouter, useLocation } from "react-router-dom";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
-import { CATALOG_ROUTES } from "../lib/routes.js";
+import { CATALOG_ROUTES, NEW_COLLECTION_ID } from "../lib/routes.js";
 
 vi.mock("../lib/api.js", () => ({
   deleteNote: vi.fn(),
@@ -83,7 +83,7 @@ describe("NotesTable with no collections", () => {
     ).toHaveAttribute("href", CATALOG_ROUTES.importExport);
     expect(
       screen.getByRole("link", { name: "Create a collection" }),
-    ).toHaveAttribute("href", CATALOG_ROUTES.collections);
+    ).toHaveAttribute("href", CATALOG_ROUTES.collectionEdit(NEW_COLLECTION_ID));
   });
 
   test("hides the collection selector and disables Add note", async () => {

@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useCollections } from "../lib/collections.jsx";
 import { useShowcases } from "../lib/showcases.jsx";
 import {
   CATALOG_ROUTES,
   DEFAULT_DESTINATION,
+  NEW_COLLECTION_ID,
   NEW_SHOWCASE_ID,
   SHOWCASE_ROUTES,
 } from "../lib/routes.js";
@@ -13,9 +15,12 @@ import {
 // keyboard focus. The layout holds a fixed 1200px desktop floor, so the rail
 // never becomes a drawer: narrow windows scroll horizontally instead.
 //
-// The Showcases group is data-driven: it lists the workspace's showcases (the
-// sidebar *is* the showcase list) plus a `+ New showcase` action that creates a
-// showcase and opens it in edit mode.
+// The Catalog group is data-driven for collections (the sidebar *is* the
+// collection list): Banknotes, one row per collection, a `+ New collection`
+// action above Import / Export. The Showcases group is data-driven the same
+// way: one row per showcase plus a `+ New showcase` action. Both create
+// actions stage a draft row and open its edit canvas; nothing POSTs until
+// Save, and Cancel or leaving the route discards the draft.
 //
 // Keyboard model (matches the tables): with nothing focused, "b" opens the
 // rail and puts the cursor on the current option. ↑/↓ and j/k move the cursor;
@@ -42,24 +47,23 @@ const ICONS = {
     '<path d="m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16"/><path d="M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2"/><circle cx="13" cy="7" r="1" fill="currentColor"/><rect x="8" y="2" width="14" height="14" rx="2"/>',
 };
 
-const CATALOG_GROUP = {
-  id: "catalog",
-  icon: "catalog",
-  label: "Catalog",
-  items: [
-    {
-      icon: "banknote",
-      label: "Banknotes",
-      to: DEFAULT_DESTINATION,
-      // The note editor is a Catalog > Banknotes child, so it keeps the
-      // Banknotes destination highlighted.
-      matches: (pathname) =>
-        pathname === DEFAULT_DESTINATION ||
-        pathname.startsWith("/catalog/notes/"),
-    },
-    { icon: "folders", label: "Collections", to: CATALOG_ROUTES.collections },
-    { icon: "swap", label: "Import / Export", to: CATALOG_ROUTES.importExport },
-  ],
+const BANKNOTES_ITEM = {
+  icon: "banknote",
+  key: "banknotes",
+  label: "Banknotes",
+  to: DEFAULT_DESTINATION,
+  // The note editor is a Catalog > Banknotes child, so it keeps the
+  // Banknotes destination highlighted.
+  matches: (pathname) =>
+    pathname === DEFAULT_DESTINATION ||
+    pathname.startsWith("/catalog/notes/"),
+};
+
+const IMPORT_EXPORT_ITEM = {
+  icon: "swap",
+  key: "import-export",
+  label: "Import / Export",
+  to: CATALOG_ROUTES.importExport,
 };
 
 function isItemActive(item, pathname) {
@@ -96,6 +100,13 @@ function Sidebar({ pageFocusRef }) {
     discardPendingShowcase,
     reorderShowcases,
   } = useShowcases();
+  const {
+    collections,
+    pendingCollection,
+    beginPendingCollection,
+    discardPendingCollection,
+    reorderCollections,
+  } = useCollections();
   // The keyboard cursor, distinct from DOM focus. Null means the rail is not
   // being navigated by keyboard.
   const [cursorIndex, setCursorIndex] = useState(null);
@@ -103,8 +114,50 @@ function Sidebar({ pageFocusRef }) {
   // whether the pointer sits above or below the hovered row's midpoint.
   const [draggedShowcaseId, setDraggedShowcaseId] = useState(null);
   const [showcaseDropTarget, setShowcaseDropTarget] = useState(null);
+  // Drag-and-drop state for reordering the collection rows, mirroring
+  // showcases. The sidebar never reorders its own copy; the provider applies
+  // the server's order.
+  const [draggedCollectionId, setDraggedCollectionId] = useState(null);
+  const [collectionDropTarget, setCollectionDropTarget] = useState(null);
   const navRef = useRef(null);
   const linksRef = useRef([]);
+
+  // The collection rows sit inside the Catalog group, above Import / Export.
+  // A collection row stays highlighted in both of its modes: view and edit
+  // are siblings under the collection. A pending (not-yet-saved) collection
+  // renders as a draft row that vanishes on Cancel or on leaving its route.
+  const collectionItems = collections.map((collection) => ({
+    icon: "folders",
+    key: `collection-${collection.id}`,
+    label: collection.name,
+    to: CATALOG_ROUTES.collection(collection.id),
+    matches: (pathname) =>
+      pathname === CATALOG_ROUTES.collection(collection.id) ||
+      pathname === CATALOG_ROUTES.collectionEdit(collection.id),
+    collectionId: collection.id,
+  }));
+
+  if (pendingCollection) {
+    collectionItems.push({
+      icon: "folders",
+      key: "collection-new",
+      label: pendingCollection.name,
+      to: CATALOG_ROUTES.collectionEdit(NEW_COLLECTION_ID),
+      matches: (pathname) =>
+        pathname === CATALOG_ROUTES.collectionEdit(NEW_COLLECTION_ID),
+      collectionId: NEW_COLLECTION_ID,
+      pending: true,
+    });
+  }
+
+  const newCollectionItem = {
+    icon: "plus",
+    key: "new-collection",
+    label: "New collection",
+    type: "action",
+    actionKind: "new-collection",
+    visibleLabel: "New collection",
+  };
 
   // The showcase rows, then the create action, hang off the Showcases group.
   // A showcase row stays highlighted in both of its modes: view and edit are
@@ -140,11 +193,22 @@ function Sidebar({ pageFocusRef }) {
     key: "new-showcase",
     label: "New showcase",
     type: "action",
+    actionKind: "new-showcase",
     visibleLabel: "New showcase",
   };
 
   const groups = [
-    CATALOG_GROUP,
+    {
+      id: "catalog",
+      icon: "catalog",
+      label: "Catalog",
+      items: [
+        BANKNOTES_ITEM,
+        ...collectionItems,
+        newCollectionItem,
+        IMPORT_EXPORT_ITEM,
+      ],
+    },
     {
       id: "showcases",
       icon: "grid",
@@ -157,6 +221,7 @@ function Sidebar({ pageFocusRef }) {
   const entries = groups.flatMap((group) => group.items);
 
   const newShowcaseTo = SHOWCASE_ROUTES.showcaseEdit(NEW_SHOWCASE_ID);
+  const newCollectionTo = CATALOG_ROUTES.collectionEdit(NEW_COLLECTION_ID);
 
   function handleNewShowcase() {
     // Deferred creation: stage a draft row and open its edit canvas. Nothing
@@ -167,8 +232,22 @@ function Sidebar({ pageFocusRef }) {
     });
   }
 
-  function handleActionClick() {
-    handleNewShowcase();
+  function handleNewCollection() {
+    // Deferred creation, mirroring showcases: stage a draft row and open its
+    // edit canvas. Nothing POSTs until Save; Cancel or leaving the route
+    // discards the draft.
+    beginPendingCollection();
+    navigate(newCollectionTo, {
+      state: { justCreated: true },
+    });
+  }
+
+  function handleActionClick(item) {
+    if (item?.actionKind === "new-collection") {
+      handleNewCollection();
+    } else {
+      handleNewShowcase();
+    }
     leaveCursor();
   }
 
@@ -304,10 +383,17 @@ function Sidebar({ pageFocusRef }) {
         const entry = entries[cursorIndex];
 
         if (entry?.type === "action") {
-          handleNewShowcase();
+          if (entry?.actionKind === "new-collection") {
+            handleNewCollection();
+          } else {
+            handleNewShowcase();
+          }
         } else if (entry) {
           if (entry.to !== newShowcaseTo) {
             discardPendingShowcase();
+          }
+          if (entry.to !== newCollectionTo) {
+            discardPendingCollection();
           }
           navigate(entry.to);
         }
@@ -317,28 +403,36 @@ function Sidebar({ pageFocusRef }) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursorIndex, pathname, showcases, pendingShowcase]);
+  }, [cursorIndex, pathname, showcases, pendingShowcase, collections, pendingCollection]);
 
   function handleLinkClick(to) {
     // A click means "I'm leaving the rail". The browser focuses a clicked
     // link, so without this the collapsed rail would keep keyboard focus and
-    // claim the arrow keys. Hand focus to the page. Leaving the draft route
-    // discards a not-yet-saved showcase so it never lingers.
+    // claim the arrow keys. Hand focus to the page. Leaving a draft route
+    // discards a not-yet-saved row so it never lingers.
     if (to !== newShowcaseTo) {
       discardPendingShowcase();
+    }
+    if (to !== newCollectionTo) {
+      discardPendingCollection();
     }
     leaveCursor();
   }
 
-  // Any route change away from the draft (browser back, typed URL, Cancel's
+  // Any route change away from a draft (browser back, typed URL, Cancel's
   // own navigation already cleared it) drops the pending row. The effect only
-  // watches the pathname so staging the draft and navigating to it in one
+  // watches the pathname so staging a draft and navigating to it in one
   // click never discards itself mid-flight.
-  const pendingRef = useRef(null);
-  pendingRef.current = pendingShowcase ? true : null;
+  const pendingShowcaseRef = useRef(null);
+  pendingShowcaseRef.current = pendingShowcase ? true : null;
+  const pendingCollectionRef = useRef(null);
+  pendingCollectionRef.current = pendingCollection ? true : null;
   useEffect(() => {
-    if (pendingRef.current && pathname !== newShowcaseTo) {
+    if (pendingShowcaseRef.current && pathname !== newShowcaseTo) {
       discardPendingShowcase();
+    }
+    if (pendingCollectionRef.current && pathname !== newCollectionTo) {
+      discardPendingCollection();
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
@@ -422,6 +516,82 @@ function Sidebar({ pageFocusRef }) {
     }
   }
 
+  function clearCollectionDrag() {
+    setDraggedCollectionId(null);
+    setCollectionDropTarget(null);
+  }
+
+  function handleCollectionDragStart(event, collectionId) {
+    event.stopPropagation();
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(collectionId));
+    setDraggedCollectionId(collectionId);
+    setCollectionDropTarget({ collectionId, placement: "before" });
+  }
+
+  function updateCollectionDropTarget(collectionId, event) {
+    const bounds = event.currentTarget.getBoundingClientRect();
+    const placement =
+      event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
+
+    setCollectionDropTarget((current) =>
+      current?.collectionId === collectionId && current?.placement === placement
+        ? current
+        : { collectionId, placement },
+    );
+  }
+
+  async function handleCollectionDrop(targetCollectionId, placement) {
+    if (draggedCollectionId == null) {
+      clearCollectionDrag();
+      return;
+    }
+
+    const startIndex = collections.findIndex(
+      (collection) => collection.id === draggedCollectionId,
+    );
+    const targetIndex = collections.findIndex(
+      (collection) => collection.id === targetCollectionId,
+    );
+
+    if (startIndex < 0 || targetIndex < 0) {
+      clearCollectionDrag();
+      return;
+    }
+
+    const rawInsertIndex = targetIndex + (placement === "after" ? 1 : 0);
+
+    if (
+      (placement === "before" && startIndex === targetIndex) ||
+      (placement === "after" && startIndex === targetIndex + 1)
+    ) {
+      clearCollectionDrag();
+      return;
+    }
+
+    const nextCollections = [...collections];
+    const [movedCollection] = nextCollections.splice(startIndex, 1);
+    const insertIndex =
+      startIndex < rawInsertIndex ? rawInsertIndex - 1 : rawInsertIndex;
+    nextCollections.splice(insertIndex, 0, movedCollection);
+
+    const unchanged = nextCollections.every(
+      (collection, index) => collection.id === collections[index].id,
+    );
+
+    clearCollectionDrag();
+
+    if (unchanged) {
+      return;
+    }
+
+    try {
+      await reorderCollections(nextCollections.map((collection) => collection.id));
+    } catch {
+      // The rail cannot surface an error; the next load reconciles the order.
+    }
+  }
+
   return (
     <div className="sidebar-dock">
         <nav
@@ -468,14 +638,24 @@ function Sidebar({ pageFocusRef }) {
                     const index = entries.indexOf(item);
                     const active =
                       item.type !== "action" && isItemActive(item, pathname);
-                    // The pending draft row is display-only: it cannot be
+                    // A pending draft row is display-only: it cannot be
                     // dragged or become a drop target.
                     const isShowcase = item.showcaseId != null && !item.pending;
-                    const dropPlacement =
-                      isShowcase &&
-                      showcaseDropTarget?.showcaseId === item.showcaseId
+                    const isCollection = item.collectionId != null && !item.pending;
+                    const dropPlacement = isShowcase
+                      ? (showcaseDropTarget?.showcaseId === item.showcaseId
                         ? showcaseDropTarget.placement
+                        : null)
+                      : isCollection
+                        ? (collectionDropTarget?.collectionId === item.collectionId
+                          ? collectionDropTarget.placement
+                          : null)
                         : null;
+                    const isDragging = isShowcase
+                      ? draggedShowcaseId === item.showcaseId
+                      : isCollection
+                        ? draggedCollectionId === item.collectionId
+                        : false;
                     const className = `sidebar-link${
                       active ? " sidebar-link--active" : ""
                     }${cursorIndex === index ? " sidebar-link--cursor" : ""}${
@@ -485,9 +665,7 @@ function Sidebar({ pageFocusRef }) {
                         ? ` sidebar-link--drop-${dropPlacement}`
                         : ""
                     }${
-                      isShowcase && draggedShowcaseId === item.showcaseId
-                        ? " sidebar-link--dragging"
-                        : ""
+                      isDragging ? " sidebar-link--dragging" : ""
                     }`;
 
                     if (item.type === "action") {
@@ -497,7 +675,7 @@ function Sidebar({ pageFocusRef }) {
                           className={className}
                           data-sidebar-index={index}
                           key={item.key}
-                          onClick={handleActionClick}
+                          onClick={() => handleActionClick(item)}
                           ref={(node) => {
                             linksRef.current[index] = node;
                           }}
@@ -512,18 +690,22 @@ function Sidebar({ pageFocusRef }) {
                       );
                     }
 
+                    const draggable = isShowcase || isCollection;
+
                     return (
                       <Link
                         aria-current={active ? "page" : undefined}
                         aria-label={item.label}
                         className={className}
                         data-sidebar-index={index}
-                        draggable={isShowcase}
+                        draggable={draggable}
                         key={item.key ?? item.to}
                         onClick={() => handleLinkClick(item.to)}
-                        onDragEnd={isShowcase ? clearShowcaseDrag : undefined}
+                        onDragEnd={draggable
+                          ? (isShowcase ? clearShowcaseDrag : clearCollectionDrag)
+                          : undefined}
                         onDragLeave={
-                          isShowcase
+                          draggable
                             ? (event) => {
                                 const links = event.currentTarget.parentElement;
 
@@ -534,53 +716,93 @@ function Sidebar({ pageFocusRef }) {
                                   return;
                                 }
 
-                                setShowcaseDropTarget((current) =>
-                                  current?.showcaseId === item.showcaseId
-                                    ? null
-                                    : current,
-                                );
+                                if (isShowcase) {
+                                  setShowcaseDropTarget((current) =>
+                                    current?.showcaseId === item.showcaseId
+                                      ? null
+                                      : current,
+                                  );
+                                } else {
+                                  setCollectionDropTarget((current) =>
+                                    current?.collectionId === item.collectionId
+                                      ? null
+                                      : current,
+                                  );
+                                }
                               }
                             : undefined
                         }
                         onDragOver={
-                          isShowcase
+                          draggable
                             ? (event) => {
-                                if (draggedShowcaseId == null) {
-                                  return;
-                                }
+                                if (isShowcase) {
+                                  if (draggedShowcaseId == null) {
+                                    return;
+                                  }
 
-                                event.preventDefault();
-                                updateShowcaseDropTarget(
-                                  item.showcaseId,
-                                  event,
-                                );
+                                  event.preventDefault();
+                                  updateShowcaseDropTarget(
+                                    item.showcaseId,
+                                    event,
+                                  );
+                                } else {
+                                  if (draggedCollectionId == null) {
+                                    return;
+                                  }
+
+                                  event.preventDefault();
+                                  updateCollectionDropTarget(
+                                    item.collectionId,
+                                    event,
+                                  );
+                                }
                               }
                             : undefined
                         }
                         onDragStart={
-                          isShowcase
-                            ? (event) =>
-                                handleShowcaseDragStart(event, item.showcaseId)
+                          draggable
+                            ? (event) => {
+                                if (isShowcase) {
+                                  handleShowcaseDragStart(event, item.showcaseId);
+                                } else {
+                                  handleCollectionDragStart(event, item.collectionId);
+                                }
+                              }
                             : undefined
                         }
                         onDrop={
-                          isShowcase
+                          draggable
                             ? (event) => {
                                 event.preventDefault();
                                 const bounds =
                                   event.currentTarget.getBoundingClientRect();
-                                const placement =
-                                  showcaseDropTarget?.showcaseId ===
-                                  item.showcaseId
-                                    ? showcaseDropTarget.placement
-                                    : event.clientY <
-                                        bounds.top + bounds.height / 2
-                                      ? "before"
-                                      : "after";
-                                void handleShowcaseDrop(
-                                  item.showcaseId,
-                                  placement,
-                                );
+                                if (isShowcase) {
+                                  const placement =
+                                    showcaseDropTarget?.showcaseId ===
+                                    item.showcaseId
+                                      ? showcaseDropTarget.placement
+                                      : event.clientY <
+                                          bounds.top + bounds.height / 2
+                                        ? "before"
+                                        : "after";
+                                  void handleShowcaseDrop(
+                                    item.showcaseId,
+                                    placement,
+                                  );
+                                } else {
+                                  const placement =
+                                    collectionDropTarget?.collectionId ===
+                                    item.collectionId
+                                      ? collectionDropTarget.placement
+                                      : event.clientY <
+                                          bounds.top + bounds.height / 2
+                                        ? "before"
+                                        : "after";
+                                  void handleCollectionDrop(
+                                    item.collectionId,
+                                    placement,
+                                  );
+                                }
                               }
                             : undefined
                         }

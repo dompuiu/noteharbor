@@ -7,7 +7,7 @@ import {
   useLocation,
   useParams,
 } from "react-router-dom";
-import { CollectionsScreen } from "./components/CollectionsScreen.jsx";
+import { CollectionScreen } from "./components/CollectionScreen.jsx";
 import { ConnectionError } from "./components/ConnectionError.jsx";
 import { ImportScreen } from "./components/ImportScreen.jsx";
 import { NoteEditForm } from "./components/NoteEditForm.jsx";
@@ -153,7 +153,15 @@ function ShellContent() {
                 path={CATALOG_ROUTES.banknotes}
               />
               <Route
-                element={<CollectionsScreen />}
+                element={<CollectionScreen key="collection-view" mode="view" />}
+                path={CATALOG_ROUTES.collection(":id")}
+              />
+              <Route
+                element={<CollectionScreen key="collection-edit" mode="edit" />}
+                path={CATALOG_ROUTES.collectionEdit(":id")}
+              />
+              <Route
+                element={<Navigate replace to={DEFAULT_DESTINATION} />}
                 path={CATALOG_ROUTES.collections}
               />
               <Route

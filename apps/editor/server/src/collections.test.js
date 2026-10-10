@@ -85,6 +85,17 @@ test('getAllCollections reports how many notes each collection holds', () => {
   assert.equal(counts.get(b.id), 1);
 });
 
+test('createCollection with an omitted name picks a unique default', () => {
+  const first = db.createCollection(undefined);
+  const second = db.createCollection('');
+  const third = db.createCollection('   ');
+
+  assert.equal(first.name, 'Collection');
+  assert.equal(second.name, 'Collection 2');
+  assert.equal(third.name, 'Collection 3');
+  assert.notEqual(first.id, second.id);
+});
+
 test('reorderCollections rejects lists that are not a full permutation', () => {
   const ids = db.getAllCollections().map((collection) => collection.id);
 

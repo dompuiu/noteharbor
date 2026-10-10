@@ -5,18 +5,25 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../lib/api.js", () => ({
+  createCollection: vi.fn(),
   createShowcase: vi.fn(),
   deleteShowcase: vi.fn(),
+  getCollections: vi.fn(),
   getShowcases: vi.fn(),
   renameShowcase: vi.fn(),
+  reorderCollections: vi.fn(),
   reorderShowcases: vi.fn(),
 }));
 
 import {
+  createCollection,
   createShowcase,
+  getCollections,
   getShowcases,
+  reorderCollections,
   reorderShowcases,
 } from "../lib/api.js";
+import { CollectionsProvider } from "../lib/collections.jsx";
 import { ShowcasesProvider } from "../lib/showcases.jsx";
 import { Sidebar } from "./Sidebar.jsx";
 import {
@@ -25,11 +32,14 @@ import {
   SHOWCASE_ROUTES,
 } from "../lib/routes.js";
 
-// The sidebar's static destinations plus one link per loaded showcase. The
-// `+ New showcase` row is a button, not a link, so it is asserted separately.
+// The sidebar's destinations: Banknotes, one link per loaded collection, then
+// Import / Export, plus one link per loaded showcase. The `+ New collection`
+// and `+ New showcase` rows are buttons, not links, so they are asserted
+// separately.
 const LINKS = [
   "Banknotes",
-  "Collections",
+  "Default",
+  "Archive",
   "Import / Export",
   "Summer",
   "Vienna",
@@ -47,9 +57,11 @@ async function renderSidebar(path) {
   const view = render(
     <MemoryRouter initialEntries={[path]}>
       <LocationProbe />
-      <ShowcasesProvider>
-        <Sidebar pageFocusRef={pageFocusRef} />
-      </ShowcasesProvider>
+      <CollectionsProvider>
+        <ShowcasesProvider>
+          <Sidebar pageFocusRef={pageFocusRef} />
+        </ShowcasesProvider>
+      </CollectionsProvider>
       <main>
         <span
           className="page-focus-anchor"
@@ -61,13 +73,18 @@ async function renderSidebar(path) {
     </MemoryRouter>,
   );
 
-  // Wait for the data-driven showcase rows before interacting.
+  // Wait for the data-driven rows before interacting.
   await screen.findByRole("link", { name: "Summer" });
+  await screen.findByRole("link", { name: "Default" });
   return { ...view, pageFocusRef };
 }
 
 function newShowcaseButton() {
   return screen.getByRole("button", { name: "New showcase" });
+}
+
+function newCollectionButton() {
+  return screen.getByRole("button", { name: "New collection" });
 }
 
 beforeEach(() => {
@@ -81,6 +98,15 @@ beforeEach(() => {
   });
   createShowcase.mockResolvedValue({
     showcase: { id: 9, name: "Showcase" },
+  });
+  getCollections.mockResolvedValue({
+    collections: [
+      { id: 1, is_default: 1, name: "Default", note_count: 2 },
+      { id: 2, is_default: 0, name: "Archive", note_count: 0 },
+    ],
+  });
+  createCollection.mockResolvedValue({
+    collection: { id: 9, is_default: 0, name: "Collection" },
   });
 });
 
@@ -100,10 +126,12 @@ describe("Sidebar navigation groups", () => {
       expect(screen.getAllByRole("link", { name: label })).toHaveLength(1);
     }
 
-    // Every link plus the `+ New showcase` action row carries an icon.
+    // Every link plus the two create actions carries an icon.
     expect(container.querySelectorAll(".sidebar-link .sidebar-ic svg")).toHaveLength(
-      LINKS.length + 1,
+      LINKS.length + 2,
     );
+    expect(newCollectionButton()).toBeInTheDocument();
+    expect(newShowcaseButton()).toBeInTheDocument();
   });
 
   test("gives each category a marker icon beside its name", async () => {
@@ -136,15 +164,23 @@ describe("Sidebar navigation groups", () => {
     );
   });
 
-  test("marks the active destination as the current page", async () => {
-    await renderSidebar(CATALOG_ROUTES.collections);
+  test("marks the active collection as the current page", async () => {
+    await renderSidebar(CATALOG_ROUTES.collection(2));
 
     expect(
-      screen.getByRole("link", { name: "Collections" }),
+      screen.getByRole("link", { name: "Archive" }),
     ).toHaveAttribute("aria-current", "page");
     expect(
       screen.getByRole("link", { name: "Banknotes" }),
     ).not.toHaveAttribute("aria-current");
+  });
+
+  test("highlights the open collection in edit mode too", async () => {
+    await renderSidebar(CATALOG_ROUTES.collectionEdit(2));
+
+    expect(
+      screen.getByRole("link", { name: "Archive" }),
+    ).toHaveAttribute("aria-current", "page");
   });
 
   test("keeps Banknotes current while the note editor is open", async () => {
@@ -213,7 +249,7 @@ describe("Sidebar navigation groups", () => {
     const user = userEvent.setup();
     const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
 
-    await user.click(screen.getByRole("link", { name: "Collections" }));
+    await user.click(screen.getByRole("link", { name: "Archive" }));
 
     // The rail is collapsed after the click, so focus belongs in the page.
     expect(document.activeElement).toBe(screen.getByTestId("page-anchor"));
@@ -226,7 +262,7 @@ describe("Sidebar navigation groups", () => {
 
     // Reproduces the report: click a destination, then press ↓. Focus is now
     // in the page, so the sidebar must not claim the key and open its cursor.
-    await user.click(screen.getByRole("link", { name: "Collections" }));
+    await user.click(screen.getByRole("link", { name: "Archive" }));
     await user.keyboard("{ArrowDown}");
 
     expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
@@ -237,16 +273,16 @@ describe("Sidebar navigation groups", () => {
 describe("Sidebar keyboard cursor", () => {
   test("`b` opens the rail on the active option", async () => {
     const user = userEvent.setup();
-    await renderSidebar(CATALOG_ROUTES.collections);
+    await renderSidebar(CATALOG_ROUTES.collection(2));
 
     await user.keyboard("{b}");
 
     expect(
       screen
-        .getByRole("link", { name: "Collections" })
+        .getByRole("link", { name: "Archive" })
         .classList.contains("sidebar-link--cursor"),
     ).toBe(true);
-    expect(document.activeElement).toHaveTextContent("Collections");
+    expect(document.activeElement).toHaveTextContent("Archive");
   });
 
   test("`/` is left for the table filter, not the sidebar", async () => {
@@ -265,8 +301,8 @@ describe("Sidebar keyboard cursor", () => {
     await renderSidebar(CATALOG_ROUTES.banknotes);
 
     await user.keyboard("{b}"); // Banknotes
-    await user.keyboard("{j}"); // Collections
-    expect(document.activeElement).toHaveTextContent("Collections");
+    await user.keyboard("{j}"); // Default (first collection)
+    expect(document.activeElement).toHaveTextContent("Default");
 
     await user.keyboard("{k}"); // back to Banknotes
     expect(document.activeElement).toHaveTextContent("Banknotes");
@@ -289,11 +325,11 @@ describe("Sidebar keyboard cursor", () => {
     await renderSidebar(CATALOG_ROUTES.banknotes);
 
     await user.keyboard("{b}"); // Banknotes
-    await user.keyboard("{j}"); // Collections
+    await user.keyboard("{j}"); // Default
     await user.keyboard("{Enter}");
 
     expect(screen.getByTestId("pathname")).toHaveTextContent(
-      CATALOG_ROUTES.collections,
+      CATALOG_ROUTES.collection(1),
     );
   });
 
@@ -348,7 +384,7 @@ describe("Sidebar keyboard cursor", () => {
     await user.keyboard("{Tab}");
 
     expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
-    expect(document.activeElement).toHaveTextContent("Collections");
+    expect(document.activeElement).toHaveTextContent("Default");
   });
 
   test("`b` does nothing while another control has focus", async () => {
@@ -460,6 +496,99 @@ function showcaseLabels(container) {
     (element) => element.textContent,
   );
 }
+
+function collectionLabels(container) {
+  return Array.from(
+    container.querySelectorAll(
+      '.sidebar-group[aria-labelledby="sidebar-group-catalog"] .sidebar-link-label',
+    ),
+    (element) => element.textContent,
+  );
+}
+
+describe("Sidebar collection rows", () => {
+  test("`+ New collection` stages a draft without posting and opens its edit route", async () => {
+    const user = userEvent.setup();
+    await renderSidebar(CATALOG_ROUTES.banknotes);
+
+    await user.click(newCollectionButton());
+
+    // Deferred creation: nothing POSTs until Save.
+    expect(createCollection).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByTestId("pathname")).toHaveTextContent(
+        CATALOG_ROUTES.collectionEdit("new"),
+      );
+    });
+    // The draft is visible in the sidebar while it is pending, above Import.
+    expect(screen.getByRole("link", { name: "Collection" })).toBeInTheDocument();
+    const { container } = { container: document.querySelector(".sidebar-nav") };
+    expect(collectionLabels(container)).toEqual([
+      "Banknotes",
+      "Default",
+      "Archive",
+      "Collection",
+      "New collection",
+      "Import / Export",
+    ]);
+  });
+
+  test("leaving the draft route discards the pending collection", async () => {
+    const user = userEvent.setup();
+    await renderSidebar(CATALOG_ROUTES.banknotes);
+
+    await user.click(newCollectionButton());
+    await screen.findByRole("link", { name: "Collection" });
+
+    await user.click(screen.getByRole("link", { name: "Banknotes" }));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("link", { name: "Collection" })).not.toBeInTheDocument();
+    });
+    expect(createCollection).not.toHaveBeenCalled();
+  });
+});
+
+describe("Sidebar collection reordering", () => {
+  test("dropping one collection onto another hands the provider the new order", async () => {
+    reorderCollections.mockResolvedValue({
+      collections: [
+        { id: 2, is_default: 0, name: "Archive" },
+        { id: 1, is_default: 1, name: "Default" },
+      ],
+    });
+    const { container } = await renderSidebar(CATALOG_ROUTES.banknotes);
+
+    const def = screen.getByRole("link", { name: "Default" });
+    const archive = screen.getByRole("link", { name: "Archive" });
+    const dataTransfer = makeDataTransfer();
+
+    await act(async () => {
+      def.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+    });
+    await act(async () => {
+      archive.dispatchEvent(
+        dragEvent("dragover", { clientY: 400, dataTransfer }),
+      );
+    });
+    await act(async () => {
+      archive.dispatchEvent(dragEvent("drop", { clientY: 400, dataTransfer }));
+    });
+
+    await waitFor(() => {
+      expect(reorderCollections).toHaveBeenCalledWith([2, 1]);
+    });
+    await waitFor(() => {
+      expect(collectionLabels(container)).toEqual([
+        "Banknotes",
+        "Archive",
+        "Default",
+        "New collection",
+        "Import / Export",
+      ]);
+    });
+  });
+});
 
 describe("Sidebar showcase reordering", () => {
   test("dropping one showcase onto another hands the provider the new order", async () => {

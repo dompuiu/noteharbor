@@ -3536,14 +3536,12 @@ function NotesTable({
       <div className="panel" inert={editorOverlayOpen}>
         <div className="panel-heading panel-heading--compact">
           <div className="panel-heading-copy">
-            <h2>Note Harbor Editor</h2>
+            <h2>
+              {Number(activeCollection?.is_default) === 1 ? "★ " : ""}
+              {activeCollection?.name ?? "Banknotes"}
+            </h2>
             <p>
-              Collection:{" "}
-              <strong>
-                {Number(activeCollection?.is_default) === 1 ? "★ " : ""}
-                {activeCollection?.name ?? "-"}
-              </strong>
-              . {orderedNotes.length} notes in the current view.
+              {orderedNotes.length} notes in the current view.
               {showSelection && selectedIds.length
                 ? ` ${selectedIds.length} selected.`
                 : ""}

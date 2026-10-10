@@ -1,5 +1,5 @@
 import { Link } from "react-router-dom";
-import { CATALOG_ROUTES } from "../lib/routes.js";
+import { CATALOG_ROUTES, NEW_COLLECTION_ID } from "../lib/routes.js";
 
 // An empty library, not an outage: there is nothing to show yet, and a note
 // can't exist without a collection. So the two ways forward are the two ways
@@ -19,7 +19,7 @@ function NoCollectionsPrompt() {
         >
           Import / Export
         </Link>
-        <Link className="button" to={CATALOG_ROUTES.collections}>
+        <Link className="button" to={CATALOG_ROUTES.collectionEdit(NEW_COLLECTION_ID)}>
           Create a collection
         </Link>
       </div>

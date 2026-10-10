@@ -22,12 +22,9 @@ collectionsRouter.get('/', (_request, response) => {
 collectionsRouter.post('/', (request, response) => {
   const name = normalizeName(request.body?.name);
 
-  if (!name) {
-    response.status(400).json({ error: 'Collection name is required.' });
-    return;
-  }
-
   try {
+    // An omitted name gets a unique default; the name is optional so the
+    // sidebar's `+ New collection` can stage a draft and POST on Save.
     const collection = createCollection(name);
     response.status(201).json({ collection });
   } catch (error) {

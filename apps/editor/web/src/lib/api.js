@@ -208,7 +208,7 @@ async function createCollection(name) {
   const response = await fetch('/api/collections', {
     method: 'POST',
     headers,
-    body: JSON.stringify({ name })
+    body: JSON.stringify(name ? { name } : {})
   });
 
   return handleResponse(response);

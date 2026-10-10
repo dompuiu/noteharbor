@@ -29,8 +29,8 @@ vi.mock("./components/NotesTable.jsx", () => ({
   NotesTable: () => <div>Banknotes screen</div>,
 }));
 
-vi.mock("./components/CollectionsScreen.jsx", () => ({
-  CollectionsScreen: () => <div>Collections screen</div>,
+vi.mock("./components/CollectionScreen.jsx", () => ({
+  CollectionScreen: ({ mode }) => <div>{`Collection ${mode} screen`}</div>,
 }));
 
 vi.mock("./components/ImportScreen.jsx", () => ({
@@ -105,11 +105,27 @@ describe("Catalog route prefixes", () => {
     expect(currentPath()).toBe("/catalog/banknotes");
   });
 
-  test("serves the collections screen at /catalog/collections", async () => {
+  test("serves a collection view at /catalog/collections/:id/view", async () => {
+    renderAt(CATALOG_ROUTES.collection(1));
+
+    expect(await screen.findByText("Collection view screen")).toBeInTheDocument();
+    expect(currentPath()).toBe("/catalog/collections/1/view");
+  });
+
+  test("serves a collection edit canvas at /catalog/collections/:id/edit", async () => {
+    renderAt(CATALOG_ROUTES.collectionEdit(1));
+
+    expect(await screen.findByText("Collection edit screen")).toBeInTheDocument();
+    expect(currentPath()).toBe("/catalog/collections/1/edit");
+  });
+
+  test("the legacy /catalog/collections list redirects to Banknotes", async () => {
     renderAt(CATALOG_ROUTES.collections);
 
-    expect(await screen.findByText("Collections screen")).toBeInTheDocument();
-    expect(currentPath()).toBe("/catalog/collections");
+    await waitFor(() => {
+      expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+    });
+    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
   });
 
   test("serves import and export at /catalog/import-export", async () => {
@@ -169,7 +185,7 @@ describe("Retired destinations", () => {
   });
 
   test("renders the sidebar navigation on every route", async () => {
-    renderAt(CATALOG_ROUTES.collections);
+    renderAt(CATALOG_ROUTES.collection(1));
 
     expect(
       await screen.findByRole("navigation", { name: "Sections" }),
