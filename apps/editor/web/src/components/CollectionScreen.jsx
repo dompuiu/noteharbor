@@ -3,15 +3,18 @@ import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import { CATALOG_ROUTES, DEFAULT_DESTINATION, NEW_COLLECTION_ID } from "../lib/routes.js";
 import { useCollections } from "../lib/collections.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
+import { NotesTable } from "./NotesTable.jsx";
 
-// One collection, rendered in one of two near-identical modes. View mode is
-// read-only; edit mode is a draft with Save/Cancel. Both share the same shell
-// so the two never drift — the showcases pattern applied to collections.
+// One collection, rendered in one of two near-identical modes. View mode shows
+// the collection's banknotes table; edit mode is a draft with Save/Cancel.
+// Both share the same header shell so the two never drift — the showcases
+// pattern applied to collections.
 function CollectionScreen({ mode }) {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
   const {
+    activeCollection,
     collections,
     loadingCollections,
     collectionsError,
@@ -277,16 +280,7 @@ function CollectionScreen({ mode }) {
     }
   }
 
-  function handleViewBanknotes() {
-    if (collection) {
-      selectCollection(collection.id);
-    }
-
-    navigate(DEFAULT_DESTINATION);
-  }
-
-  const noteCount = collection ? Number(collection.note_count ?? 0) : 0;
-  const isDefault = isNew ? defaultDraft : (collection ? Number(collection.is_default) === 1 : defaultDraft);
+  const noteCount = collection ? Number(collection.note_count ?? 0) : 0;  const isDefault = isNew ? defaultDraft : (collection ? Number(collection.is_default) === 1 : defaultDraft);
   const invalidId = !isNew && (!Number.isInteger(collectionId) || collectionId <= 0);
   const missingCollection = !isNew && !invalidId && !loadingCollections && !collectionsError && !collection;
 
@@ -359,11 +353,6 @@ function CollectionScreen({ mode }) {
               </>
             ) : (
               <>
-                {collection ? (
-                  <button className="button" onClick={handleViewBanknotes} type="button">
-                    View banknotes
-                  </button>
-                ) : null}
                 {collection || isNew ? (
                   <Link
                     className="button"
@@ -430,6 +419,19 @@ function CollectionScreen({ mode }) {
           </label>
         ) : null}
       </div>
+
+      {/* The collection view is the banknotes table for that collection, so
+      `/catalog/collections/:id/view` reads the notes directly. */}
+      {!editMode && collection && !loadingCollections && !collectionsError ? (
+        <NotesTable
+          activeCollection={activeCollection}
+          activeCollectionId={activeCollectionId}
+          collections={collections}
+          collectionsError={collectionsError}
+          loadingCollections={loadingCollections}
+          onSelectCollection={selectCollection}
+        />
+      ) : null}
     </section>
   );
 }

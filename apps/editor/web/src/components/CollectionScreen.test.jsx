@@ -11,6 +11,10 @@ vi.mock("./ConfirmDialog.jsx", () => ({
   useConfirmation: vi.fn(),
 }));
 
+vi.mock("./NotesTable.jsx", () => ({
+  NotesTable: () => <div>Banknotes table</div>,
+}));
+
 import { CollectionScreen } from "./CollectionScreen.jsx";
 import { useCollections } from "../lib/collections.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
@@ -18,6 +22,7 @@ import { CATALOG_ROUTES } from "../lib/routes.js";
 
 function collectionsContext(overrides = {}) {
   return {
+    activeCollection: { id: 1, is_default: 1, name: "Default" },
     activeCollectionId: 1,
     collections: [
       { id: 1, is_default: 1, name: "Default", note_count: 3 },
@@ -93,14 +98,14 @@ describe("CollectionScreen view mode", () => {
     expect(screen.getByText("0 notes")).toBeInTheDocument();
   });
 
-  test("offers Edit and View banknotes actions", () => {
+  test("offers an Edit action and the banknotes table", () => {
     renderView(1);
 
     expect(screen.getByRole("link", { name: "Edit" })).toHaveAttribute(
       "href",
       CATALOG_ROUTES.collectionEdit(1),
     );
-    expect(screen.getByRole("button", { name: "View banknotes" })).toBeInTheDocument();
+    expect(screen.getByText("Banknotes table")).toBeInTheDocument();
   });
 
   test("viewing a collection selects it as active", () => {
