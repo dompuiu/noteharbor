@@ -84,18 +84,13 @@ beforeEach(() => {
 });
 
 describe("CollectionScreen view mode", () => {
-  test("shows the collection name, note count, and default badge", () => {
-    renderView(1);
+  test("skips its own header copy since the banknotes table shows the name", () => {
+    const { container } = renderView(1);
 
-    expect(screen.getByRole("heading", { name: "Default" })).toBeInTheDocument();
-    expect(screen.getByText("3 notes · Default")).toBeInTheDocument();
-  });
-
-  test("shows note count without the default badge for non-defaults", () => {
-    renderView(2);
-
-    expect(screen.getByRole("heading", { name: "Archive" })).toBeInTheDocument();
-    expect(screen.getByText("0 notes")).toBeInTheDocument();
+    // The table owns the title now; the view keeps only the Edit action.
+    expect(container.querySelector(".panel-heading-copy")).toBeNull();
+    expect(screen.queryByRole("heading")).toBeNull();
+    expect(screen.getByText("Banknotes table")).toBeInTheDocument();
   });
 
   test("offers an Edit action and the banknotes table", () => {

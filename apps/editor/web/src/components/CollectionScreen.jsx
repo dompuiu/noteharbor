@@ -290,35 +290,37 @@ function CollectionScreen({ mode }) {
     >
       <div className="panel">
         <div className="panel-heading">
-          <div className="panel-heading-copy">
-            <p className="eyebrow">Catalog</p>
-            {editMode ? (
-              <input
-                aria-label="Collection name"
-                className="showcase-name-field"
-                onBlur={commitName}
-                onChange={(event) => {
-                  setNameDraft(event.target.value);
-                  setNameError("");
-                  setSaveError("");
-                }}
-                onKeyDown={handleNameKeyDown}
-                ref={nameFieldRef}
-                value={nameDraft}
-              />
-            ) : (
-              <h1>{collectionName}</h1>
-            )}
-            {!isNew && collection ? (
-              <p className="muted">{`${noteCount} notes${isDefault ? " · Default" : ""}`}</p>
-            ) : null}
-            {isNew ? (
-              <p className="muted">New collection — unsaved until you press Save.</p>
-            ) : null}
-            {editMode && dirty && !loadingCollections ? (
-              <p className="muted">Unsaved changes</p>
-            ) : null}
-          </div>
+          {editMode || isNew ? (
+            <div className="panel-heading-copy">
+              <p className="eyebrow">Catalog</p>
+              {editMode ? (
+                <input
+                  aria-label="Collection name"
+                  className="showcase-name-field"
+                  onBlur={commitName}
+                  onChange={(event) => {
+                    setNameDraft(event.target.value);
+                    setNameError("");
+                    setSaveError("");
+                  }}
+                  onKeyDown={handleNameKeyDown}
+                  ref={nameFieldRef}
+                  value={nameDraft}
+                />
+              ) : (
+                <h1>{collectionName}</h1>
+              )}
+              {!isNew && collection ? (
+                <p className="muted">{`${noteCount} notes${isDefault ? " · Default" : ""}`}</p>
+              ) : null}
+              {isNew ? (
+                <p className="muted">New collection — unsaved until you press Save.</p>
+              ) : null}
+              {editMode && dirty && !loadingCollections ? (
+                <p className="muted">Unsaved changes</p>
+              ) : null}
+            </div>
+          ) : null}
           <div className="panel-heading-actions">
             {/* Edit mode is a draft: Save persists the name and the default
             flag, Cancel discards both and returns to view. */}
