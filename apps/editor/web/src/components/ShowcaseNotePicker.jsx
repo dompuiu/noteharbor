@@ -503,6 +503,12 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
                     return null;
                   }
 
+                  // Each virtual row is translated, which creates its own
+                  // stacking context: without a lift, a later sibling row
+                  // paints above this row's preview bubble. Raise the row
+                  // carrying the open preview so the bubble stays on top.
+                  const isPreviewOpen = thumbPreview?.noteId === note.id;
+
                   return (
                     <div
                       className="showcase-picker-virtual-row"
@@ -515,6 +521,7 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
                       }}
                       style={{
                         transform: `translateY(${virtualRow.start}px)`,
+                        zIndex: isPreviewOpen ? 10 : undefined,
                       }}
                     >
                       {renderNoteLabel(note)}
@@ -523,9 +530,22 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
                 })}
               </div>
             ) : (
-              filtered.map((note) => (
-                <div key={note.id}>{renderNoteLabel(note)}</div>
-              ))
+              filtered.map((note) => {
+                const isPreviewOpen = thumbPreview?.noteId === note.id;
+
+                return (
+                  <div
+                    key={note.id}
+                    style={
+                      isPreviewOpen
+                        ? { position: "relative", zIndex: 10 }
+                        : undefined
+                    }
+                  >
+                    {renderNoteLabel(note)}
+                  </div>
+                );
+              })
             )
           ) : null}
         </div>

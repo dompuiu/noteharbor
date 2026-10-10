@@ -187,6 +187,45 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
     ).toBeNull();
   });
 
+  test("the row with the open preview lifts above sibling rows", async () => {
+    const withFull = (id) =>
+      note(id, {
+        images: [
+          {
+            type: "front",
+            variant: "thumbnail",
+            localPath: `/api/images/notes/${id}/front-thumbnail.jpg`,
+          },
+          {
+            type: "front",
+            variant: "full",
+            localPath: `/api/images/notes/${id}/front-full.jpg`,
+          },
+        ],
+      });
+    getNotes.mockResolvedValue({ notes: [withFull(1), withFull(2), withFull(3)] });
+    const user = userEvent.setup();
+
+    render(
+      <ShowcaseNotePicker
+        collections={collections}
+        node={{ id: 10, name: "Group", children: [] }}
+        onAdd={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "Add notes" });
+    const thumbs = dialog.querySelectorAll(".showcase-note-row-thumb");
+    await user.hover(thumbs[0]);
+
+    const rows = dialog.querySelectorAll(".showcase-picker-virtual-row");
+    expect(rows).toHaveLength(3);
+    expect(rows[0].style.zIndex).toBe("10");
+    expect(rows[1].style.zIndex).toBe("");
+    expect(rows[2].style.zIndex).toBe("");
+  });
+
   test("a note without images has no hover preview", async () => {
     getNotes.mockResolvedValue({ notes: [note(2, { images: [] })] });
     const user = userEvent.setup();
