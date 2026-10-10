@@ -1,17 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { getNotes } from "../lib/api.js";
 import { matchesCatalogFamily } from "../lib/catalogFamily.js";
+import { firstAvailableNoteImage } from "../lib/showcaseImages.js";
 
-// The note picker popup (ticket 10). A filter bar over a detail list; each row
-// is a checkbox. The selection accumulates across filter changes, so a user can
-// pull notes from several collections into one batch. "Add selected (N)" adds
-// and keeps the popup open; "Add & close" adds and closes it.
+// The note picker popup (ticket 10). A filter bar over a virtualized thumbnail
+// list; each row is a checkbox with the note's first available image. The
+// selection accumulates across filter changes, so a user can pull notes from
+// several collections into one batch. "Add selected (N)" adds and keeps the
+// popup open; "Add & close" adds and closes it.
 //
 // Data loading: there is no global notes endpoint, so the picker fans out to
 // the per-collection `GET /api/collections/:id/notes` for every collection the
 // collections provider already loaded, and tags each note with its collection
 // name so the cross-collection list stays legible. The fan-out is documented in
 // the ticket; it is the cleanest read that needs no new endpoint.
+//
+// Virtualization: the list uses `@tanstack/react-virtual` (already used by the
+// Notes table) with a fixed row estimate, so collections with hundreds of notes
+// only mount the visible window. Thumbnails reuse `firstAvailableNoteImage`
+// (front thumbnail, then front full, then back) and lazy-load.
 const COLUMNS = [
   {
     value: "collection",
@@ -78,6 +86,7 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
   const [busy, setBusy] = useState(false);
   const [addError, setAddError] = useState("");
   const filterRef = useRef(null);
+  const listRef = useRef(null);
 
   const collectionKey = collections.map((collection) => collection.id).join(",");
 
@@ -165,6 +174,21 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
     [notes, column, value],
   );
 
+  const rowVirtualizer = useVirtualizer({
+    count: filtered.length,
+    estimateSize: () => 64,
+    getScrollElement: () => listRef.current,
+    overscan: 10,
+  });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const totalSize = rowVirtualizer.getTotalSize();
+
+  // A new filter is a new list: jump back to the top so the window never opens
+  // mid-list on stale scroll.
+  useEffect(() => {
+    rowVirtualizer.scrollToOffset(0);
+  }, [column, value, rowVirtualizer]);
+
   function toggle(noteId) {
     if (addedIds.has(noteId)) {
       return;
@@ -240,6 +264,48 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
   const activeColumn = COLUMNS.find((entry) => entry.value === column) ?? COLUMNS[1];
   const nodeLabel = node?.name ?? "this node";
 
+  function renderNoteLabel(note) {
+    const isAdded = addedIds.has(note.id);
+    const checked = isAdded || selectedIds.has(note.id);
+    const image = firstAvailableNoteImage(note);
+
+    return (
+      <label
+        className={`showcase-note-row${isAdded ? " showcase-note-row--added" : ""}${selectedIds.has(note.id) ? " showcase-note-row--selected" : ""}`}
+      >
+        <input
+          aria-label={`${noteCaption(note)} ${note.catalog_number ?? ""} ${note.collection_name ?? ""}`.trim()}
+          checked={checked}
+          disabled={isAdded}
+          onChange={() => toggle(note.id)}
+          type="checkbox"
+        />
+        <span aria-hidden="true" className="showcase-note-row-thumb">
+          {image ? (
+            <img alt="" loading="lazy" src={image.path} />
+          ) : (
+            <span className="showcase-note-row-thumb-empty">No image</span>
+          )}
+        </span>
+        <span className="showcase-note-row-main">{noteCaption(note)}</span>
+        <span className="showcase-note-row-pill">
+          {note.catalog_number || "—"}
+        </span>
+        <span className="showcase-note-row-pill">{note.collection_name}</span>
+        {isAdded ? (
+          <span className="showcase-note-row-pill showcase-note-row-pill--added">
+            added
+          </span>
+        ) : null}
+      </label>
+    );
+  }
+
+  // jsdom (and the first paint before the scroll element is measured) yields
+  // no virtual rows; fall back to the plain list so the notes are still
+  // visible and selectable. A measured browser always takes the virtual path.
+  const useVirtualList = virtualRows.length > 0;
+
   return (
     <div className="showcase-picker-backdrop">
       <div
@@ -292,7 +358,16 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
             : "The selection carries across filter changes, so you can pick notes from several collections."}
         </p>
 
-        <div className="showcase-picker-list">
+        {!loading && !loadError ? (
+          <p aria-live="polite" className="muted showcase-picker-count">
+            {filtered.length === notes.length
+              ? `${notes.length} notes`
+              : `${filtered.length} of ${notes.length} notes`}
+            {selectedIds.size ? ` · ${selectedIds.size} selected` : ""}
+          </p>
+        ) : null}
+
+        <div className="showcase-picker-list" ref={listRef}>
           {loading ? (
             <p className="muted showcase-picker-empty">Loading notes…</p>
           ) : null}
@@ -307,39 +382,44 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
             <p className="muted showcase-picker-empty">No notes match.</p>
           ) : null}
 
-          {!loading && !loadError
-            ? filtered.map((note) => {
-                const isAdded = addedIds.has(note.id);
-                const checked = isAdded || selectedIds.has(note.id);
+          {!loading && !loadError && filtered.length > 0 ? (
+            useVirtualList ? (
+              <div
+                className="showcase-picker-virtual"
+                style={{ height: `${totalSize}px` }}
+              >
+                {virtualRows.map((virtualRow) => {
+                  const note = filtered[virtualRow.index];
 
-                return (
-                  <label
-                    className={`showcase-note-row${isAdded ? " showcase-note-row--added" : ""}`}
-                    key={note.id}
-                  >
-                    <input
-                      aria-label={`${noteCaption(note)} ${note.catalog_number ?? ""} ${note.collection_name ?? ""}`.trim()}
-                      checked={checked}
-                      disabled={isAdded}
-                      onChange={() => toggle(note.id)}
-                      type="checkbox"
-                    />
-                    <span className="showcase-note-row-main">{noteCaption(note)}</span>
-                    <span className="showcase-note-row-pill">
-                      {note.catalog_number || "—"}
-                    </span>
-                    <span className="showcase-note-row-pill">
-                      {note.collection_name}
-                    </span>
-                    {isAdded ? (
-                      <span className="showcase-note-row-pill showcase-note-row-pill--added">
-                        added
-                      </span>
-                    ) : null}
-                  </label>
-                );
-              })
-            : null}
+                  if (!note) {
+                    return null;
+                  }
+
+                  return (
+                    <div
+                      className="showcase-picker-virtual-row"
+                      data-index={virtualRow.index}
+                      key={note.id}
+                      ref={(element) => {
+                        if (element) {
+                          rowVirtualizer.measureElement(element);
+                        }
+                      }}
+                      style={{
+                        transform: `translateY(${virtualRow.start}px)`,
+                      }}
+                    >
+                      {renderNoteLabel(note)}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : (
+              filtered.map((note) => (
+                <div key={note.id}>{renderNoteLabel(note)}</div>
+              ))
+            )
+          ) : null}
         </div>
 
         <div className="showcase-picker-actions">
