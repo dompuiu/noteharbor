@@ -57,13 +57,12 @@ function renderTable(editCollectionTo = null) {
   return render(
     <MemoryRouter>
       <NotesTable
-        activeCollection={{ id: 1, is_default: 1, name: "Test" }}
-        activeCollectionId={1}
+        collection={{ id: 1, is_default: 1, name: "Test" }}
+        collectionId={1}
         collections={[{ id: 1, is_default: 1, name: "Test" }]}
         collectionsError=""
         editCollectionTo={editCollectionTo}
         loadingCollections={false}
-        onSelectCollection={() => {}}
       />
     </MemoryRouter>,
   );
@@ -90,18 +89,21 @@ beforeEach(() => {
 });
 
 describe("NotesTable header controls", () => {
-  test("keeps the collection selector and Add note above the table", async () => {
+  test("keeps Add note above the table without a collection selector", async () => {
     renderTable();
 
-    const select = await screen.findByLabelText("Active collection");
-    expect(select).toBeInTheDocument();
+    await screen.findByRole("button", { name: "Add note" });
+
+    expect(
+      screen.queryByLabelText("Active collection"),
+    ).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Add note" })).toBeInTheDocument();
   });
 
   test("no longer shows the Import / Export link", async () => {
     renderTable();
 
-    await screen.findByLabelText("Active collection");
+    await screen.findByRole("button", { name: "Add note" });
 
     expect(
       screen.queryByRole("link", { name: "Import or export" }),
@@ -111,7 +113,7 @@ describe("NotesTable header controls", () => {
   test("shows no Edit link without an edit destination", async () => {
     renderTable();
 
-    await screen.findByLabelText("Active collection");
+    await screen.findByRole("button", { name: "Add note" });
 
     expect(screen.queryByRole("link", { name: "Edit" })).not.toBeInTheDocument();
   });
@@ -119,7 +121,7 @@ describe("NotesTable header controls", () => {
   test("shows the Edit link next to Add note when given an edit destination", async () => {
     renderTable("/catalog/collections/1/edit");
 
-    await screen.findByLabelText("Active collection");
+    await screen.findByRole("button", { name: "Add note" });
 
     const edit = screen.getByRole("link", { name: "Edit" });
     expect(edit).toHaveAttribute("href", "/catalog/collections/1/edit");

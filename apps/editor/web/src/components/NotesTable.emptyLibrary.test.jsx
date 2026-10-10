@@ -43,12 +43,11 @@ function renderEmptyLibrary() {
     <MemoryRouter>
       <HashProbe />
       <NotesTable
-        activeCollection={null}
-        activeCollectionId={null}
+        collection={null}
+        collectionId={null}
         collections={[]}
         collectionsError=""
         loadingCollections={false}
-        onSelectCollection={() => {}}
       />
     </MemoryRouter>,
   );
@@ -86,7 +85,7 @@ describe("NotesTable with no collections", () => {
     ).toHaveAttribute("href", CATALOG_ROUTES.collectionEdit(NEW_COLLECTION_ID));
   });
 
-  test("hides the collection selector and disables Add note", async () => {
+  test("shows no collection selector and disables Add note", async () => {
     renderEmptyLibrary();
 
     await screen.findByText(/No collections yet/);

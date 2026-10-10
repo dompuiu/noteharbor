@@ -14,7 +14,6 @@ function CollectionScreen({ mode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const {
-    activeCollection,
     collections,
     loadingCollections,
     collectionsError,
@@ -22,8 +21,6 @@ function CollectionScreen({ mode }) {
     renameCollection,
     setDefaultCollection,
     deleteCollection,
-    selectCollection,
-    activeCollectionId,
     pendingCollection,
     beginPendingCollection,
     discardPendingCollection,
@@ -101,14 +98,8 @@ function CollectionScreen({ mode }) {
     }
   }, [isNew, pendingCollection, beginPendingCollection]);
 
-  // Viewing a collection makes it active so the notes table follows the
-  // last-viewed collection.
-  useEffect(() => {
-    if (!isNew && collection && activeCollectionId !== collection.id) {
-      selectCollection(collection.id);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [collection?.id]);
+  // Viewing a collection shows that collection's notes table: the route's
+  // `:id` is the source of truth, so there is no active-collection switch.
 
   // In edit mode the name field is part of the draft: blur/Enter only validate
   // locally, and Save persists the rename together with the default flag.
@@ -312,13 +303,12 @@ function CollectionScreen({ mode }) {
     return (
       <section className="screen-stack showcase-screen collection-screen collection-screen--view">
         <NotesTable
-          activeCollection={activeCollection}
-          activeCollectionId={activeCollectionId}
+          collection={collection}
+          collectionId={collectionId}
           collections={collections}
           collectionsError={collectionsError}
           editCollectionTo={CATALOG_ROUTES.collectionEdit(collectionId)}
           loadingCollections={loadingCollections}
-          onSelectCollection={selectCollection}
         />
       </section>
     );

@@ -12,8 +12,12 @@ vi.mock("./ConfirmDialog.jsx", () => ({
 }));
 
 vi.mock("./NotesTable.jsx", () => ({
-  NotesTable: ({ editCollectionTo }) => (
-    <div data-edit-to={editCollectionTo ?? ""} data-testid="notes-table">
+  NotesTable: ({ collectionId, editCollectionTo }) => (
+    <div
+      data-collection-id={collectionId ?? ""}
+      data-edit-to={editCollectionTo ?? ""}
+      data-testid="notes-table"
+    >
       Banknotes table
     </div>
   ),
@@ -26,8 +30,6 @@ import { CATALOG_ROUTES } from "../lib/routes.js";
 
 function collectionsContext(overrides = {}) {
   return {
-    activeCollection: { id: 1, is_default: 1, name: "Default" },
-    activeCollectionId: 1,
     collections: [
       { id: 1, is_default: 1, name: "Default", note_count: 3 },
       { id: 2, is_default: 0, name: "Archive", note_count: 0 },
@@ -38,7 +40,6 @@ function collectionsContext(overrides = {}) {
     renameCollection: vi.fn(),
     setDefaultCollection: vi.fn(),
     deleteCollection: vi.fn(),
-    selectCollection: vi.fn(),
     pendingCollection: null,
     beginPendingCollection: vi.fn(),
     discardPendingCollection: vi.fn(),
@@ -106,12 +107,13 @@ describe("CollectionScreen view mode", () => {
     );
   });
 
-  test("viewing a collection selects it as active", () => {
-    const selectCollection = vi.fn();
-    useCollections.mockReturnValue(collectionsContext({ activeCollectionId: 2, selectCollection }));
-    renderView(1);
+  test("hands the table the route collection id for its notes", () => {
+    renderView(2);
 
-    expect(selectCollection).toHaveBeenCalledWith(1);
+    expect(screen.getByTestId("notes-table")).toHaveAttribute(
+      "data-collection-id",
+      "2",
+    );
   });
 
   test("an unknown collection shows the not-found state", () => {

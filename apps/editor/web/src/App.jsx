@@ -45,12 +45,12 @@ function NoteEditorDestination({ emptyLibrary, selectedCollectionId }) {
   return <NoteEditForm selectedCollectionId={selectedCollectionId} />;
 }
 
-// The collections home has no canvas of its own: it resolves to the active
+// The collections home has no canvas of its own: it resolves to the default
 // (or first) collection view, or to the empty-library prompt when there is
 // nothing to show yet. This is also where `/`, unknown paths, and the
 // retired `/catalog/banknotes` address land.
 function CollectionHomeRedirect() {
-  const { activeCollectionId, collections, loadingCollections } =
+  const { collections, loadingCollections } =
     useCollections();
 
   if (loadingCollections) {
@@ -64,7 +64,10 @@ function CollectionHomeRedirect() {
   }
 
   const target =
-    collections.find((entry) => entry.id === activeCollectionId) ??
+    collections.find((entry) => Number(entry.is_default) === 1) ??
+    collections.find(
+      (entry) => String(entry.name ?? "").trim().toLowerCase() === "default",
+    ) ??
     collections[0] ??
     null;
 
@@ -104,7 +107,6 @@ function LegacyShowcaseRedirect() {
 
 function ShellContent() {
   const {
-    activeCollectionId,
     collections,
     collectionsError,
     collectionsErrorReason,
@@ -160,6 +162,16 @@ function ShellContent() {
     loadingCollections,
   });
 
+  // The standalone note editor URL names no collection, so scope it to the
+  // default (or first) collection — the same destination the home resolves to.
+  const noteEditorCollection =
+    collections.find((entry) => Number(entry.is_default) === 1) ??
+    collections.find(
+      (entry) => String(entry.name ?? "").trim().toLowerCase() === "default",
+    ) ??
+    collections[0] ??
+    null;
+
   return (
     <div className="app-shell">
       <Sidebar pageFocusRef={pageFocusRef} />
@@ -211,7 +223,7 @@ function ShellContent() {
                 element={
                   <NoteEditorDestination
                     emptyLibrary={showEmptyLibrary}
-                    selectedCollectionId={activeCollectionId}
+                    selectedCollectionId={noteEditorCollection?.id ?? null}
                   />
                 }
                 path={CATALOG_ROUTES.noteEdit(":id")}

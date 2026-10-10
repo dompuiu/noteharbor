@@ -160,7 +160,7 @@ describe("Sidebar navigation groups", () => {
     expect(DEFAULT_DESTINATION).toBe(CATALOG_ROUTES.collections);
   });
 
-  test("marks the active collection as the current page", async () => {
+  test("marks the open collection as the current page", async () => {
     await renderSidebar(CATALOG_ROUTES.collection(2));
 
     expect(
@@ -179,14 +179,13 @@ describe("Sidebar navigation groups", () => {
     ).toHaveAttribute("aria-current", "page");
   });
 
-  test("keeps the active collection current while the note editor is open", async () => {
+  test("marks no collection current while the note editor is open", async () => {
     await renderSidebar(CATALOG_ROUTES.noteEdit(7));
 
-    // The provider picks the default collection as active, so the note
-    // editor keeps that row highlighted.
+    // The note editor URL names no collection, so no row claims it.
     expect(
       screen.getByRole("link", { name: "Default" }),
-    ).toHaveAttribute("aria-current", "page");
+    ).not.toHaveAttribute("aria-current");
   });
 
   test("highlights the open showcase, in view and edit mode", async () => {

@@ -88,7 +88,6 @@ function Sidebar({ pageFocusRef }) {
     reorderShowcases,
   } = useShowcases();
   const {
-    activeCollectionId,
     collections,
     pendingCollection,
     beginPendingCollection,
@@ -112,9 +111,7 @@ function Sidebar({ pageFocusRef }) {
 
   // The collection rows sit inside the Catalog group, above Import / Export.
   // A collection row stays highlighted in both of its modes: view and edit
-  // are siblings under the collection. The standalone note editor has no
-  // collection segment in its URL, so it keeps the active collection
-  // highlighted. A pending (not-yet-saved) collection
+  // are siblings under the collection. A pending (not-yet-saved) collection
   // renders as a draft row that vanishes on Cancel or on leaving its route.
   const collectionItems = collections.map((collection) => ({
     icon: "banknote",
@@ -123,9 +120,7 @@ function Sidebar({ pageFocusRef }) {
     to: CATALOG_ROUTES.collection(collection.id),
     matches: (pathname) =>
       pathname === CATALOG_ROUTES.collection(collection.id) ||
-      pathname === CATALOG_ROUTES.collectionEdit(collection.id) ||
-      (pathname.startsWith("/catalog/notes/") &&
-        collection.id === activeCollectionId),
+      pathname === CATALOG_ROUTES.collectionEdit(collection.id),
     collectionId: collection.id,
   }));
 

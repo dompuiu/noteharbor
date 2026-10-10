@@ -82,12 +82,11 @@ function renderTable() {
     <MemoryRouter>
       <LocationProbe />
       <NotesTable
-        activeCollection={{ id: 1, is_default: 1, name: "Test" }}
-        activeCollectionId={1}
+        collection={{ id: 1, is_default: 1, name: "Test" }}
+        collectionId={1}
         collections={[{ id: 1, is_default: 1, name: "Test" }]}
         collectionsError=""
         loadingCollections={false}
-        onSelectCollection={() => {}}
       />
     </MemoryRouter>,
   );

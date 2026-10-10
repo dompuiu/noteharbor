@@ -68,8 +68,6 @@ describe("CollectionsProvider mutations", () => {
 
     expect(screen.getByTestId("names")).toHaveTextContent("Default,Archive,Third");
     expect(getCollections.mock.calls.length).toBe(loadsBefore);
-    // The new collection becomes active, since new notes land there.
-    expect(context.activeCollectionId).toBe(3);
   });
 
   test("renaming patches the row in place without refetching", async () => {
@@ -111,20 +109,21 @@ describe("CollectionsProvider mutations", () => {
     ).toBe(0);
   });
 
-  test("deleting removes the row without refetching and moves the active collection", async () => {
+  test("deleting removes the row without refetching and reports the neighbour", async () => {
     renderProvider();
     await screen.findByText("Default,Archive");
 
     const loadsBefore = getCollections.mock.calls.length;
     deleteCollection.mockResolvedValue({ success: true });
 
+    let result;
     await act(async () => {
-      await context.deleteCollection(1);
+      result = await context.deleteCollection(1);
     });
 
     expect(screen.getByTestId("names")).toHaveTextContent("Archive");
     expect(getCollections.mock.calls.length).toBe(loadsBefore);
-    expect(context.activeCollectionId).toBe(2);
+    expect(result.nextCollectionId).toBe(2);
   });
 });
 

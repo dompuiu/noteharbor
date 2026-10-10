@@ -992,13 +992,12 @@ function buildTableHash(route) {
 }
 
 function NotesTable({
-  activeCollection,
-  activeCollectionId,
+  collection,
+  collectionId,
   collections,
   collectionsError,
   editCollectionTo = null,
   loadingCollections,
-  onSelectCollection,
 }) {
   const initialTableStateRef = useRef(undefined);
   const initialRouteRef = useRef(
@@ -1020,7 +1019,6 @@ function NotesTable({
   const focusedRowIdRef = useRef(null);
   const tableFocusAnchorRef = useRef(null);
   const currentRouteRef = useRef(null);
-  const skipFilterResetOnCollectionChangeRef = useRef(false);
   const pendingRowFocusNoteIdRef = useRef(null);
   const focusRestoreNoteIdRef = useRef(null);
   // The row the keyboard cursor last landed on, kept apart from
@@ -1345,8 +1343,8 @@ function NotesTable({
     }
 
     return {
-      slideshowCollectionId: Number.isInteger(activeCollectionId)
-        ? activeCollectionId
+      slideshowCollectionId: Number.isInteger(collectionId)
+        ? collectionId
         : null,
       slideshowFilters: { ...filters },
       slideshowSortDirection: sortDirection,
@@ -1380,12 +1378,12 @@ function NotesTable({
     (vScroll.visible ? 1 : 0);
 
   async function loadNotes() {
-    if (!Number.isInteger(activeCollectionId)) {
+    if (!Number.isInteger(collectionId)) {
       setNotes([]);
       return [];
     }
 
-    const payload = await getNotes(activeCollectionId);
+    const payload = await getNotes(collectionId);
     setNotes(payload.notes);
     return payload.notes;
   }
@@ -1395,7 +1393,7 @@ function NotesTable({
       return;
     }
 
-    if (!Number.isInteger(activeCollectionId)) {
+    if (!Number.isInteger(collectionId)) {
       setLoading(false);
       setNotes([]);
       return;
@@ -1405,7 +1403,7 @@ function NotesTable({
     setLoading(true);
     setLoadError("");
 
-    getNotes(activeCollectionId)
+    getNotes(collectionId)
       .then((notesPayload) => {
         if (active) {
           setNotes(notesPayload.notes);
@@ -1425,7 +1423,7 @@ function NotesTable({
     return () => {
       active = false;
     };
-  }, [activeCollectionId, loadingCollections]);
+  }, [collectionId, loadingCollections]);
 
   useEffect(() => {
     setSelectedIds((current) =>
@@ -1433,51 +1431,11 @@ function NotesTable({
     );
   }, [notes]);
 
-  // A slideshow URL names its collection: switch to it so a cold-opened
-  // tab lands on the same notes even when another collection is active.
-  useEffect(() => {
-    if (currentRoute.kind !== "slideshow") {
-      return;
-    }
-
-    const targetCollectionId = currentRoute.slideshowCollectionId;
-
-    if (!Number.isInteger(targetCollectionId)) {
-      return;
-    }
-
-    if (targetCollectionId === activeCollectionId) {
-      return;
-    }
-
-    if (loadingCollections) {
-      return;
-    }
-
-    if (!collections.some((entry) => entry.id === targetCollectionId)) {
-      return;
-    }
-
-    skipFilterResetOnCollectionChangeRef.current = true;
-    onSelectCollection(targetCollectionId);
-  }, [
-    activeCollectionId,
-    collections,
-    currentRoute,
-    loadingCollections,
-    onSelectCollection,
-  ]);
-
-  // Filters reset only when the active collection actually changes. Route
+  // Filters reset only when the viewed collection actually changes. Route
   // changes (opening/closing the slideshow) leave them alone, and while a
   // slideshow URL with filter+sort context is open the URL owns them.
   useEffect(() => {
     resetColumnScroll();
-
-    if (skipFilterResetOnCollectionChangeRef.current) {
-      skipFilterResetOnCollectionChangeRef.current = false;
-      return;
-    }
 
     const route = currentRouteRef.current;
 
@@ -1486,7 +1444,7 @@ function NotesTable({
     }
 
     setFilters({});
-  }, [activeCollectionId]);
+  }, [collectionId]);
 
   useEffect(() => {
     if (!slideshowRouteActive || !slideshowNotes.length) {
@@ -1553,15 +1511,6 @@ function NotesTable({
     let baseNotes = null;
 
     if (hasSlideshowUrlContext) {
-      // While the collection switch is still landing, notes belong to the
-      // wrong collection: wait instead of bouncing back to the table.
-      if (
-        Number.isInteger(currentRoute.slideshowCollectionId) &&
-        currentRoute.slideshowCollectionId !== activeCollectionId
-      ) {
-        return;
-      }
-
       baseNotes = slideshowContextNotes ?? [];
     } else {
       const hasRestoredTableState = Boolean(initialTableStateRef.current);
@@ -1630,7 +1579,7 @@ function NotesTable({
       );
     }
   }, [
-    activeCollectionId,
+    collectionId,
     currentRoute,
     defaultOrderedNotes,
     loading,
@@ -3146,7 +3095,7 @@ function NotesTable({
     try {
       const payload = await saveNotesOrder(
         reorderedNotes.map((note) => note.id),
-        activeCollectionId,
+        collectionId,
       );
       setNotes(payload.notes);
     } catch (reorderError) {
@@ -3181,7 +3130,7 @@ function NotesTable({
       const removal = deleteFocusAfterRemoval(orderedNotes, selectedIds);
 
       await Promise.all(
-        selectedIds.map((id) => deleteNote(id, activeCollectionId)),
+        selectedIds.map((id) => deleteNote(id, collectionId)),
       );
       // Request the landing focus before the refetch sets the list, so the
       // request can never be flushed after the render it belongs to.
@@ -3224,7 +3173,7 @@ function NotesTable({
       : undefined;
 
     try {
-      await deleteNote(noteId, activeCollectionId);
+      await deleteNote(noteId, collectionId);
 
       if (fromSlideshow) {
         // The route-sync effect is the single place that reacts to a route
@@ -3502,7 +3451,7 @@ function NotesTable({
             onClick={(event) => event.stopPropagation()}
           >
             <NoteEditForm
-              selectedCollectionId={activeCollectionId}
+              selectedCollectionId={collectionId}
               cancelLabel="Close"
               currentNotePosition={currentEditingNotePosition}
               initialPositionMode={createPositionMode}
@@ -3537,8 +3486,8 @@ function NotesTable({
         <div className="panel-heading panel-heading--compact">
           <div className="panel-heading-copy">
             <h2>
-              {Number(activeCollection?.is_default) === 1 ? "★ " : ""}
-              {activeCollection?.name ?? "Notes"}
+              {Number(collection?.is_default) === 1 ? "★ " : ""}
+              {collection?.name ?? "Notes"}
             </h2>
             <p>
               {orderedNotes.length} notes in the current view.
@@ -3548,24 +3497,6 @@ function NotesTable({
             </p>
           </div>
           <div className="inline-actions">
-            {noCollections ? null : (
-              <select
-                aria-label="Active collection"
-                className="select-input"
-                disabled={loadingCollections || !collections.length}
-                onChange={(event) =>
-                  onSelectCollection(Number(event.target.value))
-                }
-                value={activeCollectionId ?? ""}
-              >
-                {collections.map((collection) => (
-                  <option key={collection.id} value={collection.id}>
-                    {Number(collection.is_default) === 1 ? "★ " : ""}
-                    {collection.name}
-                  </option>
-                ))}
-              </select>
-            )}
             {editCollectionTo ? (
               <Link className="icon-link" to={editCollectionTo}>
                 Edit
