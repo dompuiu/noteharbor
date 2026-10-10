@@ -25,7 +25,7 @@ const shortcutGroups = [
         description: "Jump to the first / last column",
       },
       { keys: ["Enter", "Space"], description: "Open the focused note" },
-      { keys: ["e"], description: "Edit the focused note" },
+      { keys: ["e"], description: "Edit the focused note (or the collection name when no row is focused)" },
       { keys: ["d"], description: "Delete the focused note" },
       { keys: ["c"], description: "Copy the focused note's details" },
       { keys: ["a"], description: "Add a new note (before the focused row when one is focused, otherwise at the end)" },

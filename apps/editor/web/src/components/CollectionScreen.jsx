@@ -241,9 +241,9 @@ function CollectionScreen({ mode }) {
   const missingCollection = !isNew && !invalidId && !loadingCollections && !collectionsError && !collection;
 
   // The collection view is the notes table for that collection, so
-  // `/catalog/collections/:id/view` reads the notes directly. The Edit action
-  // lives in the table header next to Add note; the table already shows the
-  // loading and error states.
+  // `/catalog/collections/:id/view` reads the notes directly. The table owns
+  // the inline collection rename next to its title; the table already shows
+  // the loading and error states.
   if (!editMode && !isNew) {
     if (invalidId || missingCollection) {
       return (
@@ -272,8 +272,8 @@ function CollectionScreen({ mode }) {
           collectionId={collectionId}
           collections={collections}
           collectionsError={collectionsError}
-          editCollectionTo={CATALOG_ROUTES.collectionEdit(collectionId)}
           loadingCollections={loadingCollections}
+          onRenameCollection={renameCollection}
         />
       </section>
     );

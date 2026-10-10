@@ -11,7 +11,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Link, useLocation, useNavigate } from "react-router-dom";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   deleteNote,
   getNotes,
@@ -996,8 +996,8 @@ function NotesTable({
   collectionId,
   collections,
   collectionsError,
-  editCollectionTo = null,
   loadingCollections,
+  onRenameCollection = null,
 }) {
   const initialTableStateRef = useRef(undefined);
   const initialRouteRef = useRef(
@@ -1128,6 +1128,13 @@ function NotesTable({
   const editorDirtyRef = useRef(false);
   const confirmOpenRef = useRef(false);
   const closeEditorRef = useRef(null);
+  const collectionNameFieldRef = useRef(null);
+  const [editingCollectionName, setEditingCollectionName] = useState(false);
+  const [collectionNameDraft, setCollectionNameDraft] = useState(
+    collection?.name ?? "",
+  );
+  const [collectionNameError, setCollectionNameError] = useState("");
+  const [savingCollectionName, setSavingCollectionName] = useState(false);
   const { confirm: requestConfirmation, dialog: confirmDialog, isOpen: confirmOpen } =
     useConfirmation();
   confirmOpenRef.current = confirmOpen;
@@ -1142,6 +1149,93 @@ function NotesTable({
       }
     };
   }, []);
+
+  // Inline collection rename: the header owns a draft that tracks the server
+  // row until editing starts, then holds the user's text untouched.
+  const collectionName = collection?.name ?? null;
+  useEffect(() => {
+    if (editingCollectionName) {
+      return;
+    }
+
+    setCollectionNameDraft(collectionName ?? "");
+    setCollectionNameError("");
+  }, [collectionName, editingCollectionName]);
+
+  useEffect(() => {
+    if (!editingCollectionName) {
+      return;
+    }
+
+    const field = collectionNameFieldRef.current;
+
+    if (field) {
+      field.focus();
+      field.select?.();
+    }
+  }, [editingCollectionName]);
+
+  const startEditingCollectionName = useCallback(() => {
+    if (!collection || editingCollectionName) {
+      return;
+    }
+
+    setCollectionNameDraft(collection.name ?? "");
+    setCollectionNameError("");
+    setEditingCollectionName(true);
+  }, [collection, editingCollectionName]);
+
+  function cancelEditingCollectionName() {
+    setEditingCollectionName(false);
+    setCollectionNameDraft(collection?.name ?? "");
+    setCollectionNameError("");
+  }
+
+  async function commitCollectionName() {
+    const trimmed = collectionNameDraft.trim();
+
+    if (!trimmed) {
+      setCollectionNameError("A collection name is required.");
+      return;
+    }
+
+    if (!collection || trimmed === collection.name) {
+      setEditingCollectionName(false);
+      setCollectionNameDraft(collection?.name ?? "");
+      setCollectionNameError("");
+      return;
+    }
+
+    if (!onRenameCollection) {
+      setEditingCollectionName(false);
+      return;
+    }
+
+    setSavingCollectionName(true);
+    setCollectionNameError("");
+
+    try {
+      await onRenameCollection(collection.id, trimmed);
+      setEditingCollectionName(false);
+    } catch (error) {
+      setCollectionNameError(error.message || "Could not rename the collection.");
+    } finally {
+      setSavingCollectionName(false);
+    }
+  }
+
+  function handleCollectionRenameSubmit(event) {
+    event.preventDefault();
+    void commitCollectionName();
+  }
+
+  function handleCollectionNameKeyDown(event) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      cancelEditingCollectionName();
+    }
+  }
 
   const showSelection = true;
   const showReorder = true;
@@ -2407,6 +2501,11 @@ function NotesTable({
       }
 
       if (!rowHasFocus) {
+        // No row cursor: `e` renames the collection instead of a note.
+        if (event.key === "e" && !focusWithinFocusedRow && collection) {
+          event.preventDefault();
+          startEditingCollectionName();
+        }
         return;
       }
 
@@ -2440,6 +2539,7 @@ function NotesTable({
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [
     clearRowCursor,
+    collection,
     creatingNote,
     editingNoteId,
     hasActiveFilters,
@@ -2448,6 +2548,7 @@ function NotesTable({
     rowVirtualizer,
     slideshowRouteActive,
     showShortcutsHelp,
+    startEditingCollectionName,
   ]);
 
   function resetTableState() {
@@ -3485,9 +3586,111 @@ function NotesTable({
       <div className="panel" inert={editorOverlayOpen}>
         <div className="panel-heading panel-heading--compact">
           <div className="panel-heading-copy">
-            <h2>
-              {collection?.name ?? "Notes"}
-            </h2>
+            {editingCollectionName ? (
+              <form
+                className="collection-rename-form"
+                onSubmit={handleCollectionRenameSubmit}
+              >
+                <input
+                  aria-label="Collection name"
+                  className="showcase-name-field"
+                  disabled={savingCollectionName}
+                  onChange={(event) => {
+                    setCollectionNameDraft(event.target.value);
+                    setCollectionNameError("");
+                  }}
+                  onKeyDown={handleCollectionNameKeyDown}
+                  ref={collectionNameFieldRef}
+                  value={collectionNameDraft}
+                />
+                <button
+                  aria-label="Save"
+                  className="showcase-node-save"
+                  disabled={savingCollectionName}
+                  title="Save name"
+                  type="submit"
+                >
+                  <svg
+                    aria-hidden="true"
+                    focusable="false"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    width="13"
+                  >
+                    <path
+                      d="M4 12.5l5 5L20 6.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2.5"
+                    />
+                  </svg>
+                </button>
+                <button
+                  aria-label="Cancel"
+                  className="showcase-node-cancel"
+                  onClick={cancelEditingCollectionName}
+                  title="Discard changes"
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    focusable="false"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    width="13"
+                  >
+                    <path
+                      d="M6 6l12 12M18 6L6 18"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeWidth="2"
+                    />
+                  </svg>
+                </button>
+              </form>
+            ) : (
+              <div className="collection-title-row">
+                <h2>{collection?.name ?? "Notes"}</h2>
+                {collection ? (
+                  <button
+                    aria-label={`Rename ${collection.name} collection`}
+                    className="icon-link collection-rename-button"
+                    data-shortcut="e"
+                    onClick={startEditingCollectionName}
+                    title="Rename collection (e)"
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      height="16"
+                      viewBox="0 0 24 24"
+                      width="16"
+                    >
+                      <path
+                        d="M4 20h4l10-10-4-4L4 16v4z"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      />
+                      <path
+                        d="M12 6l4 4"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                      />
+                    </svg>
+                  </button>
+                ) : null}
+              </div>
+            )}
+            {collectionNameError ? (
+              <p className="error-text" role="alert">
+                {collectionNameError}
+              </p>
+            ) : null}
             <p>
               {orderedNotes.length} notes in the current view.
               {showSelection && selectedIds.length
@@ -3496,11 +3699,6 @@ function NotesTable({
             </p>
           </div>
           <div className="inline-actions">
-            {editCollectionTo ? (
-              <Link className="icon-link" to={editCollectionTo}>
-                Edit
-              </Link>
-            ) : null}
             <button
               aria-label="Add note"
               className="icon-link button-primary"

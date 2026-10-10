@@ -12,10 +12,10 @@ vi.mock("./ConfirmDialog.jsx", () => ({
 }));
 
 vi.mock("./NotesTable.jsx", () => ({
-  NotesTable: ({ collectionId, editCollectionTo }) => (
+  NotesTable: ({ collectionId, onRenameCollection }) => (
     <div
       data-collection-id={collectionId ?? ""}
-      data-edit-to={editCollectionTo ?? ""}
+      data-has-rename={onRenameCollection ? "true" : "false"}
       data-testid="notes-table"
     >
       Banknotes table
@@ -97,12 +97,12 @@ describe("CollectionScreen view mode", () => {
     expect(screen.getByText("Banknotes table")).toBeInTheDocument();
   });
 
-  test("hands the table the edit destination for its header action", () => {
+  test("hands the table the rename handler for its inline title edit", () => {
     renderView(1);
 
     expect(screen.getByTestId("notes-table")).toHaveAttribute(
-      "data-edit-to",
-      CATALOG_ROUTES.collectionEdit(1),
+      "data-has-rename",
+      "true",
     );
   });
 

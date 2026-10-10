@@ -2006,6 +2006,27 @@ input[type="radio"] {
   gap: 4px;
 }
 
+.collection-title-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.collection-title-row h2 {
+  margin: 0;
+}
+
+.collection-rename-button {
+  min-height: 28px;
+  padding: 4px 8px;
+}
+
+.collection-rename-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
 .panel-heading-copy p {
   margin: 0;
 }
