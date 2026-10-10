@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.0.1] - 2026-10-10
+
+### Fixed
+
+- Export: notes whose `collection_id` is missing or points at a deleted collection no longer abort the download with `NOT NULL constraint failed: banknotes.collection_id`. They are excluded from the archive (with their tags, links, and showcase references) while the live data stays untouched.
+
 ## [2.0.0] - 2026-10-10
 
 ### Added
