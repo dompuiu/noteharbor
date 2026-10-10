@@ -760,6 +760,53 @@ function encodeOmittedShowcasesHeader(omittedShowcases) {
   return encodeURIComponent(JSON.stringify(names));
 }
 
+// Orphaned notes (collection_id NULL or pointing at a missing collection)
+// abort the export in renumberSnapshot with
+// `NOT NULL constraint failed: banknotes.collection_id`. Orphans are
+// excluded from the archive: this deletes them (and their links) from the
+// snapshot copy only, never from the live DB.
+function deleteOrphanedSnapshotRows(database) {
+  database.prepare(`
+    DELETE FROM banknote_tags
+    WHERE banknote_id IN (
+      SELECT id FROM banknotes
+      WHERE collection_id IS NULL OR collection_id NOT IN (SELECT id FROM collections)
+    )
+    OR tag_id IN (
+      SELECT id FROM tags
+      WHERE collection_id IS NULL OR collection_id NOT IN (SELECT id FROM collections)
+    )
+  `).run();
+  database.prepare(`
+    DELETE FROM banknotes
+    WHERE collection_id IS NULL OR collection_id NOT IN (SELECT id FROM collections)
+  `).run();
+  database.prepare(`
+    DELETE FROM tags
+    WHERE collection_id IS NULL OR collection_id NOT IN (SELECT id FROM collections)
+  `).run();
+  database.prepare(`
+    DELETE FROM banknote_tags
+    WHERE banknote_id NOT IN (SELECT id FROM banknotes)
+       OR tag_id NOT IN (SELECT id FROM tags)
+  `).run();
+
+  // Drop showcase nodes that pointed at purged notes, and clear purged
+  // manual covers. Deleted explicitly (not relying on FK cascades) so legacy
+  // snapshots without the cascade constraints stay clean too.
+  if (archiveHasShowcasesTables(database)) {
+    database.prepare(`
+      DELETE FROM showcase_nodes
+      WHERE note_id IS NOT NULL AND note_id NOT IN (SELECT id FROM banknotes)
+    `).run();
+    database.prepare(`
+      UPDATE showcase_nodes
+      SET cover_note_id = NULL
+      WHERE cover_note_id IS NOT NULL AND cover_note_id NOT IN (SELECT id FROM banknotes)
+    `).run();
+  }
+}
+
 function buildFilteredExportSnapshot(snapshotDbPath, selectedCollectionIds, tempRoot, selectedShowcaseIds = undefined) {
   const snapshotDatabase = new Database(snapshotDbPath);
 
@@ -783,6 +830,11 @@ function buildFilteredExportSnapshot(snapshotDbPath, selectedCollectionIds, temp
     }
 
     const unselectedCollectionIds = allCollectionIds.filter((id) => !selectedSet.has(id));
+
+    // Purge orphans before any showcase or filtering logic so renumbering
+    // never sees a note without a collection. Showcases that referenced
+    // purged notes lose those nodes (or covers) instead of failing.
+    deleteOrphanedSnapshotRows(snapshotDatabase);
 
     // An explicit showcase selection names the showcases the archive must
     // contain. Unselected showcases are dropped up front; a selected showcase

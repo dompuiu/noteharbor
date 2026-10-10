@@ -971,3 +971,153 @@ test('importing an old archive with none of the showcase tables leaves the stage
     fs.rmSync(archiveRoot, { recursive: true, force: true });
   }
 });
+
+// Orphaned notes (collection_id NULL or pointing at a missing collection)
+// used to abort the export in renumberSnapshot. They are now excluded from
+// the archive instead of failing or being rescued.
+function createOrphanExportSnapshotFile(dbPath, { nullableNotes = false } = {}) {
+  const db = new Database(dbPath);
+  try {
+    db.pragma('foreign_keys = OFF');
+    db.exec(`
+      CREATE TABLE collections (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL);
+      CREATE TABLE banknotes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        collection_id INTEGER${nullableNotes ? '' : ' NOT NULL REFERENCES collections(id) ON DELETE CASCADE'},
+        display_order INTEGER,
+        denomination TEXT,
+        images TEXT
+      );
+      CREATE TABLE tags (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        name TEXT NOT NULL,
+        collection_id INTEGER NOT NULL
+      );
+      CREATE TABLE banknote_tags (
+        banknote_id INTEGER NOT NULL,
+        tag_id INTEGER NOT NULL,
+        PRIMARY KEY (banknote_id, tag_id)
+      );
+    `);
+    db.prepare(`INSERT INTO collections (id, name) VALUES (1, 'Keep')`).run();
+    db.prepare(
+      `INSERT INTO banknotes (id, collection_id, display_order, denomination, images) VALUES (10, 1, 1, 'Kept Note', '[]'), (20, 999, 2, 'Orphan Note', '[]')`
+    ).run();
+
+    if (nullableNotes) {
+      db.prepare(
+        `INSERT INTO banknotes (id, collection_id, display_order, denomination, images) VALUES (30, NULL, 3, 'Null Note', '[]')`
+      ).run();
+    }
+
+    db.prepare(`INSERT INTO tags (id, name, collection_id) VALUES (1, 'orphan-tag', 999)`).run();
+    db.prepare(`INSERT INTO banknote_tags (banknote_id, tag_id) VALUES (20, 1)`).run();
+    db.pragma('foreign_keys = ON');
+  } finally {
+    db.close();
+  }
+}
+
+test('an export with orphaned notes excludes them instead of failing', () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'nh-orphan-excluded-'));
+  const snapshotDbPath = path.join(tempRoot, 'banknotes.db');
+
+  try {
+    createOrphanExportSnapshotFile(snapshotDbPath);
+
+    const result = buildFilteredExportSnapshot(snapshotDbPath, null, tempRoot);
+
+    assert.equal(result.selectedCount, 1);
+
+    const db = new Database(snapshotDbPath, { readonly: true });
+    try {
+      assert.deepEqual(
+        db.prepare(`SELECT name FROM collections ORDER BY id`).all().map((row) => row.name),
+        ['Keep']
+      );
+      assert.deepEqual(
+        db.prepare(`SELECT denomination FROM banknotes ORDER BY id`).all().map((row) => row.denomination),
+        ['Kept Note']
+      );
+      assert.equal(db.prepare(`SELECT COUNT(*) AS value FROM tags`).get().value, 0);
+      assert.equal(db.prepare(`SELECT COUNT(*) AS value FROM banknote_tags`).get().value, 0);
+      assert.deepEqual(db.prepare(`PRAGMA foreign_key_check`).all(), []);
+    } finally {
+      db.close();
+    }
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('an export with null-collection notes excludes them', () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'nh-null-excluded-'));
+  const snapshotDbPath = path.join(tempRoot, 'banknotes.db');
+
+  try {
+    createOrphanExportSnapshotFile(snapshotDbPath, { nullableNotes: true });
+
+    buildFilteredExportSnapshot(snapshotDbPath, null, tempRoot);
+
+    const db = new Database(snapshotDbPath, { readonly: true });
+    try {
+      assert.deepEqual(
+        db.prepare(`SELECT denomination FROM banknotes ORDER BY id`).all().map((row) => row.denomination),
+        ['Kept Note']
+      );
+      assert.deepEqual(db.prepare(`PRAGMA foreign_key_check`).all(), []);
+    } finally {
+      db.close();
+    }
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('an export with orphaned notes drops showcase nodes that referenced them', () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'nh-orphan-showcase-'));
+  const snapshotDbPath = path.join(tempRoot, 'banknotes.db');
+
+  try {
+    createOrphanExportSnapshotFile(snapshotDbPath);
+
+    const setup = new Database(snapshotDbPath);
+    try {
+      createShowcaseTables(setup);
+      setup.prepare(`INSERT INTO categories (id, name) VALUES (1, 'Label')`).run();
+      setup.prepare(`INSERT INTO showcases (id, name, display_order) VALUES (1, 'Show', 1)`).run();
+      setup.prepare(`
+        INSERT INTO showcase_nodes
+          (id, showcase_id, parent_node_id, node_type, category_id, name, note_id, cover_note_id, position)
+        VALUES
+          (11, 1, NULL, 'category', 1, NULL, NULL, NULL, 1),
+          (12, 1, 11, 'note', NULL, NULL, 10, NULL, 1),
+          (13, 1, 11, 'note', NULL, NULL, 20, NULL, 2),
+          (14, 1, 11, 'grouping', NULL, 'G', NULL, 20, 3)
+      `).run();
+    } finally {
+      setup.close();
+    }
+
+    buildFilteredExportSnapshot(snapshotDbPath, null, tempRoot);
+
+    const db = new Database(snapshotDbPath, { readonly: true });
+    try {
+      // The node for the kept note and the grouping survive; the orphan
+      // note node is gone and the orphan cover is cleared.
+      assert.deepEqual(
+        db.prepare(`SELECT node_type, note_id, cover_note_id FROM showcase_nodes ORDER BY id`).all(),
+        [
+          { node_type: 'category', note_id: null, cover_note_id: null },
+          { node_type: 'note', note_id: 1, cover_note_id: null },
+          { node_type: 'grouping', note_id: null, cover_note_id: null }
+        ]
+      );
+      assert.deepEqual(db.prepare(`PRAGMA foreign_key_check`).all(), []);
+    } finally {
+      db.close();
+    }
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
