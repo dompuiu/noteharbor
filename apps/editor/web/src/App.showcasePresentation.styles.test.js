@@ -51,11 +51,24 @@ describe("showcase note/grouping card heights", () => {
     for (const prop of [
       /justify-content:\s*flex-start/,
       /gap:\s*8px/,
-      /padding:\s*10px/,
+      // The bottom pad stays tight so no daylight sits under the caption.
+      /padding:\s*10px 10px 4px/,
     ]) {
       expect(note[1]).toMatch(prop);
       expect(grouping[1]).toMatch(prop);
     }
+  });
+
+  test("edit cells and grouping edit cards keep the same tight bottom pad", () => {
+    const cell = styles.match(/\n\.showcase-reorder-cell\s*\{([^}]*)\}/);
+    const editcard = styles.match(
+      /\n\.showcase-grouping-editcard\s*\{([^}]*)\}/,
+    );
+    expect(cell).not.toBeNull();
+    expect(editcard).not.toBeNull();
+    expect(cell[1]).toMatch(/padding-top:\s*36px/);
+    expect(cell[1]).toMatch(/padding:\s*10px 10px 4px/);
+    expect(editcard[1]).toMatch(/padding:\s*10px 10px 4px/);
   });
 
   test("grouping footer shares the caption's line metrics", () => {

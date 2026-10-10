@@ -843,7 +843,7 @@ input[type="radio"] {
 .showcase-card--grouping {
   justify-content: flex-start;
   gap: 8px;
-  padding: 10px;
+  padding: 10px 10px 4px;
   border-color: var(--border-control);
   background: var(--surface);
   box-shadow: inset 3px 0 0 var(--accent);
@@ -988,7 +988,7 @@ input[type="radio"] {
   flex-direction: column;
   min-width: 0;
   height: 100%;
-  padding: 10px;
+  padding: 10px 10px 4px;
   padding-top: 36px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
@@ -1090,7 +1090,7 @@ input[type="radio"] {
   flex-direction: column;
   gap: 8px;
   width: 100%;
-  padding: 10px;
+  padding: 10px 10px 4px;
   border: 1px solid var(--border-control);
   border-radius: var(--radius-md);
   background: var(--surface);
@@ -1371,7 +1371,7 @@ input[type="radio"] {
 .showcase-card--note {
   justify-content: flex-start;
   gap: 8px;
-  padding: 10px;
+  padding: 10px 10px 4px;
 }
 
 /* The shared 2/1 image well. It is transparent so letterboxed photos blend
