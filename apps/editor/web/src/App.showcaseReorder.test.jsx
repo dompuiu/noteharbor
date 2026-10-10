@@ -259,15 +259,15 @@ describe("showcase child reordering", () => {
       source.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
     });
     await act(async () => {
-      // A negative clientY is above the (all-zero) rect midpoint, so the
+      // A negative clientX is left of the (all-zero) rect midpoint, so the
       // placement is "before" — Sub stays immediately ahead of note A.
       targetCell.dispatchEvent(
-        dragEvent("dragover", { clientY: -5, clientX: 0, dataTransfer }),
+        dragEvent("dragover", { clientY: 0, clientX: -5, dataTransfer }),
       );
     });
     await act(async () => {
       targetCell.dispatchEvent(
-        dragEvent("drop", { clientY: -5, clientX: 0, dataTransfer }),
+        dragEvent("drop", { clientY: 0, clientX: -5, dataTransfer }),
       );
     });
 

@@ -910,12 +910,13 @@ input[type="radio"] {
   opacity: 0.5;
 }
 
-.showcase-reorder-cell--drop-before-x::after,
-.showcase-reorder-cell--drop-after-x::after,
-.showcase-reorder-cell--drop-before-y::after,
-.showcase-reorder-cell--drop-after-y::after {
+.showcase-reorder-cell--drop-before::after,
+.showcase-reorder-cell--drop-after::after {
   content: "";
   position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 3px;
   border-radius: var(--radius-pill);
   background: var(--accent);
   z-index: 1;
@@ -923,35 +924,12 @@ input[type="radio"] {
 
 /* Vertical lines sit in the middle of the 16px column gap: half the gap plus
    half the 3px line beyond the card edge. */
-.showcase-reorder-cell--drop-before-x::after,
-.showcase-reorder-cell--drop-after-x::after {
-  top: 0;
-  bottom: 0;
-  width: 3px;
-}
-
-.showcase-reorder-cell--drop-before-x::after {
+.showcase-reorder-cell--drop-before::after {
   left: -9.5px;
 }
 
-.showcase-reorder-cell--drop-after-x::after {
+.showcase-reorder-cell--drop-after::after {
   right: -9.5px;
-}
-
-/* Horizontal lines sit in the middle of the 16px row gap. */
-.showcase-reorder-cell--drop-before-y::after,
-.showcase-reorder-cell--drop-after-y::after {
-  left: 0;
-  right: 0;
-  height: 3px;
-}
-
-.showcase-reorder-cell--drop-before-y::after {
-  top: -9.5px;
-}
-
-.showcase-reorder-cell--drop-after-y::after {
-  bottom: -9.5px;
 }
 
 /* The `+` tiles (edit mode only). The 2px dashed border and the

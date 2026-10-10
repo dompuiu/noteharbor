@@ -1,18 +1,13 @@
 import { useState } from "react";
 
 // A grid cell has no single before/after edge, so compare the pointer to the
-// cell centre on both axes and use whichever axis the pointer is nearer to.
-// The axis decides which edge the indicator sits on; the placement decides
-// the order the drop lands in.
+// cell centre horizontally: left half is `before`, right half is `after`.
+// The indicator is always a vertical line in the column gap, never above or
+// below a card.
 function placementForEvent(event, bounds) {
   const dx = event.clientX - (bounds.left + bounds.width / 2);
-  const dy = event.clientY - (bounds.top + bounds.height / 2);
 
-  if (Math.abs(dx) > Math.abs(dy)) {
-    return { placement: dx < 0 ? "before" : "after", axis: "x" };
-  }
-
-  return { placement: dy < 0 ? "before" : "after", axis: "y" };
+  return dx < 0 ? "before" : "after";
 }
 
 // A drop that leaves the order untouched has no visible target: the gap
@@ -62,7 +57,7 @@ function useShowcaseReorder({ nodes, onReorder }) {
       return;
     }
 
-    const { placement, axis } = placementForEvent(
+    const placement = placementForEvent(
       event,
       event.currentTarget.getBoundingClientRect(),
     );
@@ -82,11 +77,9 @@ function useShowcaseReorder({ nodes, onReorder }) {
 
     event.preventDefault();
     setDropTarget((current) =>
-      current?.nodeId === nodeId &&
-      current?.placement === placement &&
-      current?.axis === axis
+      current?.nodeId === nodeId && current?.placement === placement
         ? current
-        : { nodeId, placement, axis },
+        : { nodeId, placement },
     );
   }
 
@@ -105,12 +98,10 @@ function useShowcaseReorder({ nodes, onReorder }) {
   async function handleDrop(event, targetId) {
     event.preventDefault();
     const sourceId = draggedId;
-    const dropPlacement =
-      dropTarget?.nodeId === targetId ? dropTarget.placement : null;
     const placement =
-      dropPlacement ??
-      placementForEvent(event, event.currentTarget.getBoundingClientRect())
-        .placement;
+      dropTarget?.nodeId === targetId
+        ? dropTarget.placement
+        : placementForEvent(event, event.currentTarget.getBoundingClientRect());
 
     clear();
 
