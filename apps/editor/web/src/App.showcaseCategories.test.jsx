@@ -52,6 +52,7 @@ import {
   getHealth,
   getShowcases,
   getShowcaseTree,
+  reorderNodes,
   updateNode,
 } from "./lib/api.js";
 import { CollectionsProvider } from "./lib/collections.jsx";
@@ -270,5 +271,77 @@ describe("the showcase category canvas", () => {
     await waitFor(() => {
       expect(deleteNode).toHaveBeenCalledWith(10);
     });
+  });
+
+  test("two placements show move controls with the ends disabled", async () => {
+    getShowcaseTree.mockResolvedValue({
+      showcase_id: 1,
+      nodes: [
+        SUMMER_NODE,
+        {
+          ...SUMMER_NODE,
+          id: 11,
+          name: "Winter",
+          category_id: 2,
+          position: 2,
+        },
+      ],
+    });
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    await screen.findByRole("heading", { name: "Winter" });
+
+    expect(screen.getByRole("button", { name: "Move Summer up" })).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Move Summer down" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Move Winter up" })).toBeEnabled();
+    expect(screen.getByRole("button", { name: "Move Winter down" })).toBeDisabled();
+  });
+
+  test("moving a placement down stages the order and saves it on Save", async () => {
+    const user = userEvent.setup();
+    getShowcaseTree.mockResolvedValue({
+      showcase_id: 1,
+      nodes: [
+        SUMMER_NODE,
+        {
+          ...SUMMER_NODE,
+          id: 11,
+          name: "Winter",
+          category_id: 2,
+          position: 2,
+        },
+      ],
+    });
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    await user.click(
+      await screen.findByRole("button", { name: "Move Summer down" }),
+    );
+
+    // Staged locally: the headings swap with no network call.
+    const headings = screen
+      .getAllByRole("heading")
+      .map((heading) => heading.textContent);
+    expect(headings).toEqual(["Winter", "Summer"]);
+    expect(reorderNodes).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Save", exact: true }));
+
+    await waitFor(() => {
+      expect(reorderNodes).toHaveBeenCalledWith(1, null, [11, 10]);
+    });
+  });
+
+  test("a single placement shows no move controls", async () => {
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    await screen.findByRole("heading", { name: "Summer" });
+
+    expect(
+      screen.queryByRole("button", { name: "Move Summer up" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Move Summer down" }),
+    ).not.toBeInTheDocument();
   });
 });

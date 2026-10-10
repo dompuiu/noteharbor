@@ -165,6 +165,28 @@ describe("saveShowcaseDraft", () => {
     expect(mocks.reorderNodes).toHaveBeenCalledWith(1, 10, [12, 11]);
   });
 
+  test("a top-level category reorder posts a null-parent order", async () => {
+    const mocks = api();
+    const category = (id, name) => ({
+      id,
+      node_type: "category",
+      name,
+      category_id: id,
+      children: [],
+    });
+    const baseline = [category(10, "Summer"), category(11, "Winter")];
+    const draft = [category(11, "Winter"), category(10, "Summer")];
+
+    await saveShowcaseDraft({
+      showcaseId: 1,
+      baselineNodes: baseline,
+      draftNodes: draft,
+      api: mocks,
+    });
+
+    expect(mocks.reorderNodes).toHaveBeenCalledWith(1, null, [11, 10]);
+  });
+
   test("new notes under a parent post one batch", async () => {
     const mocks = api();
     const parent = {

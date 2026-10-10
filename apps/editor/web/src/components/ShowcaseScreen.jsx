@@ -394,6 +394,29 @@ function ShowcaseScreen({ mode }) {
     setSaveError("");
   }
 
+  // Arrow reorder for top-level categories (many items make drag impractical).
+  // Draft only: swap the placement with its neighbour and persist on Save.
+  function handleMoveCategory(node, direction) {
+    setNodes((current) => {
+      const index = current.findIndex((entry) => entry.id === node.id);
+      const nextIndex = index + direction;
+
+      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) {
+        return current;
+      }
+
+      const orderedIds = current.map((entry) => entry.id);
+      [orderedIds[index], orderedIds[nextIndex]] = [
+        orderedIds[nextIndex],
+        orderedIds[index],
+      ];
+
+      return reorderNodeTree(current, null, orderedIds);
+    });
+    setTreeDirty(true);
+    setSaveError("");
+  }
+
   // View mode is URL-synced: `?node=<id>` names the current node and the root
   // has no parameter. Edit mode keeps the drill in memory.
   const urlDrillIds =
@@ -429,6 +452,10 @@ function ShowcaseScreen({ mode }) {
             : countNoteNodes([node]) > 0,
         )
       : nodes;
+  const rootCategories = visibleRootNodes.filter(
+    (node) => node.node_type === "category",
+  );
+  const showCategoryMove = editMode && rootCategories.length > 1;
 
   // A `?node=` that no longer resolves (a node removed in another tab, or a
   // stale deep link) falls back to the root and drops the parameter.
@@ -1321,6 +1348,10 @@ function ShowcaseScreen({ mode }) {
                     return null;
                   }
 
+                  const categoryIndex = rootCategories.findIndex(
+                    (entry) => entry.id === node.id,
+                  );
+
                   return (
                     <ShowcaseCategorySection
                       category={node}
@@ -1335,6 +1366,14 @@ function ShowcaseScreen({ mode }) {
                       onRenameCategory={handleRenameCategory}
                       onRenameGrouping={handleRenameGrouping}
                       onReorder={handleReorderChildrenFor}
+                      onMoveCategory={
+                        showCategoryMove ? handleMoveCategory : undefined
+                      }
+                      canMoveUp={showCategoryMove && categoryIndex > 0}
+                      canMoveDown={
+                        showCategoryMove &&
+                        categoryIndex < rootCategories.length - 1
+                      }
                       photoSize={photoSize}
                     />
                   );

@@ -739,7 +739,6 @@ input[type="radio"] {
   justify-content: center;
   width: 28px;
   height: 22px;
-  margin-left: auto;
   padding: 0;
   border: 1px solid var(--border-control);
   border-radius: var(--radius-sm);
@@ -752,6 +751,40 @@ input[type="radio"] {
 .showcase-node-remove:focus-visible {
   border-color: var(--danger, #b3261e);
   color: var(--danger, #b3261e);
+}
+
+.showcase-node-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex: none;
+}
+
+.showcase-node-move {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.showcase-node-move:hover:not(:disabled),
+.showcase-node-move:focus-visible:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.showcase-node-move:disabled {
+  opacity: 0.4;
+  cursor: default;
 }
 
 .showcase-card {

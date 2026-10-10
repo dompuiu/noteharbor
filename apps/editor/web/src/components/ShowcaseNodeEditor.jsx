@@ -2,15 +2,26 @@ import { useState } from "react";
 
 // Shared edit-shell for a Category Placement (and any card-styled node that
 // renders through it). Prototype layout, mirroring the Grouping editor: the
-// title sits beside an inline pencil right where it ends, a remove icon sits
-// on the right of the header row, and renaming swaps the title for a text
-// field with save / discard icons in place. All icons keep the shared
-// `Rename <name>` / `Remove <name>` labels and `data-showcase-action` hooks
-// so keyboard shortcuts keep working. `noun` only selects the error wording;
-// a Category rename renames the shared label server-side while a Grouping
-// rename stays local, but that difference lives in the `onRename` the caller
-// passes.
-function ShowcaseNodeEditor({ card, node, noun, onRemove, onRename, children }) {
+// title sits beside an inline pencil right where it ends, move arrows and a
+// remove icon sit on the right of the header row, and renaming swaps the
+// title for a text field with save / discard icons in place. All icons keep
+// the shared `Rename <name>` / `Remove <name>` labels and
+// `data-showcase-action` hooks so keyboard shortcuts keep working. `noun`
+// only selects the error wording; a Category rename renames the shared label
+// server-side while a Grouping rename stays local, but that difference lives
+// in the `onRename` the caller passes.
+function ShowcaseNodeEditor({
+  card,
+  node,
+  noun,
+  onRemove,
+  onRename,
+  children,
+  onMoveUp,
+  onMoveDown,
+  canMoveUp = false,
+  canMoveDown = false,
+}) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(node.name);
   const [busy, setBusy] = useState(false);
@@ -164,31 +175,89 @@ function ShowcaseNodeEditor({ card, node, noun, onRemove, onRename, children }) 
                 </svg>
               </button>
             </div>
-            <button
-              aria-label={`Remove ${node.name}`}
-              className="showcase-node-remove"
-              data-showcase-action="remove"
-              disabled={busy}
-              onClick={handleRemove}
-              title={`Remove ${noun}`}
-              type="button"
-            >
-              <svg
-                aria-hidden="true"
-                focusable="false"
-                height="14"
-                viewBox="0 0 24 24"
-                width="14"
+            <div className="showcase-node-actions">
+              {onMoveUp ? (
+                <button
+                  aria-label={`Move ${node.name} up`}
+                  className="showcase-node-move"
+                  data-showcase-action="move-up"
+                  disabled={!canMoveUp}
+                  onClick={() => onMoveUp(node)}
+                  title="Move up"
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    focusable="false"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    width="14"
+                  >
+                    <path
+                      d="M12 19V5M5 12l7-7 7 7"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                    />
+                  </svg>
+                </button>
+              ) : null}
+              {onMoveDown ? (
+                <button
+                  aria-label={`Move ${node.name} down`}
+                  className="showcase-node-move"
+                  data-showcase-action="move-down"
+                  disabled={!canMoveDown}
+                  onClick={() => onMoveDown(node)}
+                  title="Move down"
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    focusable="false"
+                    height="14"
+                    viewBox="0 0 24 24"
+                    width="14"
+                  >
+                    <path
+                      d="M12 5v14M5 12l7 7 7-7"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2"
+                    />
+                  </svg>
+                </button>
+              ) : null}
+              <button
+                aria-label={`Remove ${node.name}`}
+                className="showcase-node-remove"
+                data-showcase-action="remove"
+                disabled={busy}
+                onClick={handleRemove}
+                title={`Remove ${noun}`}
+                type="button"
               >
-                <path
-                  d="M6 6l12 12M18 6L6 18"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeWidth="2"
-                />
-              </svg>
-            </button>
+                <svg
+                  aria-hidden="true"
+                  focusable="false"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  width="14"
+                >
+                  <path
+                    d="M6 6l12 12M18 6L6 18"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeWidth="2"
+                  />
+                </svg>
+              </button>
+            </div>
           </>
         )}
       </div>

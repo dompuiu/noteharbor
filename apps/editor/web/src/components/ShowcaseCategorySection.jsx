@@ -32,6 +32,9 @@ function ShowcaseCategorySection({
   onRenameCategory,
   onRenameGrouping,
   onReorder,
+  onMoveCategory,
+  canMoveUp = false,
+  canMoveDown = false,
 }) {
   const children = category.children ?? [];
   const visibleChildren = visibleChildNodes(children, editMode);
@@ -60,6 +63,10 @@ function ShowcaseCategorySection({
           noun="category"
           onRemove={onRemoveCategory}
           onRename={onRenameCategory}
+          onMoveUp={onMoveCategory ? () => onMoveCategory(category, -1) : undefined}
+          onMoveDown={onMoveCategory ? () => onMoveCategory(category, 1) : undefined}
+          canMoveUp={canMoveUp}
+          canMoveDown={canMoveDown}
         />
       ) : (
         <h2 className="showcase-category-title">{category.name}</h2>
