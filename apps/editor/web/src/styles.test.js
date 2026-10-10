@@ -121,7 +121,7 @@ describe("sidebar styles", () => {
       /\.sidebar-dock \.sidebar-group-label\s*\{[^}]*display:\s*none/,
     );
     expect(styles).toMatch(
-      /\.sidebar-dock:not\(:hover\):not\(:has\(:focus-visible\)\) \.sidebar-group-label\s*\{[^}]*justify-content:\s*center/,
+      /\.sidebar-dock:not\(\.sidebar-dock--open\):not\(:hover\):not\(:has\(:focus-visible\)\) \.sidebar-group-label\s*\{[^}]*justify-content:\s*center/,
     );
   });
 
@@ -223,6 +223,38 @@ describe("sidebar styles", () => {
     );
     expect(expandedLabels).not.toBeNull();
     expect(expandedLabels[1]).toMatch(/animation:\s*sidebar-label-in/);
+  });
+
+  test("the keyboard-open class expands the rail like hover and focus", () => {
+    // Keyboard navigation holds the rail open through a React-owned class,
+    // not through `:has(:focus-visible)` alone: the class cannot flicker
+    // between key presses, so the labels keep one steady computed style.
+    const open = styles.match(
+      /\.sidebar-dock\.sidebar-dock--open \.sidebar\s*\{([^}]*)\}/,
+    );
+    expect(open).not.toBeNull();
+    expect(open[1]).toMatch(
+      /width:\s*max\(var\(--sidebar-expanded-width\),\s*max-content\)/,
+    );
+    expect(open[1]).toMatch(/max-width:\s*480px/);
+  });
+
+  test("the keyboard-open class shows the labels with the entrance", () => {
+    const labels = styles.match(
+      /\.sidebar-dock\.sidebar-dock--open \.sidebar-link-label,[\s\S]*?\{([^}]*)\}/,
+    );
+    expect(labels).not.toBeNull();
+    expect(labels[1]).toMatch(/display:\s*block/);
+    expect(labels[1]).toMatch(/animation:\s*sidebar-label-in/);
+  });
+
+  test("the collapsed-rail rules yield to the keyboard-open class", () => {
+    // The centred collapsed-rail rules must not match while keyboard-open,
+    // or they would fight the open layout whenever focus visibility
+    // flickers between key presses.
+    expect(styles).toMatch(
+      /\.sidebar-dock:not\(\.sidebar-dock--open\):not\(:hover\):not\(:has\(:focus-visible\)\) \.sidebar-link--cursor/,
+    );
   });
 
   test("the cursor link is ringed so focus is visible", () => {

@@ -343,6 +343,29 @@ describe("Sidebar keyboard cursor", () => {
     expect(document.activeElement).not.toBe(screen.getByRole("navigation"));
   });
 
+  test("the dock holds the open class while the cursor is active", async () => {
+    // The open class is React-owned, so it cannot flicker between key
+    // presses the way `:has(:focus-visible)` can: the labels keep one
+    // steady computed style while navigating and never replay their
+    // entrance.
+    const user = userEvent.setup();
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    expect(container.querySelector(".sidebar-dock--open")).toBeNull();
+
+    await user.keyboard("{b}");
+    expect(container.querySelector(".sidebar-dock--open")).not.toBeNull();
+
+    // Moving the cursor must not drop the class for a render.
+    await user.keyboard("{ArrowDown}");
+    expect(container.querySelector(".sidebar-dock--open")).not.toBeNull();
+    await user.keyboard("{ArrowDown}");
+    expect(container.querySelector(".sidebar-dock--open")).not.toBeNull();
+
+    await user.keyboard("{Escape}");
+    expect(container.querySelector(".sidebar-dock--open")).toBeNull();
+  });
+
   test("Tab off the last option wraps to the first, like ArrowDown", async () => {
     const user = userEvent.setup();
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));

@@ -624,9 +624,58 @@ input[type="radio"] {
   border-left: 1.5px solid var(--border);
 }
 
+/* Keyboard-open: the cursor (not hover or focus visibility) holds the rail
+   open while navigating with the arrows. React owns this class, so unlike
+   `:has(:focus-visible)` it cannot flicker between key presses — the labels
+   keep one steady computed style, and their entrance plays once when the
+   rail opens instead of replaying on every move. */
+.sidebar-dock.sidebar-dock--open .sidebar {
+  width: max(var(--sidebar-expanded-width), max-content);
+  max-width: 480px;
+  box-shadow: var(--shadow-lg);
+}
+
+.sidebar-dock.sidebar-dock--open .sidebar-wordmark {
+  display: block;
+  animation: sidebar-label-in 0.18s ease;
+}
+
+.sidebar-dock.sidebar-dock--open .sidebar-nav {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.sidebar-dock.sidebar-dock--open .sidebar-link-label,
+.sidebar-dock.sidebar-dock--open .sidebar-group-name {
+  display: block;
+  animation: sidebar-label-in 0.18s ease;
+}
+
+.sidebar-dock.sidebar-dock--open .sidebar-reorder-toggle {
+  display: inline-flex;
+}
+
+.sidebar-dock.sidebar-dock--open .sidebar-row-moves {
+  display: inline-flex;
+}
+
+.sidebar-dock.sidebar-dock--open .sidebar-link {
+  justify-content: flex-start;
+  padding-left: 9px;
+  padding-right: 9px;
+}
+
+.sidebar-dock.sidebar-dock--open .sidebar-group-links {
+  margin-left: 20px;
+  padding-left: 12px;
+  border-left: 1.5px solid var(--border);
+}
+
 /* Collapsed, the cursor's link is the one cleared among the icons; the bare
-   rail otherwise shows just the brand mark plus each link's own icon. */
-.sidebar-dock:not(:hover):not(:has(:focus-visible)) .sidebar-link--cursor {
+   rail otherwise shows just the brand mark plus each link's own icon. The
+   collapsed rules yield to the keyboard-open class so they never fight the
+   open layout while focus visibility settles between key presses. */
+.sidebar-dock:not(.sidebar-dock--open):not(:hover):not(:has(:focus-visible)) .sidebar-link--cursor {
   display: inline-flex;
 }
 
@@ -634,21 +683,21 @@ input[type="radio"] {
    the rail visually bare. The label keeps its base padding, so its box —
    and the marker inside it — is identical to the expanded state; only the
    name's `display` toggles. */
-.sidebar-dock:not(:hover):not(:has(:focus-visible)) .sidebar-head {
+.sidebar-dock:not(.sidebar-dock--open):not(:hover):not(:has(:focus-visible)) .sidebar-head {
   justify-content: center;
   padding: 0;
 }
 
-.sidebar-dock:not(:hover):not(:has(:focus-visible)) .sidebar-group-label {
+.sidebar-dock:not(.sidebar-dock--open):not(:hover):not(:has(:focus-visible)) .sidebar-group-label {
   justify-content: center;
 }
 
 /* Collapsed, the group head centres with the marker while the toggle hides. */
-.sidebar-dock:not(:hover):not(:has(:focus-visible)) .sidebar-group-head {
+.sidebar-dock:not(.sidebar-dock--open):not(:hover):not(:has(:focus-visible)) .sidebar-group-head {
   justify-content: center;
 }
 
-.sidebar-dock:not(:hover):not(:has(:focus-visible)) .sidebar-row {
+.sidebar-dock:not(.sidebar-dock--open):not(:hover):not(:has(:focus-visible)) .sidebar-row {
   justify-content: center;
 }
 
@@ -1877,10 +1926,13 @@ input[type="radio"] {
 
   .sidebar-dock:hover .sidebar-wordmark,
   .sidebar-dock:has(:focus-visible) .sidebar-wordmark,
+  .sidebar-dock.sidebar-dock--open .sidebar-wordmark,
   .sidebar-dock:hover .sidebar-link-label,
   .sidebar-dock:hover .sidebar-group-name,
   .sidebar-dock:has(:focus-visible) .sidebar-link-label,
-  .sidebar-dock:has(:focus-visible) .sidebar-group-name {
+  .sidebar-dock:has(:focus-visible) .sidebar-group-name,
+  .sidebar-dock.sidebar-dock--open .sidebar-link-label,
+  .sidebar-dock.sidebar-dock--open .sidebar-group-name {
     animation: none;
   }
 

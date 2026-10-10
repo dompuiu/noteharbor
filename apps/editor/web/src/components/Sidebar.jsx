@@ -299,12 +299,15 @@ function Sidebar({ pageFocusRef }) {
   }
 
   // Move DOM focus with the cursor so Tab/Escape and screen readers track it.
+  // `preventScroll` matches every other focus call in the rail: without it
+  // each arrow press can scroll the navigating list, visibly shifting every
+  // row's text.
   useEffect(() => {
     if (cursorIndex === null) {
       return;
     }
 
-    linksRef.current[cursorIndex]?.focus();
+    linksRef.current[cursorIndex]?.focus({ preventScroll: true });
   }, [cursorIndex]);
 
   useEffect(() => {
@@ -704,7 +707,12 @@ function Sidebar({ pageFocusRef }) {
   }, [draggedShowcaseId, draggedCollectionId]);
 
   return (
-    <div className="sidebar-dock" ref={dockRef}>
+    <div
+      className={
+        cursorIndex !== null ? "sidebar-dock sidebar-dock--open" : "sidebar-dock"
+      }
+      ref={dockRef}
+    >
         <nav
           aria-label="Sections"
           className="sidebar"
