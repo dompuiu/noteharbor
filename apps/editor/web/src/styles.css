@@ -970,9 +970,15 @@ input[type="radio"] {
 
 /* An edit cell is the showcase's catalog row: while Tab sits on the card or
    any of its controls, the cell paints the row wash with an inset 1px ring.
-   Inner controls keep their own outlines, mirroring `.table-row-link`. */
+   Inner controls keep their own outlines, mirroring `.table-row-link`. While
+   a Category is being renamed the wash stays off: the rename field carries
+   its own focus style, and painting the whole header row would read as one
+   giant input box. */
 .showcase-reorder-cell:has(:focus-visible),
-.showcase-category-section > .showcase-cell--category:has(:focus-visible) {
+.showcase-category-section
+  > .showcase-cell--category:not(:has(.showcase-node-rename-form)):has(
+    :focus-visible
+  ) {
   background: var(--accent-soft);
   box-shadow: inset 0 0 0 1px var(--accent);
 }

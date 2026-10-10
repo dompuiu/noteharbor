@@ -296,6 +296,15 @@ describe("slideshow overlay styles", () => {
     expect(panel[1]).toMatch(/overflow-y:\s*auto/);
   });
 
+  // The category header's focus wash must stay off while renaming: the rename
+  // field carries its own focus style, and painting the whole header row would
+  // read as one giant input box.
+  test("the category header wash stays off while renaming", () => {
+    expect(styles).toMatch(
+      /\.showcase-cell--category:not\(:has\(\.showcase-node-rename-form\)\):has\(\s*:focus-visible\s*\)/,
+    );
+  });
+
   // A full-screen overlay owns scrolling while open: the body's bar would
   // only scroll the dimmed app behind it, stacking a second horizontal bar
   // under the overlay's own. The body lock leaves the overlay's bar as the
