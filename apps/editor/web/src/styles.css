@@ -397,6 +397,7 @@ input[type="radio"] {
   display: flex;
   align-items: center;
   gap: 8px;
+  width: 100%;
 }
 
 .sidebar-group-head .sidebar-group-label {
@@ -445,12 +446,16 @@ input[type="radio"] {
 /* A reorderable row: the navigating link plus the keyboard move pair.
    The row is the draggable unit; the link inside never starts a drag.
    The hamburger lives in the link's own icon slot, so no row ever
-   shifts when reorder mode turns on. */
+   shifts when reorder mode turns on. The explicit full width matters:
+   the links block keeps the collapsed rail's `align-items: center`,
+   so a wrapper without a width would shrink-wrap and centre itself
+   instead of lining up with the full-width links. */
 .sidebar-row {
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
+  width: 100%;
   border-radius: 8px;
   cursor: grab;
 }

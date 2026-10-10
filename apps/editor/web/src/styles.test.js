@@ -192,6 +192,19 @@ describe("sidebar styles", () => {
     expect(row[1]).toMatch(/cursor:\s*grab/);
   });
 
+  test("row and header wrappers span the links block like the links do", () => {
+    // The links block keeps the collapsed rail's `align-items: center`.
+    // Plain links are immune via their own `width: 100%`; the row and
+    // header wrappers need the same, or they shrink-wrap and centre
+    // themselves instead of lining up with the links.
+    const row = styles.match(/\.sidebar-row\s*\{([^}]*)\}/);
+    expect(row).not.toBeNull();
+    expect(row[1]).toMatch(/width:\s*100%/);
+    const head = styles.match(/\.sidebar-group-head\s*\{([^}]*)\}/);
+    expect(head).not.toBeNull();
+    expect(head[1]).toMatch(/width:\s*100%/);
+  });
+
   test("the cursor link is ringed so focus is visible", () => {
     expect(styles).toMatch(
       /\.sidebar-link--cursor\s*\{[^}]*box-shadow:\s*inset 0 0 0 1\.5px var\(--accent\)/,
