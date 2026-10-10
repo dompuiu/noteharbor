@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.0.4] - 2026-10-10
+
+### Fixed
+
+- Import: the import-mode radios on the Import screen no longer render with text-field sizing overlapping their labels; the glyph reset now covers radios as well as checkboxes.
+
 ## [2.0.3] - 2026-10-10
 
 ### Added
