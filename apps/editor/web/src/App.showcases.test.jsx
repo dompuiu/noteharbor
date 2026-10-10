@@ -32,8 +32,8 @@ vi.mock("./components/NotesTable.jsx", () => ({
   NotesTable: () => <div>Banknotes screen</div>,
 }));
 
-vi.mock("./components/CollectionsScreen.jsx", () => ({
-  CollectionsScreen: () => <div>Collections screen</div>,
+vi.mock("./components/CollectionScreen.jsx", () => ({
+  CollectionScreen: () => <div>Collection screen</div>,
 }));
 
 vi.mock("./components/ImportScreen.jsx", () => ({
@@ -221,6 +221,29 @@ describe("Creating a showcase", () => {
     expect(createShowcase).not.toHaveBeenCalled();
     await waitFor(() => {
       expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+    });
+  });
+
+  test("Escape in the draft name field cancels like Cancel", async () => {
+    const user = userEvent.setup();
+    renderAt(CATALOG_ROUTES.banknotes);
+
+    await user.click(
+      await screen.findByRole("button", { name: "New showcase" }),
+    );
+    const field = await screen.findByLabelText("Showcase name");
+    await waitFor(() => {
+      expect(field).toHaveFocus();
+    });
+
+    await user.keyboard("{Escape}");
+
+    expect(createShowcase).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(currentPath()).toBe(SHOWCASE_ROUTES.showcase(2));
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("link", { name: "Showcase" })).not.toBeInTheDocument();
     });
   });
 

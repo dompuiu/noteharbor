@@ -298,9 +298,15 @@ function ShowcaseScreen({ mode }) {
 
     if (event.key === "Escape") {
       event.preventDefault();
-      setNameDraft(
-        isNew ? (pendingShowcase?.name ?? "Showcase") : (showcase?.name ?? "Showcase"),
-      );
+      event.stopPropagation();
+      // A new showcase starts with the name field focused: Escape bails out
+      // of the whole draft, exactly like Cancel, instead of only reverting
+      // the field.
+      if (isNew) {
+        handleCancel();
+        return;
+      }
+      setNameDraft(showcase?.name ?? "Showcase");
       setNameError("");
     }
   }
