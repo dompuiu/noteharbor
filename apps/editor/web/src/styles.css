@@ -673,8 +673,9 @@ input[type="radio"] {
   font-weight: 700;
 }
 
-/* The edit-mode category header: title on the left, Rename / Remove on the
-   right, divided from the grid below so the buttons read as the title's own. */
+/* The edit-mode category header: title plus pencil on the left, remove icon
+   on the right, divided from the grid below so the controls read as the
+   title's own. */
 .showcase-category-section > .showcase-cell--category {
   flex-direction: row;
   align-items: center;
@@ -686,23 +687,65 @@ input[type="radio"] {
   border-bottom: 1px solid var(--border-soft);
 }
 
-.showcase-category-section > .showcase-cell--category .showcase-category-title {
+.showcase-category-section > .showcase-cell--category .showcase-error {
+  flex-basis: 100%;
+}
+
+/* Shared node header row (category placement): title plus inline pencil on
+   the left, remove icon on the right. The rename form takes the row and
+   swaps the title for a text field with save / discard icons in place. */
+.showcase-node-headrow {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex: 1 1 auto;
   min-width: 0;
 }
 
-.showcase-category-section
-  > .showcase-cell--category
-  .showcase-cell-controls {
-  margin-left: auto;
-  margin-top: 0;
-  border-top: 0;
-  padding-top: 0;
+.showcase-node-title {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
 }
 
-.showcase-category-section > .showcase-cell--category .showcase-cell-edit,
-.showcase-category-section > .showcase-cell--category .showcase-error {
-  flex-basis: 100%;
+.showcase-node-rename-form {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.showcase-node-title .showcase-category-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase-node-remove {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 22px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.showcase-node-remove:hover,
+.showcase-node-remove:focus-visible {
+  border-color: var(--danger, #b3261e);
+  color: var(--danger, #b3261e);
 }
 
 .showcase-card {
@@ -1045,7 +1088,8 @@ input[type="radio"] {
   margin: 0 auto;
 }
 
-.showcase-grouping-input {
+.showcase-grouping-input,
+.showcase-node-input {
   flex: 1 1 auto;
   min-width: 0;
   padding: 2px 6px;
@@ -1060,13 +1104,15 @@ input[type="radio"] {
    soft halo instead of the global offset outline. */
 .showcase-name-field:focus,
 .showcase-category-input:focus,
-.showcase-grouping-input:focus {
+.showcase-grouping-input:focus,
+.showcase-node-input:focus {
   border-color: var(--accent);
   outline: 2px solid var(--accent-soft);
   outline-offset: 0;
 }
 
-.showcase-grouping-rename {
+.showcase-grouping-rename,
+.showcase-node-rename {
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -1084,13 +1130,19 @@ input[type="radio"] {
 .showcase-grouping-rename:hover,
 .showcase-grouping-rename:focus-visible,
 .showcase-grouping-save:hover,
-.showcase-grouping-save:focus-visible {
+.showcase-grouping-save:focus-visible,
+.showcase-node-rename:hover,
+.showcase-node-rename:focus-visible,
+.showcase-node-save:hover,
+.showcase-node-save:focus-visible {
   border-color: var(--accent);
   color: var(--accent-strong);
 }
 
 .showcase-grouping-save,
-.showcase-grouping-cancel {
+.showcase-grouping-cancel,
+.showcase-node-save,
+.showcase-node-cancel {
   flex: none;
   display: inline-flex;
   align-items: center;
@@ -1106,7 +1158,9 @@ input[type="radio"] {
 }
 
 .showcase-grouping-cancel:hover,
-.showcase-grouping-cancel:focus-visible {
+.showcase-grouping-cancel:focus-visible,
+.showcase-node-cancel:hover,
+.showcase-node-cancel:focus-visible {
   border-color: var(--danger, #b3261e);
   color: var(--danger, #b3261e);
 }
