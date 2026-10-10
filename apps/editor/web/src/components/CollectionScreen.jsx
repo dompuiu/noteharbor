@@ -138,7 +138,7 @@ function CollectionScreen({ mode }) {
   const dirty = editMode && (isNew ? nameDraft.trim() !== "" : nameDirty);
 
   async function handleSave() {
-    if (!editMode || saving || loadingCollections || confirmOpen) {
+    if ((!editMode && !isNew) || saving || loadingCollections || confirmOpen) {
       return;
     }
 
@@ -239,6 +239,35 @@ function CollectionScreen({ mode }) {
   const noteCount = collection ? Number(collection.note_count ?? 0) : 0;
   const invalidId = !isNew && (!Number.isInteger(collectionId) || collectionId <= 0);
   const missingCollection = !isNew && !invalidId && !loadingCollections && !collectionsError && !collection;
+
+  // A not-yet-saved collection renders the same notes-table view as a saved
+  // one: the title is the draft text field (focused, with save/cancel icons)
+  // above an empty table. Save POSTs the draft; Cancel discards it.
+  if (isNew) {
+    return (
+      <section className="screen-stack showcase-screen collection-screen collection-screen--edit">
+        <NotesTable
+          collection={null}
+          collectionId={null}
+          collections={collections}
+          collectionsError={collectionsError}
+          loadingCollections={loadingCollections}
+          onRenameCollection={renameCollection}
+          isNewCollection
+          newCollectionName={nameDraft}
+          onNewCollectionNameChange={(value) => {
+            setNameDraft(value);
+            setNameError("");
+            setSaveError("");
+          }}
+          onSaveNewCollection={handleSave}
+          onCancelNewCollection={handleCancel}
+          savingNewCollection={saving}
+          newCollectionError={nameError || saveError}
+        />
+      </section>
+    );
+  }
 
   // The collection view is the notes table for that collection, so
   // `/catalog/collections/:id/view` reads the notes directly. The table owns

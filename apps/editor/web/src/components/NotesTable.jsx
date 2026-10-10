@@ -998,6 +998,13 @@ function NotesTable({
   collectionsError,
   loadingCollections,
   onRenameCollection = null,
+  isNewCollection = false,
+  newCollectionName = "",
+  onNewCollectionNameChange = null,
+  onSaveNewCollection = null,
+  onCancelNewCollection = null,
+  savingNewCollection = false,
+  newCollectionError = "",
 }) {
   const initialTableStateRef = useRef(undefined);
   const initialRouteRef = useRef(
@@ -1162,6 +1169,22 @@ function NotesTable({
     setCollectionNameError("");
   }, [collectionName, editingCollectionName]);
 
+  // A not-yet-saved collection has no view to rename: its header is the
+  // draft form from the start, focused so the name can be typed at once.
+  const showingNewCollectionForm = isNewCollection;
+  useEffect(() => {
+    if (!showingNewCollectionForm) {
+      return;
+    }
+
+    const field = collectionNameFieldRef.current;
+
+    if (field) {
+      field.focus();
+      field.select?.();
+    }
+  }, [showingNewCollectionForm]);
+
   useEffect(() => {
     if (!editingCollectionName) {
       return;
@@ -1226,7 +1249,21 @@ function NotesTable({
 
   function handleCollectionRenameSubmit(event) {
     event.preventDefault();
+
+    if (showingNewCollectionForm) {
+      void onSaveNewCollection?.();
+      return;
+    }
+
     void commitCollectionName();
+  }
+
+  function handleNewCollectionNameKeyDown(event) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      onCancelNewCollection?.();
+    }
   }
 
   function handleCollectionNameKeyDown(event) {
@@ -2484,8 +2521,9 @@ function NotesTable({
       // after the row cursor was cleared.
       if (event.key === "a") {
         // An empty library has no collection to create a note in. The toolbar
-        // button is disabled; the shortcut has to match it.
-        if (noCollections) {
+        // button is disabled; the shortcut has to match it. A not-yet-saved
+        // collection has no id to create a note in either.
+        if (noCollections || isNewCollection) {
           return;
         }
 
@@ -2501,8 +2539,14 @@ function NotesTable({
       }
 
       if (!rowHasFocus) {
-        // No row cursor: `e` renames the collection instead of a note.
-        if (event.key === "e" && !focusWithinFocusedRow && collection) {
+        // No row cursor: `e` renames the collection instead of a note. A
+        // not-yet-saved collection already shows its name field.
+        if (
+          event.key === "e" &&
+          !focusWithinFocusedRow &&
+          collection &&
+          !isNewCollection
+        ) {
           event.preventDefault();
           startEditingCollectionName();
         }
@@ -2832,16 +2876,28 @@ function NotesTable({
   }
 
   function openCreateNote() {
+    if (isNewCollection) {
+      return;
+    }
+
     setActionError("");
     navigateToTableRoute({ kind: "create", beforeId: null });
   }
 
   function openCreateNoteBefore(referenceNoteId) {
+    if (isNewCollection) {
+      return;
+    }
+
     setActionError("");
     navigateToTableRoute({ kind: "create", beforeId: referenceNoteId });
   }
 
   function openCreateNoteOverSlideshow(referenceNoteId) {
+    if (isNewCollection) {
+      return;
+    }
+
     setActionError("");
     navigateToTableRoute(
       slideshowRoute(referenceNoteId, { overlayCreate: true }),
@@ -3586,7 +3642,7 @@ function NotesTable({
       <div className="panel" inert={editorOverlayOpen}>
         <div className="panel-heading panel-heading--compact">
           <div className="panel-heading-copy">
-            {editingCollectionName ? (
+            {editingCollectionName || showingNewCollectionForm ? (
               <form
                 className="collection-rename-form"
                 onSubmit={handleCollectionRenameSubmit}
@@ -3594,19 +3650,39 @@ function NotesTable({
                 <input
                   aria-label="Collection name"
                   className="showcase-name-field"
-                  disabled={savingCollectionName}
+                  disabled={
+                    showingNewCollectionForm
+                      ? savingNewCollection
+                      : savingCollectionName
+                  }
                   onChange={(event) => {
+                    if (showingNewCollectionForm) {
+                      onNewCollectionNameChange?.(event.target.value);
+                      return;
+                    }
                     setCollectionNameDraft(event.target.value);
                     setCollectionNameError("");
                   }}
-                  onKeyDown={handleCollectionNameKeyDown}
+                  onKeyDown={
+                    showingNewCollectionForm
+                      ? handleNewCollectionNameKeyDown
+                      : handleCollectionNameKeyDown
+                  }
                   ref={collectionNameFieldRef}
-                  value={collectionNameDraft}
+                  value={
+                    showingNewCollectionForm
+                      ? newCollectionName
+                      : collectionNameDraft
+                  }
                 />
                 <button
                   aria-label="Save"
                   className="showcase-node-save"
-                  disabled={savingCollectionName}
+                  disabled={
+                    showingNewCollectionForm
+                      ? savingNewCollection
+                      : savingCollectionName
+                  }
                   title="Save name"
                   type="submit"
                 >
@@ -3630,7 +3706,11 @@ function NotesTable({
                 <button
                   aria-label="Cancel"
                   className="showcase-node-cancel"
-                  onClick={cancelEditingCollectionName}
+                  onClick={
+                    showingNewCollectionForm
+                      ? onCancelNewCollection
+                      : cancelEditingCollectionName
+                  }
                   title="Discard changes"
                   type="button"
                 >
@@ -3686,7 +3766,13 @@ function NotesTable({
                 ) : null}
               </div>
             )}
-            {collectionNameError ? (
+            {showingNewCollectionForm ? (
+              newCollectionError ? (
+                <p className="error-text" role="alert">
+                  {newCollectionError}
+                </p>
+              ) : null
+            ) : collectionNameError ? (
               <p className="error-text" role="alert">
                 {collectionNameError}
               </p>
@@ -3703,7 +3789,7 @@ function NotesTable({
               aria-label="Add note"
               className="icon-link button-primary"
               data-shortcut="a"
-              disabled={noCollections}
+              disabled={noCollections || isNewCollection}
               onClick={openCreateNote}
               type="button"
             >

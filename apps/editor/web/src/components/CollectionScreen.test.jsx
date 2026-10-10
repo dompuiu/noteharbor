@@ -12,15 +12,70 @@ vi.mock("./ConfirmDialog.jsx", () => ({
 }));
 
 vi.mock("./NotesTable.jsx", () => ({
-  NotesTable: ({ collectionId, onRenameCollection }) => (
-    <div
-      data-collection-id={collectionId ?? ""}
-      data-has-rename={onRenameCollection ? "true" : "false"}
-      data-testid="notes-table"
-    >
-      Banknotes table
-    </div>
-  ),
+  NotesTable: ({
+    collectionId,
+    onRenameCollection,
+    isNewCollection,
+    newCollectionName,
+    onNewCollectionNameChange,
+    onSaveNewCollection,
+    onCancelNewCollection,
+    savingNewCollection,
+    newCollectionError,
+  }) =>
+    isNewCollection ? (
+      <div data-testid="notes-table" data-new-collection="true">
+        <form onSubmit={(event) => {
+          event.preventDefault();
+          onSaveNewCollection?.();
+        }}>
+          <input
+            aria-label="Collection name"
+            onChange={(event) => onNewCollectionNameChange?.(event.target.value)}
+            value={newCollectionName ?? ""}
+          />
+          <button
+            aria-label="Save"
+            disabled={savingNewCollection}
+            onClick={() => onSaveNewCollection?.()}
+            type="button"
+          >
+            Save
+          </button>
+          <button
+            aria-label="Cancel"
+            onClick={() => onCancelNewCollection?.()}
+            type="button"
+          >
+            Cancel
+          </button>
+        </form>
+        {newCollectionError ? <p role="alert">{newCollectionError}</p> : null}
+        <table>
+          <thead>
+            <tr>
+              <th>ID</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>No notes are stored yet.</td>
+            </tr>
+          </tbody>
+        </table>
+        <button aria-label="Add note" disabled type="button">
+          Add note
+        </button>
+      </div>
+    ) : (
+      <div
+        data-collection-id={collectionId ?? ""}
+        data-has-rename={onRenameCollection ? "true" : "false"}
+        data-testid="notes-table"
+      >
+        Banknotes table
+      </div>
+    ),
 }));
 
 import { CollectionScreen } from "./CollectionScreen.jsx";
@@ -198,6 +253,23 @@ describe("CollectionScreen edit mode", () => {
 });
 
 describe("CollectionScreen new draft", () => {
+  test("renders the view-like draft table with a focused title field", () => {
+    useCollections.mockReturnValue(
+      collectionsContext({
+        pendingCollection: { id: "new", name: "Collection" },
+      }),
+    );
+    renderEdit("new");
+
+    const table = screen.getByTestId("notes-table");
+    expect(table).toHaveAttribute("data-new-collection", "true");
+    // View parity: an (empty) table and a disabled Add note, like the view.
+    expect(table.querySelector("table")).not.toBeNull();
+    expect(screen.getByRole("button", { name: "Add note" })).toBeDisabled();
+    expect(
+      screen.getByRole("textbox", { name: "Collection name" }),
+    ).toHaveValue("Collection");
+  });
   test("a direct load stages a pending draft so the sidebar agrees", () => {
     const beginPendingCollection = vi.fn();
     useCollections.mockReturnValue(
