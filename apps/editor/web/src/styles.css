@@ -722,6 +722,22 @@ input[type="radio"] {
   cursor: pointer;
 }
 
+/* Table-view focus language for a showcase card: like a one-cell catalog
+   row, a focused card paints an accent-soft wash with an inset 1px ring
+   instead of the global outline, so focusing never changes its geometry. */
+.showcase-card:focus-visible {
+  outline: none;
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* The grouping spine survives focus: both rings paint together. */
+.showcase-card--grouping:focus-visible {
+  box-shadow:
+    inset 3px 0 0 var(--accent),
+    inset 0 0 0 1px var(--accent);
+}
+
 .showcase-card--category {
   aspect-ratio: 2 / 1;
 }
@@ -903,6 +919,15 @@ input[type="radio"] {
   background: transparent;
 }
 
+/* An edit cell is the showcase's catalog row: while Tab sits on the card or
+   any of its controls, the cell paints the row wash with an inset 1px ring.
+   Inner controls keep their own outlines, mirroring `.table-row-link`. */
+.showcase-reorder-cell:has(:focus-visible),
+.showcase-category-section > .showcase-cell--category:has(:focus-visible) {
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
 .showcase-reorder-handle {
   position: absolute;
   top: 8px;
@@ -1029,6 +1054,16 @@ input[type="radio"] {
   background: var(--surface-2);
   color: var(--text);
   font: inherit;
+}
+
+/* Showcase text fields focus like catalog fields: an accent border with a
+   soft halo instead of the global offset outline. */
+.showcase-name-field:focus,
+.showcase-category-input:focus,
+.showcase-grouping-input:focus {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 0;
 }
 
 .showcase-grouping-rename {
