@@ -2,13 +2,17 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { getNotes } from "../lib/api.js";
 import { matchesCatalogFamily } from "../lib/catalogFamily.js";
-import { firstAvailableNoteImage } from "../lib/showcaseImages.js";
+import {
+  firstAvailableNoteImage,
+  pickNoteImage,
+} from "../lib/showcaseImages.js";
 
 // The note picker popup (ticket 10). A filter bar over a virtualized thumbnail
-// list; each row is a checkbox with the note's first available image. The
-// selection accumulates across filter changes, so a user can pull notes from
-// several collections into one batch. "Add selected (N)" adds and keeps the
-// popup open; "Add & close" adds and closes it.
+// list; each row is a checkbox with the note's first available image, and
+// hovering (or focusing) the thumbnail shows the full-size image in a preview
+// bubble. The selection accumulates across filter changes, so a user can pull
+// notes from several collections into one batch. "Add selected (N)" adds and
+// keeps the popup open; "Add & close" adds and closes it.
 //
 // Data loading: there is no global notes endpoint, so the picker fans out to
 // the per-collection `GET /api/collections/:id/notes` for every collection the
@@ -19,7 +23,9 @@ import { firstAvailableNoteImage } from "../lib/showcaseImages.js";
 // Virtualization: the list uses `@tanstack/react-virtual` (already used by the
 // Notes table) with a fixed row estimate, so collections with hundreds of notes
 // only mount the visible window. Thumbnails reuse `firstAvailableNoteImage`
-// (front thumbnail, then front full, then back) and lazy-load.
+// (front thumbnail, then front full, then back) and lazy-load; the hover
+// preview reuses the table's thumb-preview pattern (a positioned bubble that
+// only mounts the full-size image while visible, clamped inside the list).
 const COLUMNS = [
   {
     value: "collection",
@@ -85,8 +91,10 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
   const [selectedIds, setSelectedIds] = useState(() => new Set());
   const [busy, setBusy] = useState(false);
   const [addError, setAddError] = useState("");
+  const [thumbPreview, setThumbPreview] = useState(null);
   const filterRef = useRef(null);
   const listRef = useRef(null);
+  const thumbElementsRef = useRef(new Map());
 
   const collectionKey = collections.map((collection) => collection.id).join(",");
 
@@ -189,6 +197,68 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
     rowVirtualizer.scrollToOffset(0);
   }, [column, value, rowVirtualizer]);
 
+  function showThumbPreview(noteId) {
+    setThumbPreview({ noteId, offsetY: 0 });
+  }
+
+  function hideThumbPreview(noteId) {
+    setThumbPreview((current) =>
+      current?.noteId === noteId ? null : current,
+    );
+  }
+
+  // Keep the preview bubble inside the scrolling list: measure the hovered
+  // thumbnail against the list viewport and shift the bubble so it never
+  // bleeds past the top or bottom edge. Re-clamps on scroll and resize, and
+  // drops the preview when its row scrolls out of the virtual window.
+  useEffect(() => {
+    if (!thumbPreview) {
+      return undefined;
+    }
+
+    const shell = listRef.current;
+
+    if (!shell) {
+      return undefined;
+    }
+
+    function updatePreviewPosition() {
+      const thumbElement = thumbElementsRef.current.get(thumbPreview.noteId);
+
+      if (!thumbElement) {
+        setThumbPreview(null);
+        return;
+      }
+
+      const shellBounds = shell.getBoundingClientRect();
+      const thumbBounds = thumbElement.getBoundingClientRect();
+      const previewHeight = 186;
+      const desiredTop =
+        thumbBounds.top + thumbBounds.height / 2 - previewHeight / 2;
+      const minTop = shellBounds.top + 8;
+      const maxTop = shellBounds.bottom - previewHeight - 8;
+      const clampedTop = Math.min(Math.max(desiredTop, minTop), maxTop);
+      const offsetY = Math.round(clampedTop - desiredTop);
+
+      setThumbPreview((current) =>
+        current && current.noteId === thumbPreview.noteId
+          ? current.offsetY === offsetY
+            ? current
+            : { ...current, offsetY }
+          : current,
+      );
+    }
+
+    updatePreviewPosition();
+    shell.addEventListener("scroll", updatePreviewPosition, { passive: true });
+    window.addEventListener("resize", updatePreviewPosition);
+
+    return () => {
+      shell.removeEventListener("scroll", updatePreviewPosition);
+      window.removeEventListener("resize", updatePreviewPosition);
+    };
+  }, [thumbPreview]);
+
   function toggle(noteId) {
     if (addedIds.has(noteId)) {
       return;
@@ -268,6 +338,10 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
     const isAdded = addedIds.has(note.id);
     const checked = isAdded || selectedIds.has(note.id);
     const image = firstAvailableNoteImage(note);
+    const previewPath = image
+      ? pickNoteImage(note, image.type, "full") || image.path
+      : "";
+    const previewVisible = thumbPreview?.noteId === note.id && Boolean(previewPath);
 
     return (
       <label
@@ -278,14 +352,48 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
           checked={checked}
           disabled={isAdded}
           onChange={() => toggle(note.id)}
+          onBlur={() => hideThumbPreview(note.id)}
+          onFocus={() => {
+            if (previewPath) {
+              showThumbPreview(note.id);
+            }
+          }}
           type="checkbox"
         />
-        <span aria-hidden="true" className="showcase-note-row-thumb">
-          {image ? (
-            <img alt="" loading="lazy" src={image.path} />
-          ) : (
-            <span className="showcase-note-row-thumb-empty">No image</span>
-          )}
+        <span
+          aria-hidden="true"
+          className="showcase-note-row-thumb"
+          onMouseEnter={() => {
+            if (previewPath) {
+              showThumbPreview(note.id);
+            }
+          }}
+          onMouseLeave={() => hideThumbPreview(note.id)}
+          ref={(element) => {
+            if (element) {
+              thumbElementsRef.current.set(note.id, element);
+            } else {
+              thumbElementsRef.current.delete(note.id);
+            }
+          }}
+        >
+          <span className="showcase-note-row-thumb-frame">
+            {image ? (
+              <img alt="" loading="lazy" src={image.path} />
+            ) : (
+              <span className="showcase-note-row-thumb-empty">No image</span>
+            )}
+          </span>
+          {previewPath ? (
+            <span
+              className={`showcase-thumb-preview${previewVisible ? " is-visible" : ""}`}
+              style={{
+                "--showcase-thumb-preview-offset": `${thumbPreview?.noteId === note.id ? thumbPreview.offsetY : 0}px`,
+              }}
+            >
+              {previewVisible ? <img alt="" src={previewPath} /> : null}
+            </span>
+          ) : null}
         </span>
         <span className="showcase-note-row-main">{noteCaption(note)}</span>
         <span className="showcase-note-row-pill">

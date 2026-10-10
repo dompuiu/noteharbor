@@ -1613,9 +1613,18 @@ input[type="radio"] {
 }
 
 .showcase-note-row-thumb {
+  position: relative;
   flex: 0 0 64px;
   width: 64px;
   height: 44px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.showcase-note-row-thumb-frame {
+  width: 100%;
+  height: 100%;
   overflow: hidden;
   border: 1px solid var(--border);
   border-radius: var(--radius-sm);
@@ -1625,11 +1634,38 @@ input[type="radio"] {
   justify-content: center;
 }
 
-.showcase-note-row-thumb img {
+.showcase-note-row-thumb-frame img {
   width: 100%;
   height: 100%;
   object-fit: cover;
   display: block;
+}
+
+.showcase-thumb-preview {
+  --showcase-thumb-preview-offset: 0px;
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(calc(-50% + var(--showcase-thumb-preview-offset)));
+  display: none;
+  padding: 8px;
+  border-radius: 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow-md);
+  z-index: 30;
+  pointer-events: none;
+}
+
+.showcase-thumb-preview.is-visible {
+  display: block;
+}
+
+.showcase-thumb-preview img {
+  display: block;
+  width: 240px;
+  height: 150px;
+  object-fit: contain;
 }
 
 .showcase-note-row-thumb-empty {

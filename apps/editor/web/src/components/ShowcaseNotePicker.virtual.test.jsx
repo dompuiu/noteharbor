@@ -75,7 +75,7 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
     );
 
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });
-    const images = dialog.querySelectorAll(".showcase-note-row-thumb img");
+    const images = dialog.querySelectorAll(".showcase-note-row-thumb-frame img");
 
     expect(images).toHaveLength(1);
     expect(images[0]).toHaveAttribute(
@@ -134,5 +134,78 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
     expect(
       within(dialog).getByRole("button", { name: "Add selected (1)" }),
     ).toBeInTheDocument();
+  });
+
+  test("hovering a thumbnail shows the full-size preview and hides it after", async () => {
+    getNotes.mockResolvedValue({
+      notes: [
+        note(1, {
+          images: [
+            {
+              type: "front",
+              variant: "thumbnail",
+              localPath: "/api/images/notes/1/front-thumbnail.jpg",
+            },
+            {
+              type: "front",
+              variant: "full",
+              localPath: "/api/images/notes/1/front-full.jpg",
+            },
+          ],
+        }),
+      ],
+    });
+    const user = userEvent.setup();
+
+    render(
+      <ShowcaseNotePicker
+        collections={collections}
+        node={{ id: 10, name: "Group", children: [] }}
+        onAdd={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "Add notes" });
+    expect(
+      dialog.querySelector(".showcase-thumb-preview img"),
+    ).toBeNull();
+
+    const thumb = dialog.querySelector(".showcase-note-row-thumb");
+    expect(thumb).not.toBeNull();
+    await user.hover(thumb);
+
+    const preview = dialog.querySelector(".showcase-thumb-preview img");
+    expect(preview).toHaveAttribute(
+      "src",
+      "/api/images/notes/1/front-full.jpg?v=rev1",
+    );
+
+    await user.unhover(thumb);
+    expect(
+      dialog.querySelector(".showcase-thumb-preview img"),
+    ).toBeNull();
+  });
+
+  test("a note without images has no hover preview", async () => {
+    getNotes.mockResolvedValue({ notes: [note(2, { images: [] })] });
+    const user = userEvent.setup();
+
+    render(
+      <ShowcaseNotePicker
+        collections={collections}
+        node={{ id: 10, name: "Group", children: [] }}
+        onAdd={vi.fn()}
+        onClose={vi.fn()}
+      />,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "Add notes" });
+    const thumb = dialog.querySelector(".showcase-note-row-thumb");
+    await user.hover(thumb);
+
+    expect(
+      dialog.querySelector(".showcase-thumb-preview"),
+    ).toBeNull();
   });
 });
