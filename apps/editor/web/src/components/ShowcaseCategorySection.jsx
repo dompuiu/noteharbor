@@ -7,6 +7,7 @@ import { ShowcaseNoteEditor } from "./ShowcaseNoteEditor.jsx";
 import { ShowcaseNodeEditor } from "./ShowcaseNodeEditor.jsx";
 import { ShowcaseReorderableCell } from "./ShowcaseReorderableCell.jsx";
 import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
+import { countNoteNodes } from "../lib/showcaseTree.js";
 
 // One top-level Category rendered always expanded: a section header plus the
 // inline grid of its direct children. Groupings inside still drill (they nest);
@@ -37,6 +38,12 @@ function ShowcaseCategorySection({
     nodes: children,
     onReorder: (orderedIds) => onReorder(category.id, orderedIds),
   });
+
+  // View mode never presents an empty Category: no notes anywhere beneath it
+  // means no section at all. Edit mode keeps it so it can be filled.
+  if (!editMode && countNoteNodes(children) === 0) {
+    return null;
+  }
 
   return (
     <section
@@ -114,19 +121,14 @@ function ShowcaseCategorySection({
             />
           ) : null}
         </ShowcaseGrid>
-      ) : (
-        <>
-          <p className="showcase-empty-text muted">No notes here yet.</p>
-          {editMode ? (
-            <ShowcaseGrid size={photoSize}>
-              <ShowcaseAddTiles
-                onAddGrouping={(name) => onAddGrouping(category.id, name)}
-                onAddNotes={() => onAddNotes(category)}
-              />
-            </ShowcaseGrid>
-          ) : null}
-        </>
-      )}
+      ) : editMode ? (
+        <ShowcaseGrid size={photoSize}>
+          <ShowcaseAddTiles
+            onAddGrouping={(name) => onAddGrouping(category.id, name)}
+            onAddNotes={() => onAddNotes(category)}
+          />
+        </ShowcaseGrid>
+      ) : null}
     </section>
   );
 }

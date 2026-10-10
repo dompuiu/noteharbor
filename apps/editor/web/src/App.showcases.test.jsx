@@ -289,7 +289,7 @@ describe("Showcase modes", () => {
     expect(
       await screen.findByRole("heading", { name: "Fresh" }),
     ).toBeInTheDocument();
-    expect(screen.getByText("No notes here yet.")).toBeInTheDocument();
+    expect(screen.queryByText("No notes here yet.")).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Add notes" }),
     ).toBeInTheDocument();

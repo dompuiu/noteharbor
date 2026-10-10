@@ -228,9 +228,11 @@ describe("browsing a showcase read-only", () => {
     expect(
       await screen.findByRole("heading", { name: "Summer" }),
     ).toBeInTheDocument();
+    // Empty categories stay hidden in view mode so the presentation never
+    // shows an empty section.
     expect(
-      screen.getByRole("heading", { name: "Vienna" }),
-    ).toBeInTheDocument();
+      screen.queryByRole("heading", { name: "Vienna" }),
+    ).not.toBeInTheDocument();
     // A category always shows its contents: the child grouping and note are
     // visible without opening anything.
     expect(
@@ -272,11 +274,14 @@ describe("browsing a showcase read-only", () => {
     ).toBeInTheDocument();
   });
 
-  test("an empty category shows its message inline", async () => {
+  test("an empty category stays hidden inline", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
-    await screen.findByRole("heading", { name: "Vienna" });
-    expect(screen.getByText("No notes here yet.")).toBeInTheDocument();
+    await screen.findByRole("heading", { name: "Summer" });
+    expect(
+      screen.queryByRole("heading", { name: "Vienna" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("No notes here yet.")).not.toBeInTheDocument();
   });
 });
 
@@ -445,7 +450,7 @@ describe("entering a node", () => {
     expect(status).toHaveAttribute("aria-live", "polite");
 
     await waitFor(() => {
-      expect(status).toHaveTextContent("My showcase, 2 items");
+      expect(status).toHaveTextContent("My showcase, 1 items");
     });
 
     await openSub();

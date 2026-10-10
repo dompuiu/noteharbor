@@ -417,6 +417,17 @@ function ShowcaseScreen({ mode }) {
     ? (displayNode.children ?? [])
     : nodes;
   const isRootExpanded = displayNode == null;
+  // View mode hides empty Categories (no notes anywhere beneath them) so the
+  // presentation never shows an empty section; edit mode keeps them so they
+  // can be filled.
+  const visibleRootNodes =
+    isRootExpanded && !editMode
+      ? nodes.filter((node) =>
+          node.node_type !== "category"
+            ? true
+            : countNoteNodes([node]) > 0,
+        )
+      : nodes;
 
   // A `?node=` that no longer resolves (a node removed in another tab, or a
   // stale deep link) falls back to the root and drops the parameter.
@@ -453,14 +464,15 @@ function ShowcaseScreen({ mode }) {
   }, [editEntryNode, editMode, loading, nodes]);
   // Announce each node entry through a polite live region; the root announces
   // the showcase itself.
+  const announcedCount = isRootExpanded ? visibleRootNodes.length : displayChildren.length;
   useEffect(() => {
     if (loading) {
       return;
     }
 
     const name = displayNode ? displayNode.name : showcaseName;
-    setAnnouncement(`${name}, ${displayChildren.length} items`);
-  }, [displayChildren.length, displayNode, loading, showcaseName]);
+    setAnnouncement(`${name}, ${announcedCount} items`);
+  }, [announcedCount, displayNode, loading, showcaseName]);
 
   // Dragging a note or a Grouping reorders it among the current level's
   // children, so notes and groupings share one order. Categories only exist at
@@ -1056,7 +1068,6 @@ function ShowcaseScreen({ mode }) {
     displayNode != null &&
     displayChildren.length === 0;
   const showViewEmptyNode = showEmptyNode && !editMode;
-  const showEditEmptyNode = showEmptyNode && editMode;
   // A label can be placed at most once per Showcase, so do not suggest the ones
   // already on the canvas (including staged draft placements by name).
   const placedCategoryIds = new Set(
@@ -1269,12 +1280,6 @@ function ShowcaseScreen({ mode }) {
           </div>
         ) : null}
 
-        {showEditEmptyNode ? (
-          <div className="showcase-empty-box">
-            <p className="showcase-empty-text">No notes here yet.</p>
-          </div>
-        ) : null}
-
         {!loading && !loadError ? (
           <>
             {displayNode ? (
@@ -1306,7 +1311,7 @@ function ShowcaseScreen({ mode }) {
 
             {isRootExpanded ? (
               <>
-                {nodes.map((node) => {
+                {visibleRootNodes.map((node) => {
                   if (node.node_type !== "category") {
                     return null;
                   }

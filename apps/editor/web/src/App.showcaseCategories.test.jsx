@@ -131,6 +131,29 @@ describe("the showcase category canvas", () => {
   });
 
   test("view mode shows the expanded section and no add tile", async () => {
+    getShowcaseTree.mockResolvedValue({
+      showcase_id: 1,
+      nodes: [
+        {
+          ...SUMMER_NODE,
+          children: [
+            {
+              id: 40,
+              node_type: "note",
+              name: null,
+              category_id: null,
+              parent_node_id: 10,
+              note_id: 100,
+              cover_note_id: null,
+              position: 1,
+              note: { id: 100, denomination: "1", issue_date: "2020" },
+              cover_note: null,
+              children: [],
+            },
+          ],
+        },
+      ],
+    });
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
     expect(
@@ -139,6 +162,15 @@ describe("the showcase category canvas", () => {
     expect(
       screen.queryByRole("button", { name: "Create a category" }),
     ).not.toBeInTheDocument();
+  });
+
+  test("view mode hides an empty category", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    await waitFor(() => {
+      expect(screen.queryByRole("heading", { name: "Summer" })).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText("No notes here yet.")).not.toBeInTheDocument();
   });
 
   test("adding a typed name stages the placement and saves it on Save", async () => {

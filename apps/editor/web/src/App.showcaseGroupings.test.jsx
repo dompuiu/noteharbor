@@ -336,7 +336,9 @@ describe("grouping cover", () => {
     const emptyGrouping = groupingNode({ id: 20, name: "Sub" });
     getShowcaseTree.mockResolvedValue({
       showcase_id: 1,
-      nodes: [{ ...summerTree(), children: [emptyGrouping] }],
+      nodes: [
+        { ...summerTree(), children: [noteNode(11, DERIVED_NOTE), emptyGrouping] },
+      ],
     });
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
