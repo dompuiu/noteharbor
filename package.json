@@ -17,6 +17,6 @@
     "layout": "tsps --layout layout.yml"
   },
   "devDependencies": {
-    "concurrently": "^9.2.4"
+    "concurrently": "^9.2.5"
   }
 }
