@@ -172,6 +172,10 @@ input[type="radio"] {
   flex-direction: column;
   background: var(--surface);
   border-right: 1px solid var(--border);
+  /* The expanded width fits content (max(288px, max-content)), and keyword
+     widths only transition with interpolation allowed. Without this the
+     64px -> max-content change snaps instead of animating. */
+  interpolate-size: allow-keywords;
   transition:
     width 0.18s cubic-bezier(0.4, 0, 0.2, 1),
     box-shadow 0.18s ease,
@@ -564,6 +568,7 @@ input[type="radio"] {
 .sidebar-dock:hover .sidebar-wordmark,
 .sidebar-dock:has(:focus-visible) .sidebar-wordmark {
   display: block;
+  animation: sidebar-label-in 0.18s ease;
 }
 
 .sidebar-dock:hover .sidebar-nav,
@@ -572,12 +577,26 @@ input[type="radio"] {
   pointer-events: auto;
 }
 
-/* Expanded, the names return and the indent rule comes back. */
+/* Expanded, the names return and the indent rule comes back. The labels
+   fade and slide in so the rail keeps some entrance motion even where the
+   max-content width change cannot interpolate. */
+@keyframes sidebar-label-in {
+  from {
+    opacity: 0;
+    transform: translateX(-6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
 .sidebar-dock:hover .sidebar-link-label,
 .sidebar-dock:hover .sidebar-group-name,
 .sidebar-dock:has(:focus-visible) .sidebar-link-label,
 .sidebar-dock:has(:focus-visible) .sidebar-group-name {
   display: block;
+  animation: sidebar-label-in 0.18s ease;
 }
 
 /* Expanded, the reorder controls return with the names. */
@@ -1854,6 +1873,15 @@ input[type="radio"] {
   .sidebar,
   .sidebar-link {
     transition: none;
+  }
+
+  .sidebar-dock:hover .sidebar-wordmark,
+  .sidebar-dock:has(:focus-visible) .sidebar-wordmark,
+  .sidebar-dock:hover .sidebar-link-label,
+  .sidebar-dock:hover .sidebar-group-name,
+  .sidebar-dock:has(:focus-visible) .sidebar-link-label,
+  .sidebar-dock:has(:focus-visible) .sidebar-group-name {
+    animation: none;
   }
 
   .showcase-card-face {

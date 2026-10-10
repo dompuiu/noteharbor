@@ -205,6 +205,26 @@ describe("sidebar styles", () => {
     expect(head[1]).toMatch(/width:\s*100%/);
   });
 
+  test("the rail width transition can interpolate to max-content", () => {
+    // The expanded rail fits its content (max(288px, max-content)), which
+    // only animates when keyword interpolation is allowed. Without this,
+    // the 64px -> max-content width change snaps instead of transitioning.
+    const sidebar = styles.match(/\.sidebar\s*\{([^}]*)\}/);
+    expect(sidebar).not.toBeNull();
+    expect(sidebar[1]).toMatch(/interpolate-size:\s*allow-keywords/);
+  });
+
+  test("the expanding labels fade and slide in", () => {
+    // Width alone may snap where keyword interpolation is unsupported, so
+    // the labels carry their own entrance motion on expand.
+    expect(styles).toMatch(/@keyframes\s+sidebar-label-in/);
+    const expandedLabels = styles.match(
+      /\.sidebar-dock:hover \.sidebar-link-label,[\s\S]*?\{([^}]*)\}/,
+    );
+    expect(expandedLabels).not.toBeNull();
+    expect(expandedLabels[1]).toMatch(/animation:\s*sidebar-label-in/);
+  });
+
   test("the cursor link is ringed so focus is visible", () => {
     expect(styles).toMatch(
       /\.sidebar-link--cursor\s*\{[^}]*box-shadow:\s*inset 0 0 0 1\.5px var\(--accent\)/,
