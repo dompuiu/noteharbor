@@ -21,7 +21,7 @@ const splitTagInput = (raw) =>
     .map(normalizeTag)
     .filter(Boolean);
 
-function rankTagSuggestions(vocabulary, selectedKeys, query) {
+export function rankTagSuggestions(vocabulary, selectedKeys, query) {
   const normalizedQuery = normalizeTag(query).toLowerCase();
   const pool = vocabulary
     .map(normalizeTag)
@@ -45,7 +45,7 @@ function rankTagSuggestions(vocabulary, selectedKeys, query) {
   return [...starts, ...contains].slice(0, 16);
 }
 
-function HighlightMatch({ text, query }) {
+export function HighlightMatch({ text, query }) {
   const needle = normalizeTag(query);
   if (!needle) {
     return text;
@@ -311,9 +311,9 @@ export const TagsField = forwardRef(function TagsField(
   }
 
   const scrollHighlightedIntoView = (element) => {
-    if (element) {
-      element.scrollIntoView({ block: "nearest" });
-    }
+    // jsdom (tests) has no scrollIntoView; the guard keeps the highlight
+    // paint working there while browsers still scroll the option into view.
+    element?.scrollIntoView?.({ block: "nearest" });
   };
 
   return (

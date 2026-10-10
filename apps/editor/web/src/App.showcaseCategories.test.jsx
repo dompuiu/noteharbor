@@ -212,16 +212,40 @@ describe("the showcase category canvas", () => {
     });
   });
 
-  test("picking an existing label fills the field", async () => {
+  test("keyboard navigates suggestions and Enter fills the field", async () => {
     const user = userEvent.setup();
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     await user.click(
       await screen.findByRole("button", { name: "Create a category" }),
     );
-    await user.click(await screen.findByRole("option", { name: "Vienna" }));
+    const input = screen.getByLabelText("Category name");
+    await user.type(input, "v");
+    await user.keyboard("{ArrowDown}{Enter}");
 
-    expect(screen.getByLabelText("Category name")).toHaveValue("Vienna");
+    expect(input).toHaveValue("Vienna");
+    // Picking fills the field only; staging still waits for Add category.
+    expect(createShowcaseNode).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("heading", { name: "Vienna" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("Escape closes the suggestions without closing the field", async () => {
+    const user = userEvent.setup();
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    await user.click(
+      await screen.findByRole("button", { name: "Create a category" }),
+    );
+    expect(
+      await screen.findByRole("option", { name: "Vienna" }),
+    ).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("option", { name: "Vienna" })).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Category name")).toBeInTheDocument();
   });
 
   test("renaming a placement stages the rename and saves it on Save", async () => {

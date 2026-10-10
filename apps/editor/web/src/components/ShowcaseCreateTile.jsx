@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useId, useRef, useState } from "react";
+import { HighlightMatch, rankTagSuggestions } from "./TagsField.jsx";
 
 // Shared edit-only `+ create a …` tile. Clicking it reveals a name field; a
 // Category tile also offers the shared label pool as combobox suggestions while
@@ -6,6 +7,11 @@ import { useState } from "react";
 // ("Create a category" / "create a category") and the error wording.
 // `closedLabel` overrides both the closed button's accessible name and its
 // visible text (the grouping tile reads `+ Add grouping`).
+//
+// The category field is a single-value combobox in the TagsField's visual and
+// interaction language: the pool is ranked starts-with-first, ArrowUp/Down
+// moves a highlight, Enter picks it, Escape closes the list. Picking fills the
+// field only — staging still waits for the Add button.
 function ShowcaseCreateTile({
   noun,
   inputLabel,
@@ -20,13 +26,21 @@ function ShowcaseCreateTile({
   const [name, setName] = useState("");
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const [highlighted, setHighlighted] = useState(-1);
+  const [isOpen, setIsOpen] = useState(true);
+  const inputRef = useRef(null);
+  const listboxId = useId();
 
   if (!open) {
     return (
       <button
         aria-label={closedLabel ?? `Create a ${noun}`}
         className={`showcase-tile showcase-tile--create${centered ? " showcase-tile--centered" : ""}`}
-        onClick={() => setOpen(true)}
+        onClick={() => {
+          setOpen(true);
+          setIsOpen(true);
+          setHighlighted(-1);
+        }}
         type="button"
       >
         <span aria-hidden="true" className="showcase-tile-plus">
@@ -37,17 +51,83 @@ function ShowcaseCreateTile({
     );
   }
 
-  const query = name.trim().toLowerCase();
-  const visible = combobox
-    ? suggestions.filter((suggestion) =>
-        suggestion.name.toLowerCase().includes(query),
-      )
+  const names = suggestions.map((suggestion) => suggestion.name);
+  const rankedNames = combobox
+    ? rankTagSuggestions(names, new Set(), name)
     : [];
+  const rankedByName = new Map(rankedNames.map((ranked, index) => [ranked, index]));
+  const visible = combobox
+    ? [...suggestions]
+        .filter((suggestion) => rankedByName.has(suggestion.name))
+        .sort(
+          (left, right) =>
+            rankedByName.get(left.name) - rankedByName.get(right.name),
+        )
+    : [];
+  const listOpen = combobox && isOpen && visible.length > 0;
+  const activeDescendantId =
+    listOpen && highlighted >= 0 && visible[highlighted]
+      ? `${listboxId}-option-${highlighted}`
+      : undefined;
 
   function close() {
     setOpen(false);
     setName("");
     setError("");
+    setHighlighted(-1);
+    setIsOpen(true);
+  }
+
+  function pick(pickedName) {
+    setName(pickedName);
+    setIsOpen(false);
+    setHighlighted(-1);
+    requestAnimationFrame(() => inputRef.current?.focus());
+  }
+
+  function handleKeyDown(event) {
+    if (!combobox) {
+      return;
+    }
+    if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+      event.preventDefault();
+      setIsOpen(true);
+      if (!visible.length) {
+        return;
+      }
+      setHighlighted((current) => {
+        if (current < 0) {
+          return event.key === "ArrowDown" ? 0 : visible.length - 1;
+        }
+        const step = event.key === "ArrowDown" ? 1 : -1;
+        return (current + step + visible.length) % visible.length;
+      });
+      return;
+    }
+    if (event.key === "Enter" && isOpen && highlighted >= 0 && visible[highlighted]) {
+      // A highlighted suggestion wins over the form submit: picking fills
+      // the field so the user can review it before pressing Add.
+      event.preventDefault();
+      pick(visible[highlighted].name);
+      return;
+    }
+    if (event.key === "Escape" && isOpen) {
+      event.preventDefault();
+      event.stopPropagation();
+      setIsOpen(false);
+      setHighlighted(-1);
+      return;
+    }
+    if (event.key === "Tab" && isOpen) {
+      setIsOpen(false);
+      setHighlighted(-1);
+    }
+  }
+
+  function scrollHighlightedIntoView(element) {
+    // jsdom (tests) has no scrollIntoView; the guard keeps the highlight
+    // paint working there while browsers still scroll the option into view.
+    element?.scrollIntoView?.({ block: "nearest" });
   }
 
   async function handleSubmit(event) {
@@ -77,28 +157,52 @@ function ShowcaseCreateTile({
       onSubmit={handleSubmit}
     >
       <input
+        aria-activedescendant={combobox ? activeDescendantId : undefined}
         aria-autocomplete={combobox ? "list" : undefined}
-        aria-expanded={combobox ? visible.length > 0 : undefined}
+        aria-controls={combobox && listOpen ? listboxId : undefined}
+        aria-expanded={combobox ? listOpen : undefined}
         aria-label={inputLabel}
         autoFocus
         className="showcase-category-input"
-        onChange={(event) => setName(event.target.value)}
+        onChange={(event) => {
+          setName(event.target.value);
+          setIsOpen(true);
+          setHighlighted(-1);
+        }}
+        onFocus={() => {
+          if (combobox) {
+            setIsOpen(true);
+          }
+        }}
+        onKeyDown={handleKeyDown}
+        ref={inputRef}
         role={combobox ? "combobox" : undefined}
         value={name}
       />
 
-      {visible.length > 0 ? (
-        <div className="showcase-category-options" role="listbox">
-          {visible.map((suggestion) => (
+      {listOpen ? (
+        <div
+          className="showcase-category-options"
+          id={listboxId}
+          role="listbox"
+          aria-label={`${noun} suggestions`}
+        >
+          {visible.map((suggestion, index) => (
             <button
-              aria-selected={false}
-              className="showcase-category-option"
+              aria-selected={index === highlighted}
+              className={`showcase-category-option${index === highlighted ? " is-highlighted" : ""}`}
+              id={`${listboxId}-option-${index}`}
               key={suggestion.id}
-              onClick={() => setName(suggestion.name)}
+              onClick={() => pick(suggestion.name)}
+              onMouseDown={(event) => event.preventDefault()}
+              onMouseEnter={() => setHighlighted(index)}
+              ref={
+                index === highlighted ? scrollHighlightedIntoView : undefined
+              }
               role="option"
               type="button"
             >
-              {suggestion.name}
+              <HighlightMatch text={suggestion.name} query={name} />
             </button>
           ))}
         </div>
