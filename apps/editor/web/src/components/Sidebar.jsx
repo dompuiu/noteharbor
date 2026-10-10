@@ -731,13 +731,7 @@ function Sidebar({ pageFocusRef }) {
                     </button>
                   ) : null}
                 </div>
-                <div
-                  className={
-                    reorderMode
-                      ? "sidebar-group-links sidebar-group-links--reordering"
-                      : "sidebar-group-links"
-                  }
-                >
+                <div className="sidebar-group-links">
                   {group.items.map((item) => {
                     const index = entries.indexOf(item);
                     const active =
@@ -922,17 +916,8 @@ function Sidebar({ pageFocusRef }) {
                           onDragOver={handleRowDragOver}
                           onDragStart={handleRowDragStart}
                           onDrop={handleRowDrop}
+                          title="Drag to reorder"
                         >
-                          <span
-                            aria-hidden="true"
-                            className="sidebar-drag-handle"
-                            title="Drag to reorder"
-                          >
-                            <ItemIcon
-                              className="sidebar-drag-handle-ic"
-                              icon="reorder"
-                            />
-                          </span>
                           <Link
                             aria-current={active ? "page" : undefined}
                             aria-label={item.label}
@@ -946,7 +931,14 @@ function Sidebar({ pageFocusRef }) {
                             title={item.label}
                             to={item.to}
                           >
-                            <ItemIcon icon={item.icon} />
+                            {/* In reorder mode the hamburger takes the
+                            item icon's own slot (same 22px box), so it
+                            lines up exactly with the icons of the rows
+                            that cannot be dragged. */}
+                            <ItemIcon
+                              className="sidebar-ic sidebar-ic--grip"
+                              icon="reorder"
+                            />
                             <span className="sidebar-link-label">
                               {item.label}
                             </span>

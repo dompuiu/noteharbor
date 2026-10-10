@@ -554,7 +554,7 @@ describe("Sidebar collection reordering", () => {
     expect(toggle).toHaveAttribute("aria-pressed", "false");
 
     // No grips, no move buttons, nothing draggable before opting in.
-    expect(document.querySelectorAll(".sidebar-drag-handle")).toHaveLength(0);
+    expect(document.querySelectorAll(".sidebar-ic--grip")).toHaveLength(0);
     expect(
       screen.queryByRole("button", { name: "Move Default up" }),
     ).not.toBeInTheDocument();
@@ -567,10 +567,10 @@ describe("Sidebar collection reordering", () => {
     expect(
       screen.getByRole("button", { name: "Done reordering Catalog" }),
     ).toHaveAttribute("aria-pressed", "true");
-    // Two collection rows grow real grips; the other catalog rows
-    // (New collection, Import / Export) hold invisible alignment slots.
+    // Two collection rows swap their item icon for the grip; the other
+    // catalog rows (New collection, Import / Export) keep their icons.
     expect(
-      document.querySelectorAll(".sidebar-drag-handle"),
+      document.querySelectorAll(".sidebar-ic--grip"),
     ).toHaveLength(2);
     expect(
       screen.getByRole("button", { name: "Move Default up" }),
@@ -587,7 +587,7 @@ describe("Sidebar collection reordering", () => {
     await user.click(screen.getByRole("button", { name: "Reorder Showcases" }));
 
     expect(
-      document.querySelectorAll(".sidebar-drag-handle"),
+      document.querySelectorAll(".sidebar-ic--grip"),
     ).toHaveLength(2);
     expect(
       screen.getByRole("button", { name: "Move Summer down" }),
@@ -625,37 +625,38 @@ describe("Sidebar collection reordering", () => {
     expect(container.querySelector(".sidebar-nav")).toBeInTheDocument();
   });
 
-  test("grips sit in the gutter while plain rows keep their natural position", async () => {
+  test("grips take the icon slot so every icon shares one column", async () => {
     const user = userEvent.setup();
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
 
     await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
 
-    // Only the two draggable rows carry a grip; actions and Import /
-    // Export stay plain links with no grip and no indentation slot, so
-    // their icons keep the exact x they have outside reorder mode.
+    // Only the two draggable rows swap their icon for the grip, and the
+    // grip reuses the same 22px icon box — so grips, `+` actions, and
+    // Import / Export icons all sit in one column and no row shifts.
+    const catalogGroup = container.querySelector(
+      '.sidebar-group[aria-labelledby="sidebar-group-catalog"]',
+    );
     expect(
-      container.querySelectorAll(
-        '.sidebar-group[aria-labelledby="sidebar-group-catalog"] .sidebar-drag-handle',
-      ),
+      catalogGroup.querySelectorAll(".sidebar-ic--grip"),
     ).toHaveLength(2);
-    expect(
-      container.querySelectorAll(
-        '.sidebar-group[aria-labelledby="sidebar-group-catalog"] .sidebar-row',
-      ),
-    ).toHaveLength(2);
+    for (const row of catalogGroup.querySelectorAll(".sidebar-row")) {
+      const icon = row.querySelector(":scope > .sidebar-link > .sidebar-ic");
+      expect(icon).not.toBeNull();
+      expect(icon.classList.contains("sidebar-ic--grip")).toBe(true);
+    }
+    // Plain rows keep their own icons and gain no wrapper or slot.
     expect(
       screen.getByRole("button", { name: "New collection" }).closest(".sidebar-row"),
     ).toBeNull();
     expect(
       screen.getByRole("link", { name: "Import / Export" }).closest(".sidebar-row"),
     ).toBeNull();
-    // The reordering block marks itself so the gutter clears the grips.
     expect(
-      container.querySelector(
-        '.sidebar-group[aria-labelledby="sidebar-group-catalog"] .sidebar-group-links--reordering',
-      ),
-    ).not.toBeNull();
+      screen
+        .getByRole("button", { name: "New collection" })
+        .querySelector(".sidebar-ic--grip"),
+    ).toBeNull();
   });
 
   test("toggling off hides the handles again", async () => {
@@ -664,14 +665,14 @@ describe("Sidebar collection reordering", () => {
 
     await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
     expect(
-      document.querySelectorAll(".sidebar-drag-handle"),
+      document.querySelectorAll(".sidebar-ic--grip"),
     ).toHaveLength(2);
 
     await user.click(
       screen.getByRole("button", { name: "Done reordering Catalog" }),
     );
 
-    expect(document.querySelectorAll(".sidebar-drag-handle")).toHaveLength(0);
+    expect(document.querySelectorAll(".sidebar-ic--grip")).toHaveLength(0);
     expect(
       screen.queryByRole("button", { name: "Move Default up" }),
     ).not.toBeInTheDocument();

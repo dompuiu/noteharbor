@@ -138,9 +138,9 @@ describe("sidebar styles", () => {
     );
   });
 
-  test("the reorder toggles and handles hide on the collapsed rail", () => {
+  test("the reorder toggles and move buttons hide on the collapsed rail", () => {
     expect(styles).toMatch(
-      /\.sidebar-dock \.sidebar-reorder-toggle,\s*\n?\s*\.sidebar-dock \.sidebar-drag-handle,\s*\n?\s*\.sidebar-dock \.sidebar-row-moves\s*\{[^}]*display:\s*none/,
+      /\.sidebar-dock \.sidebar-reorder-toggle,\s*\n?\s*\.sidebar-dock \.sidebar-row-moves\s*\{[^}]*display:\s*none/,
     );
     expect(styles).toMatch(
       /\.sidebar-dock:hover \.sidebar-reorder-toggle/,
@@ -186,15 +186,10 @@ describe("sidebar styles", () => {
     expect(expanded[1]).toMatch(/max-width:\s*480px/);
   });
 
-  test("the grip is taken out of flow into the indent gutter", () => {
-    // Grips share one column left of the links without shifting them: the
-    // handle is absolutely positioned, and the reordering block clears it.
-    const grip = styles.match(/\.sidebar-drag-handle\s*\{([^}]*)\}/);
-    expect(grip).not.toBeNull();
-    expect(grip[1]).toMatch(/position:\s*absolute/);
-    expect(styles).toMatch(
-      /\.sidebar-group-links\.sidebar-group-links--reordering\s*\{[^}]*padding-left:/,
-    );
+  test("reorderable rows grab the cursor for dragging", () => {
+    const row = styles.match(/\.sidebar-row\s*\{([^}]*)\}/);
+    expect(row).not.toBeNull();
+    expect(row[1]).toMatch(/cursor:\s*grab/);
   });
 
   test("the cursor link is ringed so focus is visible", () => {

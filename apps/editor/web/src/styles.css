@@ -444,50 +444,24 @@ input[type="radio"] {
 
 /* A reorderable row: the navigating link plus the keyboard move pair.
    The row is the draggable unit; the link inside never starts a drag.
-   The grip is absolutely positioned in the group's indent gutter (see
-   the reordering modifier on `.sidebar-group-links`), out of flow, so
-   the links never shift: reorderable or not, every icon keeps its
-   natural x and all grips share one column. */
+   The hamburger lives in the link's own icon slot, so no row ever
+   shifts when reorder mode turns on. */
 .sidebar-row {
-  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
   min-width: 0;
   border-radius: 8px;
+  cursor: grab;
+}
+
+.sidebar-row:active {
+  cursor: grabbing;
 }
 
 .sidebar-row .sidebar-link {
   flex: 1 1 auto;
   min-width: 0;
-}
-
-.sidebar-drag-handle {
-  position: absolute;
-  left: -24px;
-  top: 50%;
-  transform: translateY(-50%);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  color: var(--text-faint);
-  cursor: grab;
-}
-
-.sidebar-drag-handle-ic {
-  display: inline-flex;
-}
-
-.sidebar-drag-handle-ic svg {
-  width: 15px;
-  height: 15px;
-}
-
-/* While a group is reordering, its links block gains the clearance the
-   gutter grips need. The vertical rule itself does not move; every row
-   shifts together so relative alignment never changes. */
-.sidebar-group-links.sidebar-group-links--reordering {
-  padding-left: 30px;
 }
 
 .sidebar-row-moves {
@@ -551,9 +525,8 @@ input[type="radio"] {
 }
 
 /* Reorder controls only make sense beside readable names, so the collapsed
-   rail hides the toggles, grips, and move buttons with the labels. */
+   rail hides the toggles and move buttons with the labels. */
 .sidebar-dock .sidebar-reorder-toggle,
-.sidebar-dock .sidebar-drag-handle,
 .sidebar-dock .sidebar-row-moves {
   display: none;
 }
@@ -605,11 +578,6 @@ input[type="radio"] {
 /* Expanded, the reorder controls return with the names. */
 .sidebar-dock:hover .sidebar-reorder-toggle,
 .sidebar-dock:has(:focus-visible) .sidebar-reorder-toggle {
-  display: inline-flex;
-}
-
-.sidebar-dock:hover .sidebar-drag-handle,
-.sidebar-dock:has(:focus-visible) .sidebar-drag-handle {
   display: inline-flex;
 }
 
