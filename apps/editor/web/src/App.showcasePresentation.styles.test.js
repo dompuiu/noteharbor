@@ -32,6 +32,56 @@ describe("showcase empty-state styles", () => {
   });
 });
 
+describe("showcase note/grouping card heights", () => {
+  test("grouping shares the note card's padding and alignment", () => {
+    const note = styles.match(/\n\.showcase-card--note\s*\{([^}]*)\}/);
+    const grouping = styles.match(/\n\.showcase-card--grouping\s*\{([^}]*)\}/);
+    expect(note).not.toBeNull();
+    expect(grouping).not.toBeNull();
+    for (const prop of [
+      /justify-content:\s*flex-start/,
+      /gap:\s*8px/,
+      /padding:\s*10px/,
+    ]) {
+      expect(note[1]).toMatch(prop);
+      expect(grouping[1]).toMatch(prop);
+    }
+  });
+
+  test("grouping footer shares the caption's line metrics", () => {
+    const caption = styles.match(/\n\.showcase-card-caption\s*\{([^}]*)\}/);
+    const name = styles.match(
+      /\n\.showcase-card--grouping \.showcase-card-name\s*\{([^}]*)\}/,
+    );
+    expect(caption).not.toBeNull();
+    expect(name).not.toBeNull();
+    for (const prop of [
+      /font-size:\s*0\.85rem/,
+      /line-height:\s*1\.4/,
+      /min-height:\s*1\.4em/,
+    ]) {
+      expect(caption[1]).toMatch(prop);
+      expect(name[1]).toMatch(prop);
+    }
+  });
+
+  test("grouping stays distinguishable by tone only, never by size", () => {
+    const grouping = styles.match(/\n\.showcase-card--grouping\s*\{([^}]*)\}/);
+    const name = styles.match(
+      /\n\.showcase-card--grouping \.showcase-card-name\s*\{([^}]*)\}/,
+    );
+    const icon = styles.match(/\n\.showcase-card-name-icon\s*\{([^}]*)\}/);
+    expect(grouping).not.toBeNull();
+    expect(grouping[1]).toMatch(/background:\s*var\(--accent-soft\)/);
+    expect(grouping[1]).toMatch(/border-color:\s*var\(--border-control\)/);
+    expect(name).not.toBeNull();
+    expect(name[1]).toMatch(/color:\s*var\(--accent-strong\)/);
+    expect(icon).not.toBeNull();
+    expect(icon[1]).toMatch(/width:\s*1em/);
+    expect(icon[1]).toMatch(/height:\s*1em/);
+  });
+});
+
 describe("showcase note-card motion", () => {
   test("the front and back faces cross-fade", () => {
     const face = styles.match(/\n\.showcase-card-face\s*\{([^}]*)\}/);

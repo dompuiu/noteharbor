@@ -737,17 +737,42 @@ input[type="radio"] {
 /* A Grouping card shows its cover image (the manual cover or the first note
    beneath it) or a neutral gradient placeholder that still carries the name.
    It shares the Note card's padding and footer metrics so the two stay the
-   same height in one grid row. */
+   same height in one grid row. Only tone separates them: the grouping rests
+   on the accent tint with an accent border and an accent-strong folder
+   footer, while a Note stays on the plain surface with a muted caption. The
+   footer icon is inline at 1em inside the shared 1.4 line so it never changes
+   the row height. */
 .showcase-card--grouping {
   justify-content: flex-start;
   gap: 8px;
   padding: 10px;
+  border-color: var(--border-control);
+  background: var(--accent-soft);
 }
 
 .showcase-card--grouping .showcase-card-name {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  max-width: 100%;
+  color: var(--accent-strong);
   font-size: 0.85rem;
   line-height: 1.4;
   min-height: 1.4em;
+}
+
+.showcase-card-name-icon {
+  flex: none;
+  width: 1em;
+  height: 1em;
+}
+
+.showcase-card-name-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .showcase-card-image {
