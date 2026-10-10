@@ -332,6 +332,7 @@ input[type="radio"] {
 }
 
 .sidebar-link-label {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -447,6 +448,7 @@ input[type="radio"] {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
   border-radius: 8px;
 }
 
@@ -471,6 +473,13 @@ input[type="radio"] {
 .sidebar-drag-handle-ic svg {
   width: 15px;
   height: 15px;
+}
+
+/* The alignment slot kept by rows that cannot be dragged (actions,
+   Import / Export, pending drafts) while their group is reordering:
+   identical metrics to the real grip, but invisible. */
+.sidebar-drag-handle--placeholder {
+  visibility: hidden;
 }
 
 .sidebar-row-moves {

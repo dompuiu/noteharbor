@@ -567,8 +567,13 @@ describe("Sidebar collection reordering", () => {
     expect(
       screen.getByRole("button", { name: "Done reordering Catalog" }),
     ).toHaveAttribute("aria-pressed", "true");
-    // Two collection rows grow grips; the showcase rows stay plain.
-    expect(document.querySelectorAll(".sidebar-drag-handle")).toHaveLength(2);
+    // Two collection rows grow real grips; the other catalog rows
+    // (New collection, Import / Export) hold invisible alignment slots.
+    expect(
+      document.querySelectorAll(
+        ".sidebar-drag-handle:not(.sidebar-drag-handle--placeholder)",
+      ),
+    ).toHaveLength(2);
     expect(
       screen.getByRole("button", { name: "Move Default up" }),
     ).toBeInTheDocument();
@@ -583,7 +588,11 @@ describe("Sidebar collection reordering", () => {
 
     await user.click(screen.getByRole("button", { name: "Reorder Showcases" }));
 
-    expect(document.querySelectorAll(".sidebar-drag-handle")).toHaveLength(2);
+    expect(
+      document.querySelectorAll(
+        ".sidebar-drag-handle:not(.sidebar-drag-handle--placeholder)",
+      ),
+    ).toHaveLength(2);
     expect(
       screen.getByRole("button", { name: "Move Summer down" }),
     ).toBeInTheDocument();
@@ -592,12 +601,69 @@ describe("Sidebar collection reordering", () => {
     ).not.toBeInTheDocument();
   });
 
+  test("a very long name keeps its full text in the title while it truncates", async () => {
+    const user = userEvent.setup();
+    const longName = `${"Showcase ".repeat(20).trim()}`;
+    getCollections.mockResolvedValue({
+      collections: [
+        { id: 1, is_default: 1, name: longName, note_count: 0 },
+        { id: 2, is_default: 0, name: "Default", note_count: 0 },
+      ],
+    });
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    // The visible label truncates via CSS; the full name survives on hover.
+    const link = screen.getByRole("link", { name: longName });
+    expect(link).toHaveAttribute("title", longName);
+
+    // Same in reorder mode: the long row still fits its wrapper.
+    // (Re-query: the toggle re-renders the row, detaching the old node.)
+    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
+    const row = screen
+      .getByRole("link", { name: longName })
+      .closest(".sidebar-row");
+    expect(row).not.toBeNull();
+    expect(
+      row.querySelector(".sidebar-link-label"),
+    ).toHaveTextContent(longName);
+    expect(container.querySelector(".sidebar-nav")).toBeInTheDocument();
+  });
+
+  test("non-reorderable rows keep a hidden grip slot so icons stay aligned", async () => {
+    const user = userEvent.setup();
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
+
+    // Every row in the reordering group — draggable or not — starts with
+    // the same-width grip slot, so the link icons line up.
+    const rows = Array.from(
+      container.querySelectorAll(
+        '.sidebar-group[aria-labelledby="sidebar-group-catalog"] .sidebar-row',
+      ),
+    );
+    expect(rows).toHaveLength(4);
+    for (const row of rows) {
+      expect(row.querySelector(".sidebar-drag-handle")).not.toBeNull();
+    }
+    // The two rows that cannot be dragged hold an invisible slot instead.
+    expect(
+      container.querySelectorAll(
+        '.sidebar-group[aria-labelledby="sidebar-group-catalog"] .sidebar-drag-handle--placeholder',
+      ),
+    ).toHaveLength(2);
+  });
+
   test("toggling off hides the handles again", async () => {
     const user = userEvent.setup();
     await renderSidebar(CATALOG_ROUTES.collection(1));
 
     await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
-    expect(document.querySelectorAll(".sidebar-drag-handle")).toHaveLength(2);
+    expect(
+      document.querySelectorAll(
+        ".sidebar-drag-handle:not(.sidebar-drag-handle--placeholder)",
+      ),
+    ).toHaveLength(2);
 
     await user.click(
       screen.getByRole("button", { name: "Done reordering Catalog" }),

@@ -156,6 +156,29 @@ describe("sidebar styles", () => {
     );
   });
 
+  test("long names truncate instead of widening the rail", () => {
+    // The expanded rail is a fixed 288px overlay: a very long collection or
+    // showcase name must ellipsise inside its row, never stretch the rail.
+    // Every level of the flex chain into the label must be allowed to
+    // shrink — a flex item keeps `min-width: auto` (content-sized, no
+    // shrinking) unless it is explicitly overridden.
+    const label = styles.match(/\.sidebar-link-label\s*\{([^}]*)\}/);
+    expect(label).not.toBeNull();
+    expect(label[1]).toMatch(/min-width:\s*0/);
+    expect(label[1]).toMatch(/overflow:\s*hidden/);
+    expect(label[1]).toMatch(/text-overflow:\s*ellipsis/);
+    // The flex chain into the label must be allowed to shrink.
+    const row = styles.match(/\.sidebar-row\s*\{([^}]*)\}/);
+    expect(row).not.toBeNull();
+    expect(row[1]).toMatch(/min-width:\s*0/);
+  });
+
+  test("undraggable rows keep an invisible grip slot for alignment", () => {
+    expect(styles).toMatch(
+      /\.sidebar-drag-handle--placeholder\s*\{[^}]*visibility:\s*hidden/,
+    );
+  });
+
   test("the cursor link is ringed so focus is visible", () => {
     expect(styles).toMatch(
       /\.sidebar-link--cursor\s*\{[^}]*box-shadow:\s*inset 0 0 0 1\.5px var\(--accent\)/,

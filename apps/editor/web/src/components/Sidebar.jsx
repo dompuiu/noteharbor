@@ -782,7 +782,9 @@ function Sidebar({ pageFocusRef }) {
                     }`;
 
                     if (item.type === "action") {
-                      return (
+                      // In reorder mode the action keeps a hidden grip slot
+                      // so its icon lines up with the reorderable rows.
+                      const actionButton = (
                         <button
                           aria-label={item.label}
                           className={className}
@@ -800,6 +802,25 @@ function Sidebar({ pageFocusRef }) {
                             {item.visibleLabel ?? item.label}
                           </span>
                         </button>
+                      );
+
+                      if (!reorderMode) {
+                        return actionButton;
+                      }
+
+                      return (
+                        <div className="sidebar-row" key={item.key}>
+                          <span
+                            aria-hidden="true"
+                            className="sidebar-drag-handle sidebar-drag-handle--placeholder"
+                          >
+                            <ItemIcon
+                              className="sidebar-drag-handle-ic"
+                              icon="reorder"
+                            />
+                          </span>
+                          {actionButton}
+                        </div>
                       );
                     }
 
@@ -971,7 +992,10 @@ function Sidebar({ pageFocusRef }) {
                       );
                     }
 
-                    return (
+                    // A plain row in a reordering group keeps a hidden grip
+                    // slot (Import / Export, pending drafts) so its icon
+                    // lines up with the reorderable rows beside it.
+                    const plainLink = (
                       <Link
                         aria-current={active ? "page" : undefined}
                         aria-label={item.label}
@@ -989,6 +1013,25 @@ function Sidebar({ pageFocusRef }) {
                         <ItemIcon icon={item.icon} />
                         <span className="sidebar-link-label">{item.label}</span>
                       </Link>
+                    );
+
+                    if (!reorderMode) {
+                      return plainLink;
+                    }
+
+                    return (
+                      <div className="sidebar-row" key={item.key ?? item.to}>
+                        <span
+                          aria-hidden="true"
+                          className="sidebar-drag-handle sidebar-drag-handle--placeholder"
+                        >
+                          <ItemIcon
+                            className="sidebar-drag-handle-ic"
+                            icon="reorder"
+                          />
+                        </span>
+                        {plainLink}
+                      </div>
                     );
                   })}
                 </div>
