@@ -1421,8 +1421,9 @@ input[type="radio"] {
    `+` actions fill one grid cell, so the pair reads as a single note-sized
    tile whether it sits beside notes or wraps onto its own row. The minimum
    tracks the note editor height (half the column width for the 2/1 image
-   plus the card padding, caption, and action row) via the grid's own
-   `--showcase-card-min`, so the cell keeps note height on every photo size. */
+   plus the card padding and caption) via the grid's own
+   `--showcase-card-min`, so the cell keeps note height on every photo size.
+   (No action-row allowance: edit controls are icons now, not a bottom row.) */
 .showcase-node-items {
   width: 100%;
   margin-top: 4px;
@@ -1434,7 +1435,7 @@ input[type="radio"] {
   gap: 16px;
   width: 100%;
   height: 100%;
-  min-height: calc(var(--showcase-card-min, 200px) / 2 + 154px);
+  min-height: calc(var(--showcase-card-min, 200px) / 2 + 107px);
 }
 
 .showcase-add-tiles > .showcase-tile {
