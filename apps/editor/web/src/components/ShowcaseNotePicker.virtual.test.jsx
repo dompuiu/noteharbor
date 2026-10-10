@@ -247,4 +247,46 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
       dialog.querySelector(".showcase-thumb-preview"),
     ).toBeNull();
   });
+
+  test("Escape dismisses the picker", async () => {
+    getNotes.mockResolvedValue({ notes: [note(1)] });
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <ShowcaseNotePicker
+        collections={collections}
+        node={{ id: 10, name: "Group", children: [] }}
+        onAdd={vi.fn()}
+        onClose={onClose}
+      />,
+    );
+
+    await screen.findByRole("dialog", { name: "Add notes" });
+    await user.keyboard("{Escape}");
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test("clicking the backdrop dismisses the picker but clicking inside does not", async () => {
+    getNotes.mockResolvedValue({ notes: [note(1)] });
+    const onClose = vi.fn();
+    const user = userEvent.setup();
+
+    render(
+      <ShowcaseNotePicker
+        collections={collections}
+        node={{ id: 10, name: "Group", children: [] }}
+        onAdd={vi.fn()}
+        onClose={onClose}
+      />,
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "Add notes" });
+    await user.click(within(dialog).getByRole("button", { name: "Select all" }));
+    expect(onClose).not.toHaveBeenCalled();
+
+    await user.click(dialog.parentElement);
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
 });

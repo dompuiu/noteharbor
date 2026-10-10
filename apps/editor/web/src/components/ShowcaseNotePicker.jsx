@@ -121,6 +121,21 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, []);
 
+  // Escape dismisses the popup, matching the shortcuts overlay and the image
+  // popover. A click on the backdrop does the same; clicks inside the dialog
+  // stop propagation so selecting notes never closes it.
+  useEffect(() => {
+    function handleEscape(event) {
+      if (event.key === "Escape") {
+        event.preventDefault();
+        onClose();
+      }
+    }
+
+    window.addEventListener("keydown", handleEscape);
+    return () => window.removeEventListener("keydown", handleEscape);
+  }, [onClose]);
+
   useEffect(() => {
     let active = true;
 
@@ -415,11 +430,12 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
   const useVirtualList = virtualRows.length > 0;
 
   return (
-    <div className="showcase-picker-backdrop">
+    <div className="showcase-picker-backdrop" onClick={onClose} role="presentation">
       <div
         aria-label="Add notes"
         aria-modal="true"
         className="showcase-picker"
+        onClick={(event) => event.stopPropagation()}
         role="dialog"
       >
         <div className="showcase-picker-head">
