@@ -1360,31 +1360,6 @@ input[type="radio"] {
   font: inherit;
 }
 
-.showcase-category-options {
-  display: flex;
-  flex-direction: column;
-  max-height: 168px;
-  overflow-y: auto;
-  border: 1px solid var(--border);
-  border-radius: var(--radius-sm);
-}
-
-.showcase-category-option {
-  padding: 6px 10px;
-  border: 0;
-  background: transparent;
-  color: var(--text);
-  font: inherit;
-  text-align: left;
-  cursor: pointer;
-}
-
-.showcase-category-option:hover,
-.showcase-category-option.is-highlighted,
-.showcase-category-option:focus-visible {
-  background: var(--accent-soft);
-}
-
 .showcase-error {
   margin: 0;
   color: var(--danger);

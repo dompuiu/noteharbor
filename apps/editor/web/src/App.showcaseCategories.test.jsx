@@ -249,6 +249,22 @@ describe("the showcase category canvas", () => {
     ).toBeInTheDocument();
   });
 
+  test("suggestions float above the page instead of pushing content", async () => {
+    const user = userEvent.setup();
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    await user.click(
+      await screen.findByRole("button", { name: "Create a category" }),
+    );
+    await user.keyboard("{ArrowDown}");
+
+    const listbox = await screen.findByRole("listbox");
+    // Portaled to the body with fixed positioning, so opening it never
+    // shifts the Add/Cancel actions below the field.
+    expect(listbox.parentElement).toBe(document.body);
+    expect(listbox).toHaveStyle({ position: "fixed" });
+  });
+
   test("Escape closes the suggestions without closing the field", async () => {
     const user = userEvent.setup();
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));

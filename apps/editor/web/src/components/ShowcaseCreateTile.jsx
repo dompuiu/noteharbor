@@ -1,4 +1,5 @@
-import { useId, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 import { HighlightMatch, rankTagSuggestions } from "./TagsField.jsx";
 
 // Shared edit-only `+ create a …` tile. Clicking it reveals a name field; a
@@ -11,8 +12,9 @@ import { HighlightMatch, rankTagSuggestions } from "./TagsField.jsx";
 // The category field is a single-value combobox in the TagsField's visual and
 // interaction language: the list stays shut until ArrowUp/Down, typing, or
 // double-click opens it, the pool is ranked starts-with-first, Enter picks
-// the highlight, Escape closes the list. Picking fills the
-// field only — staging still waits for the Add button.
+// the highlight, Escape closes the list. The list floats in a portal anchored
+// under the field, so opening it never shifts the Add/Cancel actions.
+// Picking fills the field only — staging still waits for the Add button.
 function ShowcaseCreateTile({
   noun,
   inputLabel,
@@ -29,8 +31,68 @@ function ShowcaseCreateTile({
   const [error, setError] = useState("");
   const [highlighted, setHighlighted] = useState(-1);
   const [isOpen, setIsOpen] = useState(false);
+  const [position, setPosition] = useState(null);
   const inputRef = useRef(null);
+  const dropdownRef = useRef(null);
   const listboxId = useId();
+
+  const names = suggestions.map((suggestion) => suggestion.name);
+  const rankedNames = combobox
+    ? rankTagSuggestions(names, new Set(), name)
+    : [];
+  const rankedByName = new Map(rankedNames.map((ranked, index) => [ranked, index]));
+  const visible = combobox
+    ? [...suggestions]
+        .filter((suggestion) => rankedByName.has(suggestion.name))
+        .sort(
+          (left, right) =>
+            rankedByName.get(left.name) - rankedByName.get(right.name),
+        )
+    : [];
+  const listOpen = open && combobox && isOpen && visible.length > 0;
+
+  useEffect(() => {
+    if (!listOpen) {
+      setPosition(null);
+      return undefined;
+    }
+    const updatePosition = () => {
+      const element = inputRef.current;
+      if (!element) {
+        return;
+      }
+      const bounds = element.getBoundingClientRect();
+      setPosition({
+        top: bounds.bottom + 4,
+        left: bounds.left,
+        width: bounds.width,
+      });
+    };
+    updatePosition();
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [listOpen]);
+
+  useEffect(() => {
+    if (!listOpen) {
+      return undefined;
+    }
+    const handlePointerDown = (event) => {
+      if (
+        !inputRef.current?.contains(event.target) &&
+        !dropdownRef.current?.contains(event.target)
+      ) {
+        setIsOpen(false);
+        setHighlighted(-1);
+      }
+    };
+    document.addEventListener("mousedown", handlePointerDown);
+    return () => document.removeEventListener("mousedown", handlePointerDown);
+  }, [listOpen]);
 
   if (!open) {
     return (
@@ -52,20 +114,6 @@ function ShowcaseCreateTile({
     );
   }
 
-  const names = suggestions.map((suggestion) => suggestion.name);
-  const rankedNames = combobox
-    ? rankTagSuggestions(names, new Set(), name)
-    : [];
-  const rankedByName = new Map(rankedNames.map((ranked, index) => [ranked, index]));
-  const visible = combobox
-    ? [...suggestions]
-        .filter((suggestion) => rankedByName.has(suggestion.name))
-        .sort(
-          (left, right) =>
-            rankedByName.get(left.name) - rankedByName.get(right.name),
-        )
-    : [];
-  const listOpen = combobox && isOpen && visible.length > 0;
   const activeDescendantId =
     listOpen && highlighted >= 0 && visible[highlighted]
       ? `${listboxId}-option-${highlighted}`
@@ -181,33 +229,43 @@ function ShowcaseCreateTile({
         value={name}
       />
 
-      {listOpen ? (
-        <div
-          className="showcase-category-options"
-          id={listboxId}
-          role="listbox"
-          aria-label={`${noun} suggestions`}
-        >
-          {visible.map((suggestion, index) => (
-            <button
-              aria-selected={index === highlighted}
-              className={`showcase-category-option${index === highlighted ? " is-highlighted" : ""}`}
-              id={`${listboxId}-option-${index}`}
-              key={suggestion.id}
-              onClick={() => pick(suggestion.name)}
-              onMouseDown={(event) => event.preventDefault()}
-              onMouseEnter={() => setHighlighted(index)}
-              ref={
-                index === highlighted ? scrollHighlightedIntoView : undefined
-              }
-              role="option"
-              type="button"
+      {listOpen && position
+        ? createPortal(
+            <div
+              className="tags-filter-dropdown"
+              ref={dropdownRef}
+              role="listbox"
+              aria-label={`${noun} suggestions`}
+              id={listboxId}
+              style={{
+                position: "fixed",
+                top: position.top,
+                left: position.left,
+                width: position.width,
+              }}
             >
-              <HighlightMatch text={suggestion.name} query={name} />
-            </button>
-          ))}
-        </div>
-      ) : null}
+              {visible.map((suggestion, index) => (
+                <button
+                  aria-selected={index === highlighted}
+                  className={`tags-filter-option${index === highlighted ? " is-highlighted" : ""}`}
+                  id={`${listboxId}-option-${index}`}
+                  key={suggestion.id}
+                  onClick={() => pick(suggestion.name)}
+                  onMouseDown={(event) => event.preventDefault()}
+                  onMouseEnter={() => setHighlighted(index)}
+                  ref={
+                    index === highlighted ? scrollHighlightedIntoView : undefined
+                  }
+                  role="option"
+                  type="button"
+                >
+                  <HighlightMatch text={suggestion.name} query={name} />
+                </button>
+              ))}
+            </div>,
+            document.body,
+          )
+        : null}
 
       <div className="showcase-category-actions">
         <button className="button" onClick={close} type="button">
