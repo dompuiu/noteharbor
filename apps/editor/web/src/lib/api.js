@@ -307,11 +307,18 @@ async function importArchive(file, onProgress) {
   return postFormDataWithUploadProgress('/api/archive/import', formData, onProgress);
 }
 
-async function downloadArchive(collectionIds = null) {
+async function downloadArchive(collectionIds = null, showcaseIds = undefined) {
   const searchParams = new URLSearchParams();
 
   if (Array.isArray(collectionIds) && collectionIds.length) {
     searchParams.set('collectionIds', collectionIds.join(','));
+  }
+
+  // An explicit showcase selection always travels (even when empty, as an
+  // empty `showcaseIds` value meaning "no showcases") so the server can tell
+  // "export no showcases" apart from the legacy "no showcase filter".
+  if (Array.isArray(showcaseIds)) {
+    searchParams.set('showcaseIds', showcaseIds.join(','));
   }
 
   searchParams.set('_ts', String(Date.now()));

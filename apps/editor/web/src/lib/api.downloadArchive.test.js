@@ -44,6 +44,36 @@ describe("downloadArchive", () => {
     });
   });
 
+  test("sends the selected showcase ids", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => archiveResponse()));
+    const fetchMock = globalThis.fetch;
+
+    await downloadArchive([1, 2], [10, 11]);
+
+    const url = fetchMock.mock.calls[0][0];
+    expect(url).toContain("collectionIds=1%2C2");
+    expect(url).toContain("showcaseIds=10%2C11");
+  });
+
+  test("sends an explicit empty showcase selection apart from no filter", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => archiveResponse()));
+    const fetchMock = globalThis.fetch;
+
+    await downloadArchive([1], []);
+
+    const url = fetchMock.mock.calls[0][0];
+    expect(url).toContain("showcaseIds=");
+  });
+
+  test("omits the showcase filter when no selection is given", async () => {
+    vi.stubGlobal("fetch", vi.fn(async () => archiveResponse()));
+    const fetchMock = globalThis.fetch;
+
+    await downloadArchive([1]);
+
+    const url = fetchMock.mock.calls[0][0];
+    expect(url).not.toContain("showcaseIds");
+  });
   test("reports no omitted showcases when the header is absent", async () => {
     vi.stubGlobal("fetch", vi.fn(async () => archiveResponse()));
 

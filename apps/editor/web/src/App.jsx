@@ -17,7 +17,7 @@ import { Sidebar } from "./components/Sidebar.jsx";
 import { getHealth } from "./lib/api.js";
 import { CollectionsProvider, useCollections } from "./lib/collections.jsx";
 import { isEmptyLibrary } from "./lib/libraryState.js";
-import { ShowcasesProvider } from "./lib/showcases.jsx";
+import { ShowcasesProvider, useShowcases } from "./lib/showcases.jsx";
 import {
   CATALOG_ROUTES,
   DEFAULT_DESTINATION,
@@ -107,6 +107,7 @@ function ShellContent() {
     loadingCollections,
     refreshCollections,
   } = useCollections();
+  const { showcases, showcasesError, loadingShowcases } = useShowcases();
 
   // The connection state is read from the collections load the provider already
   // performs on mount, so no health probe sits in front of the first paint.
@@ -204,6 +205,9 @@ function ShellContent() {
                     collections={collections}
                     collectionsError={collectionsError}
                     loadingCollections={loadingCollections}
+                    showcases={showcases}
+                    showcasesError={showcasesError}
+                    loadingShowcases={loadingShowcases}
                   />
                 )}
                 path={CATALOG_ROUTES.importExport}

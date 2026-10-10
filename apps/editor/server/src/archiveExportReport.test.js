@@ -81,6 +81,28 @@ test('a filtered export reports the showcase that reached outside the selection'
   }
 });
 
+test('an explicit showcase selection is blocked while a needed collection is missing', async () => {
+  const keptCollection = db.createCollection('Block Kept');
+  const otherCollection = db.createCollection('Block Other');
+  const otherNote = createNote(otherCollection.id, 'Block Other Note');
+
+  const showcase = db.createShowcase('Block Showcase');
+  const category = db.addShowcaseNode(showcase.id, { type: 'category', name: 'Block Label' });
+  db.addShowcaseNode(showcase.id, { type: 'notes', parent_id: category.id, note_ids: [otherNote.id] });
+
+  const response = await fetch(
+    `${baseUrl}/api/archive/export?collectionIds=${keptCollection.id}&showcaseIds=${showcase.id}`
+  );
+
+  try {
+    assert.equal(response.status, 400);
+    const payload = await response.json();
+    assert.match(payload.error, /Block Showcase/);
+  } finally {
+    await response.arrayBuffer().catch(() => {});
+  }
+});
+
 test('an unfiltered export reports no omitted showcases', async () => {
   const response = await fetch(`${baseUrl}/api/archive/export`);
 

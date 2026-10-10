@@ -18,6 +18,11 @@ const collections = [
   { id: 2, is_default: 0, name: "Extras" },
 ];
 
+const showcases = [
+  { id: 10, name: "Show One", required_collection_ids: [1] },
+  { id: 11, name: "Show Two", required_collection_ids: [1, 2] },
+];
+
 function LocationProbe() {
   const location = useLocation();
   return <span data-testid="location">{location.pathname}</span>;
@@ -28,6 +33,9 @@ function renderImportScreen(overrides = {}) {
     collections,
     collectionsError: "",
     loadingCollections: false,
+    showcases,
+    showcasesError: "",
+    loadingShowcases: false,
     ...overrides,
   };
 
@@ -95,6 +103,75 @@ describe("ImportScreen export reporting", () => {
     expect(await screen.findByText(/Omitted showcases/)).toHaveTextContent(
       "Outside Show",
     );
+  });
+});
+
+describe("ImportScreen showcase export", () => {
+  test("selecting a showcase auto-selects the collections it needs", async () => {
+    const user = userEvent.setup();
+    renderImportScreen();
+
+    await screen.findByText("Archive Import and Export");
+
+    // Deselect "Extras": "Show Two" needs it, so the export blocks.
+    await user.click(screen.getByRole("checkbox", { name: "Extras" }));
+    expect(
+      await screen.findByText(/Showcase "Show Two" needs "Extras"/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Download archive" }),
+    ).toBeDisabled();
+
+    // Deselecting the showcase clears the block.
+    await user.click(screen.getByRole("checkbox", { name: "Show Two" }));
+    expect(screen.queryByText(/needs "Extras"/)).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Download archive" }),
+    ).not.toBeDisabled();
+
+    // Re-selecting the showcase pulls the missing collection back in.
+    await user.click(screen.getByRole("checkbox", { name: "Show Two" }));
+    expect(screen.getByRole("checkbox", { name: "Extras" })).toBeChecked();
+    expect(screen.queryByText(/needs "Extras"/)).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Download archive" }),
+    ).not.toBeDisabled();
+  });
+
+  test("the export carries the selected showcase ids", async () => {
+    const user = userEvent.setup();
+    downloadArchive.mockResolvedValue({
+      filename: "noteharbor-archive-2026-01-01.zip",
+      omittedShowcases: [],
+    });
+    renderImportScreen();
+
+    await screen.findByText("Archive Import and Export");
+    await user.click(screen.getByRole("checkbox", { name: "Show Two" }));
+    await user.click(screen.getByRole("button", { name: "Download archive" }));
+
+    expect(downloadArchive).toHaveBeenCalledWith([1, 2], [10]);
+    expect(await screen.findByText(/Showcases included: 1/)).toBeInTheDocument();
+  });
+
+  test("deselecting a needed collection blocks the export", async () => {
+    const user = userEvent.setup();
+    downloadArchive.mockResolvedValue({
+      filename: "noteharbor-archive-2026-01-01.zip",
+      omittedShowcases: [],
+    });
+    renderImportScreen();
+
+    await screen.findByText("Archive Import and Export");
+    await user.click(screen.getByRole("checkbox", { name: "Default" }));
+
+    expect(
+      await screen.findByText(/Showcase "Show One" needs "Default"/),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Download archive" }),
+    ).toBeDisabled();
+    expect(downloadArchive).not.toHaveBeenCalled();
   });
 });
 

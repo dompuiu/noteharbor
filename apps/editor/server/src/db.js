@@ -1298,14 +1298,70 @@ function nextDefaultShowcaseName() {
   return `Showcase ${suffix}`;
 }
 
+function getShowcaseRequiredCollections() {
+  const database = getDatabase();
+  const rows = database.prepare(`
+    SELECT showcase_nodes.showcase_id AS showcase_id, banknotes.collection_id AS collection_id
+    FROM showcase_nodes
+    INNER JOIN banknotes ON banknotes.id = showcase_nodes.note_id
+    WHERE showcase_nodes.note_id IS NOT NULL
+    UNION
+    SELECT showcase_nodes.showcase_id AS showcase_id, banknotes.collection_id AS collection_id
+    FROM showcase_nodes
+    INNER JOIN banknotes ON banknotes.id = showcase_nodes.cover_note_id
+    WHERE showcase_nodes.cover_note_id IS NOT NULL
+    ORDER BY showcase_id ASC, collection_id ASC
+  `).all();
+
+  const byShowcaseId = new Map();
+
+  for (const row of rows) {
+    const showcaseId = Number(row.showcase_id);
+    const collectionId = Number(row.collection_id);
+
+    if (!Number.isInteger(showcaseId) || !Number.isInteger(collectionId)) {
+      continue;
+    }
+
+    if (!byShowcaseId.has(showcaseId)) {
+      byShowcaseId.set(showcaseId, []);
+    }
+
+    const list = byShowcaseId.get(showcaseId);
+
+    if (!list.includes(collectionId)) {
+      list.push(collectionId);
+    }
+  }
+
+  return byShowcaseId;
+}
+
 function getAllShowcases() {
   getDatabase();
-  return statements.listShowcasesStatement.all();
+  const showcases = statements.listShowcasesStatement.all();
+  const requiredByShowcaseId = getShowcaseRequiredCollections();
+
+  return showcases.map((showcase) => ({
+    ...showcase,
+    required_collection_ids: requiredByShowcaseId.get(Number(showcase.id)) ?? []
+  }));
 }
 
 function getShowcaseById(id) {
   getDatabase();
-  return statements.getShowcaseStatement.get(Number(id)) ?? null;
+  const showcase = statements.getShowcaseStatement.get(Number(id)) ?? null;
+
+  if (!showcase) {
+    return null;
+  }
+
+  const requiredByShowcaseId = getShowcaseRequiredCollections();
+
+  return {
+    ...showcase,
+    required_collection_ids: requiredByShowcaseId.get(Number(showcase.id)) ?? []
+  };
 }
 
 function createShowcase(name) {
@@ -2125,6 +2181,7 @@ export {
   getNoteById,
   getShowcaseById,
   getShowcaseNodeById,
+  getShowcaseRequiredCollections,
   getShowcaseTree,
   migrateBanknotesForeignKey,
   moveNoteToCollection,

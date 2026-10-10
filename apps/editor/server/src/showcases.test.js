@@ -140,6 +140,42 @@ test('GET /api/showcases lists showcases in display order with a note count', as
   );
 });
 
+test('GET /api/showcases reports the collections each showcase needs', async () => {
+  const collection = db.createCollection('Needed collections');
+  const note = db.createNote({
+    collection_id: collection.id,
+    denomination: '2',
+    issue_date: '2021',
+    catalog_number: '',
+    grading_company: '',
+    grade: '',
+    watermark: '',
+    serial: '',
+    url: '',
+    notes: '',
+    tags: [],
+    scraped_data: null,
+    images: []
+  });
+
+  const { body } = await createShowcase('Needs collections');
+  const showcaseId = body.showcase.id;
+
+  db.getDatabase().prepare(`
+    INSERT INTO showcase_nodes (showcase_id, node_type, note_id, position)
+    VALUES (?, 'note', ?, 1)
+  `).run(showcaseId, note.id);
+
+  const { response, body: payload } = await api('/api/showcases');
+  assert.equal(response.status, 200);
+
+  const counted = payload.showcases.find((showcase) => showcase.id === showcaseId);
+  assert.deepEqual(counted.required_collection_ids, [collection.id]);
+
+  const uncounted = payload.showcases.find((showcase) => showcase.name === 'Showcase');
+  assert.deepEqual(uncounted.required_collection_ids, []);
+});
+
 test('PUT /api/showcases/:id renames a showcase', async () => {
   const { body } = await createShowcase('Before rename');
   const showcaseId = body.showcase.id;

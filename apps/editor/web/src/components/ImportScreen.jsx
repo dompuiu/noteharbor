@@ -29,6 +29,9 @@ function ImportScreen({
   collections,
   collectionsError,
   loadingCollections,
+  showcases = [],
+  showcasesError = "",
+  loadingShowcases = false,
 }) {
   const archiveInputRef = useRef(null);
   const panelScrollRef = useRef(null);
@@ -47,6 +50,8 @@ function ImportScreen({
     details: null,
   });
   const [selectedExportCollectionIds, setSelectedExportCollectionIds] =
+    useState([]);
+  const [selectedExportShowcaseIds, setSelectedExportShowcaseIds] =
     useState([]);
   const [canScrollUp, setCanScrollUp] = useState(false);
   const [canScrollDown, setCanScrollDown] = useState(false);
@@ -92,6 +97,30 @@ function ImportScreen({
     });
   }, [collections]);
 
+  useEffect(() => {
+    const validIds = showcases
+      .map((showcase) => Number(showcase.id))
+      .filter((id) => Number.isInteger(id) && id > 0);
+
+    setSelectedExportShowcaseIds((current) => {
+      const currentSet = new Set(current);
+      const retained = validIds.filter((id) => currentSet.has(id));
+
+      if (!retained.length) {
+        return validIds;
+      }
+
+      if (
+        retained.length === current.length &&
+        retained.every((id, index) => id === current[index])
+      ) {
+        return current;
+      }
+
+      return retained;
+    });
+  }, [showcases]);
+
   function updatePanelScrollFades() {
     const element = panelScrollRef.current;
 
@@ -125,7 +154,10 @@ function ImportScreen({
     collections.length,
     error,
     loadingCollections,
+    loadingShowcases,
     selectedExportCollectionIds.length,
+    selectedExportShowcaseIds.length,
+    showcases.length,
   ]);
 
   useEffect(() => {
@@ -194,9 +226,80 @@ function ImportScreen({
     }
   }
 
+  // The collections each selected showcase needs to work. Selecting a
+  // showcase auto-selects its collections; deselecting a needed collection
+  // while the showcase stays selected blocks the export below.
+  const requiredCollectionIdsByShowcaseId = new Map(
+    showcases.map((showcase) => [
+      Number(showcase.id),
+      (showcase.required_collection_ids ?? [])
+        .map((id) => Number(id))
+        .filter((id) => Number.isInteger(id) && id > 0),
+    ]),
+  );
+  const collectionNameById = new Map(
+    collections.map((collection) => [Number(collection.id), collection.name]),
+  );
+  const blockedShowcases = showcases.filter((showcase) => {
+    if (!selectedExportShowcaseIds.includes(Number(showcase.id))) {
+      return false;
+    }
+
+    const required =
+      requiredCollectionIdsByShowcaseId.get(Number(showcase.id)) ?? [];
+    return required.some(
+      (collectionId) => !selectedExportCollectionIds.includes(collectionId),
+    );
+  });
+  const blockedExportMessage = blockedShowcases.length
+    ? blockedShowcases
+        .map((showcase) => {
+          const missing = (
+            requiredCollectionIdsByShowcaseId.get(Number(showcase.id)) ?? []
+          )
+            .filter((id) => !selectedExportCollectionIds.includes(id))
+            .map((id) => collectionNameById.get(id) ?? `#${id}`);
+          return `Showcase "${showcase.name}" needs ${missing.map((name) => `"${name}"`).join(", ")}`;
+        })
+        .join("; ") + ". Select the missing collections or deselect the showcase."
+    : "";
+  const isExportBlocked = blockedShowcases.length > 0;
+
+  function handleShowcaseToggle(showcaseId, checked) {
+    if (checked) {
+      setSelectedExportShowcaseIds((current) => {
+        if (current.includes(showcaseId)) {
+          return current;
+        }
+        return [...current, showcaseId];
+      });
+
+      // A showcase only works with its collections in the archive, so
+      // selecting it pulls those collections into the export.
+      const required =
+        requiredCollectionIdsByShowcaseId.get(showcaseId) ?? [];
+      if (required.length) {
+        setSelectedExportCollectionIds((current) => {
+          const missing = required.filter((id) => !current.includes(id));
+          return missing.length ? [...current, ...missing] : current;
+        });
+      }
+      return;
+    }
+
+    setSelectedExportShowcaseIds((current) =>
+      current.filter((id) => id !== showcaseId),
+    );
+  }
+
   async function handleArchiveExport() {
     if (isBusy) {
       setError(busyMessage);
+      return;
+    }
+
+    if (isExportBlocked) {
+      setError(blockedExportMessage);
       return;
     }
 
@@ -205,10 +308,14 @@ function ImportScreen({
     setArchiveResult(null);
 
     try {
-      const payload = await downloadArchive(selectedExportCollectionIds);
+      const payload = await downloadArchive(
+        selectedExportCollectionIds,
+        selectedExportShowcaseIds,
+      );
       setArchiveResult({
         exported: payload.filename,
         selectedCount: selectedExportCollectionIds.length,
+        selectedShowcaseCount: selectedExportShowcaseIds.length,
         omittedShowcases: payload.omittedShowcases ?? [],
       });
     } catch (exportError) {
@@ -285,6 +392,10 @@ function ImportScreen({
           {collectionsError ? (
             <p className="error-text">{collectionsError}</p>
           ) : null}
+          {loadingShowcases ? <p>Loading showcases...</p> : null}
+          {showcasesError ? (
+            <p className="error-text">{showcasesError}</p>
+          ) : null}
           {isBusy ? <p className="warning-text">{busyMessage}</p> : null}
 
           <div className="import-sections">
@@ -297,9 +408,12 @@ function ImportScreen({
                 <h2>Download or import archive data</h2>
                 <p>
                   Export downloads a `.zip` with `banknotes.db` and only images
-                  referenced by selected collections. Import always reads all
-                  collections from the archive and replaces matching collection
-                  names in the current data.
+                  referenced by selected collections. Only selected showcases
+                  are included: selecting a showcase also selects the
+                  collections it needs, and the export is blocked while a
+                  selected showcase needs a collection outside the selection.
+                  Import always reads all collections from the archive and
+                  replaces matching collection names in the current data.
                 </p>
                 <p className="warning-text import-card-warning">
                   You can also delete the current app data and start from an
@@ -449,12 +563,54 @@ function ImportScreen({
                 </div>
               ) : null}
 
+              {showcases.length ? (
+                <div className="field-block full-span">
+                  <span>Showcases to export</span>
+                  <div
+                    className="export-collection-list"
+                    role="group"
+                    aria-label="Showcases to export"
+                  >
+                    {showcases.map((showcase) => {
+                      const showcaseId = Number(showcase.id);
+                      const checked =
+                        selectedExportShowcaseIds.includes(showcaseId);
+
+                      return (
+                        <label
+                          className="export-collection-option"
+                          key={showcase.id}
+                        >
+                          <input
+                            checked={checked}
+                            disabled={isBusy || exportingArchive}
+                            onChange={(event) => {
+                              handleShowcaseToggle(
+                                showcaseId,
+                                event.target.checked,
+                              );
+                            }}
+                            type="checkbox"
+                          />
+                          <span>{showcase.name}</span>
+                        </label>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
+              {isExportBlocked ? (
+                <p className="error-text full-span">{blockedExportMessage}</p>
+              ) : null}
+
               <div className="import-actions full-span">
                 <button
                   className="button"
                   disabled={
                     exportingArchive ||
                     isBusy ||
+                    isExportBlocked ||
                     !selectedExportCollectionIds.length
                   }
                   onClick={handleArchiveExport}
@@ -491,6 +647,11 @@ function ImportScreen({
                 Collections included:{" "}
                 {archiveResult.selectedCount ?? collections.length}
               </p>
+              {archiveResult.selectedShowcaseCount != null ? (
+                <p>
+                  Showcases included: {archiveResult.selectedShowcaseCount}
+                </p>
+              ) : null}
               {archiveResult.omittedShowcases?.length ? (
                 <p className="warning-text">
                   Omitted showcases (they use notes outside the selection):{" "}

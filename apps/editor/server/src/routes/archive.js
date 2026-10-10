@@ -618,6 +618,126 @@ function omitShowcases(database, showcaseIds) {
   database.prepare(`DELETE FROM showcases WHERE id IN (${placeholders})`).run(...showcaseIds);
 }
 
+function parseSelectedShowcaseIds(rawValue) {
+  return parseSelectedCollectionIds(rawValue);
+}
+
+// The collections a Showcase needs to work: the distinct collections of the
+// notes it points at through `note_id` and `cover_note_id`. A Showcase with
+// no note references needs nothing.
+function listShowcaseRequirements(database) {
+  const rows = database.prepare(`
+    SELECT showcase_nodes.showcase_id AS showcase_id, banknotes.collection_id AS collection_id
+    FROM showcase_nodes
+    INNER JOIN banknotes ON banknotes.id = showcase_nodes.note_id
+    WHERE showcase_nodes.note_id IS NOT NULL
+    UNION
+    SELECT showcase_nodes.showcase_id AS showcase_id, banknotes.collection_id AS collection_id
+    FROM showcase_nodes
+    INNER JOIN banknotes ON banknotes.id = showcase_nodes.cover_note_id
+    WHERE showcase_nodes.cover_note_id IS NOT NULL
+    ORDER BY showcase_id ASC, collection_id ASC
+  `).all();
+
+  const byShowcaseId = new Map();
+
+  for (const row of rows) {
+    const showcaseId = Number(row.showcase_id);
+    const collectionId = Number(row.collection_id);
+
+    if (!Number.isInteger(showcaseId) || !Number.isInteger(collectionId)) {
+      continue;
+    }
+
+    if (!byShowcaseId.has(showcaseId)) {
+      byShowcaseId.set(showcaseId, []);
+    }
+
+    const list = byShowcaseId.get(showcaseId);
+
+    if (!list.includes(collectionId)) {
+      list.push(collectionId);
+    }
+  }
+
+  return byShowcaseId;
+}
+
+function listShowcaseNamesById(database, showcaseIds) {
+  if (!showcaseIds.length) {
+    return new Map();
+  }
+
+  const placeholders = showcaseIds.map(() => '?').join(', ');
+  const rows = database.prepare(`
+    SELECT id, name FROM showcases WHERE id IN (${placeholders})
+  `).all(...showcaseIds);
+
+  return new Map(rows.map((row) => [Number(row.id), String(row.name)]));
+}
+
+function listCollectionNamesById(database, collectionIds) {
+  if (!collectionIds.length) {
+    return new Map();
+  }
+
+  const placeholders = collectionIds.map(() => '?').join(', ');
+  const rows = database.prepare(`
+    SELECT id, name FROM collections WHERE id IN (${placeholders})
+  `).all(...collectionIds);
+
+  return new Map(rows.map((row) => [Number(row.id), String(row.name)]));
+}
+
+// An explicitly selected Showcase is only valid while every collection it
+// needs is also selected. Unlike the legacy omit path, this throws instead of
+// silently dropping the Showcase, so the caller can block the export.
+function assertSelectedShowcasesHaveCollections(database, selectedShowcaseIds, keptCollectionIds) {
+  if (!selectedShowcaseIds.length) {
+    return;
+  }
+
+  const requirements = listShowcaseRequirements(database);
+  const keptSet = new Set(keptCollectionIds);
+  const showcaseNames = listShowcaseNamesById(database, selectedShowcaseIds);
+  const violations = [];
+
+  for (const showcaseId of selectedShowcaseIds) {
+    const required = requirements.get(showcaseId) ?? [];
+    const missing = required.filter((collectionId) => !keptSet.has(collectionId));
+
+    if (missing.length) {
+      const collectionNames = listCollectionNamesById(database, missing);
+      const missingNames = missing.map((id) => collectionNames.get(id) ?? `#${id}`);
+      violations.push({ id: showcaseId, name: showcaseNames.get(showcaseId) ?? `#${showcaseId}`, missingNames });
+    }
+  }
+
+  if (violations.length) {
+    const details = violations
+      .map((violation) => `Showcase "${violation.name}" needs ${violation.missingNames.map((name) => `"${name}"`).join(', ')}`)
+      .join('; ');
+    const error = new Error(`${details}. Select the missing collections or deselect the showcase.`);
+    error.statusCode = 400;
+    throw error;
+  }
+}
+
+function omitUnselectedShowcases(database, selectedShowcaseIds) {
+  const placeholders = selectedShowcaseIds.map(() => '?').join(', ');
+
+  if (!selectedShowcaseIds.length) {
+    database.prepare(`DELETE FROM showcase_nodes`).run();
+    database.prepare(`DELETE FROM showcases`).run();
+    return;
+  }
+
+  // Delete the nodes explicitly first so a legacy snapshot without the
+  // cascade constraint cannot leave orphaned nodes behind.
+  database.prepare(`DELETE FROM showcase_nodes WHERE showcase_id NOT IN (${placeholders})`).run(...selectedShowcaseIds);
+  database.prepare(`DELETE FROM showcases WHERE id NOT IN (${placeholders})`).run(...selectedShowcaseIds);
+}
+
 // A label is worth keeping only while some Placement still references it. A
 // filtered export drops the labels that the omitted Showcases took with them.
 function deleteUnplacedCategories(database) {
@@ -640,7 +760,7 @@ function encodeOmittedShowcasesHeader(omittedShowcases) {
   return encodeURIComponent(JSON.stringify(names));
 }
 
-function buildFilteredExportSnapshot(snapshotDbPath, selectedCollectionIds, tempRoot) {
+function buildFilteredExportSnapshot(snapshotDbPath, selectedCollectionIds, tempRoot, selectedShowcaseIds = undefined) {
   const snapshotDatabase = new Database(snapshotDbPath);
 
   try {
@@ -657,18 +777,36 @@ function buildFilteredExportSnapshot(snapshotDbPath, selectedCollectionIds, temp
     const keptCollectionIds = allCollectionIds.filter((id) => selectedSet.has(id));
 
     if (hasExplicitSelection && !keptCollectionIds.length) {
-      throw new Error('Choose at least one valid collection to export.');
+      const error = new Error('Choose at least one valid collection to export.');
+      error.statusCode = 400;
+      throw error;
     }
 
     const unselectedCollectionIds = allCollectionIds.filter((id) => !selectedSet.has(id));
 
-    // Filtering can strand a Showcase that reaches a note outside the
-    // selection. Prune those Showcases (and the labels they were the last
-    // Placement of) before any note is deleted, then report them. An
-    // unfiltered export keeps every row, so this runs only for a selection.
+    // An explicit showcase selection names the showcases the archive must
+    // contain. Unselected showcases are dropped up front; a selected showcase
+    // that needs a deselected collection blocks the export instead of being
+    // silently omitted. Without an explicit selection the legacy path below
+    // prunes stranded showcases and reports them.
     const omittedShowcases = [];
+    const hasExplicitShowcaseSelection = Array.isArray(selectedShowcaseIds);
+    const hasShowcasesTables = archiveHasShowcasesTables(snapshotDatabase);
 
-    if (hasExplicitSelection && archiveHasShowcasesTables(snapshotDatabase)) {
+    if (hasExplicitShowcaseSelection && hasShowcasesTables) {
+      const existingShowcaseIds = new Set(
+        snapshotDatabase.prepare(`SELECT id FROM showcases`).all().map((row) => Number(row.id))
+      );
+      const keptShowcaseIds = selectedShowcaseIds.filter((id) => existingShowcaseIds.has(id));
+
+      assertSelectedShowcasesHaveCollections(snapshotDatabase, keptShowcaseIds, keptCollectionIds);
+      omitUnselectedShowcases(snapshotDatabase, keptShowcaseIds);
+      deleteUnplacedCategories(snapshotDatabase);
+    } else if (hasExplicitSelection && hasShowcasesTables) {
+      // Filtering can strand a Showcase that reaches a note outside the
+      // selection. Prune those Showcases (and the labels they were the last
+      // Placement of) before any note is deleted, then report them. An
+      // unfiltered export keeps every row, so this runs only for a selection.
       const stranded = listShowcasesWithUnkeptNotes(snapshotDatabase, keptCollectionIds);
       omitShowcases(snapshotDatabase, stranded.map((showcase) => showcase.id));
       deleteUnplacedCategories(snapshotDatabase);
@@ -713,6 +851,9 @@ function buildFilteredExportSnapshot(snapshotDbPath, selectedCollectionIds, temp
     return {
       imagesDir: exportImagesDir,
       selectedCount: keptCollectionIds.length,
+      selectedShowcaseCount: hasExplicitShowcaseSelection && hasShowcasesTables
+        ? snapshotDatabase.prepare(`SELECT COUNT(*) AS value FROM showcases`).get().value
+        : null,
       omittedShowcases
     };
   } finally {
@@ -1098,7 +1239,8 @@ archiveRouter.get('/export', async (request, response) => {
       await backupDatabase(snapshotDbPath);
 
       const selectedCollectionIds = parseSelectedCollectionIds(request.query.collectionIds);
-      const filteredSnapshot = buildFilteredExportSnapshot(snapshotDbPath, selectedCollectionIds, tempRoot);
+      const selectedShowcaseIds = parseSelectedShowcaseIds(request.query.showcaseIds);
+      const filteredSnapshot = buildFilteredExportSnapshot(snapshotDbPath, selectedCollectionIds, tempRoot, selectedShowcaseIds);
 
       response.setHeader('Content-Type', 'application/zip');
       response.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');

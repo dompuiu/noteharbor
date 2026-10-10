@@ -744,6 +744,76 @@ test('a filtered export omits an out-of-selection showcase, reports it, and drop
   }
 });
 
+test('an explicit showcase selection keeps only the selected showcases', () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'nh-showcase-select-'));
+  const snapshotDbPath = path.join(tempRoot, 'banknotes.db');
+
+  try {
+    createShowcaseExportSnapshotFile(snapshotDbPath);
+
+    const result = buildFilteredExportSnapshot(snapshotDbPath, [1, 2], tempRoot, [1]);
+
+    assert.equal(result.selectedShowcaseCount, 1);
+    assert.deepEqual(result.omittedShowcases, []);
+
+    const db = new Database(snapshotDbPath, { readonly: true });
+    try {
+      assert.deepEqual(db.prepare(`SELECT name FROM showcases ORDER BY id`).all().map((row) => row.name), ['Kept Show']);
+      assert.deepEqual(db.prepare(`PRAGMA foreign_key_check`).all(), []);
+    } finally {
+      db.close();
+    }
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('an explicit showcase selection blocks the export while a needed collection is missing', () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'nh-showcase-block-'));
+  const snapshotDbPath = path.join(tempRoot, 'banknotes.db');
+
+  try {
+    createShowcaseExportSnapshotFile(snapshotDbPath);
+
+    // 'Dropped Show' (id 2) needs the 'Drop' collection (id 2), which is not selected.
+    assert.throws(
+      () => buildFilteredExportSnapshot(snapshotDbPath, [1], tempRoot, [1, 2]),
+      (error) => {
+        assert.equal(error.statusCode, 400);
+        assert.match(error.message, /Dropped Show/);
+        assert.match(error.message, /Drop/);
+        return true;
+      }
+    );
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('an explicit empty showcase selection exports no showcases', () => {
+  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'nh-showcase-empty-'));
+  const snapshotDbPath = path.join(tempRoot, 'banknotes.db');
+
+  try {
+    createShowcaseExportSnapshotFile(snapshotDbPath);
+
+    const result = buildFilteredExportSnapshot(snapshotDbPath, [1, 2], tempRoot, []);
+
+    assert.equal(result.selectedShowcaseCount, 0);
+
+    const db = new Database(snapshotDbPath, { readonly: true });
+    try {
+      assert.equal(db.prepare(`SELECT COUNT(*) AS value FROM showcases`).get().value, 0);
+      assert.equal(db.prepare(`SELECT COUNT(*) AS value FROM showcase_nodes`).get().value, 0);
+      assert.deepEqual(db.prepare(`PRAGMA foreign_key_check`).all(), []);
+    } finally {
+      db.close();
+    }
+  } finally {
+    fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
 function createShowcaseImportStagedDataDir() {
   const stageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'nh-showcase-import-stage-'));
   const stagedDataDir = path.join(stageRoot, 'data');
