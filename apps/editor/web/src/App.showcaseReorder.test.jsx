@@ -1,5 +1,5 @@
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -170,7 +170,9 @@ function makeDataTransfer() {
 }
 
 function reorderLabels() {
-  return screen
+  // Scoped to the showcase canvas: the sidebar's own per-group Reorder
+  // toggles ("Reorder Catalog", "Reorder Showcases") share the prefix.
+  return within(document.querySelector(".showcase-screen"))
     .getAllByRole("button", { name: /^Reorder / })
     .map((handle) => handle.getAttribute("aria-label"));
 }

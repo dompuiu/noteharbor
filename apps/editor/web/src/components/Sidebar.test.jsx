@@ -546,7 +546,88 @@ describe("Sidebar collection rows", () => {
 });
 
 describe("Sidebar collection reordering", () => {
-  test("dropping one collection onto another hands the provider the new order", async () => {
+  test("rows are plain links until the Catalog reorder toggle is on", async () => {
+    const user = userEvent.setup();
+    await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    const toggle = screen.getByRole("button", { name: "Reorder Catalog" });
+    expect(toggle).toHaveAttribute("aria-pressed", "false");
+
+    // No grips, no move buttons, nothing draggable before opting in.
+    expect(document.querySelectorAll(".sidebar-drag-handle")).toHaveLength(0);
+    expect(
+      screen.queryByRole("button", { name: "Move Default up" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("link", { name: "Default" }).getAttribute("draggable"),
+    ).toBe("false");
+
+    await user.click(toggle);
+
+    expect(
+      screen.getByRole("button", { name: "Done reordering Catalog" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    // Two collection rows grow grips; the showcase rows stay plain.
+    expect(document.querySelectorAll(".sidebar-drag-handle")).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: "Move Default up" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Move Summer up" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("the Showcases toggle only affects showcase rows", async () => {
+    const user = userEvent.setup();
+    await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.click(screen.getByRole("button", { name: "Reorder Showcases" }));
+
+    expect(document.querySelectorAll(".sidebar-drag-handle")).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: "Move Summer down" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Move Default up" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("toggling off hides the handles again", async () => {
+    const user = userEvent.setup();
+    await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
+    expect(document.querySelectorAll(".sidebar-drag-handle")).toHaveLength(2);
+
+    await user.click(
+      screen.getByRole("button", { name: "Done reordering Catalog" }),
+    );
+
+    expect(document.querySelectorAll(".sidebar-drag-handle")).toHaveLength(0);
+    expect(
+      screen.queryByRole("button", { name: "Move Default up" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("the first row cannot move up and the last cannot move down", async () => {
+    const user = userEvent.setup();
+    await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
+
+    expect(
+      screen.getByRole("button", { name: "Move Default up" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Move Archive down" }),
+    ).toBeDisabled();
+    expect(
+      screen.getByRole("button", { name: "Move Default down" }),
+    ).not.toBeDisabled();
+  });
+
+  test("the move buttons hand the provider the swapped order", async () => {
+    const user = userEvent.setup();
     reorderCollections.mockResolvedValue({
       collections: [
         { id: 2, is_default: 0, name: "Archive" },
@@ -555,20 +636,52 @@ describe("Sidebar collection reordering", () => {
     });
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
 
-    const def = screen.getByRole("link", { name: "Default" });
-    const archive = screen.getByRole("link", { name: "Archive" });
+    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
+    await user.click(screen.getByRole("button", { name: "Move Archive up" }));
+
+    await waitFor(() => {
+      expect(reorderCollections).toHaveBeenCalledWith([2, 1]);
+    });
+    await waitFor(() => {
+      expect(collectionLabels(container)).toEqual([
+        "Archive",
+        "Default",
+        "New collection",
+        "Import / Export",
+      ]);
+    });
+  });
+
+  test("dropping one collection onto another hands the provider the new order", async () => {
+    const user = userEvent.setup();
+    reorderCollections.mockResolvedValue({
+      collections: [
+        { id: 2, is_default: 0, name: "Archive" },
+        { id: 1, is_default: 1, name: "Default" },
+      ],
+    });
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
+
+    const defRow = screen
+      .getByRole("link", { name: "Default" })
+      .closest(".sidebar-row");
+    const archiveRow = screen
+      .getByRole("link", { name: "Archive" })
+      .closest(".sidebar-row");
     const dataTransfer = makeDataTransfer();
 
     await act(async () => {
-      def.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+      defRow.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
     });
     await act(async () => {
-      archive.dispatchEvent(
+      archiveRow.dispatchEvent(
         dragEvent("dragover", { clientY: 400, dataTransfer }),
       );
     });
     await act(async () => {
-      archive.dispatchEvent(dragEvent("drop", { clientY: 400, dataTransfer }));
+      archiveRow.dispatchEvent(dragEvent("drop", { clientY: 400, dataTransfer }));
     });
 
     await waitFor(() => {
@@ -587,6 +700,7 @@ describe("Sidebar collection reordering", () => {
 
 describe("Sidebar showcase reordering", () => {
   test("dropping one showcase onto another hands the provider the new order", async () => {
+    const user = userEvent.setup();
     reorderShowcases.mockResolvedValue({
       showcases: [
         { id: 2, name: "Vienna" },
@@ -595,20 +709,26 @@ describe("Sidebar showcase reordering", () => {
     });
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
 
-    const summer = screen.getByRole("link", { name: "Summer" });
-    const vienna = screen.getByRole("link", { name: "Vienna" });
+    await user.click(screen.getByRole("button", { name: "Reorder Showcases" }));
+
+    const summerRow = screen
+      .getByRole("link", { name: "Summer" })
+      .closest(".sidebar-row");
+    const viennaRow = screen
+      .getByRole("link", { name: "Vienna" })
+      .closest(".sidebar-row");
     const dataTransfer = makeDataTransfer();
 
     await act(async () => {
-      summer.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+      summerRow.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
     });
     await act(async () => {
-      vienna.dispatchEvent(
+      viennaRow.dispatchEvent(
         dragEvent("dragover", { clientY: 400, dataTransfer }),
       );
     });
     await act(async () => {
-      vienna.dispatchEvent(dragEvent("drop", { clientY: 400, dataTransfer }));
+      viennaRow.dispatchEvent(dragEvent("drop", { clientY: 400, dataTransfer }));
     });
 
     await waitFor(() => {
@@ -623,25 +743,57 @@ describe("Sidebar showcase reordering", () => {
     });
   });
 
-  test("a drop that lands a showcase back where it started persists nothing", async () => {
+  test("the move buttons hand the provider the swapped order", async () => {
+    const user = userEvent.setup();
+    reorderShowcases.mockResolvedValue({
+      showcases: [
+        { id: 2, name: "Vienna" },
+        { id: 1, name: "Summer" },
+      ],
+    });
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
 
-    const summer = screen.getByRole("link", { name: "Summer" });
-    const vienna = screen.getByRole("link", { name: "Vienna" });
+    await user.click(screen.getByRole("button", { name: "Reorder Showcases" }));
+    await user.click(screen.getByRole("button", { name: "Move Vienna up" }));
+
+    await waitFor(() => {
+      expect(reorderShowcases).toHaveBeenCalledWith([2, 1]);
+    });
+    await waitFor(() => {
+      expect(showcaseLabels(container)).toEqual([
+        "Vienna",
+        "Summer",
+        "New showcase",
+      ]);
+    });
+  });
+
+  test("a drop that lands a showcase back where it started persists nothing", async () => {
+    const user = userEvent.setup();
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.click(screen.getByRole("button", { name: "Reorder Showcases" }));
+
+    const summerRow = screen
+      .getByRole("link", { name: "Summer" })
+      .closest(".sidebar-row");
+    const viennaRow = screen
+      .getByRole("link", { name: "Vienna" })
+      .closest(".sidebar-row");
     const dataTransfer = makeDataTransfer();
 
     await act(async () => {
-      summer.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+      summerRow.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
     });
     await act(async () => {
       // A negative clientY is above the (all-zero) rect midpoint, so the
       // placement is "before" — Summer stays immediately ahead of Vienna.
-      vienna.dispatchEvent(
+      viennaRow.dispatchEvent(
         dragEvent("dragover", { clientY: -5, dataTransfer }),
       );
     });
     await act(async () => {
-      vienna.dispatchEvent(dragEvent("drop", { clientY: -5, dataTransfer }));
+      viennaRow.dispatchEvent(dragEvent("drop", { clientY: -5, dataTransfer }));
     });
 
     expect(reorderShowcases).not.toHaveBeenCalled();

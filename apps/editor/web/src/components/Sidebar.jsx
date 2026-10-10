@@ -36,6 +36,9 @@ const ICONS = {
   swap: '<path d="M7.5 4.5v13M7.5 4.5 4.6 7.6M7.5 4.5l2.9 3.1M16.5 19.5v-13M16.5 19.5l2.9-3.1M16.5 19.5l-2.9-3.1"/>',
   grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
+  // The reorder toggle and the drag handles shown while a group is in
+  // reorder mode. Three horizontal strokes read as "grab these rows".
+  reorder: '<path d="M4 6h16M4 12h16M4 18h16"/>',
   // Section markers for the two sidebar categories. They read as hubs, not
   // as destinations: a stack of books for Catalog, a grid for Showcases. Both
   // are Lucide glyphs, matching the destination icons. Individual showcases
@@ -106,6 +109,11 @@ function Sidebar({ pageFocusRef }) {
   // the server's order.
   const [draggedCollectionId, setDraggedCollectionId] = useState(null);
   const [collectionDropTarget, setCollectionDropTarget] = useState(null);
+  // Reorder mode is opt-in per group, flipped by the group's Reorder toggle.
+  // Rows are only draggable — and only show their grip handle and move
+  // buttons — while their own group's toggle is on.
+  const [reorderingCollections, setReorderingCollections] = useState(false);
+  const [reorderingShowcases, setReorderingShowcases] = useState(false);
   const navRef = useRef(null);
   const linksRef = useRef([]);
 
@@ -189,6 +197,7 @@ function Sidebar({ pageFocusRef }) {
       id: "catalog",
       icon: "catalog",
       label: "Catalog",
+      reorderScope: "collections",
       items: [
         ...collectionItems,
         newCollectionItem,
@@ -199,9 +208,35 @@ function Sidebar({ pageFocusRef }) {
       id: "showcases",
       icon: "grid",
       label: "Showcases",
+      reorderScope: "showcases",
       items: [...showcaseItems, newShowcaseItem],
     },
   ];
+
+  function isGroupReordering(group) {
+    if (group.reorderScope === "collections") {
+      return reorderingCollections;
+    }
+
+    if (group.reorderScope === "showcases") {
+      return reorderingShowcases;
+    }
+
+    return false;
+  }
+
+  function toggleGroupReorder(group) {
+    if (group.reorderScope === "collections") {
+      clearCollectionDrag();
+      setReorderingCollections((current) => !current);
+      return;
+    }
+
+    if (group.reorderScope === "showcases") {
+      clearShowcaseDrag();
+      setReorderingShowcases((current) => !current);
+    }
+  }
 
   // One flat list drives the keyboard cursor, in DOM order.
   const entries = groups.flatMap((group) => group.items);
@@ -578,6 +613,55 @@ function Sidebar({ pageFocusRef }) {
     }
   }
 
+  // Keyboard-accessible stepping while a group is in reorder mode: swap the
+  // row with its neighbour and hand the new id order to the provider, exactly
+  // like a drop. A no-op at the ends.
+  async function handleMoveShowcase(showcaseId, direction) {
+    const index = showcases.findIndex(
+      (showcase) => showcase.id === showcaseId,
+    );
+    const nextIndex = index + direction;
+
+    if (index < 0 || nextIndex < 0 || nextIndex >= showcases.length) {
+      return;
+    }
+
+    const nextShowcases = [...showcases];
+    [nextShowcases[index], nextShowcases[nextIndex]] = [
+      nextShowcases[nextIndex],
+      nextShowcases[index],
+    ];
+
+    try {
+      await reorderShowcases(nextShowcases.map((showcase) => showcase.id));
+    } catch {
+      // The rail cannot surface an error; the next load reconciles the order.
+    }
+  }
+
+  async function handleMoveCollection(collectionId, direction) {
+    const index = collections.findIndex(
+      (collection) => collection.id === collectionId,
+    );
+    const nextIndex = index + direction;
+
+    if (index < 0 || nextIndex < 0 || nextIndex >= collections.length) {
+      return;
+    }
+
+    const nextCollections = [...collections];
+    [nextCollections[index], nextCollections[nextIndex]] = [
+      nextCollections[nextIndex],
+      nextCollections[index],
+    ];
+
+    try {
+      await reorderCollections(nextCollections.map((collection) => collection.id));
+    } catch {
+      // The rail cannot surface an error; the next load reconciles the order.
+    }
+  }
+
   return (
     <div className="sidebar-dock">
         <nav
@@ -605,20 +689,48 @@ function Sidebar({ pageFocusRef }) {
           </div>
 
           <div className="sidebar-nav">
-            {groups.map((group) => (
+            {groups.map((group) => {
+              const reorderMode = isGroupReordering(group);
+              const reorderPressedLabel = reorderMode
+                ? `Done reordering ${group.label}`
+                : `Reorder ${group.label}`;
+
+              return (
               <div
                 aria-labelledby={`sidebar-group-${group.id}`}
                 className="sidebar-group"
                 key={group.id}
                 role="group"
               >
-                <p
-                  className="sidebar-group-label"
-                  id={`sidebar-group-${group.id}`}
-                >
-                  <ItemIcon className="sidebar-group-ic" icon={group.icon} />
-                  <span className="sidebar-group-name">{group.label}</span>
-                </p>
+                <div className="sidebar-group-head">
+                  <p
+                    className="sidebar-group-label"
+                    id={`sidebar-group-${group.id}`}
+                  >
+                    <ItemIcon className="sidebar-group-ic" icon={group.icon} />
+                    <span className="sidebar-group-name">{group.label}</span>
+                  </p>
+                  {group.reorderScope ? (
+                    <button
+                      aria-label={reorderPressedLabel}
+                      aria-pressed={reorderMode}
+                      className={`sidebar-reorder-toggle${
+                        reorderMode ? " sidebar-reorder-toggle--active" : ""
+                      }`}
+                      onClick={() => toggleGroupReorder(group)}
+                      title={reorderPressedLabel}
+                      type="button"
+                    >
+                      <ItemIcon
+                        className="sidebar-reorder-toggle-ic"
+                        icon="reorder"
+                      />
+                      <span className="sidebar-reorder-toggle-label">
+                        Reorder
+                      </span>
+                    </button>
+                  ) : null}
+                </div>
                 <div className="sidebar-group-links">
                   {group.items.map((item) => {
                     const index = entries.indexOf(item);
@@ -642,16 +754,31 @@ function Sidebar({ pageFocusRef }) {
                       : isCollection
                         ? draggedCollectionId === item.collectionId
                         : false;
+                    // Reorder mode is opt-in per group: only rows of the group
+                    // whose toggle is on become draggable and grow a grip
+                    // handle plus keyboard move buttons. Everything else —
+                    // pending drafts, actions, the other group's rows — stays
+                    // a plain navigating link.
+                    const reorderable =
+                      (isShowcase &&
+                        reorderMode &&
+                        group.reorderScope === "showcases") ||
+                      (isCollection &&
+                        reorderMode &&
+                        group.reorderScope === "collections");
+                    // In reorder mode the drop/dragging markers live on the
+                    // row wrapper; the link keeps only its active/cursor
+                    // state. Outside reorder mode no drag state exists.
                     const className = `sidebar-link${
                       active ? " sidebar-link--active" : ""
                     }${cursorIndex === index ? " sidebar-link--cursor" : ""}${
                       item.type === "action" ? " sidebar-link--action" : ""
                     }${
-                      dropPlacement
+                      !reorderable && dropPlacement
                         ? ` sidebar-link--drop-${dropPlacement}`
                         : ""
                     }${
-                      isDragging ? " sidebar-link--dragging" : ""
+                      !reorderable && isDragging ? " sidebar-link--dragging" : ""
                     }`;
 
                     if (item.type === "action") {
@@ -676,7 +803,173 @@ function Sidebar({ pageFocusRef }) {
                       );
                     }
 
-                    const draggable = isShowcase || isCollection;
+                    if (reorderable) {
+                      const list = isShowcase ? showcases : collections;
+                      const rowId = isShowcase
+                        ? item.showcaseId
+                        : item.collectionId;
+                      const rowIndex = list.findIndex(
+                        (entry) => entry.id === rowId,
+                      );
+                      const canMoveUp = rowIndex > 0;
+                      const canMoveDown =
+                        rowIndex >= 0 && rowIndex < list.length - 1;
+                      const rowClassName = `sidebar-row${
+                        dropPlacement
+                          ? ` sidebar-row--drop-${dropPlacement}`
+                          : ""
+                      }${isDragging ? " sidebar-row--dragging" : ""}`;
+
+                      function handleRowDragLeave(event) {
+                        const row = event.currentTarget.parentElement;
+
+                        if (
+                          event.relatedTarget &&
+                          row?.contains(event.relatedTarget)
+                        ) {
+                          return;
+                        }
+
+                        if (isShowcase) {
+                          setShowcaseDropTarget((current) =>
+                            current?.showcaseId === item.showcaseId
+                              ? null
+                              : current,
+                          );
+                        } else {
+                          setCollectionDropTarget((current) =>
+                            current?.collectionId === item.collectionId
+                              ? null
+                              : current,
+                          );
+                        }
+                      }
+
+                      function handleRowDragOver(event) {
+                        if (isShowcase) {
+                          if (draggedShowcaseId == null) {
+                            return;
+                          }
+
+                          event.preventDefault();
+                          updateShowcaseDropTarget(item.showcaseId, event);
+                        } else {
+                          if (draggedCollectionId == null) {
+                            return;
+                          }
+
+                          event.preventDefault();
+                          updateCollectionDropTarget(item.collectionId, event);
+                        }
+                      }
+
+                      function handleRowDragStart(event) {
+                        if (isShowcase) {
+                          handleShowcaseDragStart(event, item.showcaseId);
+                        } else {
+                          handleCollectionDragStart(event, item.collectionId);
+                        }
+                      }
+
+                      function handleRowDrop(event) {
+                        event.preventDefault();
+                        const bounds =
+                          event.currentTarget.getBoundingClientRect();
+                        if (isShowcase) {
+                          const placement =
+                            showcaseDropTarget?.showcaseId === item.showcaseId
+                              ? showcaseDropTarget.placement
+                              : event.clientY < bounds.top + bounds.height / 2
+                                ? "before"
+                                : "after";
+                          void handleShowcaseDrop(item.showcaseId, placement);
+                        } else {
+                          const placement =
+                            collectionDropTarget?.collectionId ===
+                            item.collectionId
+                              ? collectionDropTarget.placement
+                              : event.clientY < bounds.top + bounds.height / 2
+                                ? "before"
+                                : "after";
+                          void handleCollectionDrop(item.collectionId, placement);
+                        }
+                      }
+
+                      function handleMove(direction) {
+                        if (isShowcase) {
+                          void handleMoveShowcase(item.showcaseId, direction);
+                        } else {
+                          void handleMoveCollection(item.collectionId, direction);
+                        }
+                      }
+
+                      return (
+                        <div
+                          className={rowClassName}
+                          data-sidebar-index={index}
+                          draggable
+                          key={item.key ?? item.to}
+                          onDragEnd={isShowcase
+                            ? clearShowcaseDrag
+                            : clearCollectionDrag}
+                          onDragLeave={handleRowDragLeave}
+                          onDragOver={handleRowDragOver}
+                          onDragStart={handleRowDragStart}
+                          onDrop={handleRowDrop}
+                        >
+                          <span
+                            aria-hidden="true"
+                            className="sidebar-drag-handle"
+                            title="Drag to reorder"
+                          >
+                            <ItemIcon
+                              className="sidebar-drag-handle-ic"
+                              icon="reorder"
+                            />
+                          </span>
+                          <Link
+                            aria-current={active ? "page" : undefined}
+                            aria-label={item.label}
+                            className={className}
+                            data-sidebar-index={index}
+                            draggable={false}
+                            onClick={() => handleLinkClick(item.to)}
+                            ref={(node) => {
+                              linksRef.current[index] = node;
+                            }}
+                            title={item.label}
+                            to={item.to}
+                          >
+                            <ItemIcon icon={item.icon} />
+                            <span className="sidebar-link-label">
+                              {item.label}
+                            </span>
+                          </Link>
+                          <span className="sidebar-row-moves">
+                            <button
+                              aria-label={`Move ${item.label} up`}
+                              className="sidebar-move-button"
+                              disabled={!canMoveUp}
+                              onClick={() => handleMove(-1)}
+                              title={`Move ${item.label} up`}
+                              type="button"
+                            >
+                              ↑
+                            </button>
+                            <button
+                              aria-label={`Move ${item.label} down`}
+                              className="sidebar-move-button"
+                              disabled={!canMoveDown}
+                              onClick={() => handleMove(1)}
+                              title={`Move ${item.label} down`}
+                              type="button"
+                            >
+                              ↓
+                            </button>
+                          </span>
+                        </div>
+                      );
+                    }
 
                     return (
                       <Link
@@ -684,114 +977,9 @@ function Sidebar({ pageFocusRef }) {
                         aria-label={item.label}
                         className={className}
                         data-sidebar-index={index}
-                        draggable={draggable}
+                        draggable={false}
                         key={item.key ?? item.to}
                         onClick={() => handleLinkClick(item.to)}
-                        onDragEnd={draggable
-                          ? (isShowcase ? clearShowcaseDrag : clearCollectionDrag)
-                          : undefined}
-                        onDragLeave={
-                          draggable
-                            ? (event) => {
-                                const links = event.currentTarget.parentElement;
-
-                                if (
-                                  event.relatedTarget &&
-                                  links?.contains(event.relatedTarget)
-                                ) {
-                                  return;
-                                }
-
-                                if (isShowcase) {
-                                  setShowcaseDropTarget((current) =>
-                                    current?.showcaseId === item.showcaseId
-                                      ? null
-                                      : current,
-                                  );
-                                } else {
-                                  setCollectionDropTarget((current) =>
-                                    current?.collectionId === item.collectionId
-                                      ? null
-                                      : current,
-                                  );
-                                }
-                              }
-                            : undefined
-                        }
-                        onDragOver={
-                          draggable
-                            ? (event) => {
-                                if (isShowcase) {
-                                  if (draggedShowcaseId == null) {
-                                    return;
-                                  }
-
-                                  event.preventDefault();
-                                  updateShowcaseDropTarget(
-                                    item.showcaseId,
-                                    event,
-                                  );
-                                } else {
-                                  if (draggedCollectionId == null) {
-                                    return;
-                                  }
-
-                                  event.preventDefault();
-                                  updateCollectionDropTarget(
-                                    item.collectionId,
-                                    event,
-                                  );
-                                }
-                              }
-                            : undefined
-                        }
-                        onDragStart={
-                          draggable
-                            ? (event) => {
-                                if (isShowcase) {
-                                  handleShowcaseDragStart(event, item.showcaseId);
-                                } else {
-                                  handleCollectionDragStart(event, item.collectionId);
-                                }
-                              }
-                            : undefined
-                        }
-                        onDrop={
-                          draggable
-                            ? (event) => {
-                                event.preventDefault();
-                                const bounds =
-                                  event.currentTarget.getBoundingClientRect();
-                                if (isShowcase) {
-                                  const placement =
-                                    showcaseDropTarget?.showcaseId ===
-                                    item.showcaseId
-                                      ? showcaseDropTarget.placement
-                                      : event.clientY <
-                                          bounds.top + bounds.height / 2
-                                        ? "before"
-                                        : "after";
-                                  void handleShowcaseDrop(
-                                    item.showcaseId,
-                                    placement,
-                                  );
-                                } else {
-                                  const placement =
-                                    collectionDropTarget?.collectionId ===
-                                    item.collectionId
-                                      ? collectionDropTarget.placement
-                                      : event.clientY <
-                                          bounds.top + bounds.height / 2
-                                        ? "before"
-                                        : "after";
-                                  void handleCollectionDrop(
-                                    item.collectionId,
-                                    placement,
-                                  );
-                                }
-                              }
-                            : undefined
-                        }
                         ref={(node) => {
                           linksRef.current[index] = node;
                         }}
@@ -805,7 +993,8 @@ function Sidebar({ pageFocusRef }) {
                   })}
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         </nav>
     </div>

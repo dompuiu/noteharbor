@@ -138,6 +138,24 @@ describe("sidebar styles", () => {
     );
   });
 
+  test("the reorder toggles and handles hide on the collapsed rail", () => {
+    expect(styles).toMatch(
+      /\.sidebar-dock \.sidebar-reorder-toggle,\s*\n?\s*\.sidebar-dock \.sidebar-drag-handle,\s*\n?\s*\.sidebar-dock \.sidebar-row-moves\s*\{[^}]*display:\s*none/,
+    );
+    expect(styles).toMatch(
+      /\.sidebar-dock:hover \.sidebar-reorder-toggle/,
+    );
+  });
+
+  test("reorderable rows mark the drop edge like the links do", () => {
+    expect(styles).toMatch(
+      /\.sidebar-row--drop-before\s*\{[^}]*box-shadow:\s*inset 0 2px 0 0 var\(--accent\)/,
+    );
+    expect(styles).toMatch(
+      /\.sidebar-row--drop-after\s*\{[^}]*box-shadow:\s*inset 0 -2px 0 0 var\(--accent\)/,
+    );
+  });
+
   test("the cursor link is ringed so focus is visible", () => {
     expect(styles).toMatch(
       /\.sidebar-link--cursor\s*\{[^}]*box-shadow:\s*inset 0 0 0 1\.5px var\(--accent\)/,

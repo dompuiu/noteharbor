@@ -389,6 +389,135 @@ input[type="radio"] {
   box-shadow: inset 0 -2px 0 0 var(--accent);
 }
 
+/* Reorder mode is opt-in per group. The group head holds the label and a
+   small Reorder toggle; the toggle flips the group's rows into reorderable
+   rows with a grip handle and Up/Down move buttons for keyboard users. */
+.sidebar-group-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.sidebar-group-head .sidebar-group-label {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sidebar-reorder-toggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.4;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.sidebar-reorder-toggle:hover,
+.sidebar-reorder-toggle:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.sidebar-reorder-toggle--active {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.sidebar-reorder-toggle-ic {
+  display: inline-flex;
+}
+
+.sidebar-reorder-toggle-ic svg {
+  width: 13px;
+  height: 13px;
+}
+
+/* A reorderable row: grip handle, the navigating link, and the move pair.
+   The row is the draggable unit; the link inside never starts a drag. */
+.sidebar-row {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 8px;
+}
+
+.sidebar-row .sidebar-link {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.sidebar-drag-handle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-faint);
+  cursor: grab;
+}
+
+.sidebar-drag-handle-ic {
+  display: inline-flex;
+}
+
+.sidebar-drag-handle-ic svg {
+  width: 15px;
+  height: 15px;
+}
+
+.sidebar-row-moves {
+  flex: none;
+  display: inline-flex;
+  gap: 2px;
+}
+
+.sidebar-move-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.sidebar-move-button:hover:not(:disabled),
+.sidebar-move-button:focus-visible:not(:disabled) {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.sidebar-move-button:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.sidebar-row--dragging {
+  opacity: 0.5;
+}
+
+.sidebar-row--drop-before {
+  box-shadow: inset 0 2px 0 0 var(--accent);
+}
+
+.sidebar-row--drop-after {
+  box-shadow: inset 0 -2px 0 0 var(--accent);
+}
+
 /* The cursor link already draws its own ring. Drop the global
    :focus-visible outline here so the two do not stack into a double border.
    Plain Tab focus (no cursor) keeps the outline, so focus stays visible. */
@@ -401,6 +530,14 @@ input[type="radio"] {
    rule flattens so the icons centre in the 64px rail. */
 .sidebar-dock .sidebar-link-label,
 .sidebar-dock .sidebar-group-name {
+  display: none;
+}
+
+/* Reorder controls only make sense beside readable names, so the collapsed
+   rail hides the toggles, grips, and move buttons with the labels. */
+.sidebar-dock .sidebar-reorder-toggle,
+.sidebar-dock .sidebar-drag-handle,
+.sidebar-dock .sidebar-row-moves {
   display: none;
 }
 
@@ -445,6 +582,22 @@ input[type="radio"] {
   display: block;
 }
 
+/* Expanded, the reorder controls return with the names. */
+.sidebar-dock:hover .sidebar-reorder-toggle,
+.sidebar-dock:has(:focus-visible) .sidebar-reorder-toggle {
+  display: inline-flex;
+}
+
+.sidebar-dock:hover .sidebar-drag-handle,
+.sidebar-dock:has(:focus-visible) .sidebar-drag-handle {
+  display: inline-flex;
+}
+
+.sidebar-dock:hover .sidebar-row-moves,
+.sidebar-dock:has(:focus-visible) .sidebar-row-moves {
+  display: inline-flex;
+}
+
 .sidebar-dock:hover .sidebar-link,
 .sidebar-dock:has(:focus-visible) .sidebar-link {
   justify-content: flex-start;
@@ -475,6 +628,15 @@ input[type="radio"] {
 }
 
 .sidebar-dock:not(:hover):not(:has(:focus-visible)) .sidebar-group-label {
+  justify-content: center;
+}
+
+/* Collapsed, the group head centres with the marker while the toggle hides. */
+.sidebar-dock:not(:hover):not(:has(:focus-visible)) .sidebar-group-head {
+  justify-content: center;
+}
+
+.sidebar-dock:not(:hover):not(:has(:focus-visible)) .sidebar-row {
   justify-content: center;
 }
 
