@@ -662,18 +662,72 @@ function Sidebar({ pageFocusRef }) {
     }
   }
 
+  // Reorder mode lives only while the rail is open. Collapsing it — the
+  // pointer leaving the dock, or focus moving out to the page — switches
+  // every group's toggle back off.
+  function exitReorderModes() {
+    setReorderingCollections(false);
+    setReorderingShowcases(false);
+  }
+
+  // The pointer leaving the dock collapses the rail, so reorder mode
+  // goes with it. This subscribes natively rather than through React's
+  // `onMouseLeave`: the native event carries the true `relatedTarget`,
+  // which is the only evidence the pointer genuinely left (a null
+  // target means it left for browser chrome, or the event is synthetic
+  // and the pointer never moved — neither must reset anything).
+  const dockRef = useRef(null);
+  useEffect(() => {
+    const dock = dockRef.current;
+
+    if (!dock) {
+      return undefined;
+    }
+
+    function handleDockMouseLeave(event) {
+      if (!(event.relatedTarget instanceof Node)) {
+        return;
+      }
+
+      // A drop outside the rail is a no-op (dragend clears it); never
+      // yank the mode out from under a drag that may still land on a row.
+      if (draggedShowcaseId != null || draggedCollectionId != null) {
+        return;
+      }
+
+      exitReorderModes();
+    }
+
+    dock.addEventListener("mouseleave", handleDockMouseLeave);
+    return () => dock.removeEventListener("mouseleave", handleDockMouseLeave);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draggedShowcaseId, draggedCollectionId]);
+
   return (
-    <div className="sidebar-dock">
+    <div className="sidebar-dock" ref={dockRef}>
         <nav
           aria-label="Sections"
           className="sidebar"
           id="app-sidebar"
           onBlur={(event) => {
-            if (
-              cursorIndex !== null &&
-              !event.currentTarget.contains(event.relatedTarget)
-            ) {
+            // Focus leaving the rail collapses it, so reorder mode goes
+            // with it. `relatedTarget` is the primary signal, but focus
+            // moved by a mouse click can arrive without one — fall back
+            // to the newly focused element, which is already current.
+            const next =
+              event.relatedTarget instanceof Node
+                ? event.relatedTarget
+                : document.activeElement;
+            const focusLeft =
+              !(next instanceof Node) ||
+              !event.currentTarget.contains(next);
+
+            if (cursorIndex !== null && focusLeft) {
               setCursorIndex(null);
+            }
+
+            if (focusLeft) {
+              exitReorderModes();
             }
           }}
           ref={navRef}

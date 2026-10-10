@@ -659,6 +659,66 @@ describe("Sidebar collection reordering", () => {
     ).toBeNull();
   });
 
+  test("moving focus out of the rail switches reorder off", async () => {
+    const user = userEvent.setup();
+    await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
+    expect(
+      screen.getByRole("button", { name: "Done reordering Catalog" }),
+    ).toBeInTheDocument();
+
+    // Focus leaves the rail for the page (the rail collapses with it).
+    await act(async () => {
+      screen.getByTestId("page-anchor").focus();
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Reorder Catalog" }),
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(document.querySelectorAll(".sidebar-ic--grip")).toHaveLength(0);
+  });
+
+  test("tabbing within the rail keeps reorder on", async () => {
+    const user = userEvent.setup();
+    await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    // Focus starts on the toggle, inside the rail; Tab stays inside it.
+    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
+    await user.tab();
+
+    expect(
+      screen.getByRole("button", { name: "Done reordering Catalog" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(document.querySelectorAll(".sidebar-ic--grip")).toHaveLength(2);
+  });
+
+  test("the pointer leaving the rail switches every reorder toggle off", async () => {
+    const user = userEvent.setup();
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
+    await user.click(screen.getByRole("button", { name: "Reorder Showcases" }));
+    expect(document.querySelectorAll(".sidebar-ic--grip")).toHaveLength(4);
+
+    // The pointer moves out of the dock onto the page: the rail collapses
+    // with it. Dispatched natively — it does not bubble, so only a real
+    // dock exit delivers it, with the true outside target attached.
+    await act(async () => {
+      container.querySelector(".sidebar-dock").dispatchEvent(
+        new MouseEvent("mouseleave", { relatedTarget: document.body }),
+      );
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Reorder Catalog" }),
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(
+      screen.getByRole("button", { name: "Reorder Showcases" }),
+    ).toHaveAttribute("aria-pressed", "false");
+    expect(document.querySelectorAll(".sidebar-ic--grip")).toHaveLength(0);
+  });
+
   test("toggling off hides the handles again", async () => {
     const user = userEvent.setup();
     await renderSidebar(CATALOG_ROUTES.collection(1));
