@@ -71,6 +71,18 @@ describe("showcase note/grouping card heights", () => {
     expect(editcard[1]).toMatch(/padding:\s*10px 10px 4px/);
   });
 
+  test("add tiles never drive the edit row taller than a note", () => {
+    // The tiles stretch by design (flex children), so their minimum must sit
+    // at or below the true note height (min / 2 + ~63px of chrome). Anything
+    // above stretches the whole grid row and leaves dead space under cards,
+    // which reads as extra gap on photo sizes whose columns sit near the min.
+    const tiles = styles.match(/\n\.showcase-add-tiles\s*\{([^}]*)\}/);
+    expect(tiles).not.toBeNull();
+    expect(tiles[1]).toMatch(
+      /min-height:\s*calc\(var\(--showcase-card-min,\s*200px\)\s*\/\s*2\s*\+\s*63px\)/,
+    );
+  });
+
   test("grouping footer shares the caption's line metrics", () => {
     const caption = styles.match(/\n\.showcase-card-caption\s*\{([^}]*)\}/);
     const name = styles.match(
