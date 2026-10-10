@@ -107,12 +107,45 @@ function createApp() {
 
   app.use(databaseErrorHandler);
 
-  if (shouldServeWebDist() && fs.existsSync(webEntryPath)) {
+  // Unknown API routes answer JSON so fetch/XHR callers get a parseable
+  // error instead of an HTML 404 page.
+  app.use('/api', (_request, response) => {
+    response.status(404).json({ error: 'Not found.' });
+  });
+
+  // The guard is on the directory, not the entry file: when the entry is
+  // missing (at startup or removed later) the fallback still registers and
+  // answers a JSON error through the handler below, instead of falling
+  // through to Express's default HTML error page.
+  if (shouldServeWebDist() && fs.existsSync(webDistDir)) {
     app.use(express.static(webDistDir));
-    app.get(/^(?!\/api(?:\/|$)).*/, (_request, response) => {
-      response.sendFile(webEntryPath);
+    app.get(/^(?!\/api(?:\/|$)).*/, (_request, response, next) => {
+      // `dotfiles: 'allow'` because the packaged desktop build serves the
+      // entry from a `.build` directory, and `send` treats any dot-segment
+      // in an absolute path as a dotfile (static serving resolves the entry
+      // relative to its root, which is why `/` worked while every other SPA
+      // route 404'd with NotFoundError). The path is fixed and
+      // server-controlled, so the dotfile guard must not apply to it.
+      response.sendFile(webEntryPath, { dotfiles: 'allow' }, (error) => {
+        if (error) {
+          next(error);
+        }
+      });
     });
   }
+
+  // A missing SPA entry (or any other failure this far down the stack)
+  // answers JSON instead of Express's default HTML error page.
+  app.use((error, _request, response, _next) => {
+    if (response.headersSent) {
+      return;
+    }
+
+    const status = Number(error?.status ?? error?.statusCode ?? 500);
+    response.status(Number.isInteger(status) && status >= 400 && status < 600 ? status : 500).json({
+      error: error?.message || 'Request failed.'
+    });
+  });
 
   return app;
 }
