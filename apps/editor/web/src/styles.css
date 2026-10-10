@@ -935,6 +935,67 @@ input[type="radio"] {
   line-height: 1;
 }
 
+/* Prototype: grouping edit icons. The remove icon sits top-right on the same
+   line as the drag handle (top:8px, matching `.showcase-reorder-handle`);
+   its containing block is the relative reorder cell. The rename pencil sits
+   near the title, over the card footer's right edge; the footer keeps a right
+   padding so the name never runs under it. */
+.showcase-grouping-remove {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.showcase-grouping-remove:hover,
+.showcase-grouping-remove:focus-visible {
+  border-color: var(--danger, #b3261e);
+  color: var(--danger, #b3261e);
+}
+
+.showcase-grouping-cardwrap {
+  position: relative;
+}
+
+.showcase-grouping-edit .showcase-card--grouping .showcase-card-name {
+  padding-right: 32px;
+}
+
+.showcase-grouping-rename {
+  position: absolute;
+  right: 14px;
+  bottom: 12px;
+  z-index: 1;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 1px solid var(--border-control);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.showcase-grouping-rename:hover,
+.showcase-grouping-rename:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
 .showcase-reorder-cell--dragging {
   opacity: 0.5;
 }
