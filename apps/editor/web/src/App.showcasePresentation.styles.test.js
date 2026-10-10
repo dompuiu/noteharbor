@@ -52,7 +52,7 @@ describe("showcase note/grouping card heights", () => {
       /justify-content:\s*flex-start/,
       /gap:\s*8px/,
       // The bottom pad stays tight so no daylight sits under the caption.
-      /padding:\s*10px 10px 4px/,
+      /padding:\s*10px 10px 6px/,
     ]) {
       expect(note[1]).toMatch(prop);
       expect(grouping[1]).toMatch(prop);
@@ -67,8 +67,8 @@ describe("showcase note/grouping card heights", () => {
     expect(cell).not.toBeNull();
     expect(editcard).not.toBeNull();
     expect(cell[1]).toMatch(/padding-top:\s*36px/);
-    expect(cell[1]).toMatch(/padding:\s*10px 10px 4px/);
-    expect(editcard[1]).toMatch(/padding:\s*10px 10px 4px/);
+    expect(cell[1]).toMatch(/padding:\s*10px 10px 6px/);
+    expect(editcard[1]).toMatch(/padding:\s*10px 10px 6px/);
   });
 
   test("edit card fills its reorder cell so bottoms align", () => {
@@ -85,13 +85,13 @@ describe("showcase note/grouping card heights", () => {
 
   test("add tiles never drive the edit row taller than a note", () => {
     // The tiles stretch by design (flex children), so their minimum must sit
-    // at or below the true note height (min / 2 + ~63px of chrome). Anything
+    // at or below the true note height (min / 2 + ~67px of chrome). Anything
     // above stretches the whole grid row and leaves dead space under cards,
     // which reads as extra gap on photo sizes whose columns sit near the min.
     const tiles = styles.match(/\n\.showcase-add-tiles\s*\{([^}]*)\}/);
     expect(tiles).not.toBeNull();
     expect(tiles[1]).toMatch(
-      /min-height:\s*calc\(var\(--showcase-card-min,\s*200px\)\s*\/\s*2\s*\+\s*63px\)/,
+      /min-height:\s*calc\(var\(--showcase-card-min,\s*200px\)\s*\/\s*2\s*\+\s*67px\)/,
     );
   });
 
