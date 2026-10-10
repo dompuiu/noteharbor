@@ -71,6 +71,18 @@ describe("showcase note/grouping card heights", () => {
     expect(editcard[1]).toMatch(/padding:\s*10px 10px 4px/);
   });
 
+  test("edit card fills its reorder cell so bottoms align", () => {
+    // Notes lack the grouping's 22px rename button, so their card ends ~3px
+    // short: without filling, the stretched row leaves a bigger gap under
+    // notes than under groupings. The inner card absorbs the row height so
+    // every cell ends on the same uniform bottom pad.
+    const fill = styles.match(
+      /\.showcase-reorder-cell > \.showcase-cell > \.showcase-card--note,[\s\S]*?\.showcase-grouping-editcard\s*\{([^}]*)\}/,
+    );
+    expect(fill).not.toBeNull();
+    expect(fill[1]).toMatch(/flex:\s*1/);
+  });
+
   test("add tiles never drive the edit row taller than a note", () => {
     // The tiles stretch by design (flex children), so their minimum must sit
     // at or below the true note height (min / 2 + ~63px of chrome). Anything

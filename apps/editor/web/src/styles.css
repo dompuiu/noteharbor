@@ -1001,6 +1001,17 @@ input[type="radio"] {
   background: transparent;
 }
 
+/* The inner card fills its reorder cell so every cell in a stretched grid row
+   ends on the same uniform bottom pad. Without this, the tallest card sets
+   the row and shorter ones float: notes lack the grouping's 22px rename
+   button, so a note row always left a bigger gap under notes than groupings.
+   The leftover row height lands inside the card below its caption, where the
+   single-line caption and fixed 2/1 image well keep it invisible. */
+.showcase-reorder-cell > .showcase-cell > .showcase-card--note,
+.showcase-reorder-cell > .showcase-cell > .showcase-grouping-editcard {
+  flex: 1 1 auto;
+}
+
 /* An edit cell is the showcase's catalog row: while Tab sits on the card or
    any of its controls, the cell paints the row wash with an inset 1px ring.
    Inner controls keep their own outlines, mirroring `.table-row-link`. While
