@@ -110,31 +110,77 @@ function ShowcaseGroupingEditor({ node, onRemove, onRename, onOpen, children }) 
             />
           )}
         </button>
-        <span className="showcase-card-name showcase-grouping-name">
-          <svg
-            aria-hidden="true"
-            className="showcase-card-name-icon"
-            focusable="false"
-            height="16"
-            viewBox="0 0 24 24"
-            width="16"
-          >
-            <path
-              d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinejoin="round"
-            />
-          </svg>
-          <span
-            className="showcase-card-name-text showcase-grouping-title"
-            onClick={onOpen}
-            title={`Open grouping ${node.name}`}
-          >
-            {node.name}
-          </span>
-          {!editing ? (
+        {editing ? (
+          <form className="showcase-grouping-rename-form" onSubmit={handleRename}>
+            <span className="showcase-card-name showcase-grouping-name">
+              <svg
+                aria-hidden="true"
+                className="showcase-card-name-icon"
+                focusable="false"
+                height="16"
+                viewBox="0 0 24 24"
+                width="16"
+              >
+                <path
+                  d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinejoin="round"
+                />
+              </svg>
+              <input
+                aria-label={`New name for ${node.name}`}
+                autoFocus
+                className="showcase-grouping-input"
+                onChange={(event) => setName(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Escape") {
+                    event.preventDefault();
+                    cancelEditing();
+                  }
+                }}
+                value={name}
+              />
+            </span>
+            <div className="showcase-cell-edit-actions">
+              <button className="button" onClick={cancelEditing} type="button">
+                Cancel
+              </button>
+              <button
+                className="button button-primary"
+                disabled={busy}
+                type="submit"
+              >
+                Save
+              </button>
+            </div>
+          </form>
+        ) : (
+          <span className="showcase-card-name showcase-grouping-name">
+            <svg
+              aria-hidden="true"
+              className="showcase-card-name-icon"
+              focusable="false"
+              height="16"
+              viewBox="0 0 24 24"
+              width="16"
+            >
+              <path
+                d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinejoin="round"
+              />
+            </svg>
+            <span
+              className="showcase-card-name-text showcase-grouping-title"
+              onClick={onOpen}
+              title={`Open grouping ${node.name}`}
+            >
+              {node.name}
+            </span>
             <button
               aria-label={`Rename ${node.name}`}
               className="showcase-grouping-rename"
@@ -166,29 +212,9 @@ function ShowcaseGroupingEditor({ node, onRemove, onRename, onOpen, children }) 
                 />
               </svg>
             </button>
-          ) : null}
-        </span>
+          </span>
+        )}
       </div>
-
-      {editing ? (
-        <form className="showcase-cell-edit" onSubmit={handleRename}>
-          <input
-            aria-label={`New name for ${node.name}`}
-            autoFocus
-            className="showcase-category-input"
-            onChange={(event) => setName(event.target.value)}
-            value={name}
-          />
-          <div className="showcase-cell-edit-actions">
-            <button className="button" onClick={cancelEditing} type="button">
-              Cancel
-            </button>
-            <button className="button button-primary" disabled={busy} type="submit">
-              Save
-            </button>
-          </div>
-        </form>
-      ) : null}
 
       {error ? (
         <p className="showcase-error" role="alert">

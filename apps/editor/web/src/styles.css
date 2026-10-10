@@ -1012,6 +1012,25 @@ input[type="radio"] {
   cursor: pointer;
 }
 
+/* Inline rename: the footer row turns into a form and the title text is
+   replaced by a text field in place. */
+.showcase-grouping-rename-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.showcase-grouping-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 2px 6px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text);
+  font: inherit;
+}
+
 .showcase-grouping-rename {
   flex: none;
   display: inline-flex;
