@@ -1,19 +1,23 @@
 import { useState } from "react";
-import { ShowcaseGroupingCard } from "./ShowcaseGroupingCard.jsx";
+import { firstAvailableNoteImage } from "../lib/showcaseImages.js";
+import { resolveGroupingCover } from "../lib/showcaseCovers.js";
 
-// Edit-only controls for one Grouping. Prototype layout: the card keeps its
-// open behaviour, a pencil icon sits near the title (over the card footer's
-// right edge), and a remove icon sits top-right on the same line as the
-// reorder drag handle (which lives in the surrounding reorder cell at
-// top:8px left:8px). Both keep the shared `Rename <name>` / `Remove <name>`
-// labels and `data-showcase-action` hooks so keyboard shortcuts keep working.
-// A Grouping is local to its parent, so a rename here never touches another
-// Showcase or Placement.
+// Edit-only controls for one Grouping. Prototype layout: a remove icon sits
+// top-right on the same line as the reorder drag handle (which lives in the
+// surrounding reorder cell at top:8px left:8px), and a pencil icon sits inline
+// right where the title text ends. The title row is outside the open button
+// (a button cannot nest inside the card button), so the cover image is the
+// single `Open grouping <name>` control and the title text reuses the same
+// `onOpen` on click. Both icons keep the shared `Rename <name>` /
+// `Remove <name>` labels and `data-showcase-action` hooks so keyboard
+// shortcuts keep working. A Grouping is local to its parent, so a rename here
+// never touches another Showcase or Placement.
 function ShowcaseGroupingEditor({ node, onRemove, onRename, onOpen, children }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(node.name);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
+  const coverImage = firstAvailableNoteImage(resolveGroupingCover(node));
 
   function startEditing() {
     setName(node.name);
@@ -89,41 +93,81 @@ function ShowcaseGroupingEditor({ node, onRemove, onRename, onOpen, children }) 
         </svg>
       </button>
 
-      <div className="showcase-grouping-cardwrap">
-        <ShowcaseGroupingCard node={node} onOpen={onOpen} />
-        {!editing ? (
-          <button
-            aria-label={`Rename ${node.name}`}
-            className="showcase-grouping-rename"
-            data-showcase-action="rename"
-            onClick={startEditing}
-            title="Rename grouping"
-            type="button"
-          >
-            <svg
+      <div className="showcase-grouping-editcard">
+        <button
+          aria-label={`Open grouping ${node.name}`}
+          className="showcase-card showcase-grouping-open"
+          data-showcase-node-id={node.id}
+          onClick={onOpen}
+          type="button"
+        >
+          {coverImage ? (
+            <img alt="" className="showcase-card-image" src={coverImage.path} />
+          ) : (
+            <span
               aria-hidden="true"
-              focusable="false"
-              height="14"
-              viewBox="0 0 24 24"
-              width="14"
+              className="showcase-card-cover showcase-card-cover--empty"
+            />
+          )}
+        </button>
+        <span className="showcase-card-name showcase-grouping-name">
+          <svg
+            aria-hidden="true"
+            className="showcase-card-name-icon"
+            focusable="false"
+            height="16"
+            viewBox="0 0 24 24"
+            width="16"
+          >
+            <path
+              d="M3 6a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V6Z"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="2"
+              strokeLinejoin="round"
+            />
+          </svg>
+          <span
+            className="showcase-card-name-text showcase-grouping-title"
+            onClick={onOpen}
+            title={`Open grouping ${node.name}`}
+          >
+            {node.name}
+          </span>
+          {!editing ? (
+            <button
+              aria-label={`Rename ${node.name}`}
+              className="showcase-grouping-rename"
+              data-showcase-action="rename"
+              onClick={startEditing}
+              title="Rename grouping"
+              type="button"
             >
-              <path
-                d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17v3Z"
-                fill="none"
-                stroke="currentColor"
-                strokeLinejoin="round"
-                strokeWidth="2"
-              />
-              <path
-                d="M13.5 6.5l3 3"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-                strokeWidth="2"
-              />
-            </svg>
-          </button>
-        ) : null}
+              <svg
+                aria-hidden="true"
+                focusable="false"
+                height="13"
+                viewBox="0 0 24 24"
+                width="13"
+              >
+                <path
+                  d="M4 20h4L19.5 8.5a2.1 2.1 0 0 0-3-3L5 17v3Z"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinejoin="round"
+                  strokeWidth="2"
+                />
+                <path
+                  d="M13.5 6.5l3 3"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="2"
+                />
+              </svg>
+            </button>
+          ) : null}
+        </span>
       </div>
 
       {editing ? (

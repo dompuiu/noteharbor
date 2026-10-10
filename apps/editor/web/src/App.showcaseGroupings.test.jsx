@@ -349,8 +349,10 @@ describe("grouping cover", () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     const card = await screen.findByRole("button", { name: "Open grouping Sub" });
-    expect(card).toHaveTextContent("Sub");
     expect(card.querySelector("img")).toBeNull();
+    // Edit mode renders the title in the footer row right after the cover
+    // (with the rename pencil), not inside the open button.
+    expect(card.closest(".showcase-cell")).toHaveTextContent("Sub");
   });
 
   test("an empty grouping stays hidden in view mode", async () => {
