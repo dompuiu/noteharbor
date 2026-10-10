@@ -9,8 +9,9 @@ import { HighlightMatch, rankTagSuggestions } from "./TagsField.jsx";
 // visible text (the grouping tile reads `+ Add grouping`).
 //
 // The category field is a single-value combobox in the TagsField's visual and
-// interaction language: the pool is ranked starts-with-first, ArrowUp/Down
-// moves a highlight, Enter picks it, Escape closes the list. Picking fills the
+// interaction language: the list stays shut until ArrowUp/Down, typing, or
+// double-click opens it, the pool is ranked starts-with-first, Enter picks
+// the highlight, Escape closes the list. Picking fills the
 // field only — staging still waits for the Add button.
 function ShowcaseCreateTile({
   noun,
@@ -27,7 +28,7 @@ function ShowcaseCreateTile({
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const [highlighted, setHighlighted] = useState(-1);
-  const [isOpen, setIsOpen] = useState(true);
+  const [isOpen, setIsOpen] = useState(false);
   const inputRef = useRef(null);
   const listboxId = useId();
 
@@ -38,7 +39,7 @@ function ShowcaseCreateTile({
         className={`showcase-tile showcase-tile--create${centered ? " showcase-tile--centered" : ""}`}
         onClick={() => {
           setOpen(true);
-          setIsOpen(true);
+          setIsOpen(false);
           setHighlighted(-1);
         }}
         type="button"
@@ -75,7 +76,7 @@ function ShowcaseCreateTile({
     setName("");
     setError("");
     setHighlighted(-1);
-    setIsOpen(true);
+    setIsOpen(false);
   }
 
   function pick(pickedName) {
@@ -169,7 +170,7 @@ function ShowcaseCreateTile({
           setIsOpen(true);
           setHighlighted(-1);
         }}
-        onFocus={() => {
+        onDoubleClick={() => {
           if (combobox) {
             setIsOpen(true);
           }

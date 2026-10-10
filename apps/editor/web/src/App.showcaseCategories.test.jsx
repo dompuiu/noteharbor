@@ -231,6 +231,24 @@ describe("the showcase category canvas", () => {
     ).not.toBeInTheDocument();
   });
 
+  test("suggestions stay hidden until ArrowDown opens them", async () => {
+    const user = userEvent.setup();
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    await user.click(
+      await screen.findByRole("button", { name: "Create a category" }),
+    );
+
+    // Like the tags field: the list opens on demand, not with the field.
+    expect(screen.queryByRole("listbox")).not.toBeInTheDocument();
+
+    await user.keyboard("{ArrowDown}");
+
+    expect(
+      await screen.findByRole("option", { name: "Vienna" }),
+    ).toBeInTheDocument();
+  });
+
   test("Escape closes the suggestions without closing the field", async () => {
     const user = userEvent.setup();
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
@@ -238,6 +256,7 @@ describe("the showcase category canvas", () => {
     await user.click(
       await screen.findByRole("button", { name: "Create a category" }),
     );
+    await user.keyboard("{ArrowDown}");
     expect(
       await screen.findByRole("option", { name: "Vienna" }),
     ).toBeInTheDocument();
