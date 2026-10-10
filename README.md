@@ -1,6 +1,6 @@
 # Note Harbor
 
-Local collection software for managing and presenting banknote archives. This monorepo contains the editable Note Harbor Editor plus separate read-only viewers (Flutter, and an experimental React Native viewer) that consume exported archives.
+Local collection software for managing and presenting banknote archives. This monorepo contains the editable Note Harbor Editor plus a separate read-only Flutter viewer that consumes exported archives.
 
 ## Stack
 
@@ -22,8 +22,7 @@ This is a pnpm workspace with apps under `apps/`:
 - **`apps/editor/server`** — Express + SQLite backend (routes, scrapers, DB access)
 - **`apps/editor/web`** — React + Vite frontend for the editor
 - **`apps/editor/desktop`** — Electron shell that packages the server and web build
-- **`apps/viewer/flutter`** — the read-only Flutter viewer (mature, primary viewer)
-- **`apps/viewer/react-native`** — an experimental read-only viewer built with React Native, targeting iOS/Android/macOS/Windows from one codebase
+- **`apps/viewer/flutter`** — the read-only Flutter viewer
 
 Local data (SQLite DB + images) lives in `data/` by default; see [Environment variables](#environment-variables) to override the location.
 
@@ -146,26 +145,6 @@ For iOS builds:
 
 ```bash
 pnpm build:viewer:flutter:ios
-```
-
-### Run the React Native viewer (experimental)
-
-An alternative read-only viewer under active development, covering iOS, Android, macOS, and Windows from one codebase. See [`apps/viewer/react-native/README.md`](apps/viewer/react-native/README.md) for native toolchain setup (Xcode/CocoaPods, Android Studio, etc.).
-
-```bash
-pnpm start:viewer:react-native
-```
-
-Then, in another terminal, run a target platform, e.g.:
-
-```bash
-pnpm dev:viewer:react-native:ios
-```
-
-Run its tests:
-
-```bash
-pnpm test:viewer:react-native
 ```
 
 ### Environment variables
@@ -590,9 +569,7 @@ The read-only presentation and its authoring canvas. Both browse one level at a 
 
 ### Viewer Apps
 
-The Flutter viewer (`apps/viewer/flutter`) is the primary read-only viewer. It starts empty, imports editor archives containing `banknotes.db` plus `images/`, then shows a searchable notes table and slideshow/lightbox using imported local files.
-
-The React Native viewer (`apps/viewer/react-native`) is an experimental alternative aiming for the same read-only experience across iOS, Android, macOS, and Windows from a single codebase.
+The Flutter viewer (`apps/viewer/flutter`) is the read-only viewer. It starts empty, imports editor archives containing `banknotes.db` plus `images/`, then shows a searchable notes table and slideshow/lightbox using imported local files.
 
 ---
 
