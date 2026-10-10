@@ -264,11 +264,21 @@ describe("sidebar styles", () => {
   });
 
   test("the cursor ring replaces the default focus outline", () => {
-    // The cursor link already draws its own ring, so the global
+    // Every cursor stop already draws its own ring, so the global
     // :focus-visible outline would double it. The outline is dropped only on
-    // the cursor link; a plain Tab focus keeps the browser outline.
+    // cursor stops; a plain Tab focus keeps the browser outline.
+    expect(styles).toMatch(/\.sidebar-link--cursor:focus-visible/);
+    expect(styles).toMatch(/\.sidebar-reorder-toggle--cursor:focus-visible/);
+    expect(styles).toMatch(/\.sidebar-move-button--cursor:focus-visible/);
+    expect(styles).toMatch(/outline:\s*none/);
+  });
+
+  test("the reorder toggle and move buttons ring the keyboard cursor", () => {
     expect(styles).toMatch(
-      /\.sidebar-link--cursor:focus-visible\s*\{[^}]*outline:\s*none/,
+      /\.sidebar-reorder-toggle--cursor\s*\{[^}]*box-shadow:\s*inset 0 0 0 1\.5px var\(--accent\)/,
+    );
+    expect(styles).toMatch(
+      /\.sidebar-move-button--cursor\s*\{[^}]*box-shadow:\s*inset 0 0 0 1\.5px var\(--accent\)/,
     );
   });
 

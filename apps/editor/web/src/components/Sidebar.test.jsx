@@ -314,7 +314,9 @@ describe("Sidebar keyboard cursor", () => {
     expect(document.activeElement).toHaveTextContent("New showcase");
 
     await user.keyboard("{Home}");
-    expect(document.activeElement).toHaveTextContent("Default");
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Reorder Catalog" }),
+    );
   });
 
   test("Enter follows the focused option", async () => {
@@ -376,9 +378,16 @@ describe("Sidebar keyboard cursor", () => {
 
     await user.keyboard("{Tab}");
 
-    // Tab stays in the rail and wraps, matching ArrowDown.
-    expect(container.querySelector(".sidebar-link--cursor")).not.toBeNull();
-    expect(document.activeElement).toHaveTextContent("Default");
+    // Tab stays in the rail and wraps, matching ArrowDown. The first stop is
+    // now the Catalog reorder toggle.
+    expect(
+      container.querySelector(
+        ".sidebar-link--cursor, .sidebar-reorder-toggle--cursor, .sidebar-move-button--cursor",
+      ),
+    ).not.toBeNull();
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Reorder Catalog" }),
+    );
   });
 
   test("Shift+Tab off the first option wraps to the last, like ArrowUp", async () => {
@@ -387,12 +396,106 @@ describe("Sidebar keyboard cursor", () => {
 
     await user.keyboard("{b}");
     await user.keyboard("{Home}");
-    expect(document.activeElement).toHaveTextContent("Default");
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Reorder Catalog" }),
+    );
 
     await user.keyboard("{Shift>}{Tab}{/Shift}");
 
-    expect(container.querySelector(".sidebar-link--cursor")).not.toBeNull();
+    expect(
+      container.querySelector(
+        ".sidebar-link--cursor, .sidebar-reorder-toggle--cursor, .sidebar-move-button--cursor",
+      ),
+    ).not.toBeNull();
     expect(document.activeElement).toHaveTextContent("New showcase");
+  });
+
+  test("arrows walk through the reorder toggles in DOM order", async () => {
+    const user = userEvent.setup();
+    await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.keyboard("{b}");
+    // "b" lands on the active row link; one step back is its group's toggle.
+    expect(document.activeElement).toHaveTextContent("Default");
+    await user.keyboard("{ArrowUp}");
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Reorder Catalog" }),
+    );
+
+    await user.keyboard("{ArrowDown}");
+    expect(document.activeElement).toHaveTextContent("Default");
+  });
+
+  test("Enter on a reorder toggle flips reorder mode", async () => {
+    const user = userEvent.setup();
+    await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.keyboard("{b}");
+    await user.keyboard("{Home}");
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Reorder Catalog" }),
+    );
+
+    await user.keyboard("{Enter}");
+    expect(
+      screen.getByRole("button", { name: "Done reordering Catalog" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(
+      screen.getByRole("button", { name: "Move Default down" }),
+    ).toBeInTheDocument();
+  });
+
+  test("move buttons join the arrow sequence while their group is reordering", async () => {
+    const user = userEvent.setup();
+    await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.keyboard("{b}");
+    await user.keyboard("{Home}");
+    await user.keyboard("{Enter}");
+    expect(
+      screen.getByRole("button", { name: "Done reordering Catalog" }),
+    ).toBeInTheDocument();
+
+    // Cursor stayed on the Catalog toggle; Default follows it, then the
+    // enabled Move down (the disabled Move up is skipped).
+    await user.keyboard("{ArrowDown}");
+    expect(document.activeElement).toHaveTextContent("Default");
+    await user.keyboard("{ArrowDown}");
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Move Default down" }),
+    );
+
+    await user.keyboard("{ArrowDown}");
+    expect(document.activeElement).toHaveTextContent("Archive");
+  });
+
+  test("Enter on a move button reorders and focus follows the moved row", async () => {
+    const user = userEvent.setup();
+    reorderCollections.mockResolvedValue({
+      collections: [
+        { id: 2, is_default: 0, name: "Archive" },
+        { id: 1, is_default: 1, name: "Default" },
+      ],
+    });
+    await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.keyboard("{b}");
+    await user.keyboard("{Home}");
+    await user.keyboard("{Enter}");
+    await user.keyboard("{ArrowDown}"); // Default link
+    await user.keyboard("{ArrowDown}"); // Move Default down
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Move Default down" }),
+    );
+
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(reorderCollections).toHaveBeenCalledWith([2, 1]);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Default" })).toHaveFocus();
+    });
   });
 
   test("Tab keeps its native order until the cursor is active", async () => {

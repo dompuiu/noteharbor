@@ -438,6 +438,10 @@ input[type="radio"] {
   color: var(--accent-strong);
 }
 
+.sidebar-reorder-toggle--cursor {
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
 .sidebar-reorder-toggle-ic {
   display: inline-flex;
 }
@@ -506,6 +510,12 @@ input[type="radio"] {
   cursor: default;
 }
 
+.sidebar-move-button--cursor {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+  box-shadow: inset 0 0 0 1.5px var(--accent);
+}
+
 .sidebar-row--dragging {
   opacity: 0.5;
 }
@@ -518,10 +528,12 @@ input[type="radio"] {
   box-shadow: inset 0 -2px 0 0 var(--accent);
 }
 
-/* The cursor link already draws its own ring. Drop the global
+/* The cursor stops already draw their own ring. Drop the global
    :focus-visible outline here so the two do not stack into a double border.
    Plain Tab focus (no cursor) keeps the outline, so focus stays visible. */
-.sidebar-link--cursor:focus-visible {
+.sidebar-link--cursor:focus-visible,
+.sidebar-reorder-toggle--cursor:focus-visible,
+.sidebar-move-button--cursor:focus-visible {
   outline: none;
 }
 

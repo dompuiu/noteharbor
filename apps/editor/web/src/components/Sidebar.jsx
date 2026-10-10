@@ -22,10 +22,13 @@ import {
 // Save, and Cancel or leaving the route discards the draft.
 //
 // Keyboard model (matches the tables): with nothing focused, "b" opens the
-// rail and puts the cursor on the current option. ↑/↓ and j/k move the cursor;
-// Home/End jump; Enter follows the option; Escape returns focus to the page and
-// collapses the rail. Tab cycles the options like ↓, and Shift+Tab like ↑, both
-// wrapping off the ends, so the rail is left with Escape.
+// rail and puts the cursor on the current option. ↑/↓ and j/k move the cursor
+// through every stop in DOM order — each group's Reorder toggle, each row
+// link/action, and the enabled Move up/down buttons while that group is in
+// reorder mode; Home/End jump; Enter/Space activates the stop (toggles
+// reorder, moves the row, or follows the option); Escape returns focus to the
+// page and collapses the rail. Tab cycles the stops like ↓, and Shift+Tab
+// like ↑, both wrapping off the ends, so the rail is left with Escape.
 
 // Per-destination icons, lifted from the settled layout-D prototype.
 const ICONS = {
@@ -238,8 +241,71 @@ function Sidebar({ pageFocusRef }) {
     }
   }
 
-  // One flat list drives the keyboard cursor, in DOM order.
-  const entries = groups.flatMap((group) => group.items);
+  function isRowReorderable(item, group) {
+    const isShowcase = item.showcaseId != null && !item.pending;
+    const isCollection = item.collectionId != null && !item.pending;
+    const reorderMode = isGroupReordering(group);
+
+    return (
+      (isShowcase && reorderMode && group.reorderScope === "showcases") ||
+      (isCollection && reorderMode && group.reorderScope === "collections")
+    );
+  }
+
+  // Keyboard cursor stops in DOM order: each group's Reorder toggle, then
+  // each row link/action, with the enabled Move up/down buttons inline after
+  // their row's link while that group is in reorder mode. Disabled moves are
+  // skipped: they are not focusable natively either.
+  const cursorStops = [];
+  for (const group of groups) {
+    if (group.reorderScope) {
+      cursorStops.push({ kind: "toggle", group, groupId: group.id, key: `toggle-${group.id}` });
+    }
+    for (const item of group.items) {
+      cursorStops.push({
+        kind: "item",
+        item,
+        group,
+        groupId: group.id,
+        key: item.key ?? item.to,
+      });
+      if (isRowReorderable(item, group)) {
+        const list = item.showcaseId != null ? showcases : collections;
+        const rowId = item.showcaseId != null ? item.showcaseId : item.collectionId;
+        const rowIndex = list.findIndex((entry) => entry.id === rowId);
+        const canMoveUp = rowIndex > 0;
+        const canMoveDown = rowIndex >= 0 && rowIndex < list.length - 1;
+        if (canMoveUp) {
+          cursorStops.push({
+            kind: "move",
+            item,
+            group,
+            groupId: group.id,
+            direction: -1,
+            key: `move-${item.key}-up`,
+          });
+        }
+        if (canMoveDown) {
+          cursorStops.push({
+            kind: "move",
+            item,
+            group,
+            groupId: group.id,
+            direction: 1,
+            key: `move-${item.key}-down`,
+          });
+        }
+      }
+    }
+  }
+  const stopIndexByKey = new Map(cursorStops.map((stop, index) => [stop.key, index]));
+  linksRef.current.length = cursorStops.length;
+
+  // After a keyboard move the provider reconciles the order, which rebuilds
+  // the stops. Park the moved row's key so the next render can land the
+  // cursor on that row's link in its new place, even when the move buttons
+  // themselves change identity at the ends.
+  const pendingMoveFocusRef = useRef(null);
 
   const newShowcaseTo = SHOWCASE_ROUTES.showcaseEdit(NEW_SHOWCASE_ID);
   const newCollectionTo = CATALOG_ROUTES.collectionEdit(NEW_COLLECTION_ID);
@@ -279,8 +345,11 @@ function Sidebar({ pageFocusRef }) {
       return;
     }
 
-    const activeIndex = entries.findIndex(
-      (item) => item.type !== "action" && isItemActive(item, pathname),
+    const activeIndex = cursorStops.findIndex(
+      (stop) =>
+        stop.kind === "item" &&
+        stop.item.type !== "action" &&
+        isItemActive(stop.item, pathname),
     );
     setCursorIndex(activeIndex === -1 ? 0 : activeIndex);
   }
@@ -298,6 +367,29 @@ function Sidebar({ pageFocusRef }) {
     }
   }
 
+  function activateItemStop(item) {
+    if (item?.type === "action") {
+      if (item?.actionKind === "new-collection") {
+        handleNewCollection();
+      } else {
+        handleNewShowcase();
+      }
+      return;
+    }
+
+    if (!item) {
+      return;
+    }
+
+    if (item.to !== newShowcaseTo) {
+      discardPendingShowcase();
+    }
+    if (item.to !== newCollectionTo) {
+      discardPendingCollection();
+    }
+    navigate(item.to);
+  }
+
   // Move DOM focus with the cursor so Tab/Escape and screen readers track it.
   // `preventScroll` matches every other focus call in the rail: without it
   // each arrow press can scroll the navigating list, visibly shifting every
@@ -308,7 +400,51 @@ function Sidebar({ pageFocusRef }) {
     }
 
     linksRef.current[cursorIndex]?.focus({ preventScroll: true });
-  }, [cursorIndex]);
+  }, [cursorIndex, cursorStops.length]);
+
+  // The stops rebuild when reorder mode flips or the order reconciles. Clamp
+  // a cursor left past the end (e.g. toggling a group off removed its moves).
+  useEffect(() => {
+    if (cursorIndex === null) {
+      return;
+    }
+
+    if (cursorIndex >= cursorStops.length) {
+      setCursorIndex(cursorStops.length - 1);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [cursorStops.length]);
+
+  // After a move lands, focus follows the moved row's link in its new place.
+  // The effect runs when the provider's order reconciles; on a failed request
+  // the order is unchanged, so the link is found where it started and focus
+  // simply returns to it. In cursor mode the cursor index moves; in native
+  // Tab mode focus is handed directly without claiming the cursor.
+  useEffect(() => {
+    if (pendingMoveFocusRef.current == null) {
+      return;
+    }
+
+    const key = pendingMoveFocusRef.current;
+    pendingMoveFocusRef.current = null;
+    const nextIndex = cursorStops.findIndex(
+      (stop) => stop.kind === "item" && (stop.item.key ?? stop.item.to) === key,
+    );
+
+    if (nextIndex < 0) {
+      return;
+    }
+
+    if (cursorIndex === null) {
+      linksRef.current[nextIndex]?.focus({ preventScroll: true });
+      return;
+    }
+
+    if (nextIndex !== cursorIndex) {
+      setCursorIndex(nextIndex);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showcases, collections]);
 
   useEffect(() => {
     function handleKeyDown(event) {
@@ -355,7 +491,7 @@ function Sidebar({ pageFocusRef }) {
         return;
       }
 
-      const count = entries.length;
+      const count = cursorStops.length;
       // Tab only takes over once the cursor is active ("b" opened the rail);
       // otherwise it keeps its native tab order. With the cursor on, Tab
       // mirrors the arrows and wraps off the ends, so Escape is the way out.
@@ -404,30 +540,31 @@ function Sidebar({ pageFocusRef }) {
           return;
         }
 
-        const entry = entries[cursorIndex];
+        const stop = cursorStops[cursorIndex];
 
-        if (entry?.type === "action") {
-          if (entry?.actionKind === "new-collection") {
-            handleNewCollection();
-          } else {
-            handleNewShowcase();
-          }
-        } else if (entry) {
-          if (entry.to !== newShowcaseTo) {
-            discardPendingShowcase();
-          }
-          if (entry.to !== newCollectionTo) {
-            discardPendingCollection();
-          }
-          navigate(entry.to);
+        if (stop?.kind === "toggle") {
+          toggleGroupReorder(stop.group);
+          return;
         }
+
+        if (stop?.kind === "move") {
+          pendingMoveFocusRef.current = stop.item.key ?? stop.item.to;
+          if (stop.item.showcaseId != null) {
+            void handleMoveShowcase(stop.item.showcaseId, stop.direction);
+          } else {
+            void handleMoveCollection(stop.item.collectionId, stop.direction);
+          }
+          return;
+        }
+
+        activateItemStop(stop?.item);
       }
     }
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursorIndex, pathname, showcases, pendingShowcase, collections, pendingCollection]);
+  }, [cursorIndex, pathname, showcases, pendingShowcase, collections, pendingCollection, reorderingCollections, reorderingShowcases, cursorStops.length]);
 
   function handleLinkClick(to) {
     // A click means "I'm leaving the rail". The browser focuses a clicked
@@ -778,8 +915,21 @@ function Sidebar({ pageFocusRef }) {
                       aria-pressed={reorderMode}
                       className={`sidebar-reorder-toggle${
                         reorderMode ? " sidebar-reorder-toggle--active" : ""
+                      }${
+                        cursorIndex === stopIndexByKey.get(`toggle-${group.id}`)
+                          ? " sidebar-reorder-toggle--cursor"
+                          : ""
                       }`}
-                      onClick={() => toggleGroupReorder(group)}
+                      data-sidebar-index={stopIndexByKey.get(`toggle-${group.id}`)}
+                      onClick={() => {
+                        if (cursorIndex !== null) {
+                          setCursorIndex(stopIndexByKey.get(`toggle-${group.id}`));
+                        }
+                        toggleGroupReorder(group);
+                      }}
+                      ref={(node) => {
+                        linksRef.current[stopIndexByKey.get(`toggle-${group.id}`)] = node;
+                      }}
                       title={reorderPressedLabel}
                       type="button"
                     >
@@ -795,7 +945,7 @@ function Sidebar({ pageFocusRef }) {
                 </div>
                 <div className="sidebar-group-links">
                   {group.items.map((item) => {
-                    const index = entries.indexOf(item);
+                    const index = stopIndexByKey.get(item.key ?? item.to);
                     const active =
                       item.type !== "action" && isItemActive(item, pathname);
                     // A pending draft row is display-only: it cannot be
@@ -958,6 +1108,14 @@ function Sidebar({ pageFocusRef }) {
                       }
 
                       function handleMove(direction) {
+                        pendingMoveFocusRef.current = item.key ?? item.to;
+                        if (cursorIndex !== null) {
+                          const moveKey = `move-${item.key}-${direction === -1 ? "up" : "down"}`;
+                          const moveIndex = stopIndexByKey.get(moveKey);
+                          if (moveIndex != null) {
+                            setCursorIndex(moveIndex);
+                          }
+                        }
                         if (isShowcase) {
                           void handleMoveShowcase(item.showcaseId, direction);
                         } else {
@@ -1008,9 +1166,20 @@ function Sidebar({ pageFocusRef }) {
                           <span className="sidebar-row-moves">
                             <button
                               aria-label={`Move ${item.label} up`}
-                              className="sidebar-move-button"
+                              className={`sidebar-move-button${
+                                cursorIndex === stopIndexByKey.get(`move-${item.key}-up`)
+                                  ? " sidebar-move-button--cursor"
+                                  : ""
+                              }`}
+                              data-sidebar-index={stopIndexByKey.get(`move-${item.key}-up`)}
                               disabled={!canMoveUp}
                               onClick={() => handleMove(-1)}
+                              ref={(node) => {
+                                const moveIndex = stopIndexByKey.get(`move-${item.key}-up`);
+                                if (moveIndex != null) {
+                                  linksRef.current[moveIndex] = node;
+                                }
+                              }}
                               title={`Move ${item.label} up`}
                               type="button"
                             >
@@ -1018,9 +1187,20 @@ function Sidebar({ pageFocusRef }) {
                             </button>
                             <button
                               aria-label={`Move ${item.label} down`}
-                              className="sidebar-move-button"
+                              className={`sidebar-move-button${
+                                cursorIndex === stopIndexByKey.get(`move-${item.key}-down`)
+                                  ? " sidebar-move-button--cursor"
+                                  : ""
+                              }`}
+                              data-sidebar-index={stopIndexByKey.get(`move-${item.key}-down`)}
                               disabled={!canMoveDown}
                               onClick={() => handleMove(1)}
+                              ref={(node) => {
+                                const moveIndex = stopIndexByKey.get(`move-${item.key}-down`);
+                                if (moveIndex != null) {
+                                  linksRef.current[moveIndex] = node;
+                                }
+                              }}
                               title={`Move ${item.label} down`}
                               type="button"
                             >
