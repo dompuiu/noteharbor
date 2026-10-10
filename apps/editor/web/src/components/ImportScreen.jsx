@@ -726,7 +726,8 @@ function ImportScreen({
             ) : null}
             {exportingArchive ? (
               <p className="muted import-progress-detail">
-                {selectedExportCollectionIds.length} collection(s) selected
+                {selectedExportCollectionIds.length} collection(s),{" "}
+                {selectedExportShowcaseIds.length} showcase(s) selected
               </p>
             ) : null}
             {submittingArchive && archiveUploadProgress?.phase === "uploading" &&
