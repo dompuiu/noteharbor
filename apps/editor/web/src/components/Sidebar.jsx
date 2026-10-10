@@ -4,7 +4,6 @@ import { useCollections } from "../lib/collections.jsx";
 import { useShowcases } from "../lib/showcases.jsx";
 import {
   CATALOG_ROUTES,
-  DEFAULT_DESTINATION,
   NEW_COLLECTION_ID,
   NEW_SHOWCASE_ID,
   SHOWCASE_ROUTES,
@@ -16,7 +15,7 @@ import {
 // never becomes a drawer: narrow windows scroll horizontally instead.
 //
 // The Catalog group is data-driven for collections (the sidebar *is* the
-// collection list): Banknotes, one row per collection, a `+ New collection`
+// collection list): one row per collection, a `+ New collection`
 // action above Import / Export. The Showcases group is data-driven the same
 // way: one row per showcase plus a `+ New showcase` action. Both create
 // actions stage a draft row and open its edit canvas; nothing POSTs until
@@ -45,18 +44,6 @@ const ICONS = {
     '<rect width="8" height="18" x="3" y="3" rx="1"/><path d="M7 3v18"/><path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z"/>',
   showcases:
     '<path d="m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16"/><path d="M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2"/><circle cx="13" cy="7" r="1" fill="currentColor"/><rect x="8" y="2" width="14" height="14" rx="2"/>',
-};
-
-const BANKNOTES_ITEM = {
-  icon: "banknote",
-  key: "banknotes",
-  label: "Banknotes",
-  to: DEFAULT_DESTINATION,
-  // The note editor is a Catalog > Banknotes child, so it keeps the
-  // Banknotes destination highlighted.
-  matches: (pathname) =>
-    pathname === DEFAULT_DESTINATION ||
-    pathname.startsWith("/catalog/notes/"),
 };
 
 const IMPORT_EXPORT_ITEM = {
@@ -101,6 +88,7 @@ function Sidebar({ pageFocusRef }) {
     reorderShowcases,
   } = useShowcases();
   const {
+    activeCollectionId,
     collections,
     pendingCollection,
     beginPendingCollection,
@@ -124,7 +112,9 @@ function Sidebar({ pageFocusRef }) {
 
   // The collection rows sit inside the Catalog group, above Import / Export.
   // A collection row stays highlighted in both of its modes: view and edit
-  // are siblings under the collection. A pending (not-yet-saved) collection
+  // are siblings under the collection. The standalone note editor has no
+  // collection segment in its URL, so it keeps the active collection
+  // highlighted. A pending (not-yet-saved) collection
   // renders as a draft row that vanishes on Cancel or on leaving its route.
   const collectionItems = collections.map((collection) => ({
     icon: "banknote",
@@ -133,7 +123,9 @@ function Sidebar({ pageFocusRef }) {
     to: CATALOG_ROUTES.collection(collection.id),
     matches: (pathname) =>
       pathname === CATALOG_ROUTES.collection(collection.id) ||
-      pathname === CATALOG_ROUTES.collectionEdit(collection.id),
+      pathname === CATALOG_ROUTES.collectionEdit(collection.id) ||
+      (pathname.startsWith("/catalog/notes/") &&
+        collection.id === activeCollectionId),
     collectionId: collection.id,
   }));
 
@@ -203,7 +195,6 @@ function Sidebar({ pageFocusRef }) {
       icon: "catalog",
       label: "Catalog",
       items: [
-        BANKNOTES_ITEM,
         ...collectionItems,
         newCollectionItem,
         IMPORT_EXPORT_ITEM,

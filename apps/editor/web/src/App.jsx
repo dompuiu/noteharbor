@@ -12,7 +12,6 @@ import { ConnectionError } from "./components/ConnectionError.jsx";
 import { ImportScreen } from "./components/ImportScreen.jsx";
 import { NoteEditForm } from "./components/NoteEditForm.jsx";
 import { NoCollectionsPrompt } from "./components/NoCollectionsPrompt.jsx";
-import { NotesTable } from "./components/NotesTable.jsx";
 import { ShowcaseScreen } from "./components/ShowcaseScreen.jsx";
 import { Sidebar } from "./components/Sidebar.jsx";
 import { getHealth } from "./lib/api.js";
@@ -34,7 +33,7 @@ function NoteEditorDestination({ emptyLibrary, selectedCollectionId }) {
         <div className="panel">
           <div className="panel-heading">
             <div className="panel-heading-copy">
-              <h1>Banknotes</h1>
+              <h1>Notes</h1>
             </div>
           </div>
           <NoCollectionsPrompt />
@@ -44,6 +43,49 @@ function NoteEditorDestination({ emptyLibrary, selectedCollectionId }) {
   }
 
   return <NoteEditForm selectedCollectionId={selectedCollectionId} />;
+}
+
+// The collections home has no canvas of its own: it resolves to the active
+// (or first) collection view, or to the empty-library prompt when there is
+// nothing to show yet. This is also where `/`, unknown paths, and the
+// retired `/catalog/banknotes` address land.
+function CollectionHomeRedirect() {
+  const { activeCollectionId, collections, loadingCollections } =
+    useCollections();
+
+  if (loadingCollections) {
+    return (
+      <section className="screen-stack narrow-stack">
+        <div className="panel">
+          <p className="muted">Loading collections…</p>
+        </div>
+      </section>
+    );
+  }
+
+  const target =
+    collections.find((entry) => entry.id === activeCollectionId) ??
+    collections[0] ??
+    null;
+
+  if (!target) {
+    return (
+      <section className="screen-stack narrow-stack">
+        <div className="panel">
+          <div className="panel-heading">
+            <div className="panel-heading-copy">
+              <h1>Collections</h1>
+            </div>
+          </div>
+          <NoCollectionsPrompt />
+        </div>
+      </section>
+    );
+  }
+
+  return (
+    <Navigate replace to={CATALOG_ROUTES.collection(target.id)} />
+  );
 }
 
 // A bare `/portfolio/showcases/:id` URL (the pre-`view`-segment shape, and any
@@ -62,14 +104,12 @@ function LegacyShowcaseRedirect() {
 
 function ShellContent() {
   const {
-    activeCollection,
     activeCollectionId,
     collections,
     collectionsError,
     collectionsErrorReason,
     loadingCollections,
     refreshCollections,
-    selectCollection,
   } = useCollections();
 
   // The connection state is read from the collections load the provider already
@@ -140,19 +180,6 @@ function ShellContent() {
           ) : (
             <Routes>
               <Route
-                element={
-                  <NotesTable
-                    activeCollection={activeCollection}
-                    activeCollectionId={activeCollectionId}
-                    collections={collections}
-                    collectionsError={collectionsError}
-                    loadingCollections={loadingCollections}
-                    onSelectCollection={selectCollection}
-                  />
-                }
-                path={CATALOG_ROUTES.banknotes}
-              />
-              <Route
                 element={<CollectionScreen key="collection-view" mode="view" />}
                 path={CATALOG_ROUTES.collection(":id")}
               />
@@ -161,8 +188,14 @@ function ShellContent() {
                 path={CATALOG_ROUTES.collectionEdit(":id")}
               />
               <Route
-                element={<Navigate replace to={DEFAULT_DESTINATION} />}
+                element={<CollectionHomeRedirect />}
                 path={CATALOG_ROUTES.collections}
+              />
+              {/* Retired with the sidebar collections: old bookmarks land on
+              the collections home, which resolves to the first collection. */}
+              <Route
+                element={<Navigate replace to={DEFAULT_DESTINATION} />}
+                path="/catalog/banknotes"
               />
               <Route
                 element={(

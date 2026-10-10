@@ -1,5 +1,4 @@
 export const CATALOG_ROUTES = {
-  banknotes: "/catalog/banknotes",
   collections: "/catalog/collections",
   collection: (id) => `/catalog/collections/${id}/view`,
   collectionEdit: (id) => `/catalog/collections/${id}/edit`,
@@ -36,7 +35,7 @@ export const NEW_SHOWCASE_ID = "new";
 // discards the draft without touching the server.
 export const NEW_COLLECTION_ID = "new";
 
-// Where an unknown route lands. This is the first destination of the first
-// sidebar group (Catalog > Banknotes); keep it in one place so the catch-all
-// and any future default agree.
-export const DEFAULT_DESTINATION = CATALOG_ROUTES.banknotes;
+// Where an unknown route lands. This is the collections home: it resolves to
+// the first collection view (or the empty-library prompt when there are no
+// collections), so the catch-all and any future default agree.
+export const DEFAULT_DESTINATION = CATALOG_ROUTES.collections;

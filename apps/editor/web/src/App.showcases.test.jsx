@@ -103,7 +103,7 @@ beforeEach(() => {
 
 describe("Showcases sidebar section", () => {
   test("lists one item per showcase and a New showcase action", async () => {
-    renderAt(CATALOG_ROUTES.banknotes);
+    renderAt(CATALOG_ROUTES.collection(1));
 
     expect(await screen.findByRole("link", { name: "Summer" })).toBeInTheDocument();
     expect(screen.getByRole("link", { name: "Vienna" })).toBeInTheDocument();
@@ -127,7 +127,7 @@ describe("Showcases sidebar section", () => {
 describe("Creating a showcase", () => {
   test("New showcase stages a draft without posting, with the name field focused", async () => {
     const user = userEvent.setup();
-    renderAt(CATALOG_ROUTES.banknotes);
+    renderAt(CATALOG_ROUTES.collection(1));
 
     await user.click(
       await screen.findByRole("button", { name: "New showcase" }),
@@ -149,7 +149,7 @@ describe("Creating a showcase", () => {
 
   test("Save on a draft posts the showcase and opens its view route", async () => {
     const user = userEvent.setup();
-    renderAt(CATALOG_ROUTES.banknotes);
+    renderAt(CATALOG_ROUTES.collection(1));
 
     await user.click(
       await screen.findByRole("button", { name: "New showcase" }),
@@ -170,7 +170,7 @@ describe("Creating a showcase", () => {
 
   test("Save on a renamed draft posts the custom name", async () => {
     const user = userEvent.setup();
-    renderAt(CATALOG_ROUTES.banknotes);
+    renderAt(CATALOG_ROUTES.collection(1));
 
     await user.click(
       await screen.findByRole("button", { name: "New showcase" }),
@@ -188,7 +188,7 @@ describe("Creating a showcase", () => {
 
   test("Cancel on a draft discards it without posting and opens the last showcase", async () => {
     const user = userEvent.setup();
-    renderAt(CATALOG_ROUTES.banknotes);
+    renderAt(CATALOG_ROUTES.collection(1));
 
     await user.click(
       await screen.findByRole("button", { name: "New showcase" }),
@@ -209,7 +209,7 @@ describe("Creating a showcase", () => {
   test("Cancel on a draft with no showcases goes home", async () => {
     const user = userEvent.setup();
     getShowcases.mockResolvedValue({ showcases: [] });
-    renderAt(CATALOG_ROUTES.banknotes);
+    renderAt(CATALOG_ROUTES.collection(1));
 
     await user.click(
       await screen.findByRole("button", { name: "New showcase" }),
@@ -220,13 +220,13 @@ describe("Creating a showcase", () => {
 
     expect(createShowcase).not.toHaveBeenCalled();
     await waitFor(() => {
-      expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+      expect(currentPath()).toBe(CATALOG_ROUTES.collection(1));
     });
   });
 
   test("Escape in the draft name field cancels like Cancel", async () => {
     const user = userEvent.setup();
-    renderAt(CATALOG_ROUTES.banknotes);
+    renderAt(CATALOG_ROUTES.collection(1));
 
     await user.click(
       await screen.findByRole("button", { name: "New showcase" }),
@@ -249,7 +249,7 @@ describe("Creating a showcase", () => {
 
   test("leaving the draft for another sidebar option discards it without posting", async () => {
     const user = userEvent.setup();
-    renderAt(CATALOG_ROUTES.banknotes);
+    renderAt(CATALOG_ROUTES.collection(1));
 
     await user.click(
       await screen.findByRole("button", { name: "New showcase" }),
@@ -457,7 +457,7 @@ describe("Deleting a showcase", () => {
     });
   });
 
-  test("deleting the last remaining showcase goes to Banknotes", async () => {
+  test("deleting the last remaining showcase goes to the first collection", async () => {
     const user = userEvent.setup();
     getShowcases.mockResolvedValue({ showcases: [{ id: 1, name: "Only" }] });
     deleteShowcase.mockResolvedValue({ success: true });
@@ -471,7 +471,7 @@ describe("Deleting a showcase", () => {
     await user.click(within(dialog).getByRole("button", { name: "Delete" }));
 
     await waitFor(() => {
-      expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+      expect(currentPath()).toBe(CATALOG_ROUTES.collection(1));
     });
   });
 
@@ -494,21 +494,21 @@ describe("Deleting a showcase", () => {
 });
 
 describe("Retired routes", () => {
-  test("/portfolio/categories falls through to Banknotes", async () => {
+  test("/portfolio/categories falls through to the first collection", async () => {
     renderAt("/portfolio/categories");
 
     await waitFor(() => {
-      expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+      expect(currentPath()).toBe(CATALOG_ROUTES.collection(1));
     });
-    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
+    expect(await screen.findByText("Collection screen")).toBeInTheDocument();
   });
 
-  test("/portfolio/groupings falls through to Banknotes", async () => {
+  test("/portfolio/groupings falls through to the first collection", async () => {
     renderAt("/portfolio/groupings");
 
     await waitFor(() => {
-      expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+      expect(currentPath()).toBe(CATALOG_ROUTES.collection(1));
     });
-    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
+    expect(await screen.findByText("Collection screen")).toBeInTheDocument();
   });
 });

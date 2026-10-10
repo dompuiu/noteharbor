@@ -23,7 +23,6 @@ import {
 } from "../lib/noteClipboard.js";
 import { isEditableElement } from "../lib/editableElement.js";
 import { isEmptyLibrary } from "../lib/libraryState.js";
-import { CATALOG_ROUTES } from "../lib/routes.js";
 import {
   shouldHandOffToFilters,
   useFilterFocusMemory,
@@ -1326,7 +1325,7 @@ function NotesTable({
   function navigateToTableRoute(nextRoute, { replace = false } = {}) {
     const nextHash = buildTableHash(nextRoute);
     const nextUrl = `${location.pathname}${nextHash}`;
-    navigate(nextUrl || CATALOG_ROUTES.banknotes, { replace });
+    navigate(nextUrl, { replace });
   }
 
   // Context carried on every slideshow URL: the filter+sort snapshot the
@@ -3539,7 +3538,7 @@ function NotesTable({
           <div className="panel-heading-copy">
             <h2>
               {Number(activeCollection?.is_default) === 1 ? "★ " : ""}
-              {activeCollection?.name ?? "Banknotes"}
+              {activeCollection?.name ?? "Notes"}
             </h2>
             <p>
               {orderedNotes.length} notes in the current view.

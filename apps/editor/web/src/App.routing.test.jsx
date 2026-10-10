@@ -25,10 +25,6 @@ vi.mock("./lib/api.js", () => ({
   updateNode: vi.fn(),
 }));
 
-vi.mock("./components/NotesTable.jsx", () => ({
-  NotesTable: () => <div>Banknotes screen</div>,
-}));
-
 vi.mock("./components/CollectionScreen.jsx", () => ({
   CollectionScreen: ({ mode }) => <div>{`Collection ${mode} screen`}</div>,
 }));
@@ -98,11 +94,13 @@ beforeEach(() => {
 });
 
 describe("Catalog route prefixes", () => {
-  test("serves the banknote table at /catalog/banknotes", async () => {
-    renderAt(CATALOG_ROUTES.banknotes);
+  test("the collections home resolves to the first collection view", async () => {
+    renderAt(CATALOG_ROUTES.collections);
 
-    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
-    expect(currentPath()).toBe("/catalog/banknotes");
+    await waitFor(() => {
+      expect(currentPath()).toBe(CATALOG_ROUTES.collection(1));
+    });
+    expect(await screen.findByText("Collection view screen")).toBeInTheDocument();
   });
 
   test("serves a collection view at /catalog/collections/:id/view", async () => {
@@ -119,13 +117,13 @@ describe("Catalog route prefixes", () => {
     expect(currentPath()).toBe("/catalog/collections/1/edit");
   });
 
-  test("the legacy /catalog/collections list redirects to Banknotes", async () => {
-    renderAt(CATALOG_ROUTES.collections);
+  test("the retired /catalog/banknotes address lands on the first collection", async () => {
+    renderAt("/catalog/banknotes");
 
     await waitFor(() => {
-      expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+      expect(currentPath()).toBe(CATALOG_ROUTES.collection(1));
     });
-    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
+    expect(await screen.findByText("Collection view screen")).toBeInTheDocument();
   });
 
   test("serves import and export at /catalog/import-export", async () => {
@@ -144,44 +142,44 @@ describe("Catalog route prefixes", () => {
 });
 
 describe("Root redirect", () => {
-  test("/ redirects to /catalog/banknotes", async () => {
+  test("/ lands on the first collection", async () => {
     renderAt("/");
 
     await waitFor(() => {
-      expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+      expect(currentPath()).toBe(CATALOG_ROUTES.collection(1));
     });
-    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
+    expect(await screen.findByText("Collection view screen")).toBeInTheDocument();
   });
 });
 
 describe("Unknown routes", () => {
-  test("an unknown path lands on the first sidebar destination", async () => {
+  test("an unknown path lands on the first collection", async () => {
     renderAt("/catalog/banknotes3");
 
     await waitFor(() => {
-      expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+      expect(currentPath()).toBe(CATALOG_ROUTES.collection(1));
     });
-    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
+    expect(await screen.findByText("Collection view screen")).toBeInTheDocument();
   });
 });
 
 describe("Retired destinations", () => {
-  test("/portfolio/categories falls through to Banknotes", async () => {
+  test("/portfolio/categories falls through to the first collection", async () => {
     renderAt("/portfolio/categories");
 
     await waitFor(() => {
-      expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+      expect(currentPath()).toBe(CATALOG_ROUTES.collection(1));
     });
-    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
+    expect(await screen.findByText("Collection view screen")).toBeInTheDocument();
   });
 
-  test("/portfolio/groupings falls through to Banknotes", async () => {
+  test("/portfolio/groupings falls through to the first collection", async () => {
     renderAt("/portfolio/groupings");
 
     await waitFor(() => {
-      expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+      expect(currentPath()).toBe(CATALOG_ROUTES.collection(1));
     });
-    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
+    expect(await screen.findByText("Collection view screen")).toBeInTheDocument();
   });
 
   test("renders the sidebar navigation on every route", async () => {
@@ -191,18 +189,18 @@ describe("Retired destinations", () => {
       await screen.findByRole("navigation", { name: "Sections" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("link", { name: "Banknotes" }),
+      screen.getByRole("link", { name: "Default" }),
     ).toBeInTheDocument();
   });
 });
 
 describe("Empty library", () => {
-  test("an empty library stays on the banknote table", async () => {
+  test("an empty library shows the empty-library prompt on the collections home", async () => {
     getCollections.mockResolvedValue({ collections: [] });
-    renderAt(CATALOG_ROUTES.banknotes);
+    renderAt(CATALOG_ROUTES.collections);
 
-    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
-    expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+    expect(await screen.findByText(/No collections yet/)).toBeInTheDocument();
+    expect(currentPath()).toBe(CATALOG_ROUTES.collections);
   });
 
   test("the note editor shows the empty-library prompt, not a dead form", async () => {
@@ -223,17 +221,17 @@ describe("Connection state", () => {
 
   test("a missing editor server reports the server problem", async () => {
     getCollections.mockRejectedValue(connectionError("server"));
-    renderAt(CATALOG_ROUTES.banknotes);
+    renderAt(CATALOG_ROUTES.collection(1));
 
     expect(
       await screen.findByText("Can't reach the editor server."),
     ).toBeInTheDocument();
-    expect(screen.queryByText("Banknotes screen")).not.toBeInTheDocument();
+    expect(screen.queryByText("Collection view screen")).not.toBeInTheDocument();
   });
 
   test("a database that does not answer reports the database problem", async () => {
     getCollections.mockRejectedValue(connectionError("database"));
-    renderAt(CATALOG_ROUTES.banknotes);
+    renderAt(CATALOG_ROUTES.collection(1));
 
     expect(
       await screen.findByText("Can't reach the database."),
@@ -242,7 +240,7 @@ describe("Connection state", () => {
 
   test("an unexpected load failure reports a generic problem", async () => {
     getCollections.mockRejectedValue(connectionError("generic"));
-    renderAt(CATALOG_ROUTES.banknotes);
+    renderAt(CATALOG_ROUTES.collection(1));
 
     expect(
       await screen.findByText("Can't check the connection."),
@@ -253,9 +251,9 @@ describe("Connection state", () => {
     // The load never settles: the page must still paint (and no probe run),
     // which is the regression that gating the shell on /api/health introduced.
     getCollections.mockReturnValue(new Promise(() => {}));
-    renderAt(CATALOG_ROUTES.banknotes);
+    renderAt(CATALOG_ROUTES.collection(1));
 
-    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
+    expect(await screen.findByText("Collection view screen")).toBeInTheDocument();
     expect(getHealth).not.toHaveBeenCalled();
   });
 
@@ -263,20 +261,20 @@ describe("Connection state", () => {
     const user = userEvent.setup();
     getCollections.mockRejectedValueOnce(connectionError("server"));
     getHealth.mockResolvedValue({ connected: true });
-    renderAt(CATALOG_ROUTES.banknotes);
+    renderAt(CATALOG_ROUTES.collection(1));
 
     await user.click(
       await screen.findByRole("button", { name: "Try again" }),
     );
 
-    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
+    expect(await screen.findByText("Collection view screen")).toBeInTheDocument();
   });
 
   test("a retry that still cannot reach the database keeps that problem", async () => {
     const user = userEvent.setup();
     getCollections.mockRejectedValue(connectionError("server"));
     getHealth.mockResolvedValue({ connected: false, reason: "database" });
-    renderAt(CATALOG_ROUTES.banknotes);
+    renderAt(CATALOG_ROUTES.collection(1));
 
     await user.click(
       await screen.findByRole("button", { name: "Try again" }),
@@ -289,9 +287,9 @@ describe("Connection state", () => {
 
   test("paints the page under StrictMode without a health probe", async () => {
     getCollections.mockReturnValue(new Promise(() => {}));
-    renderAtInStrictMode(CATALOG_ROUTES.banknotes);
+    renderAtInStrictMode(CATALOG_ROUTES.collection(1));
 
-    expect(await screen.findByText("Banknotes screen")).toBeInTheDocument();
+    expect(await screen.findByText("Collection view screen")).toBeInTheDocument();
     expect(getHealth).not.toHaveBeenCalled();
   });
 });

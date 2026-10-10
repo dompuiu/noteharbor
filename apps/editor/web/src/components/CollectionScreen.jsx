@@ -6,7 +6,7 @@ import { useConfirmation } from "./ConfirmDialog.jsx";
 import { NotesTable } from "./NotesTable.jsx";
 
 // One collection, rendered in one of two near-identical modes. View mode shows
-// the collection's banknotes table; edit mode is a draft with Save/Cancel.
+// the collection's notes table; edit mode is a draft with Save/Cancel.
 // Both share the same header shell so the two never drift — the showcases
 // pattern applied to collections.
 function CollectionScreen({ mode }) {
@@ -101,7 +101,7 @@ function CollectionScreen({ mode }) {
     }
   }, [isNew, pendingCollection, beginPendingCollection]);
 
-  // Viewing a collection makes it active so the Banknotes table follows the
+  // Viewing a collection makes it active so the notes table follows the
   // last-viewed collection.
   useEffect(() => {
     if (!isNew && collection && activeCollectionId !== collection.id) {
@@ -284,7 +284,7 @@ function CollectionScreen({ mode }) {
   const invalidId = !isNew && (!Number.isInteger(collectionId) || collectionId <= 0);
   const missingCollection = !isNew && !invalidId && !loadingCollections && !collectionsError && !collection;
 
-  // The collection view is the banknotes table for that collection, so
+  // The collection view is the notes table for that collection, so
   // `/catalog/collections/:id/view` reads the notes directly. The Edit action
   // lives in the table header next to Add note; the table already shows the
   // loading and error states.
@@ -300,7 +300,7 @@ function CollectionScreen({ mode }) {
               </p>
               <div className="showcase-empty-actions">
                 <Link className="button" to={DEFAULT_DESTINATION}>
-                  View banknotes
+                  View collections
                 </Link>
               </div>
             </div>
@@ -440,7 +440,7 @@ function CollectionScreen({ mode }) {
             </p>
             <div className="showcase-empty-actions">
               <Link className="button" to={DEFAULT_DESTINATION}>
-                View banknotes
+                View collections
               </Link>
             </div>
           </div>

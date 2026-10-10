@@ -185,7 +185,7 @@ function ImportScreen({
     try {
       await importArchive(archiveSource, setArchiveUploadProgress);
       setArchiveResult({ success: true });
-      window.location.assign(CATALOG_ROUTES.banknotes);
+      window.location.assign(CATALOG_ROUTES.collections);
     } catch (importError) {
       setError(importError.message);
     } finally {
@@ -240,7 +240,7 @@ function ImportScreen({
 
     try {
       await clearAppData();
-      window.location.assign(CATALOG_ROUTES.banknotes);
+      window.location.assign(CATALOG_ROUTES.collections);
     } catch (clearError) {
       setError(clearError.message);
     } finally {

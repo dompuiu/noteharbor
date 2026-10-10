@@ -426,7 +426,11 @@ function NoteEditForm({
       return;
     }
 
-    navigate(CATALOG_ROUTES.banknotes);
+    navigate(
+      Number.isInteger(selectedCollectionId)
+        ? CATALOG_ROUTES.collection(selectedCollectionId)
+        : CATALOG_ROUTES.collections,
+    );
   }
 
   useEffect(() => {
@@ -1194,7 +1198,11 @@ function NoteEditForm({
           return;
         }
 
-        navigate(CATALOG_ROUTES.banknotes);
+        navigate(
+          Number.isInteger(destinationCollectionId)
+            ? CATALOG_ROUTES.collection(destinationCollectionId)
+            : CATALOG_ROUTES.collections,
+        );
         return;
       }
 
@@ -1212,7 +1220,11 @@ function NoteEditForm({
         return;
       }
 
-      navigate(CATALOG_ROUTES.banknotes);
+      navigate(
+        Number.isInteger(selectedCollectionId)
+          ? CATALOG_ROUTES.collection(selectedCollectionId)
+          : CATALOG_ROUTES.collections,
+      );
     } catch (saveError) {
       setError(saveError.message);
     } finally {
@@ -1548,7 +1560,15 @@ function NoteEditForm({
                 {cancelLabel}
               </button>
             ) : (
-              <Link className="button" title={cancelLabel} to={CATALOG_ROUTES.banknotes}>
+              <Link
+                className="button"
+                title={cancelLabel}
+                to={
+                  Number.isInteger(selectedCollectionId)
+                    ? CATALOG_ROUTES.collection(selectedCollectionId)
+                    : CATALOG_ROUTES.collections
+                }
+              >
                 {cancelLabel}
               </Link>
             )}

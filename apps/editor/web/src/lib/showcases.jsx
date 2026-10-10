@@ -98,7 +98,7 @@ function ShowcasesProvider({ children }) {
 
   // Deleting hands back the showcase that follows in display order so the
   // caller can open it; when the deleted showcase was last, there is none and
-  // the caller falls back to Banknotes.
+  // the caller falls back to the collections home.
   async function handleDeleteShowcase(showcaseId) {
     const index = showcases.findIndex((showcase) => showcase.id === showcaseId);
     const nextShowcase = showcases[index + 1] ?? null;

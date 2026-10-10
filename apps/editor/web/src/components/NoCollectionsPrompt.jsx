@@ -3,7 +3,7 @@ import { CATALOG_ROUTES, NEW_COLLECTION_ID } from "../lib/routes.js";
 
 // An empty library, not an outage: there is nothing to show yet, and a note
 // can't exist without a collection. So the two ways forward are the two ways
-// data can arrive. Rendered inside the banknote table's empty cell and inside
+// data can arrive. Rendered inside the collection notes table's empty cell and inside
 // the note editor's panel.
 function NoCollectionsPrompt() {
   return (
