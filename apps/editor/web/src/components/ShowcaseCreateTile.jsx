@@ -160,17 +160,22 @@ function ShowcaseCreateTile({
       pick(visible[highlighted].name);
       return;
     }
-    if (event.key === "Escape" && isOpen) {
-      event.preventDefault();
-      event.stopPropagation();
-      setIsOpen(false);
-      setHighlighted(-1);
-      return;
-    }
     if (event.key === "Tab" && isOpen) {
       setIsOpen(false);
       setHighlighted(-1);
     }
+  }
+
+  // Escape anywhere in the tile bails out of the whole view, exactly like
+  // Cancel: it fires from the form so it also covers the Add/Cancel
+  // buttons, in both the category and the grouping tile.
+  function handleFormKeyDown(event) {
+    if (event.key !== "Escape") {
+      return;
+    }
+    event.preventDefault();
+    event.stopPropagation();
+    close();
   }
 
   function scrollHighlightedIntoView(element) {
@@ -203,6 +208,7 @@ function ShowcaseCreateTile({
   return (
     <form
       className={`showcase-category-combobox${centered ? " showcase-category-combobox--centered" : ""}`}
+      onKeyDown={handleFormKeyDown}
       onSubmit={handleSubmit}
     >
       <input

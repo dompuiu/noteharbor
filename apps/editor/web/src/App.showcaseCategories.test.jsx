@@ -265,13 +265,15 @@ describe("the showcase category canvas", () => {
     expect(listbox).toHaveStyle({ position: "fixed" });
   });
 
-  test("Escape closes the suggestions without closing the field", async () => {
+  test("Escape in the field closes the tile like Cancel", async () => {
     const user = userEvent.setup();
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     await user.click(
       await screen.findByRole("button", { name: "Create a category" }),
     );
+    // The list is open; Esc skips dismissing just the list and closes
+    // the whole tile instead.
     await user.keyboard("{ArrowDown}");
     expect(
       await screen.findByRole("option", { name: "Vienna" }),
@@ -279,10 +281,13 @@ describe("the showcase category canvas", () => {
 
     await user.keyboard("{Escape}");
 
-    expect(screen.queryByRole("option", { name: "Vienna" })).not.toBeInTheDocument();
-    expect(screen.getByLabelText("Category name")).toBeInTheDocument();
+    expect(
+      screen.queryByLabelText("Category name"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Create a category" }),
+    ).toBeInTheDocument();
   });
-
   test("renaming a placement stages the rename and saves it on Save", async () => {
     const user = userEvent.setup();
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
