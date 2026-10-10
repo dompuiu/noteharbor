@@ -296,7 +296,7 @@ async function moveNote(id, collectionId, targetCollectionId, position) {
   return handleResponse(response);
 }
 
-async function importArchive(file, onProgress) {
+async function importArchive(file, onProgress, mode = 'replace') {
   if (!isFileValue(file)) {
     throw new Error('Choose a .zip archive before importing.');
   }
@@ -304,7 +304,16 @@ async function importArchive(file, onProgress) {
   const formData = new FormData();
   formData.append('file', file);
 
-  return postFormDataWithUploadProgress('/api/archive/import', formData, onProgress);
+  const searchParams = new URLSearchParams();
+
+  if (mode) {
+    searchParams.set('mode', mode);
+  }
+
+  const query = searchParams.toString();
+  const url = query ? `/api/archive/import?${query}` : '/api/archive/import';
+
+  return postFormDataWithUploadProgress(url, formData, onProgress);
 }
 
 async function downloadArchive(collectionIds = null, showcaseIds = undefined) {

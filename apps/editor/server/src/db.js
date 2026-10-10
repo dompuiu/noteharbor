@@ -2183,6 +2183,7 @@ export {
   getShowcaseNodeById,
   getShowcaseRequiredCollections,
   getShowcaseTree,
+  initializeSchema,
   migrateBanknotesForeignKey,
   moveNoteToCollection,
   openDatabase,

@@ -11,7 +11,7 @@ vi.mock("../lib/api.js", () => ({
   importArchive: vi.fn(),
 }));
 
-import { downloadArchive, getOperationStatus } from "../lib/api.js";
+import { downloadArchive, getOperationStatus, importArchive } from "../lib/api.js";
 
 const collections = [
   { id: 1, is_default: 1, name: "Default" },
@@ -172,6 +172,76 @@ describe("ImportScreen showcase export", () => {
       screen.getByRole("button", { name: "Download archive" }),
     ).toBeDisabled();
     expect(downloadArchive).not.toHaveBeenCalled();
+  });
+});
+
+describe("ImportScreen import mode", () => {
+  function stubNavigation() {
+    const assign = vi.fn();
+    Object.defineProperty(window, "location", {
+      value: { assign },
+      writable: true,
+      configurable: true,
+    });
+    return assign;
+  }
+
+  async function chooseArchiveFile(user) {
+    const file = new File(["archive"], "noteharbor-archive.zip", {
+      type: "application/zip",
+    });
+    const input = document.querySelector('input[type="file"]');
+    await user.upload(input, file);
+    return file;
+  }
+
+  test("defaults to replacing all current data", async () => {
+    renderImportScreen();
+
+    await screen.findByText("Archive Import and Export");
+
+    expect(screen.getByRole("radio", { name: /replace/i })).toBeChecked();
+    expect(
+      screen.getByRole("radio", { name: /merge/i }),
+    ).not.toBeChecked();
+  });
+
+  test("a replace import passes the replace mode", async () => {
+    const user = userEvent.setup();
+    const assign = stubNavigation();
+    importArchive.mockResolvedValue({ success: true, mode: "replace" });
+    renderImportScreen();
+
+    await screen.findByText("Archive Import and Export");
+    const file = await chooseArchiveFile(user);
+    await user.click(screen.getByRole("button", { name: "Import archive" }));
+    await user.click(screen.getByRole("button", { name: "Import" }));
+
+    expect(importArchive).toHaveBeenCalledWith(
+      file,
+      expect.any(Function),
+      "replace",
+    );
+    expect(assign).toHaveBeenCalledWith("/catalog/collections");
+  });
+
+  test("a merge import passes the merge mode", async () => {
+    const user = userEvent.setup();
+    stubNavigation();
+    importArchive.mockResolvedValue({ success: true, mode: "merge" });
+    renderImportScreen();
+
+    await screen.findByText("Archive Import and Export");
+    const file = await chooseArchiveFile(user);
+    await user.click(screen.getByRole("radio", { name: /merge/i }));
+    await user.click(screen.getByRole("button", { name: "Import archive" }));
+    await user.click(screen.getByRole("button", { name: "Import" }));
+
+    expect(importArchive).toHaveBeenCalledWith(
+      file,
+      expect.any(Function),
+      "merge",
+    );
   });
 });
 

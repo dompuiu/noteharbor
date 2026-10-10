@@ -13,6 +13,7 @@ import {
   IMAGES_DIR,
   backupDatabase,
   closeDatabase,
+  initializeSchema,
   reloadDatabase,
   verifyDatabaseFile
 } from '../db.js';
@@ -170,6 +171,43 @@ function createStageDir() {
 
 function createEmptyStagedDataDir() {
   return createStageDir();
+}
+
+// A replace import stages from a freshly initialized database instead of a
+// copy of the live data dir, so every id restarts from 1 and nothing local
+// survives the swap. Merging the archive into it reuses the same validated
+// merge path (legacy shapes, image plans, showcase remaps) as merge mode.
+function prepareEmptyStagedDataDir() {
+  const { stageRoot, stagedDataDir } = createStageDir();
+  fs.mkdirSync(path.join(stagedDataDir, 'images'), { recursive: true });
+
+  const stagedDatabase = new Database(path.join(stagedDataDir, 'banknotes.db'));
+
+  try {
+    initializeSchema(stagedDatabase);
+  } finally {
+    stagedDatabase.close();
+  }
+
+  return { stageRoot, stagedDataDir };
+}
+
+// Replace is the default: the archive becomes the whole workspace. Merge
+// keeps collections and showcases missing from the archive untouched.
+function parseImportMode(rawValue) {
+  if (rawValue == null || String(rawValue).trim() === '') {
+    return 'replace';
+  }
+
+  const normalized = String(rawValue).trim().toLowerCase();
+
+  if (normalized === 'replace' || normalized === 'merge') {
+    return normalized;
+  }
+
+  const error = new Error(`Unknown import mode "${String(rawValue)}". Use "replace" or "merge".`);
+  error.statusCode = 400;
+  throw error;
 }
 
 function prepareStagedDataDir(sourceDataDir) {
@@ -946,10 +984,12 @@ function listArchiveTagsByNoteId(database, archiveCollectionId) {
 // The Showcases side of an import. The archive may predate the feature (no
 // tables), so the caller only invokes this when both sides have the tables. A
 // label is matched by name (reused or inserted); a Showcase is matched by name
-// and skipped when it already exists, so an import only ever adds new
-// Showcases. Nodes are inserted in two passes: first every node row with its
-// references left unresolved, then a second pass that resolves the parent and
-// the category/note/cover references through the id maps.
+// and replaced when it already exists, mirroring the collection merge rule, so
+// a re-import rebuilds the showcase against the freshly inserted notes instead
+// of leaving it pointed at deleted ones. Nodes are inserted in two passes:
+// first every node row with its references left unresolved, then a second pass
+// that resolves the parent and the category/note/cover references through the
+// id maps.
 function importShowcases(archiveDatabase, stagedDatabase, noteMap) {
   const showcaseRows = archiveDatabase.prepare(`
     SELECT id, name
@@ -968,8 +1008,8 @@ function importShowcases(archiveDatabase, stagedDatabase, noteMap) {
     INSERT INTO categories (name, created_at, updated_at)
     VALUES (?, datetime('now'), datetime('now'))
   `);
-  const findShowcaseByNameStatement = stagedDatabase.prepare(`
-    SELECT id FROM showcases WHERE lower(name) = lower(?) ORDER BY id ASC LIMIT 1
+  const deleteShowcaseByNameStatement = stagedDatabase.prepare(`
+    DELETE FROM showcases WHERE lower(name) = lower(?)
   `);
   const insertShowcaseStatement = stagedDatabase.prepare(`
     INSERT INTO showcases (name, display_order, created_at, updated_at)
@@ -989,9 +1029,10 @@ function importShowcases(archiveDatabase, stagedDatabase, noteMap) {
 
   const newShowcases = [];
   for (const row of showcaseRows) {
-    if (findShowcaseByNameStatement.get(String(row.name))) {
-      continue;
-    }
+    // Replace the same-named showcase so its nodes resolve against the notes
+    // this import just inserted. Deleting cascades to its nodes; the label
+    // pool is shared and stays.
+    deleteShowcaseByNameStatement.run(String(row.name));
 
     newShowcases.push({ archiveId: Number(row.id), name: String(row.name) });
   }
@@ -1375,7 +1416,10 @@ archiveRouter.post('/import', upload.single('file'), async (request, response) =
 
       verifyDatabaseFile(path.join(archiveDataDir, 'banknotes.db'));
 
-      const staged = prepareStagedDataDir(DATA_DIR);
+      const importMode = parseImportMode(request.query.mode ?? request.body?.mode);
+      const staged = importMode === 'replace'
+        ? prepareEmptyStagedDataDir()
+        : prepareStagedDataDir(DATA_DIR);
       stageRoot = staged.stageRoot;
 
       mergeArchiveIntoStagedData(archiveDataDir, staged.stagedDataDir);
@@ -1383,6 +1427,7 @@ archiveRouter.post('/import', upload.single('file'), async (request, response) =
 
       return {
         success: true,
+        mode: importMode,
         currentOperation: 'idle'
       };
     });
@@ -1426,4 +1471,4 @@ archiveRouter.delete('/data', async (_request, response) => {
   }
 });
 
-export { archiveRouter, buildFilteredExportSnapshot, mergeArchiveIntoStagedData, renumberSnapshot, sanitizeSnapshotImages, stripScrapeColumns };
+export { archiveRouter, buildFilteredExportSnapshot, mergeArchiveIntoStagedData, parseImportMode, prepareEmptyStagedDataDir, renumberSnapshot, sanitizeSnapshotImages, stripScrapeColumns };

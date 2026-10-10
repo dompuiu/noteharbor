@@ -36,6 +36,7 @@ function ImportScreen({
   const archiveInputRef = useRef(null);
   const panelScrollRef = useRef(null);
   const [archiveSource, setArchiveSource] = useState(null);
+  const [importMode, setImportMode] = useState("replace");
   const [archiveDropActive, setArchiveDropActive] = useState(false);
   const [archiveResult, setArchiveResult] = useState(null);
   const [error, setError] = useState("");
@@ -198,10 +199,14 @@ function ImportScreen({
       return;
     }
 
+    const isReplace = importMode === "replace";
     const confirmed = await requestConfirmation({
-      title:
-        "Importing an archive will replace collections that exist in the archive (by name).",
-      body: "Collections missing from the archive stay untouched. Continue?",
+      title: isReplace
+        ? "Importing an archive will replace ALL current data."
+        : "Importing an archive will replace collections that exist in the archive (by name).",
+      body: isReplace
+        ? "Collections, showcases, and pictures missing from the archive will be deleted. Continue?"
+        : "Collections missing from the archive stay untouched. Continue?",
       confirmLabel: "Import",
     });
 
@@ -215,7 +220,7 @@ function ImportScreen({
     setArchiveResult(null);
 
     try {
-      await importArchive(archiveSource, setArchiveUploadProgress);
+      await importArchive(archiveSource, setArchiveUploadProgress, importMode);
       setArchiveResult({ success: true });
       window.location.assign(CATALOG_ROUTES.collections);
     } catch (importError) {
@@ -379,7 +384,8 @@ function ImportScreen({
               <h1>Manage your collection data</h1>
               <p>
                 Archive export can include selected collections only, and
-                archive import replaces local collections that exist in the
+                archive import either replaces all current data (the default)
+                or merges: replacing local collections that exist in the
                 archive (matched by name) while leaving other collections
                 untouched. Archive import is destructive for collections
                 present in the archive: local data for those collections is
@@ -412,13 +418,46 @@ function ImportScreen({
                   are included: selecting a showcase also selects the
                   collections it needs, and the export is blocked while a
                   selected showcase needs a collection outside the selection.
-                  Import always reads all collections from the archive and
-                  replaces matching collection names in the current data.
+                  A replace import reads all collections from the archive and
+                  deletes everything else; a merge import replaces matching
+                  collection names in the current data and keeps the rest.
                 </p>
                 <p className="warning-text import-card-warning">
                   You can also delete the current app data and start from an
                   empty collection.
                 </p>
+              </div>
+
+              <div className="field-block full-span">
+                <span>Import mode</span>
+                <div
+                  className="export-collection-list"
+                  role="radiogroup"
+                  aria-label="Import mode"
+                >
+                  <label className="export-collection-option">
+                    <input
+                      checked={importMode === "replace"}
+                      disabled={isBusy || submittingArchive}
+                      name="import-mode"
+                      onChange={() => setImportMode("replace")}
+                      type="radio"
+                      value="replace"
+                    />
+                    <span>Replace all current data</span>
+                  </label>
+                  <label className="export-collection-option">
+                    <input
+                      checked={importMode === "merge"}
+                      disabled={isBusy || submittingArchive}
+                      name="import-mode"
+                      onChange={() => setImportMode("merge")}
+                      type="radio"
+                      value="merge"
+                    />
+                    <span>Merge into current data</span>
+                  </label>
+                </div>
               </div>
 
               <div className="field-block full-span">

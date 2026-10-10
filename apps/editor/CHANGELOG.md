@@ -2,6 +2,16 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Import modes: archive import offers Replace (default) and Merge. Replace swaps the whole workspace for the archive contents, so collection, note, and showcase ids restart from 1; Merge keeps collections and showcases missing from the archive untouched while replacing same-named ones.
+
+### Fixed
+
+- Import: re-importing an archive no longer guts same-named showcases. Showcases are replaced by name (mirroring collections) so their notes resolve against the freshly imported notes instead of pointing at deleted ones.
+
 ## [2.0.2] - 2026-10-10
 
 ### Fixed

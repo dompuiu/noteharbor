@@ -7,6 +7,8 @@ import Database from 'better-sqlite3';
 import {
   buildFilteredExportSnapshot,
   mergeArchiveIntoStagedData,
+  parseImportMode,
+  prepareEmptyStagedDataDir,
   renumberSnapshot,
   sanitizeSnapshotImages,
   stripScrapeColumns
@@ -869,7 +871,7 @@ function createShowcaseImportArchiveDataDir() {
   return { archiveRoot, archiveDataDir };
 }
 
-test('importing a showcase archive reuses labels by name, skips an existing showcase, and resolves nodes in two passes', () => {
+test('importing a showcase archive reuses labels by name, replaces an existing showcase, and resolves nodes in two passes', () => {
   const { stageRoot, stagedDataDir } = createShowcaseImportStagedDataDir();
   const { archiveRoot, archiveDataDir } = createShowcaseImportArchiveDataDir();
 
@@ -888,11 +890,16 @@ test('importing a showcase archive reuses labels by name, skips an existing show
         1
       );
 
-      // The pre-existing Showcase is skipped, so its lone node is untouched.
+      const stagedExistingLabel = db.prepare(`SELECT id FROM categories WHERE name = 'Existing Label'`).get();
+      const stagedFreshLabel = db.prepare(`SELECT id FROM categories WHERE name = 'Fresh Label'`).get();
+
+      // The pre-existing Showcase is replaced by the archive version, so its
+      // stale lone node is gone and the archive node (Fresh Label placement)
+      // takes its place.
       const existingShowcase = db.prepare(`SELECT id FROM showcases WHERE name = 'Existing Showcase'`).get();
-      assert.equal(
-        db.prepare(`SELECT COUNT(*) AS value FROM showcase_nodes WHERE showcase_id = ?`).get(existingShowcase.id).value,
-        1
+      assert.deepEqual(
+        db.prepare(`SELECT category_id, note_id FROM showcase_nodes WHERE showcase_id = ?`).all(existingShowcase.id),
+        [{ category_id: stagedFreshLabel.id, note_id: null }]
       );
 
       const freshShowcase = db.prepare(`SELECT id FROM showcases WHERE name = 'Fresh Showcase'`).get();
@@ -900,8 +907,6 @@ test('importing a showcase archive reuses labels by name, skips an existing show
 
       const stagedNote = db.prepare(`SELECT id FROM banknotes WHERE denomination = 'Archive Note'`).get();
       const stagedCover = db.prepare(`SELECT id FROM banknotes WHERE denomination = 'Archive Cover'`).get();
-      const stagedExistingLabel = db.prepare(`SELECT id FROM categories WHERE name = 'Existing Label'`).get();
-      const stagedFreshLabel = db.prepare(`SELECT id FROM categories WHERE name = 'Fresh Label'`).get();
 
       const nodes = db.prepare(`
         SELECT id, parent_node_id, node_type, category_id, name, note_id, cover_note_id
@@ -930,6 +935,82 @@ test('importing a showcase archive reuses labels by name, skips an existing show
       assert.equal(noteNode.note_id, stagedNote.id);
       assert.equal(noteNode.parent_node_id, grouping.id);
 
+      assert.deepEqual(db.prepare(`PRAGMA foreign_key_check`).all(), []);
+    } finally {
+      db.close();
+    }
+  } finally {
+    fs.rmSync(stageRoot, { recursive: true, force: true });
+    fs.rmSync(archiveRoot, { recursive: true, force: true });
+  }
+});
+
+test('re-importing an archive replaces the same-named showcase instead of gutting it', () => {
+  const stageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'nh-showcase-reimport-stage-'));
+  const stagedDataDir = path.join(stageRoot, 'data');
+  fs.mkdirSync(path.join(stagedDataDir, 'images'), { recursive: true });
+
+  const stagedSetup = new Database(path.join(stagedDataDir, 'banknotes.db'));
+  try {
+    stagedSetup.pragma('foreign_keys = OFF');
+    stagedSetup.exec(baseArchiveSchemaSql);
+    createShowcaseTables(stagedSetup);
+    // A previous import left this collection, note, and showcase behind.
+    stagedSetup.prepare(`INSERT INTO collections (id, name, is_default) VALUES (20, 'Archive Col', 0)`).run();
+    stagedSetup.prepare(`INSERT INTO banknotes (id, collection_id, display_order, denomination, images) VALUES (200, 20, 1, 'Old Note', '[]')`).run();
+    stagedSetup.prepare(`INSERT INTO categories (id, name) VALUES (1, 'Fresh Label')`).run();
+    stagedSetup.prepare(`INSERT INTO showcases (id, name, display_order) VALUES (1, 'Fresh Showcase', 1)`).run();
+    stagedSetup.prepare(`
+      INSERT INTO showcase_nodes
+        (id, showcase_id, parent_node_id, node_type, category_id, name, note_id, cover_note_id, position)
+      VALUES
+        (1, 1, NULL, 'category', 1, NULL, NULL, NULL, 1),
+        (2, 1, 1, 'note', NULL, NULL, 200, NULL, 1)
+    `).run();
+    stagedSetup.pragma('foreign_keys = ON');
+  } finally {
+    stagedSetup.close();
+  }
+
+  const { archiveRoot, archiveDataDir } = createShowcaseImportArchiveDataDir();
+
+  try {
+    mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir);
+
+    const db = new Database(path.join(stagedDataDir, 'banknotes.db'), { readonly: true });
+    try {
+      // Same-named showcase, so exactly one row survives the re-import.
+      assert.equal(
+        db.prepare(`SELECT COUNT(*) AS value FROM showcases WHERE lower(name) = lower('Fresh Showcase')`).get().value,
+        1
+      );
+      const showcase = db.prepare(`SELECT id FROM showcases WHERE name = 'Fresh Showcase'`).get();
+      const nodes = db.prepare(`
+        SELECT node_type, note_id, cover_note_id
+        FROM showcase_nodes
+        WHERE showcase_id = ?
+      `).all(showcase.id);
+
+      // The archive version (two categories + grouping + note) replaced the
+      // stale two-node tree instead of being skipped while its notes were
+      // deleted.
+      assert.equal(nodes.length, 4);
+      const stagedNote = db.prepare(`SELECT id FROM banknotes WHERE denomination = 'Archive Note'`).get();
+      const stagedCover = db.prepare(`SELECT id FROM banknotes WHERE denomination = 'Archive Cover'`).get();
+      assert.ok(stagedNote, 'expected the re-imported note to exist');
+      assert.deepEqual(
+        nodes.filter((node) => node.node_type === 'note').map((node) => node.note_id),
+        [stagedNote.id]
+      );
+      assert.deepEqual(
+        nodes.filter((node) => node.node_type === 'grouping').map((node) => node.cover_note_id),
+        [stagedCover.id]
+      );
+      // No node still points at the deleted pre-import note.
+      assert.equal(
+        db.prepare(`SELECT COUNT(*) AS value FROM showcase_nodes WHERE note_id = 200 OR cover_note_id = 200`).get().value,
+        0
+      );
       assert.deepEqual(db.prepare(`PRAGMA foreign_key_check`).all(), []);
     } finally {
       db.close();
@@ -1119,5 +1200,104 @@ test('an export with orphaned notes drops showcase nodes that referenced them', 
     }
   } finally {
     fs.rmSync(tempRoot, { recursive: true, force: true });
+  }
+});
+
+test('parseImportMode defaults to replace and rejects unknown modes', () => {
+  assert.equal(parseImportMode(undefined), 'replace');
+  assert.equal(parseImportMode(null), 'replace');
+  assert.equal(parseImportMode(''), 'replace');
+  assert.equal(parseImportMode('replace'), 'replace');
+  assert.equal(parseImportMode('merge'), 'merge');
+  assert.throws(
+    () => parseImportMode('overwrite'),
+    (error) => {
+      assert.equal(error.statusCode, 400);
+      assert.match(error.message, /mode/i);
+      return true;
+    }
+  );
+});
+
+test('merging an archive into an empty staged dir restarts ids from 1', () => {
+  const { archiveRoot, archiveDataDir } = createShowcaseImportArchiveDataDir();
+  const { stageRoot, stagedDataDir } = prepareEmptyStagedDataDir();
+
+  try {
+    mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir);
+
+    const db = new Database(path.join(stagedDataDir, 'banknotes.db'), { readonly: true });
+    try {
+      assert.deepEqual(
+        db.prepare(`SELECT id, name FROM collections ORDER BY id`).all(),
+        [{ id: 1, name: 'Archive Col' }]
+      );
+      assert.deepEqual(
+        db.prepare(`SELECT id, collection_id FROM banknotes ORDER BY id`).all(),
+        [
+          { id: 1, collection_id: 1 },
+          { id: 2, collection_id: 1 }
+        ]
+      );
+      // Both archive showcases land with their nodes resolved to the fresh notes.
+      assert.deepEqual(
+        db.prepare(`SELECT name FROM showcases ORDER BY display_order, id`).all().map((row) => row.name),
+        ['Existing Showcase', 'Fresh Showcase']
+      );
+      assert.equal(db.prepare(`SELECT COUNT(*) AS value FROM showcase_nodes`).get().value, 5);
+      assert.deepEqual(db.prepare(`PRAGMA foreign_key_check`).all(), []);
+    } finally {
+      db.close();
+    }
+  } finally {
+    fs.rmSync(stageRoot, { recursive: true, force: true });
+    fs.rmSync(archiveRoot, { recursive: true, force: true });
+  }
+});
+
+test('merge mode leaves collections missing from the archive untouched', () => {
+  const stageRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'nh-merge-keeps-stage-'));
+  const stagedDataDir = path.join(stageRoot, 'data');
+  fs.mkdirSync(path.join(stagedDataDir, 'images'), { recursive: true });
+
+  const stagedSetup = new Database(path.join(stagedDataDir, 'banknotes.db'));
+  try {
+    stagedSetup.pragma('foreign_keys = OFF');
+    stagedSetup.exec(baseArchiveSchemaSql);
+    createShowcaseTables(stagedSetup);
+    stagedSetup.prepare(`INSERT INTO collections (id, name, is_default) VALUES (1, 'Local Only', 0)`).run();
+    stagedSetup.prepare(`INSERT INTO banknotes (id, collection_id, display_order, denomination, images) VALUES (1, 1, 1, 'Local Note', '[]')`).run();
+    stagedSetup.prepare(`INSERT INTO categories (id, name) VALUES (1, 'Local Label')`).run();
+    stagedSetup.prepare(`INSERT INTO showcases (id, name, display_order) VALUES (1, 'Local Show', 1)`).run();
+    stagedSetup.prepare(`
+      INSERT INTO showcase_nodes
+        (id, showcase_id, parent_node_id, node_type, category_id, name, position)
+      VALUES (1, 1, NULL, 'category', 1, NULL, 1)
+    `).run();
+    stagedSetup.pragma('foreign_keys = ON');
+  } finally {
+    stagedSetup.close();
+  }
+
+  const { archiveRoot, archiveDataDir } = createShowcaseImportArchiveDataDir();
+
+  try {
+    mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir);
+
+    const db = new Database(path.join(stagedDataDir, 'banknotes.db'), { readonly: true });
+    try {
+      assert.equal(db.prepare(`SELECT COUNT(*) AS value FROM banknotes WHERE denomination = 'Local Note'`).get().value, 1);
+      assert.equal(db.prepare(`SELECT COUNT(*) AS value FROM banknotes WHERE denomination = 'Archive Note'`).get().value, 1);
+      assert.deepEqual(
+        db.prepare(`SELECT name FROM showcases ORDER BY name`).all().map((row) => row.name),
+        ['Existing Showcase', 'Fresh Showcase', 'Local Show']
+      );
+      assert.deepEqual(db.prepare(`PRAGMA foreign_key_check`).all(), []);
+    } finally {
+      db.close();
+    }
+  } finally {
+    fs.rmSync(stageRoot, { recursive: true, force: true });
+    fs.rmSync(archiveRoot, { recursive: true, force: true });
   }
 });
