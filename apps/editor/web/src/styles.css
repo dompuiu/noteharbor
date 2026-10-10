@@ -3104,11 +3104,12 @@ td.drag-cell {
   line-height: 1.15;
 }
 
-.export-collection-option input[type="checkbox"] {
+.export-collection-option input[type="checkbox"],
+.export-collection-option input[type="radio"] {
   width: 13px;
   height: 13px;
   /* The `.field-block input` text-field sizing (min-height, padding) also
-     matches these checkboxes; reset it so the box and its focus outline hug
+     matches these boxes; reset it so the box and its focus outline hug
      the 13px glyph instead of a 34px-tall field box. */
   min-height: 0;
   padding: 0;
