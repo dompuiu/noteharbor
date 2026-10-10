@@ -284,6 +284,46 @@ function CollectionScreen({ mode }) {
   const invalidId = !isNew && (!Number.isInteger(collectionId) || collectionId <= 0);
   const missingCollection = !isNew && !invalidId && !loadingCollections && !collectionsError && !collection;
 
+  // The collection view is the banknotes table for that collection, so
+  // `/catalog/collections/:id/view` reads the notes directly. The Edit action
+  // lives in the table header next to Add note; the table already shows the
+  // loading and error states.
+  if (!editMode && !isNew) {
+    if (invalidId || missingCollection) {
+      return (
+        <section className="screen-stack showcase-screen collection-screen collection-screen--view">
+          <div className="panel">
+            <div className="showcase-empty-box">
+              <p className="showcase-empty-title">Collection not found.</p>
+              <p className="showcase-empty-text muted">
+                This collection no longer exists.
+              </p>
+              <div className="showcase-empty-actions">
+                <Link className="button" to={DEFAULT_DESTINATION}>
+                  View banknotes
+                </Link>
+              </div>
+            </div>
+          </div>
+        </section>
+      );
+    }
+
+    return (
+      <section className="screen-stack showcase-screen collection-screen collection-screen--view">
+        <NotesTable
+          activeCollection={activeCollection}
+          activeCollectionId={activeCollectionId}
+          collections={collections}
+          collectionsError={collectionsError}
+          editCollectionTo={CATALOG_ROUTES.collectionEdit(collectionId)}
+          loadingCollections={loadingCollections}
+          onSelectCollection={selectCollection}
+        />
+      </section>
+    );
+  }
+
   return (
     <section
       className={`screen-stack showcase-screen collection-screen collection-screen--${editMode ? "edit" : "view"}`}
@@ -422,18 +462,6 @@ function CollectionScreen({ mode }) {
         ) : null}
       </div>
 
-      {/* The collection view is the banknotes table for that collection, so
-      `/catalog/collections/:id/view` reads the notes directly. */}
-      {!editMode && collection && !loadingCollections && !collectionsError ? (
-        <NotesTable
-          activeCollection={activeCollection}
-          activeCollectionId={activeCollectionId}
-          collections={collections}
-          collectionsError={collectionsError}
-          loadingCollections={loadingCollections}
-          onSelectCollection={selectCollection}
-        />
-      ) : null}
     </section>
   );
 }

@@ -53,7 +53,7 @@ function note(id, denomination) {
   };
 }
 
-function renderTable() {
+function renderTable(editCollectionTo = null) {
   return render(
     <MemoryRouter>
       <NotesTable
@@ -61,6 +61,7 @@ function renderTable() {
         activeCollectionId={1}
         collections={[{ id: 1, is_default: 1, name: "Test" }]}
         collectionsError=""
+        editCollectionTo={editCollectionTo}
         loadingCollections={false}
         onSelectCollection={() => {}}
       />
@@ -105,6 +106,30 @@ describe("NotesTable header controls", () => {
     expect(
       screen.queryByRole("link", { name: "Import or export" }),
     ).not.toBeInTheDocument();
+  });
+
+  test("shows no Edit link without an edit destination", async () => {
+    renderTable();
+
+    await screen.findByLabelText("Active collection");
+
+    expect(screen.queryByRole("link", { name: "Edit" })).not.toBeInTheDocument();
+  });
+
+  test("shows the Edit link next to Add note when given an edit destination", async () => {
+    renderTable("/catalog/collections/1/edit");
+
+    await screen.findByLabelText("Active collection");
+
+    const edit = screen.getByRole("link", { name: "Edit" });
+    expect(edit).toHaveAttribute("href", "/catalog/collections/1/edit");
+
+    const actions = edit.closest(".inline-actions");
+    const labels = Array.from(
+      actions.querySelectorAll(":scope > a, :scope > button"),
+      (element) => element.textContent,
+    );
+    expect(labels).toEqual(["Edit", "Add note", "Shortcuts"]);
   });
 });
 

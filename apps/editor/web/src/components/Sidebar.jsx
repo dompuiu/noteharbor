@@ -127,7 +127,7 @@ function Sidebar({ pageFocusRef }) {
   // are siblings under the collection. A pending (not-yet-saved) collection
   // renders as a draft row that vanishes on Cancel or on leaving its route.
   const collectionItems = collections.map((collection) => ({
-    icon: "folders",
+    icon: "banknote",
     key: `collection-${collection.id}`,
     label: collection.name,
     to: CATALOG_ROUTES.collection(collection.id),
@@ -139,7 +139,7 @@ function Sidebar({ pageFocusRef }) {
 
   if (pendingCollection) {
     collectionItems.push({
-      icon: "folders",
+      icon: "banknote",
       key: "collection-new",
       label: pendingCollection.name,
       to: CATALOG_ROUTES.collectionEdit(NEW_COLLECTION_ID),

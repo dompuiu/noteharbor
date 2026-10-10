@@ -12,7 +12,11 @@ vi.mock("./ConfirmDialog.jsx", () => ({
 }));
 
 vi.mock("./NotesTable.jsx", () => ({
-  NotesTable: () => <div>Banknotes table</div>,
+  NotesTable: ({ editCollectionTo }) => (
+    <div data-edit-to={editCollectionTo ?? ""} data-testid="notes-table">
+      Banknotes table
+    </div>
+  ),
 }));
 
 import { CollectionScreen } from "./CollectionScreen.jsx";
@@ -87,20 +91,19 @@ describe("CollectionScreen view mode", () => {
   test("skips its own header copy since the banknotes table shows the name", () => {
     const { container } = renderView(1);
 
-    // The table owns the title now; the view keeps only the Edit action.
-    expect(container.querySelector(".panel-heading-copy")).toBeNull();
+    // The table owns the title now; the view keeps no panel of its own.
+    expect(container.querySelector(".panel")).toBeNull();
     expect(screen.queryByRole("heading")).toBeNull();
     expect(screen.getByText("Banknotes table")).toBeInTheDocument();
   });
 
-  test("offers an Edit action and the banknotes table", () => {
+  test("hands the table the edit destination for its header action", () => {
     renderView(1);
 
-    expect(screen.getByRole("link", { name: "Edit" })).toHaveAttribute(
-      "href",
+    expect(screen.getByTestId("notes-table")).toHaveAttribute(
+      "data-edit-to",
       CATALOG_ROUTES.collectionEdit(1),
     );
-    expect(screen.getByText("Banknotes table")).toBeInTheDocument();
   });
 
   test("viewing a collection selects it as active", () => {

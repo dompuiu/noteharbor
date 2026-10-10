@@ -11,7 +11,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   deleteNote,
   getNotes,
@@ -997,6 +997,7 @@ function NotesTable({
   activeCollectionId,
   collections,
   collectionsError,
+  editCollectionTo = null,
   loadingCollections,
   onSelectCollection,
 }) {
@@ -3566,6 +3567,11 @@ function NotesTable({
                 ))}
               </select>
             )}
+            {editCollectionTo ? (
+              <Link className="icon-link" to={editCollectionTo}>
+                Edit
+              </Link>
+            ) : null}
             <button
               aria-label="Add note"
               className="icon-link button-primary"
