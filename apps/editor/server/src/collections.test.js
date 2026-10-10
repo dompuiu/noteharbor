@@ -43,7 +43,7 @@ function notePayload(collectionId) {
   };
 }
 
-test('collections keep a manual order: new rows append and defaults do not re-sort', () => {
+test('collections keep a manual order: new rows append and nothing re-sorts them', () => {
   const second = db.createCollection('Manual Second');
   db.createCollection('Manual First');
   db.createCollection('Manual Third');
@@ -51,14 +51,10 @@ test('collections keep a manual order: new rows append and defaults do not re-so
   // Created order is insertion order, so "Second" precedes the later "First".
   assert.deepEqual(manualNames(), ['Manual Second', 'Manual First', 'Manual Third']);
 
-  db.setDefaultCollectionById(second.id);
-
-  // Marking a default must not move it or anything else.
-  assert.deepEqual(manualNames(), ['Manual Second', 'Manual First', 'Manual Third']);
-  assert.equal(
-    db.getAllCollections().find((collection) => collection.id === second.id).is_default,
-    1
-  );
+  // There is no default flag anymore; rows carry no is_default property.
+  for (const collection of db.getAllCollections()) {
+    assert.equal('is_default' in collection, false);
+  }
 
   const allIds = db.getAllCollections().map((collection) => collection.id);
   const reversed = [...allIds].reverse();
@@ -67,6 +63,19 @@ test('collections keep a manual order: new rows append and defaults do not re-so
     db.reorderCollections(reversed).map((collection) => collection.id),
     reversed
   );
+
+  assert.equal(second.name, 'Manual Second');
+});
+
+test('getFirstCollectionId resolves the top sidebar collection after a reorder', () => {
+  const a = db.createCollection('First Pick A');
+  const b = db.createCollection('First Pick B');
+  const ids = db.getAllCollections().map((collection) => collection.id);
+
+  db.reorderCollections([b.id, a.id, ...ids.filter((id) => id !== a.id && id !== b.id)]);
+
+  // Sidebar order wins over insertion (and id) order.
+  assert.equal(db.getFirstCollectionId(), b.id);
 });
 
 test('getAllCollections reports how many notes each collection holds', () => {
@@ -150,6 +159,14 @@ test('legacy collections gain a display_order without losing their row order', a
 
     // Backfill follows id order, not name order.
     assert.deepEqual(ordered, ['Old B', 'Old A', 'Old C']);
+
+    // The retired default flag is dropped by the migration, whatever the
+    // old rows carried.
+    const columns = legacyDb.getDatabase().prepare(`PRAGMA table_info(collections)`).all();
+    assert.equal(columns.some((column) => column.name === 'is_default'), false);
+    for (const collection of legacyDb.getAllCollections()) {
+      assert.equal('is_default' in collection, false);
+    }
   } finally {
     legacyDb?.closeDatabase();
     process.env.NOTE_HARBOR_DATA_DIR = previousDataDir;

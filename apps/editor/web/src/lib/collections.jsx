@@ -5,7 +5,6 @@ import {
   getCollections,
   renameCollection,
   reorderCollections,
-  setDefaultCollection,
 } from './api.js';
 
 const CollectionsContext = createContext(null);
@@ -99,20 +98,6 @@ function CollectionsProvider({ children }) {
     return payload.collection;
   }
 
-  async function handleSetDefaultCollection(collectionId) {
-    const payload = await setDefaultCollection(collectionId);
-
-    // Exactly one collection is the default, so clear the others locally too.
-    setCollections((current) =>
-      current.map((collection) => ({
-        ...collection,
-        is_default: collection.id === collectionId ? 1 : 0,
-      })),
-    );
-    applyCollectionRow(payload.collection);
-    return payload.collection;
-  }
-
   async function handleReorderCollections(ids) {
     const payload = await reorderCollections(ids);
     const nextCollections = payload.collections ?? [];
@@ -155,7 +140,6 @@ function CollectionsProvider({ children }) {
       refreshCollections,
       renameCollection: handleRenameCollection,
       reorderCollections: handleReorderCollections,
-      setDefaultCollection: handleSetDefaultCollection,
     }),
     [
       collections,

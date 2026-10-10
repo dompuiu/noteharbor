@@ -3486,7 +3486,6 @@ function NotesTable({
         <div className="panel-heading panel-heading--compact">
           <div className="panel-heading-copy">
             <h2>
-              {Number(collection?.is_default) === 1 ? "★ " : ""}
               {collection?.name ?? "Notes"}
             </h2>
             <p>

@@ -232,14 +232,6 @@ async function deleteCollection(collectionId) {
   return handleResponse(response);
 }
 
-async function setDefaultCollection(collectionId) {
-  const response = await fetch(`/api/collections/${collectionId}/default`, {
-    method: 'PUT'
-  });
-
-  return handleResponse(response);
-}
-
 async function reorderCollections(ids) {
   const response = await fetch('/api/collections/reorder', {
     method: 'POST',
@@ -578,7 +570,6 @@ export {
   reorderShowcases,
   scrapePreview,
   scrapeTimeoutMessage,
-  setDefaultCollection,
   updateNode,
   updateNote
 };

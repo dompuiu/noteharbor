@@ -45,8 +45,8 @@ function NoteEditorDestination({ emptyLibrary, selectedCollectionId }) {
   return <NoteEditForm selectedCollectionId={selectedCollectionId} />;
 }
 
-// The collections home has no canvas of its own: it resolves to the default
-// (or first) collection view, or to the empty-library prompt when there is
+// The collections home has no canvas of its own: it resolves to the first
+// collection in sidebar order, or to the empty-library prompt when there is
 // nothing to show yet. This is also where `/`, unknown paths, and the
 // retired `/catalog/banknotes` address land.
 function CollectionHomeRedirect() {
@@ -63,13 +63,7 @@ function CollectionHomeRedirect() {
     );
   }
 
-  const target =
-    collections.find((entry) => Number(entry.is_default) === 1) ??
-    collections.find(
-      (entry) => String(entry.name ?? "").trim().toLowerCase() === "default",
-    ) ??
-    collections[0] ??
-    null;
+  const target = collections[0] ?? null;
 
   if (!target) {
     return (
@@ -163,14 +157,9 @@ function ShellContent() {
   });
 
   // The standalone note editor URL names no collection, so scope it to the
-  // default (or first) collection — the same destination the home resolves to.
-  const noteEditorCollection =
-    collections.find((entry) => Number(entry.is_default) === 1) ??
-    collections.find(
-      (entry) => String(entry.name ?? "").trim().toLowerCase() === "default",
-    ) ??
-    collections[0] ??
-    null;
+  // first collection in sidebar order — the same destination the home
+  // resolves to.
+  const noteEditorCollection = collections[0] ?? null;
 
   return (
     <div className="app-shell">

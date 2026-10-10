@@ -156,6 +156,70 @@ test('re-importing a same-named collection leaves no orphaned notes, tags or lin
   }
 });
 
+test('importing an old archive carrying is_default succeeds and ignores the flag', () => {
+  const { stageRoot, stagedDataDir } = createLegacyStagedDataDir();
+  const archiveRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'nh-archive-flagged-'));
+  const archiveDataDir = path.join(archiveRoot, 'data');
+  fs.mkdirSync(path.join(archiveDataDir, 'images'), { recursive: true });
+
+  const archiveDbPath = path.join(archiveDataDir, 'banknotes.db');
+  const archiveDb = new Database(archiveDbPath);
+  try {
+    archiveDb.exec(`
+      CREATE TABLE collections (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, is_default INTEGER NOT NULL DEFAULT 0);
+      CREATE TABLE banknotes (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        collection_id INTEGER,
+        display_order INTEGER,
+        denomination TEXT,
+        issue_date TEXT,
+        catalog_number TEXT,
+        grading_company TEXT,
+        grade TEXT,
+        watermark TEXT,
+        serial TEXT,
+        url TEXT,
+        notes TEXT,
+        scraped_data TEXT,
+        images TEXT,
+        scrape_status TEXT DEFAULT 'pending',
+        scrape_error TEXT,
+        created_at TEXT,
+        updated_at TEXT
+      );
+      CREATE TABLE tags (id INTEGER PRIMARY KEY AUTOINCREMENT, name TEXT NOT NULL, collection_id INTEGER NOT NULL);
+      CREATE TABLE banknote_tags (banknote_id INTEGER NOT NULL, tag_id INTEGER NOT NULL, PRIMARY KEY (banknote_id, tag_id));
+    `);
+    archiveDb.prepare(`INSERT INTO collections (id, name, is_default) VALUES (5, 'Flagged Archive', 1)`).run();
+    archiveDb.prepare(`INSERT INTO banknotes (id, collection_id, display_order, denomination, images) VALUES (5, 5, 1, '100 Lei', '[]')`).run();
+  } finally {
+    archiveDb.close();
+  }
+
+  try {
+    mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir);
+
+    const db = new Database(path.join(stagedDataDir, 'banknotes.db'), { readonly: true });
+    try {
+      const names = db.prepare(`SELECT name FROM collections ORDER BY name ASC`).all().map((row) => row.name);
+      assert.deepEqual(names, ['Flagged Archive', "Serban's Notes"]);
+
+      const noteCount = db.prepare(`SELECT COUNT(*) AS value FROM banknotes`).get().value;
+      assert.equal(noteCount, 3);
+
+      // The archived flag is ignored: the staged row keeps the column
+      // default even though the archive marked it default.
+      const stagedFlags = db.prepare(`SELECT is_default FROM collections`).all();
+      assert.ok(stagedFlags.every((row) => Number(row.is_default) === 0));
+    } finally {
+      db.close();
+    }
+  } finally {
+    fs.rmSync(stageRoot, { recursive: true, force: true });
+    fs.rmSync(archiveRoot, { recursive: true, force: true });
+  }
+});
+
 function createDirtySnapshotDatabase() {
   const db = new Database(':memory:');
   db.pragma('foreign_keys = OFF');

@@ -21,7 +21,6 @@ vi.mock("./lib/api.js", () => ({
   getShowcaseTree: vi.fn(),
   renameCollection: vi.fn(),
   reorderCollections: vi.fn(),
-  setDefaultCollection: vi.fn(),
   updateNode: vi.fn(),
 }));
 
@@ -147,6 +146,21 @@ describe("Root redirect", () => {
 
     await waitFor(() => {
       expect(currentPath()).toBe(CATALOG_ROUTES.collection(1));
+    });
+    expect(await screen.findByText("Collection view screen")).toBeInTheDocument();
+  });
+
+  test("/ lands on the top sidebar collection when several exist", async () => {
+    getCollections.mockResolvedValue({
+      collections: [
+        { id: 2, name: "Archive" },
+        { id: 1, name: "Default" },
+      ],
+    });
+    renderAt("/");
+
+    await waitFor(() => {
+      expect(currentPath()).toBe(CATALOG_ROUTES.collection(2));
     });
     expect(await screen.findByText("Collection view screen")).toBeInTheDocument();
   });

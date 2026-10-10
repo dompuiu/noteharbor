@@ -19,7 +19,6 @@ function CollectionScreen({ mode }) {
     collectionsError,
     createCollection,
     renameCollection,
-    setDefaultCollection,
     deleteCollection,
     pendingCollection,
     beginPendingCollection,
@@ -42,8 +41,6 @@ function CollectionScreen({ mode }) {
   const nameFieldRef = useRef(null);
   const [nameDraft, setNameDraft] = useState(collectionName);
   const [nameError, setNameError] = useState("");
-  const [defaultDraft, setDefaultDraft] = useState(false);
-  const [defaultInitialized, setDefaultInitialized] = useState(false);
   const [saving, setSaving] = useState(false);
   const [saveError, setSaveError] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -73,23 +70,6 @@ function CollectionScreen({ mode }) {
     setNameDraft(collectionName);
   }, [collectionName]);
 
-  // Initialise the default toggle from the server row once it arrives. The
-  // draft flag guards user toggles from being overwritten by late loads.
-  useEffect(() => {
-    if (isNew || defaultInitialized) {
-      return;
-    }
-
-    if (collection) {
-      setDefaultDraft(Number(collection.is_default) === 1);
-      setDefaultInitialized(true);
-    }
-  }, [collection, defaultInitialized, isNew]);
-
-  useEffect(() => {
-    setDefaultInitialized(false);
-  }, [collectionId, isNew]);
-
   // A direct load of the draft URL (reload, share) has no provider draft yet;
   // stage one so the sidebar row and the canvas agree.
   useEffect(() => {
@@ -98,11 +78,8 @@ function CollectionScreen({ mode }) {
     }
   }, [isNew, pendingCollection, beginPendingCollection]);
 
-  // Viewing a collection shows that collection's notes table: the route's
-  // `:id` is the source of truth, so there is no active-collection switch.
-
   // In edit mode the name field is part of the draft: blur/Enter only validate
-  // locally, and Save persists the rename together with the default flag.
+  // locally, and Save persists the rename.
   function commitName() {
     if (!collection && !isNew) {
       return;
@@ -156,13 +133,9 @@ function CollectionScreen({ mode }) {
     editMode && !isNew && collection
       ? nameDraft.trim() !== "" && nameDraft.trim() !== collection.name
       : false;
-  const defaultDirty =
-    editMode && !isNew && collection
-      ? defaultDraft !== (Number(collection.is_default) === 1)
-      : false;
   // A draft collection is itself unsaved, so Save stays enabled whenever the
   // name is non-empty — even with nothing else changed.
-  const dirty = editMode && (isNew ? nameDraft.trim() !== "" : nameDirty || defaultDirty);
+  const dirty = editMode && (isNew ? nameDraft.trim() !== "" : nameDirty);
 
   async function handleSave() {
     if (!editMode || saving || loadingCollections || confirmOpen) {
@@ -193,10 +166,6 @@ function CollectionScreen({ mode }) {
           throw new Error("Could not save the collection.");
         }
 
-        if (defaultDraft) {
-          await setDefaultCollection(created.id);
-        }
-
         // createCollection clears the pending draft; land on the real view.
         navigate(CATALOG_ROUTES.collection(created.id));
         return;
@@ -204,10 +173,6 @@ function CollectionScreen({ mode }) {
 
       if (collection && trimmedName !== collection.name) {
         await renameCollection(collection.id, trimmedName);
-      }
-
-      if (collection && defaultDirty) {
-        await setDefaultCollection(collection.id);
       }
 
       navigate(CATALOG_ROUTES.collection(collectionId));
@@ -271,7 +236,7 @@ function CollectionScreen({ mode }) {
     }
   }
 
-  const noteCount = collection ? Number(collection.note_count ?? 0) : 0;  const isDefault = isNew ? defaultDraft : (collection ? Number(collection.is_default) === 1 : defaultDraft);
+  const noteCount = collection ? Number(collection.note_count ?? 0) : 0;
   const invalidId = !isNew && (!Number.isInteger(collectionId) || collectionId <= 0);
   const missingCollection = !isNew && !invalidId && !loadingCollections && !collectionsError && !collection;
 
@@ -341,7 +306,7 @@ function CollectionScreen({ mode }) {
                 <h1>{collectionName}</h1>
               )}
               {!isNew && collection ? (
-                <p className="muted">{`${noteCount} notes${isDefault ? " · Default" : ""}`}</p>
+                <p className="muted">{`${noteCount} notes`}</p>
               ) : null}
               {isNew ? (
                 <p className="muted">New collection — unsaved until you press Save.</p>
@@ -352,8 +317,8 @@ function CollectionScreen({ mode }) {
             </div>
           ) : null}
           <div className="panel-heading-actions">
-            {/* Edit mode is a draft: Save persists the name and the default
-            flag, Cancel discards both and returns to view. */}
+            {/* Edit mode is a draft: Save persists the rename, Cancel
+            discards it and returns to view. */}
             {editMode ? (
               <>
                 {collection ? (
@@ -434,21 +399,6 @@ function CollectionScreen({ mode }) {
               </Link>
             </div>
           </div>
-        ) : null}
-
-        {editMode ? (
-          <label className="muted">
-            <input
-              checked={defaultDraft}
-              disabled={saving || loadingCollections}
-              onChange={(event) => {
-                setDefaultDraft(event.target.checked);
-                setSaveError("");
-              }}
-              type="checkbox"
-            />
-            {" Default collection (new notes land here)"}
-          </label>
         ) : null}
       </div>
 

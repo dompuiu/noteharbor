@@ -8,7 +8,6 @@ vi.mock("./api.js", () => ({
   getCollections: vi.fn(),
   renameCollection: vi.fn(),
   reorderCollections: vi.fn(),
-  setDefaultCollection: vi.fn(),
 }));
 
 import {
@@ -16,7 +15,6 @@ import {
   deleteCollection,
   getCollections,
   renameCollection,
-  setDefaultCollection,
 } from "./api.js";
 import { CollectionsProvider, useCollections } from "./collections.jsx";
 
@@ -87,26 +85,11 @@ describe("CollectionsProvider mutations", () => {
     expect(getCollections.mock.calls.length).toBe(loadsBefore);
   });
 
-  test("setting the default flips the flag in place without refetching", async () => {
+  test("exposes no default-collection control", async () => {
     renderProvider();
     await screen.findByText("Default,Archive");
 
-    const loadsBefore = getCollections.mock.calls.length;
-    setDefaultCollection.mockResolvedValue({
-      collection: { id: 2, is_default: 1, name: "Archive" },
-    });
-
-    await act(async () => {
-      await context.setDefaultCollection(2);
-    });
-
-    expect(getCollections.mock.calls.length).toBe(loadsBefore);
-    expect(
-      context.collections.find((c) => c.id === 2).is_default,
-    ).toBe(1);
-    expect(
-      context.collections.find((c) => c.id === 1).is_default,
-    ).toBe(0);
+    expect(context.setDefaultCollection).toBeUndefined();
   });
 
   test("deleting removes the row without refetching and reports the neighbour", async () => {

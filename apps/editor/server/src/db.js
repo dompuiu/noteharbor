@@ -51,7 +51,6 @@ function ensureCollectionsTable(database) {
     CREATE TABLE IF NOT EXISTS collections (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       name TEXT NOT NULL,
-      is_default INTEGER NOT NULL DEFAULT 0,
       display_order INTEGER,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
@@ -63,20 +62,22 @@ function ensureCollectionsTable(database) {
 
   let columns = database.prepare(`PRAGMA table_info(collections)`).all();
 
-  if (!columns.some((column) => column.name === 'is_default')) {
-    database.exec(`ALTER TABLE collections ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0`);
-  }
-
   if (!columns.some((column) => column.name === 'display_order')) {
     database.exec(`ALTER TABLE collections ADD COLUMN display_order INTEGER`);
     columns = database.prepare(`PRAGMA table_info(collections)`).all();
   }
 
-  database.exec(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_collections_single_default
-      ON collections(is_default)
-      WHERE is_default = 1;
+  // The default-collection flag is retired: new rows never carry it, and
+  // databases written before the removal lose the column (and its partial
+  // unique index) here, so exports stop emitting it. Imports tolerate both
+  // shapes and ignore any archived flag.
+  database.exec(`DROP INDEX IF EXISTS idx_collections_single_default`);
 
+  if (columns.some((column) => column.name === 'is_default')) {
+    database.exec(`ALTER TABLE collections DROP COLUMN is_default`);
+  }
+
+  database.exec(`
     CREATE INDEX IF NOT EXISTS idx_collections_display_order
       ON collections(display_order, id);
   `);
@@ -114,28 +115,25 @@ function ensureCollectionsTable(database) {
   backfillCollections(missing);
 }
 
-function ensureDefaultCollection(database) {
-  const existingDefault = database.prepare(`
+// The first collection in sidebar order (manual order, then id). This is
+// what unscoped API routes and legacy NULL-collection backfills resolve to
+// now that the default-collection flag is retired.
+function findFirstCollectionId(database) {
+  const first = database.prepare(`
     SELECT id
     FROM collections
-    WHERE is_default = 1
-    ORDER BY id ASC
+    ORDER BY display_order ASC, id ASC
     LIMIT 1
   `).get();
 
-  if (existingDefault) {
-    return Number(existingDefault.id);
-  }
+  return first ? Number(first.id) : null;
+}
 
-  const firstExisting = database.prepare(`
-    SELECT id
-    FROM collections
-    ORDER BY id ASC
-    LIMIT 1
-  `).get();
+function ensureFirstCollection(database) {
+  const firstCollectionId = findFirstCollectionId(database);
 
-  if (firstExisting) {
-    return Number(firstExisting.id);
+  if (firstCollectionId) {
+    return firstCollectionId;
   }
 
   const banknotesCount = Number(database.prepare(`SELECT COUNT(*) AS value FROM banknotes`).get()?.value ?? 0);
@@ -146,10 +144,9 @@ function ensureDefaultCollection(database) {
   }
 
   const inserted = database.prepare(`
-    INSERT INTO collections (name, is_default, display_order, created_at, updated_at)
+    INSERT INTO collections (name, display_order, created_at, updated_at)
     VALUES (
       ?,
-      1,
       (SELECT COALESCE(MAX(display_order), 0) + 1 FROM collections),
       datetime('now'),
       datetime('now')
@@ -159,27 +156,7 @@ function ensureDefaultCollection(database) {
   return Number(inserted.lastInsertRowid);
 }
 
-function ensureDefaultCollectionFlag(database, defaultCollectionId) {
-  const hasDefault = database.prepare(`
-    SELECT id
-    FROM collections
-    WHERE is_default = 1
-    LIMIT 1
-  `).get();
-
-  if (hasDefault) {
-    return;
-  }
-
-  if (!Number.isInteger(defaultCollectionId) || defaultCollectionId <= 0) {
-    return;
-  }
-
-  database.prepare(`UPDATE collections SET is_default = 0`).run();
-  database.prepare(`UPDATE collections SET is_default = 1 WHERE id = ?`).run(defaultCollectionId);
-}
-
-function migrateTagsForCollectionScope(database, defaultCollectionId) {
+function migrateTagsForCollectionScope(database, firstCollectionId) {
   const tagsTableDefinition = database.prepare(`
     SELECT sql
     FROM sqlite_master
@@ -191,7 +168,7 @@ function migrateTagsForCollectionScope(database, defaultCollectionId) {
 
   if (!hasCollectionColumn) {
     database.exec(`ALTER TABLE tags ADD COLUMN collection_id INTEGER`);
-    database.prepare(`UPDATE tags SET collection_id = ? WHERE collection_id IS NULL`).run(defaultCollectionId);
+    database.prepare(`UPDATE tags SET collection_id = ? WHERE collection_id IS NULL`).run(firstCollectionId);
   }
 
   if (/name\s+TEXT\s+NOT\s+NULL\s+UNIQUE/i.test(tagsTableDefinition?.sql ?? '')) {
@@ -205,7 +182,7 @@ function migrateTagsForCollectionScope(database, defaultCollectionId) {
       );
 
       INSERT INTO tags_new (id, name, collection_id)
-      SELECT id, name, COALESCE(collection_id, ${defaultCollectionId})
+      SELECT id, name, COALESCE(collection_id, ${firstCollectionId})
       FROM tags;
 
       DROP TABLE tags;
@@ -215,7 +192,7 @@ function migrateTagsForCollectionScope(database, defaultCollectionId) {
     `);
   }
 
-  database.prepare(`UPDATE tags SET collection_id = ? WHERE collection_id IS NULL`).run(defaultCollectionId);
+  database.prepare(`UPDATE tags SET collection_id = ? WHERE collection_id IS NULL`).run(firstCollectionId);
 
   const duplicateRows = database.prepare(`
     SELECT id, collection_id, lower(name) AS normalized_name
@@ -255,15 +232,15 @@ function migrateTagsForCollectionScope(database, defaultCollectionId) {
   `);
 }
 
-function migrateBanknotesForCollectionScope(database, defaultCollectionId) {
+function migrateBanknotesForCollectionScope(database, firstCollectionId) {
   const banknotesColumns = database.prepare(`PRAGMA table_info(banknotes)`).all();
 
   if (!banknotesColumns.some((column) => column.name === 'collection_id')) {
     database.exec(`ALTER TABLE banknotes ADD COLUMN collection_id INTEGER`);
   }
 
-  if (Number.isInteger(defaultCollectionId) && defaultCollectionId > 0) {
-    database.prepare(`UPDATE banknotes SET collection_id = ? WHERE collection_id IS NULL`).run(defaultCollectionId);
+  if (Number.isInteger(firstCollectionId) && firstCollectionId > 0) {
+    database.prepare(`UPDATE banknotes SET collection_id = ? WHERE collection_id IS NULL`).run(firstCollectionId);
   }
 }
 
@@ -473,8 +450,7 @@ function initializeSchema(database) {
   // banknotes table exists (ADR 0001).
   ensureShowcasesSchema(database);
 
-  const defaultCollectionId = ensureDefaultCollection(database);
-  ensureDefaultCollectionFlag(database, defaultCollectionId);
+  const firstCollectionId = ensureFirstCollection(database);
 
   const banknotesTableDefinition = database.prepare(`
     SELECT sql
@@ -529,7 +505,7 @@ function initializeSchema(database) {
       )
       SELECT
         id,
-        ${defaultCollectionId},
+        ${firstCollectionId},
         display_order,
         denomination,
         issue_date,
@@ -555,8 +531,8 @@ function initializeSchema(database) {
     `);
   }
 
-  migrateBanknotesForCollectionScope(database, defaultCollectionId);
-  migrateTagsForCollectionScope(database, defaultCollectionId);
+  migrateBanknotesForCollectionScope(database, firstCollectionId);
+  migrateTagsForCollectionScope(database, firstCollectionId);
   migrateBanknotesForeignKey(database);
 
   database.exec(`
@@ -626,7 +602,6 @@ function createStatements(database) {
       SELECT
         collections.id,
         collections.name,
-        collections.is_default,
         collections.display_order,
         collections.created_at,
         collections.updated_at,
@@ -634,25 +609,10 @@ function createStatements(database) {
       FROM collections
       ORDER BY display_order ASC, id ASC
     `),
-    getDefaultCollectionStatement: database.prepare(`
-      SELECT
-        collections.id,
-        collections.name,
-        collections.is_default,
-        collections.display_order,
-        collections.created_at,
-        collections.updated_at,
-        (SELECT COUNT(*) FROM banknotes WHERE banknotes.collection_id = collections.id) AS note_count
-      FROM collections
-      WHERE is_default = 1
-      ORDER BY id ASC
-      LIMIT 1
-    `),
     getCollectionStatement: database.prepare(`
       SELECT
         collections.id,
         collections.name,
-        collections.is_default,
         collections.display_order,
         collections.created_at,
         collections.updated_at,
@@ -661,10 +621,9 @@ function createStatements(database) {
       WHERE id = ?
     `),
     createCollectionStatement: database.prepare(`
-      INSERT INTO collections (name, is_default, display_order, created_at, updated_at)
+      INSERT INTO collections (name, display_order, created_at, updated_at)
       VALUES (
         @name,
-        0,
         (SELECT COALESCE(MAX(display_order), 0) + 1 FROM collections),
         datetime('now'),
         datetime('now')
@@ -679,18 +638,6 @@ function createStatements(database) {
     renameCollectionStatement: database.prepare(`
       UPDATE collections
       SET name = @name,
-          updated_at = datetime('now')
-      WHERE id = @id
-    `),
-    clearDefaultCollectionStatement: database.prepare(`
-      UPDATE collections
-      SET is_default = 0,
-          updated_at = datetime('now')
-      WHERE is_default = 1
-    `),
-    markDefaultCollectionStatement: database.prepare(`
-      UPDATE collections
-      SET is_default = 1,
           updated_at = datetime('now')
       WHERE id = @id
     `),
@@ -1103,32 +1050,26 @@ function rowToNote(row, tagMap) {
   };
 }
 
-function getDefaultCollectionId() {
-  getDatabase();
-  const preferred = statements.getDefaultCollectionStatement.get();
+function getFirstCollectionId() {
+  const first = getDatabase().prepare(`
+    SELECT id
+    FROM collections
+    ORDER BY display_order ASC, id ASC
+    LIMIT 1
+  `).get();
 
-  if (preferred) {
-    return Number(preferred.id);
-  }
-
-  const first = statements.listCollectionsStatement.get();
-
-  if (first) {
-    return Number(first.id);
-  }
-
-  return null;
+  return first ? Number(first.id) : null;
 }
 
 function resolveCollectionId(collectionId) {
   if (collectionId == null) {
-    const defaultCollectionId = getDefaultCollectionId();
+    const firstCollectionId = getFirstCollectionId();
 
-    if (!Number.isInteger(defaultCollectionId) || defaultCollectionId <= 0) {
+    if (!Number.isInteger(firstCollectionId) || firstCollectionId <= 0) {
       throw new Error('No collections available.');
     }
 
-    return defaultCollectionId;
+    return firstCollectionId;
   }
 
   const normalized = Number(collectionId);
@@ -1253,48 +1194,21 @@ function removeManagedNoteImages(noteId) {
   fs.rmSync(noteImagesDir, { recursive: true, force: true });
 }
 
-function setDefaultCollectionById(id) {
+function deleteCollectionById(id) {
   getDatabase();
   const collectionId = Number(id);
   ensureCollectionExists(collectionId);
 
-  const transaction = db.transaction((targetCollectionId) => {
-    statements.clearDefaultCollectionStatement.run();
-    statements.markDefaultCollectionStatement.run({ id: targetCollectionId });
-  });
-
-  transaction(collectionId);
-  return getCollectionById(collectionId);
-}
-
-function deleteCollectionById(id) {
-  getDatabase();
-  const collectionId = Number(id);
-  const collection = ensureCollectionExists(collectionId);
-
-  const fallbackCollection = statements.listCollectionsStatement
-    .all()
-    .find((entry) => Number(entry.id) !== collectionId);
-
   const noteIds = statements.listNoteIdsByCollectionStatement.all(collectionId).map((row) => Number(row.id));
 
-  const transaction = db.transaction((targetCollectionId, nextDefaultId, isDeletingDefault) => {
+  const transaction = db.transaction((targetCollectionId) => {
     statements.deleteNotesByCollectionStatement.run(targetCollectionId);
     statements.deleteTagsByCollectionStatement.run(targetCollectionId);
     statements.deleteOrphanTagLinksStatement.run();
     statements.deleteCollectionStatement.run(targetCollectionId);
-
-    if (isDeletingDefault && Number.isInteger(nextDefaultId) && nextDefaultId > 0) {
-      statements.clearDefaultCollectionStatement.run();
-      statements.markDefaultCollectionStatement.run({ id: nextDefaultId });
-    }
   });
 
-  transaction(
-    collectionId,
-    Number(fallbackCollection?.id ?? 0),
-    Number(collection.is_default) === 1,
-  );
+  transaction(collectionId);
 
   for (const noteId of noteIds) {
     removeManagedNoteImages(noteId);
@@ -2207,7 +2121,7 @@ export {
   getCategoryById,
   getCollectionById,
   getDatabase,
-  getDefaultCollectionId,
+  getFirstCollectionId,
   getNoteById,
   getShowcaseById,
   getShowcaseNodeById,
@@ -2224,7 +2138,6 @@ export {
   reorderNotes,
   reorderShowcases,
   reorderShowcaseNodes,
-  setDefaultCollectionById,
   replaceNoteTags,
   updateNote,
   updateShowcaseNode,

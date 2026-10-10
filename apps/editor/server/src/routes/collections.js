@@ -5,8 +5,7 @@ import {
   getAllCollections,
   getCollectionById,
   renameCollectionById,
-  reorderCollections,
-  setDefaultCollectionById
+  reorderCollections
 } from '../db.js';
 
 const collectionsRouter = Router();
@@ -70,27 +69,6 @@ collectionsRouter.put('/:collectionId', (request, response) => {
 
   try {
     const collection = renameCollectionById(collectionId, name);
-    response.json({ collection });
-  } catch (error) {
-    response.status(400).json({ error: error.message });
-  }
-});
-
-collectionsRouter.put('/:collectionId/default', (request, response) => {
-  const collectionId = Number(request.params.collectionId);
-
-  if (!Number.isInteger(collectionId) || collectionId <= 0) {
-    response.status(400).json({ error: 'A valid collection ID is required.' });
-    return;
-  }
-
-  if (!getCollectionById(collectionId)) {
-    response.status(404).json({ error: 'Collection not found.' });
-    return;
-  }
-
-  try {
-    const collection = setDefaultCollectionById(collectionId);
     response.json({ collection });
   } catch (error) {
     response.status(400).json({ error: error.message });

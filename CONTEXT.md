@@ -95,10 +95,6 @@ _Avoid_: Variation set
 A named group of notes forming one archive. Each note belongs to exactly one collection, and a collection's notes have an order.
 _Avoid_: Album, group
 
-**Default collection**:
-The collection a note lands in when none is specified and the fallback active collection; at most one collection is designated default.
-_Avoid_: Primary collection
-
 **Scrape status**:
 The progress of a note's Scrape: pending, in progress, succeeded, or failed with an error.
 _Avoid_: Fetch state

@@ -247,8 +247,10 @@ function listArchiveCollections(database) {
     throw new Error('Archive must include collections metadata.');
   }
 
+  // Archives written before the default-flag removal carry `is_default`;
+  // newer ones do not. Either shape imports; any archived flag is ignored.
   const rows = database.prepare(`
-    SELECT id, name, COALESCE(is_default, 0) AS is_default
+    SELECT id, name
     FROM collections
     ORDER BY id ASC
   `).all();
@@ -259,8 +261,7 @@ function listArchiveCollections(database) {
 
   return rows.map((row) => ({
     id: Number(row.id),
-    name: String(row.name ?? '').trim(),
-    is_default: Number(row.is_default ?? 0) === 1 ? 1 : 0
+    name: String(row.name ?? '').trim()
   })).filter((row) => row.name);
 }
 
@@ -895,7 +896,7 @@ function mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir) {
     }
 
     const findCollectionByNameStatement = stagedDatabase.prepare(`
-      SELECT id, name, is_default
+      SELECT id, name
       FROM collections
       WHERE lower(name) = lower(?)
       ORDER BY id ASC
@@ -920,8 +921,8 @@ function mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir) {
          OR banknote_id NOT IN (SELECT id FROM banknotes)
     `);
     const insertCollectionStatement = stagedDatabase.prepare(`
-      INSERT INTO collections (name, is_default, created_at, updated_at)
-      VALUES (?, 0, datetime('now'), datetime('now'))
+      INSERT INTO collections (name, created_at, updated_at)
+      VALUES (?, datetime('now'), datetime('now'))
     `);
     const insertNoteStatement = stagedDatabase.prepare(`
       INSERT INTO banknotes (
@@ -969,22 +970,8 @@ function mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir) {
       INSERT OR IGNORE INTO banknote_tags (banknote_id, tag_id)
       VALUES (?, ?)
     `);
-    const clearDefaultStatement = stagedDatabase.prepare(`
-      UPDATE collections
-      SET is_default = 0,
-          updated_at = datetime('now')
-      WHERE is_default = 1
-    `);
-    const markDefaultStatement = stagedDatabase.prepare(`
-      UPDATE collections
-      SET is_default = 1,
-          updated_at = datetime('now')
-      WHERE id = ?
-    `);
 
     const importTransaction = stagedDatabase.transaction(() => {
-      const importedDefaults = [];
-
       for (const archiveCollection of archiveCollections) {
         const existingCollection = findCollectionByNameStatement.get(archiveCollection.name);
 
@@ -1002,13 +989,6 @@ function mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir) {
 
         const insertedCollection = insertCollectionStatement.run(archiveCollection.name);
         const stagedCollectionId = Number(insertedCollection.lastInsertRowid);
-
-        if (archiveCollection.is_default === 1) {
-          importedDefaults.push({
-            archiveCollectionId: archiveCollection.id,
-            stagedCollectionId
-          });
-        }
 
         const tagsByNoteId = listArchiveTagsByNoteId(archiveDatabase, archiveCollection.id);
         const archiveNotes = archiveDatabase.prepare(`
@@ -1086,12 +1066,6 @@ function mergeArchiveIntoStagedData(archiveDataDir, stagedDataDir) {
       // staged database always has them (it is a copy of the live data dir).
       if (archiveHasShowcasesTables(archiveDatabase) && archiveHasShowcasesTables(stagedDatabase)) {
         importShowcases(archiveDatabase, stagedDatabase, archiveToStagedNoteIds);
-      }
-
-      if (importedDefaults.length) {
-        importedDefaults.sort((a, b) => a.archiveCollectionId - b.archiveCollectionId);
-        clearDefaultStatement.run();
-        markDefaultStatement.run(importedDefaults[0].stagedCollectionId);
       }
     });
 

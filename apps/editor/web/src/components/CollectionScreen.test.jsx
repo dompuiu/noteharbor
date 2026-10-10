@@ -38,7 +38,6 @@ function collectionsContext(overrides = {}) {
     collectionsError: "",
     createCollection: vi.fn(),
     renameCollection: vi.fn(),
-    setDefaultCollection: vi.fn(),
     deleteCollection: vi.fn(),
     pendingCollection: null,
     beginPendingCollection: vi.fn(),
@@ -124,7 +123,7 @@ describe("CollectionScreen view mode", () => {
 });
 
 describe("CollectionScreen edit mode", () => {
-  test("Save stays disabled until the name or default changes", async () => {
+  test("Save stays disabled until the name changes", async () => {
     const user = userEvent.setup();
     renderEdit(2);
 
@@ -155,18 +154,13 @@ describe("CollectionScreen edit mode", () => {
     });
   });
 
-  test("toggling default saves through the context", async () => {
-    const user = userEvent.setup();
-    const setDefaultCollection = vi.fn().mockResolvedValue({ id: 2, is_default: 1 });
-    useCollections.mockReturnValue(collectionsContext({ setDefaultCollection }));
+  test("offers no default-collection control", async () => {
     renderEdit(2);
 
-    await user.click(screen.getByRole("checkbox"));
-    await user.click(screen.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => {
-      expect(setDefaultCollection).toHaveBeenCalledWith(2);
-    });
+    expect(
+      screen.queryByRole("checkbox", { name: /default collection/i }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText(/new notes land here/i)).not.toBeInTheDocument();
   });
 
   test("Cancel returns to view without saving", async () => {

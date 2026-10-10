@@ -23,7 +23,6 @@ vi.mock("./lib/api.js", () => ({
   renameCollection: vi.fn(),
   reorderCollections: vi.fn(),
   reorderNodes: vi.fn(),
-  setDefaultCollection: vi.fn(),
   updateNode: vi.fn(),
 }));
 

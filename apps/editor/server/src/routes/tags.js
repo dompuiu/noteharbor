@@ -2,7 +2,7 @@ import { Router } from 'express';
 import {
   getAllTags,
   getCollectionById,
-  getDefaultCollectionId
+  getFirstCollectionId
 } from '../db.js';
 
 const tagsRouter = Router({ mergeParams: true });
@@ -11,7 +11,7 @@ function resolveCollectionId(request, response) {
   const rawCollectionId = request.params.collectionId;
 
   if (rawCollectionId == null) {
-    return getDefaultCollectionId();
+    return getFirstCollectionId();
   }
 
   const collectionId = Number(rawCollectionId);
