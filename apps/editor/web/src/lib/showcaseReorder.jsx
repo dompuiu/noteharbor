@@ -16,7 +16,11 @@ function placementForEvent(event, bounds) {
 // A drop that leaves the order untouched has no visible target: the gap
 // between two adjacent cards otherwise offers two indicators (`after` on the
 // earlier card, `before` on the later one) that both resolve to the same
-// no-op move.
+// no-op move. For the same reason only one edge per gap is active: `before`
+// on every card plus `after` on the last card for the end position. An
+// `after` on any other card duplicates the next card's `before` (same
+// insertion index), so dragging the 1st note between the 2nd and 3rd would
+// otherwise offer two drop lines for one destination.
 function isNoopMove(nodes, sourceId, targetId, placement) {
   const from = nodes.findIndex((node) => node.id === sourceId);
   const to = nodes.findIndex((node) => node.id === targetId);
@@ -60,6 +64,14 @@ function useShowcaseReorder({ nodes, onReorder }) {
       event,
       event.currentTarget.getBoundingClientRect(),
     );
+
+    // One indicator per gap: `after` is only active on the last card (the
+    // end position). Any other `after` duplicates the next card's `before`.
+    const targetIndex = nodes.findIndex((node) => node.id === nodeId);
+    if (placement === "after" && targetIndex !== nodes.length - 1) {
+      setDropTarget((current) => (current == null ? current : null));
+      return;
+    }
 
     if (isNoopMove(nodes, draggedId, nodeId, placement)) {
       setDropTarget((current) => (current == null ? current : null));
