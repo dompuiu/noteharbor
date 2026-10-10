@@ -13,6 +13,23 @@ function placementForEvent(event, bounds) {
   return dy < 0 ? "before" : "after";
 }
 
+// A drop that leaves the order untouched has no visible target: the gap
+// between two adjacent cards otherwise offers two indicators (`after` on the
+// earlier card, `before` on the later one) that both resolve to the same
+// no-op move.
+function isNoopMove(nodes, sourceId, targetId, placement) {
+  const from = nodes.findIndex((node) => node.id === sourceId);
+  const to = nodes.findIndex((node) => node.id === targetId);
+
+  if (from < 0 || to < 0) {
+    return true;
+  }
+
+  const insertAt = to + (placement === "after" ? 1 : 0);
+
+  return insertAt === from || insertAt === from + 1;
+}
+
 // Drag state for reordering the children of one node. It mirrors the sidebar's
 // showcase drag: HTML5 `draggable`, `dataTransfer`, a before/after drop target.
 // The owner applies the order (it hands ids to the server, then reorders its
@@ -31,7 +48,7 @@ function useShowcaseReorder({ nodes, onReorder }) {
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData("text/plain", String(nodeId));
     setDraggedId(nodeId);
-    setDropTarget({ nodeId, placement: "before" });
+    setDropTarget(null);
   }
 
   function handleDragOver(event, nodeId) {
@@ -39,12 +56,17 @@ function useShowcaseReorder({ nodes, onReorder }) {
       return;
     }
 
-    event.preventDefault();
     const placement = placementForEvent(
       event,
       event.currentTarget.getBoundingClientRect(),
     );
 
+    if (isNoopMove(nodes, draggedId, nodeId, placement)) {
+      setDropTarget((current) => (current == null ? current : null));
+      return;
+    }
+
+    event.preventDefault();
     setDropTarget((current) =>
       current?.nodeId === nodeId && current?.placement === placement
         ? current
@@ -78,18 +100,14 @@ function useShowcaseReorder({ nodes, onReorder }) {
       return;
     }
 
+    if (isNoopMove(nodes, sourceId, targetId, placement)) {
+      return;
+    }
+
     const from = nodes.findIndex((node) => node.id === sourceId);
     const to = nodes.findIndex((node) => node.id === targetId);
 
-    if (from < 0 || to < 0) {
-      return;
-    }
-
     const insertAt = to + (placement === "after" ? 1 : 0);
-
-    if (insertAt === from || insertAt === from + 1) {
-      return;
-    }
 
     const next = [...nodes];
     const [moved] = next.splice(from, 1);
