@@ -9,6 +9,7 @@ import {
   removeNodeTree,
   reorderNodeTree,
   updateNodeTree,
+  visibleChildNodes,
 } from "./showcaseTree.js";
 
 function noteNode(id) {
@@ -133,5 +134,35 @@ describe("countNoteNodes", () => {
 
   test("is zero for an empty tree", () => {
     expect(countNoteNodes([])).toBe(0);
+  });
+});
+
+describe("visibleChildNodes", () => {
+  test("keeps everything in edit mode", () => {
+    const children = [grouping(2), noteNode(3)];
+
+    expect(visibleChildNodes(children, true)).toBe(children);
+  });
+
+  test("hides empty groupings in view mode but keeps notes", () => {
+    const children = [grouping(2), noteNode(3)];
+
+    expect(visibleChildNodes(children, false).map((node) => node.id)).toEqual([
+      3,
+    ]);
+  });
+
+  test("keeps a grouping with a nested note in view mode", () => {
+    const children = [grouping(2, [grouping(6, [noteNode(7)])])];
+
+    expect(visibleChildNodes(children, false).map((node) => node.id)).toEqual([
+      2,
+    ]);
+  });
+
+  test("hides a grouping holding only empty groupings in view mode", () => {
+    const children = [grouping(2, [grouping(6)])];
+
+    expect(visibleChildNodes(children, false)).toEqual([]);
   });
 });

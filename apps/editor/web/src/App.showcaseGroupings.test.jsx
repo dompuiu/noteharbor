@@ -118,7 +118,9 @@ function groupingNode({ id, name, children = [], coverNote = null }) {
 }
 
 // A category placement "Summer" holding a "Sub" grouping. The grouping has a
-// note member (which fixes its derived cover) and a deeper "Deep" grouping.
+// note member (which fixes its derived cover) and a deeper "Deep" grouping
+// that also holds a note so drill navigation can reach it in view mode (empty
+// groupings stay hidden there).
 function summerTree({ coverNote = null } = {}) {
   const sub = groupingNode({
     id: 20,
@@ -126,7 +128,11 @@ function summerTree({ coverNote = null } = {}) {
     coverNote,
     children: [
       noteNode(11, DERIVED_NOTE),
-      groupingNode({ id: 30, name: "Deep" }),
+      groupingNode({
+        id: 30,
+        name: "Deep",
+        children: [noteNode(12, DERIVED_NOTE)],
+      }),
     ],
   });
 
@@ -332,7 +338,22 @@ describe("grouping cover", () => {
     );
   });
 
-  test("a grouping with no resolvable note shows its name and a placeholder", async () => {
+  test("an empty grouping shows its name and a placeholder in edit mode", async () => {
+    const emptyGrouping = groupingNode({ id: 20, name: "Sub" });
+    getShowcaseTree.mockResolvedValue({
+      showcase_id: 1,
+      nodes: [
+        { ...summerTree(), children: [noteNode(11, DERIVED_NOTE), emptyGrouping] },
+      ],
+    });
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    const card = await screen.findByRole("button", { name: "Open grouping Sub" });
+    expect(card).toHaveTextContent("Sub");
+    expect(card.querySelector("img")).toBeNull();
+  });
+
+  test("an empty grouping stays hidden in view mode", async () => {
     const emptyGrouping = groupingNode({ id: 20, name: "Sub" });
     getShowcaseTree.mockResolvedValue({
       showcase_id: 1,
@@ -342,9 +363,64 @@ describe("grouping cover", () => {
     });
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
-    const card = await screen.findByRole("button", { name: "Open grouping Sub" });
-    expect(card).toHaveTextContent("Sub");
-    expect(card.querySelector("img")).toBeNull();
+    await screen.findByRole("heading", { name: "Summer" });
+    expect(
+      screen.queryByRole("button", { name: "Open grouping Sub" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("an empty nested grouping stays hidden on its drilled level in view mode", async () => {
+    getShowcaseTree.mockResolvedValue({
+      showcase_id: 1,
+      nodes: [
+        {
+          ...summerTree(),
+          children: [
+            {
+              ...groupingNode({ id: 20, name: "Sub" }),
+              children: [
+                noteNode(11, DERIVED_NOTE),
+                groupingNode({ id: 30, name: "Deep" }),
+              ],
+            },
+          ],
+        },
+      ],
+    });
+    renderAt(`${SHOWCASE_ROUTES.showcase(1)}?node=20`);
+
+    expect(
+      await screen.findByRole("button", { name: "1, 2020" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Open grouping Deep" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("a grouping holding only empty groupings stays hidden in view mode", async () => {
+    const nestedEmpty = groupingNode({
+      id: 30,
+      name: "Deep",
+      children: [groupingNode({ id: 31, name: "Deeper" })],
+    });
+    const parent = groupingNode({
+      id: 20,
+      name: "Sub",
+      children: [nestedEmpty],
+    });
+    getShowcaseTree.mockResolvedValue({
+      showcase_id: 1,
+      nodes: [{ ...summerTree(), children: [noteNode(11, DERIVED_NOTE), parent] }],
+    });
+
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    await screen.findByRole("heading", { name: "Summer" });
+    expect(
+      screen.queryByRole("button", { name: "Open grouping Sub" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "1, 2020" }),
+    ).toBeInTheDocument();
   });
 });
 

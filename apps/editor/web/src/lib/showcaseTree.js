@@ -172,6 +172,21 @@ function countNoteNodes(nodes) {
   return total;
 }
 
+// View mode hides empty Groupings (no notes anywhere beneath them) so the
+// presentation never shows an empty card; edit mode keeps them so they can
+// be filled. Notes and Categories pass through untouched — Categories are
+// filtered at the section level, not here.
+function visibleChildNodes(children, editMode) {
+  if (editMode) {
+    return children;
+  }
+
+  return (children ?? []).filter(
+    (node) =>
+      node.node_type !== "grouping" || countNoteNodes([node]) > 0,
+  );
+}
+
 export {
   appendChildren,
   applyChildOrder,
@@ -182,4 +197,5 @@ export {
   removeNodeTree,
   reorderNodeTree,
   updateNodeTree,
+  visibleChildNodes,
 };

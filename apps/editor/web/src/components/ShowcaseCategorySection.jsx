@@ -7,7 +7,7 @@ import { ShowcaseNoteEditor } from "./ShowcaseNoteEditor.jsx";
 import { ShowcaseNodeEditor } from "./ShowcaseNodeEditor.jsx";
 import { ShowcaseReorderableCell } from "./ShowcaseReorderableCell.jsx";
 import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
-import { countNoteNodes } from "../lib/showcaseTree.js";
+import { countNoteNodes, visibleChildNodes } from "../lib/showcaseTree.js";
 
 // One top-level Category rendered always expanded: a section header plus the
 // inline grid of its direct children. Groupings inside still drill (they nest);
@@ -34,6 +34,7 @@ function ShowcaseCategorySection({
   onReorder,
 }) {
   const children = category.children ?? [];
+  const visibleChildren = visibleChildNodes(children, editMode);
   const reorder = useShowcaseReorder({
     nodes: children,
     onReorder: (orderedIds) => onReorder(category.id, orderedIds),
@@ -66,7 +67,7 @@ function ShowcaseCategorySection({
 
       {children.length > 0 ? (
         <ShowcaseGrid size={photoSize}>
-          {children.map((node) => {
+          {visibleChildren.map((node) => {
             if (node.node_type === "grouping") {
               return editMode ? (
                 <ShowcaseReorderableCell

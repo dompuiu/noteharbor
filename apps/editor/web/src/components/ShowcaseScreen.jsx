@@ -25,6 +25,7 @@ import {
   removeNodeTree,
   reorderNodeTree,
   updateNodeTree,
+  visibleChildNodes,
 } from "../lib/showcaseTree.js";
 import {
   isTempId,
@@ -464,7 +465,10 @@ function ShowcaseScreen({ mode }) {
   }, [editEntryNode, editMode, loading, nodes]);
   // Announce each node entry through a polite live region; the root announces
   // the showcase itself.
-  const announcedCount = isRootExpanded ? visibleRootNodes.length : displayChildren.length;
+  // View mode hides empty Groupings (no notes beneath them); edit mode keeps
+  // them so they can be filled.
+  const visibleDisplayChildren = visibleChildNodes(displayChildren, editMode);
+  const announcedCount = isRootExpanded ? visibleRootNodes.length : visibleDisplayChildren.length;
   useEffect(() => {
     if (loading) {
       return;
@@ -1058,15 +1062,16 @@ function ShowcaseScreen({ mode }) {
   // a way forward.
   const showViewEmpty = showEmpty && !editMode;
   const showEditEmpty = showEmpty && editMode;
-  // A resolvable node with nothing under it is not the same as an empty
-  // showcase: a Grouping holding only sub-Groupings is not empty. Categories
-  // render expanded with their own per-section empty copy, so this only covers
-  // a drilled Grouping.
+  // A resolvable node with nothing visible under it is not the same as an
+  // empty showcase: a Grouping holding only non-empty sub-Groupings is not
+  // empty. Categories render expanded with their own per-section empty copy,
+  // so this only covers a drilled Grouping. In view mode empty Groupings are
+  // hidden, so the empty state reads the visible children, not the raw ones.
   const showEmptyNode =
     !loading &&
     !loadError &&
     displayNode != null &&
-    displayChildren.length === 0;
+    visibleDisplayChildren.length === 0;
   const showViewEmptyNode = showEmptyNode && !editMode;
   // A label can be placed at most once per Showcase, so do not suggest the ones
   // already on the canvas (including staged draft placements by name).
@@ -1344,7 +1349,7 @@ function ShowcaseScreen({ mode }) {
               </>
             ) : (
               <ShowcaseGrid size={photoSize}>
-                {displayChildren.map((node) => {
+                {visibleDisplayChildren.map((node) => {
                   if (node.node_type === "grouping") {
                     return editMode ? (
                       <ShowcaseReorderableCell

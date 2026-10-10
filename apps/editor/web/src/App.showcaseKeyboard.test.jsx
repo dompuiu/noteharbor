@@ -148,7 +148,14 @@ function summerTree() {
           position: 2,
           children: [
             noteNode(410, note(300, { denomination: "10 lei", issue_date: "1930" }), 1),
-            groupingNode({ id: 30, name: "Deep", position: 2 }),
+            groupingNode({
+              id: 30,
+              name: "Deep",
+              position: 2,
+              children: [
+                noteNode(411, note(301, { denomination: "20 lei", issue_date: "1940" }), 1),
+              ],
+            }),
           ],
         }),
       ],
