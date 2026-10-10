@@ -142,19 +142,54 @@ function ShowcaseGroupingEditor({ node, onRemove, onRename, onOpen, children }) 
                 }}
                 value={name}
               />
-            </span>
-            <div className="showcase-cell-edit-actions">
-              <button className="button" onClick={cancelEditing} type="button">
-                Cancel
-              </button>
               <button
-                className="button button-primary"
+                aria-label="Save"
+                className="showcase-grouping-save"
                 disabled={busy}
+                title="Save name"
                 type="submit"
               >
-                Save
+                <svg
+                  aria-hidden="true"
+                  focusable="false"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  width="13"
+                >
+                  <path
+                    d="M4 12.5l5 5L20 6.5"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth="2.5"
+                  />
+                </svg>
               </button>
-            </div>
+              <button
+                aria-label="Cancel"
+                className="showcase-grouping-cancel"
+                onClick={cancelEditing}
+                title="Discard changes"
+                type="button"
+              >
+                <svg
+                  aria-hidden="true"
+                  focusable="false"
+                  height="13"
+                  viewBox="0 0 24 24"
+                  width="13"
+                >
+                  <path
+                    d="M6 6l12 12M18 6L6 18"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeWidth="2"
+                  />
+                </svg>
+              </button>
+            </span>
           </form>
         ) : (
           <span className="showcase-card-name showcase-grouping-name">

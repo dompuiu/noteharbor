@@ -1013,11 +1013,11 @@ input[type="radio"] {
 }
 
 /* Inline rename: the footer row turns into a form and the title text is
-   replaced by a text field in place. */
+   replaced by a text field in place, followed by save / discard icons. The
+   row takes ~85% of the card width, centered. */
 .showcase-grouping-rename-form {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
+  width: 85%;
+  margin: 0 auto;
 }
 
 .showcase-grouping-input {
@@ -1047,9 +1047,33 @@ input[type="radio"] {
 }
 
 .showcase-grouping-rename:hover,
-.showcase-grouping-rename:focus-visible {
+.showcase-grouping-rename:focus-visible,
+.showcase-grouping-save:hover,
+.showcase-grouping-save:focus-visible {
   border-color: var(--accent);
   color: var(--accent-strong);
+}
+
+.showcase-grouping-save,
+.showcase-grouping-cancel {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  padding: 0;
+  border: 1px solid var(--border-control);
+  border-radius: 999px;
+  background: var(--surface-2);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.showcase-grouping-cancel:hover,
+.showcase-grouping-cancel:focus-visible {
+  border-color: var(--danger, #b3261e);
+  color: var(--danger, #b3261e);
 }
 
 .showcase-reorder-cell--dragging {
