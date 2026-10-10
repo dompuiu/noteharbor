@@ -13,9 +13,11 @@ function ShowcaseReorderableCell({ nodeId, label, reorder, children }) {
     handleDrop,
   } = reorder;
   const placement = dropTarget?.nodeId === nodeId ? dropTarget.placement : null;
+  const axis =
+    dropTarget?.nodeId === nodeId ? (dropTarget.axis ?? "x") : null;
   const className = `showcase-reorder-cell${
     draggedId === nodeId ? " showcase-reorder-cell--dragging" : ""
-  }${placement ? ` showcase-reorder-cell--drop-${placement}` : ""}`;
+  }${placement ? ` showcase-reorder-cell--drop-${placement}-${axis}` : ""}`;
 
   return (
     <div
