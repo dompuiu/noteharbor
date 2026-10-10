@@ -719,11 +719,17 @@ function ShowcaseScreen({ mode }) {
     if (saving) {
       return;
     }
-    // A draft showcase has no view to return to: discard it and go home so
-    // the sidebar row disappears with it.
+    // A draft showcase has no view to return to: discard it and land on the
+    // last showcase in the list (or home when the list is empty) so the
+    // sidebar row disappears with it.
     if (isNew) {
       discardPendingShowcase();
-      navigate(DEFAULT_DESTINATION);
+      const lastShowcase = showcases[showcases.length - 1] ?? null;
+      navigate(
+        lastShowcase
+          ? SHOWCASE_ROUTES.showcase(lastShowcase.id)
+          : DEFAULT_DESTINATION,
+      );
       return;
     }
     // Cancel discards the draft and returns to view on the same level when

@@ -186,7 +186,7 @@ describe("Creating a showcase", () => {
     });
   });
 
-  test("Cancel on a draft discards it without posting and goes home", async () => {
+  test("Cancel on a draft discards it without posting and opens the last showcase", async () => {
     const user = userEvent.setup();
     renderAt(CATALOG_ROUTES.banknotes);
 
@@ -199,10 +199,28 @@ describe("Creating a showcase", () => {
 
     expect(createShowcase).not.toHaveBeenCalled();
     await waitFor(() => {
-      expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
+      expect(currentPath()).toBe(SHOWCASE_ROUTES.showcase(2));
     });
     await waitFor(() => {
       expect(screen.queryByRole("link", { name: "Showcase" })).not.toBeInTheDocument();
+    });
+  });
+
+  test("Cancel on a draft with no showcases goes home", async () => {
+    const user = userEvent.setup();
+    getShowcases.mockResolvedValue({ showcases: [] });
+    renderAt(CATALOG_ROUTES.banknotes);
+
+    await user.click(
+      await screen.findByRole("button", { name: "New showcase" }),
+    );
+    await screen.findByLabelText("Showcase name");
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(createShowcase).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(currentPath()).toBe(CATALOG_ROUTES.banknotes);
     });
   });
 
