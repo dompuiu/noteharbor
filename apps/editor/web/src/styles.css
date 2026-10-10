@@ -1003,6 +1003,11 @@ input[type="radio"] {
    centered action. Edit mode holds the create tile; view mode holds a title,
    a hint, and a way forward. */
 .showcase-empty-box {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
   margin-bottom: 16px;
   padding: 40px 24px;
   border: 2px dashed var(--border-control);
@@ -1019,14 +1024,14 @@ input[type="radio"] {
 }
 
 .showcase-empty-title {
-  margin: 0 0 6px;
+  margin: 0;
   color: var(--text);
   font-size: 1.05rem;
   font-weight: 700;
 }
 
 .showcase-empty-text {
-  margin: 0 auto 14px;
+  margin: 0 auto;
   font: inherit;
 }
 
@@ -1034,7 +1039,7 @@ input[type="radio"] {
   display: flex;
   justify-content: center;
   gap: 8px;
-  margin-top: 4px;
+  margin-top: 0;
 }
 
 .showcase-empty-box .showcase-empty-text:last-child {

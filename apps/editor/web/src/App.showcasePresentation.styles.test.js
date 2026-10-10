@@ -15,6 +15,16 @@ describe("showcase empty-state styles", () => {
     expect(box[1]).toMatch(/text-align:\s*center/);
   });
 
+  test("the empty box middle-centers its copy and action", () => {
+    const box = styles.match(/\n\.showcase-empty-box\s*\{([^}]*)\}/);
+    expect(box).not.toBeNull();
+    expect(box[1]).toMatch(/display:\s*flex/);
+    expect(box[1]).toMatch(/flex-direction:\s*column/);
+    expect(box[1]).toMatch(/align-items:\s*center/);
+    expect(box[1]).toMatch(/justify-content:\s*center/);
+    expect(box[1]).toMatch(/gap:\s*\d/);
+  });
+
   test("the create tiles use a dashed border with the accent label", () => {
     const tile = styles.match(/\n\.showcase-tile\s*\{([^}]*)\}/);
     expect(tile).not.toBeNull();
