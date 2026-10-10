@@ -2,13 +2,46 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
-## [Unreleased]
+## [2.0.0] - 2026-10-10
+
+### Added
+
+- Showcases: a presentation hub in the sidebar for building named presentation trees from notes across collections. Create, rename, delete, and reorder showcases — drag the sidebar items, or use each group's Reorder toggle with grip handles and keyboard-accessible Move up/down buttons. Creation stays a draft until Save; Cancel or leaving discards it.
+- Showcase view and edit screens with drill-down routes synced to the URL and kept across view/edit modes: place Categories from the shared label pool (a combobox with suggestions) onto the canvas, nest Groupings inside them, and add notes through the note picker. Edits stage as a draft — Save persists, Cancel discards.
+- Showcase note picker: per-row thumbnails with a full-size hover preview, virtualized scrolling for large collections, a result/selection count, accumulate and deselect-all behaviour, `/` focusing its filter, and Escape/backdrop dismissal.
+- Showcase cards: catalog-family grouping on a shared note card, front/back cross-fade in view mode, drag-to-reorder with a single drop indicator per gap, arrow-key category reorder, inline Grouping and Category rename, and a three-way photo size control in the header with a persisted preference.
+- Grouping cover image: set a note image as the cover explicitly, or fall back to the first note beneath the Grouping; exposed through the API.
+- Showcase keyboard support: arrows/`hjkl` move card focus, `Enter`/`Space` open the focused card, `Home`/`End` and page-sized jumps, single-key edit actions on the focused card, and `?` shortcut help — all guarded against fields, dialogs, chords, and sidebar focus.
+- Showcase empty states use the dashed-box pattern, and empty Categories and Groupings stay hidden in view mode.
+- Import screen: showcases are listed alongside collections — selecting one auto-selects the collections it needs, and export is blocked (in the UI and with a `400` from the server) while a needed collection stays unselected. Archives carry the showcase tables through export and import, and a filtered export reports the showcases it omitted.
+- Collections screen over a reusable records table: per-collection note counts, inline title rename with the `e` shortcut, Save/Cancel/Delete, deferred creation (no request until Save), and automatic naming.
+- Sidebar: full keyboard navigation with a visible cursor, per-item icons, per-group (Catalog and Showcases) reorder toggles, and an expanded rail that fits its content instead of truncating long names.
+- Image popover: the counter is editable — click it, type a position, and press `Enter` to jump.
+- Startup and connection states: the shell loads without a blocking health probe and shows connecting, connection-error, and no-collections states instead of redirecting; the health check is database-aware.
+- Autopopulate: the Editor launches Chrome and opens the grading tab automatically, including when no matching tab exists; the redundant Open Chrome button is gone.
+
+### Changed
+
+- Routes moved under `/catalog` with legacy redirects.
+- The sidebar lists every collection in the Catalog group; the global Banknotes table route and sidebar item are gone, and the home and standalone Note editor resolve to the owning or first collection.
+- Collection views embed the banknotes table directly: the view header keeps Edit only, the table owns the title, and Edit lives in the table header.
+- Note creation always names its collection explicitly; unscoped fallbacks resolve to the first collection in sidebar order. Archives carrying the old default-collection flag still import (the flag is ignored), and exports no longer emit the column.
+- Note slideshow: it now renders as a scrim with the panel inside, so the sidebar stays visible and hoverable behind it.
+- The Editor requires a 1200px minimum width: the narrow-screen responsive mode is gone, fixed overlays render at 1200px, and body horizontal scroll locks while a full-screen overlay is open.
+- The Import screen no longer offers CSV import; the archive card fills the screen width with a single merged description.
 
 ### Removed
 
 - Table screen: the bulk "Scrape selected" action, the "Select next unscraped" control and its count selector, and the "Scraped" column, along with the scrape polling and status badges behind them.
 - Server: `GET /api/scrape/status` and `POST /api/scrape/start`, plus the `updateScrapeResult` DB helper and the scraper `downloadImages()` methods they used. Autopopulate via `POST /api/scrape/preview` is unchanged.
 - Exported archives no longer contain the `scrape_status` and `scrape_error` columns. Import accepts archives with or without them, and the editor keeps the columns in its own database for compatibility.
+- Collections: the default-collection concept — the `is_default` column (dropped via migration), `PUT /api/collections/:id/default`, the edit-screen checkbox, and the table star.
+- Navigation: the Active collection select and its global state, plus the `/import` and note-editor legacy redirects.
+- Server: the `parent_id`/`ids` alias keys on `PUT /api/nodes/order`; only the canonical `parent_node_id`/`node_ids` contract remains.
+
+### Fixed
+
+- Showcase note cards: clicking a card no longer leaves the back image stuck on.
 
 ## [1.18.0] - 2026-10-01
 
