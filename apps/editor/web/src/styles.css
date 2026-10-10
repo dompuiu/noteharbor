@@ -442,9 +442,14 @@ input[type="radio"] {
   height: 13px;
 }
 
-/* A reorderable row: grip handle, the navigating link, and the move pair.
-   The row is the draggable unit; the link inside never starts a drag. */
+/* A reorderable row: the navigating link plus the keyboard move pair.
+   The row is the draggable unit; the link inside never starts a drag.
+   The grip is absolutely positioned in the group's indent gutter (see
+   the reordering modifier on `.sidebar-group-links`), out of flow, so
+   the links never shift: reorderable or not, every icon keeps its
+   natural x and all grips share one column. */
 .sidebar-row {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 6px;
@@ -458,7 +463,10 @@ input[type="radio"] {
 }
 
 .sidebar-drag-handle {
-  flex: none;
+  position: absolute;
+  left: -24px;
+  top: 50%;
+  transform: translateY(-50%);
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -475,11 +483,11 @@ input[type="radio"] {
   height: 15px;
 }
 
-/* The alignment slot kept by rows that cannot be dragged (actions,
-   Import / Export, pending drafts) while their group is reordering:
-   identical metrics to the real grip, but invisible. */
-.sidebar-drag-handle--placeholder {
-  visibility: hidden;
+/* While a group is reordering, its links block gains the clearance the
+   gutter grips need. The vertical rule itself does not move; every row
+   shifts together so relative alignment never changes. */
+.sidebar-group-links.sidebar-group-links--reordering {
+  padding-left: 30px;
 }
 
 .sidebar-row-moves {
@@ -565,10 +573,13 @@ input[type="radio"] {
 
 /* The dock stays in flow at every width. The rail expands over the content
    on hover or keyboard focus; it is never pinned, so it never pushes
-   content. */
+   content. The expanded rail fits its content: short names get the 288px
+   floor, longer names widen it up to the cap, and only names beyond the
+   cap truncate with an ellipsis. */
 .sidebar-dock:hover .sidebar,
 .sidebar-dock:has(:focus-visible) .sidebar {
-  width: var(--sidebar-expanded-width);
+  width: max(var(--sidebar-expanded-width), max-content);
+  max-width: 480px;
   box-shadow: var(--shadow-lg);
 }
 

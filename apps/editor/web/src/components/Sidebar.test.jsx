@@ -570,9 +570,7 @@ describe("Sidebar collection reordering", () => {
     // Two collection rows grow real grips; the other catalog rows
     // (New collection, Import / Export) hold invisible alignment slots.
     expect(
-      document.querySelectorAll(
-        ".sidebar-drag-handle:not(.sidebar-drag-handle--placeholder)",
-      ),
+      document.querySelectorAll(".sidebar-drag-handle"),
     ).toHaveLength(2);
     expect(
       screen.getByRole("button", { name: "Move Default up" }),
@@ -589,9 +587,7 @@ describe("Sidebar collection reordering", () => {
     await user.click(screen.getByRole("button", { name: "Reorder Showcases" }));
 
     expect(
-      document.querySelectorAll(
-        ".sidebar-drag-handle:not(.sidebar-drag-handle--placeholder)",
-      ),
+      document.querySelectorAll(".sidebar-drag-handle"),
     ).toHaveLength(2);
     expect(
       screen.getByRole("button", { name: "Move Summer down" }),
@@ -629,29 +625,37 @@ describe("Sidebar collection reordering", () => {
     expect(container.querySelector(".sidebar-nav")).toBeInTheDocument();
   });
 
-  test("non-reorderable rows keep a hidden grip slot so icons stay aligned", async () => {
+  test("grips sit in the gutter while plain rows keep their natural position", async () => {
     const user = userEvent.setup();
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
 
     await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
 
-    // Every row in the reordering group — draggable or not — starts with
-    // the same-width grip slot, so the link icons line up.
-    const rows = Array.from(
+    // Only the two draggable rows carry a grip; actions and Import /
+    // Export stay plain links with no grip and no indentation slot, so
+    // their icons keep the exact x they have outside reorder mode.
+    expect(
+      container.querySelectorAll(
+        '.sidebar-group[aria-labelledby="sidebar-group-catalog"] .sidebar-drag-handle',
+      ),
+    ).toHaveLength(2);
+    expect(
       container.querySelectorAll(
         '.sidebar-group[aria-labelledby="sidebar-group-catalog"] .sidebar-row',
       ),
-    );
-    expect(rows).toHaveLength(4);
-    for (const row of rows) {
-      expect(row.querySelector(".sidebar-drag-handle")).not.toBeNull();
-    }
-    // The two rows that cannot be dragged hold an invisible slot instead.
-    expect(
-      container.querySelectorAll(
-        '.sidebar-group[aria-labelledby="sidebar-group-catalog"] .sidebar-drag-handle--placeholder',
-      ),
     ).toHaveLength(2);
+    expect(
+      screen.getByRole("button", { name: "New collection" }).closest(".sidebar-row"),
+    ).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "Import / Export" }).closest(".sidebar-row"),
+    ).toBeNull();
+    // The reordering block marks itself so the gutter clears the grips.
+    expect(
+      container.querySelector(
+        '.sidebar-group[aria-labelledby="sidebar-group-catalog"] .sidebar-group-links--reordering',
+      ),
+    ).not.toBeNull();
   });
 
   test("toggling off hides the handles again", async () => {
@@ -660,9 +664,7 @@ describe("Sidebar collection reordering", () => {
 
     await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
     expect(
-      document.querySelectorAll(
-        ".sidebar-drag-handle:not(.sidebar-drag-handle--placeholder)",
-      ),
+      document.querySelectorAll(".sidebar-drag-handle"),
     ).toHaveLength(2);
 
     await user.click(

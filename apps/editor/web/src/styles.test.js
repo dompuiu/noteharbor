@@ -156,12 +156,11 @@ describe("sidebar styles", () => {
     );
   });
 
-  test("long names truncate instead of widening the rail", () => {
-    // The expanded rail is a fixed 288px overlay: a very long collection or
-    // showcase name must ellipsise inside its row, never stretch the rail.
-    // Every level of the flex chain into the label must be allowed to
-    // shrink — a flex item keeps `min-width: auto` (content-sized, no
-    // shrinking) unless it is explicitly overridden.
+  test("names beyond the widened rail still truncate with an ellipsis", () => {
+    // The rail widens for long names up to its cap; only names beyond
+    // the cap ellipsise inside the row. Every level of the flex chain
+    // into the label must be allowed to shrink — a flex item keeps
+    // `min-width: auto` (content-sized, no shrinking) unless overridden.
     const label = styles.match(/\.sidebar-link-label\s*\{([^}]*)\}/);
     expect(label).not.toBeNull();
     expect(label[1]).toMatch(/min-width:\s*0/);
@@ -173,9 +172,28 @@ describe("sidebar styles", () => {
     expect(row[1]).toMatch(/min-width:\s*0/);
   });
 
-  test("undraggable rows keep an invisible grip slot for alignment", () => {
+  test("long names widen the rail instead of truncating at 288px", () => {
+    // The expanded rail fits its content: short names get the 288px floor
+    // while longer names widen it, up to a cap past which the ellipsis
+    // still applies.
+    const expanded = styles.match(
+      /\.sidebar-dock:hover \.sidebar,\s*\n?\s*\.sidebar-dock:has\(:focus-visible\) \.sidebar\s*\{([^}]*)\}/,
+    );
+    expect(expanded).not.toBeNull();
+    expect(expanded[1]).toMatch(
+      /width:\s*max\(var\(--sidebar-expanded-width\),\s*max-content\)/,
+    );
+    expect(expanded[1]).toMatch(/max-width:\s*480px/);
+  });
+
+  test("the grip is taken out of flow into the indent gutter", () => {
+    // Grips share one column left of the links without shifting them: the
+    // handle is absolutely positioned, and the reordering block clears it.
+    const grip = styles.match(/\.sidebar-drag-handle\s*\{([^}]*)\}/);
+    expect(grip).not.toBeNull();
+    expect(grip[1]).toMatch(/position:\s*absolute/);
     expect(styles).toMatch(
-      /\.sidebar-drag-handle--placeholder\s*\{[^}]*visibility:\s*hidden/,
+      /\.sidebar-group-links\.sidebar-group-links--reordering\s*\{[^}]*padding-left:/,
     );
   });
 

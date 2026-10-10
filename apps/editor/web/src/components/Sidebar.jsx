@@ -731,7 +731,13 @@ function Sidebar({ pageFocusRef }) {
                     </button>
                   ) : null}
                 </div>
-                <div className="sidebar-group-links">
+                <div
+                  className={
+                    reorderMode
+                      ? "sidebar-group-links sidebar-group-links--reordering"
+                      : "sidebar-group-links"
+                  }
+                >
                   {group.items.map((item) => {
                     const index = entries.indexOf(item);
                     const active =
@@ -782,9 +788,7 @@ function Sidebar({ pageFocusRef }) {
                     }`;
 
                     if (item.type === "action") {
-                      // In reorder mode the action keeps a hidden grip slot
-                      // so its icon lines up with the reorderable rows.
-                      const actionButton = (
+                      return (
                         <button
                           aria-label={item.label}
                           className={className}
@@ -802,25 +806,6 @@ function Sidebar({ pageFocusRef }) {
                             {item.visibleLabel ?? item.label}
                           </span>
                         </button>
-                      );
-
-                      if (!reorderMode) {
-                        return actionButton;
-                      }
-
-                      return (
-                        <div className="sidebar-row" key={item.key}>
-                          <span
-                            aria-hidden="true"
-                            className="sidebar-drag-handle sidebar-drag-handle--placeholder"
-                          >
-                            <ItemIcon
-                              className="sidebar-drag-handle-ic"
-                              icon="reorder"
-                            />
-                          </span>
-                          {actionButton}
-                        </div>
                       );
                     }
 
@@ -992,10 +977,10 @@ function Sidebar({ pageFocusRef }) {
                       );
                     }
 
-                    // A plain row in a reordering group keeps a hidden grip
-                    // slot (Import / Export, pending drafts) so its icon
-                    // lines up with the reorderable rows beside it.
-                    const plainLink = (
+                    // A plain link stays a plain link, in or out of reorder
+                    // mode: actions, Import / Export, and pending drafts
+                    // never shift for the reorder UI.
+                    return (
                       <Link
                         aria-current={active ? "page" : undefined}
                         aria-label={item.label}
@@ -1013,25 +998,6 @@ function Sidebar({ pageFocusRef }) {
                         <ItemIcon icon={item.icon} />
                         <span className="sidebar-link-label">{item.label}</span>
                       </Link>
-                    );
-
-                    if (!reorderMode) {
-                      return plainLink;
-                    }
-
-                    return (
-                      <div className="sidebar-row" key={item.key ?? item.to}>
-                        <span
-                          aria-hidden="true"
-                          className="sidebar-drag-handle sidebar-drag-handle--placeholder"
-                        >
-                          <ItemIcon
-                            className="sidebar-drag-handle-ic"
-                            icon="reorder"
-                          />
-                        </span>
-                        {plainLink}
-                      </div>
                     );
                   })}
                 </div>
