@@ -2,6 +2,17 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.3.0] - 2026-10-11
+
+### Added
+
+- Showcase view mode: note cards open a showcase-wide image preview. Click, `Enter`, or `Space` on a note opens the shared image popover at the visible face (flipped cards open at the back); grouping cards still drill into the grouping. The slideshow flattens every imaged note in display order across all levels, with the same zoom, pan, keyboard, and counter behavior as the table image popover. Closing returns to the level containing the current image, and the drill address tracks the shown image while paging so it never names a level the image is not on. Notes without images have no preview.
+
+### Fixed
+
+- Showcase image preview: the popover content owns the on-dark text colour itself, so the arrows, counter, and note label no longer inherit the host's dark text and fade into the dark background.
+- Showcase keyboard: arrow keys from a note/grouping reorder handle move relative to the owning card instead of jumping to the first category header.
+
 ## [2.2.2] - 2026-10-11
 
 ### Fixed
