@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.2.1] - 2026-10-11
+
+### Fixed
+
+- Showcase photo size: the chosen size (Small/Medium/Large) no longer resets to Small every time the desktop app starts. The embedded desktop server listens on a random port, so each launch was a fresh `localStorage` origin; the preference is now stored in a file-backed desktop preference and restored on launch.
+
 ## [2.2.0] - 2026-10-11
 
 ### Added
