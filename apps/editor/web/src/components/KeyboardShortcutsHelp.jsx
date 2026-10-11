@@ -89,7 +89,8 @@ const shortcutGroups = [
     items: [
       {
         keys: ["←", "↑", "→", "↓", "h", "j", "k", "l"],
-        description: "Move focus between the cards in grid order",
+        description:
+          "Move focus between the cards and add tiles in grid order",
       },
       { keys: ["Home", "End"], description: "Focus the first / last card" },
       {

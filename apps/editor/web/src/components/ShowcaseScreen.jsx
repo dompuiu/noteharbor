@@ -799,9 +799,13 @@ function ShowcaseScreen({ mode }) {
   // decide whether there is a level to go up to.
   const drillDepth = effectiveDrillIds.length;
 
-  // Every card is a `.showcase-card`, and DOM order is the grid's reading
-  // order. All cards carry `tabIndex={0}` (no roving tabindex); the shortcuts
-  // only move `document.activeElement`.
+  // The arrow-key sequence is every card (`.showcase-card`) plus every
+  // edit-mode add tile (`.showcase-tile`: Add notes, Add grouping, Create a
+  // category), in DOM order — which is the grid's reading order. An open
+  // create tile is a form, not a tile button, so it drops out of the sequence
+  // while its field (an editable) owns the arrows anyway. All sequence
+  // members are natively focusable (no roving tabindex); the shortcuts only
+  // move `document.activeElement`.
   function showcaseCardElements() {
     const root = sectionRef.current;
 
@@ -809,11 +813,12 @@ function ShowcaseScreen({ mode }) {
       return [];
     }
 
-    return Array.from(root.querySelectorAll(".showcase-card"));
+    return Array.from(root.querySelectorAll(".showcase-card, .showcase-tile"));
   }
 
-  // The card under focus, or the card of the cell the focused control sits in
-  // (a Rename/Remove/Reorder control belongs to the card's own cell).
+  // The card (or add tile) under focus, or the card of the cell the focused
+  // control sits in (a Rename/Remove/Reorder control belongs to the card's
+  // own cell).
   function focusedShowcaseCard() {
     const active = document.activeElement;
 
@@ -822,7 +827,7 @@ function ShowcaseScreen({ mode }) {
     }
 
     return (
-      active.closest(".showcase-card") ??
+      active.closest(".showcase-card, .showcase-tile") ??
       active.closest(".showcase-cell")?.querySelector(".showcase-card") ??
       null
     );

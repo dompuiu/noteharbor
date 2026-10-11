@@ -679,3 +679,45 @@ function stubGridRects(cards, columns, { width = 200, height = 100, gap = 0 }) {
   });
 }
 
+
+describe("edit-mode add tiles in the arrow sequence", () => {
+  test("the arrows walk from the cards through Add notes and Add grouping", async () => {
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    const note = await screen.findByRole("button", { name: "1 leu, 1917" });
+    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    const addNotes = screen.getAllByRole("button", { name: "Add notes" })[0];
+    const addGrouping = screen.getAllByRole("button", {
+      name: "Add grouping",
+    })[0];
+
+    fireEvent.keyDown(document.body, { key: "ArrowDown" });
+    expect(note).toHaveFocus();
+
+    fireEvent.keyDown(document.body, { key: "ArrowDown" });
+    expect(sub).toHaveFocus();
+
+    fireEvent.keyDown(document.body, { key: "ArrowDown" });
+    expect(addNotes).toHaveFocus();
+
+    fireEvent.keyDown(document.body, { key: "ArrowDown" });
+    expect(addGrouping).toHaveFocus();
+
+    fireEvent.keyDown(document.body, { key: "ArrowUp" });
+    expect(addNotes).toHaveFocus();
+  });
+
+  test("Home and End include the tiles at the ends of the sequence", async () => {
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    const note = await screen.findByRole("button", { name: "1 leu, 1917" });
+
+    fireEvent.keyDown(document.body, { key: "End" });
+    expect(
+      screen.getByRole("button", { name: "Create a category" }),
+    ).toHaveFocus();
+
+    fireEvent.keyDown(document.body, { key: "Home" });
+    expect(note).toHaveFocus();
+  });
+});
