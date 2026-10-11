@@ -20,6 +20,7 @@ import {
 } from "../lib/noteClipboard.js";
 import { isDesktopRuntime } from "../lib/appMode.js";
 import { isEditableElement } from "../lib/editableElement.js";
+import { extractPmgDescriptionFields } from "../lib/pmgDescription.js";
 import { CATALOG_ROUTES } from "../lib/routes.js";
 import { NoteCounter } from "./NoteCounter.jsx";
 import { PositionPicker } from "./PositionPicker.jsx";
@@ -793,47 +794,6 @@ function NoteEditForm({
 
     const match = normalized.match(/\bWmk:\s*(.+?)(?:\s*[;,|]\s*|$)/i);
     return match?.[1]?.trim() || null;
-  }
-
-  function extractPmgDescriptionFields(value) {
-    const normalized = String(value ?? "").replace(/\s+/g, " ").trim();
-    if (!normalized) {
-      return {};
-    }
-
-    const cleaned = normalized
-      .replace(/\s*"SPECIMEN"\s*/gi, " ")
-      .replace(/\s+-\s+Wmk:\s*.+$/i, "")
-      .trim();
-
-    let issueDate = null;
-    let denominationSource = cleaned;
-    const ndMatch = cleaned.match(/\bND\s*\(([^)]+)\)\s*$/i);
-    if (ndMatch) {
-      issueDate = ndMatch[1].trim();
-      denominationSource = cleaned.slice(0, ndMatch.index).trim();
-    } else {
-      const trailingDateMatch = cleaned.match(/(\d{4}(?:\s*-\s*\d{1,4})?)\s*$/);
-      if (trailingDateMatch) {
-        issueDate = trailingDateMatch[1].replace(/\s+/g, "");
-        denominationSource = cleaned.slice(0, trailingDateMatch.index).trim();
-      }
-    }
-
-    const lastSegment = denominationSource
-      .split(",")
-      .at(-1)
-      ?.trim()
-      .replace(/\s+/g, " ") || "";
-    const denominationMatch = lastSegment.match(
-      /^(\d[\d,./]*\s+[A-Za-z][A-Za-z.'-]*(?:\s+[A-Za-z][A-Za-z.'-]*){0,2})\b/,
-    );
-    const denomination = denominationMatch?.[1]?.trim() || null;
-
-    return {
-      denomination,
-      issueDate,
-    };
   }
 
   function mapScrapedFields(scrapedData, url) {
