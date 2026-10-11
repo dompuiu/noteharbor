@@ -137,4 +137,15 @@ describe("ShowcaseNoteCard", () => {
       screen.getByRole("button", { name: "1 leu, 1917" }),
     ).toHaveAttribute("aria-pressed", "false");
   });
+
+  test("shows the catalog number after the denomination", () => {
+    render(
+      <ShowcaseNoteCard
+        note={note({ denomination: "1 leu", catalog_number: "22", issue_date: "1917" })}
+      />,
+    );
+
+    const card = screen.getByRole("button", { name: "1 leu, 22, 1917" });
+    expect(card).toHaveTextContent("1 leu · 22 · 1917");
+  });
 });

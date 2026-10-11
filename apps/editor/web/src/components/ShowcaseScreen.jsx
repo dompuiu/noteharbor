@@ -61,7 +61,7 @@ import { useConfirmation } from "./ConfirmDialog.jsx";
 function noteNodeLabel(node) {
   const note = node.note ?? {};
   return (
-    [note.denomination, note.issue_date].filter(Boolean).join(" ") || "note"
+    [note.denomination, note.catalog_number, note.issue_date].filter(Boolean).join(" ") || "note"
   );
 }
 

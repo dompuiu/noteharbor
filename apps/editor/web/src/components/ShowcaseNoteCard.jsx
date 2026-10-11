@@ -35,9 +35,10 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
   const frontVisible = Boolean(frontPath) && !swapped && !soleBack;
   const backVisible = Boolean(backPath) && (swapped || soleBack);
   const denomination = String(note?.denomination ?? "").trim();
+  const catalogNumber = String(note?.catalog_number ?? "").trim();
   const issueDate = String(note?.issue_date ?? "").trim();
-  const caption = [denomination, issueDate].filter(Boolean).join(" · ");
-  const label = [denomination, issueDate].filter(Boolean).join(", ");
+  const caption = [denomination, catalogNumber, issueDate].filter(Boolean).join(" · ");
+  const label = [denomination, catalogNumber, issueDate].filter(Boolean).join(", ");
   const backLabel = label ? `${label} (back)` : "back";
 
   function handleClick(event) {

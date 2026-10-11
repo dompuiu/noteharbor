@@ -12,7 +12,7 @@ function ShowcaseNoteEditor({ node, onRemove, onSetCover }) {
   const [error, setError] = useState("");
 
   const note = node.note ?? {};
-  const label = [note.denomination, note.issue_date].filter(Boolean).join(" ");
+  const label = [note.denomination, note.catalog_number, note.issue_date].filter(Boolean).join(" ");
   const removeLabel = `Remove note ${label}`.trim();
 
   async function run(action, fallbackMessage) {
