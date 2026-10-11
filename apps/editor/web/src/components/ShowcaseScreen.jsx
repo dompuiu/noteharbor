@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   createShowcaseNode,
@@ -101,6 +101,11 @@ function ShowcaseScreen({ mode }) {
   const [nameError, setNameError] = useState("");
   const [deleting, setDeleting] = useState(false);
   const { confirm, dialog, isOpen: confirmOpen } = useConfirmation();
+  const confirmOpenRef = useRef(false);
+  confirmOpenRef.current = confirmOpen;
+  // The unsaved-changes guard reads the latest draft state through this ref,
+  // so the window key listener never closes over a stale value.
+  const exitGuardRef = useRef({ hasUnsavedEdits: false, isNew: false });
   const { collections } = useCollections();
   // The picker's target node id (not the node object) so the open popup reads
   // the node's current children after an add updates the tree.
@@ -350,14 +355,17 @@ function ShowcaseScreen({ mode }) {
       event.preventDefault();
       event.stopPropagation();
       // A new showcase starts with the name field focused: Escape bails out
-      // of the whole draft, exactly like Cancel, instead of only reverting
-      // the field.
+      // of the whole draft, exactly like Cancel (guarded when edited),
+      // instead of only leaving the field.
       if (isNew) {
         handleCancel();
         return;
       }
-      setNameDraft(showcase?.name ?? "Showcase");
-      setNameError("");
+      // Escape never silently clears the field: blur stages the typed name
+      // through `commitName` (like Enter) and a further Escape leaves edit
+      // mode through the unsaved-changes guard, mirroring the Note editor
+      // (first Escape blurs, second asks).
+      event.currentTarget?.blur?.();
     }
   }
 
@@ -368,6 +376,19 @@ function ShowcaseScreen({ mode }) {
   // A draft showcase is itself unsaved, so Save stays enabled whenever the
   // name is non-empty — even with an empty canvas.
   const dirty = editMode && (isNew ? nameDraft.trim() !== "" : treeDirty || nameDirty);
+  // Cancel and Escape only prompt when the user actually changed something: an
+  // untouched draft (the starting name on an empty canvas) exits silently,
+  // exactly like an untouched Note editor. `dirty` above stays broader on
+  // purpose — a fresh draft is still saveable — so the guard tracks edits
+  // against the draft's starting name instead.
+  const newNameEdited =
+    isNew &&
+    nameDraft.trim() !== "" &&
+    nameDraft.trim() !== (pendingShowcase?.name ?? "Showcase");
+  const hasUnsavedEdits = isNew
+    ? treeDirty || newNameEdited
+    : treeDirty || nameDirty;
+  exitGuardRef.current = { hasUnsavedEdits, isNew };
 
   async function handleDelete() {
     if (!showcase || deleting) {
@@ -814,10 +835,40 @@ function ShowcaseScreen({ mode }) {
     }
   }
 
-  function handleCancel() {
-    if (saving) {
-      return;
-    }
+  // Guarded exits share one prompt, mirroring the Note editor's
+  // unsaved-changes dialog: "Keep editing" is the safe default, and the copy
+  // names what is about to be lost. The draft state travels through a ref so
+  // the callback (and the window key listener through it) stays stable.
+  const guardShowcaseExit = useCallback(
+    async (action) => {
+      if (confirmOpenRef.current) {
+        return;
+      }
+
+      const { hasUnsavedEdits: unsaved, isNew: draft } = exitGuardRef.current;
+
+      if (!unsaved) {
+        action();
+        return;
+      }
+
+      const confirmed = await confirm({
+        title: draft ? "Discard new showcase?" : "Discard changes?",
+        body: draft
+          ? "Your new showcase will be lost."
+          : "Your changes will be lost.",
+        cancelLabel: "Keep editing",
+        confirmLabel: "Discard",
+      });
+
+      if (confirmed) {
+        action();
+      }
+    },
+    [confirm],
+  );
+
+  const doCancel = useCallback(() => {
     // A draft showcase has no view to return to: discard it and land on the
     // last showcase in the list (or home when the list is empty) so the
     // sidebar row disappears with it.
@@ -841,7 +892,38 @@ function ShowcaseScreen({ mode }) {
       pathname: SHOWCASE_ROUTES.showcase(showcaseId),
       search: showcaseNodeSearch(cancelDisplayId),
     });
+  }, [
+    discardPendingShowcase,
+    displayNode,
+    isNew,
+    navigate,
+    showcaseId,
+    showcases,
+  ]);
+
+  function handleCancel() {
+    if (saving) {
+      return;
+    }
+    guardShowcaseExit(doCancel);
   }
+
+  // Escape at the root leaves edit mode entirely, exactly like Cancel; a
+  // draft takes Cancel's destination since it has no view to return to,
+  // while a saved showcase drops to its root level.
+  const exitEditModeToRoot = useCallback(() => {
+    if (isNew) {
+      doCancel();
+      return;
+    }
+
+    if (Number.isInteger(showcaseId) && showcaseId > 0) {
+      navigate({
+        pathname: SHOWCASE_ROUTES.showcase(showcaseId),
+        search: showcaseNodeSearch(null),
+      });
+    }
+  }, [doCancel, isNew, navigate, showcaseId]);
 
   // --- Keyboard navigation ------------------------------------------------
   // The number of levels deep the canvas is drilled. The Escape step uses it to
@@ -1050,27 +1132,11 @@ function ShowcaseScreen({ mode }) {
 
         // Edit mode at the root with nothing focused leaves edit mode
         // entirely, exactly like Cancel: the in-memory draft is discarded
-        // with the edit instance and view loads fresh.
+        // with the edit instance and view loads fresh. Unsaved changes
+        // prompt first, mirroring the Note editor.
         if (editMode) {
           event.preventDefault();
-
-          if (isNew) {
-            discardPendingShowcase();
-            const lastShowcase = showcases[showcases.length - 1] ?? null;
-            navigate(
-              lastShowcase
-                ? SHOWCASE_ROUTES.showcase(lastShowcase.id)
-                : DEFAULT_DESTINATION,
-            );
-            return;
-          }
-
-          if (Number.isInteger(showcaseId) && showcaseId > 0) {
-            navigate({
-              pathname: SHOWCASE_ROUTES.showcase(showcaseId),
-              search: showcaseNodeSearch(null),
-            });
-          }
+          guardShowcaseExit(exitEditModeToRoot);
         }
         return;
       }
@@ -1150,6 +1216,8 @@ function ShowcaseScreen({ mode }) {
     discardPendingShowcase,
     drillDepth,
     editMode,
+    exitEditModeToRoot,
+    guardShowcaseExit,
     isNew,
     location.search,
     navigate,

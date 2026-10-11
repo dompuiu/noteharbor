@@ -1,5 +1,5 @@
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -414,7 +414,7 @@ describe("Renaming a showcase", () => {
     });
   });
 
-  test("Cancel discards a staged name without saving", async () => {
+  test("Cancel with a staged name asks first; Keep editing stays, Discard leaves", async () => {
     const user = userEvent.setup();
     renameShowcase.mockResolvedValue({
       showcase: { id: 1, name: "Spring", display_order: 1 },
@@ -427,6 +427,143 @@ describe("Renaming a showcase", () => {
     await user.type(field, "Spring");
 
     await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: "Discard changes?" }),
+    ).toBeInTheDocument();
+
+    // Keep editing leaves the draft exactly where it was.
+    await user.click(
+      within(dialog).getByRole("button", { name: "Keep editing" }),
+    );
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(currentPath()).toBe(SHOWCASE_ROUTES.showcaseEdit(1));
+    expect(screen.getByLabelText("Showcase name")).toHaveValue("Spring");
+
+    // Discard leaves without saving.
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+    const secondDialog = await screen.findByRole("dialog");
+    await user.click(
+      within(secondDialog).getByRole("button", { name: "Discard" }),
+    );
+
+    expect(renameShowcase).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(currentPath()).toBe(SHOWCASE_ROUTES.showcase(1));
+    });
+  });
+
+  test("Cancel with no changes leaves without prompting", async () => {
+    const user = userEvent.setup();
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    await screen.findByRole("link", { name: "Summer" });
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(currentPath()).toBe(SHOWCASE_ROUTES.showcase(1));
+    });
+  });
+
+  test("Cancel with a staged tree change asks first", async () => {
+    const user = userEvent.setup();
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    await screen.findByRole("link", { name: "Summer" });
+    await user.click(
+      await screen.findByRole("button", { name: "Create a category" }),
+    );
+    await user.type(screen.getByLabelText("Category name"), "Winter");
+    await user.click(screen.getByRole("button", { name: "Add category" }));
+    expect(
+      await screen.findByRole("heading", { name: "Winter" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: "Discard changes?" }),
+    ).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "Discard" }));
+
+    await waitFor(() => {
+      expect(currentPath()).toBe(SHOWCASE_ROUTES.showcase(1));
+    });
+  });
+
+  test("Cancel on a renamed draft asks to discard the new showcase", async () => {
+    const user = userEvent.setup();
+    renderAt(CATALOG_ROUTES.collection(1));
+
+    await user.click(
+      await screen.findByRole("button", { name: "New showcase" }),
+    );
+    const field = await screen.findByLabelText("Showcase name");
+    await user.clear(field);
+    await user.type(field, "Winter");
+
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: "Discard new showcase?" }),
+    ).toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "Discard" }));
+
+    expect(createShowcase).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(currentPath()).toBe(SHOWCASE_ROUTES.showcase(2));
+    });
+  });
+
+  test("Escape in the name field keeps the typed name; leaving then asks first", async () => {
+    const user = userEvent.setup();
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    await screen.findByRole("link", { name: "Summer" });
+    const field = screen.getByLabelText("Showcase name");
+    await user.clear(field);
+    await user.type(field, "Spring");
+
+    // Escape in the field never silently clears it: it blurs (staging the
+    // name, like Enter) and the draft stays open with the text intact.
+    await user.keyboard("{Escape}");
+    expect(currentPath()).toBe(SHOWCASE_ROUTES.showcaseEdit(1));
+    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(screen.getByLabelText("Showcase name")).toHaveValue("Spring");
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+
+    // A further Escape with nothing focused leaves edit mode through the
+    // unsaved-changes guard, mirroring the Note editor.
+    fireEvent.keyDown(document.body, { key: "Escape" });
+
+    const dialog = await screen.findByRole("dialog");
+    expect(
+      within(dialog).getByRole("heading", { name: "Discard changes?" }),
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(dialog).getByRole("button", { name: "Keep editing" }),
+    );
+    expect(currentPath()).toBe(SHOWCASE_ROUTES.showcaseEdit(1));
+    expect(screen.getByLabelText("Showcase name")).toHaveValue("Spring");
+
+    act(() => {
+      if (document.activeElement instanceof HTMLElement) {
+        document.activeElement.blur();
+      }
+    });
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    const secondDialog = await screen.findByRole("dialog");
+    await user.click(
+      within(secondDialog).getByRole("button", { name: "Discard" }),
+    );
 
     expect(renameShowcase).not.toHaveBeenCalled();
     await waitFor(() => {
