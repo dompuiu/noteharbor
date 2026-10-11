@@ -2,6 +2,17 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
+## [1.10.1] - 2026-10-11
+
+### Fixed
+
+- Archive import: archives exported without the retired default-collection flag now import instead of failing with `no such column: is_default`. The viewer's local default flag is ensured on the installed database, and any archived flag stays ignored.
+- Import screen: the import result banner now sits directly under the Archive import panel and scrolls into view, so failures are visible without hunting at the bottom of the screen.
+
+### Changed
+
+- Import screen: polished the import progress overlay.
+
 ## [1.10.0] - 2026-10-04
 
 ### Added
