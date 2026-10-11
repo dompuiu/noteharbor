@@ -37,7 +37,8 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Import data to get started'), findsOneWidget);
-    expect(find.text('No dataset imported'), findsOneWidget);
+    expect(find.text('No dataset imported'), findsNothing);
+    // The Active source pill was removed; Dataset built covers the header.
     // The archive picker sits below the fold on first run; the lazy ListView
     // only builds it once scrolled into range.
     await tester.scrollUntilVisible(find.text('Choose archive'), 200.0);

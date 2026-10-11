@@ -27,20 +27,17 @@ class ImportedDatasetLoader {
       final banknotesHasScrapeError =
           _columnExists(database, 'banknotes', 'scrape_error');
 
-      final defaultCollectionId = hasCollectionsTable
-          ? _resolveDefaultCollectionId(database)
-          : 1;
-
       final collections = hasCollectionsTable
           ? _loadCollections(database)
-          : <ViewerCollection>[
-              const ViewerCollection(
+          : const <ViewerCollection>[
+              ViewerCollection(
                 id: 1,
                 name: 'Default',
                 noteCount: 0,
-                isDefault: true,
               ),
             ];
+      final fallbackCollectionId =
+          collections.isNotEmpty ? collections.first.id : 1;
 
       final tagMap = <int, List<Tag>>{};
       final tagRows = database.select('''
@@ -99,8 +96,8 @@ class ImportedDatasetLoader {
             .toList(growable: false);
 
         final collectionId = banknotesHasCollectionId
-            ? (row['collection_id'] as int?) ?? defaultCollectionId
-            : defaultCollectionId;
+            ? (row['collection_id'] as int?) ?? fallbackCollectionId
+            : fallbackCollectionId;
 
         notes.add(
           NoteRecord.fromJson({
@@ -146,7 +143,6 @@ class ImportedDatasetLoader {
               id: collection.id,
               name: collection.name,
               noteCount: notesPerCollection[collection.id] ?? collection.noteCount,
-              isDefault: collection.isDefault,
             ),
           )
           .toList(growable: false);
@@ -250,51 +246,11 @@ bool _columnExists(Database database, String tableName, String columnName) {
   return false;
 }
 
-int _resolveDefaultCollectionId(Database database) {
-  final hasDefaultColumn = _columnExists(database, 'collections', 'is_default');
-
-  if (hasDefaultColumn) {
-    final defaultRows = database.select('''
-      SELECT id
-      FROM collections
-      WHERE is_default = 1
-      ORDER BY id ASC
-      LIMIT 1
-    ''');
-
-    if (defaultRows.isNotEmpty) {
-      return (defaultRows.first['id'] as int?) ?? 1;
-    }
-  }
-
+List<ViewerCollection> _loadCollections(Database database) {
   final rows = database.select('''
-    SELECT id
-    FROM collections
-    WHERE lower(name) = lower('Default')
-    ORDER BY id ASC
-    LIMIT 1
-  ''');
-
-  if (rows.isNotEmpty) {
-    return (rows.first['id'] as int?) ?? 1;
-  }
-
-  final fallbackRows = database.select('''
-    SELECT id
+    SELECT id, name
     FROM collections
     ORDER BY name COLLATE NOCASE ASC, id ASC
-    LIMIT 1
-  ''');
-
-  return fallbackRows.isNotEmpty ? ((fallbackRows.first['id'] as int?) ?? 1) : 1;
-}
-
-List<ViewerCollection> _loadCollections(Database database) {
-  final hasDefaultColumn = _columnExists(database, 'collections', 'is_default');
-  final rows = database.select('''
-    SELECT id, name${hasDefaultColumn ? ', is_default' : ''}
-    FROM collections
-    ORDER BY ${hasDefaultColumn ? 'is_default DESC, ' : ''}name COLLATE NOCASE ASC, id ASC
   ''');
 
   return rows
@@ -303,7 +259,6 @@ List<ViewerCollection> _loadCollections(Database database) {
           id: (row['id'] as int?) ?? 0,
           name: _stringValue(row['name']),
           noteCount: 0,
-          isDefault: hasDefaultColumn ? ((row['is_default'] as int?) ?? 0) == 1 : false,
         ),
       )
       .where((collection) => collection.id > 0)

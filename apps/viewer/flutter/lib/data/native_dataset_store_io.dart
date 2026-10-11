@@ -65,11 +65,13 @@ class NativeDatasetStore {
     }
   }
 
-  Future<void> deleteCollection(int collectionId) async {
-    final normalizedCollectionId = collectionId;
-    if (normalizedCollectionId <= 0) {
-      throw StateError('A valid collection ID is required.');
-    }
+  /// Deletes a collection and its notes, tags, and image files.
+  ///
+  /// The collection is resolved by ID first, then by name (case-insensitive):
+  /// archive re-imports delete and re-insert collections, so IDs churn while
+  /// names stay stable and the caller's ID may be stale.
+  Future<void> deleteCollection(int collectionId, {String? collectionName}) async {
+    final normalizedName = (collectionName ?? '').trim();
 
     final currentDir = await _currentDatasetDirectory();
     final databasePath = p.join(currentDir.path, 'banknotes.db');
@@ -81,46 +83,70 @@ class NativeDatasetStore {
 
     try {
       database.execute('PRAGMA foreign_keys = ON');
-      _ensureDefaultCollectionColumn(database);
 
-      final collectionRows = database.select(
-        'SELECT id, is_default FROM collections WHERE id = ? LIMIT 1',
-        <Object?>[normalizedCollectionId],
-      );
-      if (collectionRows.isEmpty) {
-        throw StateError('Collection not found.');
+      int? targetId;
+      if (collectionId > 0) {
+        final idRows = database.select(
+          'SELECT id FROM collections WHERE id = ? LIMIT 1',
+          <Object?>[collectionId],
+        );
+        if (idRows.isNotEmpty) {
+          targetId = (idRows.first['id'] as int?) ?? collectionId;
+        }
       }
 
+      if (targetId == null && normalizedName.isNotEmpty) {
+        final nameRows = database.select(
+          'SELECT id FROM collections WHERE lower(name) = lower(?) ORDER BY id ASC LIMIT 1',
+          <Object?>[normalizedName],
+        );
+        if (nameRows.isNotEmpty) {
+          targetId = (nameRows.first['id'] as int?) ?? 0;
+          if (targetId <= 0) {
+            targetId = null;
+          }
+        }
+      }
+
+      if (targetId == null) {
+        throw StateError(
+          'Collection "${normalizedName.isEmpty ? collectionId : normalizedName}" not found. ${_availableCollectionsDescription(database)}',
+        );
+      }
+
+      final resolvedId = targetId;
       final noteIdRows = database.select(
         'SELECT id FROM banknotes WHERE collection_id = ? ORDER BY id ASC',
-        <Object?>[normalizedCollectionId],
+        <Object?>[resolvedId],
       );
       final noteIds = noteIdRows
           .map((row) => (row['id'] as int?) ?? 0)
           .where((id) => id > 0)
           .toList(growable: false);
 
-      database.execute('DELETE FROM collections WHERE id = ?', <Object?>[normalizedCollectionId]);
-
-      final hasDefaultRows = database.select(
-        'SELECT id FROM collections WHERE is_default = 1 LIMIT 1',
-      );
-
-      if (hasDefaultRows.isEmpty) {
-        final fallbackRows = database.select(
-          'SELECT id FROM collections ORDER BY name COLLATE NOCASE ASC, id ASC LIMIT 1',
+      database.execute('BEGIN IMMEDIATE');
+      try {
+        database.execute(
+          'DELETE FROM banknote_tags WHERE banknote_id IN (SELECT id FROM banknotes WHERE collection_id = ?)',
+          <Object?>[resolvedId],
         );
-
-        if (fallbackRows.isNotEmpty) {
-          final fallbackId = (fallbackRows.first['id'] as int?) ?? 0;
-          if (fallbackId > 0) {
-            database.execute('UPDATE collections SET is_default = 0 WHERE is_default = 1');
-            database.execute(
-              'UPDATE collections SET is_default = 1 WHERE id = ?',
-              <Object?>[fallbackId],
-            );
-          }
+        database.execute(
+          'DELETE FROM banknotes WHERE collection_id = ?',
+          <Object?>[resolvedId],
+        );
+        database.execute(
+          'DELETE FROM tags WHERE collection_id = ?',
+          <Object?>[resolvedId],
+        );
+        database.execute('DELETE FROM collections WHERE id = ?', <Object?>[resolvedId]);
+        database.execute('COMMIT');
+      } catch (_) {
+        try {
+          database.execute('ROLLBACK');
+        } catch (_) {
+          // The rollback itself failed; surface the original error below.
         }
+        rethrow;
       }
 
       for (final noteId in noteIds) {
@@ -134,20 +160,16 @@ class NativeDatasetStore {
     }
   }
 
-  Future<void> setDefaultCollection(int collectionId) async {
-    final currentDir = await _currentDatasetDirectory();
-    final databasePath = p.join(currentDir.path, 'banknotes.db');
-    if (!File(databasePath).existsSync()) {
-      throw StateError('No imported dataset is installed.');
-    }
-
-    final database = sqlite3.open(databasePath);
+  String _availableCollectionsDescription(Database database) {
     try {
-      _ensureDefaultCollectionColumn(database);
-      database.execute('UPDATE collections SET is_default = 0 WHERE is_default = 1');
-      database.execute('UPDATE collections SET is_default = 1 WHERE id = ?', <Object?>[collectionId]);
-    } finally {
-      database.close();
+      final rows = database.select('SELECT id, name FROM collections ORDER BY id ASC LIMIT 20');
+      if (rows.isEmpty) {
+        return 'No collections remain on this device.';
+      }
+      final names = rows.map((row) => '#${row['id']} "${row['name']}"').join(', ');
+      return 'Available: $names.';
+    } catch (_) {
+      return 'The collections list could not be read.';
     }
   }
 
@@ -395,14 +417,6 @@ bool _columnExists(Database database, String tableName, String columnName) {
   return false;
 }
 
-void _ensureDefaultCollectionColumn(Database database) {
-  if (!_columnExists(database, 'collections', 'is_default')) {
-    database.execute(
-      'ALTER TABLE collections ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0',
-    );
-  }
-}
-
 List<Map<String, Object?>> _loadArchiveCollections(Database database) {
   if (!_tableExists(database, 'collections')) {
     throw StateError('Archive must include collections metadata.');
@@ -550,11 +564,6 @@ Future<void> _mergeArchiveIntoDataset({
 
     final archiveCollections = _loadArchiveCollections(archiveDatabase);
 
-    // The viewer keeps its own default-collection flag while newer editor
-    // archives no longer carry the column. Ensure it locally so the insert
-    // below and the default-management actions keep working.
-    _ensureDefaultCollectionColumn(stagedDatabase);
-
     final findCollectionByName = statements._track(stagedDatabase.prepare('''
       SELECT id
       FROM collections
@@ -572,8 +581,8 @@ Future<void> _mergeArchiveIntoDataset({
       stagedDatabase.prepare('DELETE FROM collections WHERE id = ?'),
     );
     final insertCollection = statements._track(stagedDatabase.prepare('''
-      INSERT INTO collections (name, is_default, created_at, updated_at)
-      VALUES (?, 0, datetime('now'), datetime('now'))
+      INSERT INTO collections (name, created_at, updated_at)
+      VALUES (?, datetime('now'), datetime('now'))
     '''));
     final archiveTagsByCollection = statements._track(archiveDatabase.prepare('''
       SELECT bt.banknote_id AS banknote_id, t.name AS name

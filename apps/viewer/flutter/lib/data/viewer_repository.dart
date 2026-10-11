@@ -27,12 +27,8 @@ class ViewerRepository {
     return _nativeDatasetStore.importArchive(archivePath);
   }
 
-  Future<void> deleteCollection(int collectionId) {
-    return _nativeDatasetStore.deleteCollection(collectionId);
-  }
-
-  Future<void> setDefaultCollection(int collectionId) {
-    return _nativeDatasetStore.setDefaultCollection(collectionId);
+  Future<void> deleteCollection(int collectionId, {String? collectionName}) {
+    return _nativeDatasetStore.deleteCollection(collectionId, collectionName: collectionName);
   }
 
   Future<void> deleteImportedDataset() {

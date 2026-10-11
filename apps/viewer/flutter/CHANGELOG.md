@@ -2,6 +2,20 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
+## [Unreleased]
+
+### Removed
+
+- Import screen: the `Set as default collection` button and the default-collection flag are gone, including the `(default)` suffix and the `Active source` pill. The `Notes (active)` pill is now `Notes`, and `Delete active collection` is `Delete collection`.
+
+### Added
+
+- The app now remembers the last selected collection across restarts (ID with name fallback, so re-imports that churn IDs still restore the right collection).
+
+### Fixed
+
+- Delete collection: the collection is resolved by ID with a name fallback, child rows are deleted in a transaction, and failures name the collection plus the available ones. Delete errors now show inline under the Active collection panel.
+
 ## [1.10.2] - 2026-10-11
 
 ### Changed

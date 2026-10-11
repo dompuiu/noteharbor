@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 import '../../app/app_info.dart';
 import '../../app/viewer_palette.dart';
 import '../../data/dataset_controller.dart';
-import '../../models/dataset_source.dart';
 import '../../utils/dataset_date_format.dart';
 
 class ImportDatasetScreen extends StatefulWidget {
@@ -26,6 +25,8 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
   String? _selectedArchiveName;
   String? _message;
   bool _messageIsError = false;
+  String? _collectionMessage;
+  bool _collectionMessageIsError = false;
   bool _isPicking = false;
   bool _isImporting = false;
 
@@ -177,16 +178,13 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
     }
   }
 
-  Future<void> _setDefaultCollection() async {
-    final activeCollection = widget.controller.activeCollection;
-    if (activeCollection == null) return;
-    await widget.controller.setDefaultCollection(activeCollection.id);
-  }
-
   Future<void> _deleteActiveCollection() async {
     final activeCollection = widget.controller.activeCollection;
     if (activeCollection == null) {
-      _setStatus('Select a collection to delete.', true);
+      setState(() {
+        _collectionMessage = 'Select a collection to delete.';
+        _collectionMessageIsError = true;
+      });
       return;
     }
 
@@ -220,16 +218,25 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
     }
 
     try {
-      await widget.controller.deleteCollection(activeCollection.id);
+      await widget.controller.deleteCollection(
+        activeCollection.id,
+        collectionName: activeCollection.name,
+      );
       if (!mounted) {
         return;
       }
-      _setStatus('Deleted ${activeCollection.name}.', false);
+      setState(() {
+        _collectionMessage = 'Deleted ${activeCollection.name}.';
+        _collectionMessageIsError = false;
+      });
     } catch (error) {
       if (!mounted) {
         return;
       }
-      _setStatus('Delete failed: $error', true);
+      setState(() {
+        _collectionMessage = 'Delete failed: $error';
+        _collectionMessageIsError = true;
+      });
     }
   }
 
@@ -389,11 +396,6 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                           runSpacing: 12,
                           children: [
                             _InfoPill(
-                              label: 'Active source',
-                              value: dataset?.source.label ??
-                                  'No dataset imported',
-                            ),
-                            _InfoPill(
                               label: 'Dataset built',
                               value: generatedAt == null || generatedAt.isEmpty
                                   ? 'Not available yet'
@@ -404,7 +406,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                               value: '${collections.length}',
                             ),
                             _InfoPill(
-                              label: 'Notes (active)',
+                              label: 'Notes',
                               value: '${activeCollection?.noteCount ?? 0}',
                             ),
                           ],
@@ -425,6 +427,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                           ),
                           const SizedBox(height: 14),
                           DropdownButtonFormField<int>(
+                            key: ValueKey('collection-${activeCollection?.id}'),
                             initialValue: activeCollection?.id,
                             decoration: const InputDecoration(
                               border: OutlineInputBorder(),
@@ -434,7 +437,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                   (collection) => DropdownMenuItem<int>(
                                     value: collection.id,
                                     child: Text(
-                                      '${collection.name}${collection.isDefault ? ' (default)' : ''} (${collection.noteCount})',
+                                      '${collection.name} (${collection.noteCount})',
                                     ),
                                   ),
                                 )
@@ -446,17 +449,14 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                       return;
                                     }
                                     widget.controller.selectCollection(collectionId);
-                                    setState(() => _message = null);
+                                    setState(() {
+                                      _message = null;
+                                      _collectionMessage = null;
+                                      _collectionMessageIsError = false;
+                                    });
                                   },
                           ),
                           const SizedBox(height: 14),
-                          FilledButton.tonal(
-                            onPressed: isBusy || activeCollection == null || activeCollection.isDefault
-                                ? null
-                                : _setDefaultCollection,
-                            child: const Text('Set as default collection'),
-                          ),
-                          const SizedBox(height: 8),
                           FilledButton.tonal(
                             onPressed: isBusy || activeCollection == null
                                 ? null
@@ -465,8 +465,20 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                               backgroundColor: ViewerPalette.dangerSoft,
                               foregroundColor: ViewerPalette.danger,
                             ),
-                            child: const Text('Delete active collection'),
+                            child: const Text('Delete collection'),
                           ),
+                          if (_collectionMessage != null) ...[
+                            const SizedBox(height: 12),
+                            Text(
+                              _collectionMessage!,
+                              style: TextStyle(
+                                color: _collectionMessageIsError
+                                    ? ViewerPalette.danger
+                                    : ViewerPalette.textMuted,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                          ],
                         ],
                       ),
                     ),
