@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.3.1] - 2026-10-11
+
+### Fixed
+
+- Table screen: Add note opens a blank form again instead of the first note in the collection for edit. The overlay's explicit "create" signal fell through to the collection id in the URL, which the note editor mistook for a note id.
+
 ## [2.3.0] - 2026-10-11
 
 ### Added
