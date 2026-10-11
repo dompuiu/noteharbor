@@ -954,7 +954,9 @@ function ShowcaseScreen({ mode }) {
 
   // The card (or category header, or add tile) under focus, or the card of
   // the cell the focused control sits in (a Rename/Remove/Reorder control
-  // belongs to the card's own cell).
+  // belongs to the card's own cell). Reorder handles sit in the surrounding
+  // `.showcase-reorder-cell` (a sibling of the `.showcase-cell`), so the
+  // fallback looks through both wrappers.
   function focusedShowcaseCard() {
     const active = document.activeElement;
 
@@ -967,8 +969,10 @@ function ShowcaseScreen({ mode }) {
         ".showcase-card, .showcase-tile, .showcase-category-focus",
       ) ??
       active
-        .closest(".showcase-cell")
-        ?.querySelector(".showcase-card, .showcase-category-focus") ??
+        .closest(".showcase-reorder-cell, .showcase-cell")
+        ?.querySelector(
+          ".showcase-card, .showcase-tile, .showcase-category-focus",
+        ) ??
       null
     );
   }

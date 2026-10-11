@@ -851,4 +851,39 @@ describe("edit-mode add tiles in the arrow sequence", () => {
     ).toBeInTheDocument();
     expect(search()).toBe("");
   });
+
+  test("the arrows from a reorder handle move relative to its own card", async () => {
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    const summer = await screen.findByRole("heading", { name: "Summer" });
+    const note = screen.getByRole("button", { name: "1 leu, 1917" });
+    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
+    const reorderNote = screen.getByRole("button", {
+      name: "Reorder 1 leu 1917",
+    });
+    const reorderSub = screen.getByRole("button", { name: "Reorder Sub" });
+
+    act(() => reorderNote.focus());
+    fireEvent.keyDown(document.body, { key: "ArrowDown" });
+    expect(sub).toHaveFocus();
+
+    act(() => reorderSub.focus());
+    fireEvent.keyDown(document.body, { key: "ArrowDown" });
+    expect(screen.getAllByRole("button", { name: "Add notes" })[0]).toHaveFocus();
+
+    act(() => reorderNote.focus());
+    fireEvent.keyDown(document.body, { key: "ArrowUp" });
+    expect(summer).toHaveFocus();
+
+    // The reported flow: category action -> note -> next item (never the
+    // first category again).
+    const renameSummer = screen.getByRole("button", {
+      name: "Rename Summer",
+    });
+    act(() => renameSummer.focus());
+    fireEvent.keyDown(document.body, { key: "ArrowDown" });
+    expect(note).toHaveFocus();
+    fireEvent.keyDown(document.body, { key: "ArrowDown" });
+    expect(sub).toHaveFocus();
+  });
 });
