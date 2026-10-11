@@ -2,6 +2,16 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.1.0] - 2026-10-11
+
+### Added
+
+- Collections: a reachable edit mode from the table header. An Edit action next to Add note (or the `e` shortcut) opens a single-container edit view where the title is a focused text field with icon and action Save/Cancel plus Delete collection, while the notes table stays visible. Entering edit mode focuses the title for immediate retyping; Escape leaves edit mode like Cancel. New-collection drafts show Cancel/Save instead of a disabled Add note.
+
+### Removed
+
+- Collections: the inline title rename (pencil icon) in the table header is gone in favor of the edit mode; the `e` shortcut now enters edit mode instead of starting an inline rename.
+
 ## [2.0.4] - 2026-10-10
 
 ### Fixed
