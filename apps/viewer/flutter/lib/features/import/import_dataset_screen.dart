@@ -20,6 +20,8 @@ class ImportDatasetScreen extends StatefulWidget {
 class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
   late final FocusNode _screenFocusNode =
       FocusNode(debugLabel: 'importScreen');
+  final ScrollController _scrollController = ScrollController();
+  final GlobalKey _statusKey = GlobalKey();
   String? _selectedArchivePath;
   String? _selectedArchiveName;
   String? _message;
@@ -37,7 +39,28 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
   void dispose() {
     FocusManager.instance.removeListener(_handleFocusDrain);
     _screenFocusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
+  }
+
+  void _setStatus(String? message, bool isError) {
+    setState(() {
+      _message = message;
+      _messageIsError = isError;
+    });
+    if (message != null) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        final context = _statusKey.currentContext;
+        if (context != null) {
+          Scrollable.ensureVisible(
+            context,
+            duration: const Duration(milliseconds: 250),
+            alignment: 0.5,
+          );
+        }
+      });
+    }
   }
 
   /// Mirrors the table screen's drain guard: after a table→import swap the
@@ -96,10 +119,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
   Future<void> _importArchive() async {
     final archivePath = _selectedArchivePath;
     if (archivePath == null) {
-      setState(() {
-        _message = 'Choose an archive before importing.';
-        _messageIsError = true;
-      });
+      _setStatus('Choose an archive before importing.', true);
       return;
     }
 
@@ -144,18 +164,12 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _message = 'Imported $_selectedArchiveName successfully.';
-        _messageIsError = false;
-      });
+      _setStatus('Imported $_selectedArchiveName successfully.', false);
     } catch (error) {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _message = 'Import failed: $error';
-        _messageIsError = true;
-      });
+      _setStatus('Import failed: $error', true);
     } finally {
       if (mounted) {
         setState(() => _isImporting = false);
@@ -172,10 +186,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
   Future<void> _deleteActiveCollection() async {
     final activeCollection = widget.controller.activeCollection;
     if (activeCollection == null) {
-      setState(() {
-        _message = 'Select a collection to delete.';
-        _messageIsError = true;
-      });
+      _setStatus('Select a collection to delete.', true);
       return;
     }
 
@@ -213,18 +224,12 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _message = 'Deleted ${activeCollection.name}.';
-        _messageIsError = false;
-      });
+      _setStatus('Deleted ${activeCollection.name}.', false);
     } catch (error) {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _message = 'Delete failed: $error';
-        _messageIsError = true;
-      });
+      _setStatus('Delete failed: $error', true);
     }
   }
 
@@ -266,17 +271,13 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       setState(() {
         _selectedArchivePath = null;
         _selectedArchiveName = null;
-        _message = 'Imported data deleted. Import another archive to continue.';
-        _messageIsError = false;
       });
+      _setStatus('Imported data deleted. Import another archive to continue.', false);
     } catch (error) {
       if (!mounted) {
         return;
       }
-      setState(() {
-        _message = 'Delete failed: $error';
-        _messageIsError = true;
-      });
+      _setStatus('Delete failed: $error', true);
     }
   }
 
@@ -336,6 +337,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
               final isInitialEmptyState = dataset == null;
 
               return ListView(
+                controller: _scrollController,
                 padding: const EdgeInsets.all(20),
                 children: [
                   if (isInitialEmptyState) ...[
@@ -518,6 +520,14 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                     ),
                   ),
                   const SizedBox(height: 18),
+                  if (_message != null) ...[
+                    _StatusBanner(
+                      key: _statusKey,
+                      message: _message!,
+                      isError: _messageIsError,
+                    ),
+                    const SizedBox(height: 18),
+                  ],
                   _Panel(
                     icon: Icons.delete_forever_outlined,
                     iconColor: ViewerPalette.danger,
@@ -543,13 +553,6 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                       ],
                     ),
                   ),
-                  if (_message != null) ...[
-                    const SizedBox(height: 18),
-                    _StatusBanner(
-                      message: _message!,
-                      isError: _messageIsError,
-                    ),
-                  ],
                   const SizedBox(height: 24),
                   const Center(
                     child: Text(
@@ -740,7 +743,7 @@ class _ImportProgressOverlay extends StatelessWidget {
 }
 
 class _StatusBanner extends StatelessWidget {
-  const _StatusBanner({required this.message, required this.isError});
+  const _StatusBanner({super.key, required this.message, required this.isError});
 
   final String message;
   final bool isError;

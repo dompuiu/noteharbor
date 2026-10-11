@@ -81,6 +81,7 @@ class NativeDatasetStore {
 
     try {
       database.execute('PRAGMA foreign_keys = ON');
+      _ensureDefaultCollectionColumn(database);
 
       final collectionRows = database.select(
         'SELECT id, is_default FROM collections WHERE id = ? LIMIT 1',
@@ -142,6 +143,7 @@ class NativeDatasetStore {
 
     final database = sqlite3.open(databasePath);
     try {
+      _ensureDefaultCollectionColumn(database);
       database.execute('UPDATE collections SET is_default = 0 WHERE is_default = 1');
       database.execute('UPDATE collections SET is_default = 1 WHERE id = ?', <Object?>[collectionId]);
     } finally {
@@ -393,13 +395,23 @@ bool _columnExists(Database database, String tableName, String columnName) {
   return false;
 }
 
+void _ensureDefaultCollectionColumn(Database database) {
+  if (!_columnExists(database, 'collections', 'is_default')) {
+    database.execute(
+      'ALTER TABLE collections ADD COLUMN is_default INTEGER NOT NULL DEFAULT 0',
+    );
+  }
+}
+
 List<Map<String, Object?>> _loadArchiveCollections(Database database) {
   if (!_tableExists(database, 'collections')) {
     throw StateError('Archive must include collections metadata.');
   }
 
+  // Archives written before the default-flag removal carry `is_default`;
+  // newer ones do not. Either shape imports; any archived flag is ignored.
   final rows = database.select('''
-    SELECT id, name, COALESCE(is_default, 0) AS is_default
+    SELECT id, name
     FROM collections
     ORDER BY id ASC
   ''');
@@ -409,7 +421,6 @@ List<Map<String, Object?>> _loadArchiveCollections(Database database) {
         (row) => <String, Object?>{
           'id': (row['id'] as int?) ?? 0,
           'name': '${row['name'] ?? ''}'.trim(),
-          'is_default': ((row['is_default'] as int?) ?? 0) == 1 ? 1 : 0,
         },
       )
       .where((row) => (row['id'] as int) > 0 && ('${row['name']}'.trim().isNotEmpty))
@@ -539,6 +550,11 @@ Future<void> _mergeArchiveIntoDataset({
 
     final archiveCollections = _loadArchiveCollections(archiveDatabase);
 
+    // The viewer keeps its own default-collection flag while newer editor
+    // archives no longer carry the column. Ensure it locally so the insert
+    // below and the default-management actions keep working.
+    _ensureDefaultCollectionColumn(stagedDatabase);
+
     final findCollectionByName = statements._track(stagedDatabase.prepare('''
       SELECT id
       FROM collections
@@ -639,12 +655,9 @@ Future<void> _mergeArchiveIntoDataset({
       'INSERT OR IGNORE INTO banknote_tags (banknote_id, tag_id) VALUES (?, ?)',
     ));
 
-    final importedDefaults = <({int archiveId, int stagedId})>[];
-
     for (final archiveCollection in archiveCollections) {
       final archiveCollectionId = archiveCollection['id'] as int;
       final archiveCollectionName = '${archiveCollection['name']}';
-      final archiveIsDefault = (archiveCollection['is_default'] as int?) == 1;
 
       final existingRows = findCollectionByName.select(<Object?>[archiveCollectionName]);
       if (existingRows.isNotEmpty) {
@@ -662,10 +675,6 @@ Future<void> _mergeArchiveIntoDataset({
 
       insertCollection.execute(<Object?>[archiveCollectionName]);
       final stagedCollectionId = stagedDatabase.lastInsertRowId;
-
-      if (archiveIsDefault) {
-        importedDefaults.add((archiveId: archiveCollectionId, stagedId: stagedCollectionId));
-      }
 
       final tagsByNoteId = <int, List<String>>{};
       for (final row in archiveTagsByCollection.select(<Object?>[archiveCollectionId])) {
@@ -735,15 +744,6 @@ Future<void> _mergeArchiveIntoDataset({
         nextDisplayOrder += 1;
         await progress.tick();
       }
-    }
-
-    if (importedDefaults.isNotEmpty) {
-      importedDefaults.sort((a, b) => a.archiveId.compareTo(b.archiveId));
-      stagedDatabase.execute('UPDATE collections SET is_default = 0 WHERE is_default = 1');
-      stagedDatabase.execute(
-        'UPDATE collections SET is_default = 1 WHERE id = ?',
-        <Object?>[importedDefaults.first.stagedId],
-      );
     }
   } finally {
     for (final statement in statements.reversed) {
