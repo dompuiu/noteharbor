@@ -820,18 +820,20 @@ function isCreateRoute(route) {
 
 // A route that edits an existing Note, either directly or over the slideshow.
 function isEditNoteRoute(route) {
-  return (route.kind === "edit" || Boolean(route.overlayEdit)) &&
-    !route.overlayCreate;
+  return (
+    (route.kind === "edit" || Boolean(route.overlayEdit)) &&
+    !route.overlayCreate
+  );
 }
 
 function hasSlideshowContext(route) {
   return Boolean(
     route &&
-      route.kind === "slideshow" &&
-      (route.slideshowCollectionId != null ||
-        route.slideshowFilters != null ||
-        route.slideshowSortKey != null ||
-        route.slideshowSortDirection != null),
+    route.kind === "slideshow" &&
+    (route.slideshowCollectionId != null ||
+      route.slideshowFilters != null ||
+      route.slideshowSortKey != null ||
+      route.slideshowSortDirection != null),
   );
 }
 
@@ -863,7 +865,9 @@ function parseSlideshowSortKey(value) {
 }
 
 function parseSlideshowSortDirection(value) {
-  const normalized = String(value ?? "").trim().toLowerCase();
+  const normalized = String(value ?? "")
+    .trim()
+    .toLowerCase();
   if (normalized === "asc" || normalized === "desc") {
     return normalized;
   }
@@ -1094,12 +1098,8 @@ function NotesTable({
   });
   const [sortDirection, setSortDirection] = useState(() => {
     if (initialRouteRef.current?.kind === "slideshow") {
-      const routeSortDirection =
-        initialRouteRef.current.slideshowSortDirection;
-      if (
-        routeSortDirection === "asc" ||
-        routeSortDirection === "desc"
-      ) {
+      const routeSortDirection = initialRouteRef.current.slideshowSortDirection;
+      if (routeSortDirection === "asc" || routeSortDirection === "desc") {
         return routeSortDirection;
       }
     }
@@ -1142,8 +1142,11 @@ function NotesTable({
   );
   const [collectionNameError, setCollectionNameError] = useState("");
   const [savingCollectionName, setSavingCollectionName] = useState(false);
-  const { confirm: requestConfirmation, dialog: confirmDialog, isOpen: confirmOpen } =
-    useConfirmation();
+  const {
+    confirm: requestConfirmation,
+    dialog: confirmDialog,
+    isOpen: confirmOpen,
+  } = useConfirmation();
   confirmOpenRef.current = confirmOpen;
   const handleEditorDirtyChange = useCallback((dirty) => {
     editorDirtyRef.current = dirty;
@@ -1241,7 +1244,9 @@ function NotesTable({
       await onRenameCollection(collection.id, trimmed);
       setEditingCollectionName(false);
     } catch (error) {
-      setCollectionNameError(error.message || "Could not rename the collection.");
+      setCollectionNameError(
+        error.message || "Could not rename the collection.",
+      );
     } finally {
       setSavingCollectionName(false);
     }
@@ -1289,12 +1294,8 @@ function NotesTable({
     () => visibleColumns.map(([key]) => key),
     [visibleColumns],
   );
-  const {
-    focusFilter,
-    focusRememberedFilter,
-    getFilterRef,
-    rememberFilter,
-  } = useFilterFocusMemory(filterColumnKeys);
+  const { focusFilter, focusRememberedFilter, getFilterRef, rememberFilter } =
+    useFilterFocusMemory(filterColumnKeys);
   const filterRowHeight = Object.keys(columnFilterHeights).length
     ? Math.max(32, ...Object.values(columnFilterHeights))
     : null;
@@ -2362,8 +2363,7 @@ function NotesTable({
       }
 
       const editable = isEditableElement(event.target);
-      const tableKeysActive =
-        !slideshowRouteActive && !editorOverlayOpen;
+      const tableKeysActive = !slideshowRouteActive && !editorOverlayOpen;
 
       // The sidebar owns its keys while it holds focus. Bail before any of the
       // table's single-key handling so the rail's cursor and navigation win.
@@ -2823,8 +2823,7 @@ function NotesTable({
       return;
     }
 
-    const headerHeight =
-      scroller.querySelector("thead")?.offsetHeight ?? 0;
+    const headerHeight = scroller.querySelector("thead")?.offsetHeight ?? 0;
     const measuredRowHeight =
       scroller.querySelector("tbody tr.table-row-link")?.offsetHeight ??
       rowHeightEstimate;
@@ -2837,8 +2836,7 @@ function NotesTable({
     );
     // No focus yet (fresh load, Esc to the anchor): anchor on the current
     // first visible row so the first press already jumps a full page.
-    const firstVisibleIndex =
-      rowVirtualizer.getVirtualItems()[0]?.index ?? 0;
+    const firstVisibleIndex = rowVirtualizer.getVirtualItems()[0]?.index ?? 0;
     const baseIndex =
       currentIndex >= 0
         ? currentIndex
@@ -3286,9 +3284,7 @@ function NotesTable({
       // ran to the end.
       const removal = deleteFocusAfterRemoval(orderedNotes, selectedIds);
 
-      await Promise.all(
-        selectedIds.map((id) => deleteNote(id, collectionId)),
-      );
+      await Promise.all(selectedIds.map((id) => deleteNote(id, collectionId)));
       // Request the landing focus before the refetch sets the list, so the
       // request can never be flushed after the render it belongs to.
       landFocusAfterDelete(removal);
@@ -3950,7 +3946,9 @@ function NotesTable({
 
                           return (
                             <th
-                              className={isTagsColumn ? "tags-column" : undefined}
+                              className={
+                                isTagsColumn ? "tags-column" : undefined
+                              }
                               key={`${key}-filter`}
                             >
                               {isTagsColumn ? (
@@ -4048,7 +4046,7 @@ function NotesTable({
                             ) : notes.length ? (
                               "No notes match the current view."
                             ) : (
-                              "No notes are stored yet. Use Import / Export to import data or add your first banknote."
+                              "No notes are stored yet in this collection."
                             )}
                           </td>
                         </tr>
@@ -4172,9 +4170,7 @@ function NotesTable({
                                 }
 
                                 setDropTarget((current) =>
-                                  current?.noteId === note.id
-                                    ? null
-                                    : current,
+                                  current?.noteId === note.id ? null : current,
                                 );
                               }}
                               onDragOver={(event) => {
