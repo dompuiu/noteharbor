@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
+## [1.10.2] - 2026-10-11
+
+### Changed
+
+- Import screen: the import progress overlay now shows only the spinner, the `Importing archive…` status, and the archive name, dropping the extra hint line.
+
 ## [1.10.1] - 2026-10-11
 
 ### Fixed
