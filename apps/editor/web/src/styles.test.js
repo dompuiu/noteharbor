@@ -417,6 +417,16 @@ describe("slideshow overlay styles", () => {
     expect(content[1]).toMatch(/margin:\s*auto/);
   });
 
+  test("the image popover content owns the on-dark text colour", () => {
+    // The popover mounts standalone in the showcase, outside the slideshow
+    // scrim that used to supply the text colour: without its own colour the
+    // arrows, counter, and note label inherit the host's dark text and fade
+    // into the dark background.
+    const content = styles.match(/\.image-popover-content\s*\{([^}]*)\}/);
+    expect(content).not.toBeNull();
+    expect(content[1]).toMatch(/color:\s*var\(--on-dark-text\)/);
+  });
+
   test("the showcase panel scrolls vertically instead of cropping", () => {
     const panel = styles.match(
       /\.screen-stack\.showcase-screen > \.panel\s*\{([^}]*)\}/,

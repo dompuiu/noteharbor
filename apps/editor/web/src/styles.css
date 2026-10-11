@@ -3939,6 +3939,11 @@ button.tag {
   background: var(--on-dark-bg-translucent);
   border: 1px solid var(--on-dark-border);
   box-shadow: 0 24px 48px rgba(20, 12, 4, 0.5);
+  /* The popover is mounted standalone in the showcase (unlike the table
+     slideshow, where the scrim owns the text colour), so the content owns
+     the on-dark text colour itself: the arrows, counter, and note label
+     all inherit it. */
+  color: var(--on-dark-text);
 }
 
 .image-popover-content--zoomed {
