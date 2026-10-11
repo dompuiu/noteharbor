@@ -573,56 +573,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
               color: Colors.black54,
             ),
           if (_isImporting)
-            Center(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: ViewerPalette.surface,
-                  borderRadius: BorderRadius.circular(
-                      ViewerPalette.radiusXl),
-                  border: Border.all(color: ViewerPalette.border),
-                  boxShadow: ViewerPalette.shadowHigh,
-                ),
-                child: Padding(
-                  padding: const EdgeInsets.all(28),
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      DecoratedBox(
-                        decoration: BoxDecoration(
-                          color: ViewerPalette.accentSoft,
-                          borderRadius: BorderRadius.circular(
-                              ViewerPalette.radiusLg),
-                        ),
-                        child: const Padding(
-                          padding: EdgeInsets.all(14),
-                          child: CircularProgressIndicator(),
-                        ),
-                      ),
-                      const SizedBox(height: 18),
-                      const Text(
-                        'Importing archive…',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontWeight: FontWeight.w800,
-                          fontSize: 16,
-                        ),
-                      ),
-                      if (_selectedArchiveName != null) ...[
-                        const SizedBox(height: 8),
-                        Text(
-                          _selectedArchiveName!,
-                          textAlign: TextAlign.center,
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            color: ViewerPalette.textMuted,
-                          ),
-                        ),
-                      ],
-                    ],
-                  ),
-                ),
-              ),
-            ),
+            _ImportProgressOverlay(archiveName: _selectedArchiveName),
         ],
       ),
       ),
@@ -697,6 +648,91 @@ class _Panel extends StatelessWidget {
             ],
             child,
           ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ImportProgressOverlay extends StatelessWidget {
+  const _ImportProgressOverlay({this.archiveName});
+
+  final String? archiveName;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Padding(
+        padding: const EdgeInsets.all(ViewerPalette.spaceXl),
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 360),
+          child: DecoratedBox(
+            decoration: BoxDecoration(
+              color: ViewerPalette.surface,
+              borderRadius: BorderRadius.circular(
+                  ViewerPalette.radiusXl),
+              border: Border.all(color: ViewerPalette.border),
+              boxShadow: ViewerPalette.shadowHigh,
+            ),
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  DecoratedBox(
+                    decoration: BoxDecoration(
+                      color: ViewerPalette.accentSoft,
+                      borderRadius: BorderRadius.circular(
+                          ViewerPalette.radiusMd),
+                    ),
+                    child: const SizedBox(
+                      width: 64,
+                      height: 64,
+                      child: Padding(
+                        padding: EdgeInsets.all(18),
+                        child: CircularProgressIndicator(strokeWidth: 3),
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 20),
+                  const Text(
+                    'Importing archive…',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                      color: ViewerPalette.text,
+                    ),
+                  ),
+                  if (archiveName != null) ...[
+                    const SizedBox(height: 6),
+                    Text(
+                      archiveName!,
+                      textAlign: TextAlign.center,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 13,
+                        color: ViewerPalette.textMuted,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 10),
+                  const Text(
+                    'Keep this window open until the import finishes.',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      color: ViewerPalette.textFaint,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
         ),
       ),
     );
