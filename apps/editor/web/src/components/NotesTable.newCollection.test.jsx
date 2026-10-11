@@ -68,12 +68,13 @@ describe("NotesTable new collection draft", () => {
     const input = await screen.findByRole("textbox", { name: "Collection name" });
     expect(document.activeElement).toBe(input);
     expect(input).toHaveClass("showcase-name-field");
-    expect(screen.getByRole("button", { name: "Save" })).toHaveClass(
-      "showcase-node-save",
-    );
-    expect(screen.getByRole("button", { name: "Cancel" })).toHaveClass(
-      "showcase-node-cancel",
-    );
+
+    const saves = screen.getAllByRole("button", { name: "Save" });
+    const cancels = screen.getAllByRole("button", { name: "Cancel" });
+    expect(saves.some((button) => button.classList.contains("showcase-node-save"))).toBe(true);
+    expect(saves.some((button) => button.classList.contains("button"))).toBe(true);
+    expect(cancels.some((button) => button.classList.contains("showcase-node-cancel"))).toBe(true);
+    expect(cancels.some((button) => button.classList.contains("button"))).toBe(true);
   });
 
   test("typing reports the draft name and submitting saves it", async () => {
@@ -87,7 +88,10 @@ describe("NotesTable new collection draft", () => {
     await user.type(input, "Third");
 
     expect(onNewCollectionNameChange).toHaveBeenCalled();
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    const save = screen
+      .getAllByRole("button", { name: "Save" })
+      .find((button) => button.classList.contains("button"));
+    await user.click(save);
     expect(onSaveNewCollection).toHaveBeenCalledTimes(1);
   });
 
@@ -101,7 +105,7 @@ describe("NotesTable new collection draft", () => {
     expect(onCancelNewCollection).toHaveBeenCalledTimes(1);
   });
 
-  test("shows the same empty table with Add note disabled", async () => {
+  test("shows the same empty table with Cancel/Save instead of Add note", async () => {
     const { getNotes } = await import("../lib/api.js");
     renderNewCollection();
 
@@ -112,7 +116,12 @@ describe("NotesTable new collection draft", () => {
     expect(
       screen.getByText(/No notes are stored yet/),
     ).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add note" })).toBeDisabled();
+    // The draft has no Add note: the actions mirror the collection edit
+    // view, without Delete since there is nothing saved yet.
+    expect(screen.queryByRole("button", { name: "Add note" })).not.toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Delete collection" })).not.toBeInTheDocument();
+    expect(screen.getAllByRole("button", { name: "Cancel" })).toHaveLength(2);
+    expect(screen.getAllByRole("button", { name: "Save" })).toHaveLength(2);
     expect(getNotes).not.toHaveBeenCalled();
   });
 

@@ -2273,11 +2273,6 @@ input[type="radio"] {
   margin: 0;
 }
 
-.collection-rename-button {
-  min-height: 28px;
-  padding: 4px 8px;
-}
-
 .collection-rename-form {
   display: flex;
   align-items: center;

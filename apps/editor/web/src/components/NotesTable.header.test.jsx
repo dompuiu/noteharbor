@@ -1,5 +1,5 @@
-import { MemoryRouter } from "react-router-dom";
-import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, useLocation } from "react-router-dom";
+import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
@@ -53,16 +53,21 @@ function note(id, denomination) {
   };
 }
 
-function renderTable({ editDestinationIgnored = null, onRenameCollection = null } = {}) {
+function PathnameProbe() {
+  const { pathname } = useLocation();
+  return <output data-testid="pathname">{pathname}</output>;
+}
+
+function renderTable() {
   return render(
-    <MemoryRouter>
+    <MemoryRouter initialEntries={["/catalog/collections/1/view"]}>
+      <PathnameProbe />
       <NotesTable
         collection={{ id: 1, is_default: 1, name: "Test" }}
         collectionId={1}
         collections={[{ id: 1, is_default: 1, name: "Test" }]}
         collectionsError=""
         loadingCollections={false}
-        onRenameCollection={onRenameCollection}
       />
     </MemoryRouter>,
   );
@@ -110,89 +115,70 @@ describe("NotesTable header controls", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("shows no Edit link in the header actions", async () => {
+  test("shows an Edit link to the collection edit route", async () => {
     renderTable();
 
     await screen.findByRole("button", { name: "Add note" });
 
-    expect(screen.queryByRole("link", { name: "Edit" })).not.toBeInTheDocument();
+    expect(screen.getByRole("link", { name: "Edit Test collection" })).toHaveAttribute(
+      "href",
+      "/catalog/collections/1/edit",
+    );
   });
 
-  test("shows the rename icon next to the collection title", async () => {
+  test("shows the collection title with no rename control", async () => {
     renderTable();
 
     await screen.findByRole("button", { name: "Add note" });
 
-    const rename = screen.getByRole("button", { name: "Rename Test collection" });
-    expect(rename).toBeInTheDocument();
-
-    const actions = rename.closest(".panel-heading-copy");
-    expect(actions).not.toBeNull();
-  });
-
-  test("the rename icon turns the title into an input", async () => {
-    const user = userEvent.setup();
-    renderTable();
-
-    await screen.findByRole("button", { name: "Add note" });
-    await user.click(screen.getByRole("button", { name: "Rename Test collection" }));
-
-    expect(screen.getByRole("textbox", { name: "Collection name" })).toBeInTheDocument();
-    expect(screen.queryByRole("heading", { name: "Test" })).not.toBeInTheDocument();
-  });
-
-  test("saving the inline rename calls the rename handler", async () => {
-    const user = userEvent.setup();
-    const onRenameCollection = vi.fn().mockResolvedValue({ id: 1, name: "Renamed" });
-    renderTable({ onRenameCollection });
-
-    await screen.findByRole("button", { name: "Add note" });
-    await user.click(screen.getByRole("button", { name: "Rename Test collection" }));
-
-    const input = screen.getByRole("textbox", { name: "Collection name" });
-    await user.clear(input);
-    await user.type(input, "Renamed");
-    await user.keyboard("{Enter}");
-
-    await waitFor(() => {
-      expect(onRenameCollection).toHaveBeenCalledWith(1, "Renamed");
-    });
-  });
-
-  test("the Save button persists the inline rename", async () => {
-    const user = userEvent.setup();
-    const onRenameCollection = vi.fn().mockResolvedValue({ id: 1, name: "Renamed" });
-    renderTable({ onRenameCollection });
-
-    await screen.findByRole("button", { name: "Add note" });
-    await user.click(screen.getByRole("button", { name: "Rename Test collection" }));
-
-    const input = screen.getByRole("textbox", { name: "Collection name" });
-    await user.clear(input);
-    await user.type(input, "Renamed");
-    await user.click(screen.getByRole("button", { name: "Save" }));
-
-    await waitFor(() => {
-      expect(onRenameCollection).toHaveBeenCalledWith(1, "Renamed");
-    });
-  });
-
-  test("the Cancel button discards the inline rename", async () => {
-    const user = userEvent.setup();
-    const onRenameCollection = vi.fn();
-    renderTable({ onRenameCollection });
-
-    await screen.findByRole("button", { name: "Add note" });
-    await user.click(screen.getByRole("button", { name: "Rename Test collection" }));
-
-    const input = screen.getByRole("textbox", { name: "Collection name" });
-    await user.clear(input);
-    await user.type(input, "Changed");
-    await user.click(screen.getByRole("button", { name: "Cancel" }));
-
-    expect(onRenameCollection).not.toHaveBeenCalled();
-    expect(screen.queryByRole("textbox", { name: "Collection name" })).not.toBeInTheDocument();
     expect(screen.getByRole("heading", { name: "Test" })).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Rename Test collection" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: "Collection name" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("pressing e enters the collection edit mode", async () => {
+    const user = userEvent.setup();
+    renderTable();
+
+    await screen.findByRole("button", { name: "Add note" });
+    expect(screen.getByTestId("pathname")).toHaveTextContent(
+      "/catalog/collections/1/view",
+    );
+
+    await user.keyboard("e");
+
+    expect(screen.getByTestId("pathname")).toHaveTextContent(
+      "/catalog/collections/1/edit",
+    );
+  });
+
+  test("pressing Escape in edit mode without row focus cancels the edit", async () => {
+    const user = userEvent.setup();
+    const onCancelCollectionEdit = vi.fn();
+    render(
+      <MemoryRouter initialEntries={["/catalog/collections/1/edit"]}>
+        <NotesTable
+          collection={{ id: 1, is_default: 1, name: "Test" }}
+          collectionId={1}
+          collections={[{ id: 1, is_default: 1, name: "Test" }]}
+          collectionsError=""
+          loadingCollections={false}
+          showEditCollectionAction={false}
+          isCollectionEditing
+          collectionEditName="Test"
+          onCancelCollectionEdit={onCancelCollectionEdit}
+        />
+      </MemoryRouter>,
+    );
+
+    await screen.findByRole("button", { name: "Delete collection" });
+    await user.keyboard("{Escape}");
+
+    expect(onCancelCollectionEdit).toHaveBeenCalledTimes(1);
   });
 });
 

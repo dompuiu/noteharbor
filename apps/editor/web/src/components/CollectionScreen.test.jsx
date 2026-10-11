@@ -14,7 +14,6 @@ vi.mock("./ConfirmDialog.jsx", () => ({
 vi.mock("./NotesTable.jsx", () => ({
   NotesTable: ({
     collectionId,
-    onRenameCollection,
     isNewCollection,
     newCollectionName,
     onNewCollectionNameChange,
@@ -22,6 +21,19 @@ vi.mock("./NotesTable.jsx", () => ({
     onCancelNewCollection,
     savingNewCollection,
     newCollectionError,
+    isCollectionEditing,
+    collectionEditName,
+    onCollectionEditNameChange,
+    onCollectionEditNameBlur,
+    onCollectionEditNameKeyDown,
+    collectionEditFieldRef,
+    collectionEditError,
+    onSaveCollectionEdit,
+    onCancelCollectionEdit,
+    onDeleteCollectionEdit,
+    savingCollectionEdit,
+    deletingCollectionEdit,
+    canSaveCollectionEdit,
   }) =>
     isNewCollection ? (
       <div data-testid="notes-table" data-new-collection="true">
@@ -67,10 +79,46 @@ vi.mock("./NotesTable.jsx", () => ({
           Add note
         </button>
       </div>
+    ) : isCollectionEditing ? (
+      <div
+        data-collection-id={collectionId ?? ""}
+        data-testid="notes-table"
+      >
+        <input
+          aria-label="Collection name"
+          onBlur={onCollectionEditNameBlur}
+          onChange={(event) => onCollectionEditNameChange?.(event.target.value)}
+          onKeyDown={onCollectionEditNameKeyDown}
+          ref={collectionEditFieldRef}
+          value={collectionEditName ?? ""}
+        />
+        {collectionEditError ? <p role="alert">{collectionEditError}</p> : null}
+        <button
+          disabled={deletingCollectionEdit}
+          onClick={onDeleteCollectionEdit}
+          type="button"
+        >
+          Delete collection
+        </button>
+        <button
+          disabled={savingCollectionEdit}
+          onClick={onCancelCollectionEdit}
+          type="button"
+        >
+          Cancel
+        </button>
+        <button
+          disabled={!canSaveCollectionEdit || savingCollectionEdit}
+          onClick={onSaveCollectionEdit}
+          type="button"
+        >
+          {savingCollectionEdit ? "Saving…" : "Save"}
+        </button>
+        Banknotes table
+      </div>
     ) : (
       <div
         data-collection-id={collectionId ?? ""}
-        data-has-rename={onRenameCollection ? "true" : "false"}
         data-testid="notes-table"
       >
         Banknotes table
@@ -152,15 +200,6 @@ describe("CollectionScreen view mode", () => {
     expect(screen.getByText("Banknotes table")).toBeInTheDocument();
   });
 
-  test("hands the table the rename handler for its inline title edit", () => {
-    renderView(1);
-
-    expect(screen.getByTestId("notes-table")).toHaveAttribute(
-      "data-has-rename",
-      "true",
-    );
-  });
-
   test("hands the table the route collection id for its notes", () => {
     renderView(2);
 
@@ -168,6 +207,21 @@ describe("CollectionScreen view mode", () => {
       "data-collection-id",
       "2",
     );
+  });
+
+  test("hands the table the collection editing state in edit mode", () => {
+    renderEdit(2);
+
+    expect(screen.getByTestId("notes-table")).toHaveAttribute(
+      "data-collection-id",
+      "2",
+    );
+    expect(
+      screen.getByRole("textbox", { name: "Collection name" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Delete collection" }),
+    ).toBeInTheDocument();
   });
 
   test("an unknown collection shows the not-found state", () => {
@@ -178,6 +232,31 @@ describe("CollectionScreen view mode", () => {
 });
 
 describe("CollectionScreen edit mode", () => {
+  test("focuses the title field on entering edit mode", async () => {
+    renderEdit(2);
+
+    const input = screen.getByRole("textbox", { name: "Collection name" });
+    expect(document.activeElement).toBe(input);
+  });
+
+  test("Escape in the title leaves edit mode without saving", async () => {
+    const user = userEvent.setup();
+    const renameCollection = vi.fn();
+    useCollections.mockReturnValue(collectionsContext({ renameCollection }));
+    renderEdit(2);
+
+    const input = screen.getByRole("textbox", { name: "Collection name" });
+    expect(document.activeElement).toBe(input);
+    await user.keyboard("{Escape}");
+
+    expect(renameCollection).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByTestId("pathname")).toHaveTextContent(
+        CATALOG_ROUTES.collection(2),
+      );
+    });
+  });
+
   test("Save stays disabled until the name changes", async () => {
     const user = userEvent.setup();
     renderEdit(2);
