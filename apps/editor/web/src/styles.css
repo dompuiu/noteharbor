@@ -1456,6 +1456,16 @@ input[type="radio"] {
   color: var(--danger, #b3261e);
 }
 
+.showcase-grouping-save:disabled,
+.showcase-grouping-cancel:disabled,
+.showcase-node-save:disabled,
+.showcase-node-cancel:disabled {
+  cursor: not-allowed;
+  opacity: 0.55;
+  pointer-events: none;
+  box-shadow: none;
+}
+
 .showcase-reorder-cell--dragging {
   opacity: 0.5;
 }
@@ -3235,6 +3245,7 @@ button.tag {
 }
 
 .button:disabled,
+.icon-link:disabled,
 .button-disabled {
   cursor: not-allowed;
   opacity: 0.55;
