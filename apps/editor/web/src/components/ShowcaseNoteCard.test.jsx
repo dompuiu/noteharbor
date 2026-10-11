@@ -141,11 +141,22 @@ describe("ShowcaseNoteCard", () => {
   test("shows the catalog number after the denomination", () => {
     render(
       <ShowcaseNoteCard
-        note={note({ denomination: "1 leu", catalog_number: "22", issue_date: "1917" })}
+        note={note({ denomination: "1 leu", catalog_number: "17", issue_date: "1917" })}
       />,
     );
 
-    const card = screen.getByRole("button", { name: "1 leu, 22, 1917" });
-    expect(card).toHaveTextContent("1 leu · 22 · 1917");
+    const card = screen.getByRole("button", { name: "1 leu, Pick 17, 1917" });
+    expect(card).toHaveTextContent("1 leu · Pick 17 · 1917");
+  });
+
+  test("normalizes an existing prefix", () => {
+    render(
+      <ShowcaseNoteCard
+        note={note({ denomination: "1 leu", catalog_number: "P17", issue_date: "1917" })}
+      />,
+    );
+
+    const card = screen.getByRole("button", { name: "1 leu, Pick 17, 1917" });
+    expect(card).toHaveTextContent("1 leu · Pick 17 · 1917");
   });
 });

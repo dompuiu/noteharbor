@@ -10,6 +10,7 @@ import {
 } from "../lib/api.js";
 import { isEditableElement } from "../lib/editableElement.js";
 import { usePhotoSize } from "../lib/photoSize.js";
+import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 import {
   DEFAULT_DESTINATION,
   NEW_SHOWCASE_ID,
@@ -61,7 +62,7 @@ import { useConfirmation } from "./ConfirmDialog.jsx";
 function noteNodeLabel(node) {
   const note = node.note ?? {};
   return (
-    [note.denomination, note.catalog_number, note.issue_date].filter(Boolean).join(" ") || "note"
+    showcaseNoteDisplayParts(note).join(" ") || "note"
   );
 }
 

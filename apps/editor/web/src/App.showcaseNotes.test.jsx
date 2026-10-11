@@ -202,7 +202,7 @@ describe("the note picker", () => {
     expect(within(dialog).getByRole("button", { name: "Add selected (0)" })).toBeInTheDocument();
     // The added note cards render on the canvas.
     expect(
-      await screen.findByRole("button", { name: "1 leu, 22, 1917" }),
+      await screen.findByRole("button", { name: "1 leu, Pick 22, 1917" }),
     ).toBeInTheDocument();
     // The header total updates with the tree.
     expect(screen.getByText("3 notes")).toBeInTheDocument();

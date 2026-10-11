@@ -8,6 +8,7 @@ import { ShowcaseNodeEditor } from "./ShowcaseNodeEditor.jsx";
 import { ShowcaseReorderableCell } from "./ShowcaseReorderableCell.jsx";
 import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
 import { countNoteNodes, visibleChildNodes } from "../lib/showcaseTree.js";
+import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 
 // One top-level Category rendered always expanded: a section header plus the
 // inline grid of its direct children. Groupings inside still drill (they nest);
@@ -15,7 +16,7 @@ import { countNoteNodes, visibleChildNodes } from "../lib/showcaseTree.js";
 function noteNodeLabel(node) {
   const note = node.note ?? {};
   return (
-    [note.denomination, note.catalog_number, note.issue_date].filter(Boolean).join(" ") || "note"
+    showcaseNoteDisplayParts(note).join(" ") || "note"
   );
 }
 

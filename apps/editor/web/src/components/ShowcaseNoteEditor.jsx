@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 import { ShowcaseNoteCard } from "./ShowcaseNoteCard.jsx";
 
 // Edit-only controls for one note node. Prototype layout mirrors the Grouping
@@ -12,7 +13,7 @@ function ShowcaseNoteEditor({ node, onRemove, onSetCover }) {
   const [error, setError] = useState("");
 
   const note = node.note ?? {};
-  const label = [note.denomination, note.catalog_number, note.issue_date].filter(Boolean).join(" ");
+  const label = showcaseNoteDisplayParts(note).join(" ");
   const removeLabel = `Remove note ${label}`.trim();
 
   async function run(action, fallbackMessage) {
