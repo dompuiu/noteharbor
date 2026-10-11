@@ -27,6 +27,7 @@ function ShowcaseCategorySection({
   onAddGrouping,
   onAddNotes,
   onOpenGrouping,
+  onOpenNote,
   onRemoveGrouping,
   onRemoveNote,
   onRemoveCategory,
@@ -123,6 +124,7 @@ function ShowcaseCategorySection({
                   mode="view"
                   nodeId={node.id}
                   note={node.note}
+                  onOpen={(kind) => onOpenNote?.(node, kind)}
                 />
               );
             }

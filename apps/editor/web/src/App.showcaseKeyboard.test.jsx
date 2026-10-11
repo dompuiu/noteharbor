@@ -301,25 +301,29 @@ describe("opening the focused card", () => {
     ).toBeInTheDocument();
   });
 
-  test("Enter and Space never drill into a view-mode note card", async () => {
+  test("Enter and Space open the preview on a view-mode note card", async () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
     const card = await screen.findByRole("button", { name: "1 leu, 1917" });
-    // Focus alone never flips; activation must neither flip nor drill, so
-    // blurring always leaves the front showing.
+    // Focus alone never flips; activation opens the showcase-wide preview at
+    // the visible face instead of drilling, so the drill param stays empty.
     act(() => card.focus());
     expect(card).toHaveAttribute("aria-pressed", "false");
 
     await userEvent.keyboard("{Enter}");
-    expect(search()).toBe("");
-    expect(card).toHaveAttribute("aria-pressed", "false");
+    await waitFor(() => expect(search()).toBe("?preview=400%3Afront"));
+    expect(
+      await screen.findByRole("button", { name: "Close preview" }),
+    ).toBeInTheDocument();
 
-    act(() => card.blur());
-    expect(card).toHaveAttribute("aria-pressed", "false");
+    await userEvent.click(
+      screen.getByRole("button", { name: "Close preview" }),
+    );
+    await waitFor(() => expect(search()).toBe(""));
 
     act(() => card.focus());
     await userEvent.keyboard(" ");
-    expect(search()).toBe("");
+    await waitFor(() => expect(search()).toBe("?preview=400%3Afront"));
     act(() => card.blur());
     expect(card).toHaveAttribute("aria-pressed", "false");
   });

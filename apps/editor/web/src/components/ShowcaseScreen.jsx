@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
   createShowcaseNode,
@@ -29,6 +29,14 @@ import {
   visibleChildNodes,
 } from "../lib/showcaseTree.js";
 import {
+  buildShowcasePreviewSearch,
+  findShowcasePreviewIndex,
+  getShowcasePreviewContainingLevelId,
+  getShowcasePreviewItems,
+  parseShowcasePreviewParam,
+  showcasePreviewLabel,
+} from "../lib/showcasePreview.js";
+import {
   isTempId,
   makeDraftCategoryNode,
   makeDraftGroupingNode,
@@ -52,6 +60,7 @@ import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
 import { ShowcasePhotoSizeControl } from "./ShowcasePhotoSizeControl.jsx";
 import { ShowcaseReorderableCell } from "./ShowcaseReorderableCell.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
+import { ImagePopover } from "./Slideshow.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 
 // One showcase, rendered in one of two near-identical modes. View mode is the
@@ -534,6 +543,182 @@ function ShowcaseScreen({ mode }) {
   );
   const showCategoryMove = editMode && rootCategories.length > 1;
 
+  // Showcase-wide image preview (view mode only): `?preview=<nodeId>:<kind>`
+  // alongside `?node=`. The slideshow flattens every visible note in display
+  // order; closing strips only `preview` so the drill level is preserved.
+  const previewParamRaw = editMode
+    ? null
+    : new URLSearchParams(location.search).get("preview");
+  const previewRequest = previewParamRaw
+    ? parseShowcasePreviewParam(previewParamRaw)
+    : null;
+  const previewItems = useMemo(
+    () => (editMode ? [] : getShowcasePreviewItems(nodes)),
+    [editMode, nodes],
+  );
+  const previewIndex = previewRequest
+    ? findShowcasePreviewIndex(
+        previewItems,
+        previewRequest.nodeId,
+        previewRequest.kind,
+      )
+    : -1;
+  const previewOpen = !editMode && previewRequest != null && previewIndex >= 0;
+  const activePreviewItem = previewOpen ? previewItems[previewIndex] : null;
+  const restorePreviewFocusNodeIdRef = useRef(null);
+  const wasPreviewOpenRef = useRef(false);
+
+  function openShowcasePreview(node, kind) {
+    if (editMode || node?.node_type !== "note") {
+      return;
+    }
+
+    const nodeItems = previewItems.filter((item) => item.nodeId === node.id);
+
+    if (!nodeItems.length) {
+      return;
+    }
+
+    const item =
+      nodeItems.find((entry) => entry.kind === kind) ?? nodeItems[0];
+    restorePreviewFocusNodeIdRef.current = node.id;
+    const nodeRaw = new URLSearchParams(location.search).get("node");
+    navigate({
+      search: buildShowcasePreviewSearch({
+        node: nodeRaw,
+        previewKind: item.kind,
+        previewNodeId: item.nodeId,
+      }),
+    });
+  }
+
+  function replaceShowcasePreview(item) {
+    const nodeRaw = new URLSearchParams(location.search).get("node");
+    navigate(
+      {
+        search: buildShowcasePreviewSearch({
+          node: nodeRaw,
+          previewKind: item.kind,
+          previewNodeId: item.nodeId,
+        }),
+      },
+      { replace: true },
+    );
+  }
+
+  function moveShowcasePreview(offset) {
+    if (!previewOpen || previewItems.length === 0) {
+      return;
+    }
+
+    const next =
+      previewItems[
+        (previewIndex + offset + previewItems.length) % previewItems.length
+      ];
+
+    if (next) {
+      replaceShowcasePreview(next);
+    }
+  }
+
+  function jumpShowcasePreview(position) {
+    const target = previewItems[position - 1];
+
+    if (target) {
+      replaceShowcasePreview(target);
+      return true;
+    }
+
+    return false;
+  }
+
+  function startShowcasePreview() {
+    const first = previewItems[0];
+
+    if (first && previewIndex !== 0) {
+      replaceShowcasePreview(first);
+      return true;
+    }
+
+    return false;
+  }
+
+  function endShowcasePreview() {
+    const last = previewItems[previewItems.length - 1];
+
+    if (last && previewIndex !== previewItems.length - 1) {
+      replaceShowcasePreview(last);
+      return true;
+    }
+
+    return false;
+  }
+
+  function closeShowcasePreview() {
+    const params = new URLSearchParams(location.search);
+    const nodeRaw = params.get("node");
+    const nodeResolves =
+      nodeRaw == null || findNodeIdPath(nodes, Number(nodeRaw)).length > 0;
+
+    if (nodeResolves) {
+      params.delete("preview");
+      const text = params.toString();
+      navigate({ search: text ? `?${text}` : "" }, { replace: true });
+      return;
+    }
+
+    const levelId =
+      activePreviewItem != null
+        ? getShowcasePreviewContainingLevelId(nodes, activePreviewItem.nodeId)
+        : null;
+    navigate({ search: showcaseNodeSearch(levelId) }, { replace: true });
+  }
+
+  // An unresolvable `preview` (stale deep link, or a note that lost its
+  // images) never opens the overlay; drop the parameter once loaded.
+  useEffect(() => {
+    if (editMode || loading || previewParamRaw == null || previewOpen) {
+      return;
+    }
+
+    if (previewRequest == null || previewIndex < 0) {
+      const params = new URLSearchParams(location.search);
+      params.delete("preview");
+      const text = params.toString();
+      navigate({ search: text ? `?${text}` : "" }, { replace: true });
+    }
+  }, [
+    editMode,
+    loading,
+    location.search,
+    navigate,
+    previewIndex,
+    previewOpen,
+    previewParamRaw,
+    previewRequest,
+  ]);
+
+  // Closing the preview (button, Esc, overlay click, or Back) restores focus
+  // to the card the preview opened from, when it is still rendered.
+  useEffect(() => {
+    if (wasPreviewOpenRef.current && !previewOpen) {
+      const nodeId = restorePreviewFocusNodeIdRef.current;
+      restorePreviewFocusNodeIdRef.current = null;
+
+      if (nodeId != null) {
+        requestAnimationFrame(() => {
+          sectionRef.current
+            ?.querySelector(
+              `.showcase-card[data-showcase-node-id="${nodeId}"]`,
+            )
+            ?.focus?.();
+        });
+      }
+    }
+
+    wasPreviewOpenRef.current = previewOpen;
+  }, [previewOpen]);
+
   // A `?node=` that no longer resolves (a node removed in another tab, or a
   // stale deep link) falls back to the root and drops the parameter.
   useEffect(() => {
@@ -542,9 +727,12 @@ function ShowcaseScreen({ mode }) {
     }
 
     if (findNodeIdPath(nodes, Number(nodeParam)).length === 0) {
-      navigate({ search: "" }, { replace: true });
+      const params = new URLSearchParams(location.search);
+      params.delete("node");
+      const text = params.toString();
+      navigate({ search: text ? `?${text}` : "" }, { replace: true });
     }
-  }, [editMode, loading, navigate, nodeParam, nodes]);
+  }, [editMode, loading, location.search, navigate, nodeParam, nodes]);
 
   // Edit mode adopts the entry `?node=` into the in-memory drill once the tree
   // loads (the header Edit toggle carries it over; a drilled edit URL also
@@ -1052,6 +1240,12 @@ function ShowcaseScreen({ mode }) {
         return;
       }
 
+      // While the image preview is open it owns the keyboard (arrows page,
+      // Esc closes); the card grid stays inert behind it.
+      if (previewOpen) {
+        return;
+      }
+
       if (isEditableElement(event.target)) {
         return;
       }
@@ -1227,6 +1421,7 @@ function ShowcaseScreen({ mode }) {
     navigate,
     nodes,
     pickerNodeId,
+    previewOpen,
     showcaseId,
     showcases,
     showShortcutsHelp,
@@ -1555,6 +1750,7 @@ function ShowcaseScreen({ mode }) {
                       onAddGrouping={handleAddGroupingFor}
                       onAddNotes={handleOpenNotePicker}
                       onOpenGrouping={openNode}
+                      onOpenNote={openShowcasePreview}
                       onRemoveCategory={handleRemoveCategory}
                       onRemoveGrouping={handleRemoveGrouping}
                       onRemoveNote={handleRemoveNote}
@@ -1633,6 +1829,7 @@ function ShowcaseScreen({ mode }) {
                         mode="view"
                         nodeId={node.id}
                         note={node.note}
+                        onOpen={(kind) => openShowcasePreview(node, kind)}
                       />
                     );
                   }
@@ -1663,6 +1860,27 @@ function ShowcaseScreen({ mode }) {
 
       {showShortcutsHelp ? (
         <KeyboardShortcutsHelp onClose={() => setShowShortcutsHelp(false)} />
+      ) : null}
+
+      {previewOpen && activePreviewItem ? (
+        <ImagePopover
+          alt={activePreviewItem.alt}
+          canGoNext={previewItems.length > 1}
+          canGoPrevious={previewItems.length > 1}
+          counterPosition={previewIndex + 1}
+          counterTotal={previewItems.length}
+          noteLabel={showcasePreviewLabel(
+            activePreviewItem.note,
+            activePreviewItem.kind,
+          )}
+          onClose={closeShowcasePreview}
+          onJump={jumpShowcasePreview}
+          onNext={() => moveShowcasePreview(1)}
+          onPrevious={() => moveShowcasePreview(-1)}
+          onPreviewEnd={endShowcasePreview}
+          onPreviewStart={startShowcasePreview}
+          src={activePreviewItem.src}
+        />
       ) : null}
 
       {dialog}

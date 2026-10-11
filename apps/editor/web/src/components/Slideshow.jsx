@@ -1030,4 +1030,4 @@ function Slideshow({
   );
 }
 
-export { Slideshow };
+export { ImagePopover, Slideshow };

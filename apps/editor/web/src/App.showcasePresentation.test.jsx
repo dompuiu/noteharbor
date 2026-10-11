@@ -553,25 +553,51 @@ describe("the note card in view mode", () => {
     );
   });
 
-  test("a tap leaves the front showing and never navigates", async () => {
+  test("a tap opens the showcase-wide image preview at the front", async () => {
     const card = await openWithNote();
-    const searchBefore = currentSearch();
 
     fireEvent.click(card);
 
-    expect(card).toHaveAttribute("aria-pressed", "false");
-    expect(within(card).getByRole("img")).toHaveAttribute(
-      "src",
-      "/api/images/notes/100/front.jpg?v=rev-100",
-    );
-    expect(currentSearch()).toBe(searchBefore);
+    await waitFor(() => {
+      expect(currentSearch()).toContain("preview=400%3Afront");
+    });
+    // The flattened showcase slideshow shows the note label with the face
+    // and the image counter over every image in display order.
+    expect(screen.getByText("1 leu, 1917 - Front")).toBeInTheDocument();
+  });
 
+  test("the preview pages over the whole showcase and closes back to the level", async () => {
+    const card = await openWithNote();
     fireEvent.click(card);
-    expect(card).toHaveAttribute("aria-pressed", "false");
-    expect(within(card).getByRole("img")).toHaveAttribute(
-      "src",
-      "/api/images/notes/100/front.jpg?v=rev-100",
+
+    await screen.findByText("1 leu, 1917 - Front");
+
+    // Front then back of the first note, then the nested sub note: the
+    // slideshow is showcase-wide in display order, not per level.
+    fireEvent.click(screen.getByRole("button", { name: "Show next image" }));
+    await screen.findByText("1 leu, 1917 - Back");
+
+    fireEvent.click(screen.getByRole("button", { name: "Show next image" }));
+    await screen.findByText("10 lei, 1930 - Front");
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Close preview" }),
     );
+    await waitFor(() => {
+      expect(currentSearch()).toBe("");
+    });
+    expect(
+      screen.getByRole("button", { name: "1 leu, 1917" }),
+    ).toBeInTheDocument();
+  });
+
+  test("a grouping card still drills instead of opening the preview", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    await openSub();
+    expect(currentSearch()).toBe("?node=20");
+    expect(
+      screen.queryByRole("button", { name: "Close preview" }),
+    ).not.toBeInTheDocument();
   });
 
   test("a card is focusable and reports its label and pressed state", async () => {

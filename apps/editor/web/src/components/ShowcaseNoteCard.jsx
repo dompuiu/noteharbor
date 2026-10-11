@@ -8,9 +8,11 @@ import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 // focusing a card with a distinct back reveals a flip control in the image's
 // bottom-right corner, and clicking it (or pressing Shift/Ctrl + ←/→ on the
 // focused card) toggles to the back. Moving the pointer out, or blurring the
-// card, always returns to the front. Edit mode never flips. The card is a button and never a link:
-// activating (click / Enter / Space on the card itself) never changes the
-// image and never opens the Note slideshow.
+// card, always returns to the front. Edit mode never flips. The card is a button and never a link.
+// In showcase view mode activating the card (click / Enter / Space on the card
+// itself, but not on the flip or info controls) opens the showcase-wide image
+// preview at the currently visible face; a note without images has no preview
+// and activation is a no-op for the preview.
 function pickBackImage(note) {
   return (
     pickNoteImage(note, "back", "thumbnail") ||
@@ -85,6 +87,12 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
     // working while a mouse click never holds focus.
     if (!editMode && event.detail > 0 && !flipped) {
       event.currentTarget.blur();
+    }
+
+    if (!editMode && onOpen && (frontPath || backPath)) {
+      const visibleKind = soleBack ? "back" : swapped ? "back" : "front";
+      onOpen(visibleKind, event);
+      return;
     }
 
     onOpen?.(event);
