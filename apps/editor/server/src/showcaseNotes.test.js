@@ -259,3 +259,30 @@ test('addNotesToNode inserts the batch in order at the database seam', () => {
   assert.equal(nodes[0].parent_node_id, category.id);
   assert.equal(nodes[0].node_type, 'note');
 });
+
+test('the showcase tree carries each note\u2019s description and tags', () => {
+  const showcase = db.createShowcase('Tree details seam');
+  const category = db.addShowcaseNode(showcase.id, {
+    type: 'category',
+    name: 'Details'
+  });
+  const note = createNote({
+    denomination: '5',
+    notes: 'Printed in Bucharest.',
+    tags: ['paper', 'rare']
+  });
+
+  db.addShowcaseNode(showcase.id, {
+    type: 'notes',
+    parent_id: category.id,
+    note_ids: [note.id]
+  });
+
+  const tree = db.getShowcaseTree(showcase.id);
+  const placed = tree[0].children[0];
+  assert.equal(placed.note.notes, 'Printed in Bucharest.');
+  assert.deepEqual(
+    placed.note.tags.map((tag) => tag.name),
+    ['paper', 'rare']
+  );
+});

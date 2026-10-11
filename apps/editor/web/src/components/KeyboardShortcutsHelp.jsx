@@ -102,6 +102,10 @@ const shortcutGroups = [
           "Open the focused card; on a view-mode note card, flip front / back instead",
       },
       {
+        keys: ["i"],
+        description: "Show the focused note card's description and tags",
+      },
+      {
         keys: ["Esc"],
         description: "Clear the card focus, then go up one level",
       },

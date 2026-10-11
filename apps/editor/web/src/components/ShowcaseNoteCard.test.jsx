@@ -1,4 +1,9 @@
-import { fireEvent, render, screen } from "@testing-library/react";
+import {
+  fireEvent,
+  render,
+  screen,
+  waitForElementToBeRemoved,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { describe, expect, test } from "vitest";
 import { ShowcaseNoteCard } from "./ShowcaseNoteCard.jsx";
@@ -158,5 +163,113 @@ describe("ShowcaseNoteCard", () => {
 
     const card = screen.getByRole("button", { name: "1 leu, Pick 17, 1917" });
     expect(card).toHaveTextContent("1 leu · Pick 17 · 1917");
+  });
+
+  test("shows an info icon after the caption", () => {
+    render(<ShowcaseNoteCard note={note({ notes: "Printed in Bucharest." })} />);
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    const caption = card.querySelector(".showcase-card-caption");
+    expect(caption).not.toBeNull();
+    const info = card.querySelector(".showcase-card-info");
+    expect(info).not.toBeNull();
+    // The icon sits after the caption in the caption row.
+    expect(caption.compareDocumentPosition(info)).toBe(
+      Node.DOCUMENT_POSITION_FOLLOWING,
+    );
+  });
+
+  test("hovering the info icon shows the description and tags", async () => {
+    render(
+      <ShowcaseNoteCard
+        note={note({
+          notes: "Printed in Bucharest.",
+          tags: [
+            { id: 1, name: "paper" },
+            { id: 2, name: "rare" },
+          ],
+        })}
+      />,
+    );
+
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+
+    const info = document.querySelector(".showcase-card-info");
+    fireEvent.mouseEnter(info);
+
+    const tooltip = screen.getByRole("tooltip");
+    expect(tooltip).toHaveTextContent("Printed in Bucharest.");
+    expect(tooltip).toHaveTextContent("paper");
+    expect(tooltip).toHaveTextContent("rare");
+
+    // Moving from the icon onto the tooltip leaves the icon but enters the
+    // tooltip before the close delay runs, so it stays open for reading;
+    // leaving the tooltip lets the delay close it.
+    fireEvent.mouseLeave(info);
+    fireEvent.mouseEnter(screen.getByRole("tooltip"));
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+
+    fireEvent.mouseLeave(screen.getByRole("tooltip"));
+    await waitForElementToBeRemoved(() => screen.queryByRole("tooltip"));
+  });
+
+  test("pressing i on a keyboard-focused card toggles the tooltip", async () => {
+    render(
+      <ShowcaseNoteCard
+        note={note({
+          notes: "Printed in Bucharest.",
+          tags: [{ id: 1, name: "paper" }],
+        })}
+      />,
+    );
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    card.focus();
+
+    await userEvent.keyboard("i");
+    expect(screen.getByRole("tooltip")).toHaveTextContent(
+      "Printed in Bucharest.",
+    );
+
+    await userEvent.keyboard("i");
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
+  test("escape dismisses the i-pinned tooltip", () => {
+    render(<ShowcaseNoteCard note={note({ notes: "Printed in Bucharest." })} />);
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    card.focus();
+    fireEvent.keyDown(card, { key: "i" });
+    expect(screen.getByRole("tooltip")).toBeInTheDocument();
+
+    fireEvent.keyDown(card, { key: "Escape" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
+  test("a note without description or tags shows no info icon", () => {
+    render(<ShowcaseNoteCard note={note()} />);
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    expect(card.querySelector(".showcase-card-info")).toBeNull();
+
+    card.focus();
+    fireEvent.keyDown(card, { key: "i" });
+    expect(screen.queryByRole("tooltip")).not.toBeInTheDocument();
+  });
+
+  test("a note with only tags shows the icon and a tags-only tooltip", () => {
+    render(
+      <ShowcaseNoteCard note={note({ tags: [{ id: 1, name: "paper" }] })} />,
+    );
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    expect(card.querySelector(".showcase-card-info")).not.toBeNull();
+
+    card.focus();
+    fireEvent.keyDown(card, { key: "i" });
+
+    const tooltip = screen.getByRole("tooltip");
+    expect(tooltip).toHaveTextContent("paper");
   });
 });

@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { firstAvailableNoteImage, pickNoteImage } from "../lib/showcaseImages.js";
 import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 
@@ -19,6 +19,24 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
   const editMode = mode === "edit";
   const [hovered, setHovered] = useState(false);
   const [focused, setFocused] = useState(false);
+  // The info tooltip opens on icon hover or pins with the `i` key on a
+  // keyboard-focused card. The icon is a plain span (never a nested button)
+  // since the card itself is the button.
+  const [infoHovered, setInfoHovered] = useState(false);
+  const [infoPinned, setInfoPinned] = useState(false);
+  const tooltipId = useId();
+  // Leaving the icon starts a short close delay instead of hiding at once,
+  // so the cursor can travel onto the tooltip itself without a flicker.
+  // Entering either end cancels the pending close.
+  const infoCloseTimeoutRef = useRef(null);
+
+  useEffect(() => {
+    return () => {
+      if (infoCloseTimeoutRef.current) {
+        clearTimeout(infoCloseTimeoutRef.current);
+      }
+    };
+  }, []);
 
   const primary = firstAvailableNoteImage(note);
   const back = pickBackImage(note);
@@ -39,6 +57,13 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
   const caption = parts.join(" · ");
   const label = parts.join(", ");
   const backLabel = label ? `${label} (back)` : "back";
+  const description = String(note?.notes ?? "").trim();
+  const tagNames = (Array.isArray(note?.tags) ? note.tags : [])
+    .map((tag) => (typeof tag === "string" ? tag.trim() : String(tag?.name ?? "").trim()))
+    .filter(Boolean);
+  // No description and no tags means no icon and no tooltip at all.
+  const hasDetails = Boolean(description) || tagNames.length > 0;
+  const tooltipOpen = hasDetails && (infoHovered || infoPinned);
 
   function handleClick(event) {
     // A mouse click parks focus on the card, and focus alone previews the
@@ -76,10 +101,51 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
     if (!editMode) {
       setFocused(false);
     }
+
+    setInfoPinned(false);
+  }
+
+  function handleInfoMouseEnter() {
+    if (infoCloseTimeoutRef.current) {
+      clearTimeout(infoCloseTimeoutRef.current);
+      infoCloseTimeoutRef.current = null;
+    }
+
+    setInfoHovered(true);
+  }
+
+  function handleInfoMouseLeave() {
+    if (infoCloseTimeoutRef.current) {
+      clearTimeout(infoCloseTimeoutRef.current);
+    }
+
+    infoCloseTimeoutRef.current = setTimeout(() => {
+      setInfoHovered(false);
+    }, 150);
+  }
+
+  // `i` pins the info tooltip on the focused card; a second `i` (or Escape)
+  // dismisses it. Escape stops here so the screen-level handler does not blur
+  // the card underneath the dismissed tooltip. Without details there is no
+  // tooltip, so `i` does nothing.
+  function handleKeyDown(event) {
+    if (event.key === "i" || event.key === "I") {
+      if (hasDetails) {
+        setInfoPinned((current) => !current);
+      }
+      return;
+    }
+
+    if (event.key === "Escape" && infoPinned) {
+      event.preventDefault();
+      event.stopPropagation();
+      setInfoPinned(false);
+    }
   }
 
   return (
     <button
+      aria-describedby={tooltipOpen ? tooltipId : undefined}
       aria-label={label}
       aria-pressed={swapped}
       className={`showcase-card showcase-card--note${swapped ? " showcase-card--back" : ""}`}
@@ -87,6 +153,7 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
       onBlur={handleBlur}
       onClick={handleClick}
       onFocus={handleFocus}
+      onKeyDown={handleKeyDown}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
       role="button"
@@ -114,7 +181,67 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
           <span className="showcase-card-no-image">No image</span>
         ) : null}
       </span>
-      <span className="showcase-card-caption">{caption}</span>
+      <span className="showcase-card-caption-row">
+        <span className="showcase-card-caption">{caption}</span>
+        {hasDetails ? (
+          <span
+            aria-hidden="true"
+            className="showcase-card-info"
+            onMouseEnter={handleInfoMouseEnter}
+            onMouseLeave={handleInfoMouseLeave}
+          >
+            <svg
+              aria-hidden="true"
+              className="showcase-card-info-icon"
+              focusable="false"
+              height="14"
+              viewBox="0 0 24 24"
+              width="14"
+            >
+              <circle
+                cx="12"
+                cy="12"
+                fill="none"
+                r="9"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              <path
+                d="M12 11v5"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeWidth="2"
+              />
+              <circle cx="12" cy="8" fill="currentColor" r="1.2" />
+            </svg>
+          </span>
+        ) : null}
+        {tooltipOpen ? (
+          <span
+            className="showcase-card-tooltip"
+            id={tooltipId}
+            onMouseEnter={handleInfoMouseEnter}
+            onMouseLeave={handleInfoMouseLeave}
+            role="tooltip"
+          >
+            {description ? (
+              <span className="showcase-card-tooltip-description">
+                {description}
+              </span>
+            ) : null}
+            {tagNames.length ? (
+              <span className="showcase-card-tooltip-tags">
+                {tagNames.map((name, index) => (
+                  <span className="tag" key={`${name}-${index}`}>
+                    {name}
+                  </span>
+                ))}
+              </span>
+            ) : null}
+          </span>
+        ) : null}
+      </span>
     </button>
   );
 }

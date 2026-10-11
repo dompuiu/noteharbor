@@ -134,6 +134,26 @@ describe("showcase note/grouping card heights", () => {
   });
 });
 
+describe("showcase note-card info tooltip", () => {
+  test("the info icon stays inline at 1em like the grouping footer icon", () => {
+    const icon = styles.match(/\n\.showcase-card-info-icon\s*\{([^}]*)\}/);
+    expect(icon).not.toBeNull();
+    expect(icon[1]).toMatch(/width:\s*1em/);
+    expect(icon[1]).toMatch(/height:\s*1em/);
+  });
+
+  test("the tooltip opens below the caption row, by the info icon", () => {
+    const row = styles.match(/\n\.showcase-card-caption-row\s*\{([^}]*)\}/);
+    const tooltip = styles.match(/\n\.showcase-card-tooltip\s*\{([^}]*)\}/);
+    expect(row).not.toBeNull();
+    expect(tooltip).not.toBeNull();
+    expect(row[1]).toMatch(/position:\s*relative/);
+    expect(tooltip[1]).toMatch(/position:\s*absolute/);
+    expect(tooltip[1]).toMatch(/top:\s*calc\(100%/);
+    expect(tooltip[1]).toMatch(/right:\s*0/);
+  });
+});
+
 describe("showcase note-card motion", () => {
   test("the front and back faces cross-fade", () => {
     const face = styles.match(/\n\.showcase-card-face\s*\{([^}]*)\}/);

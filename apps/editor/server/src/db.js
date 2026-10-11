@@ -1474,7 +1474,7 @@ function getShowcaseTree(showcaseId) {
   const id = Number(showcaseId);
   const rows = statements.listShowcaseNodesStatement.all(id);
   const noteRows = statements.listShowcaseNotesStatement.all({ showcase_id: id });
-  const notesById = new Map(noteRows.map((note) => [note.id, rowToNote(note, new Map())]));
+  const notesById = new Map(noteRows.map((note) => [note.id, rowToNote(note, buildTagMap())]));
   const nodesById = new Map();
 
   for (const row of rows) {
