@@ -4,6 +4,11 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { app, BrowserWindow, Menu, MenuItem, dialog, ipcMain, screen, shell } from 'electron';
+import {
+  DESKTOP_PREFERENCES_FILENAME,
+  readShowcasePhotoSizePreference,
+  writeShowcasePhotoSizePreference,
+} from './preferences.js';
 
 app.setName('Note Harbor Editor');
 
@@ -316,6 +321,10 @@ function getWindowStatePath() {
   return path.join(app.getPath('userData'), WINDOW_STATE_FILENAME);
 }
 
+function getDesktopPreferencesPath() {
+  return path.join(app.getPath('userData'), DESKTOP_PREFERENCES_FILENAME);
+}
+
 function isWindowVisibleOnAnyDisplay(bounds) {
   const { x, y, width, height } = bounds;
 
@@ -474,6 +483,8 @@ async function createMainWindow() {
 
 ipcMain.handle('note-harbor:get-scrape-browser-status', async () => getScrapeBrowserStatus());
 ipcMain.handle('note-harbor:open-scrape-browser', async () => openScrapeBrowser());
+ipcMain.handle('note-harbor:get-showcase-photo-size', () => readShowcasePhotoSizePreference(getDesktopPreferencesPath()));
+ipcMain.handle('note-harbor:set-showcase-photo-size', (_event, value) => writeShowcasePhotoSizePreference(getDesktopPreferencesPath(), value));
 ipcMain.on('note-harbor:show-note-editor-text-menu', (event, options) => {
   const window = BrowserWindow.fromWebContents(event.sender);
 
