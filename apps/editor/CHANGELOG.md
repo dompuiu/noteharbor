@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.2.2] - 2026-10-11
+
+### Fixed
+
+- Showcase edit mode: a selected grouping, note, or Set-as-cover action now reads as one accent-soft cell. The inner card no longer paints its own wash over the outer reorder cell, so the grouping's three-tone selection and the note's double border are gone; the grouping keeps only its accent spine.
+
 ## [2.2.1] - 2026-10-11
 
 ### Fixed
