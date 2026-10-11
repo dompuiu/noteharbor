@@ -2,6 +2,27 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.2.0] - 2026-10-11
+
+### Added
+
+- Showcase note cards: an info tooltip showing the note's description and tags, with labeled sections. Hover the info icon after the caption, or press `i` on a focused card; notes without either show no icon. The `i` shortcut is documented in the shortcuts help.
+- Showcase edit keyboard: `e` with no card focused enters edit mode on the same level. Entering edit mode focuses the showcase name, `Down` moves from the name into the cards, arrow keys work inside the photo-size control, and category headers and add tiles join the arrow-key sequence. `Esc` at the root level exits edit mode.
+- Showcase edit mode: leaving with unsaved changes (Cancel button or `Escape`) asks for confirmation before discarding the draft.
+
+### Changed
+
+- Showcase note cards: the back image no longer appears on hover or focus preview. Cards with a distinct back show a flip control in the image's bottom-right corner — click it, or press `Shift`/`Ctrl` + `Left`/`Right` on the focused card. Moving the pointer out or blurring the card returns to the front, while card-body taps keep the back showing. Edit mode never flips.
+- Showcase note labels show the catalog number after the denomination, including the note picker ("Pick catalog number").
+- Showcase category titles are centered, with a hairline dividing the header from the grid below.
+- Showcase groupings hide the rename icon at small photo size.
+
+### Fixed
+
+- Showcase edit header: the category move/remove icons no longer crowd the panel border, and the selected category name ring has breathing room around the text.
+- Showcase grouping cover hint no longer sits flush against the note grid.
+- Showcase trees now attach note tags server-side (they were always empty), so the note info tooltip has tags to show.
+
 ## [2.1.0] - 2026-10-11
 
 ### Added
