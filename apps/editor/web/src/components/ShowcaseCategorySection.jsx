@@ -89,6 +89,7 @@ function ShowcaseCategorySection({
                     onOpen={() => onOpenGrouping(node)}
                     onRemove={onRemoveGrouping}
                     onRename={onRenameGrouping}
+                    photoSize={photoSize}
                   />
                 </ShowcaseReorderableCell>
               ) : (

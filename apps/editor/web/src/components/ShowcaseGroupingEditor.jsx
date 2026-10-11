@@ -12,12 +12,16 @@ import { resolveGroupingCover } from "../lib/showcaseCovers.js";
 // `Remove <name>` labels and `data-showcase-action` hooks so keyboard
 // shortcuts keep working. A Grouping is local to its parent, so a rename here
 // never touches another Showcase or Placement.
-function ShowcaseGroupingEditor({ node, onRemove, onRename, onOpen, children }) {
+function ShowcaseGroupingEditor({ node, onRemove, onRename, onOpen, photoSize, children }) {
   const [editing, setEditing] = useState(false);
   const [name, setName] = useState(node.name);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
   const coverImage = firstAvailableNoteImage(resolveGroupingCover(node));
+  // At the small photo size the rename row is tight: the folder glyph is
+  // decorative (aria-hidden), so it steps aside while editing to leave the
+  // input, save, and discard controls more room.
+  const hideRenameIcon = editing && photoSize === "small";
 
   function startEditing() {
     setName(node.name);
@@ -113,6 +117,7 @@ function ShowcaseGroupingEditor({ node, onRemove, onRename, onOpen, children }) 
         {editing ? (
           <form className="showcase-grouping-rename-form" onSubmit={handleRename}>
             <span className="showcase-card-name showcase-grouping-name">
+              {hideRenameIcon ? null : (
               <svg
                 aria-hidden="true"
                 className="showcase-card-name-icon"
@@ -129,6 +134,7 @@ function ShowcaseGroupingEditor({ node, onRemove, onRename, onOpen, children }) 
                   strokeLinejoin="round"
                 />
               </svg>
+              )}
               <input
                 aria-label={`New name for ${node.name}`}
                 autoFocus

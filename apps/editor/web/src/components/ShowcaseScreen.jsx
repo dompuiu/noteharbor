@@ -1409,6 +1409,7 @@ function ShowcaseScreen({ mode }) {
                           onOpen={() => openNode(node)}
                           onRemove={handleRemoveGrouping}
                           onRename={handleRenameGrouping}
+                          photoSize={photoSize}
                         />
                       </ShowcaseReorderableCell>
                     ) : (
