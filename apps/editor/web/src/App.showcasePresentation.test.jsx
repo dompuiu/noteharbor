@@ -576,9 +576,44 @@ describe("the note card in view mode", () => {
     // slideshow is showcase-wide in display order, not per level.
     fireEvent.click(screen.getByRole("button", { name: "Show next image" }));
     await screen.findByText("1 leu, 1917 - Back");
+    // Both faces live at the root, so the drill stays empty.
+    expect(currentSearch()).toBe("?preview=400%3Aback");
 
+    // The sub note lives inside grouping 20: paging to it drills the
+    // address to its containing level instead of leaving a stale level.
     fireEvent.click(screen.getByRole("button", { name: "Show next image" }));
     await screen.findByText("10 lei, 1930 - Front");
+    await waitFor(() => {
+      expect(currentSearch()).toBe("?node=20&preview=410%3Afront");
+    });
+
+    await userEvent.click(
+      screen.getByRole("button", { name: "Close preview" }),
+    );
+    await waitFor(() => {
+      expect(currentSearch()).toBe("?node=20");
+    });
+    expect(
+      screen.getByRole("button", { name: "10 lei, 1930" }),
+    ).toBeInTheDocument();
+  });
+
+  test("paging from a drilled level back to a root note drops the drill", async () => {
+    renderAt(`${SHOWCASE_ROUTES.showcase(1)}?node=20`);
+    const subNote = await screen.findByRole("button", { name: "10 lei, 1930" });
+    fireEvent.click(subNote);
+    await screen.findByText("10 lei, 1930 - Front");
+    expect(currentSearch()).toBe("?node=20&preview=410%3Afront");
+
+    // The previous image is the root note's back: the drill follows it to
+    // the expanded root instead of naming a level it is not on.
+    fireEvent.click(
+      screen.getByRole("button", { name: "Show previous image" }),
+    );
+    await screen.findByText("1 leu, 1917 - Back");
+    await waitFor(() => {
+      expect(currentSearch()).toBe("?preview=400%3Aback");
+    });
 
     await userEvent.click(
       screen.getByRole("button", { name: "Close preview" }),
@@ -586,9 +621,6 @@ describe("the note card in view mode", () => {
     await waitFor(() => {
       expect(currentSearch()).toBe("");
     });
-    expect(
-      screen.getByRole("button", { name: "1 leu, 1917" }),
-    ).toBeInTheDocument();
   });
 
   test("a grouping card still drills instead of opening the preview", async () => {

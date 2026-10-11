@@ -593,11 +593,15 @@ function ShowcaseScreen({ mode }) {
   }
 
   function replaceShowcasePreview(item) {
-    const nodeRaw = new URLSearchParams(location.search).get("node");
+    // The drill tracks the shown image's containing level (deepest grouping
+    // ancestor, or the expanded root), so the address never names a level
+    // the current image is not on, and closing lands on its level.
+    const levelId = getShowcasePreviewContainingLevelId(nodes, item.nodeId);
+    restorePreviewFocusNodeIdRef.current = item.nodeId;
     navigate(
       {
         search: buildShowcasePreviewSearch({
-          node: nodeRaw,
+          node: levelId,
           previewKind: item.kind,
           previewNodeId: item.nodeId,
         }),
