@@ -1695,11 +1695,6 @@ function NoteEditForm({
 
           <div className="field-block full-span">
             <span>Pictures</span>
-            <p className="muted image-field-help">
-              Scraped, uploaded, and generated pictures now share the same
-              slots. Uploading or scraping a slot replaces what is already
-              there.
-            </p>
             <div className="image-slot-grid">
               {imageSlots.map((slot) => {
                 const currentImage = pickImage(
