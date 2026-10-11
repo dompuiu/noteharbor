@@ -198,7 +198,9 @@ describe("ShowcaseNoteCard", () => {
     fireEvent.mouseEnter(info);
 
     const tooltip = screen.getByRole("tooltip");
+    expect(tooltip).toHaveTextContent("Description:");
     expect(tooltip).toHaveTextContent("Printed in Bucharest.");
+    expect(tooltip).toHaveTextContent("Tags:");
     expect(tooltip).toHaveTextContent("paper");
     expect(tooltip).toHaveTextContent("rare");
 
@@ -270,6 +272,8 @@ describe("ShowcaseNoteCard", () => {
     fireEvent.keyDown(card, { key: "i" });
 
     const tooltip = screen.getByRole("tooltip");
+    expect(tooltip).toHaveTextContent("Tags:");
     expect(tooltip).toHaveTextContent("paper");
+    expect(tooltip).not.toHaveTextContent("Description:");
   });
 });

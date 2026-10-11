@@ -1752,6 +1752,12 @@ input[type="radio"] {
   overflow-wrap: break-word;
 }
 
+.showcase-card-tooltip-row {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
 .showcase-card-tooltip-tags {
   display: flex;
   flex-wrap: wrap;

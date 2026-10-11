@@ -226,17 +226,23 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
             role="tooltip"
           >
             {description ? (
-              <span className="showcase-card-tooltip-description">
-                {description}
+              <span className="showcase-card-tooltip-row">
+                <strong>Description:</strong>{" "}
+                <span className="showcase-card-tooltip-description">
+                  {description}
+                </span>
               </span>
             ) : null}
             {tagNames.length ? (
-              <span className="showcase-card-tooltip-tags">
-                {tagNames.map((name, index) => (
-                  <span className="tag" key={`${name}-${index}`}>
-                    {name}
-                  </span>
-                ))}
+              <span className="showcase-card-tooltip-row">
+                <strong>Tags:</strong>
+                <span className="showcase-card-tooltip-tags">
+                  {tagNames.map((name, index) => (
+                    <span className="tag" key={`${name}-${index}`}>
+                      {name}
+                    </span>
+                  ))}
+                </span>
               </span>
             ) : null}
           </span>
