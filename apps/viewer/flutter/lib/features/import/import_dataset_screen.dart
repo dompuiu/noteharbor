@@ -722,16 +722,6 @@ class _ImportProgressOverlay extends StatelessWidget {
                       ),
                     ),
                   ],
-                  const SizedBox(height: 10),
-                  const Text(
-                    'Keep this window open until the import finishes.',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontSize: 12,
-                      color: ViewerPalette.textFaint,
-                    ),
-                  ),
                 ],
               ),
             ),
