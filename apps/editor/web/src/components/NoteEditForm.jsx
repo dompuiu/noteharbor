@@ -238,7 +238,13 @@ function NoteEditForm({
 }) {
   const { id: routeNoteId } = useParams();
   const navigate = useNavigate();
-  const noteId = noteIdProp ?? routeNoteId;
+  // An explicit null noteId means "create a new note" (the table overlay
+  // passes null for create, a note id for edit). Only fall back to the route
+  // param when no prop was given at all (the standalone /catalog/notes/:id
+  // route). Using `??` here would mistake the collection id in
+  // /catalog/collections/:id/view for a note id and open the first note for
+  // edit instead of a blank form.
+  const noteId = noteIdProp !== undefined ? noteIdProp : routeNoteId;
   const isCreateMode = !noteId;
   const [form, setForm] = useState(emptyForm);
   const [suggestions, setSuggestions] = useState([]);
