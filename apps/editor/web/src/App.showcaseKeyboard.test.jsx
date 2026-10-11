@@ -395,6 +395,11 @@ describe("editing from the keyboard", () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
     
     const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
+    // Let the name draft converge from the list before blurring it: the
+    // field is autofocused, so focusing away earlier would commit stale text.
+    await waitFor(() =>
+      expect(screen.getByLabelText("Showcase name")).toHaveValue("My showcase"),
+    );
     act(() => sub.focus());
     return sub;
   }
@@ -497,6 +502,88 @@ describe("editing from the keyboard", () => {
   });
 });
 
+describe("edit-mode header focus", () => {
+  function firstCard() {
+    const card = document.querySelector(".showcase-screen .showcase-card");
+    expect(card).not.toBeNull();
+    return card;
+  }
+
+  test("entering edit mode focuses the showcase name input", async () => {
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    const nameField = await screen.findByLabelText("Showcase name");
+    await waitFor(() => expect(nameField).toHaveFocus());
+  });
+
+  test("entering edit mode from view lands focus in the showcase name input", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+    await screen.findByRole("button", { name: "Open grouping Sub" });
+
+    if (document.activeElement instanceof HTMLElement) {
+      act(() => document.activeElement.blur());
+    }
+
+    fireEvent.keyDown(document.body, { key: "e" });
+
+    const nameField = await screen.findByLabelText("Showcase name");
+    await waitFor(() => expect(nameField).toHaveFocus());
+  });
+
+  test("Down arrow in the showcase name moves focus to the first card", async () => {
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    const nameField = await screen.findByLabelText("Showcase name");
+    await screen.findByRole("button", { name: "1 leu, 1917" });
+
+    act(() => nameField.focus());
+    fireEvent.keyDown(nameField, { key: "ArrowDown" });
+
+    expect(firstCard()).toHaveFocus();
+  });
+
+  test("Down arrow in the photo size moves focus to the first card without changing the size", async () => {
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    const small = await screen.findByRole("radio", { name: "Small" });
+    await screen.findByRole("button", { name: "1 leu, 1917" });
+    expect(small).toBeChecked();
+
+    act(() => small.focus());
+    fireEvent.keyDown(small, { key: "ArrowDown" });
+
+    expect(firstCard()).toHaveFocus();
+    expect(small).toBeChecked();
+  });
+
+  test("Up arrow in the photo size keeps focus without changing the size", async () => {
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    const small = await screen.findByRole("radio", { name: "Small" });
+    await screen.findByRole("button", { name: "1 leu, 1917" });
+    expect(small).toBeChecked();
+
+    act(() => small.focus());
+    fireEvent.keyDown(small, { key: "ArrowUp" });
+
+    expect(small).toHaveFocus();
+    expect(small).toBeChecked();
+  });
+
+  test("blurring the untouched name field leaves the draft clean", async () => {
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    const nameField = await screen.findByLabelText("Showcase name");
+    await waitFor(() => expect(nameField).toHaveValue("My showcase"));
+
+    const card = await screen.findByRole("button", { name: "1 leu, 1917" });
+    act(() => card.focus());
+
+    expect(nameField).toHaveValue("My showcase");
+    expect(screen.getByRole("button", { name: "Save" })).toBeDisabled();
+  });
+});
+
 // Twelve notes in one category, for the page-sized movement test.
 function manyNotes(count) {
   return Array.from({ length: count }, (_, index) =>
@@ -518,9 +605,7 @@ describe("guards", () => {
 
     act(() => nameField.focus());
     await userEvent.type(nameField, "gd");
-    fireEvent.keyDown(nameField, { key: "ArrowDown" });
 
-    expect(nameField).toHaveFocus();
     expect(screen.queryByLabelText("Grouping name")).not.toBeInTheDocument();
     expect(deleteNode).not.toHaveBeenCalled();
   });

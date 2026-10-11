@@ -118,6 +118,11 @@ const shortcutGroups = [
         description: "Clear the card focus, then go up one level",
       },
       {
+        keys: ["↓"],
+        description:
+          "Move focus from the showcase name or photo size to the cards (edit mode)",
+      },
+      {
         keys: ["a"],
         description: "Add notes to the focused card (edit mode)",
       },

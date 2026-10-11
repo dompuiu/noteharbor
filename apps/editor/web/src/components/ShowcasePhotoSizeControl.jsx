@@ -45,13 +45,30 @@ function PhotoSizeIcon({ value }) {
 // presentational. A `div[role=group]` (not fieldset/legend) keeps the caption
 // and the pill on one flex row so the pill centers exactly with the header's
 // Edit/View button — a legend always renders on its own row above the pill.
-function ShowcasePhotoSizeControl({ onChange, value }) {
+//
+// Only Left/Right change the size (the radios' native behaviour); Up never
+// changes it, and Down hands focus to the current level's cards through
+// `onArrowDown` instead of moving the selection.
+function ShowcasePhotoSizeControl({ onArrowDown, onChange, value }) {
   const labelId = useId();
+
+  function handleKeyDown(event) {
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      onArrowDown?.();
+      return;
+    }
+
+    if (event.key === "ArrowUp") {
+      event.preventDefault();
+    }
+  }
 
   return (
     <div
       aria-labelledby={labelId}
       className="showcase-photo-size-control"
+      onKeyDown={handleKeyDown}
       role="group"
     >
       <span className="showcase-photo-size-legend" id={labelId}>

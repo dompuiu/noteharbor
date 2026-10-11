@@ -94,6 +94,9 @@ function ShowcaseScreen({ mode }) {
   // so the user can name the showcase immediately.
   const justCreated = editMode && Boolean(location.state?.justCreated);
   const nameFieldRef = useRef(null);
+  // Entering edit mode always lands focus in the name field (once per
+  // showcase), so the header is the keyboard starting point.
+  const editFocusDoneRef = useRef(false);
   const [nameDraft, setNameDraft] = useState(showcaseName);
   const [nameError, setNameError] = useState("");
   const [deleting, setDeleting] = useState(false);
@@ -142,6 +145,7 @@ function ShowcaseScreen({ mode }) {
   useEffect(() => {
     setDrillIds([]);
     consumedEditEntryRef.current = false;
+    editFocusDoneRef.current = false;
   }, [showcaseId, isNew]);
 
   useEffect(() => {
@@ -149,6 +153,7 @@ function ShowcaseScreen({ mode }) {
       return;
     }
 
+    editFocusDoneRef.current = true;
     const field = nameFieldRef.current;
 
     if (field) {
@@ -157,17 +162,54 @@ function ShowcaseScreen({ mode }) {
     }
   }, [justCreated]);
 
+  // The last showcase row name the draft was reconciled against. The draft
+  // adopts a new row name whenever it still holds the previous one — even
+  // while focused — so a list that arrives after the load never goes stale
+  // (a blur would otherwise commit the stale text back); text the user
+  // actually typed is never clobbered.
+  const showcaseNameRef = useRef(showcaseName);
+
   // The heading and the sidebar both read the provider's row, so a rename is
   // reflected everywhere from one applied server row. Keep the local draft in
   // step with it (a list load can arrive after the first render, and a saved
-  // rename normalises whitespace), but never clobber text the user is typing.
+  // rename normalises whitespace).
   useEffect(() => {
-    if (document.activeElement === nameFieldRef.current) {
+    const prev = showcaseNameRef.current;
+    showcaseNameRef.current = showcaseName;
+
+    if (showcaseName === prev || nameDraft !== prev) {
       return;
     }
 
     setNameDraft(showcaseName);
-  }, [showcaseName]);
+  }, [showcaseName, nameDraft]);
+
+  // Entering edit mode lands focus in the name field. A new showcase focuses
+  // immediately (see justCreated); an existing one waits for the load and the
+  // showcase row, so the draft sync above settles from the list first (it
+  // skips while the field is focused, which is why this runs after it). Only
+  // unclaimed focus is taken: a fresh entry leaves focus on <body>, while
+  // focus already in the sidebar or the canvas is never yanked.
+  useEffect(() => {
+    if (
+      !editMode ||
+      justCreated ||
+      loading ||
+      editFocusDoneRef.current ||
+      (!isNew && showcase == null)
+    ) {
+      return;
+    }
+
+    const active = document.activeElement;
+
+    if (active != null && active !== document.body) {
+      return;
+    }
+
+    editFocusDoneRef.current = true;
+    nameFieldRef.current?.focus();
+  }, [editMode, isNew, justCreated, loading, showcase]);
 
   // A direct load of the draft URL (reload, share) has no provider draft yet;
   // stage one so the sidebar row and the canvas agree.
@@ -294,6 +336,13 @@ function ShowcaseScreen({ mode }) {
       event.preventDefault();
       commitName();
       event.currentTarget?.blur?.();
+      return;
+    }
+
+    // Down moves focus from the name field to the first card.
+    if (event.key === "ArrowDown") {
+      event.preventDefault();
+      focusCardAt(0);
       return;
     }
 
@@ -1192,6 +1241,7 @@ function ShowcaseScreen({ mode }) {
           <div className="showcase-header-controls">
             <div className="showcase-photo-size">
               <ShowcasePhotoSizeControl
+                onArrowDown={() => focusCardAt(0)}
                 onChange={setPhotoSize}
                 value={photoSize}
               />
