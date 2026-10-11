@@ -882,13 +882,20 @@ input[type="radio"] {
 }
 
 /* A top-level Category always renders expanded: a titled section holding its
-   inline grid. In edit mode the section is a bordered panel so the title, its
-   Rename / Remove, and its grid read as one group; view mode stays plain. */
+   inline grid. The title is centered and larger than body text; in view mode
+   consecutive sections are divided by a hairline. In edit mode the section
+   is a bordered panel so the title, its Rename / Remove, and its grid read
+   as one group; view mode stays plain. */
 .showcase-category-section {
   display: flex;
   flex-direction: column;
   gap: 16px;
   margin-bottom: 32px;
+}
+
+.showcase-screen:not(.showcase-screen--edit) .showcase-category-section + .showcase-category-section {
+  border-top: 1px solid var(--border);
+  padding-top: 28px;
 }
 
 .showcase-screen--edit .showcase-category-section {
@@ -904,22 +911,28 @@ input[type="radio"] {
 
 .showcase-category-title {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: 1.4rem;
   font-weight: 700;
+  text-align: center;
 }
 
-/* The edit-mode category header: title plus pencil on the left, remove icon
-   on the right, divided from the grid below so the controls read as the
-   title's own. */
+/* The edit-mode category header: title plus pencil centered as a group, move
+   arrows and remove icon on the right, divided from the grid below so the
+   controls read as the title's own. */
 .showcase-category-section > .showcase-cell--category {
   flex-direction: row;
   align-items: center;
-  justify-content: space-between;
+  justify-content: center;
+  text-align: center;
   gap: 12px;
   flex-wrap: wrap;
   height: auto;
   padding-bottom: 12px;
   border-bottom: 1px solid var(--border-soft);
+}
+
+.showcase-category-section > .showcase-cell--category .showcase-node-title {
+  justify-content: center;
 }
 
 .showcase-category-section > .showcase-cell--category .showcase-error {
