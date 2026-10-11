@@ -164,6 +164,34 @@ describe("showcase note-card flip control", () => {
   });
 });
 
+describe("showcase edit-mode selection", () => {
+  test("the inner card never paints its own wash, so the cell is one tone", () => {
+    const rule = styles.match(
+      /\.showcase-screen--edit \.showcase-card:focus-visible\s*\{([^}]*)\}/,
+    );
+    expect(rule).not.toBeNull();
+    expect(rule[1]).toMatch(/background:\s*transparent/);
+    expect(rule[1]).toMatch(/box-shadow:\s*none/);
+  });
+
+  test("a selected cell blends its inner note and grouping into the wash", () => {
+    expect(styles).toMatch(
+      /\.showcase-screen--edit[\s\S]*?\.showcase-reorder-cell:has\(:focus-visible\)[\s\S]*?\.showcase-card--note/,
+    );
+    expect(styles).toMatch(
+      /\.showcase-screen--edit[\s\S]*?\.showcase-reorder-cell:has\(:focus-visible\)[\s\S]*?\.showcase-grouping-editcard/,
+    );
+    const blend = styles.match(
+      /\.showcase-grouping-editcard\s*\{[^}]*\}[\s\S]*?border-color:\s*transparent/,
+    );
+    expect(blend).not.toBeNull();
+    // The grouping keeps only its spine once blended.
+    expect(styles).toMatch(
+      /\.showcase-reorder-cell:has\(:focus-visible\)[\s\S]*?\.showcase-grouping-editcard\s*\{[^}]*box-shadow:\s*inset 3px 0 0 var\(--accent\)/,
+    );
+  });
+});
+
 describe("showcase note-card motion", () => {
   test("the front and back faces cross-fade", () => {
     const face = styles.match(/\n\.showcase-card-face\s*\{([^}]*)\}/);

@@ -1079,6 +1079,19 @@ input[type="radio"] {
     inset 0 0 0 1px var(--accent);
 }
 
+/* Edit mode selection lives on the outer reorder cell only: the inner card
+   never paints its own wash/ring, so a focused grouping cover, note card, or
+   action (Set as cover) all read as one accent-soft cell instead of three
+   stacked tones. */
+.showcase-screen--edit .showcase-card:focus-visible {
+  background: transparent;
+  box-shadow: none;
+}
+
+.showcase-screen--edit .showcase-card--grouping:focus-visible {
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
 .showcase-card--category {
   aspect-ratio: 2 / 1;
 }
@@ -1294,6 +1307,29 @@ input[type="radio"] {
   ) {
   background: var(--accent-soft);
   box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+/* A selected edit cell shows one wash tone: the inner grouping wrapper and
+   note card go transparent and borderless while selected, keeping only the
+   grouping spine. Without this the outer wash, the inner surface, and the
+   image well read as three backgrounds, and the outer ring plus the inner
+   border read as a double border — while a note (outer and inner both washed)
+   reads as one. */
+.showcase-screen--edit
+  .showcase-reorder-cell:has(:focus-visible)
+  > .showcase-cell
+  > .showcase-card--note {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: none;
+}
+
+.showcase-screen--edit
+  .showcase-reorder-cell:has(:focus-visible)
+  .showcase-grouping-editcard {
+  border-color: transparent;
+  background: transparent;
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .showcase-reorder-handle {
