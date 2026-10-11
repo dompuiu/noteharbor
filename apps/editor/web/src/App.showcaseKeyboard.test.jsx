@@ -305,14 +305,14 @@ describe("opening the focused card", () => {
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
     const card = await screen.findByRole("button", { name: "1 leu, 1917" });
-    // Focus alone previews the back; activation must neither latch it nor
-    // drill, so blurring always returns to the front.
+    // Focus alone never flips; activation must neither flip nor drill, so
+    // blurring always leaves the front showing.
     act(() => card.focus());
-    expect(card).toHaveAttribute("aria-pressed", "true");
+    expect(card).toHaveAttribute("aria-pressed", "false");
 
     await userEvent.keyboard("{Enter}");
     expect(search()).toBe("");
-    expect(card).toHaveAttribute("aria-pressed", "true");
+    expect(card).toHaveAttribute("aria-pressed", "false");
 
     act(() => card.blur());
     expect(card).toHaveAttribute("aria-pressed", "false");

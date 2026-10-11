@@ -98,8 +98,15 @@ const shortcutGroups = [
       },
       {
         keys: ["Enter", "Space"],
-        description:
-          "Open the focused card; on a view-mode note card, flip front / back instead",
+        description: "Open the focused card (view-mode note cards stay put)",
+      },
+      {
+        keys: ["Shift", "←", "→"],
+        description: "Flip the focused note card between front and back",
+      },
+      {
+        keys: ["Ctrl", "←", "→"],
+        description: "Flip the focused note card between front and back",
       },
       {
         keys: ["i"],

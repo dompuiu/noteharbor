@@ -154,6 +154,16 @@ describe("showcase note-card info tooltip", () => {
   });
 });
 
+describe("showcase note-card flip control", () => {
+  test("the flip control pins to the image's bottom-right corner", () => {
+    const flip = styles.match(/\n\.showcase-card-flip\s*\{([^}]*)\}/);
+    expect(flip).not.toBeNull();
+    expect(flip[1]).toMatch(/position:\s*absolute/);
+    expect(flip[1]).toMatch(/right:\s*8px/);
+    expect(flip[1]).toMatch(/bottom:\s*8px/);
+  });
+});
+
 describe("showcase note-card motion", () => {
   test("the front and back faces cross-fade", () => {
     const face = styles.match(/\n\.showcase-card-face\s*\{([^}]*)\}/);

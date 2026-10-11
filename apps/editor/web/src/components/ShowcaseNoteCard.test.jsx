@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -84,11 +85,168 @@ describe("ShowcaseNoteCard", () => {
 
     const card = screen.getByRole("button", { name: "1 leu, 1917" });
     await userEvent.click(card);
-    // Focus must not stick to the clicked card, or the back preview would
-    // stay on after the pointer leaves (and move to the next clicked card).
+    // Focus must not stick to the clicked card, or keyboard users would find
+    // a stale focus ring after a mouse tap.
     expect(card).not.toHaveFocus();
 
     await userEvent.unhover(card);
+    expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "/api/images/notes/1/front-thumb.jpg?v=rev-1",
+    );
+  });
+
+  test("hover reveals the flip control without swapping to the back", () => {
+    render(<ShowcaseNoteCard note={note()} />);
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    expect(card.querySelector(".showcase-card-flip")).toBeNull();
+
+    fireEvent.mouseEnter(card);
+    expect(card.querySelector(".showcase-card-flip")).not.toBeNull();
+    expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "/api/images/notes/1/front-thumb.jpg?v=rev-1",
+    );
+
+    fireEvent.mouseLeave(card);
+    expect(card.querySelector(".showcase-card-flip")).toBeNull();
+    expect(card).toHaveAttribute("aria-pressed", "false");
+  });
+
+  test("focus reveals the flip control without swapping to the back", () => {
+    render(<ShowcaseNoteCard note={note()} />);
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    act(() => card.focus());
+
+    expect(card.querySelector(".showcase-card-flip")).not.toBeNull();
+    expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "/api/images/notes/1/front-thumb.jpg?v=rev-1",
+    );
+
+    act(() => card.blur());
+    expect(card.querySelector(".showcase-card-flip")).toBeNull();
+  });
+
+  test("clicking the flip control toggles the back and blur returns", async () => {
+    render(<ShowcaseNoteCard note={note()} />);
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    fireEvent.mouseEnter(card);
+
+    const flip = card.querySelector(".showcase-card-flip");
+    expect(flip).not.toBeNull();
+
+    await userEvent.click(flip);
+    expect(card).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "/api/images/notes/1/back-thumb.jpg?v=rev-1",
+    );
+
+    await userEvent.click(flip);
+    expect(card).toHaveAttribute("aria-pressed", "false");
+
+    await userEvent.click(flip);
+    expect(card).toHaveAttribute("aria-pressed", "true");
+    act(() => card.blur());
+    expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "/api/images/notes/1/front-thumb.jpg?v=rev-1",
+    );
+  });
+
+  test("moving the pointer out returns to the front", async () => {
+    render(<ShowcaseNoteCard note={note()} />);
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    fireEvent.mouseEnter(card);
+
+    const flip = card.querySelector(".showcase-card-flip");
+    expect(flip).not.toBeNull();
+
+    await userEvent.click(flip);
+    expect(card).toHaveAttribute("aria-pressed", "true");
+
+    fireEvent.mouseLeave(card);
+    expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "/api/images/notes/1/front-thumb.jpg?v=rev-1",
+    );
+  });
+
+  test("Shift or Ctrl plus an arrow flips; a plain arrow does not", () => {
+    render(<ShowcaseNoteCard note={note()} />);
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    act(() => card.focus());
+
+    fireEvent.keyDown(card, { key: "ArrowRight" });
+    expect(card).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.keyDown(card, { key: "ArrowRight", shiftKey: true });
+    expect(card).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "/api/images/notes/1/back-thumb.jpg?v=rev-1",
+    );
+
+    fireEvent.keyDown(card, { key: "ArrowLeft", ctrlKey: true });
+    expect(card).toHaveAttribute("aria-pressed", "false");
+  });
+
+  test("no flip control without a distinct back", () => {
+    const frontOnly = note({
+      images: [
+        {
+          type: "front",
+          variant: "full",
+          localPath: "/api/images/notes/1/front.jpg",
+        },
+      ],
+    });
+    const { unmount } = render(<ShowcaseNoteCard note={frontOnly} />);
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    fireEvent.mouseEnter(card);
+    act(() => card.focus());
+    expect(card.querySelector(".showcase-card-flip")).toBeNull();
+    fireEvent.keyDown(card, { key: "ArrowRight", shiftKey: true });
+    expect(card).toHaveAttribute("aria-pressed", "false");
+    unmount();
+
+    const backOnly = note({
+      images: [
+        {
+          type: "back",
+          variant: "full",
+          localPath: "/api/images/notes/1/back.jpg",
+        },
+      ],
+    });
+    render(<ShowcaseNoteCard note={backOnly} />);
+    const backCard = screen.getByRole("button", { name: "1 leu, 1917" });
+    fireEvent.mouseEnter(backCard);
+    act(() => backCard.focus());
+    expect(backCard.querySelector(".showcase-card-flip")).toBeNull();
+  });
+
+  test("edit mode never shows the flip control and never flips", () => {
+    render(<ShowcaseNoteCard mode="edit" note={note()} />);
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    fireEvent.mouseEnter(card);
+    act(() => card.focus());
+    expect(card.querySelector(".showcase-card-flip")).toBeNull();
+
+    fireEvent.keyDown(card, { key: "ArrowRight", shiftKey: true });
     expect(card).toHaveAttribute("aria-pressed", "false");
     expect(screen.getByRole("img")).toHaveAttribute(
       "src",

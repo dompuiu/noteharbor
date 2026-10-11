@@ -467,13 +467,16 @@ describe("the note card in view mode", () => {
     return screen.findByRole("button", { name: "1 leu, 1917" });
   }
 
-  test("hovering swaps to the back and leaving returns to the front", async () => {
+  test("hovering reveals the flip control but keeps the front", async () => {
     const card = await openWithNote();
 
+    expect(card.querySelector(".showcase-card-flip")).toBeNull();
+
     await userEvent.hover(card);
+    expect(card.querySelector(".showcase-card-flip")).not.toBeNull();
     expect(within(card).getByRole("img")).toHaveAttribute(
       "src",
-      "/api/images/notes/100/back.jpg?v=rev-100",
+      "/api/images/notes/100/front.jpg?v=rev-100",
     );
 
     await userEvent.unhover(card);
@@ -483,16 +486,67 @@ describe("the note card in view mode", () => {
     );
   });
 
-  test("focusing swaps to the back and blurring returns to the front", async () => {
+  test("clicking the flip control shows the back until focus leaves", async () => {
     const card = await openWithNote();
 
-    act(() => card.focus());
+    await userEvent.hover(card);
+    const flip = card.querySelector(".showcase-card-flip");
+    expect(flip).not.toBeNull();
+
+    await userEvent.click(flip);
+    expect(card).toHaveAttribute("aria-pressed", "true");
     expect(within(card).getByRole("img")).toHaveAttribute(
       "src",
       "/api/images/notes/100/back.jpg?v=rev-100",
     );
 
+    // Moving the pointer out returns to the front as well.
+    await userEvent.unhover(card);
+    expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(within(card).getByRole("img")).toHaveAttribute(
+      "src",
+      "/api/images/notes/100/front.jpg?v=rev-100",
+    );
+
+    await userEvent.hover(card);
+    await userEvent.click(card.querySelector(".showcase-card-flip"));
+    expect(card).toHaveAttribute("aria-pressed", "true");
+
     act(() => card.blur());
+    expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(within(card).getByRole("img")).toHaveAttribute(
+      "src",
+      "/api/images/notes/100/front.jpg?v=rev-100",
+    );
+  });
+
+  test("focusing never flips; Shift/Ctrl + arrows flip and blur returns", async () => {
+    const card = await openWithNote();
+
+    act(() => card.focus());
+    // Focus reveals the control but the front stays showing.
+    expect(card.querySelector(".showcase-card-flip")).not.toBeNull();
+    expect(card).toHaveAttribute("aria-pressed", "false");
+    expect(within(card).getByRole("img")).toHaveAttribute(
+      "src",
+      "/api/images/notes/100/front.jpg?v=rev-100",
+    );
+
+    fireEvent.keyDown(card, { key: "ArrowRight", shiftKey: true });
+    expect(card).toHaveAttribute("aria-pressed", "true");
+    expect(within(card).getByRole("img")).toHaveAttribute(
+      "src",
+      "/api/images/notes/100/back.jpg?v=rev-100",
+    );
+    // The chord flips instead of moving card focus to a neighbour.
+    expect(card).toHaveFocus();
+
+    fireEvent.keyDown(card, { key: "ArrowLeft", ctrlKey: true });
+    expect(card).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.keyDown(card, { key: "ArrowRight", shiftKey: true });
+    act(() => card.blur());
+    expect(card).toHaveAttribute("aria-pressed", "false");
     expect(within(card).getByRole("img")).toHaveAttribute(
       "src",
       "/api/images/notes/100/front.jpg?v=rev-100",

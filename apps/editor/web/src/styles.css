@@ -1689,6 +1689,34 @@ input[type="radio"] {
   opacity: 1;
 }
 
+/* The Note card's flip control: a two-arrow affordance pinned to the image's
+   bottom-right corner. It only renders on notes with a distinct back, and
+   only while hovered/focused (or flipped), so the front stays a clean
+   presentation until the user asks for the back. The dark pill reads over any
+   photo; it is a mouse affordance (aria-hidden like the info icon) while
+   keyboard users flip with Shift/Ctrl + ←/→. */
+.showcase-card-flip {
+  position: absolute;
+  right: 8px;
+  bottom: 8px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: 1px solid var(--on-dark-border);
+  border-radius: var(--radius-pill);
+  background: var(--on-dark-bg-translucent);
+  color: var(--on-dark-text);
+  cursor: pointer;
+}
+
+.showcase-card-flip-icon {
+  display: block;
+  width: 1em;
+  height: 1em;
+}
+
 .showcase-card-no-image {
   color: var(--text-faint);
   font-size: 0.85rem;
