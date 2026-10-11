@@ -2,6 +2,16 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.3.2] - 2026-10-11
+
+### Changed
+
+- Note editor: the Pictures help text about shared image slots is gone.
+
+### Fixed
+
+- Note editor: PMG scrape keeps thousands separators in denominations. Descriptions like "Romania, Banca Nationala, 500,000 Lei 2000-04" imported as "000 Lei" because parsing kept only the text after the last comma; it now matches the trailing amount on the full description.
+
 ## [2.3.1] - 2026-10-11
 
 ### Fixed
