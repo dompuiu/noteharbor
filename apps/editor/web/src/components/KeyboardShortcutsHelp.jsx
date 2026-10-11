@@ -90,7 +90,7 @@ const shortcutGroups = [
       {
         keys: ["←", "↑", "→", "↓", "h", "j", "k", "l"],
         description:
-          "Move focus between the cards and add tiles in grid order",
+          "Move focus between the cards, category headers and add tiles in grid order",
       },
       { keys: ["Home", "End"], description: "Focus the first / last card" },
       {
@@ -115,7 +115,8 @@ const shortcutGroups = [
       },
       {
         keys: ["Esc"],
-        description: "Clear the card focus, then go up one level",
+        description:
+          "Clear the card focus, then go up one level (exit edit mode at the root)",
       },
       {
         keys: ["↓"],

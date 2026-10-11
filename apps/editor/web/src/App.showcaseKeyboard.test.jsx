@@ -539,7 +539,7 @@ describe("edit-mode header focus", () => {
     act(() => nameField.focus());
     fireEvent.keyDown(nameField, { key: "ArrowDown" });
 
-    expect(firstCard()).toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Summer" })).toHaveFocus();
   });
 
   test("Down arrow in the photo size moves focus to the first card without changing the size", async () => {
@@ -552,7 +552,7 @@ describe("edit-mode header focus", () => {
     act(() => small.focus());
     fireEvent.keyDown(small, { key: "ArrowDown" });
 
-    expect(firstCard()).toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Summer" })).toHaveFocus();
     expect(small).toBeChecked();
   });
 
@@ -769,12 +769,16 @@ describe("edit-mode add tiles in the arrow sequence", () => {
   test("the arrows walk from the cards through Add notes and Add grouping", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
-    const note = await screen.findByRole("button", { name: "1 leu, 1917" });
+    const summer = await screen.findByRole("heading", { name: "Summer" });
+    const note = screen.getByRole("button", { name: "1 leu, 1917" });
     const sub = screen.getByRole("button", { name: "Open grouping Sub" });
     const addNotes = screen.getAllByRole("button", { name: "Add notes" })[0];
     const addGrouping = screen.getAllByRole("button", {
       name: "Add grouping",
     })[0];
+
+    fireEvent.keyDown(document.body, { key: "ArrowDown" });
+    expect(summer).toHaveFocus();
 
     fireEvent.keyDown(document.body, { key: "ArrowDown" });
     expect(note).toHaveFocus();
@@ -795,7 +799,7 @@ describe("edit-mode add tiles in the arrow sequence", () => {
   test("Home and End include the tiles at the ends of the sequence", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
-    const note = await screen.findByRole("button", { name: "1 leu, 1917" });
+    await screen.findByRole("button", { name: "1 leu, 1917" });
 
     fireEvent.keyDown(document.body, { key: "End" });
     expect(
@@ -803,6 +807,48 @@ describe("edit-mode add tiles in the arrow sequence", () => {
     ).toHaveFocus();
 
     fireEvent.keyDown(document.body, { key: "Home" });
-    expect(note).toHaveFocus();
+    expect(screen.getByRole("heading", { name: "Summer" })).toHaveFocus();
+  });
+
+  test("Escape on a focused category header only clears the focus", async () => {
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    const summer = await screen.findByRole("heading", { name: "Summer" });
+    act(() => summer.focus());
+    expect(summer).toHaveFocus();
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+    expect(summer).not.toHaveFocus();
+    expect(document.activeElement).toBe(document.body);
+  });
+
+  test("Escape with nothing focused in edit mode at the root exits to view", async () => {
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+
+    await screen.findByRole("heading", { name: "Summer" });
+    await waitFor(() =>
+      expect(screen.getByLabelText("Showcase name")).toHaveValue(
+        "My showcase",
+      ),
+    );
+    expect(
+      screen.queryByRole("button", { name: "Open grouping Sub" }),
+    ).toBeInTheDocument();
+
+    if (document.activeElement instanceof HTMLElement) {
+      act(() => document.activeElement.blur());
+    }
+
+    fireEvent.keyDown(document.body, { key: "Escape" });
+
+    await waitFor(() =>
+      expect(
+        screen.queryByLabelText("Showcase name"),
+      ).not.toBeInTheDocument(),
+    );
+    expect(
+      screen.getByRole("button", { name: "Open grouping Sub" }),
+    ).toBeInTheDocument();
+    expect(search()).toBe("");
   });
 });

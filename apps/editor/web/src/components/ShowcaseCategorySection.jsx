@@ -58,7 +58,13 @@ function ShowcaseCategorySection({
       {editMode ? (
         <ShowcaseNodeEditor
           card={
-            <h2 className="showcase-category-title">{category.name}</h2>
+            <h2
+              className="showcase-category-title showcase-category-focus"
+              data-showcase-node-id={category.id}
+              tabIndex={0}
+            >
+              {category.name}
+            </h2>
           }
           node={category}
           noun="category"

@@ -848,7 +848,8 @@ function ShowcaseScreen({ mode }) {
   // decide whether there is a level to go up to.
   const drillDepth = effectiveDrillIds.length;
 
-  // The arrow-key sequence is every card (`.showcase-card`) plus every
+  // The arrow-key sequence is every card (`.showcase-card`), every
+  // edit-mode category header (`.showcase-category-focus`), plus every
   // edit-mode add tile (`.showcase-tile`: Add notes, Add grouping, Create a
   // category), in DOM order — which is the grid's reading order. An open
   // create tile is a form, not a tile button, so it drops out of the sequence
@@ -862,12 +863,16 @@ function ShowcaseScreen({ mode }) {
       return [];
     }
 
-    return Array.from(root.querySelectorAll(".showcase-card, .showcase-tile"));
+    return Array.from(
+      root.querySelectorAll(
+        ".showcase-card, .showcase-tile, .showcase-category-focus",
+      ),
+    );
   }
 
-  // The card (or add tile) under focus, or the card of the cell the focused
-  // control sits in (a Rename/Remove/Reorder control belongs to the card's
-  // own cell).
+  // The card (or category header, or add tile) under focus, or the card of
+  // the cell the focused control sits in (a Rename/Remove/Reorder control
+  // belongs to the card's own cell).
   function focusedShowcaseCard() {
     const active = document.activeElement;
 
@@ -876,8 +881,12 @@ function ShowcaseScreen({ mode }) {
     }
 
     return (
-      active.closest(".showcase-card, .showcase-tile") ??
-      active.closest(".showcase-cell")?.querySelector(".showcase-card") ??
+      active.closest(
+        ".showcase-card, .showcase-tile, .showcase-category-focus",
+      ) ??
+      active
+        .closest(".showcase-cell")
+        ?.querySelector(".showcase-card, .showcase-category-focus") ??
       null
     );
   }
@@ -1036,6 +1045,32 @@ function ShowcaseScreen({ mode }) {
         if (drillDepth > 0) {
           event.preventDefault();
           navigateTo(drillDepth - 2);
+          return;
+        }
+
+        // Edit mode at the root with nothing focused leaves edit mode
+        // entirely, exactly like Cancel: the in-memory draft is discarded
+        // with the edit instance and view loads fresh.
+        if (editMode) {
+          event.preventDefault();
+
+          if (isNew) {
+            discardPendingShowcase();
+            const lastShowcase = showcases[showcases.length - 1] ?? null;
+            navigate(
+              lastShowcase
+                ? SHOWCASE_ROUTES.showcase(lastShowcase.id)
+                : DEFAULT_DESTINATION,
+            );
+            return;
+          }
+
+          if (Number.isInteger(showcaseId) && showcaseId > 0) {
+            navigate({
+              pathname: SHOWCASE_ROUTES.showcase(showcaseId),
+              search: showcaseNodeSearch(null),
+            });
+          }
         }
         return;
       }
@@ -1112,6 +1147,7 @@ function ShowcaseScreen({ mode }) {
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [
     confirmOpen,
+    discardPendingShowcase,
     drillDepth,
     editMode,
     isNew,
@@ -1120,6 +1156,7 @@ function ShowcaseScreen({ mode }) {
     nodes,
     pickerNodeId,
     showcaseId,
+    showcases,
     showShortcutsHelp,
   ]);
 
@@ -1159,7 +1196,7 @@ function ShowcaseScreen({ mode }) {
     restoreFocusNodeIdRef.current = null;
 
     const card = sectionRef.current?.querySelector(
-      `.showcase-card[data-showcase-node-id="${nodeId}"]`,
+      `.showcase-card[data-showcase-node-id="${nodeId}"], .showcase-category-focus[data-showcase-node-id="${nodeId}"]`,
     );
 
     card?.focus();

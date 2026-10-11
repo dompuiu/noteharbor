@@ -916,6 +916,13 @@ input[type="radio"] {
   text-align: center;
 }
 
+.showcase-category-focus:focus-visible {
+  outline: none;
+  background: var(--accent-soft);
+  box-shadow: inset 0 0 0 1px var(--accent);
+  border-radius: var(--radius-sm);
+}
+
 /* The edit-mode category header: title plus pencil centered as a group, move
    arrows and remove icon on the right, divided from the grid below so the
    controls read as the title's own. */
