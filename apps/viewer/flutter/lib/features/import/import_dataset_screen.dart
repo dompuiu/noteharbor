@@ -664,65 +664,71 @@ class _ImportProgressOverlay extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(ViewerPalette.spaceXl),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 360),
-          child: DecoratedBox(
-            decoration: BoxDecoration(
-              color: ViewerPalette.surface,
-              borderRadius: BorderRadius.circular(
-                  ViewerPalette.radiusXl),
-              border: Border.all(color: ViewerPalette.border),
-              boxShadow: ViewerPalette.shadowHigh,
-            ),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: ViewerPalette.accentSoft,
-                      borderRadius: BorderRadius.circular(
-                          ViewerPalette.radiusMd),
-                    ),
-                    child: const SizedBox(
-                      width: 64,
-                      height: 64,
-                      child: Padding(
-                        padding: EdgeInsets.all(18),
-                        child: CircularProgressIndicator(strokeWidth: 3),
+    // Material ancestor required: this overlay sits beside (not inside) the
+    // Scaffold, so without Material the Texts fall back to the debug style
+    // with a yellow underline.
+    return Material(
+      type: MaterialType.transparency,
+      child: Center(
+        child: Padding(
+          padding: const EdgeInsets.all(ViewerPalette.spaceXl),
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 360),
+            child: DecoratedBox(
+              decoration: BoxDecoration(
+                color: ViewerPalette.surface,
+                borderRadius: BorderRadius.circular(
+                    ViewerPalette.radiusXl),
+                border: Border.all(color: ViewerPalette.border),
+                boxShadow: ViewerPalette.shadowHigh,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(24, 28, 24, 24),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: ViewerPalette.accentSoft,
+                        borderRadius: BorderRadius.circular(
+                            ViewerPalette.radiusMd),
+                      ),
+                      child: const SizedBox(
+                        width: 64,
+                        height: 64,
+                        child: Padding(
+                          padding: EdgeInsets.all(18),
+                          child: CircularProgressIndicator(strokeWidth: 3),
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(height: 20),
-                  const Text(
-                    'Importing archive…',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w800,
-                      fontSize: 18,
-                      color: ViewerPalette.text,
-                    ),
-                  ),
-                  if (archiveName != null) ...[
-                    const SizedBox(height: 6),
-                    Text(
-                      archiveName!,
+                    const SizedBox(height: 20),
+                    const Text(
+                      'Importing archive…',
                       textAlign: TextAlign.center,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontFamily: 'Inter',
-                        fontSize: 13,
-                        color: ViewerPalette.textMuted,
+                        fontWeight: FontWeight.w800,
+                        fontSize: 18,
+                        color: ViewerPalette.text,
                       ),
                     ),
+                    if (archiveName != null) ...[
+                      const SizedBox(height: 6),
+                      Text(
+                        archiveName!,
+                        textAlign: TextAlign.center,
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          fontSize: 13,
+                          color: ViewerPalette.textMuted,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ),
           ),
