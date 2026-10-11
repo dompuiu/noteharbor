@@ -916,6 +916,10 @@ input[type="radio"] {
   text-align: center;
 }
 
+.showcase-category-focus {
+  padding: 2px 8px;
+}
+
 .showcase-category-focus:focus-visible {
   outline: none;
   background: var(--accent-soft);
