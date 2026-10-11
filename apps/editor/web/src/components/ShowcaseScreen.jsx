@@ -990,6 +990,26 @@ function ShowcaseScreen({ mode }) {
       // note picker for that card's node (a Category or Grouping; a note cannot
       // hold notes), `e` its rename field, `d` its remove control. `g` is the
       // current level's add-grouping tile, which is not inside a cell.
+      // View mode's `e` with no card focused enters edit mode on the same
+      // level (mirroring the table's `e` editing the collection when no row
+      // is focused); with a focused card the view-mode keys stay inert.
+      if (!editMode && event.key === "e") {
+        if (focusedShowcaseCard()) {
+          return;
+        }
+
+        if (isNew || !Number.isInteger(showcaseId) || showcaseId <= 0) {
+          return;
+        }
+
+        event.preventDefault();
+        navigate({
+          pathname: SHOWCASE_ROUTES.showcaseEdit(showcaseId),
+          search: location.search,
+        });
+        return;
+      }
+
       if (
         editMode &&
         (event.key === "a" ||
@@ -1040,8 +1060,12 @@ function ShowcaseScreen({ mode }) {
     confirmOpen,
     drillDepth,
     editMode,
+    isNew,
+    location.search,
+    navigate,
     nodes,
     pickerNodeId,
+    showcaseId,
     showShortcutsHelp,
   ]);
 

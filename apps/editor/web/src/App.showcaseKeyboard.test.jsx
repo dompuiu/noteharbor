@@ -458,6 +458,43 @@ describe("editing from the keyboard", () => {
       screen.getByRole("button", { name: "Open grouping Sub" }),
     ).toBeInTheDocument();
   });
+
+  test("e with no card focused enters edit mode on the same level", async () => {
+    renderAt(`${SHOWCASE_ROUTES.showcase(1)}?node=20`);
+
+    await screen.findByRole("button", { name: "Open grouping Deep" });
+    expect(
+      screen.queryByLabelText("Showcase name"),
+    ).not.toBeInTheDocument();
+
+    if (document.activeElement instanceof HTMLElement) {
+      act(() => document.activeElement.blur());
+    }
+
+    fireEvent.keyDown(document.body, { key: "e" });
+
+    expect(await screen.findByLabelText("Showcase name")).toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Open grouping Deep" }),
+    ).toBeInTheDocument();
+    expect(search()).toBe("?node=20");
+  });
+
+  test("e with a focused card stays in view mode", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
+    act(() => sub.focus());
+
+    fireEvent.keyDown(document.body, { key: "e" });
+
+    expect(
+      screen.queryByLabelText("Showcase name"),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Open grouping Sub" }),
+    ).toBeInTheDocument();
+  });
 });
 
 // Twelve notes in one category, for the page-sized movement test.

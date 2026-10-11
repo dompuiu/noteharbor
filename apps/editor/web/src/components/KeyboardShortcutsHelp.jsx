@@ -125,6 +125,10 @@ const shortcutGroups = [
         description: "Add a grouping to the current level (edit mode)",
       },
       { keys: ["e"], description: "Rename the focused card (edit mode)" },
+      {
+        keys: ["e"],
+        description: "Enter edit mode when no card is focused (view mode)",
+      },
       { keys: ["d"], description: "Remove the focused card (edit mode)" },
       { keys: ["?"], description: "Toggle this help" },
     ],
