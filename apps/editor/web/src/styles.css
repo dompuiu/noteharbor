@@ -934,7 +934,7 @@ input[type="radio"] {
   gap: 12px;
   flex-wrap: wrap;
   height: auto;
-  padding-bottom: 12px;
+  padding: 8px 12px 12px;
   border-bottom: 1px solid var(--border-soft);
 }
 
