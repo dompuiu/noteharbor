@@ -162,6 +162,29 @@ describe("ShowcaseNoteCard", () => {
     );
   });
 
+  test("clicking the card body while back keeps the back; only the icon flips back", async () => {
+    render(<ShowcaseNoteCard note={note()} />);
+
+    const card = screen.getByRole("button", { name: "1 leu, 1917" });
+    fireEvent.mouseEnter(card);
+
+    const flip = card.querySelector(".showcase-card-flip");
+    await userEvent.click(flip);
+    expect(card).toHaveAttribute("aria-pressed", "true");
+
+    // A tap on the card body parks focus but never returns to the front.
+    await userEvent.click(card);
+    expect(card).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("img")).toHaveAttribute(
+      "src",
+      "/api/images/notes/1/back-thumb.jpg?v=rev-1",
+    );
+
+    // Only the flip control returns to the front.
+    await userEvent.click(card.querySelector(".showcase-card-flip"));
+    expect(card).toHaveAttribute("aria-pressed", "false");
+  });
+
   test("moving the pointer out returns to the front", async () => {
     render(<ShowcaseNoteCard note={note()} />);
 

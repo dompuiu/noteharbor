@@ -77,15 +77,13 @@ function ShowcaseNoteCard({ note, mode = "view", pressed = false, nodeId, onOpen
     !editMode && hasDistinctBack && (hovered || focused || flipped);
 
   function handleClick(event) {
-    // A mouse click parks focus on the card, and focus alone used to preview
-    // the back — without this the preview would stick after the pointer
-    // leaves, and clicking a second card would just move the stuck preview
-    // there. Hover/focus no longer flip, but the blur keeps a tap neutral:
-    // the front stays showing and no focus ring is left behind.
+    // A mouse tap on the card body blurs it so no focus ring is left behind.
+    // While the back is showing the tap keeps focus: only the flip control
+    // returns to the front, so clicking the card body never flips it back.
     // `detail` is the click count for a real pointer click and 0 for a
     // keyboard-activated one, so keyboard focus (Tab / Enter / Space) keeps
     // working while a mouse click never holds focus.
-    if (!editMode && event.detail > 0) {
+    if (!editMode && event.detail > 0 && !flipped) {
       event.currentTarget.blur();
     }
 
