@@ -4,7 +4,9 @@
 //! SQLite foundation (pool, migrations) with collections + operations-status
 //! routes. Further resources land per the tickets in `.scratch/tauri-port/`.
 
+pub mod archive;
 pub mod db;
+pub mod images;
 pub mod ops;
 pub mod routes;
 
@@ -253,7 +255,9 @@ async fn health_handler(State(state): State<AppState>) -> (StatusCode, Json<Valu
 pub fn create_app(state: AppState) -> Router {
     Router::new()
         .route("/api/health", get(health_handler))
+        .merge(routes::archive_router())
         .merge(routes::collections_router())
+        .merge(routes::images_router())
         .merge(routes::operations_router())
         .fallback(fallback_handler)
         .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024))

@@ -14,16 +14,18 @@ name = "editor_server_rust"
 path = "src/lib.rs"
 
 [dependencies]
-axum = "0.8"
+axum = { version = "0.8", features = ["multipart"] }
+image = "0.25"
 mime_guess = "2"
 r2d2 = "0.8"
 r2d2_sqlite = { version = "0.35", features = ["bundled"] }
 rusqlite = { version = "0.40", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
+tempfile = "3"
 tokio = { version = "1", features = ["full"] }
 tower = { version = "0.5", features = ["util"] }
 tower-http = { version = "0.6", features = ["cors", "limit"] }
+zip = "2"
 
 [dev-dependencies]
-tempfile = "3"

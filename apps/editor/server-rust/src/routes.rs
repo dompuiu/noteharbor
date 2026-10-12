@@ -5,18 +5,20 @@
 
 use axum::{
     Json, Router,
-    extract::{Path, State},
+    extract::{Multipart, Path, Query, State},
     http::StatusCode,
     response::{IntoResponse, Response},
-    routing::{get, post, put},
+    routing::{delete, get, post, put},
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
 
 use crate::{
     AppState,
+    archive::{self},
     db::{self},
     js_number, js_string,
+    ops::with_exclusive_operation,
 };
 
 fn ok(body: Value) -> Response {
@@ -197,6 +199,211 @@ async fn operation_status(State(state): State<AppState>) -> Response {
         .map(|guard| guard.status())
         .unwrap_or_else(|_| json!({"currentOperation": "idle", "isBusy": false, "startedAt": null, "details": null}));
     ok(status)
+}
+
+// ---------------------------------------------------------------------------
+// Images (static passthrough, mirrors `express.static(IMAGES_DIR)`)
+// ---------------------------------------------------------------------------
+
+/// Serves one managed image file from `<data_dir>/images`. Unknown paths
+/// answer the same JSON 404 as every other `/api/*` route (Express falls
+/// through its static middleware to the JSON 404 handler); traversal
+/// attempts that escape the images root are confined, never served.
+async fn serve_image(State(state): State<AppState>, Path(tail): Path<String>) -> Response {
+    let images_root = state.data_dir.join("images");
+    // Reuse the managed-path resolver so the traversal rule lives in one
+    // place (`images.rs`): anything that does not map inside the images root
+    // answers the API 404.
+    let Some(candidate) = crate::images::resolve_local_path(&images_root, &format!("/api/images/{tail}")) else {
+        return not_found("Not found.");
+    };
+    let canonical_root = tokio::fs::canonicalize(&images_root).await.ok();
+    let canonical = tokio::fs::canonicalize(&candidate).await.ok();
+    match (canonical_root, canonical) {
+        (Some(root), Some(path)) if path.starts_with(&root) && path.is_file() => {
+            match tokio::fs::read(&path).await {
+                Ok(bytes) => {
+                    let mime = mime_guess::from_path(&path).first_or_octet_stream();
+                    axum::response::Response::builder()
+                        .status(StatusCode::OK)
+                        .header(
+                            axum::http::header::CONTENT_TYPE,
+                            mime.essence_str().to_owned(),
+                        )
+                        .body(axum::body::Body::from(bytes))
+                        .expect("image response builds")
+                        .into_response()
+                }
+                Err(_) => not_found("Not found."),
+            }
+        }
+        _ => not_found("Not found."),
+    }
+}
+
+pub fn images_router() -> Router<AppState> {
+    Router::new().route("/api/images/{*path}", get(serve_image))
+}
+
+// ---------------------------------------------------------------------------
+// Archive (export / import / delete, each under its exclusive operation)
+// ---------------------------------------------------------------------------
+
+fn query_values(params: &[(String, String)], key: &str) -> Option<String> {
+    let mut found = false;
+    let mut joined = String::new();
+    for (name, value) in params {
+        if name == key {
+            if found {
+                joined.push(',');
+            }
+            joined.push_str(value);
+            found = true;
+        }
+    }
+    found.then_some(joined)
+}
+
+fn operation_conflict(conflict: crate::ops::OperationConflict) -> Response {
+    (conflict.status_code(), Json(conflict.body())).into_response()
+}
+
+fn join_failed() -> Response {
+    (
+        StatusCode::INTERNAL_SERVER_ERROR,
+        Json(json!({ "error": "Request failed." })),
+    )
+        .into_response()
+}
+
+async fn export_archive(
+    State(state): State<AppState>,
+    Query(params): Query<Vec<(String, String)>>,
+) -> Response {
+    let collections =
+        archive::parse_selected_ids(query_values(&params, "collectionIds").as_deref());
+    let showcases =
+        archive::parse_selected_ids(query_values(&params, "showcaseIds").as_deref());
+    let pool = state.pool.clone();
+    let data_dir = state.data_dir.clone();
+    let outcome = with_exclusive_operation(&state.ops, "exporting_archive", None, async move {
+        tokio::task::spawn_blocking(move || {
+            archive::run_export(&pool, &data_dir, collections, showcases)
+        })
+        .await
+    })
+    .await;
+    let output = match outcome {
+        Err(conflict) => return operation_conflict(conflict),
+        Ok(Err(_)) => return join_failed(),
+        Ok(Ok(Err(error))) => return error.into_response(),
+        Ok(Ok(Ok(output))) => output,
+    };
+    let omitted = archive::encode_omitted_showcases_header(&output.omitted_names);
+    match axum::response::Response::builder()
+        .status(StatusCode::OK)
+        .header(axum::http::header::CONTENT_TYPE, "application/zip")
+        .header(
+            axum::http::header::CACHE_CONTROL,
+            "no-store, no-cache, must-revalidate, proxy-revalidate",
+        )
+        .header(axum::http::header::PRAGMA, "no-cache")
+        .header(axum::http::header::EXPIRES, "0")
+        .header(
+            axum::http::header::CONTENT_DISPOSITION,
+            format!("attachment; filename=\"{}\"", output.filename),
+        )
+        .header("x-noteharbor-omitted-showcases", omitted)
+        .body(axum::body::Body::from(output.zip_bytes))
+    {
+        Ok(response) => response.into_response(),
+        Err(_) => join_failed(),
+    }
+}
+
+async fn import_archive(
+    State(state): State<AppState>,
+    Query(params): Query<Vec<(String, String)>>,
+    mut multipart: Multipart,
+) -> Response {
+    // The upload must be read before the exclusive operation starts: a
+    // missing file answers 400 even while another operation runs, exactly
+    // like the multer guard before `withExclusiveOperation`.
+    let mut file_bytes: Option<Vec<u8>> = None;
+    let mut body_mode: Option<String> = None;
+    loop {
+        match multipart.next_field().await {
+            Err(error) => {
+                return archive::ArchiveError::internal(error.to_string()).into_response();
+            }
+            Ok(None) => break,
+            Ok(Some(field)) => {
+                let name = field.name().unwrap_or("").to_owned();
+                if name == "file" {
+                    match field.bytes().await {
+                        Err(error) => {
+                            return archive::ArchiveError::internal(error.to_string())
+                                .into_response();
+                        }
+                        Ok(bytes) => file_bytes = Some(bytes.to_vec()),
+                    }
+                } else if name == "mode" {
+                    match field.text().await {
+                        Err(error) => {
+                            return archive::ArchiveError::internal(error.to_string())
+                                .into_response();
+                        }
+                        Ok(text) => body_mode = Some(text),
+                    }
+                }
+            }
+        }
+    }
+    let Some(file_bytes) = file_bytes else {
+        return bad_request("Archive file is required.");
+    };
+    let query_mode = query_values(&params, "mode");
+    let pool = state.pool.clone();
+    let data_dir = state.data_dir.clone();
+    let outcome = with_exclusive_operation(&state.ops, "importing_archive", None, async move {
+        tokio::task::spawn_blocking(move || {
+            archive::run_import(&pool, &data_dir, &file_bytes, query_mode.as_deref(), body_mode.as_deref())
+        })
+        .await
+    })
+    .await;
+    match outcome {
+        Err(conflict) => operation_conflict(conflict),
+        Ok(Err(_)) => join_failed(),
+        Ok(Ok(Err(error))) => error.into_response(),
+        Ok(Ok(Ok(mode))) => ok(json!({ "success": true, "mode": mode, "currentOperation": "idle" })),
+    }
+}
+
+async fn delete_archive_data(State(state): State<AppState>) -> Response {
+    let pool = state.pool.clone();
+    let data_dir = state.data_dir.clone();
+    let outcome = with_exclusive_operation(&state.ops, "clearing_data", None, async move {
+        tokio::task::spawn_blocking(move || {
+            let mut conn = pool.get().map_err(|_| archive::ArchiveError::unavailable())?;
+            archive::clear_live_data(&mut conn, &data_dir)
+        })
+        .await
+    })
+    .await;
+    match outcome {
+        Err(conflict) => operation_conflict(conflict),
+        Ok(Err(_)) => join_failed(),
+        Ok(Ok(Err(error))) => error.into_response(),
+        Ok(Ok(Ok(()))) => ok(json!({ "success": true, "currentOperation": "idle" })),
+    }
+}
+
+pub fn archive_router() -> Router<AppState> {
+    Router::new()
+        .route("/api/archive/export", get(export_archive))
+        .route("/api/archive/import", post(import_archive))
+        .route("/api/archive/data", delete(delete_archive_data))
 }
 
 pub fn collections_router() -> Router<AppState> {
