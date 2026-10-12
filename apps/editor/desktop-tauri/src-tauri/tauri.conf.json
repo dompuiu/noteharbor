@@ -6,8 +6,8 @@
   "build": {
     "frontendDist": "../../ui-react/dist",
     "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "pnpm --dir ../../ui-react dev",
-    "beforeBuildCommand": "pnpm --dir ../../desktop-electron build:web"
+    "beforeDevCommand": "pnpm --dir ../ui-react dev",
+    "beforeBuildCommand": "pnpm --dir ../desktop-electron build:web"
   },
   "app": {
     "security": {
@@ -16,9 +16,27 @@
   },
   "bundle": {
     "active": true,
-    "targets": "all",
-    "resources": [
-      "../../../../data"
-    ]
+    "category": "Utility",
+    "icon": [
+      "icons/32x32.png",
+      "icons/128x128.png",
+      "icons/128x128@2x.png",
+      "icons/icon.icns",
+      "icons/icon.ico"
+    ],
+    "targets": [
+      "nsis",
+      "appimage"
+    ],
+    "resources": {
+      "../../../../data": "data",
+      "../../ui-react/dist": "web-dist"
+    },
+    "windows": {
+      "nsis": {
+        "installMode": "both",
+        "installerIcon": "icons/icon.ico"
+      }
+    }
   }
 }

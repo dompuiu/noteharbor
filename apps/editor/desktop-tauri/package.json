@@ -5,7 +5,9 @@
   "description": "Tauri-packaged Note Harbor Editor",
   "scripts": {
     "dev": "tauri dev",
-    "build": "tauri build"
+    "build": "tauri build",
+    "build:windows": "tauri build --bundles nsis",
+    "build:linux": "tauri build --bundles appimage"
   },
   "devDependencies": {
     "@tauri-apps/api": "^2",

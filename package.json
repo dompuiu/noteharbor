@@ -7,6 +7,8 @@
     "dev:editor:rust": "concurrently \"cargo run -p editor_server_rust\" \"pnpm --filter editor_ui_react dev\"",
     "dev:editor:tauri": "pnpm --filter editor_desktop_tauri dev",
     "build:editor:electron:windows": "pnpm --filter editor_desktop_electron build:windows",
+    "build:editor:tauri:windows": "pnpm --filter editor_desktop_tauri build:windows",
+    "build:editor:tauri:linux": "pnpm --filter editor_desktop_tauri build:linux",
     "dev:viewer:flutter": "cd apps/viewer/flutter && flutter pub get && flutter run",
     "build:viewer:flutter:windows": "cd apps/viewer/flutter && flutter pub get && flutter build windows",
     "build:viewer:flutter:ios": "cd apps/viewer/flutter && flutter pub get && flutter build ios",
