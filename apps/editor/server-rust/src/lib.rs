@@ -7,6 +7,7 @@
 pub mod archive;
 pub mod db;
 pub mod images;
+pub mod notes;
 pub mod ops;
 pub mod routes;
 pub mod scrape;
@@ -259,6 +260,8 @@ pub fn create_app(state: AppState) -> Router {
         .merge(routes::archive_router())
         .merge(routes::collections_router())
         .merge(routes::images_router())
+        .merge(notes::notes_router())
+        .merge(notes::tags_router())
         .merge(routes::operations_router())
         .merge(scrape::scrape_router())
         .fallback(fallback_handler)

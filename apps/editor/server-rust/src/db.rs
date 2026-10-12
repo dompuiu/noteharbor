@@ -66,7 +66,7 @@ fn availability_prefix(code: ErrorCode) -> Option<&'static str> {
     })
 }
 
-fn classify(error: rusqlite::Error) -> DbError {
+pub(crate) fn classify(error: rusqlite::Error) -> DbError {
     match &error {
         rusqlite::Error::SqliteFailure(sqlite_error, _) => {
             match availability_prefix(sqlite_error.code) {

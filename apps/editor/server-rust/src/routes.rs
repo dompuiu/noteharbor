@@ -21,11 +21,11 @@ use crate::{
     ops::with_exclusive_operation,
 };
 
-fn ok(body: Value) -> Response {
+pub(crate) fn ok(body: Value) -> Response {
     (StatusCode::OK, Json(body)).into_response()
 }
 
-fn created(body: Value) -> Response {
+pub(crate) fn created(body: Value) -> Response {
     (StatusCode::CREATED, Json(body)).into_response()
 }
 
@@ -33,7 +33,7 @@ pub(crate) fn bad_request(message: &str) -> Response {
     (StatusCode::BAD_REQUEST, Json(json!({ "error": message }))).into_response()
 }
 
-fn not_found(message: &str) -> Response {
+pub(crate) fn not_found(message: &str) -> Response {
     (StatusCode::NOT_FOUND, Json(json!({ "error": message }))).into_response()
 }
 
