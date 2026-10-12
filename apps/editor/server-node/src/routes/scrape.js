@@ -95,4 +95,4 @@ scrapeRouter.post("/preview", async (request, response) => {
   }
 });
 
-export { scrapeRouter };
+export { getScraperForNote, scrapeRouter, scrapeUrl };

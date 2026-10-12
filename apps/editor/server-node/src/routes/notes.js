@@ -275,14 +275,14 @@ notesRouter.post('/', uploadFields, async (request, response) => {
     return;
   }
 
-  const payload = sanitizeNotePayload(request.body);
-
-  if (!payload.denomination) {
-    response.status(400).json({ error: 'Denomination is required.' });
-    return;
-  }
-
   try {
+    const payload = sanitizeNotePayload(request.body);
+
+    if (!payload.denomination) {
+      response.status(400).json({ error: 'Denomination is required.' });
+      return;
+    }
+
     let note = createNote({
       ...payload,
       collection_id: collectionId,

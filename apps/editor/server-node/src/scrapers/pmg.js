@@ -33,7 +33,7 @@ class PMGScraper extends BaseScraper {
       const anchor = $(element).find('a').first();
       const img = $(element).find('img').first();
       const title = (img.attr('title') || '').toLowerCase();
-      const side = title.includes('rev') || title.includes('back') || title.includes('reverse') ? 'front' : 'back';
+      const side = title.includes('rev') || title.includes('back') || title.includes('reverse') ? 'back' : 'front';
       const fullSizeUrl = anchor.attr('href') ? new URL(anchor.attr('href'), pageUrl).href : null;
       const thumbnailUrl = img.attr('src') ? new URL(img.attr('src'), pageUrl).href : null;
 
