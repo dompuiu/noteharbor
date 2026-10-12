@@ -54,7 +54,13 @@ pnpm dev
 This starts:
 
 - the Express API at `http://127.0.0.1:3001`
-- the Vite app at `http://localhost:5173`
+- the Vite app at `http://localhost:5173` (proxies `/api` to the Node API)
+
+To run the Rust API instead (listens on `http://127.0.0.1:3002`):
+
+```bash
+pnpm dev:editor:rust
+```
 
 ### Use a Windows Chrome from WSL via CDP
 
@@ -154,7 +160,8 @@ Create `apps/editor/server-node/.env` if you want to override defaults.
 | Variable | Default | Description |
 |---|---|---|
 | `HOST` | `127.0.0.1` | Express bind host |
-| `PORT` | `3001` | Express bind port |
+| `PORT` | `3001` (Node) / `3002` (Rust) | API bind port |
+| `NOTE_HARBOR_API_PORT` | `PORT` or `3001` | Vite dev `/api` proxy target port |
 | `NOTE_HARBOR_BROWSER_CDP_URL` | `http://localhost:9222` | CDP endpoint for the browser that already has the target page open |
 | `NOTE_HARBOR_DATA_DIR` | `data` | Root data directory containing `banknotes.db` and `images/` |
 | `NOTE_HARBOR_WEB_DIST_DIR` | `apps/editor/ui-react/dist` | Static web build served by Express |

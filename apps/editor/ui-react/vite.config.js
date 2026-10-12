@@ -6,6 +6,8 @@ const { version: appVersion } = JSON.parse(
   readFileSync(new URL("./package.json", import.meta.url), "utf-8"),
 );
 
+const apiPort = process.env.NOTE_HARBOR_API_PORT || process.env.PORT || 3001;
+
 export default defineConfig({
   define: {
     __APP_VERSION__: JSON.stringify(appVersion),
@@ -14,7 +16,7 @@ export default defineConfig({
   server: {
     port: 5173,
     proxy: {
-      "/api": "http://localhost:3002",
+      "/api": `http://localhost:${apiPort}`,
     },
   },
   test: {
