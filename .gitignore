@@ -6,3 +6,6 @@ apps/*/*/dist/
 .idea
 .metadata
 .scratch
+
+# Rust
+/target/
