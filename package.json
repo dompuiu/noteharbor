@@ -4,6 +4,7 @@
   "scripts": {
     "fix:sqlite:node": "pnpm --filter editor_server_node rebuild better-sqlite3 && node apps/editor/desktop-electron/scripts/reset-native-stamps.mjs better-sqlite3",
     "dev": "concurrently \"pnpm --filter editor_server_node dev\" \"pnpm --filter editor_ui_react dev\"",
+    "dev:editor:rust": "concurrently \"cargo run -p editor_server_rust\" \"pnpm --filter editor_ui_react dev\"",
     "build:editor:electron:windows": "pnpm --filter editor_desktop_electron build:windows",
     "dev:viewer:flutter": "cd apps/viewer/flutter && flutter pub get && flutter run",
     "build:viewer:flutter:windows": "cd apps/viewer/flutter && flutter pub get && flutter build windows",

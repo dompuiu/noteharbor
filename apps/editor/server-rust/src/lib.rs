@@ -28,8 +28,10 @@ use tower_http::{cors::CorsLayer, limit::RequestBodyLimitLayer};
 pub const DEFAULT_HOST: &str = "127.0.0.1";
 /// Dev default: the Rust server listens on `:3002` while server-node keeps `:3001`.
 pub const DEFAULT_PORT: u16 = 3002;
-/// `ROOT_DIR` depth (`../../../..`) matches `server-node/src/db.js` so the same
-/// relative layout resolves from either sibling directory.
+/// `ROOT_DIR` depth matches `server-node/src/db.js`: that file resolves
+/// `../../../..` from `apps/editor/server-node/src/`; the crate manifest sits
+/// one level higher (`apps/editor/server-rust/`), so `../../..` lands on the
+/// same repo root.
 pub const DEFAULT_WEB_DIST_DIR: &str = "apps/editor/ui-react/dist";
 
 #[derive(Debug, Clone)]
@@ -43,7 +45,7 @@ pub struct ServerConfig {
 impl ServerConfig {
     pub fn default_web_dist_dir() -> PathBuf {
         PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .join("../../../..")
+            .join("../../..")
             .join(DEFAULT_WEB_DIST_DIR)
     }
 
@@ -259,6 +261,16 @@ pub fn create_app(state: AppState) -> Router {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn default_web_dist_dir_resolves_to_sibling_ui_dist() {
+        let dir = ServerConfig::default_web_dist_dir();
+        assert!(
+            dir.ends_with("apps/editor/ui-react/dist"),
+            "unexpected default: {}",
+            dir.display()
+        );
+    }
 
     #[test]
     fn availability_prefixes_match_exact_and_suffixed_codes() {
