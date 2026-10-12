@@ -191,6 +191,62 @@ fn percent_decode(input: &str) -> String {
     String::from_utf8_lossy(&out).into_owned()
 }
 
+/// better-sqlite3 reports failures with a SQLITE_* code. Only the
+/// availability codes mean the database can't be reached — constraint
+/// failures are client mistakes, not an outage. Mirrors
+/// `DATABASE_UNAVAILABLE_PREFIXES` / `isDatabaseUnavailable` in
+/// `server-node/src/index.js`.
+pub const DATABASE_UNAVAILABLE_PREFIXES: &[&str] = &[
+    "SQLITE_BUSY",
+    "SQLITE_CANTOPEN",
+    "SQLITE_CORRUPT",
+    "SQLITE_IOERR",
+    "SQLITE_LOCKED",
+    "SQLITE_NOTADB",
+    "SQLITE_PERM",
+    "SQLITE_READONLY",
+];
+
+pub fn is_database_unavailable(code: &str) -> bool {
+    DATABASE_UNAVAILABLE_PREFIXES
+        .iter()
+        .any(|prefix| code == *prefix || code.starts_with(&format!("{prefix}_")))
+}
+
+/// Handler error type. Route handlers return `Result<impl IntoResponse,
+/// AppError>` so availability failures map to 503 exactly like
+/// `databaseErrorHandler` does; everything else keeps its status.
+#[derive(Debug)]
+pub enum AppError {
+    DatabaseUnavailable,
+    Http { status: StatusCode, message: String },
+}
+
+impl AppError {
+    pub fn db_unavailable_if(code: &str) -> Option<Self> {
+        is_database_unavailable(code).then_some(Self::DatabaseUnavailable)
+    }
+}
+
+impl IntoResponse for AppError {
+    fn into_response(self) -> Response {
+        match self {
+            Self::DatabaseUnavailable => {
+                json_error(StatusCode::SERVICE_UNAVAILABLE, "Database unavailable.")
+            }
+            Self::Http { status, message } => {
+                let code = status.as_u16();
+                let status = if (400..600).contains(&code) {
+                    status
+                } else {
+                    StatusCode::INTERNAL_SERVER_ERROR
+                };
+                json_error(status, &message)
+            }
+        }
+    }
+}
+
 pub fn create_app(state: AppState) -> Router {
     Router::new()
         .route("/api/health", get(health_handler))
@@ -198,4 +254,78 @@ pub fn create_app(state: AppState) -> Router {
         .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024))
         .layer(CorsLayer::permissive())
         .with_state(state)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn availability_prefixes_match_exact_and_suffixed_codes() {
+        for prefix in [
+            "SQLITE_BUSY",
+            "SQLITE_CANTOPEN",
+            "SQLITE_CORRUPT",
+            "SQLITE_IOERR",
+            "SQLITE_LOCKED",
+            "SQLITE_NOTADB",
+            "SQLITE_PERM",
+            "SQLITE_READONLY",
+        ] {
+            assert!(is_database_unavailable(prefix), "exact {prefix}");
+            assert!(
+                is_database_unavailable(&format!("{prefix}_SNAPSHOT")),
+                "suffixed {prefix}"
+            );
+        }
+    }
+
+    #[test]
+    fn constraint_and_unrelated_codes_are_not_outages() {
+        for code in [
+            "SQLITE_CONSTRAINT_UNIQUE",
+            "SQLITE_CONSTRAINT",
+            "SQLITE_BUS",
+            "XSQLITE_BUSY",
+            "",
+            "ECONNREFUSED",
+        ] {
+            assert!(!is_database_unavailable(code), "code {code}");
+        }
+    }
+
+    #[tokio::test]
+    async fn database_unavailable_maps_to_503_json() {
+        let response = AppError::DatabaseUnavailable.into_response();
+        assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body reads");
+        let body: serde_json::Value = serde_json::from_slice(&bytes).expect("body is JSON");
+        assert_eq!(body, json!({ "error": "Database unavailable." }));
+    }
+
+    #[tokio::test]
+    async fn http_error_maps_status_and_clamps_out_of_range() {
+        let response = AppError::Http {
+            status: StatusCode::BAD_REQUEST,
+            message: "Denomination is required.".to_owned(),
+        }
+        .into_response();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body reads");
+        let body: serde_json::Value = serde_json::from_slice(&bytes).expect("body is JSON");
+        assert_eq!(body, json!({ "error": "Denomination is required." }));
+
+        for status in [StatusCode::OK, StatusCode::from_u16(302).unwrap()] {
+            let clamped = AppError::Http {
+                status,
+                message: "x".to_owned(),
+            }
+            .into_response();
+            assert_eq!(clamped.status(), StatusCode::INTERNAL_SERVER_ERROR);
+        }
+    }
 }
