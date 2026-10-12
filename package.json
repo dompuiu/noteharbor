@@ -8,7 +8,7 @@
     "dev:viewer:flutter": "cd apps/viewer/flutter && flutter pub get && flutter run",
     "build:viewer:flutter:windows": "cd apps/viewer/flutter && flutter pub get && flutter build windows",
     "build:viewer:flutter:ios": "cd apps/viewer/flutter && flutter pub get && flutter build ios",
-    "test:editor:web": "pnpm --filter editor_ui_react test",
+    "test:editor:ui-react": "pnpm --filter editor_ui_react test",
     "layout": "tsps --layout layout.yml"
   },
   "devDependencies": {
