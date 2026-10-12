@@ -6,6 +6,7 @@ import {
   importArchive,
 } from "../lib/api.js";
 import { CATALOG_ROUTES } from "../lib/routes.js";
+import { assignLocation } from "../lib/navigation.js";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 
 function isArchiveFile(file) {
@@ -222,7 +223,7 @@ function ImportScreen({
     try {
       await importArchive(archiveSource, setArchiveUploadProgress, importMode);
       setArchiveResult({ success: true });
-      window.location.assign(CATALOG_ROUTES.collections);
+      assignLocation(CATALOG_ROUTES.collections);
     } catch (importError) {
       setError(importError.message);
     } finally {
@@ -352,7 +353,7 @@ function ImportScreen({
 
     try {
       await clearAppData();
-      window.location.assign(CATALOG_ROUTES.collections);
+      assignLocation(CATALOG_ROUTES.collections);
     } catch (clearError) {
       setError(clearError.message);
     } finally {

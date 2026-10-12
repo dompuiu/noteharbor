@@ -11,7 +11,12 @@ vi.mock("../lib/api.js", () => ({
   importArchive: vi.fn(),
 }));
 
+vi.mock("../lib/navigation.js", () => ({
+  assignLocation: vi.fn(),
+}));
+
 import { downloadArchive, getOperationStatus, importArchive } from "../lib/api.js";
+import { assignLocation } from "../lib/navigation.js";
 
 const collections = [
   { id: 1, is_default: 1, name: "Default" },
@@ -176,14 +181,10 @@ describe("ImportScreen showcase export", () => {
 });
 
 describe("ImportScreen import mode", () => {
+  // The navigation seam is a module mock, so no window mutation (and no
+  // restore) is needed. The top-level beforeEach clears calls between tests.
   function stubNavigation() {
-    const assign = vi.fn();
-    Object.defineProperty(window, "location", {
-      value: { assign },
-      writable: true,
-      configurable: true,
-    });
-    return assign;
+    return assignLocation;
   }
 
   async function chooseArchiveFile(user) {

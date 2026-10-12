@@ -1,7 +1,12 @@
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
+import { act, configure, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
+
+// These tests render the full shell and open the note picker, so their async
+// queries can exceed Testing Library's 1000ms default under full-suite load.
+// Scoped to this file (each test file gets a fresh environment).
+configure({ asyncUtilTimeout: 5000 });
 
 // The keyboard tests drive the real shell (sidebar + routes) with the web API
 // mocked. Behavior is observed through focus and the route, never through the
