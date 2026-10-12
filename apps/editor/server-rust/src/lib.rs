@@ -9,6 +9,7 @@ pub mod db;
 pub mod images;
 pub mod ops;
 pub mod routes;
+pub mod scrape;
 
 use std::{
     env,
@@ -259,6 +260,7 @@ pub fn create_app(state: AppState) -> Router {
         .merge(routes::collections_router())
         .merge(routes::images_router())
         .merge(routes::operations_router())
+        .merge(scrape::scrape_router())
         .fallback(fallback_handler)
         .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024))
         .layer(CorsLayer::permissive())

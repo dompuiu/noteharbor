@@ -29,7 +29,7 @@ fn created(body: Value) -> Response {
     (StatusCode::CREATED, Json(body)).into_response()
 }
 
-fn bad_request(message: &str) -> Response {
+pub(crate) fn bad_request(message: &str) -> Response {
     (StatusCode::BAD_REQUEST, Json(json!({ "error": message }))).into_response()
 }
 
