@@ -239,6 +239,23 @@ input[type="radio"] {
   gap: 4px;
 }
 
+/* Pinned version footer: outside the scrolling nav so it stays at the
+   bottom in both the collapsed and expanded rail. Display-only, never a
+   keyboard stop. */
+.sidebar-foot {
+  flex: 0 0 auto;
+  padding: 10px 8px 12px;
+  border-top: 1px solid var(--border-soft);
+  text-align: center;
+}
+
+.sidebar-version {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-faint);
+  white-space: nowrap;
+}
+
 .sidebar-group {
   display: flex;
   flex-direction: column;

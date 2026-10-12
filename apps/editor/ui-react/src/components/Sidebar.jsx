@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useCollections } from "../lib/collections.jsx";
 import { useShowcases } from "../lib/showcases.jsx";
+import { APP_VERSION } from "../lib/version.js";
 import {
   CATALOG_ROUTES,
   NEW_COLLECTION_ID,
@@ -1238,6 +1239,9 @@ function Sidebar({ pageFocusRef }) {
               </div>
               );
             })}
+          </div>
+          <div className="sidebar-foot">
+            <span className="sidebar-version">v{APP_VERSION}</span>
           </div>
         </nav>
     </div>

@@ -25,6 +25,7 @@ import {
 } from "../lib/api.js";
 import { CollectionsProvider } from "../lib/collections.jsx";
 import { ShowcasesProvider } from "../lib/showcases.jsx";
+import { APP_VERSION } from "../lib/version.js";
 import { Sidebar } from "./Sidebar.jsx";
 import {
   CATALOG_ROUTES,
@@ -251,6 +252,23 @@ describe("Sidebar navigation groups", () => {
     // The rail is collapsed after the click, so focus belongs in the page.
     expect(document.activeElement).toBe(screen.getByTestId("page-anchor"));
     expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
+  });
+
+  test("renders the app version pinned at the bottom of the sidebar", async () => {
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    // Display-only footer: centered text, not a link or button, so it never
+    // joins the keyboard cursor stops.
+    const version = screen.getByText(`v${APP_VERSION}`);
+    expect(version).toBeInTheDocument();
+    expect(version.classList.contains("sidebar-version")).toBe(true);
+    expect(version.closest("#app-sidebar")).not.toBeNull();
+    expect(version.closest(".sidebar-foot")).not.toBeNull();
+    expect(version.tagName).toBe("SPAN");
+    expect(container.querySelector(".sidebar-foot")).toBeInTheDocument();
+    // The footer sits after the scrolling nav, so it stays pinned bottom.
+    const nav = container.querySelector("#app-sidebar");
+    expect(nav.lastElementChild.classList.contains("sidebar-foot")).toBe(true);
   });
 
   test("after a link click, an arrow key does not reopen the rail", async () => {
