@@ -1,0 +1,26 @@
+[package]
+name = "editor_server_rust"
+version = "2.3.2"
+edition = "2021"
+description = "Note Harbor editor backend (Axum port of server-node)"
+license = "MIT"
+
+[[bin]]
+name = "editor_server_rust"
+path = "src/main.rs"
+
+[lib]
+name = "editor_server_rust"
+path = "src/lib.rs"
+
+[dependencies]
+axum = "0.8"
+mime_guess = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tokio = { version = "1", features = ["full"] }
+tower = { version = "0.5", features = ["util"] }
+tower-http = { version = "0.6", features = ["cors", "limit"] }
+
+[dev-dependencies]
+tempfile = "3"
