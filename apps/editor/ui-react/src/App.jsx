@@ -15,6 +15,8 @@ import { NoCollectionsPrompt } from "./components/NoCollectionsPrompt.jsx";
 import { ShowcaseScreen } from "./components/ShowcaseScreen.jsx";
 import { Sidebar } from "./components/Sidebar.jsx";
 import { getHealth } from "./lib/api.js";
+import { isDesktopRuntime } from "./lib/appMode.js";
+import { attachMenuBarToggle } from "./lib/menuBar.js";
 import { CollectionsProvider, useCollections } from "./lib/collections.jsx";
 import { isEmptyLibrary } from "./lib/libraryState.js";
 import { ShowcasesProvider, useShowcases } from "./lib/showcases.jsx";
@@ -256,6 +258,15 @@ function Shell() {
 }
 
 function App() {
+  // Desktop auto-hide menu bar parity: the shell starts the native menu
+  // hidden on Windows/Linux, and solitary Alt presses toggle it back.
+  useEffect(() => {
+    if (!isDesktopRuntime) {
+      return undefined;
+    }
+    return attachMenuBarToggle(window);
+  }, []);
+
   return (
     <BrowserRouter>
       <Shell />

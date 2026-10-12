@@ -8,6 +8,7 @@
 
 pub mod chrome;
 pub mod data_dir;
+pub mod menu;
 pub mod paths;
 pub mod prefs;
 pub mod server;
