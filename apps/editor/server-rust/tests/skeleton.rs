@@ -1,5 +1,5 @@
 use std::sync::{
-    Arc,
+    Arc, Mutex,
     atomic::{AtomicBool, Ordering},
 };
 
@@ -10,20 +10,24 @@ use axum::{
 };
 use tower::ServiceExt;
 
-use editor_server_rust::{AppState, create_app};
+use editor_server_rust::{AppState, DbPool, create_app, db};
 
-fn live_state() -> AppState {
-    AppState {
-        static_root: None,
-        db_available: Arc::new(AtomicBool::new(true)),
-    }
+fn temp_pool() -> (tempfile::TempDir, DbPool) {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let pool = db::open_pool(&dir.path().join("banknotes.db")).expect("pool opens");
+    (dir, pool)
 }
 
-fn down_state() -> AppState {
-    AppState {
+fn live_state() -> (tempfile::TempDir, AppState) {
+    let (dir, pool) = temp_pool();
+    let state = AppState {
         static_root: None,
-        db_available: Arc::new(AtomicBool::new(false)),
-    }
+        data_dir: dir.path().to_path_buf(),
+        pool,
+        ops: Arc::new(Mutex::new(editor_server_rust::ops::OperationState::default())),
+        db_available: Arc::new(AtomicBool::new(true)),
+    };
+    (dir, state)
 }
 
 async fn get(app: Router, path: &str) -> (StatusCode, serde_json::Value, Option<String>) {
@@ -46,7 +50,8 @@ async fn get(app: Router, path: &str) -> (StatusCode, serde_json::Value, Option<
 
 #[tokio::test]
 async fn health_reports_ok_when_database_answers() {
-    let (status, body, content_type) = get(create_app(live_state()), "/api/health").await;
+    let (_dir, state) = live_state();
+    let (status, body, content_type) = get(create_app(state), "/api/health").await;
 
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body, serde_json::json!({ "ok": true }));
@@ -58,7 +63,9 @@ async fn health_reports_ok_when_database_answers() {
 
 #[tokio::test]
 async fn health_reports_unavailable_when_database_is_down() {
-    let (status, body, _) = get(create_app(down_state()), "/api/health").await;
+    let (_dir, state) = live_state();
+    state.db_available.store(false, Ordering::SeqCst);
+    let (status, body, _) = get(create_app(state), "/api/health").await;
 
     assert_eq!(status, StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(body, serde_json::json!({ "ok": false }));
@@ -66,11 +73,8 @@ async fn health_reports_unavailable_when_database_is_down() {
 
 #[tokio::test]
 async fn health_reflects_later_database_state() {
-    let flag = Arc::new(AtomicBool::new(true));
-    let state = AppState {
-        static_root: None,
-        db_available: Arc::clone(&flag),
-    };
+    let (_dir, state) = live_state();
+    let flag = Arc::clone(&state.db_available);
     let app = create_app(state);
 
     let (before, _, _) = get(app.clone(), "/api/health").await;
@@ -106,9 +110,11 @@ fn json_body(bytes: &[u8]) -> serde_json::Value {
 
 #[tokio::test]
 async fn unknown_api_route_answers_json_404() {
+    let (_dir, state) = live_state();
+    let app = create_app(state);
     for method in ["GET", "POST", "PUT", "DELETE"] {
         let (status, bytes, content_type) =
-            raw(create_app(live_state()), method, "/api/no-such-thing").await;
+            raw(app.clone(), method, "/api/no-such-thing").await;
         assert_eq!(status, StatusCode::NOT_FOUND, "method {method}");
         assert_eq!(json_body(&bytes), serde_json::json!({ "error": "Not found." }));
         assert!(
@@ -120,7 +126,8 @@ async fn unknown_api_route_answers_json_404() {
 
 #[tokio::test]
 async fn bare_api_prefix_answers_json_404() {
-    let (status, bytes, _) = raw(create_app(live_state()), "GET", "/api").await;
+    let (_dir, state) = live_state();
+    let (status, bytes, _) = raw(create_app(state), "GET", "/api").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(json_body(&bytes), serde_json::json!({ "error": "Not found." }));
 }
@@ -131,8 +138,12 @@ async fn bare_api_prefix_answers_json_404() {
 async fn api_like_prefix_is_an_spa_route() {
     let dir = tempfile::tempdir().expect("tempdir");
     std::fs::write(dir.path().join("index.html"), "<p>spa</p>").expect("write entry");
+    let (_pool_dir, pool) = temp_pool();
     let state = AppState {
         static_root: Some(dir.path().canonicalize().expect("canonical")),
+        data_dir: dir.path().to_path_buf(),
+        pool,
+        ops: Arc::new(Mutex::new(editor_server_rust::ops::OperationState::default())),
         db_available: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
     };
 
@@ -146,11 +157,16 @@ async fn api_like_prefix_is_an_spa_route() {
     );
 }
 
-fn serving_state(dir: &tempfile::TempDir) -> AppState {
-    AppState {
+fn serving_state(dir: &tempfile::TempDir) -> (tempfile::TempDir, AppState) {
+    let (pool_dir, pool) = temp_pool();
+    let state = AppState {
         static_root: Some(dir.path().canonicalize().expect("canonical")),
+        data_dir: dir.path().to_path_buf(),
+        pool,
+        ops: Arc::new(Mutex::new(editor_server_rust::ops::OperationState::default())),
         db_available: Arc::new(AtomicBool::new(true)),
-    }
+    };
+    (pool_dir, state)
 }
 
 #[tokio::test]
@@ -160,8 +176,9 @@ async fn spa_entry_serves_at_root_and_deep_routes() {
     std::fs::write(dir.path().join("app.js"), "console.log(1)").expect("write asset");
 
     for path in ["/", "/collections/1", "/showcases/abc/notes"] {
+        let (_pool_dir, state) = serving_state(&dir);
         let (status, bytes, content_type) =
-            raw(create_app(serving_state(&dir)), "GET", path).await;
+            raw(create_app(state), "GET", path).await;
         assert_eq!(status, StatusCode::OK, "path {path}");
         assert_eq!(bytes, b"<p>spa</p>");
         assert!(
@@ -170,8 +187,9 @@ async fn spa_entry_serves_at_root_and_deep_routes() {
         );
     }
 
+    let (_pool_dir, state) = serving_state(&dir);
     let (status, bytes, content_type) =
-        raw(create_app(serving_state(&dir)), "GET", "/app.js").await;
+        raw(create_app(state), "GET", "/app.js").await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(bytes, b"console.log(1)");
     assert!(
@@ -185,8 +203,9 @@ async fn spa_entry_serves_at_root_and_deep_routes() {
 async fn missing_spa_entry_answers_json_not_html() {
     let dir = tempfile::tempdir().expect("tempdir");
 
+    let (_pool_dir, state) = serving_state(&dir);
     let (status, bytes, content_type) =
-        raw(create_app(serving_state(&dir)), "GET", "/collections").await;
+        raw(create_app(state), "GET", "/collections").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(json_body(&bytes), serde_json::json!({ "error": "Not found." }));
     assert!(
@@ -197,7 +216,8 @@ async fn missing_spa_entry_answers_json_not_html() {
 
 #[tokio::test]
 async fn static_serving_disabled_answers_json_404() {
-    let (status, bytes, _) = raw(create_app(live_state()), "GET", "/collections").await;
+    let (_dir, state) = live_state();
+    let (status, bytes, _) = raw(create_app(state), "GET", "/collections").await;
     assert_eq!(status, StatusCode::NOT_FOUND);
     assert_eq!(json_body(&bytes), serde_json::json!({ "error": "Not found." }));
 }
@@ -209,8 +229,9 @@ async fn request_path_cannot_escape_static_root() {
     let outside = dir.path().join("secret.txt");
     std::fs::write(&outside, "secret").expect("write outside file");
 
+    let (_pool_dir, state) = serving_state(&dir);
     let (status, bytes, _) =
-        raw(create_app(serving_state(&dir)), "GET", "/../secret.txt").await;
+        raw(create_app(state), "GET", "/../secret.txt").await;
     // Never serve the outside file: fall back to the SPA entry or 404.
     assert_ne!(bytes, b"secret");
     assert!(status == StatusCode::OK || status == StatusCode::NOT_FOUND);

@@ -1,14 +1,10 @@
-//! `server-rust` binary: binds the Axum app and serves it.
+//! `server-rust` binary: migrates the database, binds the Axum app, serves it.
 //!
+//! Migrations run once at boot, before serving, on a blocking thread.
 //! `PORT=0` binds an ephemeral port (how the Tauri shell embeds the server);
 //! the active port is printed so the launcher can point the WebView at it.
 
-use std::sync::{
-    Arc,
-    atomic::AtomicBool,
-};
-
-use editor_server_rust::{AppState, ServerConfig, create_app};
+use editor_server_rust::{AppState, ServerConfig, create_app, db};
 
 #[tokio::main]
 async fn main() {
@@ -18,10 +14,16 @@ async fn main() {
     } else {
         None
     };
-    let state = AppState {
-        static_root,
-        db_available: Arc::new(AtomicBool::new(true)),
-    };
+    let db_path = config.db_path();
+    let data_dir = config.data_dir.clone();
+    let pool = tokio::task::spawn_blocking(move || db::open_pool(&db_path))
+        .await
+        .expect("migration task joins")
+        .unwrap_or_else(|error| {
+            eprintln!("cannot open database: {error}");
+            std::process::exit(1);
+        });
+    let state = AppState::new(static_root, data_dir, pool);
     let app = create_app(state);
 
     let listener = tokio::net::TcpListener::bind((config.host.as_str(), config.port))
