@@ -12,7 +12,7 @@ importers:
         specifier: ^10.0.6
         version: 10.0.6
 
-  apps/editor/desktop:
+  apps/editor/desktop-electron:
     dependencies:
       '@img/sharp-darwin-arm64':
         specifier: 0.35.5
@@ -55,7 +55,7 @@ importers:
         specifier: ^26.15.3
         version: 26.15.3(electron-builder-squirrel-windows@26.15.3)(supports-color@10.2.2)
 
-  apps/editor/server:
+  apps/editor/server-node:
     dependencies:
       archiver:
         specifier: ^8.0.0
@@ -85,7 +85,7 @@ importers:
         specifier: ^0.12.5
         version: 0.12.5
 
-  apps/editor/web:
+  apps/editor/ui-react:
     dependencies:
       '@tanstack/react-virtual':
         specifier: ^3.14.14

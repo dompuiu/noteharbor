@@ -19,9 +19,9 @@ Local collection software for managing and presenting banknote archives. This mo
 
 This is a pnpm workspace with apps under `apps/`:
 
-- **`apps/editor/server`** — Express + SQLite backend (routes, scrapers, DB access)
-- **`apps/editor/web`** — React + Vite frontend for the editor
-- **`apps/editor/desktop`** — Electron shell that packages the server and web build
+- **`apps/editor/server-node`** — Express + SQLite backend (routes, scrapers, DB access)
+- **`apps/editor/ui-react`** — React + Vite frontend for the editor
+- **`apps/editor/desktop-electron`** — Electron shell that packages the server and web build
 - **`apps/viewer/flutter`** — the read-only Flutter viewer
 
 Local data (SQLite DB + images) lives in `data/` by default; see [Environment variables](#environment-variables) to override the location.
@@ -98,16 +98,16 @@ Workflow:
 ### Build the web editor and run the server
 
 ```bash
-pnpm --filter editor_web build
-NOTE_HARBOR_SERVE_WEB_DIST=true pnpm --filter editor_server start
+pnpm --filter editor_ui_react build
+NOTE_HARBOR_SERVE_WEB_DIST=true pnpm --filter editor_server_node start
 ```
 
-This serves `apps/editor/web/dist` from the Express server.
+This serves `apps/editor/ui-react/dist` from the Express server.
 
 ### Build the Electron editor
 
 ```bash
-pnpm --filter editor_desktop build
+pnpm --filter editor_desktop_electron build
 ```
 
 The Electron package:
@@ -149,7 +149,7 @@ pnpm build:viewer:flutter:ios
 
 ### Environment variables
 
-Create `apps/editor/server/.env` if you want to override defaults.
+Create `apps/editor/server-node/.env` if you want to override defaults.
 
 | Variable | Default | Description |
 |---|---|---|
@@ -157,7 +157,7 @@ Create `apps/editor/server/.env` if you want to override defaults.
 | `PORT` | `3001` | Express bind port |
 | `NOTE_HARBOR_BROWSER_CDP_URL` | `http://localhost:9222` | CDP endpoint for the browser that already has the target page open |
 | `NOTE_HARBOR_DATA_DIR` | `data` | Root data directory containing `banknotes.db` and `images/` |
-| `NOTE_HARBOR_WEB_DIST_DIR` | `apps/editor/web/dist` | Static web build served by Express |
+| `NOTE_HARBOR_WEB_DIST_DIR` | `apps/editor/ui-react/dist` | Static web build served by Express |
 | `NOTE_HARBOR_SERVE_WEB_DIST` | `false` | Enables serving the built web app from Express |
 
 The desktop (Electron) app additionally reads these from its own process environment, not from `.env`:
@@ -511,7 +511,7 @@ POST /api/scrape/preview -> Note editor autopopulate
 Reads the current HTML from a matching open tab on a CDP-connected browser.
 
 ```bash
-node -e "import('./apps/editor/server/src/fetchHtml.js').then(async ({ fetchHtml }) => console.log(await fetchHtml({ url: 'https://example.com', cdpUrl: 'http://localhost:9222', waitSeconds: 2 })))"
+node -e "import('./apps/editor/server-node/src/fetchHtml.js').then(async ({ fetchHtml }) => console.log(await fetchHtml({ url: 'https://example.com', cdpUrl: 'http://localhost:9222', waitSeconds: 2 })))"
 ```
 
 | Option | Default | Description |
@@ -523,8 +523,8 @@ The helper does not open a new tab or navigate. It requires an already open tab 
 
 ### Adding a new scraper
 
-1. Add a new file in `apps/editor/server/src/scrapers/` extending `BaseScraper`.
-2. Register it in `getScraperForNote()` inside `apps/editor/server/src/routes/scrape.js`.
+1. Add a new file in `apps/editor/server-node/src/scrapers/` extending `BaseScraper`.
+2. Register it in `getScraperForNote()` inside `apps/editor/server-node/src/routes/scrape.js`.
 
 ---
 

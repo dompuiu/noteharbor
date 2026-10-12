@@ -4,7 +4,7 @@ import { spawnSync } from 'node:child_process';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
-const webDir = path.resolve(__dirname, '../../web');
+const webDir = path.resolve(__dirname, '../../ui-react');
 const pnpmExecPath = process.env.npm_execpath;
 const pnpmArgs = ['--dir', webDir, 'run', 'build'];
 const spawnEnv = {

@@ -2,7 +2,7 @@ import 'package:flutter/material.dart';
 
 /// Warm professional palette shared by every Viewer screen.
 ///
-/// Mirrors the Editor web theme tokens (`apps/editor/web/src/styles.css`):
+/// Mirrors the Editor web theme tokens (`apps/editor/ui-react/src/styles.css`):
 /// flat warm surfaces, warm charcoal text, and a single honey-bronze
 /// accent. All screens reference these values instead of hardcoding
 /// colors, so a future palette tweak only touches this file.

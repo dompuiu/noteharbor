@@ -1,5 +1,5 @@
 {
-  "name": "editor_desktop",
+  "name": "editor_desktop_electron",
   "private": true,
   "version": "2.3.2",
   "description": "Electron-packaged Note Harbor Editor",

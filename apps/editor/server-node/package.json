@@ -1,5 +1,5 @@
 {
-  "name": "editor_server",
+  "name": "editor_server_node",
   "version": "2.3.2",
   "private": true,
   "type": "module",
