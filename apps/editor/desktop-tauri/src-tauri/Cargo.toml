@@ -25,7 +25,7 @@ tokio = { version = "1", features = ["full"] }
 url = "2"
 
 [build-dependencies]
-tauri-build = { version = "2" }
+tauri-build = { version = "2", features = [] }
 
 [dev-dependencies]
 reqwest = { version = "0.13" }
