@@ -1,0 +1,24 @@
+{
+  "$schema": "https://schema.tauri.app/config/2",
+  "productName": "Note Harbor Editor",
+  "version": "2.3.2",
+  "identifier": "com.noteharbor.editor",
+  "build": {
+    "frontendDist": "../../ui-react/dist",
+    "devUrl": "http://localhost:5173",
+    "beforeDevCommand": "pnpm --dir ../../ui-react dev",
+    "beforeBuildCommand": "pnpm --dir ../../desktop-electron build:web"
+  },
+  "app": {
+    "security": {
+      "csp": null
+    }
+  },
+  "bundle": {
+    "active": true,
+    "targets": "all",
+    "resources": [
+      "../../../../data"
+    ]
+  }
+}

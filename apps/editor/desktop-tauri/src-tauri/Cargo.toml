@@ -1,0 +1,32 @@
+[package]
+name = "editor_desktop_tauri"
+version = "2.3.2"
+edition = "2021"
+description = "Note Harbor editor desktop shell (Tauri port of desktop-electron)"
+license = "MIT"
+
+[[bin]]
+name = "editor_desktop_tauri"
+path = "src/main.rs"
+
+[lib]
+name = "editor_desktop_tauri"
+path = "src/lib.rs"
+
+[dependencies]
+axum = "0.8"
+editor_server_rust = { path = "../../server-rust" }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+tauri = { version = "2", features = [] }
+tauri-plugin-dialog = "2"
+tauri-plugin-opener = "2"
+tokio = { version = "1", features = ["full"] }
+url = "2"
+
+[build-dependencies]
+tauri-build = { version = "2" }
+
+[dev-dependencies]
+reqwest = { version = "0.13" }
+tempfile = "3"
