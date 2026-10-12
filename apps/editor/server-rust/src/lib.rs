@@ -11,6 +11,7 @@ pub mod notes;
 pub mod ops;
 pub mod routes;
 pub mod scrape;
+pub mod showcases;
 
 use std::{
     env,
@@ -264,6 +265,9 @@ pub fn create_app(state: AppState) -> Router {
         .merge(notes::tags_router())
         .merge(routes::operations_router())
         .merge(scrape::scrape_router())
+        .merge(showcases::categories_router())
+        .merge(showcases::nodes_router())
+        .merge(showcases::showcases_router())
         .fallback(fallback_handler)
         .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024))
         .layer(CorsLayer::permissive())
