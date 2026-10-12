@@ -167,3 +167,26 @@ fn nsis_install_mode_mirrors_electron_per_user_or_machine() {
         "nsis installerIcon {icon_rel:?} exists",
     );
 }
+
+#[test]
+fn release_shell_has_no_console_window() {
+    let main_rs =
+        std::fs::read_to_string(src_tauri_dir().join("src/main.rs")).expect("src/main.rs reads");
+    assert!(
+        main_rs.contains("windows_subsystem"),
+        "src/main.rs must detach the Windows console in release builds",
+    );
+    assert!(
+        main_rs.contains("not(debug_assertions)"),
+        "console detach must apply to release builds only (dev keeps its terminal)",
+    );
+    let pos = main_rs
+        .find("shell serving at")
+        .expect("shell serving log line exists for dev diagnostics");
+    let head = &main_rs[..pos];
+    let window = &head[head.len().saturating_sub(500)..];
+    assert!(
+        window.contains("cfg(debug_assertions)"),
+        "shell serving log must be debug-gated so release opens no cmd window",
+    );
+}

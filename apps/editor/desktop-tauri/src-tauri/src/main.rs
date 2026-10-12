@@ -1,3 +1,8 @@
+#![cfg_attr(
+    all(not(debug_assertions), target_os = "windows"),
+    windows_subsystem = "windows"
+)]
+
 // Tauri shell entry: embeds `server-rust` on 127.0.0.1:0 and loads it in a
 // WebView. Parity target: `desktop-electron/src/main.js`.
 //
@@ -378,6 +383,9 @@ pub fn run() {
             let (app_url, _server) =
                 tauri::async_runtime::block_on(server::start_embedded_server(data_dir, web_dist_dir))
                     .map_err(|error| error.to_string())?;
+            // Dev-only: in release `windows_subsystem = "windows"` detaches
+            // the console, so logging here would open a cmd window on Windows.
+            #[cfg(debug_assertions)]
             eprintln!("Note Harbor Editor shell serving at {app_url}");
             app.manage(Arc::new(ShellState {
                 scrape_launching: AtomicBool::new(false),
