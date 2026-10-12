@@ -259,7 +259,7 @@ async fn launch_scrape_browser(app: &tauri::AppHandle) -> chrome::ScrapeBrowserS
         };
     }
     let args = chrome::chrome_launch_args(
-        &chrome::chrome_cdp_port(&cdp_url),
+        chrome::chrome_cdp_port(&cdp_url),
         chrome::DEFAULT_CHROME_CDP_ADDRESS,
         &user_data_dir,
     );

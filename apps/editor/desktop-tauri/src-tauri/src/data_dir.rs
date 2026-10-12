@@ -4,35 +4,33 @@
 //! copies it over the user-data copy when the bundled file is newer (mtime),
 //! so seed updates reach existing installs without wiping user edits.
 
-use std::{fs, io, path::Path};
+use std::{fs, io, path::Path, time::SystemTime};
 
 /// Pure decision: copy when the bundled db is newer than the target.
-/// A missing target counts as infinitely old (`-1` in `main.js`).
+/// A missing target counts as infinitely old (`-1` in `main.js`); an
+/// unreadable bundled mtime never copies (refuses to clobber user data with
+/// a seed of unknown age), while an unreadable target mtime copies (treats
+/// the target as stale).
 pub fn should_copy_bundled_data(
     bundled_exists: bool,
-    bundled_mtime_ms: f64,
+    bundled_mtime: Option<SystemTime>,
     target_exists: bool,
-    target_mtime_ms: f64,
+    target_mtime: Option<SystemTime>,
 ) -> bool {
     if !bundled_exists {
         return false;
     }
-    let target_mtime = if target_exists {
-        target_mtime_ms
-    } else {
-        -1.0
+    let Some(bundled_mtime) = bundled_mtime else {
+        return false;
     };
-    target_mtime < bundled_mtime_ms
+    if !target_exists {
+        return true;
+    }
+    target_mtime.is_none_or(|current| current < bundled_mtime)
 }
 
-fn mtime_ms(path: &Path) -> Option<f64> {
-    fs::metadata(path)
-        .ok()?
-        .modified()
-        .ok()?
-        .duration_since(std::time::UNIX_EPOCH)
-        .ok()
-        .map(|d| d.as_secs_f64() * 1000.0)
+fn mtime(path: &Path) -> Option<SystemTime> {
+    fs::metadata(path).ok()?.modified().ok()
 }
 
 /// Mirrors `ensureViewerDataDir()`: copy `bundled_dir` → `target_dir` when
@@ -41,20 +39,11 @@ fn mtime_ms(path: &Path) -> Option<f64> {
 pub fn ensure_data_dir(bundled_dir: &Path, target_dir: &Path) -> io::Result<std::path::PathBuf> {
     let bundled_db = bundled_dir.join("banknotes.db");
     let target_db = target_dir.join("banknotes.db");
-    let bundled_exists = bundled_db.exists();
     let copy = should_copy_bundled_data(
-        bundled_exists,
-        if bundled_exists {
-            mtime_ms(&bundled_db).unwrap_or(0.0)
-        } else {
-            0.0
-        },
+        bundled_db.exists(),
+        mtime(&bundled_db),
         target_db.exists(),
-        if target_db.exists() {
-            mtime_ms(&target_db).unwrap_or(0.0)
-        } else {
-            0.0
-        },
+        mtime(&target_db),
     );
     if copy {
         if let Some(parent) = target_dir.parent() {
@@ -100,10 +89,19 @@ mod tests {
 
     #[test]
     fn copies_when_target_is_missing_or_older() {
-        assert!(should_copy_bundled_data(true, 200.0, false, 0.0));
-        assert!(should_copy_bundled_data(true, 200.0, true, 100.0));
-        assert!(!should_copy_bundled_data(true, 100.0, true, 200.0));
-        assert!(!should_copy_bundled_data(false, 999.0, false, 0.0));
+        use std::time::{Duration, SystemTime};
+        fn t(secs: u64) -> Option<SystemTime> {
+            Some(SystemTime::UNIX_EPOCH + Duration::from_secs(secs))
+        }
+        assert!(should_copy_bundled_data(true, t(200), false, None));
+        assert!(should_copy_bundled_data(true, t(200), true, t(100)));
+        assert!(!should_copy_bundled_data(true, t(100), true, t(200)));
+        assert!(!should_copy_bundled_data(true, t(200), true, t(200)));
+        assert!(!should_copy_bundled_data(false, t(999), false, None));
+        // Unreadable bundled mtime never clobbers user data; unreadable
+        // target mtime treats the target as stale.
+        assert!(!should_copy_bundled_data(true, None, true, t(100)));
+        assert!(should_copy_bundled_data(true, t(200), true, None));
     }
 
     #[test]

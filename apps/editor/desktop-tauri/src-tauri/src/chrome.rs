@@ -7,7 +7,7 @@
 use std::path::Path;
 
 pub const DEFAULT_CHROME_CDP_URL: &str = "http://127.0.0.1:9222";
-pub const DEFAULT_CHROME_CDP_PORT: &str = "9222";
+pub const DEFAULT_CHROME_CDP_PORT: u16 = 9222;
 pub const DEFAULT_CHROME_CDP_ADDRESS: &str = "0.0.0.0";
 pub const UNSUPPORTED_PLATFORM_MESSAGE: &str =
     "Launching the scrape browser is currently supported only on Windows and macOS.";
@@ -39,23 +39,26 @@ pub fn chrome_cdp_url(env_value: Option<&str>) -> String {
     }
 }
 
-/// Mirrors `getChromeCdpPort()`: the CDP URL's port or the default.
-pub fn chrome_cdp_port(cdp_url: &str) -> String {
+/// Mirrors `getChromeCdpPort()`: the CDP URL's explicit port or the default
+/// (`new URL().port` is empty for default ports, hence `port()`).
+pub fn chrome_cdp_port(cdp_url: &str) -> u16 {
     url::Url::parse(cdp_url)
         .ok()
-        .and_then(|parsed| parsed.port().map(|port| port.to_string()))
-        .unwrap_or_else(|| DEFAULT_CHROME_CDP_PORT.to_owned())
+        .and_then(|parsed| parsed.port())
+        .unwrap_or(DEFAULT_CHROME_CDP_PORT)
 }
 
 /// Platform candidates, mirroring `CHROME_CANDIDATE_PATHS_BY_PLATFORM`.
-/// `home_dir` is injected (tests) instead of read from the OS.
+/// The vocabulary is Electron's `process.platform` (`win32`/`darwin`);
+/// anything else gets no candidates. `home_dir` is injected (tests) instead
+/// of read from the OS.
 pub fn chrome_candidate_paths(platform: &str, home_dir: Option<&str>) -> Vec<String> {
     match platform {
-        "win32" | "windows" => vec![
+        "win32" => vec![
             "C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe".to_owned(),
             "C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe".to_owned(),
         ],
-        "darwin" | "macos" => {
+        "darwin" => {
             let mut paths = vec![
                 "/Applications/Google Chrome.app/Contents/MacOS/Google Chrome".to_owned(),
             ];
@@ -71,7 +74,7 @@ pub fn chrome_candidate_paths(platform: &str, home_dir: Option<&str>) -> Vec<Str
 }
 
 pub fn is_scrape_browser_supported(platform: &str) -> bool {
-    matches!(platform, "win32" | "windows" | "darwin" | "macos")
+    matches!(platform, "win32" | "darwin")
 }
 
 /// Mirrors `resolveChromeExecutablePath()`: platform candidates first, then
@@ -105,7 +108,7 @@ pub fn resolve_chrome_executable_path(
 }
 
 /// Mirrors the spawn args in `openScrapeBrowser()`.
-pub fn chrome_launch_args(port: &str, address: &str, user_data_dir: &Path) -> Vec<String> {
+pub fn chrome_launch_args(port: u16, address: &str, user_data_dir: &Path) -> Vec<String> {
     vec![
         format!("--remote-debugging-port={port}"),
         format!("--remote-debugging-address={address}"),
@@ -135,16 +138,19 @@ mod tests {
 
     #[test]
     fn cdp_port_parses_or_defaults() {
-        assert_eq!(chrome_cdp_port("http://127.0.0.1:9222"), "9222");
-        assert_eq!(chrome_cdp_port("http://localhost:9333"), "9333");
+        assert_eq!(chrome_cdp_port("http://127.0.0.1:9222"), 9222);
+        assert_eq!(chrome_cdp_port("http://localhost:9333"), 9333);
         assert_eq!(chrome_cdp_port("http://localhost"), DEFAULT_CHROME_CDP_PORT);
         assert_eq!(chrome_cdp_port("not a url"), DEFAULT_CHROME_CDP_PORT);
     }
 
     #[test]
     fn platform_support_matches_electron_gate() {
+        // Exact `process.platform` vocabulary: no `windows`/`macos` aliases.
         assert!(is_scrape_browser_supported("win32"));
         assert!(is_scrape_browser_supported("darwin"));
+        assert!(!is_scrape_browser_supported("windows"));
+        assert!(!is_scrape_browser_supported("macos"));
         assert!(!is_scrape_browser_supported("linux"));
         assert_eq!(
             ScrapeBrowserStatus::unsupported().error.as_deref(),
@@ -190,7 +196,7 @@ mod tests {
 
     #[test]
     fn launch_args_mirror_detached_chrome_flags() {
-        let args = chrome_launch_args("9222", DEFAULT_CHROME_CDP_ADDRESS, Path::new("/tmp/x"));
+        let args = chrome_launch_args(9222, DEFAULT_CHROME_CDP_ADDRESS, Path::new("/tmp/x"));
         assert_eq!(
             args,
             vec![
