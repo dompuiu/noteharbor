@@ -276,6 +276,10 @@ fn join_failed() -> Response {
         .into_response()
 }
 
+fn multipart_failed(error: impl ToString) -> Response {
+    archive::ArchiveError::internal(error.to_string()).into_response()
+}
+
 async fn export_archive(
     State(state): State<AppState>,
     Query(params): Query<Vec<(String, String)>>,
@@ -326,40 +330,74 @@ async fn import_archive(
     Query(params): Query<Vec<(String, String)>>,
     mut multipart: Multipart,
 ) -> Response {
-    // The upload must be read before the exclusive operation starts: a
-    // missing file answers 400 even while another operation runs, exactly
-    // like the multer guard before `withExclusiveOperation`.
-    let mut file_bytes: Option<Vec<u8>> = None;
+    // The upload streams straight to disk: archives can be gigabytes, so the
+    // file field must never be buffered in memory. The staging directory is
+    // kept alive until the blocking import finishes. A missing file answers
+    // 400 even while another operation runs, exactly like the multer guard
+    // before `withExclusiveOperation`.
+    let mut upload_stage: Option<tempfile::TempDir> = None;
+    let mut upload_path: Option<std::path::PathBuf> = None;
     let mut body_mode: Option<String> = None;
     loop {
         match multipart.next_field().await {
-            Err(error) => {
-                return archive::ArchiveError::internal(error.to_string()).into_response();
-            }
+            Err(error) => return multipart_failed(error),
             Ok(None) => break,
-            Ok(Some(field)) => {
+            Ok(Some(mut field)) => {
                 let name = field.name().unwrap_or("").to_owned();
                 if name == "file" {
-                    match field.bytes().await {
-                        Err(error) => {
-                            return archive::ArchiveError::internal(error.to_string())
-                                .into_response();
+                    // A repeated file field supersedes the previous one, like
+                    // the old whole-body read's last-wins assignment.
+                    let mut uploaded_bytes: u64 = 0;
+                    let stage = match tempfile::TempDir::new() {
+                        Ok(stage) => stage,
+                        Err(error) => return multipart_failed(error),
+                    };
+                    let path = stage.path().join("upload.zip");
+                    let mut file = match tokio::fs::File::create(&path).await {
+                        Ok(file) => file,
+                        Err(error) => return multipart_failed(error),
+                    };
+                    loop {
+                        match field.chunk().await {
+                            Err(error) => return multipart_failed(error),
+                            Ok(None) => break,
+                            Ok(Some(chunk)) => {
+                                uploaded_bytes += chunk.len() as u64;
+                                if uploaded_bytes > archive::MAX_ARCHIVE_UPLOAD_BYTES {
+                                    // Close the handle so the staging dir can
+                                    // be cleaned up (Windows holds open files).
+                                    drop(file);
+                                    return archive::ArchiveError::too_large().into_response();
+                                }
+                                if let Err(error) = tokio::io::AsyncWriteExt::write_all(
+                                    &mut file,
+                                    &chunk,
+                                )
+                                .await
+                                {
+                                    return multipart_failed(error);
+                                }
+                            }
                         }
-                        Ok(bytes) => file_bytes = Some(bytes.to_vec()),
                     }
+                    if let Err(error) =
+                        tokio::io::AsyncWriteExt::flush(&mut file).await
+                    {
+                        return multipart_failed(error);
+                    }
+                    drop(file);
+                    upload_stage = Some(stage);
+                    upload_path = Some(path);
                 } else if name == "mode" {
                     match field.text().await {
-                        Err(error) => {
-                            return archive::ArchiveError::internal(error.to_string())
-                                .into_response();
-                        }
+                        Err(error) => return multipart_failed(error),
                         Ok(text) => body_mode = Some(text),
                     }
                 }
             }
         }
     }
-    let Some(file_bytes) = file_bytes else {
+    let (Some(stage), Some(path)) = (upload_stage, upload_path) else {
         return bad_request("Archive file is required.");
     };
     let query_mode = query_values(&params, "mode");
@@ -367,7 +405,10 @@ async fn import_archive(
     let data_dir = state.data_dir.clone();
     let outcome = with_exclusive_operation(&state.ops, "importing_archive", None, async move {
         tokio::task::spawn_blocking(move || {
-            archive::run_import(&pool, &data_dir, &file_bytes, query_mode.as_deref(), body_mode.as_deref())
+            // `stage` is only held to keep `upload.zip` on disk until the
+            // import below finishes.
+            let _stage_guard = &stage;
+            archive::run_import(&pool, &data_dir, &path, query_mode.as_deref(), body_mode.as_deref())
         })
         .await
     })
@@ -402,8 +443,13 @@ async fn delete_archive_data(State(state): State<AppState>) -> Response {
 pub fn archive_router() -> Router<AppState> {
     Router::new()
         .route("/api/archive/export", get(export_archive))
-        .route("/api/archive/import", post(import_archive))
         .route("/api/archive/data", delete(delete_archive_data))
+}
+
+/// Large-upload route: merged separately in `create_app` so it gets the
+/// multi-gigabyte body cap instead of the normal 10 MiB one.
+pub fn archive_import_router() -> Router<AppState> {
+    Router::new().route("/api/archive/import", post(import_archive))
 }
 
 pub fn collections_router() -> Router<AppState> {

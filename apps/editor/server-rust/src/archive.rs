@@ -51,6 +51,16 @@ impl ArchiveError {
         Self { status: 400, message: message.into(), current_operation: None }
     }
 
+    /// The staged upload outgrew the streaming cap: answers 413 as JSON so
+    /// callers see a message instead of a dropped connection.
+    pub fn too_large() -> Self {
+        Self {
+            status: 413,
+            message: "Archive exceeds maximum allowed size (5 GB).".to_owned(),
+            current_operation: None,
+        }
+    }
+
     pub fn internal(message: impl Into<String>) -> Self {
         Self { status: 500, message: message.into(), current_operation: None }
     }
@@ -1707,21 +1717,24 @@ pub fn run_export(
     })
 }
 
-/// Blocking import pipeline: stage the uploaded zip in a temp dir, validate
-/// it, and merge it into the live database. Runs on a blocking thread.
+/// Largest archive upload the import handler will stream to disk (5 GiB).
+/// Anything bigger answers 413 as JSON mid-stream instead of buffering.
+pub const MAX_ARCHIVE_UPLOAD_BYTES: u64 = 5 * 1024 * 1024 * 1024;
+
+/// Blocking import pipeline: validate the staged zip file and merge it into
+/// the live database. The caller stages the upload on disk (never in memory)
+/// and keeps that directory alive until this returns. Runs on a blocking thread.
 pub fn run_import(
     pool: &crate::DbPool,
     data_dir: &Path,
-    upload_bytes: &[u8],
+    upload_path: &Path,
     query_mode: Option<&str>,
     body_mode: Option<&str>,
 ) -> Result<String, ArchiveError> {
     let stage = tempfile::TempDir::new().map_err(io_failed)?;
-    let upload_path = stage.path().join("upload.zip");
-    std::fs::write(&upload_path, upload_bytes).map_err(io_failed)?;
     let extracted_root = stage.path().join("extracted");
     std::fs::create_dir_all(&extracted_root).map_err(io_failed)?;
-    extract_archive(&upload_path, &extracted_root)?;
+    extract_archive(upload_path, &extracted_root)?;
     let archive_data_dir = find_archive_data_dir(&extracted_root).ok_or_else(|| {
         ArchiveError::internal("Archive must contain a banknotes.db file and an images directory.")
     })?;
@@ -1752,6 +1765,20 @@ mod tests {
         assert_eq!(
             error.message,
             "Unknown import mode \"overwrite\". Use \"replace\" or \"merge\"."
+        );
+    }
+
+    #[tokio::test]
+    async fn too_large_answers_413_json() {
+        let response = ArchiveError::too_large().into_response();
+        assert_eq!(response.status(), StatusCode::from_u16(413).unwrap());
+        let bytes = axum::body::to_bytes(response.into_body(), usize::MAX)
+            .await
+            .expect("body reads");
+        let body: Value = serde_json::from_slice(&bytes).expect("body is JSON");
+        assert_eq!(
+            body,
+            json!({ "error": "Archive exceeds maximum allowed size (5 GB)." })
         );
     }
 

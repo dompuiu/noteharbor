@@ -355,6 +355,34 @@ async fn import_requires_a_file_even_when_idle() {
 }
 
 #[tokio::test]
+async fn import_accepts_bodies_above_old_global_limit() {
+    // Regression: an 11 MiB upload exceeds the old 10 MiB global
+    // `RequestBodyLimitLayer` (which surfaced through Vite as EPIPE /
+    // ERR_CONNECTION_RESET). The handler must stream it to disk (answering
+    // 500 for the garbage zip) instead of 413.
+    let (_dir, state) = archive_state();
+    let boundary = "largeboundary";
+    let large = vec![0x41u8; 11 * 1024 * 1024];
+    let body = multipart_body(boundary, vec![("file", Some("big.zip"), &large, "application/zip")]);
+    // Browsers and curl send Content-Length, which is what lets the old
+    // global cap short-circuit with 413 (surfacing through Vite as EPIPE /
+    // ERR_CONNECTION_RESET).
+    let request = Request::builder()
+        .method("POST")
+        .uri("/api/archive/import?mode=replace")
+        .header("content-type", format!("multipart/form-data; boundary={boundary}"))
+        .header("content-length", body.len())
+        .body(Body::from(body))
+        .expect("request builds");
+    let (status, _headers, bytes) = response_parts(send(create_app(state), request).await).await;
+
+    assert_ne!(status, StatusCode::PAYLOAD_TOO_LARGE);
+    assert_eq!(status, StatusCode::INTERNAL_SERVER_ERROR);
+    let parsed: serde_json::Value = serde_json::from_slice(&bytes).expect("body is JSON");
+    assert!(parsed.get("error").is_some(), "{parsed:?}");
+}
+
+#[tokio::test]
 async fn import_round_trip_replace_restores_collections() {
     let (_dir, state) = archive_state();
     let pool = state.pool.clone();
@@ -463,6 +491,118 @@ async fn import_round_trip_replace_restores_collections() {
         data_dir.join("images").join("notes").join(note_id.to_string()).join("front-full.jpg").is_file()
             || data_dir.join("images").join("notes").join("1").join("front-full.jpg").is_file()
     );
+}
+
+#[tokio::test]
+async fn import_round_trip_streams_archives_above_old_default_limit() {
+    // End to end above Axum's old 2 MiB `DefaultBodyLimit`: the upload must
+    // stream to disk and restore, not fail mid-stream with a 500.
+    let (_dir, state) = archive_state();
+    let pool = state.pool.clone();
+
+    let note_id: i64 = tokio::task::spawn_blocking(move || {
+        let conn = pool.get().expect("conn");
+        conn.execute(
+            "INSERT INTO collections (name, display_order) VALUES ('Big Trip', 1)",
+            [],
+        )
+        .expect("collection");
+        let collection: i64 = conn
+            .query_row("SELECT id FROM collections WHERE name = 'Big Trip'", [], |row| {
+                row.get(0)
+            })
+            .expect("collection id");
+        conn.execute(
+            "INSERT INTO banknotes (collection_id, display_order, denomination, images)
+             VALUES (?1, 1, 'Big', '[]')",
+            [collection],
+        )
+        .expect("note");
+        conn.query_row("SELECT id FROM banknotes WHERE denomination = 'Big'", [], |row| {
+            row.get::<_, i64>(0)
+        })
+        .expect("note id")
+    })
+    .await
+    .expect("join");
+
+    // Pseudo-random bytes so the export zip stays above 2 MiB after deflate.
+    let mut random = vec![0u8; 3 * 1024 * 1024];
+    let mut xorshift: u64 = 0x9E3779B97F4A7C15;
+    for byte in random.iter_mut() {
+        xorshift ^= xorshift << 13;
+        xorshift ^= xorshift >> 7;
+        xorshift ^= xorshift << 17;
+        *byte = (xorshift >> 56) as u8;
+    }
+    let data_dir = _dir.path().to_path_buf();
+    let note_images = data_dir.join("images").join("notes").join(note_id.to_string());
+    std::fs::create_dir_all(&note_images).expect("note dir");
+    std::fs::write(note_images.join("front-full.jpg"), &random).expect("image");
+    let images_json = serde_json::json!([
+        { "type": "front", "variant": "full", "localPath": format!("/api/images/notes/{note_id}/front-full.jpg"), "origin": "uploaded" }
+    ])
+    .to_string();
+    let pool = state.pool.clone();
+    tokio::task::spawn_blocking(move || {
+        let conn = pool.get().expect("conn");
+        conn.execute("UPDATE banknotes SET images = ?1", [images_json]).expect("images");
+    })
+    .await
+    .expect("join");
+
+    let export = Request::builder()
+        .uri("/api/archive/export")
+        .body(Body::from(()))
+        .expect("request builds");
+    let (status, _, zip_bytes) = response_parts(send(create_app(state.clone()), export).await).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(zip_bytes.len() > 2 * 1024 * 1024, "zip is {} bytes", zip_bytes.len());
+
+    let delete = Request::builder()
+        .method("DELETE")
+        .uri("/api/archive/data")
+        .body(Body::from(()))
+        .expect("request builds");
+    let (status, _, _) = response_parts(send(create_app(state.clone()), delete).await).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let boundary = "bigroundtripboundary";
+    let body = multipart_body(
+        boundary,
+        vec![("file", Some("noteharbor-archive.zip"), &zip_bytes, "application/zip")],
+    );
+    let import = Request::builder()
+        .method("POST")
+        .uri("/api/archive/import?mode=replace")
+        .header("content-type", format!("multipart/form-data; boundary={boundary}"))
+        .header("content-length", body.len())
+        .body(Body::from(body))
+        .expect("request builds");
+    let (status, _, bytes) = response_parts(send(create_app(state.clone()), import).await).await;
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&bytes));
+    assert_eq!(
+        serde_json::from_slice::<serde_json::Value>(&bytes).expect("json"),
+        serde_json::json!({ "success": true, "mode": "replace", "currentOperation": "idle" })
+    );
+
+    let pool = state.pool.clone();
+    let names: Vec<String> = tokio::task::spawn_blocking(move || {
+        let conn = pool.get().expect("conn");
+        let mut stmt = conn.prepare("SELECT name FROM collections ORDER BY id").expect("stmt");
+        stmt.query_map([], |row| row.get::<_, String>(0))
+            .expect("rows")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("collect")
+    })
+    .await
+    .expect("join");
+    assert_eq!(names, vec!["Big Trip".to_owned()]);
+    let restored = std::fs::read(
+        data_dir.join("images").join("notes").join("1").join("front-full.jpg"),
+    )
+    .expect("restored image");
+    assert_eq!(restored.len(), random.len());
 }
 
 #[tokio::test]

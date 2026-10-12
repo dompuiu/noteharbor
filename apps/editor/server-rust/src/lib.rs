@@ -24,7 +24,7 @@ use std::{
 
 use axum::{
     Json, Router,
-    extract::State,
+    extract::{DefaultBodyLimit, State},
     http::StatusCode,
     response::IntoResponse,
     routing::get,
@@ -255,8 +255,20 @@ async fn health_handler(State(state): State<AppState>) -> (StatusCode, Json<Valu
     }
 }
 
+/// Historical cap for every route except the archive import, matching the
+/// long-standing global `RequestBodyLimitLayer`.
+pub const NORMAL_BODY_LIMIT: usize = 10 * 1024 * 1024;
+/// Import cap, derived from the handler's streaming cap plus headroom for
+/// multipart framing: the handler's JSON 413 fires first for genuinely
+/// oversize files, while absurd bodies still trip the layer's plain 413.
+pub const IMPORT_BODY_LIMIT: usize = archive::MAX_ARCHIVE_UPLOAD_BYTES as usize + 1024 * 1024;
+
 pub fn create_app(state: AppState) -> Router {
-    Router::new()
+    // Limits are per-router: the import streams multi-gigabyte uploads to
+    // disk, while everything else keeps the historical 10 MiB cap. A single
+    // global layer would re-impose the small cap on the import (the Vite
+    // EPIPE / ERR_CONNECTION_RESET failure).
+    let normal = Router::new()
         .route("/api/health", get(health_handler))
         .merge(routes::archive_router())
         .merge(routes::collections_router())
@@ -268,8 +280,15 @@ pub fn create_app(state: AppState) -> Router {
         .merge(showcases::categories_router())
         .merge(showcases::nodes_router())
         .merge(showcases::showcases_router())
+        .layer(DefaultBodyLimit::max(NORMAL_BODY_LIMIT))
+        .layer(RequestBodyLimitLayer::new(NORMAL_BODY_LIMIT));
+    let import = routes::archive_import_router()
+        .layer(DefaultBodyLimit::max(IMPORT_BODY_LIMIT))
+        .layer(RequestBodyLimitLayer::new(IMPORT_BODY_LIMIT));
+    Router::new()
+        .merge(normal)
+        .merge(import)
         .fallback(fallback_handler)
-        .layer(RequestBodyLimitLayer::new(10 * 1024 * 1024))
         .layer(CorsLayer::permissive())
         .with_state(state)
 }
