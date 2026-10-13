@@ -172,32 +172,32 @@ describe("Note editor keyboard navigation", () => {
     expect(input).toHaveFocus();
   });
 
-  test("Shift+Arrow changes notes from inside a field", async () => {
+  test("Shift+Arrow keeps the field's selection handling and does not change notes", async () => {
     const onNavigateNext = vi.fn();
     const onNavigatePrevious = vi.fn();
     await renderLoadedForm({ onNavigateNext, onNavigatePrevious });
     const user = userEvent.setup();
 
     await user.keyboard("{Shift>}{ArrowRight}{/Shift}");
-    expect(onNavigateNext).toHaveBeenCalledTimes(1);
+    expect(onNavigateNext).not.toHaveBeenCalled();
 
     await user.keyboard("{Shift>}{ArrowLeft}{/Shift}");
-    expect(onNavigatePrevious).toHaveBeenCalledTimes(1);
+    expect(onNavigatePrevious).not.toHaveBeenCalled();
   });
 
-  test("Shift+h and Shift+l change notes from inside a field", async () => {
+  test("Shift+h and Shift+l type capitals inside a field instead of changing notes", async () => {
     const onNavigateNext = vi.fn();
     const onNavigatePrevious = vi.fn();
     const input = await renderLoadedForm({ onNavigateNext, onNavigatePrevious });
     const user = userEvent.setup();
 
-    await user.keyboard("{Shift>}l{/Shift}");
-    expect(onNavigateNext).toHaveBeenCalledTimes(1);
-    expect(input).toHaveValue("TWOTEST");
+    await user.keyboard("L");
+    expect(onNavigateNext).not.toHaveBeenCalled();
+    expect(input).toHaveValue("TWOTESTL");
 
-    await user.keyboard("{Shift>}h{/Shift}");
-    expect(onNavigatePrevious).toHaveBeenCalledTimes(1);
-    expect(input).toHaveValue("TWOTEST");
+    await user.keyboard("H");
+    expect(onNavigatePrevious).not.toHaveBeenCalled();
+    expect(input).toHaveValue("TWOTESTLH");
   });
 
   test("navigation stops at the ends of the collection", async () => {
@@ -275,5 +275,30 @@ describe("Note editor keyboard navigation", () => {
 
     await waitFor(() => expect(onSaveSuccess).toHaveBeenCalledTimes(1));
     expect(onSaveSuccess.mock.calls[0][3]).toBe("stay");
+  });
+
+  test("note fields disable browser autocomplete", async () => {
+    await renderLoadedForm();
+
+    for (const label of [
+      "Denomination",
+      "Date",
+      "Catalog #",
+      "Grading Company",
+      "Grade",
+      "Watermark",
+      "Serial",
+      "URL",
+      "Notes",
+    ]) {
+      expect(await screen.findByLabelText(label)).toHaveAttribute(
+        "autocomplete",
+        "off",
+      );
+    }
+    expect(document.getElementById("edit-note-form")).toHaveAttribute(
+      "autocomplete",
+      "off",
+    );
   });
 });

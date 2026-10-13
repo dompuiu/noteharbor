@@ -548,12 +548,10 @@ function NoteEditForm({
         return;
       }
 
-      // The editable counter owns its arrows while focused: they move the
-      // caret, they do not change notes.
-      if (
-        event.target instanceof HTMLElement &&
-        event.target.closest("[data-note-counter-input]")
-      ) {
+      // Inside a field the keys belong to the text: caret movement, text
+      // selection (Shift+Arrow), and typing capitals (Shift+h/l). Navigation
+      // only happens when focus is outside the editable controls.
+      if (isEditableElement(event.target)) {
         return;
       }
 
@@ -563,15 +561,6 @@ function NoteEditForm({
         event.key === "ArrowLeft" || event.key === "h" || event.key === "H";
 
       if (!goNext && !goPrevious) {
-        return;
-      }
-
-      // Inside a field the plain keys belong to the text (caret movement and
-      // the letters h/l) and Ctrl/Cmd keeps its normal handling, so only a
-      // bare Shift steps to an adjacent note there.
-      const shiftOnly = event.shiftKey && !event.metaKey && !event.ctrlKey;
-
-      if (isEditableElement(event.target) && !shiftOnly) {
         return;
       }
 
@@ -1581,6 +1570,7 @@ function NoteEditForm({
         <form
           className="form-grid"
           id="edit-note-form"
+          autoComplete="off"
           onSubmit={handleSubmit}
           ref={formElementRef}
         >
@@ -1599,6 +1589,7 @@ function NoteEditForm({
               <div className="field-block" key={name}>
                 <label htmlFor={inputId}>{label}</label>
                 <input
+                  autoComplete="off"
                   data-note-editor-context-field="true"
                   id={inputId}
                   name={name}
@@ -1615,6 +1606,7 @@ function NoteEditForm({
             <label htmlFor={fieldInputId("url")}>URL</label>
             <div className="url-field-row">
               <input
+                autoComplete="off"
                 data-note-editor-context-field="true"
                 id={fieldInputId("url")}
                 name="url"
@@ -1642,6 +1634,7 @@ function NoteEditForm({
           <div className="field-block full-span">
             <label htmlFor={fieldInputId("notes")}>Notes</label>
             <textarea
+              autoComplete="off"
               className="note-textarea"
               data-note-editor-context-field="true"
               id={fieldInputId("notes")}
