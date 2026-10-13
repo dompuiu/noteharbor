@@ -1,7 +1,7 @@
 {
   "name": "editor_desktop_electron",
   "private": true,
-  "version": "2.4.0",
+  "version": "2.4.1",
   "description": "Electron-packaged Note Harbor Editor",
   "type": "module",
   "main": "src/main.js",

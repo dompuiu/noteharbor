@@ -2,6 +2,16 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.4.1] - 2026-10-12
+
+### Changed
+
+- Empty-library state: the no-collections prompt uses the shared dashed empty-state box (artwork, title, description), so the collections home, the note editor, and the table empty cell read as one pattern. "Create a collection" is now the primary action, and the empty panels gain eyebrow and helper copy.
+
+### Fixed
+
+- Desktop (Tauri): the installer no longer embeds the `data` directory as a bundled resource.
+
 ## [2.4.0] - 2026-10-12
 
 ### Added
