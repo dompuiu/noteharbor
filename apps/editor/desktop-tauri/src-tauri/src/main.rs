@@ -20,9 +20,8 @@ use std::{
     },
 };
 
-use editor_desktop_tauri::{chrome, data_dir, menu, paths, prefs, server, urls, window_state};
+use editor_desktop_tauri::{chrome, data_dir, paths, prefs, server, urls, window_state};
 use tauri::{Manager, WebviewUrl};
-use tauri_plugin_dialog::DialogExt;
 use tauri_plugin_opener::OpenerExt;
 
 /// JS bridge injected before any page script runs. Defines the same
@@ -38,7 +37,6 @@ if (window.__TAURI__ && !window.noteHarborDesktop) {
     openScrapeBrowser: () => invoke('open_scrape_browser'),
     getShowcasePhotoSize: () => invoke('get_showcase_photo_size'),
     setShowcasePhotoSize: (photoSize) => invoke('set_showcase_photo_size', { value: photoSize }),
-    toggleMenuBar: () => invoke('toggle_menu_bar'),
   };
 }
 "#;
@@ -306,22 +304,6 @@ fn get_showcase_photo_size(app: tauri::AppHandle) -> String {
     prefs::read_showcase_photo_size(&desktop_preferences_path(&app))
 }
 
-/// Flips the window menu bar and reports whether it is visible now.
-/// `hide_menu`/`show_menu` are Windows/Linux-only no-ops elsewhere, so the
-/// page gates the listener to those platforms and macOS never invokes this.
-#[tauri::command]
-fn toggle_menu_bar(window: tauri::WebviewWindow) -> Result<bool, String> {
-    let visible = window
-        .is_menu_visible()
-        .map_err(|error| error.to_string())?;
-    if visible {
-        window.hide_menu().map_err(|error| error.to_string())?;
-    } else {
-        window.show_menu().map_err(|error| error.to_string())?;
-    }
-    Ok(!visible)
-}
-
 #[tauri::command]
 fn set_showcase_photo_size(app: tauri::AppHandle, value: String) -> String {
     let path = desktop_preferences_path(&app);
@@ -329,15 +311,6 @@ fn set_showcase_photo_size(app: tauri::AppHandle, value: String) -> String {
         let _ = std::fs::create_dir_all(parent);
     }
     prefs::write_showcase_photo_size(&path, &value).unwrap_or(value)
-}
-
-fn build_help_menu(app: &tauri::AppHandle) -> tauri::Result<tauri::menu::Menu<tauri::Wry>> {
-    use tauri::menu::{MenuBuilder, MenuItemBuilder, SubmenuBuilder};
-    let about =
-        MenuItemBuilder::with_id("about-note-harbor-editor", "About Note Harbor Editor")
-            .build(app)?;
-    let help = SubmenuBuilder::new(app, "Help").item(&about).build()?;
-    MenuBuilder::new(app).item(&help).build()
 }
 
 pub fn run() {
@@ -348,26 +321,8 @@ pub fn run() {
             get_scrape_browser_status,
             open_scrape_browser,
             get_showcase_photo_size,
-            set_showcase_photo_size,
-            toggle_menu_bar
+            set_showcase_photo_size
         ])
-        .on_menu_event(|app, event| {
-            if event.id().as_ref() == "about-note-harbor-editor" {
-                // `showAboutWindow` parity: macOS uses the native panel via
-                // the app metadata, other platforms get a version message
-                // box like Electron's `dialog.showMessageBox`.
-                #[cfg(target_os = "macos")]
-                app.show_about_panel();
-                #[cfg(not(target_os = "macos"))]
-                {
-                    let version = app.config().version.clone().unwrap_or_default();
-                    app.dialog()
-                        .message(format!("Version {version}"))
-                        .title("About Note Harbor Editor")
-                        .blocking_show();
-                }
-            }
-        })
         .setup(|app| {
             let resource_dir = app.path().resource_dir().ok();
             let data_dir = data_dir::ensure_data_dir(
@@ -390,10 +345,6 @@ pub fn run() {
             app.manage(Arc::new(ShellState {
                 scrape_launching: AtomicBool::new(false),
             }));
-
-            if let Ok(menu) = build_help_menu(app.handle()) {
-                let _ = app.set_menu(menu);
-            }
 
             let saved = read_saved_window_state(app.handle());
             let opener = app.handle().clone();
@@ -429,12 +380,6 @@ pub fn run() {
                 builder = builder.maximized(true);
             }
             let window = builder.build()?;
-            // `autoHideMenuBar` parity with Electron: the menu bar starts
-            // hidden (Windows/Linux only) and solitary Alt presses in the
-            // page toggle it back via `toggle_menu_bar`.
-            if menu::menu_starts_hidden(current_platform()) {
-                let _ = window.hide_menu();
-            }
             // Saved positions restore only when visible on a current monitor,
             // mirroring `isWindowVisibleOnAnyDisplay()` in `main.js`.
             if let (Some(x), Some(y)) = (saved.x, saved.y) {
