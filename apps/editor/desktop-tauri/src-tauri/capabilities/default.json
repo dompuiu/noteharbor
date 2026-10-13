@@ -11,6 +11,10 @@
   "permissions": [
     "core:default",
     "dialog:default",
-    "opener:default"
+    "opener:default",
+    "allow-get-scrape-browser-status",
+    "allow-open-scrape-browser",
+    "allow-get-showcase-photo-size",
+    "allow-set-showcase-photo-size"
   ]
 }

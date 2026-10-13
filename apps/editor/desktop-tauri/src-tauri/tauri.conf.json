@@ -9,6 +9,7 @@
     "beforeBuildCommand": "pnpm --dir ../desktop-electron build:web"
   },
   "app": {
+    "withGlobalTauri": true,
     "security": {
       "csp": null
     }

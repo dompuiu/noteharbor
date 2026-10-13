@@ -1,0 +1,19 @@
+[[permission]]
+identifier = "allow-get-scrape-browser-status"
+description = "Enables the get_scrape_browser_status command: lets the Note editor check whether the CDP scrape browser is already listening."
+commands.allow = ["get_scrape_browser_status"]
+
+[[permission]]
+identifier = "allow-open-scrape-browser"
+description = "Enables the open_scrape_browser command: lets Auto Populate launch the CDP-enabled Chrome used for scraping."
+commands.allow = ["open_scrape_browser"]
+
+[[permission]]
+identifier = "allow-get-showcase-photo-size"
+description = "Enables the get_showcase_photo_size command: lets the UI read the persisted showcase photo-size preference."
+commands.allow = ["get_showcase_photo_size"]
+
+[[permission]]
+identifier = "allow-set-showcase-photo-size"
+description = "Enables the set_showcase_photo_size command: lets the UI persist the showcase photo-size preference."
+commands.allow = ["set_showcase_photo_size"]
