@@ -35,7 +35,11 @@ function NoteEditorDestination({ emptyLibrary, selectedCollectionId }) {
         <div className="panel">
           <div className="panel-heading">
             <div className="panel-heading-copy">
+              <p className="eyebrow">Catalog</p>
               <h1>Notes</h1>
+              <p className="muted">
+                Notes live inside collections, and there are none yet.
+              </p>
             </div>
           </div>
           <NoCollectionsPrompt />
@@ -73,7 +77,12 @@ function CollectionHomeRedirect() {
         <div className="panel">
           <div className="panel-heading">
             <div className="panel-heading-copy">
+              <p className="eyebrow">Catalog</p>
               <h1>Collections</h1>
+              <p className="muted">
+                Organize banknotes into collections, then add notes to each
+                one.
+              </p>
             </div>
           </div>
           <NoCollectionsPrompt />

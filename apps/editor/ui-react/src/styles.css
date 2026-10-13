@@ -2655,14 +2655,26 @@ td {
   text-align: center;
 }
 
-/* The empty-library prompt sits in the table's centred empty cell, so its
-   actions line up under the message. */
-.no-collections-prompt .inline-actions {
-  margin-top: 12px;
+/* The empty-library prompt reuses the shared dashed empty-state box, so the
+   collections home, the note editor, and the table's empty cell all read as
+   one pattern. The box owns the centering; the copy stays readable at panel
+   width. */
+.no-collections-prompt.showcase-empty-box {
+  margin-bottom: 0;
 }
 
-.table-empty-cell .no-collections-prompt .inline-actions {
-  justify-content: center;
+.no-collections-prompt .showcase-empty-text {
+  max-width: 52ch;
+}
+
+.no-collections-prompt .showcase-empty-actions {
+  flex-wrap: wrap;
+}
+
+.table-empty-cell .no-collections-prompt.showcase-empty-box {
+  margin: 0 auto;
+  max-width: 560px;
+  text-align: center;
 }
 
 .table-thumb {
