@@ -1,5 +1,4 @@
-//! Scrape port (`server-node/src/routes/scrape.js` + `fetchHtml.js` +
-//! `scrapers/*`): grading-company page parsers plus the CDP browser-attach
+//! Scrape routes: grading-company page parsers plus the CDP browser-attach
 //! flow behind `POST /api/scrape/preview`.
 //!
 //! Crate choices follow the survey on `research/scrape`: `scraper`
@@ -10,9 +9,8 @@
 //! structure.
 //!
 //! `NOTE_HARBOR_BROWSER_CDP_URL` keeps its name and default verbatim; the
-//! Win/macOS-only Chrome-launch gate lives in the desktop shell (ticket 07),
-//! exactly like `desktop-electron/src/main.js` — the server attaches to
-//! whatever CDP endpoint it is given on every platform.
+//! Win/macOS-only Chrome-launch gate lives in the desktop shell (ticket 07) —
+//! the server attaches to whatever CDP endpoint it is given on every platform.
 
 use std::sync::OnceLock;
 use std::time::Duration;
@@ -32,7 +30,7 @@ pub const MIN_NAVIGATION_TIMEOUT_MS: u64 = 5_000;
 pub const MAX_NAVIGATION_TIMEOUT_MS: u64 = 120_000;
 pub const NO_SCRAPER_MESSAGE: &str = "No scraper is implemented for this grading company yet.";
 
-/// Mirrors `getBrowserCdpUrl` in `routes/scrape.js`: trimmed env override or
+/// Resolves the browser CDP URL: trimmed env override or
 /// the `http://localhost:9222` default.
 pub fn browser_cdp_url() -> String {
     let trimmed = std::env::var("NOTE_HARBOR_BROWSER_CDP_URL")
@@ -45,7 +43,7 @@ pub fn browser_cdp_url() -> String {
     }
 }
 
-/// Mirrors `normalizeNavigationTimeoutMs` in `fetchHtml.js`: `Number(value)`
+/// Normalizes the navigation timeout: `Number(value)`
 /// semantics, falling back to 30 s for missing/non-positive/non-finite input
 /// and clamping to 5–120 s.
 pub fn normalize_navigation_timeout_ms(value: Option<&Value>) -> u64 {
@@ -74,7 +72,7 @@ pub fn normalize_navigation_timeout_ms(value: Option<&Value>) -> u64 {
     ) as u64
 }
 
-/// Mirrors `normalizeUrl` in `fetchHtml.js`: trim, strip `#fragment`, strip
+/// Normalizes a URL: trim, strip `#fragment`, strip
 /// one trailing `/`.
 pub fn normalize_url(url: &str) -> String {
     let trimmed = url.trim();
@@ -85,7 +83,7 @@ pub fn normalize_url(url: &str) -> String {
         .to_owned()
 }
 
-/// Mirrors `buildCdpHint` in `fetchHtml.js` (joined with single spaces).
+/// Builds the CDP-unreachable hint (joined with single spaces).
 pub fn build_cdp_hint(cdp_url: &str) -> String {
     [
         "Unable to reach the configured CDP browser endpoint.",
@@ -100,7 +98,7 @@ pub fn build_cdp_hint(cdp_url: &str) -> String {
     .join(" ")
 }
 
-/// Mirrors `isHttpUrl` in `fetchHtml.js`.
+/// Whether the URL uses the `http`/`https` scheme.
 pub fn is_http_url(url: &str) -> bool {
     url::Url::parse(url)
         .map(|parsed| parsed.scheme() == "http" || parsed.scheme() == "https")
@@ -117,7 +115,7 @@ pub fn real_page_urls(page_urls: &[String]) -> Vec<String> {
         .collect()
 }
 
-/// Mirrors `describeOpenPages`: `(no open browser tabs)` when empty, else one
+/// Describes the open tabs: `(no open browser tabs)` when empty, else one
 /// `- <url>` line per tab (`about:blank` for blank entries).
 pub fn describe_open_pages(page_urls: &[String]) -> String {
     if page_urls.is_empty() {
@@ -130,7 +128,7 @@ pub fn describe_open_pages(page_urls: &[String]) -> String {
         .join("\n")
 }
 
-/// Mirrors `findMatchingOpenPage`: last tab whose normalized URL matches,
+/// Finds the matching open tab: last tab whose normalized URL matches,
 /// skipping blank and `about:blank` entries. Returns the index into the
 /// caller's slice.
 pub fn find_matching_open_page(page_urls: &[String], normalized_requested: &str) -> Option<usize> {
@@ -177,8 +175,8 @@ pub fn resolve_page_plan(
     ))
 }
 
-/// Readiness probe mirroring the shell's `requestJson` check
-/// (`desktop-electron/src/main.js`): `GET <cdpUrl>/json/version` with a 1 s
+/// Readiness probe mirroring the shell's `requestJson` check:
+/// `GET <cdpUrl>/json/version` with a 1 s
 /// timeout; HTTP ≥ 400 counts as unavailable.
 pub async fn probe_cdp_version(cdp_url: &str) -> Result<String, String> {
     let endpoint = format!("{}/json/version", cdp_url.trim_end_matches('/'));
@@ -201,7 +199,7 @@ pub async fn probe_cdp_version(cdp_url: &str) -> Result<String, String> {
 // Scraper selection + parsers
 // ---------------------------------------------------------------------------
 
-/// Mirrors `getScraperForNote` in `routes/scrape.js` (case-insensitive).
+/// Selects the scraper for a note by URL/company (case-insensitive).
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ScraperKind {
     Pmg,
@@ -255,7 +253,7 @@ pub struct ParsedScrape {
     pub images: Vec<ScrapedImage>,
 }
 
-/// Mirrors `normalizeLabel` in `pmg.js`/`pcgs.js`/`tqg.js`: lowercase,
+/// Normalizes a detail label: lowercase,
 /// non-alnum runs become `_`, one leading/trailing `_` stripped.
 pub fn normalize_label(label: &str) -> String {
     let mut out = String::with_capacity(label.len());
@@ -390,7 +388,7 @@ fn comments_text(document: &Html, sel: &Selector) -> Option<String> {
     }
 }
 
-// --- PCGS embedded-literal helpers (mirror `pcgs.js` exactly) ---
+// --- PCGS embedded-literal helpers ---
 
 fn unescape_html_string(value: &str) -> String {
     value
@@ -506,7 +504,7 @@ fn extract_table_details(document: &Html) -> Map<String, Value> {
     details
 }
 
-/// Mirrors `normalizeGrade` in `pcgs.js`.
+/// Normalizes the PCGS grade display value.
 pub fn normalize_grade(
     display_grade: Option<&str>,
     grade_desc: Option<&str>,
@@ -716,7 +714,7 @@ pub fn parse_pcgs(html: &str, page_url: &str, note: &NoteRef) -> ParsedScrape {
 
 // --- TQG ---
 
-/// Mirrors `getQueryFolderName` in `tqg.js`: last `/query/<folder>` path
+/// Extracts the TQG query folder: last `/query/<folder>` path
 /// segment, case-insensitive, else `None`.
 pub fn tqg_query_folder(page_url: &str) -> Option<String> {
     let pathname = url::Url::parse(page_url).ok()?.path().to_owned();
@@ -727,7 +725,7 @@ pub fn tqg_query_folder(page_url: &str) -> Option<String> {
         .map(|group| group.as_str().to_owned())
 }
 
-/// Mirrors `getCellText`: the label cell's text with `span` descendants
+/// Reads a label cell's text with `span` descendants
 /// removed, trimmed, one trailing colon stripped.
 fn tqg_cell_text(cell: scraper::ElementRef<'_>) -> String {
     let inner = cell.inner_html();
@@ -794,16 +792,14 @@ pub fn parse_tqg(html: &str, page_url: &str, note: &NoteRef) -> ParsedScrape {
 }
 
 // ---------------------------------------------------------------------------
-// Browser-attach fetch (`fetchHtml.js` via `chromiumoxide`)
+// Browser-attach fetch (via `chromiumoxide`)
 // ---------------------------------------------------------------------------
 
-/// Attach-only fetch mirroring `fetchHtml`: connect over CDP (never launch),
+/// Attach-only fetch: connect over CDP (never launch),
 /// reuse the last matching tab or open-navigate when `open_if_missing`,
-/// settle `wait_seconds`, then return `page.content().
-///
-/// Dropping `Browser` disconnects without killing the user's browser, which
-/// is exactly what `browser.close()` meant on a `connectOverCDP` handle in
-/// `fetchHtml.js` — so unlike the launch flow, nothing is closed here.
+/// settle `wait_seconds`, then return `page.content()`.
+/// Dropping `Browser` disconnects without killing the user's browser —
+/// so unlike the launch flow, nothing is closed here.
 pub async fn fetch_html(
     url: &str,
     cdp_url: &str,
@@ -922,7 +918,7 @@ async fn preview(body: Option<Json<PreviewPayload>>) -> Response {
     {
         Ok(html) => html,
         Err(message) => {
-            // Mirrors the `isNoScraper` check in the Express catch: the
+            // Keeps the `isNoScraper` status mapping: the
             // early return above already covers it, but the mapping stays so
             // a future fetch path that throws selection errors keeps the 400.
             let status = if message.contains(NO_SCRAPER_MESSAGE) {
@@ -1162,7 +1158,7 @@ mod tests {
         assert_eq!(scraper_for_note("", ""), None);
     }
 
-    // --- Timeout + URL helpers (port of `fetchHtml.test.js`) ---
+    // --- Timeout + URL helpers ---
 
     #[test]
     fn navigation_timeout_falls_back_for_missing_or_invalid_values() {

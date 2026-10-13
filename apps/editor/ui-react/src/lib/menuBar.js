@@ -1,5 +1,5 @@
 // Alt-toggles the desktop menu bar: the Tauri shell starts it hidden on
-// Windows/Linux (`autoHideMenuBar` parity with Electron), and a solitary Alt
+// Windows/Linux (auto-hide menu bar), and a solitary Alt
 // press shows or hides it again. Alt combinations (access keys, Alt+Tab) and
 // macOS (whose menu is global) never toggle.
 

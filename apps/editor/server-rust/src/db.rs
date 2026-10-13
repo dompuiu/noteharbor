@@ -1,7 +1,5 @@
-//! SQLite layer: pool, schema/migrations, and collection CRUD.
-//!
-//! Faithful port of the corresponding parts of `server-node/src/db.js` over
-//! `rusqlite` + `r2d2`. Statements keep the Node SQL verbatim so ordering,
+//! SQLite layer: pool, schema/migrations, and collection CRUD over
+//! `rusqlite` + `r2d2`. Statements keep the historical SQL verbatim so ordering,
 //! defaults (`datetime('now')`), and migration behavior match exactly.
 
 use std::{
@@ -20,8 +18,8 @@ use crate::{AppError, is_database_unavailable};
 pub type DbPool = Pool<SqliteConnectionManager>;
 
 /// Every pooled connection enforces foreign keys (the cascade deletes the
-/// schema relies on) and waits on locked rows like better-sqlite3's default
-/// 5 s busy timeout instead of failing immediately.
+/// schema relies on) and waits on locked rows with a 5 s busy timeout
+/// instead of failing immediately.
 #[derive(Debug)]
 struct ConnectionSetup;
 

@@ -1,4 +1,4 @@
-//! Chrome CDP launcher parity with `desktop-electron/src/main.js`.
+//! Chrome CDP launcher.
 //!
 //! The server (`server-rust`) only *attaches* to a CDP endpoint; launching
 //! the browser is shell-side and stays Win/macOS-only, with the same env
@@ -31,7 +31,7 @@ impl ScrapeBrowserStatus {
     }
 }
 
-/// Mirrors `getChromeCdpUrl()` in `main.js`: trimmed env or the default.
+/// Resolves the CDP URL: trimmed env override or the default.
 pub fn chrome_cdp_url(env_value: Option<&str>) -> String {
     match env_value.map(str::trim) {
         Some(value) if !value.is_empty() => value.to_owned(),
@@ -48,10 +48,9 @@ pub fn chrome_cdp_port(cdp_url: &str) -> u16 {
         .unwrap_or(DEFAULT_CHROME_CDP_PORT)
 }
 
-/// Platform candidates, mirroring `CHROME_CANDIDATE_PATHS_BY_PLATFORM`.
-/// The vocabulary is Electron's `process.platform` (`win32`/`darwin`);
-/// anything else gets no candidates. `home_dir` is injected (tests) instead
-/// of read from the OS.
+/// Platform candidates for the scrape-browser executable.
+/// The platform vocabulary is `win32`/`darwin` (anything else gets no
+/// candidates). `home_dir` is injected (tests) instead of read from the OS.
 pub fn chrome_candidate_paths(platform: &str, home_dir: Option<&str>) -> Vec<String> {
     match platform {
         "win32" => vec![
@@ -107,7 +106,7 @@ pub fn resolve_chrome_executable_path(
     Err(lines.join("\n"))
 }
 
-/// Mirrors the spawn args in `openScrapeBrowser()`.
+/// Spawn args for opening the scrape browser.
 pub fn chrome_launch_args(port: u16, address: &str, user_data_dir: &Path) -> Vec<String> {
     vec![
         format!("--remote-debugging-port={port}"),
@@ -145,7 +144,7 @@ mod tests {
     }
 
     #[test]
-    fn platform_support_matches_electron_gate() {
+    fn platform_support_matches_win_mac_gate() {
         // Exact `process.platform` vocabulary: no `windows`/`macos` aliases.
         assert!(is_scrape_browser_supported("win32"));
         assert!(is_scrape_browser_supported("darwin"));

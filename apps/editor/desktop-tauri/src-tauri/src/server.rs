@@ -1,9 +1,10 @@
 //! Embedded `server-rust` bootstrap shared by the Tauri shell binary.
 //!
 //! Kept here (not in `main.rs`) so the "Rust on `127.0.0.1:0`" contract is
-//! covered by an HTTP-level test without a WebView. Mirrors
-//! `startEmbeddedServer()` in `desktop-electron/src/main.js`: data dir + web
-//! dist + serve flag go through the same `NOTE_HARBOR_*` env names.
+//! covered by an HTTP-level test without a WebView. The embedded server
+//! startup (data dir + web dist + serve flag) goes through the same
+//! `NOTE_HARBOR_*` env names as the former Electron shell's
+//! `startEmbeddedServer()`.
 
 use std::path::PathBuf;
 

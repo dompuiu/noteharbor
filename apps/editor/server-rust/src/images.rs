@@ -1,4 +1,4 @@
-//! Image storage helpers: faithful port of `server-node/src/imageStore.js`.
+//! Image storage helpers.
 //!
 //! Storage layout parity (recorded for ticket 04):
 //! - Files live under `<data_dir>/images/notes/<note_id>/`
@@ -67,8 +67,7 @@ pub fn generate_flag_field_name(image_type: &str) -> String {
     format!("generate_image_{image_type}_thumbnail_from_full")
 }
 
-/// Mirrors `parseBooleanFlag` in `imageStore.js` (same truthy set as the
-/// server env parser).
+/// Parses boolean flags (same truthy set as the server env parser).
 pub fn parse_boolean_flag(value: Option<&str>) -> bool {
     matches!(
         value.unwrap_or("").trim().to_lowercase().as_str(),

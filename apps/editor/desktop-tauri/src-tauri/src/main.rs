@@ -4,7 +4,7 @@
 )]
 
 // Tauri shell entry: embeds `server-rust` on 127.0.0.1:0 and loads it in a
-// WebView. Parity target: `desktop-electron/src/main.js`.
+// WebView.
 //
 // Navigation stays inside the WebView at the embedded http:// URL, so the
 // UI's `assignLocation` seam (`ui-react/src/lib/navigation.js`) keeps working
@@ -24,10 +24,10 @@ use editor_desktop_tauri::{chrome, data_dir, paths, prefs, server, urls, window_
 use tauri::{Manager, WebviewUrl};
 use tauri_plugin_opener::OpenerExt;
 
-/// JS bridge injected before any page script runs. Defines the same
+/// JS bridge injected before any page script runs. Defines the
 /// `window.noteHarborDesktop` surface the UI reads (`appMode.js`,
-/// `photoSize.js`, `NoteEditForm.jsx`), backed by Tauri `invoke` instead of
-/// Electron IPC. `showNoteEditorTextMenu` is intentionally absent: without it
+/// `photoSize.js`, `NoteEditForm.jsx`), backed by Tauri `invoke`.
+/// `showNoteEditorTextMenu` is intentionally absent: without it
 /// the UI keeps the WebView's native context menu (see ticket resolution).
 const DESKTOP_BRIDGE_JS: &str = r#"
 if (window.__TAURI__ && !window.noteHarborDesktop) {
@@ -141,9 +141,8 @@ fn save_window_state_for_window(window: &tauri::WebviewWindow) {
         window_state::WINDOW_STATE_FILENAME,
     );
     // `inner_size` is physical pixels; the builder takes logical ones, so
-    // scale back for a HiDPI-stable restore. Electron instead re-saves the
-    // pre-maximize normal bounds; Tauri exposes no normal-bounds API, so a
-    // maximized save restores as a large plain window (recorded gap).
+    // scale back for a HiDPI-stable restore. Tauri exposes no normal-bounds
+    // API, so a maximized save restores as a large plain window (recorded gap).
     let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
     let (width, height) = window
         .inner_size()
@@ -392,9 +391,9 @@ pub fn run() {
                     ));
                 }
             }
-            // Saves run synchronously on each event (no 300 ms debounce like
-            // Electron): the payload is a small JSON write and correctness
-            // (state survives a crash) beats write coalescing here.
+            // Saves run synchronously on each event: the payload is a small
+            // JSON write and correctness (state survives a crash) beats
+            // write coalescing here.
             let persist_window = window.clone();
             window.on_window_event(move |event| {
                 if matches!(

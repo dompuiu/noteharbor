@@ -1,23 +1,22 @@
-//! Showcases + nodes + categories port (`server-node/src/routes/showcases.js`
-//! + `routes/categories.js` + the showcase parts of `src/db.js`).
+//! Showcases + nodes + categories routes plus the showcase database helpers.
 //!
-//! Parity notes (ticket 10):
+//! Behavior notes (ticket 10):
 //! - Showcase CRUD + order, node tree building with embedded notes, placement
 //!   rules (top-level categories, groupings under category/grouping, notes
 //!   under parents), node reorder/rename/cover/delete, category pool with
 //!   get-or-create (no delete).
-//! - Route-level catch semantics mirror Express exactly: POST/PUT/reorder
+//! - Route-level catch semantics are: POST/PUT/reorder
 //!   answer any database failure as 400 with the message (existence checks
 //!   before the `try` still propagate 503/500, 404s preserved), while
 //!   GET/DELETE propagate `AppError`.
 //! - `readShowcaseId`/`parseId` use `Number()` coercion (`js_number`): an
 //!   unparsable id is 400, an unknown id is 404. Node ids in reorder bodies
 //!   use `Number()` too: NaN can never join the permutation, so the reorder
-//!   fails with the permutation message exactly like Node's membership check.
+//!   fails with the permutation message, like the original membership check.
 //! - Category placements check only `parent_id` for the top-level rule (a
 //!   `parent_node_id` alias does not trigger it), groupings require
-//!   `parent_id`, and the notes batch reads `parent_id ?? parent_node_id`,
-//!   exactly like Node. Node reorder reads only the canonical
+//!   `parent_id`, and the notes batch reads `parent_id ?? parent_node_id`.
+//!   Node reorder reads only the canonical
 //!   `parent_node_id`/`node_ids` keys.
 //! - The tree nests rows ordered `position, id` at every level; note and cover
 //!   payloads are full `rowToNote` shapes with their tags.
@@ -147,12 +146,12 @@ const GET_NODE_SQL: &str = "SELECT
 // Small helpers (mirror `db.js`)
 // ---------------------------------------------------------------------------
 
-/// Trim + collapse internal whitespace runs, like `normalizeName` in `db.js`.
+/// Trim + collapse internal whitespace runs.
 pub fn normalize_name(value: &str) -> String {
     value.split_whitespace().collect::<Vec<_>>().join(" ")
 }
 
-/// Route-level trim (Express `String(value ?? '').trim()` via `node_string`,
+/// Route-level trim (`String(value ?? '').trim()` semantics via `node_string`,
 /// which carries the JS `String()` fidelity for arrays/objects).
 fn route_name(value: Option<&Value>) -> String {
     value.map(node_string).unwrap_or_default().trim().to_owned()
@@ -335,7 +334,7 @@ pub fn delete_showcase(conn: &mut Connection, id: i64) -> Result<(), DbError> {
 }
 
 fn assert_full_permutation(current: &[i64], requested: &[i64], message: &str) -> Result<(), DbError> {
-    // Mirrors Node: reject partial, duplicated, foreign, or non-positive lists.
+    // Reject partial, duplicated, foreign, or non-positive lists.
     if requested.len() != current.len()
         || requested.iter().any(|id| *id <= 0)
         || HashSet::<i64>::from_iter(requested.iter().copied()).len() != requested.len()

@@ -1,4 +1,4 @@
-//! Axum port of `server-node`: serves the static React UI plus `/api/*`.
+//! Axum editor backend: serves the static React UI plus `/api/*`.
 //!
 //! Slices so far: skeleton (config, health, static/SPA, 404s, 503 mapping),
 //! SQLite foundation (pool, migrations) with collections + operations-status
@@ -36,12 +36,10 @@ pub use db::DbPool;
 use ops::OperationState;
 
 pub const DEFAULT_HOST: &str = "127.0.0.1";
-/// Dev default: the Rust server listens on `:3002` while server-node keeps `:3001`.
+/// Dev default: the Rust server listens on `:3002`.
 pub const DEFAULT_PORT: u16 = 3002;
-/// `ROOT_DIR` depth matches `server-node/src/db.js`: that file resolves
-/// `../../../..` from `apps/editor/server-node/src/`; the crate manifest sits
-/// one level higher (`apps/editor/server-rust/`), so `../../..` lands on the
-/// same repo root.
+/// `ROOT_DIR` depth: the crate manifest sits at `apps/editor/server-rust/`,
+/// so `../../..` lands on the repo root.
 pub const DEFAULT_WEB_DIST_DIR: &str = "apps/editor/ui-react/dist";
 pub const DEFAULT_DATA_DIR: &str = "data";
 
@@ -67,7 +65,7 @@ impl ServerConfig {
         Self::repo_root().join(DEFAULT_DATA_DIR)
     }
 
-    /// Mirrors `parseBooleanEnv` in `server-node/src/index.js`.
+    /// Parses truthy boolean env values (`1`/`true`/`yes`/`on`).
     pub fn parse_bool(value: Option<&str>) -> bool {
         matches!(
             value.unwrap_or("").trim().to_lowercase().as_str(),
@@ -103,7 +101,7 @@ impl ServerConfig {
 pub struct AppState {
     /// Canonical UI dist directory when static serving is active, else `None`.
     /// Resolved once at startup, mirroring the `shouldServeWebDist() &&
-    /// fs.existsSync(webDistDir)` guard in `server-node/src/index.js`.
+    /// fs.existsSync(webDistDir)` startup guard.
     pub static_root: Option<PathBuf>,
     /// Resolved data directory (images cleanup, DB path derivation).
     pub data_dir: PathBuf,
@@ -177,11 +175,11 @@ pub fn js_string(value: &Value) -> String {
     }
 }
 
-/// better-sqlite3 reports failures with a SQLITE_* code. Only the
+/// SQLite reports failures with a SQLITE_* code. Only the
 /// availability codes mean the database can't be reached — constraint
-/// failures are client mistakes, not an outage. Mirrors
-/// `DATABASE_UNAVAILABLE_PREFIXES` / `isDatabaseUnavailable` in
-/// `server-node/src/index.js`.
+/// failures are client mistakes, not an outage. Mirrors the
+/// `DATABASE_UNAVAILABLE_PREFIXES` / `isDatabaseUnavailable` behavior
+/// of the former Node backend.
 pub const DATABASE_UNAVAILABLE_PREFIXES: &[&str] = &[
     "SQLITE_BUSY",
     "SQLITE_CANTOPEN",
@@ -233,7 +231,7 @@ impl axum::response::IntoResponse for AppError {
     }
 }
 
-/// Mirrors `checkHealth` in `server-node/src/index.js`, plus the kill-switch:
+/// Health check plus the kill-switch:
 /// a cheap round-trip proving the database file is open and answering.
 async fn health_handler(State(state): State<AppState>) -> (StatusCode, Json<Value>) {
     if !state.is_db_available() {
@@ -298,7 +296,7 @@ fn json_error(status: StatusCode, message: &str) -> axum::response::Response {
 }
 
 /// Unknown API routes answer JSON so fetch/XHR callers get a parseable error
-/// instead of an HTML 404 page (`server-node/src/index.js`).
+/// instead of an HTML 404 page.
 async fn fallback_handler(
     State(state): State<AppState>,
     uri: axum::http::Uri,

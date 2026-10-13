@@ -5,8 +5,8 @@
   "identifier": "com.noteharbor.editor",
   "build": {
     "frontendDist": "../../ui-react/dist",
-    "beforeDevCommand": "pnpm --dir ../desktop-electron build:web:watch",
-    "beforeBuildCommand": "pnpm --dir ../desktop-electron build:web"
+    "beforeDevCommand": "pnpm --dir . build:web:watch",
+    "beforeBuildCommand": "pnpm --dir . build:web"
   },
   "app": {
     "withGlobalTauri": true,

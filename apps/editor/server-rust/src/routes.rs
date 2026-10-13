@@ -1,7 +1,7 @@
-//! HTTP handlers. Route-level catch semantics mirror the Express routers
-//! exactly: collections POST/PUT/DELETE answer any database failure as 400
-//! with the message (the `catch` in `routes/collections.js` runs before the
-//! 503 middleware), while uncaught paths propagate `AppError` (503/500).
+//! HTTP handlers. Route-level catch semantics: collections POST/PUT/DELETE
+//! answer any database failure as 400 with the message (the route-level
+//! `catch` runs before the 503 mapping), while uncaught paths propagate
+//! `AppError` (503/500).
 
 use axum::{
     Json, Router,
@@ -202,12 +202,11 @@ async fn operation_status(State(state): State<AppState>) -> Response {
 }
 
 // ---------------------------------------------------------------------------
-// Images (static passthrough, mirrors `express.static(IMAGES_DIR)`)
+// Images (static passthrough)
 // ---------------------------------------------------------------------------
 
 /// Serves one managed image file from `<data_dir>/images`. Unknown paths
-/// answer the same JSON 404 as every other `/api/*` route (Express falls
-/// through its static middleware to the JSON 404 handler); traversal
+/// answer the same JSON 404 as every other `/api/*` route; traversal
 /// attempts that escape the images root are confined, never served.
 async fn serve_image(State(state): State<AppState>, Path(tail): Path<String>) -> Response {
     let images_root = state.data_dir.join("images");
@@ -333,8 +332,8 @@ async fn import_archive(
     // The upload streams straight to disk: archives can be gigabytes, so the
     // file field must never be buffered in memory. The staging directory is
     // kept alive until the blocking import finishes. A missing file answers
-    // 400 even while another operation runs, exactly like the multer guard
-    // before `withExclusiveOperation`.
+    // 400 even while another operation runs: the missing-file check runs
+    // before the exclusive-operation guard.
     let mut upload_stage: Option<tempfile::TempDir> = None;
     let mut upload_path: Option<std::path::PathBuf> = None;
     let mut body_mode: Option<String> = None;

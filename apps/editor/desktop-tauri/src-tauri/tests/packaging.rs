@@ -1,11 +1,10 @@
 //! Packaging contract for the Tauri shell (`08-packaging`).
 //!
-//! Asserts the `tauri.conf.json` bundle surface that gives installer parity
-//! with `desktop-electron` (electron-builder): explicit `nsis` + `appimage`
+//! Asserts the `tauri.conf.json` bundle surface: explicit `nsis` + `appimage`
 //! targets, `Utility` category, full icon set (no symlink placeholder),
 //! `data` + `web-dist` resources matching the runtime layouts in
-//! `paths.rs`, and per-user-or-machine NSIS installs mirroring Electron's
-//! `oneClick: false` + `allowToChangeInstallationDirectory: true`.
+//! `paths.rs`, and per-user-or-machine NSIS installs
+//! (`oneClick: false` + `allowToChangeInstallationDirectory: true` parity).
 //!
 //! Source paths (`../../../../data`, `../../ui-react/dist`) are
 //! intentionally NOT asserted for existence: both are gitignored build
@@ -32,7 +31,7 @@ fn bundle(config: &Value) -> &Value {
 }
 
 #[test]
-fn app_identity_matches_electron_parity() {
+fn app_identity_matches_shell_metadata() {
     let config = load_config();
     assert_eq!(
         config.get("productName").and_then(Value::as_str),
@@ -50,7 +49,7 @@ fn app_identity_matches_electron_parity() {
 }
 
 #[test]
-fn frontend_dist_and_build_hook_reuse_desktop_web_build() {
+fn frontend_dist_and_build_hook_reuse_tauri_web_build() {
     let config = load_config();
     let build = config.get("build").expect("tauri.conf.json has a build section");
     assert_eq!(
@@ -74,15 +73,15 @@ fn frontend_dist_and_build_hook_reuse_desktop_web_build() {
     // breaks every pnpm-scripted dev/build invocation.
     assert_eq!(
         build.get("beforeDevCommand").and_then(Value::as_str),
-        Some("pnpm --dir ../desktop-electron build:web:watch"),
-        "dev rebuilds dist on save via desktop-electron build:web:watch \
+        Some("pnpm --dir . build:web:watch"),
+        "dev rebuilds dist on save via desktop-tauri build:web:watch \
          (VITE_DESKTOP_RUNTIME=true): the shell serves dist from disk, \
          not the Vite dev server",
     );
     assert_eq!(
         build.get("beforeBuildCommand").and_then(Value::as_str),
-        Some("pnpm --dir ../desktop-electron build:web"),
-        "packaged UI must reuse desktop-electron build:web (VITE_DESKTOP_RUNTIME=true)",
+        Some("pnpm --dir . build:web"),
+        "packaged UI must reuse desktop-tauri build:web (VITE_DESKTOP_RUNTIME=true)",
     );
 }
 
@@ -100,13 +99,13 @@ fn bundle_targets_are_the_explicit_parity_pair() {
     for expected in ["nsis", "appimage"] {
         assert!(
             targets.contains(&expected.to_owned()),
-            "bundle.targets must include {expected:?} (electron nsis/portable + AppImage/dir parity), got {targets:?}",
+            "bundle.targets must include {expected:?} (nsis/portable + AppImage/dir parity), got {targets:?}",
         );
     }
 }
 
 #[test]
-fn bundle_category_matches_electron_linux_category() {
+fn bundle_category_matches_linux_category() {
     assert_eq!(
         bundle(&load_config()).get("category").and_then(Value::as_str),
         Some("Utility"),
@@ -160,7 +159,7 @@ fn bundle_resources_map_to_data_and_web_dist() {
 }
 
 #[test]
-fn nsis_install_mode_mirrors_electron_per_user_or_machine() {
+fn nsis_install_mode_allows_per_user_or_machine() {
     let windows = bundle(&load_config())
         .get("windows")
         .cloned()
@@ -169,7 +168,7 @@ fn nsis_install_mode_mirrors_electron_per_user_or_machine() {
     assert_eq!(
         nsis.get("installMode").and_then(Value::as_str),
         Some("both"),
-        "NSIS installMode \"both\" mirrors electron nsis oneClick:false (per-user-or-machine choice)",
+        "NSIS installMode \"both\" keeps the per-user-or-machine choice (oneClick:false parity)",
     );
     let icon_rel = nsis
         .get("installerIcon")

@@ -7,7 +7,7 @@ use tower::ServiceExt;
 
 use editor_server_rust::{create_app, db, AppState, DbPool};
 
-// Port of the server half of `server-node/src/scrape.test.js`: only paths
+// Port of the server half of the former Node `scrape.test.js`: only paths
 // that answer before any browser is touched (no live browser here either).
 fn test_state() -> (tempfile::TempDir, AppState) {
     let dir = tempfile::tempdir().expect("tempdir");

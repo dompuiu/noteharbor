@@ -1,4 +1,4 @@
-//! Archive import/export/delete: port of `server-node/src/routes/archive.js`.
+//! Archive import/export/delete routes.
 //!
 //! Storage layout parity (recorded for ticket 04):
 //! - Export zip: `banknotes.db` at the root + `images/` tree (or an empty
@@ -15,9 +15,9 @@
 //!   name replaced), showcases by name (replaced), labels by name (reused).
 //!   `replace` (default) wipes local data first so ids restart at 1.
 //!
-//! Concurrency note: `server-node` closes the database and swaps whole data
-//! directories (`closeDatabase`/`reloadDatabase`). The Rust pool holds open
-//! connections across requests, so the port applies the staged content
+//! Concurrency note: the former Node backend closed the database and swapped
+//! whole data directories (`closeDatabase`/`reloadDatabase`). The Rust pool holds
+//! open connections across requests, so this backend applies the staged content
 //! in-place in one transaction instead — same post-condition, no pool
 //! rebuild, no window where the database file is absent. The
 //! `... Rollback also failed: ...` suffix therefore never triggers here; a
@@ -380,9 +380,8 @@ fn query_ids(conn: &Connection, sql: &str) -> Result<Vec<i64>, ArchiveError> {
 }
 
 /// Renumbers every PK from 1, rewrites note image paths, and returns the
-/// image copy plan. Mirrors `renumberSnapshot` verbatim (notes ordered by
-/// collection then display order; showcase parents resolved in a second
-/// pass over negated ids).
+/// image copy plan (notes ordered by collection then display order;
+/// showcase parents resolved in a second pass over negated ids).
 pub fn renumber_snapshot(conn: &Connection) -> Result<RenumberPlan, ArchiveError> {
     let collection_ids = query_ids(conn, "SELECT id FROM collections ORDER BY id ASC")?;
     let mut collection_map = HashMap::new();
@@ -1048,9 +1047,8 @@ pub fn build_export_zip(
     if export_images_dir.is_dir() {
         let files = collect_export_files(export_images_dir)?;
         if files.is_empty() {
-            // Mirrors `archive.directory(imagesDir, 'images')` on an empty
-            // dir: the `images/` prefix itself travels so the import's
-            // `banknotes.db` + `images/` probe still matches.
+            // On an empty dir, the `images/` prefix itself travels so the
+            // import's `banknotes.db` + `images/` probe still matches.
             zip.add_directory("images/", options).map_err(zip_failed)?;
         }
         for file in files {

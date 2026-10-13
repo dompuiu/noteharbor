@@ -6,11 +6,11 @@ Local collection software for managing and presenting banknote archives. This mo
 
 | Layer | Tech |
 |---|---|
-| Editor backend | Node.js (ESM), Express 5, SQLite (better-sqlite3) |
+| Editor backend | Rust (Axum), SQLite (rusqlite, bundled) |
 | Editor frontend | React, React Router, Vite |
-| Desktop editor | Electron + electron-builder |
+| Desktop editor | Tauri 2 (embeds the Rust backend) |
 | Viewer | Flutter (bundled-data, read-only) |
-| Scraping | Node.js + `playwright-core` (CDP attach to an already-running browser, no managed browser install) |
+| Scraping | Rust + `chromiumoxide` (CDP attach to an already-running browser, no managed browser install) |
 | Package manager | pnpm workspaces (version pinned via `packageManager` in `package.json`) |
 
 ---
@@ -19,9 +19,9 @@ Local collection software for managing and presenting banknote archives. This mo
 
 This is a pnpm workspace with apps under `apps/`:
 
-- **`apps/editor/server-node`** — Express + SQLite backend (routes, scrapers, DB access)
+- **`apps/editor/server-rust`** — Rust (Axum) + SQLite backend (routes, scrapers, DB access)
 - **`apps/editor/ui-react`** — React + Vite frontend for the editor
-- **`apps/editor/desktop-electron`** — Electron shell that packages the server and web build
+- **`apps/editor/desktop-tauri`** — Tauri shell that embeds the Rust server and web build
 - **`apps/viewer/flutter`** — the read-only Flutter viewer
 
 Local data (SQLite DB + images) lives in `data/` by default; see [Environment variables](#environment-variables) to override the location.
@@ -53,18 +53,12 @@ pnpm dev
 
 This starts:
 
-- the Express API at `http://127.0.0.1:3001`
-- the Vite app at `http://localhost:5173` (proxies `/api` to the Node API)
-
-To run the Rust API instead (listens on `http://127.0.0.1:3002`):
-
-```bash
-pnpm dev:editor:rust
-```
+- the Rust API at `http://127.0.0.1:3002`
+- the Vite app at `http://localhost:5173` (proxies `/api` to the Rust API)
 
 ### Use a Windows Chrome from WSL via CDP
 
-The packaged desktop app (Windows and macOS) launches its own CDP-enabled Chrome automatically when you use Auto Populate, so no manual setup is needed there — see [Build the Electron editor](#build-the-electron-editor). The steps below are for running the editor server directly (e.g. `pnpm dev` in WSL), where nothing launches Chrome automatically.
+The packaged desktop app (Windows and macOS) launches its own CDP-enabled Chrome automatically when you use Auto Populate, so no manual setup is needed there — see [Build the Tauri editor](#build-the-tauri-editor). The steps below are for running the editor server directly (e.g. `pnpm dev` in WSL), where nothing launches Chrome automatically.
 
 If you run the editor server in WSL but want to see and interact with a Windows Chrome window for bot checks, launch Chrome on Windows with remote debugging enabled and point the server at it. The scraper reads the current HTML from the already open tab whose URL matches the requested note URL.
 
@@ -105,21 +99,21 @@ Workflow:
 
 ```bash
 pnpm --filter editor_ui_react build
-NOTE_HARBOR_SERVE_WEB_DIST=true pnpm --filter editor_server_node start
+NOTE_HARBOR_SERVE_WEB_DIST=true cargo run -p editor_server_rust
 ```
 
-This serves `apps/editor/ui-react/dist` from the Express server.
+This serves `apps/editor/ui-react/dist` from the Rust server.
 
-### Build the Electron editor
+### Build the Tauri editor
 
 ```bash
-pnpm --filter editor_desktop_electron build
+pnpm --filter editor_desktop_tauri build
 ```
 
-The Electron package:
+The Tauri package:
 
 - builds the React UI
-- embeds the Express server and built web app
+- embeds the Rust server and built web app
 - bundles the current `data/` directory
 - copies bundled data into the user-data folder when the packaged app is newer
 
@@ -128,7 +122,13 @@ On Windows and macOS, the packaged app launches its own CDP-enabled Chrome autom
 For Windows artifacts, build on Windows:
 
 ```bash
-pnpm build:editor:electron:windows
+pnpm build:editor:tauri:windows
+```
+
+For Linux artifacts:
+
+```bash
+pnpm build:editor:tauri:linux
 ```
 
 ### Run the Flutter viewer locally
@@ -155,19 +155,19 @@ pnpm build:viewer:flutter:ios
 
 ### Environment variables
 
-Create `apps/editor/server-node/.env` if you want to override defaults.
+Set these environment variables to override defaults.
 
 | Variable | Default | Description |
 |---|---|---|
-| `HOST` | `127.0.0.1` | Express bind host |
-| `PORT` | `3001` (Node) / `3002` (Rust) | API bind port |
-| `NOTE_HARBOR_API_PORT` | `PORT` or `3001` | Vite dev `/api` proxy target port |
+| `HOST` | `127.0.0.1` | API bind host |
+| `PORT` | `3002` | API bind port |
+| `NOTE_HARBOR_API_PORT` | `PORT` or `3002` | Vite dev `/api` proxy target port |
 | `NOTE_HARBOR_BROWSER_CDP_URL` | `http://localhost:9222` | CDP endpoint for the browser that already has the target page open |
 | `NOTE_HARBOR_DATA_DIR` | `data` | Root data directory containing `banknotes.db` and `images/` |
-| `NOTE_HARBOR_WEB_DIST_DIR` | `apps/editor/ui-react/dist` | Static web build served by Express |
-| `NOTE_HARBOR_SERVE_WEB_DIST` | `false` | Enables serving the built web app from Express |
+| `NOTE_HARBOR_WEB_DIST_DIR` | `apps/editor/ui-react/dist` | Static web build served by the Rust server |
+| `NOTE_HARBOR_SERVE_WEB_DIST` | `false` | Enables serving the built web app from the Rust server |
 
-The desktop (Electron) app additionally reads these from its own process environment, not from `.env`:
+The desktop (Tauri) app additionally reads these from its own process environment, not from `.env`:
 
 | Variable | Default | Description |
 |---|---|---|
@@ -498,28 +498,20 @@ Autopopulate in the Note editor calls this to fill a note from a grading company
 ## Scraping Architecture
 
 ```
-scrape.js (Node.js)
+POST /api/scrape/preview (server-rust)
     |
-    | read matching open tab over CDP
+    | read matching open tab over CDP (chromiumoxide attach)
     v
-fetchHtml.js (Node.js / Playwright)
-    |
-    | returns raw HTML
-    v
-scrapers/pmg.js, pcgs.js, or tqg.js
+grading-company parsers (PMG, PCGS, TQG in src/scrape.rs)
     |
     | parse details + image source URLs
     v
-POST /api/scrape/preview -> Note editor autopopulate
+Note editor autopopulate
 ```
 
-### `src/fetchHtml.js`
+### CDP attach flow
 
-Reads the current HTML from a matching open tab on a CDP-connected browser.
-
-```bash
-node -e "import('./apps/editor/server-node/src/fetchHtml.js').then(async ({ fetchHtml }) => console.log(await fetchHtml({ url: 'https://example.com', cdpUrl: 'http://localhost:9222', waitSeconds: 2 })))"
-```
+The server reads the current HTML from a matching open tab on a CDP-connected browser (default `http://localhost:9222`).
 
 | Option | Default | Description |
 |---|---|---|
@@ -530,8 +522,8 @@ The helper does not open a new tab or navigate. It requires an already open tab 
 
 ### Adding a new scraper
 
-1. Add a new file in `apps/editor/server-node/src/scrapers/` extending `BaseScraper`.
-2. Register it in `getScraperForNote()` inside `apps/editor/server-node/src/routes/scrape.js`.
+1. Add a new `parse_*` parser in `apps/editor/server-rust/src/scrape.rs` alongside `parse_pmg` / `parse_pcgs` / `parse_tqg`.
+2. Register it in `scraper_for_note()` in the same file.
 
 ---
 

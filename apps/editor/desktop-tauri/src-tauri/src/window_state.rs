@@ -1,4 +1,4 @@
-//! Window-state parity with `desktop-electron/src/main.js`.
+//! Window-state persistence.
 //!
 //! Same file (`window-state.json`), same defaults (1480×960, min 1200×720),
 //! same clamping, same on-any-display guard. The display list is injected so
@@ -82,8 +82,7 @@ pub fn is_window_visible_on_any_display(
 /// Parses + normalizes a `window-state.json` body: size clamped to the
 /// minima, flags read with `=== true` semantics. Keeps any numeric position;
 /// callers apply [`is_window_visible_on_any_display`] when monitors are
-/// available. Returns `None` when the size is missing/non-numeric, exactly
-/// like the Electron shell.
+/// available. Returns `None` when the size is missing/non-numeric.
 pub fn parse_window_state(raw: &str) -> Option<WindowState> {
     let parsed: RawState = serde_json::from_str(raw).ok()?;
     let width = parsed.width.as_ref().and_then(as_number)?;

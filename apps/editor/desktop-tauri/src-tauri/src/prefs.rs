@@ -1,8 +1,8 @@
-//! Desktop prefs parity with `desktop-electron/src/preferences.js`.
+//! Desktop prefs.
 //!
 //! The showcase photo size is the only file-backed desktop preference so
 //! far. Writes are atomic (`<path>.tmp` + rename) and preserve unrelated
-//! keys, exactly like the Electron shell.
+//! keys.
 
 use std::{collections::HashMap, fs, path::Path};
 

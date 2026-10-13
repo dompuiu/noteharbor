@@ -1,30 +1,28 @@
-//! Notes + tags port (`server-node/src/routes/notes.js` + `routes/tags.js` +
-//! the note/tag parts of `src/db.js`).
+//! Notes + tags routes plus the note/tag database helpers.
 //!
-//! Parity notes (ticket 09):
+//! Behavior notes (ticket 09):
 //! - Notes/tags routers are dual-mounted: `/api/collections/:id/notes|tags`
 //!   and bare `/api/notes|tags` (bare resolves the first collection in
 //!   sidebar order). A bare route on an empty library answers `500
 //!   { error: 'No collections available.' }` — the db-layer throw rendered
-//!   as a response instead of Node's never-responding hang.
-//! - Route-level catch semantics mirror Express exactly: POST/PUT/reorder/move
+//!   as a response instead of hanging without a response.
+//! - Route-level catch semantics are: POST/PUT/reorder/move
 //!   answer any database failure as 400 with the message (404s for unknown
 //!   collections/notes preserved), while GET/DELETE propagate `AppError`
 //!   (503/500). Collection-id validation (`400`/`404`) runs before payload
 //!   validation, and move checks run target → same → target-exists → mode →
-//!   reference in Node order (so a bad mode against a missing target is 404).
+//!   reference in this order (so a bad mode against a missing target is 404).
 //! - Note ids are never 400: an unparsable id simply matches no row, so it
-//!   answers `404 { error: 'Note not found.' }`, exactly like Node's
-//!   `getNoteById(Number(id))` miss.
+//!   answers `404 { error: 'Note not found.' }`.
 //! - Multipart and JSON share one handler each for POST/PUT (Axum cannot
 //!   split one path+method by content type). Multipart text fields map to the
 //!   same sanitizer as JSON; repeated `tags` fields collect into an array
 //!   (the UI appends one field per tag). Files under unknown field names are
 //!   ignored rather than rejected.
 //! - Image slots, URL download (http→https upgrade, 15 MB cap), delete and
-//!   generate-thumbnail flags, and stale-file cleanup mirror `routes/notes.js`
-//!   step for step; per-file uploads over 15 MB answer 400 (multer would fail
-//!   the whole request — same status family, explicit message).
+//!   generate-thumbnail flags, and stale-file cleanup follow the same steps;
+//!   per-file uploads over 15 MB answer 400 (the whole request fails — same
+//!   status family, explicit message).
 
 use std::collections::{HashMap, HashSet};
 
@@ -52,9 +50,8 @@ use crate::{
     routes::{bad_request, created, not_found, ok},
 };
 
-/// Per-file and per-download cap, matching multer's `fileSize` (15 MB) in
-/// `routes/notes.js`. The message denominators render as `15 MB`, exactly
-/// like `` `${MAX / 1024 / 1024} MB` ``.
+/// Per-file and per-download cap (15 MB). The message denominators render as
+/// `15 MB`, exactly like `` `${MAX / 1024 / 1024} MB` ``.
 pub const MAX_IMAGE_BYTES: usize = 15 * 1024 * 1024;
 const MAX_IMAGE_MB_LABEL: &str = "15 MB";
 
@@ -419,7 +416,7 @@ fn payload_string(body: &Value, key: &str) -> String {
     body.get(key).map(node_string).unwrap_or_default().trim().to_owned()
 }
 
-/// Mirrors `sanitizeNotePayload`, including the falsy-`scraped_data` rule: a
+/// Sanitizes the note payload, including the falsy-`scraped_data` rule: a
 /// missing, null, empty-string, `false`, or numeric payload means null; a
 /// non-empty string must parse as JSON; any other object passes through.
 pub fn sanitize_payload(body: &Value) -> Result<NotePayload, String> {
@@ -1011,7 +1008,7 @@ fn captures(collection: Option<Path<Vec<String>>>) -> Vec<String> {
 
 /// Scoped (`/api/collections/:id/...`, one capture) vs bare (`/api/...`, no
 /// capture) collection resolution. `Err(status, message)` preserves the exact
-/// Node status: 400 for `abc`/`0`, 404 for unknown ids.
+/// status: 400 for `abc`/`0`, 404 for unknown ids.
 fn resolve_collection(conn: &Connection, raw: Option<&str>) -> Result<i64, (StatusCode, String)> {
     match raw {
         None => {
@@ -1134,8 +1131,8 @@ async fn read_note_input(state: &AppState, req: Request) -> Result<NoteInput, (S
         let fields = body_fields(&body);
         return Ok(NoteInput { body, fields, files: HashMap::new() });
     }
-    // A malformed multipart body fails in middleware in Node (multer runs
-    // before the route), surfacing as a 500 — same here.
+    // A malformed multipart body fails in middleware (the multipart layer
+    // runs before the route), surfacing as a 500 — same here.
     match Multipart::from_request(req, state).await {
         Err(error) => Err((StatusCode::INTERNAL_SERVER_ERROR, error.to_string())),
         Ok(multipart) => match read_multipart(multipart).await {
@@ -1148,7 +1145,7 @@ async fn read_note_input(state: &AppState, req: Request) -> Result<NoteInput, (S
     }
 }
 
-/// Lenient JSON-body read for reorder/move (no multer there in Node: a
+/// Lenient JSON-body read for reorder/move (no multipart there: a
 /// non-JSON body parses to nothing and fails the shape checks below).
 async fn read_json_body(req: Request) -> Value {
     let Ok(bytes) = axum::body::to_bytes(req.into_body(), usize::MAX).await else {

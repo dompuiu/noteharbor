@@ -1,5 +1,5 @@
-//! Exclusive-operation status. Ports `server-node/src/operationState.js`
-//! (status read + `begin`/`end` transitions + `withExclusiveOperation`).
+//! Exclusive-operation status (status read + `begin`/`end` transitions
+//! + `withExclusiveOperation`).
 
 use std::sync::{Arc, Mutex};
 

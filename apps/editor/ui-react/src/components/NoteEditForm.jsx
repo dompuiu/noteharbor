@@ -1013,7 +1013,7 @@ function NoteEditForm({
     }
 
     if (!desktopBridge) {
-      showScrapeToast("The Electron desktop bridge is not available in this window.");
+      showScrapeToast("The desktop bridge is not available in this window.");
       return false;
     }
 

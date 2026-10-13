@@ -1,4 +1,4 @@
-//! Tauri shell port of `desktop-electron/src/main.js` + `preferences.js`.
+//! Tauri desktop shell: embedded server + window + preferences.
 //!
 //! Pure, testable logic lives here (Chrome CDP resolution, window-state
 //! normalization, desktop prefs, bundled-data copy decision, external-URL

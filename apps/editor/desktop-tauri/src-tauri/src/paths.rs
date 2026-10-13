@@ -5,8 +5,8 @@
 
 use std::path::{Path, PathBuf};
 
-/// Mirrors `resolveBundledDataDir()` in `main.js`: the packaged
-/// `bundled-data` dir first (Electron layout), then the `data` resource dir
+/// Resolves the bundled data dir: the packaged
+/// `bundled-data` dir first, then the `data` resource dir
 /// (Tauri `resources` layout), then the dev fallback (repo `data/`).
 pub fn resolve_bundled_data_dir(
     resource_dir: Option<&Path>,
@@ -78,7 +78,7 @@ mod tests {
         assert_eq!(
             resolve_bundled_data_dir(Some(&resource), &dev),
             bundled,
-            "electron bundled-data layout wins first"
+            "bundled-data layout wins first"
         );
 
         assert_eq!(resolve_bundled_data_dir(None, &dev), dev);

@@ -6,6 +6,8 @@
   "scripts": {
     "dev": "tauri dev",
     "build": "tauri build",
+    "build:web": "node ./scripts/build-web.mjs",
+    "build:web:watch": "node ./scripts/build-web.mjs --watch",
     "build:windows": "tauri build --bundles nsis",
     "build:linux": "tauri build --bundles appimage"
   },
