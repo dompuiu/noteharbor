@@ -29,7 +29,6 @@
       "appimage"
     ],
     "resources": {
-      "../../../../data": "data",
       "../../ui-react/dist": "web-dist"
     },
     "windows": {
