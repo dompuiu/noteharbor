@@ -2,6 +2,26 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.4.0] - 2026-10-12
+
+### Added
+
+- Desktop: a Tauri-packaged edition of the Editor with an embedded server, window-state restore, file-backed preferences, a Chrome launcher for autopopulate, and NSIS (Windows) / AppImage (Linux) installers.
+- Server: a Rust backend for the Editor (collections, notes, tags, images, showcases, scraping, archive import/export) alongside the Node server.
+- Desktop: the menu bar auto-hides on Windows/Linux; a solitary `Alt` press toggles it back.
+- Sidebar: the app version is pinned at the bottom.
+- Note editor: `Alt`+`Left`/`Right` moves to the previous/next note, including while typing in a field. The counter tooltips and the shortcuts help list the new keys. In the desktop app `Alt`+arrows no longer move through page history.
+
+### Changed
+
+- Note editor: browser autocomplete is off on all note fields, so previously typed values are no longer suggested.
+- Note editor: plain arrows and `h`/`l` no longer change notes; note navigation is `Alt`+arrows only.
+
+### Fixed
+
+- Note editor: typing capitals such as "10 Lei" no longer opens the discard-changes prompt.
+- Archive import streams to disk with per-route body caps.
+
 ## [2.3.2] - 2026-10-11
 
 ### Changed

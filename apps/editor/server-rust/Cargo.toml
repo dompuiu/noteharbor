@@ -1,6 +1,6 @@
 [package]
 name = "editor_server_rust"
-version = "2.3.2"
+version = "2.4.0"
 edition = "2021"
 description = "Note Harbor editor backend (Axum port of server-node)"
 license = "MIT"

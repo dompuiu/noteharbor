@@ -1,6 +1,6 @@
 [package]
 name = "editor_desktop_tauri"
-version = "2.3.2"
+version = "2.4.0"
 edition = "2021"
 description = "Note Harbor editor desktop shell (Tauri port of desktop-electron)"
 license = "MIT"
