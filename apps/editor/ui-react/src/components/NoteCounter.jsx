@@ -125,7 +125,7 @@ function NoteCounter({
           className="icon-link note-nav-arrow"
           disabled={!canGoPrevious}
           onClick={onPrevious}
-          title="Previous note (← or h)"
+          title="Previous note (Alt+←)"
           type="button"
         >
           <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
@@ -163,7 +163,7 @@ function NoteCounter({
           className="icon-link note-nav-arrow"
           disabled={!canGoNext}
           onClick={onNext}
-          title="Next note (→ or l)"
+          title="Next note (Alt+→)"
           type="button"
         >
           <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">

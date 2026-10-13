@@ -543,22 +543,17 @@ function NoteEditForm({
 
   useEffect(() => {
     function handleKeyDown(event) {
-      // Alt+arrow is left for the platform, as it is everywhere else.
-      if (event.altKey) {
+      // Note navigation is Alt+Arrow only. Everything else (typing, including
+      // Shift+h/l capitals, caret movement, text selection) belongs to the
+      // field, so Alt+arrows work with focus anywhere — inside a field too.
+      // preventDefault also blocks the desktop WebView's Alt+Left/Right
+      // history navigation while the editor is open.
+      if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey) {
         return;
       }
 
-      // Inside a field the keys belong to the text: caret movement, text
-      // selection (Shift+Arrow), and typing capitals (Shift+h/l). Navigation
-      // only happens when focus is outside the editable controls.
-      if (isEditableElement(event.target)) {
-        return;
-      }
-
-      const goNext =
-        event.key === "ArrowRight" || event.key === "l" || event.key === "L";
-      const goPrevious =
-        event.key === "ArrowLeft" || event.key === "h" || event.key === "H";
+      const goNext = event.key === "ArrowRight";
+      const goPrevious = event.key === "ArrowLeft";
 
       if (!goNext && !goPrevious) {
         return;

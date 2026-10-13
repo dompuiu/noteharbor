@@ -36,12 +36,8 @@ const shortcutGroups = [
   {
     title: "Note editor",
     items: [
-      { keys: ["←", "h"], description: "Go to the previous note" },
-      { keys: ["→", "l"], description: "Go to the next note" },
-      {
-        keys: ["Shift", "←", "→"],
-        description: "Change notes while typing in a field",
-      },
+      { keys: ["Alt", "←"], description: "Go to the previous note" },
+      { keys: ["Alt", "→"], description: "Go to the next note" },
       {
         keys: ["Ctrl/Cmd", "S"],
         description: "Save the note and keep editing",

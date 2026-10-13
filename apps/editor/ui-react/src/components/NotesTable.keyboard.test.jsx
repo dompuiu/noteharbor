@@ -821,9 +821,9 @@ describe("Arrow modifiers and h/j/k/l aliases", () => {
       "→",
     ]);
 
-    // The note editor's previous/next rows show the h/l aliases.
-    expect(keysOf("Go to the previous note")).toEqual(["←", "h"]);
-    expect(keysOf("Go to the next note")).toEqual(["→", "l"]);
+    // The note editor's previous/next rows use Alt+arrows.
+    expect(keysOf("Go to the previous note")).toEqual(["Alt", "←"]);
+    expect(keysOf("Go to the next note")).toEqual(["Alt", "→"]);
 
     // The note editor advertises the save shortcuts.
     expect(keysOf("Save the note and keep editing")).toEqual(["Ctrl/Cmd", "S"]);

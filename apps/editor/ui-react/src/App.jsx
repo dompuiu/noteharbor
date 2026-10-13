@@ -267,6 +267,28 @@ function App() {
     return attachMenuBarToggle(window);
   }, []);
 
+  // In the desktop WebView Alt+Left/Right would move through the page
+  // history (previous/next screen). Claim it so Alt+arrows never leave the
+  // current screen; the Note editor reuses it for previous/next note.
+  useEffect(() => {
+    if (!isDesktopRuntime) {
+      return undefined;
+    }
+
+    function blockHistoryKeys(event) {
+      if (
+        event.altKey &&
+        (event.key === "ArrowLeft" || event.key === "ArrowRight")
+      ) {
+        event.preventDefault();
+      }
+    }
+
+    window.addEventListener("keydown", blockHistoryKeys);
+
+    return () => window.removeEventListener("keydown", blockHistoryKeys);
+  }, []);
+
   return (
     <BrowserRouter>
       <Shell />

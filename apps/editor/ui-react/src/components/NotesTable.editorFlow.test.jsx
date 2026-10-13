@@ -482,13 +482,13 @@ describe("Leaving a changed Note editor", () => {
     act(() => {
       field.blur();
     });
-    await user.keyboard("{ArrowRight}");
+    await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
 
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: "Keep editing" }));
     expect(currentHash()).toContain("edit/1");
 
-    await user.keyboard("{ArrowRight}");
+    await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
     const secondDialog = await screen.findByRole("dialog");
     await user.click(
       within(secondDialog).getByRole("button", { name: "Discard" }),

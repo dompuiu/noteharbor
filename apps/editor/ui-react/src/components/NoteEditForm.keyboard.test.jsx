@@ -66,70 +66,57 @@ beforeEach(() => {
 });
 
 describe("Note editor keyboard navigation", () => {
-  test("ArrowRight and ArrowLeft change notes outside a field", async () => {
+  test("Alt+ArrowRight and Alt+ArrowLeft change notes outside a field", async () => {
     const onNavigateNext = vi.fn();
     const onNavigatePrevious = vi.fn();
     const input = await renderLoadedForm({ onNavigateNext, onNavigatePrevious });
     const user = userEvent.setup();
 
     input.blur();
+    await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
+    expect(onNavigateNext).toHaveBeenCalledTimes(1);
+
+    await user.keyboard("{Alt>}{ArrowLeft}{/Alt}");
+    expect(onNavigatePrevious).toHaveBeenCalledTimes(1);
+  });
+
+  test("Alt+ArrowRight and Alt+ArrowLeft change notes from inside a field", async () => {
+    const onNavigateNext = vi.fn();
+    const onNavigatePrevious = vi.fn();
+    const input = await renderLoadedForm({ onNavigateNext, onNavigatePrevious });
+    const user = userEvent.setup();
+
+    expect(input).toHaveFocus();
+    await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
+    expect(onNavigateNext).toHaveBeenCalledTimes(1);
+
+    await user.keyboard("{Alt>}{ArrowLeft}{/Alt}");
+    expect(onNavigatePrevious).toHaveBeenCalledTimes(1);
+  });
+
+  test("plain arrows, h/l and Shift/Ctrl/Cmd variants do not change notes", async () => {
+    const onNavigateNext = vi.fn();
+    const onNavigatePrevious = vi.fn();
+    const input = await renderLoadedForm({ onNavigateNext, onNavigatePrevious });
+    const user = userEvent.setup();
+
+    input.blur();
+
     await user.keyboard("{ArrowRight}");
-    expect(onNavigateNext).toHaveBeenCalledTimes(1);
-
     await user.keyboard("{ArrowLeft}");
-    expect(onNavigatePrevious).toHaveBeenCalledTimes(1);
-  });
-
-  test("h and l change notes outside a field", async () => {
-    const onNavigateNext = vi.fn();
-    const onNavigatePrevious = vi.fn();
-    const input = await renderLoadedForm({ onNavigateNext, onNavigatePrevious });
-    const user = userEvent.setup();
-
-    input.blur();
     await user.keyboard("l");
-    expect(onNavigateNext).toHaveBeenCalledTimes(1);
-
     await user.keyboard("h");
-    expect(onNavigatePrevious).toHaveBeenCalledTimes(1);
-  });
-
-  test("Shift, Ctrl and Cmd + arrows change notes outside a field", async () => {
-    const onNavigateNext = vi.fn();
-    const onNavigatePrevious = vi.fn();
-    const input = await renderLoadedForm({ onNavigateNext, onNavigatePrevious });
-    const user = userEvent.setup();
-
-    input.blur();
-
     await user.keyboard("{Shift>}{ArrowRight}{/Shift}");
-    await user.keyboard("{Control>}{ArrowRight}{/Control}");
-    await user.keyboard("{Meta>}{ArrowRight}{/Meta}");
-    expect(onNavigateNext).toHaveBeenCalledTimes(3);
-
     await user.keyboard("{Shift>}{ArrowLeft}{/Shift}");
+    await user.keyboard("{Control>}{ArrowRight}{/Control}");
     await user.keyboard("{Control>}{ArrowLeft}{/Control}");
+    await user.keyboard("{Meta>}{ArrowRight}{/Meta}");
     await user.keyboard("{Meta>}{ArrowLeft}{/Meta}");
-    expect(onNavigatePrevious).toHaveBeenCalledTimes(3);
-  });
-
-  test("Shift, Ctrl and Cmd + h/l change notes outside a field", async () => {
-    const onNavigateNext = vi.fn();
-    const onNavigatePrevious = vi.fn();
-    const input = await renderLoadedForm({ onNavigateNext, onNavigatePrevious });
-    const user = userEvent.setup();
-
-    input.blur();
-
-    await user.keyboard("{Shift>}l{/Shift}");
     await user.keyboard("{Control>}l{/Control}");
-    await user.keyboard("{Meta>}l{/Meta}");
-    expect(onNavigateNext).toHaveBeenCalledTimes(3);
-
-    await user.keyboard("{Shift>}h{/Shift}");
-    await user.keyboard("{Control>}h{/Control}");
     await user.keyboard("{Meta>}h{/Meta}");
-    expect(onNavigatePrevious).toHaveBeenCalledTimes(3);
+
+    expect(onNavigateNext).not.toHaveBeenCalled();
+    expect(onNavigatePrevious).not.toHaveBeenCalled();
   });
 
   test("plain arrows and h/l keep their text behaviour inside a field", async () => {
@@ -212,29 +199,25 @@ describe("Note editor keyboard navigation", () => {
     const user = userEvent.setup();
 
     input.blur();
-    await user.keyboard("{ArrowRight}");
-    await user.keyboard("{ArrowLeft}");
-    await user.keyboard("l");
-    await user.keyboard("h");
+    await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
+    await user.keyboard("{Alt>}{ArrowLeft}{/Alt}");
 
     expect(onNavigateNext).not.toHaveBeenCalled();
     expect(onNavigatePrevious).not.toHaveBeenCalled();
   });
 
-  test("Alt+arrow and Alt+h/l do not change notes from a field or outside it", async () => {
+  test("Alt+h/l do not change notes from a field or outside it", async () => {
     const onNavigateNext = vi.fn();
     const onNavigatePrevious = vi.fn();
     const input = await renderLoadedForm({ onNavigateNext, onNavigatePrevious });
     const user = userEvent.setup();
 
-    await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
-    await user.keyboard("{Alt>}{ArrowLeft}{/Alt}");
     await user.keyboard("{Alt>}l{/Alt}");
     await user.keyboard("{Alt>}h{/Alt}");
 
     input.blur();
-    await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
     await user.keyboard("{Alt>}l{/Alt}");
+    await user.keyboard("{Alt>}h{/Alt}");
 
     expect(onNavigateNext).not.toHaveBeenCalled();
     expect(onNavigatePrevious).not.toHaveBeenCalled();
