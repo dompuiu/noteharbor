@@ -5,8 +5,7 @@
   "identifier": "com.noteharbor.editor",
   "build": {
     "frontendDist": "../../ui-react/dist",
-    "devUrl": "http://localhost:5173",
-    "beforeDevCommand": "pnpm --dir ../ui-react dev",
+    "beforeDevCommand": "pnpm --dir ../desktop-electron build:web:watch",
     "beforeBuildCommand": "pnpm --dir ../desktop-electron build:web"
   },
   "app": {

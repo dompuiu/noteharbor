@@ -58,13 +58,26 @@ fn frontend_dist_and_build_hook_reuse_desktop_web_build() {
         Some("../../ui-react/dist"),
         "frontendDist is tauri.conf-relative, so it keeps the src-tauri depth",
     );
+    // No devUrl: the shell window loads the embedded-server URL from
+    // main.rs in both dev and release, so `tauri dev` must not wait on a
+    // Vite dev server that nothing serves (beforeDevCommand only rebuilds
+    // dist, which the embedded server reads from disk).
+    assert!(
+        build.get("devUrl").is_none(),
+        "tauri.conf.json must not set build.devUrl: the window URL is owned by main.rs",
+    );
     // Hook shell commands run with the tauri invocation directory as cwd
     // (the desktop-tauri package root via pnpm scripts), NOT src-tauri, so
     // their relative paths use the package-root depth. `../../...` here
     // breaks every pnpm-scripted dev/build invocation.
+    // their relative paths use the package-root depth. `../../...` here
+    // breaks every pnpm-scripted dev/build invocation.
     assert_eq!(
         build.get("beforeDevCommand").and_then(Value::as_str),
-        Some("pnpm --dir ../ui-react dev"),
+        Some("pnpm --dir ../desktop-electron build:web:watch"),
+        "dev rebuilds dist on save via desktop-electron build:web:watch \
+         (VITE_DESKTOP_RUNTIME=true): the shell serves dist from disk, \
+         not the Vite dev server",
     );
     assert_eq!(
         build.get("beforeBuildCommand").and_then(Value::as_str),

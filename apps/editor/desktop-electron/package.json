@@ -7,6 +7,7 @@
   "main": "src/main.js",
   "scripts": {
     "build:web": "node ./scripts/build-web.mjs",
+    "build:web:watch": "node ./scripts/build-web.mjs --watch",
     "prepare:package": "node ./scripts/prepare-package.mjs",
     "reset:native-stamps": "node ./scripts/reset-native-stamps.mjs",
     "build": "pnpm run build:web && pnpm run prepare:package && pnpm run reset:native-stamps && electron-builder install-app-deps && electron-builder",
