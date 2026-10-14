@@ -748,3 +748,38 @@ async fn image_url_validation_rejects_before_any_download() {
         assert_eq!(failed, json!({ "error": message }));
     }
 }
+
+#[tokio::test]
+async fn notes_accept_two_large_images_above_old_10mib_cap() {
+    // Regression: pasting front+back photos (~12 MiB total, each under the
+    // 15 MB per-file cap) exceeded the old 10 MiB global `RequestBodyLimitLayer`,
+    // which surfaced through Vite as ECONNABORTED / `Failed to fetch`.
+    // The notes routes get their own large body cap so the handler answers
+    // 201 instead of 413.
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let collection = create_collection(app.clone(), "Large Paste").await;
+    let id = collection["id"].as_i64().unwrap();
+    let front = vec![0x89u8; 6 * 1024 * 1024];
+    let back = vec![0x89u8; 6 * 1024 * 1024];
+    let boundary = "largepasteboundary";
+    let body = multipart_body(boundary, vec![
+        ("denomination", None, b"5 Lei", "text/plain"),
+        ("image_front_full", Some("front.png"), &front, "image/png"),
+        ("image_back_full", Some("back.png"), &back, "image/png"),
+    ]);
+    // Browsers send Content-Length, which is what lets the small cap
+    // short-circuit with 413.
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/api/collections/{id}/notes"))
+        .header("content-type", format!("multipart/form-data; boundary={boundary}"))
+        .header("content-length", body.len())
+        .body(Body::from(body))
+        .expect("request builds");
+    let response = app.oneshot(request).await.expect("service answers");
+    let status = response.status();
+    let raw = axum::body::to_bytes(response.into_body(), usize::MAX).await.expect("body reads");
+    assert_ne!(status, StatusCode::PAYLOAD_TOO_LARGE, "{}", String::from_utf8_lossy(&raw));
+    assert_eq!(status, StatusCode::CREATED, "{}", String::from_utf8_lossy(&raw));
+}

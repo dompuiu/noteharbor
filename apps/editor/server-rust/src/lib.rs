@@ -260,18 +260,24 @@ pub const NORMAL_BODY_LIMIT: usize = 10 * 1024 * 1024;
 /// multipart framing: the handler's JSON 413 fires first for genuinely
 /// oversize files, while absurd bodies still trip the layer's plain 413.
 pub const IMPORT_BODY_LIMIT: usize = archive::MAX_ARCHIVE_UPLOAD_BYTES as usize + 1024 * 1024;
+/// Notes cap: four image slots at `MAX_IMAGE_BYTES` each plus headroom for
+/// multipart framing and text fields. Two pasted full-size photos easily
+/// exceed the historical 10 MiB cap, which surfaced through Vite as
+/// `ECONNABORTED` / `Failed to fetch`; the per-file 15 MB handler check
+/// still fires first for genuinely oversize files.
+pub const NOTES_BODY_LIMIT: usize = crate::notes::MAX_IMAGE_BYTES * 4 + 2 * 1024 * 1024;
 
 pub fn create_app(state: AppState) -> Router {
     // Limits are per-router: the import streams multi-gigabyte uploads to
-    // disk, while everything else keeps the historical 10 MiB cap. A single
-    // global layer would re-impose the small cap on the import (the Vite
-    // EPIPE / ERR_CONNECTION_RESET failure).
+    // disk and notes accept up to four 15 MB images, while everything else
+    // keeps the historical 10 MiB cap. A single global layer would re-impose
+    // the small cap on those uploads (the Vite EPIPE / ERR_CONNECTION_RESET /
+    // ECONNABORTED failure).
     let normal = Router::new()
         .route("/api/health", get(health_handler))
         .merge(routes::archive_router())
         .merge(routes::collections_router())
         .merge(routes::images_router())
-        .merge(notes::notes_router())
         .merge(notes::tags_router())
         .merge(routes::operations_router())
         .merge(scrape::scrape_router())
@@ -280,11 +286,15 @@ pub fn create_app(state: AppState) -> Router {
         .merge(showcases::showcases_router())
         .layer(DefaultBodyLimit::max(NORMAL_BODY_LIMIT))
         .layer(RequestBodyLimitLayer::new(NORMAL_BODY_LIMIT));
+    let notes = notes::notes_router()
+        .layer(DefaultBodyLimit::max(NOTES_BODY_LIMIT))
+        .layer(RequestBodyLimitLayer::new(NOTES_BODY_LIMIT));
     let import = routes::archive_import_router()
         .layer(DefaultBodyLimit::max(IMPORT_BODY_LIMIT))
         .layer(RequestBodyLimitLayer::new(IMPORT_BODY_LIMIT));
     Router::new()
         .merge(normal)
+        .merge(notes)
         .merge(import)
         .fallback(fallback_handler)
         .layer(CorsLayer::permissive())
