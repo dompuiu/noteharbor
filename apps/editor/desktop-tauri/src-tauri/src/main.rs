@@ -283,12 +283,18 @@ async fn launch_scrape_browser(app: &tauri::AppHandle) -> chrome::ScrapeBrowserS
         .stderr(std::process::Stdio::null())
         .spawn()
     {
-        Ok(_) => chrome::ScrapeBrowserStatus {
-            supported: true,
-            available: is_scrape_browser_available().await,
-            launching: false,
-            error: None,
-        },
+        Ok(_) => {
+            // A fresh Chrome window opens behind the Editor on some systems;
+            // raise it best-effort so bot checks are visible. Failures are
+            // ignored: scraping still succeeds.
+            focus_scrape_browser_window().await;
+            chrome::ScrapeBrowserStatus {
+                supported: true,
+                available: is_scrape_browser_available().await,
+                launching: false,
+                error: None,
+            }
+        }
         Err(error) => chrome::ScrapeBrowserStatus {
             supported: true,
             available: false,
@@ -296,6 +302,16 @@ async fn launch_scrape_browser(app: &tauri::AppHandle) -> chrome::ScrapeBrowserS
             error: Some(error.to_string()),
         },
     }
+}
+
+/// Best-effort Chrome OS-window focus after a shell-side launch (mirrors the
+/// server's `focus_scrape_browser_window` during `fetch_html`).
+async fn focus_scrape_browser_window() {
+    let Some((program, args)) = chrome::chrome_focus_command(current_platform()) else {
+        return;
+    };
+    let run = tokio::process::Command::new(program).args(args).output();
+    let _ = tokio::time::timeout(std::time::Duration::from_secs(3), run).await;
 }
 
 #[tauri::command]

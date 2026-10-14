@@ -518,7 +518,7 @@ The server reads the current HTML from a matching open tab on a CDP-connected br
 | `waitSeconds` | `2` | Delay before reading the matching open tab |
 | `cdpUrl` | `http://localhost:9222` in the route | CDP endpoint for the browser that already has the page open |
 
-The helper does not open a new tab or navigate. It requires an already open tab whose URL matches the requested URL.
+The server reuses the last open tab whose URL matches the requested URL (ignoring `#fragment` and one trailing `/`) and only opens a new tab when no tab matches. The reused or new tab is activated via CDP and the Chrome OS window is raised best-effort so bot checks are visible.
 
 ### Adding a new scraper
 

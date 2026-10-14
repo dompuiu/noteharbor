@@ -129,13 +129,15 @@ pub fn describe_open_pages(page_urls: &[String]) -> String {
 }
 
 /// Finds the matching open tab: last tab whose normalized URL matches,
-/// skipping blank and `about:blank` entries. Returns the index into the
-/// caller's slice.
+/// skipping blank, `about:blank`, and `chrome-devtools://` entries.
+/// Returns the index into the caller's slice so the caller can reuse the
+/// exact tab even when devtools tabs are present.
 pub fn find_matching_open_page(page_urls: &[String], normalized_requested: &str) -> Option<usize> {
     page_urls
         .iter()
         .enumerate()
         .filter(|(_, url)| !url.is_empty() && *url != "about:blank")
+        .filter(|(_, url)| !url.starts_with("chrome-devtools://"))
         .filter(|(_, url)| normalize_url(url) == normalized_requested)
         .map(|(index, _)| index)
         .next_back()
@@ -145,7 +147,7 @@ pub fn find_matching_open_page(page_urls: &[String], normalized_requested: &str)
 /// testable without a live browser against a faked tab-URL list.
 #[derive(Debug, PartialEq, Eq)]
 pub enum PagePlan {
-    /// Index into the `real_page_urls`-filtered list.
+    /// Index into the caller's tab-URL slice (the tab to reuse).
     Reuse(usize),
     OpenNew,
 }
@@ -159,8 +161,7 @@ pub fn resolve_page_plan(
     if normalized.is_empty() {
         return Err("No requested URL was provided for open-tab selection.".to_owned());
     }
-    let real = real_page_urls(page_urls);
-    if let Some(index) = find_matching_open_page(&real, &normalized) {
+    if let Some(index) = find_matching_open_page(page_urls, &normalized) {
         return Ok(PagePlan::Reuse(index));
     }
     if open_if_missing {
@@ -169,6 +170,7 @@ pub fn resolve_page_plan(
         }
         return Ok(PagePlan::OpenNew);
     }
+    let real = real_page_urls(page_urls);
     Err(format!(
         "No open browser tab matches the requested URL.\nRequested: {requested_url}\nOpen tabs:\n{}",
         describe_open_pages(&real)
@@ -297,11 +299,14 @@ fn detail_str(details: &Map<String, Value>, key: &str) -> Option<String> {
 }
 
 fn pmg_side(title: &str) -> &'static str {
+    // The grading-site labels come out swapped relative to the note faces
+    // (reported: the scraped "front" picture belongs on the back slot and
+    // vice versa), so the sides are stored swapped on purpose.
     let title = title.to_lowercase();
     if title.contains("rev") || title.contains("back") || title.contains("reverse") {
-        "back"
-    } else {
         "front"
+    } else {
+        "back"
     }
 }
 
@@ -449,10 +454,12 @@ fn extract_embedded_images(source: &str) -> Vec<ScrapedImage> {
     let mut images = Vec::new();
     for captures in re.captures_iter(source) {
         let label = captures.get(1).map(|group| group.as_str()).unwrap_or("");
+        // Sides are stored swapped on purpose: the site's "reverse" picture
+        // belongs on the front slot and vice versa (see `pmg_side`).
         let side = if label.to_lowercase().contains("reverse") {
-            "back"
-        } else {
             "front"
+        } else {
+            "back"
         };
         let full = captures
             .get(4)
@@ -766,8 +773,10 @@ pub fn parse_tqg(html: &str, page_url: &str, note: &NoteRef) -> ParsedScrape {
             continue;
         };
         let side = match index {
-            0 => "front".to_owned(),
-            1 => "back".to_owned(),
+            // Stored swapped on purpose: the first site image belongs on the
+            // back slot and the second on the front slot (see `pmg_side`).
+            0 => "back".to_owned(),
+            1 => "front".to_owned(),
             _ => format!("image_{}", index + 1),
         };
         images.push(ScrapedImage {
@@ -794,6 +803,38 @@ pub fn parse_tqg(html: &str, page_url: &str, note: &NoteRef) -> ParsedScrape {
 // ---------------------------------------------------------------------------
 // Browser-attach fetch (via `chromiumoxide`)
 // ---------------------------------------------------------------------------
+
+/// Best-effort OS-level Chrome focus so the autopopulate browser window
+/// comes forward for bot checks. CDP `Page.bringToFront` only activates the
+/// tab inside Chrome; it does not raise the OS window above the Editor.
+/// Failures are ignored: scraping still succeeds, the window just stays
+/// behind. Win/macOS-only (the shell only launches Chrome there).
+async fn focus_scrape_browser_window() {
+    #[cfg(target_os = "windows")]
+    {
+        let script = "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class NHF { [DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr hWnd); [DllImport(\"user32.dll\")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); }'; Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | ForEach-Object { [NHF]::ShowWindow($_.MainWindowHandle, 9) | Out-Null; [NHF]::SetForegroundWindow($_.MainWindowHandle) | Out-Null }";
+        let run = tokio::process::Command::new("powershell")
+            .args([
+                "-NoProfile",
+                "-NonInteractive",
+                "-Command",
+                script,
+            ])
+            .output();
+        let _ = tokio::time::timeout(Duration::from_secs(3), run).await;
+    }
+    #[cfg(target_os = "macos")]
+    {
+        let run = tokio::process::Command::new("osascript")
+            .args(["-e", "tell application \"Google Chrome\" to activate"])
+            .output();
+        let _ = tokio::time::timeout(Duration::from_secs(3), run).await;
+    }
+    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
+    {
+        // No OS focus hook on other platforms.
+    }
+}
 
 /// Attach-only fetch: connect over CDP (never launch),
 /// reuse the last matching tab or open-navigate when `open_if_missing`,
@@ -835,6 +876,11 @@ pub async fn fetch_html(
             let page = pages
                 .get(index)
                 .ok_or_else(|| "Browser tab vanished.".to_owned())?;
+            // Activate the already-open tab (previously missing, so the tab
+            // stayed in the background) and raise the Chrome OS window so the
+            // user sees the page used for the scrape.
+            let _ = page.bring_to_front().await;
+            focus_scrape_browser_window().await;
             if wait_seconds > 0.0 {
                 tokio::time::sleep(Duration::from_secs_f64(wait_seconds)).await;
             }
@@ -848,6 +894,9 @@ pub async fn fetch_html(
             page.bring_to_front()
                 .await
                 .map_err(|error| error.to_string())?;
+            // A new tab in an existing window does not raise the OS window
+            // above the Editor on its own; focus it for bot checks.
+            focus_scrape_browser_window().await;
             // A failed navigation leaves the tab open for the user, and the
             // error propagates — mirroring `openMissingPage`.
             let navigated = tokio::time::timeout(
@@ -999,29 +1048,31 @@ mod tests {
             .iter()
             .map(|image| (image.url.as_str(), image))
             .collect();
+        // Sides are stored swapped on purpose (site labels come out
+        // reversed): Obverse lands on the back slot, Reverse on the front.
         assert_eq!(
             by_url
                 .get("https://images.example.com/full-front.jpg")
-                .map(|image| (image.side.as_str(), image.variant.as_str())),
-            Some(("front", "full"))
-        );
-        assert_eq!(
-            by_url
-                .get("https://images.example.com/full-back.jpg")
                 .map(|image| (image.side.as_str(), image.variant.as_str())),
             Some(("back", "full"))
         );
         assert_eq!(
             by_url
+                .get("https://images.example.com/full-back.jpg")
+                .map(|image| (image.side.as_str(), image.variant.as_str())),
+            Some(("front", "full"))
+        );
+        assert_eq!(
+            by_url
                 .get("https://images.example.com/thumb-front.jpg")
-                .map(|image| image.variant.as_str()),
-            Some("thumbnail")
+                .map(|image| (image.side.as_str(), image.variant.as_str())),
+            Some(("back", "thumbnail"))
         );
         assert_eq!(
             by_url
                 .get("https://images.example.com/thumb-back.jpg")
-                .map(|image| image.variant.as_str()),
-            Some("thumbnail")
+                .map(|image| (image.side.as_str(), image.variant.as_str())),
+            Some(("front", "thumbnail"))
         );
     }
 
@@ -1060,10 +1111,11 @@ mod tests {
             .map(|image| (image.url.as_str(), image))
             .collect();
         let full = by_url.get("https://i.example/p.jpg").expect("full image");
-        assert_eq!(full.side, "front");
+        // Obverse is stored swapped onto the back slot (see `pmg_side`).
+        assert_eq!(full.side, "back");
         assert_eq!(full.variant, "full");
         let thumbnail = by_url.get("https://i.example/t.jpg").expect("thumbnail");
-        assert_eq!(thumbnail.side, "front");
+        assert_eq!(thumbnail.side, "back");
         assert_eq!(thumbnail.variant, "thumbnail");
     }
 
@@ -1091,12 +1143,12 @@ mod tests {
             parsed.images,
             vec![
                 ScrapedImage {
-                    side: "front".to_owned(),
+                    side: "back".to_owned(),
                     variant: "full".to_owned(),
                     url: "https://tqggrading.com/img/front.jpg".to_owned(),
                 },
                 ScrapedImage {
-                    side: "back".to_owned(),
+                    side: "front".to_owned(),
                     variant: "full".to_owned(),
                     url: "https://tqggrading.com/img/back.jpg".to_owned(),
                 },
@@ -1249,6 +1301,21 @@ mod tests {
         assert_eq!(
             resolve_page_plan(&tabs, "https://www.pmgnotes.com/certlookup/999", true),
             Ok(PagePlan::Reuse(0))
+        );
+    }
+
+    #[test]
+    fn reuses_original_tab_index_when_devtools_tabs_precede_match() {
+        // Regression: the reuse index must address the caller's tab list, not
+        // the devtools-filtered list, or the scrape reads the wrong tab.
+        let tabs = pages(&[
+            "chrome-devtools://devtools/bundled/inspector.html",
+            "https://www.pmgnotes.com/certlookup/1",
+            "https://www.pmgnotes.com/certlookup/999",
+        ]);
+        assert_eq!(
+            resolve_page_plan(&tabs, "https://www.pmgnotes.com/certlookup/999", true),
+            Ok(PagePlan::Reuse(2))
         );
     }
 
