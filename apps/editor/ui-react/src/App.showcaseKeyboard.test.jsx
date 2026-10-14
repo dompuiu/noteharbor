@@ -682,15 +682,28 @@ describe("guards", () => {
 });
 
 describe("the note picker", () => {
-  test("/ focuses the picker's filter field from another control", async () => {
+  async function openPickerOnSub() {
     getNotes.mockResolvedValue({ notes: [NOTE_WITH_BACK] });
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    
-    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
+
+    // Let the name draft converge before blurring it: the field is
+    // autofocused, so focusing a card earlier can lose card focus on the
+    // converging rerender and the "a" shortcut never opens the picker
+    // (the checkbox query then pends until the test times out).
+    await waitFor(() =>
+      expect(screen.getByLabelText("Showcase name")).toHaveValue("My showcase"),
+    );
+    const sub = screen.getByRole("button", { name: "Open grouping Sub" });
     act(() => sub.focus());
     fireEvent.keyDown(document.body, { key: "a" });
 
-    const checkbox = await screen.findByRole("checkbox");
+    return screen.findByRole("dialog", { name: "Add notes" });
+  }
+
+  test("/ focuses the picker's filter field from another control", async () => {
+    const dialog = await openPickerOnSub();
+
+    const checkbox = await within(dialog).findByRole("checkbox");
     act(() => checkbox.focus());
 
     fireEvent.keyDown(checkbox, { key: "/" });
@@ -699,11 +712,7 @@ describe("the note picker", () => {
   });
 
   test("a slash typed in the filter field stays a slash", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-    
-    const sub = await screen.findByRole("button", { name: "Open grouping Sub" });
-    act(() => sub.focus());
-    fireEvent.keyDown(document.body, { key: "a" });
+    await openPickerOnSub();
 
     const filter = await screen.findByLabelText("Filter value");
     act(() => filter.focus());
