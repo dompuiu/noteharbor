@@ -4,6 +4,10 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [2.4.2] - 2026-10-14
 
+### Added
+
+- Desktop and web: the app reopens on the last visited page across restarts. The route is remembered on every navigation and restored on boot; the desktop build persists it file-backed and loads it as the window's initial URL (each launch is a fresh `localStorage` origin behind the embedded server's random port), while web builds keep it in `localStorage`. Root, unknown, and `new`-draft addresses fall back to the default destination.
+
 ### Fixed
 
 - Note editor: pasting front and back photos when adding a note no longer fails with `Failed to fetch` (Vite `ECONNABORTED`). The note routes get their own large body cap covering four 15 MB images, instead of the 10 MiB cap shared by the other routes.
