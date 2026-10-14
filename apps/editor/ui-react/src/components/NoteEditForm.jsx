@@ -20,6 +20,7 @@ import {
 } from "../lib/noteClipboard.js";
 import { isDesktopRuntime } from "../lib/appMode.js";
 import { isEditableElement } from "../lib/editableElement.js";
+import { normalizePastedImageFile } from "../lib/pastedImages.js";
 import { extractPmgDescriptionFields } from "../lib/pmgDescription.js";
 import { CATALOG_ROUTES } from "../lib/routes.js";
 import { NoteCounter } from "./NoteCounter.jsx";
@@ -901,6 +902,13 @@ function NoteEditForm({
     setScrapeConflictOverlayOpen(false);
   }
 
+  function isCdpUnreachableError(error) {
+    const message = String(error?.message ?? error ?? "");
+    return /Unable to reach the configured CDP|CDP browser .* unavailable|json\/version|Received no response from the chromium|Browser tab vanished/i.test(
+      message,
+    );
+  }
+
   async function handleAutoPopulate() {
     setScraping(true);
     setScrapeToast(null);
@@ -911,9 +919,30 @@ function NoteEditForm({
         return;
       }
 
-      const result = await scrapePreview(form.url, {
-        timeoutMs: SCRAPE_NAVIGATION_TIMEOUT_MS,
-      });
+      let result;
+      try {
+        result = await scrapePreview(form.url, {
+          timeoutMs: SCRAPE_NAVIGATION_TIMEOUT_MS,
+        });
+      } catch (scrapeError) {
+        // The browser may have been closed between the readiness probe and
+        // the scrape (or the cached flag went stale). Relaunch once and
+        // retry so a closed Chrome reopens instead of surfacing the raw
+        // CDP-unreachable error.
+        if (!isCdpUnreachableError(scrapeError) || !hasDesktopScrapeLauncher) {
+          throw scrapeError;
+        }
+        scrapeBrowserAvailable.current = false;
+        scrapeBrowserReadyPromise.current = null;
+        clearScrapeBrowserPollTimer();
+        const relaunched = await ensureScrapeBrowserReady();
+        if (!relaunched) {
+          return;
+        }
+        result = await scrapePreview(form.url, {
+          timeoutMs: SCRAPE_NAVIGATION_TIMEOUT_MS,
+        });
+      }
       const mappedUpdates = mapScrapedFields(result.scraped_data, form.url);
 
       if (Object.keys(mappedUpdates).length === 0) {
@@ -1008,10 +1037,10 @@ function NoteEditForm({
       return scrapeBrowserReadyPromise.current;
     }
 
-    if (scrapeBrowserAvailable.current) {
-      return true;
-    }
-
+    // No stale-cache shortcut: a cached `available === true` can outlive the
+    // Chrome process (user closed the window), so every call re-probes via
+    // `refreshScrapeBrowserAvailability()` inside the shared promise below
+    // and relaunches when the endpoint is gone.
     if (!desktopBridge) {
       showScrapeToast("The desktop bridge is not available in this window.");
       return false;
@@ -1718,14 +1747,14 @@ function NoteEditForm({
                         setSlotFile(slot, event.dataTransfer.files?.[0]);
                       }}
                       onFocus={() => setActivePasteSlot(slot.key)}
-                      onPaste={(event) => {
+                      onPaste={async (event) => {
                         const file = getPastedImageFile(event);
                         if (!file) {
                           return;
                         }
 
                         event.preventDefault();
-                        setSlotFile(slot, file);
+                        setSlotFile(slot, await normalizePastedImageFile(file));
                       }}
                       role="button"
                       tabIndex={0}
