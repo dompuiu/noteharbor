@@ -21,6 +21,8 @@ use scraper::{Html, Selector};
 use serde::Deserialize;
 use serde_json::{json, Map, Value};
 
+use chromiumoxide::cdp::browser_protocol::target::TargetId;
+
 use crate::routes::bad_request;
 
 pub const DEFAULT_BROWSER_CDP_URL: &str = "http://localhost:9222";
@@ -143,6 +145,62 @@ pub fn find_matching_open_page(page_urls: &[String], normalized_requested: &str)
         .next_back()
 }
 
+/// Site-specific identity of a grading-company URL: the note the page shows,
+/// independent of URL embellishments the site adds or drops (PMG certlookup
+/// URLs gain a `/<grade>` segment, e.g. `.../2258889-039` vs
+/// `.../2258889-039/25/`). Used as a tab-reuse fallback so autopopulate stops
+/// opening a duplicate tab when the stored URL and the open tab differ only
+/// by such embellishments. Query strings and fragments never participate.
+pub fn canonical_scrape_key(url: &str) -> Option<(ScraperKind, String)> {
+    let parsed = url::Url::parse(url.trim()).ok()?;
+    if parsed.scheme() != "http" && parsed.scheme() != "https" {
+        return None;
+    }
+    let host = parsed.host_str()?.to_lowercase();
+    let segments: Vec<String> = parsed
+        .path_segments()?
+        .filter(|segment| !segment.is_empty())
+        .map(|segment| segment.to_lowercase())
+        .collect();
+    // First non-empty path segment after `marker`.
+    let after = |marker: &str| {
+        segments
+            .iter()
+            .position(|segment| segment == marker)
+            .and_then(|at| segments.get(at + 1))
+            .filter(|segment| !segment.is_empty())
+            .cloned()
+    };
+    if host.contains("pmgnotes.com") {
+        return after("certlookup").map(|key| (ScraperKind::Pmg, key));
+    }
+    if host.contains("pcgs.com") {
+        return after("cert").map(|key| (ScraperKind::Pcgs, key));
+    }
+    if host.contains("tqggrading.com") {
+        return after("query").map(|key| (ScraperKind::Tqg, key));
+    }
+    None
+}
+
+/// Fallback tab match: last tab showing the same graded note (per
+/// `canonical_scrape_key`), skipping blank, `about:blank`, and
+/// `chrome-devtools://` entries. Only consulted when no tab matches the full
+/// URL exactly, so a different note never matches.
+pub fn find_key_matching_open_page(
+    page_urls: &[String],
+    key: &(ScraperKind, String),
+) -> Option<usize> {
+    page_urls
+        .iter()
+        .enumerate()
+        .filter(|(_, url)| !url.is_empty() && *url != "about:blank")
+        .filter(|(_, url)| !url.starts_with("chrome-devtools://"))
+        .filter(|(_, url)| canonical_scrape_key(url).as_ref() == Some(key))
+        .map(|(index, _)| index)
+        .next_back()
+}
+
 /// Pure half of `resolveOpenPage` (tab reuse vs. open-new vs. refuse),
 /// testable without a live browser against a faked tab-URL list.
 #[derive(Debug, PartialEq, Eq)]
@@ -163,6 +221,13 @@ pub fn resolve_page_plan(
     }
     if let Some(index) = find_matching_open_page(page_urls, &normalized) {
         return Ok(PagePlan::Reuse(index));
+    }
+    // Same note, embellished URL (e.g. PMG's appended `/<grade>` segment):
+    // reuse the tab instead of piling up a duplicate.
+    if let Some(key) = canonical_scrape_key(requested_url) {
+        if let Some(index) = find_key_matching_open_page(page_urls, &key) {
+            return Ok(PagePlan::Reuse(index));
+        }
     }
     if open_if_missing {
         if !is_http_url(requested_url) {
@@ -865,17 +930,51 @@ pub async fn fetch_html(
     });
 
     // Pick up tabs that were already open before we attached.
-    let _ = browser.fetch_targets().await;
-    let pages = browser.pages().await.map_err(|error| error.to_string())?;
-    let mut urls = Vec::with_capacity(pages.len());
-    for page in &pages {
-        urls.push(page.url().await.unwrap_or(None).unwrap_or_default());
-    }
+    // `browser.pages()` only reports targets the handler has finished
+    // attaching, which lags `fetch_targets` (empty when read immediately),
+    // so match against the returned `TargetInfo` list instead: top-level
+    // `page` targets only — OOPIF `iframe` targets share `type == "page"`
+    // but carry `parent_frame_id`.
+    let targets = browser
+        .fetch_targets()
+        .await
+        .map_err(|error| error.to_string())?;
+    let top_pages: Vec<(TargetId, String)> = targets
+        .iter()
+        .filter(|target| target.r#type == "page" && target.parent_frame_id.is_none())
+        .map(|target| (target.target_id.clone(), target.url.clone()))
+        .collect();
+    let urls: Vec<String> = top_pages
+        .iter()
+        .map(|(_, page_url)| page_url.clone())
+        .collect();
     match resolve_page_plan(&urls, url, open_if_missing) {
         Ok(PagePlan::Reuse(index)) => {
-            let page = pages
+            let target_id = top_pages
                 .get(index)
+                .map(|(id, _)| id.clone())
                 .ok_or_else(|| "Browser tab vanished.".to_owned())?;
+            // Attaching to a pre-existing target can lag `fetch_targets`;
+            // poll briefly before giving up on the tab.
+            let mut page = None;
+            for _ in 0..30 {
+                match browser.get_page(target_id.clone()).await {
+                    Ok(attached) => {
+                        page = Some(attached);
+                        break;
+                    }
+                    Err(_) => tokio::time::sleep(Duration::from_millis(100)).await,
+                }
+            }
+            let page = match page {
+                Some(attached) => attached,
+                // The tab vanished mid-scrape: open fresh when allowed.
+                None if open_if_missing && is_http_url(url) => {
+                    return open_fresh_page(&browser, url, wait_seconds, navigation_timeout)
+                        .await;
+                }
+                None => return Err("Browser tab vanished.".to_owned()),
+            };
             // Activate the already-open tab (previously missing, so the tab
             // stayed in the background) and raise the Chrome OS window so the
             // user sees the page used for the scrape.
@@ -887,38 +986,48 @@ pub async fn fetch_html(
             page.content().await.map_err(|error| error.to_string())
         }
         Ok(PagePlan::OpenNew) => {
-            let page = browser
-                .new_page("about:blank")
-                .await
-                .map_err(|error| error.to_string())?;
-            page.bring_to_front()
-                .await
-                .map_err(|error| error.to_string())?;
-            // A new tab in an existing window does not raise the OS window
-            // above the Editor on its own; focus it for bot checks.
-            focus_scrape_browser_window().await;
-            // A failed navigation leaves the tab open for the user, and the
-            // error propagates — mirroring `openMissingPage`.
-            let navigated = tokio::time::timeout(
-                Duration::from_millis(navigation_timeout),
-                page.goto(url.to_owned()),
-            )
-            .await
-            .map_err(|_| {
-                format!("Navigation timeout of {navigation_timeout}ms exceeded for {url}")
-            });
-            match navigated {
-                Ok(Ok(_)) => {}
-                Ok(Err(error)) => return Err(error.to_string()),
-                Err(error) => return Err(error),
-            }
-            if wait_seconds > 0.0 {
-                tokio::time::sleep(Duration::from_secs_f64(wait_seconds)).await;
-            }
-            page.content().await.map_err(|error| error.to_string())
+            open_fresh_page(&browser, url, wait_seconds, navigation_timeout).await
         }
         Err(error) => Err(error),
     }
+}
+
+/// Opens a new tab, navigates it to `url`, settles `wait_seconds`, and
+/// returns `page.content()`. A failed navigation leaves the tab open for the
+/// user, and the error propagates — mirroring `openMissingPage`.
+async fn open_fresh_page(
+    browser: &chromiumoxide::Browser,
+    url: &str,
+    wait_seconds: f64,
+    navigation_timeout: u64,
+) -> Result<String, String> {
+    let page = browser
+        .new_page("about:blank")
+        .await
+        .map_err(|error| error.to_string())?;
+    page.bring_to_front()
+        .await
+        .map_err(|error| error.to_string())?;
+    // A new tab in an existing window does not raise the OS window
+    // above the Editor on its own; focus it for bot checks.
+    focus_scrape_browser_window().await;
+    let navigated = tokio::time::timeout(
+        Duration::from_millis(navigation_timeout),
+        page.goto(url.to_owned()),
+    )
+    .await
+    .map_err(|_| {
+        format!("Navigation timeout of {navigation_timeout}ms exceeded for {url}")
+    });
+    match navigated {
+        Ok(Ok(_)) => {}
+        Ok(Err(error)) => return Err(error.to_string()),
+        Err(error) => return Err(error),
+    }
+    if wait_seconds > 0.0 {
+        tokio::time::sleep(Duration::from_secs_f64(wait_seconds)).await;
+    }
+    page.content().await.map_err(|error| error.to_string())
 }
 
 // ---------------------------------------------------------------------------
@@ -1316,6 +1425,66 @@ mod tests {
         assert_eq!(
             resolve_page_plan(&tabs, "https://www.pmgnotes.com/certlookup/999", true),
             Ok(PagePlan::Reuse(2))
+        );
+    }
+
+    #[test]
+    fn canonical_key_ignores_pmg_grade_suffix_query_and_case() {
+        assert_eq!(
+            canonical_scrape_key("https://www.pmgnotes.com/certlookup/2258889-039/25/"),
+            Some((ScraperKind::Pmg, "2258889-039".to_owned()))
+        );
+        assert_eq!(
+            canonical_scrape_key("https://www.pmgnotes.com/certlookup/2258889-039/?x=1#y"),
+            Some((ScraperKind::Pmg, "2258889-039".to_owned()))
+        );
+        assert_eq!(
+            canonical_scrape_key("https://www.pcgs.com/banknotes/cert/999?foo=bar"),
+            Some((ScraperKind::Pcgs, "999".to_owned()))
+        );
+        assert_eq!(
+            canonical_scrape_key("https://tqggrading.com/query/ABC123/"),
+            Some((ScraperKind::Tqg, "abc123".to_owned()))
+        );
+        assert_eq!(canonical_scrape_key("https://example.com/cert/1"), None);
+        assert_eq!(
+            canonical_scrape_key("https://www.pmgnotes.com/certlookup/"),
+            None
+        );
+        assert_eq!(canonical_scrape_key("file:///etc/passwd"), None);
+    }
+
+    #[test]
+    fn reuses_same_note_tab_when_grade_suffix_differs() {
+        let tabs = pages(&["https://www.pmgnotes.com/certlookup/2258889-039/25/"]);
+        assert_eq!(
+            resolve_page_plan(&tabs, "https://www.pmgnotes.com/certlookup/2258889-039/", true),
+            Ok(PagePlan::Reuse(0))
+        );
+        // And the reverse direction: stored URL has the suffix, tab does not.
+        let tabs = pages(&["https://www.pmgnotes.com/certlookup/2258889-039/"]);
+        assert_eq!(
+            resolve_page_plan(
+                &tabs,
+                "https://www.pmgnotes.com/certlookup/2258889-039/25/",
+                true
+            ),
+            Ok(PagePlan::Reuse(0))
+        );
+    }
+
+    #[test]
+    fn different_notes_never_key_match() {
+        let tabs = pages(&["https://www.pmgnotes.com/certlookup/111/25/"]);
+        assert_eq!(
+            resolve_page_plan(&tabs, "https://www.pmgnotes.com/certlookup/222", true),
+            Ok(PagePlan::OpenNew)
+        );
+        // Different sites sharing an id segment are different notes.
+        let tabs = pages(&["https://tqggrading.com/query/999"]);
+        assert_eq!(
+            resolve_page_plan(&tabs, "https://www.pcgs.com/banknotes/cert/999", true),
+            Ok(PagePlan::OpenNew)
         );
     }
 
