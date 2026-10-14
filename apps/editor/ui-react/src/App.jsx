@@ -17,6 +17,7 @@ import { Sidebar } from "./components/Sidebar.jsx";
 import { getHealth } from "./lib/api.js";
 import { isDesktopRuntime } from "./lib/appMode.js";
 import { attachMenuBarToggle } from "./lib/menuBar.js";
+import { LastVisitedRouteSync } from "./lib/lastVisitedRoute.js";
 import { CollectionsProvider, useCollections } from "./lib/collections.jsx";
 import { isEmptyLibrary } from "./lib/libraryState.js";
 import { ShowcasesProvider, useShowcases } from "./lib/showcases.jsx";
@@ -175,6 +176,7 @@ function ShellContent() {
 
   return (
     <div className="app-shell">
+      <LastVisitedRouteSync />
       <Sidebar pageFocusRef={pageFocusRef} />
       <div className="app-main">
         <main>

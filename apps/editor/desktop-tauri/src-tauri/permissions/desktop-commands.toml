@@ -17,3 +17,13 @@ commands.allow = ["get_showcase_photo_size"]
 identifier = "allow-set-showcase-photo-size"
 description = "Enables the set_showcase_photo_size command: lets the UI persist the showcase photo-size preference."
 commands.allow = ["set_showcase_photo_size"]
+
+[[permission]]
+identifier = "allow-get-last-visited-route"
+description = "Enables the get_last_visited_route command: lets the UI read the persisted last visited page."
+commands.allow = ["get_last_visited_route"]
+
+[[permission]]
+identifier = "allow-set-last-visited-route"
+description = "Enables the set_last_visited_route command: lets the UI persist the last visited page."
+commands.allow = ["set_last_visited_route"]

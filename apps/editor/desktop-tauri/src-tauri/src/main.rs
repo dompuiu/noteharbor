@@ -37,6 +37,8 @@ if (window.__TAURI__ && !window.noteHarborDesktop) {
     openScrapeBrowser: () => invoke('open_scrape_browser'),
     getShowcasePhotoSize: () => invoke('get_showcase_photo_size'),
     setShowcasePhotoSize: (photoSize) => invoke('set_showcase_photo_size', { value: photoSize }),
+    getLastVisitedRoute: () => invoke('get_last_visited_route'),
+    setLastVisitedRoute: (route) => invoke('set_last_visited_route', { value: route }),
   };
 }
 "#;
@@ -328,6 +330,22 @@ fn set_showcase_photo_size(app: tauri::AppHandle, value: String) -> String {
     prefs::write_showcase_photo_size(&path, &value).unwrap_or(value)
 }
 
+#[tauri::command]
+fn get_last_visited_route(app: tauri::AppHandle) -> Option<String> {
+    prefs::read_last_visited_route(&desktop_preferences_path(&app))
+}
+
+#[tauri::command]
+fn set_last_visited_route(app: tauri::AppHandle, value: String) -> Option<String> {
+    let path = desktop_preferences_path(&app);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    prefs::write_last_visited_route(&path, &value)
+        .ok()
+        .flatten()
+}
+
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -336,7 +354,9 @@ pub fn run() {
             get_scrape_browser_status,
             open_scrape_browser,
             get_showcase_photo_size,
-            set_showcase_photo_size
+            set_showcase_photo_size,
+            get_last_visited_route,
+            set_last_visited_route
         ])
         .setup(|app| {
             let resource_dir = app.path().resource_dir().ok();
@@ -364,10 +384,21 @@ pub fn run() {
             let saved = read_saved_window_state(app.handle());
             let opener = app.handle().clone();
             let navigation_app_url = app_url.clone();
+            // The last visited page restores like the window position: the
+            // saved route becomes the WebView's initial URL, so the next
+            // launch opens where the previous session left off.
+            let initial_url = prefs::initial_app_url(
+                &app_url,
+                prefs::read_last_visited_route(&desktop_preferences_path(app.handle())).as_deref(),
+            );
             let mut builder = tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
-                WebviewUrl::External(app_url.parse().map_err(|e| format!("bad app url: {e:?}"))?),
+                WebviewUrl::External(
+                    initial_url
+                        .parse()
+                        .map_err(|e| format!("bad app url: {e:?}"))?,
+                ),
             )
             .title("Note Harbor Editor")
             .inner_size(f64::from(saved.width), f64::from(saved.height))
