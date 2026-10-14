@@ -55,12 +55,76 @@ pub fn write_showcase_photo_size(path: &Path, value: &str) -> std::io::Result<St
     Ok(normalized)
 }
 
+fn is_positive_integer_id(id: &str) -> bool {
+    !id.is_empty()
+        && id.bytes().all(|b| b.is_ascii_digit())
+        && !id.starts_with('0')
+}
+
+/// Collapses a pathname to its first-level screen: a collection lands on its
+/// table (`/catalog/collections/:id/view`), a showcase on its root view.
+/// Slideshow / preview hashes, `?node=` drills, edit canvases, and the
+/// standalone note editor have no first-level restore of their own. Keep in
+/// sync with `collapseLastVisitedPathname` in
+/// `ui-react/src/lib/lastVisitedRoute.js`.
+pub fn collapse_last_visited_pathname(pathname: &str) -> Option<String> {
+    if pathname == "/catalog/collections" {
+        return Some(pathname.to_owned());
+    }
+    if pathname == "/catalog/import-export" {
+        return Some(pathname.to_owned());
+    }
+    if pathname == "/catalog/banknotes" {
+        return Some("/catalog/collections".to_owned());
+    }
+    if let Some(rest) = pathname.strip_prefix("/catalog/collections/") {
+        let mut segments = rest.split('/');
+        let id = segments.next().unwrap_or("");
+        let mode = segments.next();
+        // Only `:id`, `:id/view`, and `:id/edit` (with an optional trailing
+        // slash) collapse; anything deeper is not a first-level screen.
+        let trailing = segments.next();
+        let valid = match (mode, trailing) {
+            (None, None) => true,
+            (Some("view" | "edit"), None) => true,
+            (Some(""), None) => true,
+            (Some("view" | "edit"), Some("")) => true,
+            _ => false,
+        };
+        if valid && is_positive_integer_id(id) {
+            return Some(format!("/catalog/collections/{id}/view"));
+        }
+        return None;
+    }
+    if let Some(rest) = pathname.strip_prefix("/portfolio/showcases/") {
+        let mut segments = rest.split('/');
+        let id = segments.next().unwrap_or("");
+        let mode = segments.next();
+        let trailing = segments.next();
+        let valid = match (mode, trailing) {
+            (None, None) => true,
+            (Some("view" | "edit"), None) => true,
+            (Some(""), None) => true,
+            (Some("view" | "edit"), Some("")) => true,
+            _ => false,
+        };
+        if valid && is_positive_integer_id(id) {
+            return Some(format!("/portfolio/showcases/{id}/view"));
+        }
+        return None;
+    }
+    None
+}
+
 /// Validates a last-visited route the same way on read and write: an
 /// app-local pathname under `/catalog/` or `/portfolio/` (the collections
-/// home included), with its query/hash kept. Anything else — the `/` root,
-/// unknown paths, `new`-draft addresses, overlong or suspicious values —
+/// home included), collapsing to the first-level screen and dropping any
+/// query/hash. Anything else — the `/` root,
+/// unknown paths, note-editor and edit addresses, drill query / overlay
+/// hash, `new`-draft addresses, overlong or suspicious values —
 /// normalizes to `None` so the shell falls back to the default destination
 /// instead of restoring a dead or transient screen.
+
 pub fn normalize_last_visited_route(value: Option<&str>) -> Option<String> {
     let raw = value?.trim();
     if raw.is_empty() || raw.len() > MAX_LAST_VISITED_ROUTE_LEN {
@@ -76,16 +140,10 @@ pub fn normalize_last_visited_route(value: Option<&str>) -> Option<String> {
     }
     let path_end = raw.find(['?', '#']).unwrap_or(raw.len());
     let pathname = &raw[..path_end];
-    let known = pathname == "/catalog/collections"
-        || pathname.starts_with("/catalog/")
-        || pathname.starts_with("/portfolio/");
-    if !known {
-        return None;
-    }
     if pathname.split('/').any(|segment| segment == "new") {
         return None;
     }
-    Some(raw.to_owned())
+    collapse_last_visited_pathname(pathname)
 }
 
 pub fn read_last_visited_route(path: &Path) -> Option<String> {
@@ -175,18 +233,65 @@ mod tests {
     }
 
     #[test]
-    fn last_visited_route_accepts_catalog_and_portfolio_paths_with_query() {
+    fn last_visited_route_collapses_to_the_first_level_screen() {
         assert_eq!(
             normalize_last_visited_route(Some("/catalog/collections")),
             Some("/catalog/collections".to_owned())
         );
         assert_eq!(
+            normalize_last_visited_route(Some("/catalog/import-export")),
+            Some("/catalog/import-export".to_owned())
+        );
+        // The retired address lands on the collections home.
+        assert_eq!(
+            normalize_last_visited_route(Some("/catalog/banknotes")),
+            Some("/catalog/collections".to_owned())
+        );
+        // A collection restores on its table: edit collapses to view and the
+        // slideshow / editor hash never persists.
+        assert_eq!(
             normalize_last_visited_route(Some("/catalog/collections/1/view")),
             Some("/catalog/collections/1/view".to_owned())
         );
         assert_eq!(
+            normalize_last_visited_route(Some("/catalog/collections/1/edit")),
+            Some("/catalog/collections/1/view".to_owned())
+        );
+        assert_eq!(
+            normalize_last_visited_route(Some("/catalog/collections/1")),
+            Some("/catalog/collections/1/view".to_owned())
+        );
+        assert_eq!(
+            normalize_last_visited_route(Some("/catalog/collections/1/view#slideshow/2")),
+            Some("/catalog/collections/1/view".to_owned())
+        );
+        assert_eq!(
+            normalize_last_visited_route(Some("/catalog/collections/1/view#edit/7")),
+            Some("/catalog/collections/1/view".to_owned())
+        );
+        // A showcase restores on its root view: edit collapses to view and
+        // the `?node=` drill / preview query never persists.
+        assert_eq!(
+            normalize_last_visited_route(Some("/portfolio/showcases/2/view")),
+            Some("/portfolio/showcases/2/view".to_owned())
+        );
+        assert_eq!(
+            normalize_last_visited_route(Some("/portfolio/showcases/2/edit")),
+            Some("/portfolio/showcases/2/view".to_owned())
+        );
+        assert_eq!(
+            normalize_last_visited_route(Some("/portfolio/showcases/2")),
+            Some("/portfolio/showcases/2/view".to_owned())
+        );
+        assert_eq!(
             normalize_last_visited_route(Some("/portfolio/showcases/2/view?node=3")),
-            Some("/portfolio/showcases/2/view?node=3".to_owned())
+            Some("/portfolio/showcases/2/view".to_owned())
+        );
+        assert_eq!(
+            normalize_last_visited_route(Some(
+                "/portfolio/showcases/2/view?node=3&preview=4%3Afront"
+            )),
+            Some("/portfolio/showcases/2/view".to_owned())
         );
     }
 
@@ -195,17 +300,34 @@ mod tests {
         assert_eq!(normalize_last_visited_route(None), None);
         assert_eq!(normalize_last_visited_route(Some("")), None);
         assert_eq!(normalize_last_visited_route(Some("/")), None);
-        // Retired app-local paths still land on the default destination
-        // through the catch-all redirect, so restoring them is harmless.
-        assert_eq!(
-            normalize_last_visited_route(Some("/catalog/banknotes")),
-            Some("/catalog/banknotes".to_owned())
-        );
         assert_eq!(
             normalize_last_visited_route(Some("/settings/advanced")),
             None
         );
         assert_eq!(normalize_last_visited_route(Some("/api/health")), None);
+        // The standalone note editor names no collection, so there is no
+        // first-level table to restore: fall back to the default destination.
+        assert_eq!(
+            normalize_last_visited_route(Some("/catalog/notes/7/edit")),
+            None
+        );
+        // Non-numeric ids and deeper paths have no first-level screen.
+        assert_eq!(
+            normalize_last_visited_route(Some("/catalog/collections/abc/view")),
+            None
+        );
+        assert_eq!(
+            normalize_last_visited_route(Some("/catalog/collections/1/view/extra")),
+            None
+        );
+        assert_eq!(
+            normalize_last_visited_route(Some("/portfolio/showcases")),
+            None
+        );
+        assert_eq!(
+            normalize_last_visited_route(Some("/portfolio/showcases/2/view/extra")),
+            None
+        );
         assert_eq!(
             normalize_last_visited_route(Some("/catalog/collections/new/edit")),
             None
@@ -271,5 +393,21 @@ mod tests {
         assert_eq!(initial_app_url(base, None), base);
         assert_eq!(initial_app_url(base, Some("/")), base);
         assert_eq!(initial_app_url(base, Some("https://example.com/")), base);
+        // Deep screens collapse before becoming the initial URL.
+        assert_eq!(
+            initial_app_url(base, Some("/catalog/collections/1/edit")),
+            "http://127.0.0.1:1234/catalog/collections/1/view"
+        );
+        assert_eq!(
+            initial_app_url(
+                base,
+                Some("/portfolio/showcases/2/view?node=3")
+            ),
+            "http://127.0.0.1:1234/portfolio/showcases/2/view"
+        );
+        assert_eq!(
+            initial_app_url(base, Some("/catalog/notes/7/edit")),
+            base
+        );
     }
 }

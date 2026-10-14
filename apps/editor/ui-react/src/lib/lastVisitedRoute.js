@@ -13,6 +13,46 @@ const MAX_LAST_VISITED_ROUTE_LENGTH = 2000;
 
 // Keep in sync with `normalize_last_visited_route` in
 // `desktop-tauri/src-tauri/src/prefs.rs`.
+//
+// Only the first level restores: a collection lands on its table
+// (`/catalog/collections/:id/view`), a showcase on its root view - never a
+// slideshow / preview hash, a `?node=` drill, an edit canvas, or the
+// standalone note editor. Query and hash are always dropped, and anything
+// without a first-level screen normalizes to `null` so the app boots on the
+// default destination instead.
+function collapseLastVisitedPathname(pathname) {
+  if (pathname === "/catalog/collections") {
+    return "/catalog/collections";
+  }
+  if (pathname === "/catalog/import-export") {
+    return "/catalog/import-export";
+  }
+  if (pathname === "/catalog/banknotes") {
+    return "/catalog/collections";
+  }
+  const collectionMatch = pathname.match(
+    /^\/catalog\/collections\/([^/]+)(?:\/(view|edit))?\/?$/,
+  );
+  if (collectionMatch) {
+    const id = collectionMatch[1];
+    if (/^[1-9][0-9]*$/.test(id)) {
+      return `/catalog/collections/${id}/view`;
+    }
+    return null;
+  }
+  const showcaseMatch = pathname.match(
+    /^\/portfolio\/showcases\/([^/]+)(?:\/(view|edit))?\/?$/,
+  );
+  if (showcaseMatch) {
+    const id = showcaseMatch[1];
+    if (/^[1-9][0-9]*$/.test(id)) {
+      return `/portfolio/showcases/${id}/view`;
+    }
+    return null;
+  }
+  return null;
+}
+
 function normalizeLastVisitedRoute(value) {
   if (typeof value !== "string") {
     return null;
@@ -30,17 +70,10 @@ function normalizeLastVisitedRoute(value) {
   }
   const pathEnd = raw.search(/[?#]/);
   const pathname = pathEnd === -1 ? raw : raw.slice(0, pathEnd);
-  const known =
-    pathname === "/catalog/collections" ||
-    pathname.startsWith("/catalog/") ||
-    pathname.startsWith("/portfolio/");
-  if (!known) {
-    return null;
-  }
   if (pathname.split("/").includes("new")) {
     return null;
   }
-  return raw;
+  return collapseLastVisitedPathname(pathname);
 }
 
 function readStoredLastVisitedRoute() {
@@ -139,6 +172,7 @@ function LastVisitedRouteSync() {
 }
 
 export {
+  collapseLastVisitedPathname,
   LAST_VISITED_ROUTE_STORAGE_KEY,
   LastVisitedRouteSync,
   MAX_LAST_VISITED_ROUTE_LENGTH,
