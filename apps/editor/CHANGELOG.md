@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.4.2] - 2026-10-14
+
+### Fixed
+
+- Note editor: pasting front and back photos when adding a note no longer fails with `Failed to fetch` (Vite `ECONNABORTED`). The note routes get their own large body cap covering four 15 MB images, instead of the 10 MiB cap shared by the other routes.
+
 ## [2.4.1] - 2026-10-12
 
 ### Changed
