@@ -269,11 +269,12 @@ async fn launch_scrape_browser(app: &tauri::AppHandle) -> chrome::ScrapeBrowserS
         &user_data_dir,
     );
     // Detached launch, mirroring `detached: true, stdio: 'ignore'` + unref().
+    // CREATE_NO_WINDOW keeps helper/console children from flashing a prompt.
     #[cfg(windows)]
     let mut command = {
         use std::os::windows::process::CommandExt;
         let mut command = std::process::Command::new(&chrome_path);
-        command.creation_flags(0x00000008 /* DETACHED_PROCESS */);
+        command.creation_flags(0x0800_0008 /* CREATE_NO_WINDOW | DETACHED_PROCESS */);
         command
     };
     #[cfg(not(windows))]
@@ -312,7 +313,13 @@ async fn focus_scrape_browser_window() {
     let Some((program, args)) = chrome::chrome_focus_command(current_platform()) else {
         return;
     };
-    let run = tokio::process::Command::new(program).args(args).output();
+    let mut cmd = tokio::process::Command::new(program);
+    cmd.args(args);
+    // Hide the helper console: without CREATE_NO_WINDOW, spawning
+    // powershell.exe flashes a visible prompt on every launch/focus.
+    #[cfg(windows)]
+    cmd.creation_flags(0x0800_0000 /* CREATE_NO_WINDOW */);
+    let run = cmd.output();
     let _ = tokio::time::timeout(std::time::Duration::from_secs(3), run).await;
 }
 

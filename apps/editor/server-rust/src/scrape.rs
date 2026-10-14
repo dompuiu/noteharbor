@@ -914,7 +914,13 @@ async fn focus_scrape_browser_window() {
     let Some((program, args)) = scrape_browser_focus_command(platform) else {
         return;
     };
-    let run = tokio::process::Command::new(program).args(args).output();
+    let mut cmd = tokio::process::Command::new(program);
+    cmd.args(args);
+    // Hide the helper console: without CREATE_NO_WINDOW, spawning
+    // powershell.exe flashes a visible prompt on every scrape.
+    #[cfg(windows)]
+    cmd.creation_flags(0x0800_0000 /* CREATE_NO_WINDOW */);
+    let run = cmd.output();
     let _ = tokio::time::timeout(Duration::from_secs(3), run).await;
 }
 
