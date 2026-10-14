@@ -2,6 +2,17 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.5.0] - 2026-10-14
+
+### Added
+
+- Note editor: pasting a web image from the clipboard re-encodes the decoded PNG back to JPEG (quality 0.92, white-flattened, kept only when smaller), so a 1.7 MB photo no longer lands as an ~8 MB PNG. Explicit file uploads, drag-drop, and scraped downloads are untouched.
+
+### Changed
+
+- Desktop and web: the last-visited restore collapses to the first-level screen — a collection reopens on its table, a showcase on its root view. Slideshow/preview hashes, `?node=` drills, edit canvases, and the standalone note editor fall back to the default destination instead of restoring a transient screen.
+- Build: the web bundle splits `node_modules` into `react-vendor`, `router`, and `vendor` chunks, so no single chunk exceeds the 500 kB warning limit. No runtime change.
+
 ## [2.4.3] - 2026-10-14
 
 ### Fixed
