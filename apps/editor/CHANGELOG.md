@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.4.3] - 2026-10-14
+
+### Fixed
+
+- Desktop (Tauri): opening the scrape browser or reusing its tab no longer flashes a command-prompt window. The Chrome focus helper now spawns PowerShell with `CREATE_NO_WINDOW`, and the Chrome launch adds it alongside `DETACHED_PROCESS`.
+
 ## [2.4.2] - 2026-10-14
 
 ### Added
