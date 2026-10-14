@@ -115,31 +115,11 @@ pub fn chrome_launch_args(port: u16, address: &str, user_data_dir: &Path) -> Vec
     ]
 }
 
-/// Best-effort OS command that raises the Chrome window above the Editor so
-/// autopopulate bot checks are visible. Returns `(program, args)` per
-/// platform vocabulary (`win32`/`darwin`, else `None`). Failures are ignored
-/// by the caller: scraping still succeeds, the window just stays behind.
-pub fn chrome_focus_command(platform: &str) -> Option<(String, Vec<String>)> {
-    match platform {
-        "win32" => Some((
-            "powershell".to_owned(),
-            vec![
-                "-NoProfile".to_owned(),
-                "-NonInteractive".to_owned(),
-                "-Command".to_owned(),
-                "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class NHF { [DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr hWnd); [DllImport(\"user32.dll\")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); }'; Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | ForEach-Object { [NHF]::ShowWindow($_.MainWindowHandle, 9) | Out-Null; [NHF]::SetForegroundWindow($_.MainWindowHandle) | Out-Null }".to_owned(),
-            ],
-        )),
-        "darwin" => Some((
-            "osascript".to_owned(),
-            vec![
-                "-e".to_owned(),
-                "tell application \"Google Chrome\" to activate".to_owned(),
-            ],
-        )),
-        _ => None,
-    }
-}
+/// Best-effort OS command that raises the scrape browser window (scoped to
+/// the `noteharbor-cdp` Chrome profile so the user's normal Chrome windows
+/// stay put). Single implementation in `editor_server_rust::scrape`, shared
+/// by the embedded server's fetch flow and the shell's post-launch focus.
+pub use editor_server_rust::scrape::scrape_browser_focus_command as chrome_focus_command;
 
 #[cfg(test)]
 mod tests {
@@ -233,13 +213,14 @@ mod tests {
     }
 
     #[test]
-    fn focus_command_targets_chrome_window_per_platform() {
+    fn focus_command_targets_only_the_scrape_browser_profile() {
         let (program, args) = chrome_focus_command("win32").expect("windows focus");
         assert_eq!(program, "powershell");
-        assert!(args.iter().any(|arg| arg.contains("SetForegroundWindow")));
+        let script = args.last().expect("script arg");
+        assert!(script.contains("noteharbor-cdp"), "{script}");
         let (program, args) = chrome_focus_command("darwin").expect("mac focus");
-        assert_eq!(program, "osascript");
-        assert!(args.iter().any(|arg| arg.contains("Google Chrome")));
+        assert_eq!(program, "sh");
+        assert!(args.iter().any(|arg| arg.contains("noteharbor-cdp")));
         assert_eq!(chrome_focus_command("linux"), None);
     }
 }

@@ -869,36 +869,53 @@ pub fn parse_tqg(html: &str, page_url: &str, note: &NoteRef) -> ParsedScrape {
 // Browser-attach fetch (via `chromiumoxide`)
 // ---------------------------------------------------------------------------
 
+/// Best-effort OS command that raises the scrape browser window above the
+/// Editor so autopopulate bot checks are visible. Returns `(program, args)`
+/// per platform vocabulary (`win32`/`darwin`, else `None`). Only the Chrome
+/// running the `noteharbor-cdp` profile is targeted — the user's normal
+/// Chrome windows are left alone. Failures are ignored by the caller:
+/// scraping still succeeds, the window just stays behind.
+pub fn scrape_browser_focus_command(platform: &str) -> Option<(String, Vec<String>)> {
+    match platform {
+        "win32" => Some((
+            "powershell".to_owned(),
+            vec![
+                "-NoProfile".to_owned(),
+                "-NonInteractive".to_owned(),
+                "-Command".to_owned(),
+                "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class NHF { [DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr hWnd); [DllImport(\"user32.dll\")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); }'; Get-CimInstance Win32_Process -Filter \"Name='chrome.exe'\" | Where-Object { $_.CommandLine -like '*noteharbor-cdp*' } | ForEach-Object { $p = Get-Process -Id $_.ProcessId -ErrorAction SilentlyContinue; if ($p -and $p.MainWindowHandle -ne 0) { [NHF]::ShowWindow($p.MainWindowHandle, 9) | Out-Null; [NHF]::SetForegroundWindow($p.MainWindowHandle) | Out-Null } }".to_owned(),
+            ],
+        )),
+        "darwin" => Some((
+            "sh".to_owned(),
+            vec![
+                "-c".to_owned(),
+                r#"for pid in $(pgrep -f noteharbor-cdp 2>/dev/null); do osascript -e "tell application \"System Events\" to set frontmost of (first process whose unix id is $pid) to true" >/dev/null 2>&1; done"#
+                    .to_owned(),
+            ],
+        )),
+        _ => None,
+    }
+}
+
 /// Best-effort OS-level Chrome focus so the autopopulate browser window
 /// comes forward for bot checks. CDP `Page.bringToFront` only activates the
 /// tab inside Chrome; it does not raise the OS window above the Editor.
 /// Failures are ignored: scraping still succeeds, the window just stays
 /// behind. Win/macOS-only (the shell only launches Chrome there).
 async fn focus_scrape_browser_window() {
-    #[cfg(target_os = "windows")]
-    {
-        let script = "Add-Type -TypeDefinition 'using System; using System.Runtime.InteropServices; public class NHF { [DllImport(\"user32.dll\")] public static extern bool SetForegroundWindow(IntPtr hWnd); [DllImport(\"user32.dll\")] public static extern bool ShowWindow(IntPtr hWnd, int nCmdShow); }'; Get-Process chrome -ErrorAction SilentlyContinue | Where-Object { $_.MainWindowHandle -ne 0 } | ForEach-Object { [NHF]::ShowWindow($_.MainWindowHandle, 9) | Out-Null; [NHF]::SetForegroundWindow($_.MainWindowHandle) | Out-Null }";
-        let run = tokio::process::Command::new("powershell")
-            .args([
-                "-NoProfile",
-                "-NonInteractive",
-                "-Command",
-                script,
-            ])
-            .output();
-        let _ = tokio::time::timeout(Duration::from_secs(3), run).await;
-    }
-    #[cfg(target_os = "macos")]
-    {
-        let run = tokio::process::Command::new("osascript")
-            .args(["-e", "tell application \"Google Chrome\" to activate"])
-            .output();
-        let _ = tokio::time::timeout(Duration::from_secs(3), run).await;
-    }
-    #[cfg(not(any(target_os = "windows", target_os = "macos")))]
-    {
-        // No OS focus hook on other platforms.
-    }
+    let platform = if cfg!(target_os = "windows") {
+        "win32"
+    } else if cfg!(target_os = "macos") {
+        "darwin"
+    } else {
+        return;
+    };
+    let Some((program, args)) = scrape_browser_focus_command(platform) else {
+        return;
+    };
+    let run = tokio::process::Command::new(program).args(args).output();
+    let _ = tokio::time::timeout(Duration::from_secs(3), run).await;
 }
 
 /// Attach-only fetch: connect over CDP (never launch),
@@ -1499,6 +1516,28 @@ mod tests {
     fn rejects_missing_requested_url() {
         let error = resolve_page_plan(&pages(&[]), "  ", false).expect_err("rejected");
         assert!(error.contains("No requested URL was provided"), "{error}");
+    }
+
+    #[test]
+    fn focus_command_targets_only_the_scrape_browser_profile() {
+        let (program, args) = scrape_browser_focus_command("win32").expect("windows focus");
+        assert_eq!(program, "powershell");
+        let script = args.last().expect("script arg");
+        assert!(
+            script.contains("noteharbor-cdp"),
+            "must scope to the scrape profile: {script}"
+        );
+        assert!(
+            !script.contains("Get-Process chrome -ErrorAction"),
+            "must not raise every Chrome window: {script}"
+        );
+        let (program, args) = scrape_browser_focus_command("darwin").expect("mac focus");
+        assert_eq!(program, "sh");
+        assert!(
+            args.iter().any(|arg| arg.contains("noteharbor-cdp")),
+            "must scope to the scrape profile: {args:?}"
+        );
+        assert_eq!(scrape_browser_focus_command("linux"), None);
     }
 
     #[test]
