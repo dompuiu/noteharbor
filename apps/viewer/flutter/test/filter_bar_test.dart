@@ -181,6 +181,59 @@ void main() {
       findsNothing,
     );
   });
+
+  testWidgets('picking a scope with the pointer focuses the filter field', (
+    tester,
+  ) async {
+    final controller = DatasetController(repository: _FakeViewerRepository());
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('filterScope')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Denomination'));
+    await tester.pumpAndSettle();
+
+    // The scope changed and typing lands straight in the filter field.
+    expect(
+      tester
+          .widget<DropdownButton<String>>(
+            find.byKey(const ValueKey('filterScope')),
+          )
+          .value,
+      'denomination',
+    );
+    expect(_filterFieldHasFocus(tester), isTrue);
+  });
+
+  testWidgets('picking a scope with the keyboard focuses the filter field', (
+    tester,
+  ) async {
+    final controller = DatasetController(repository: _FakeViewerRepository());
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('filterScope')));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    expect(_filterFieldHasFocus(tester), isTrue);
+  });
+}
+
+bool _filterFieldHasFocus(WidgetTester tester) {
+  return tester.widget<TextField>(find.byType(TextField)).focusNode!.hasFocus;
 }
 
 Finder get _washFinder => find.byWidgetPredicate(

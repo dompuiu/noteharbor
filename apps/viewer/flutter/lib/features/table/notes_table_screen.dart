@@ -1305,6 +1305,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       _filterScope = scope;
       _selectedIndex = null;
     });
+    // The menu closes on selection; hand typing straight to the filter
+    // field, however the option was picked (mouse, touch, or keyboard).
+    _focusSearchField();
   }
 
   String get _filterHint {

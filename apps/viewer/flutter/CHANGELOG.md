@@ -8,6 +8,7 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 - Table screen: hovering the filter field no longer washes its background — the bar keeps one flat surface, and the scope menu's options now lift to a warm wash on hover so the hovered option reads as selected.
 - Table screen: the filter scope select highlights label and arrow as one unit on hover and on keyboard focus, and the open scope menu highlights the arrow-keyed option exactly like a hovered one.
+- Table screen: picking a filter scope hands typing focus to the filter field, so a new value can be typed immediately.
 - Image popover: a narrowing pinch that settles within 20% of the fit size (up from 10%) now snaps the rest of the way to fit, so the sequence stays swipeable instead of resting a few pixels above fit until a double tap.
 
 ## [1.11.0] - 2026-10-11
