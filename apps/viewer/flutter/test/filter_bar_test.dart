@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_harbor_viewer/app/viewer_palette.dart';
@@ -83,19 +84,111 @@ void main() {
     await mouse.moveTo(tester.getCenter(optionFinder));
     await tester.pumpAndSettle();
 
+    // The hovered option carries the warm wash (the keyboard-focused
+    // option may carry one too, so link the wash to its label).
     expect(
-      find.byWidgetPredicate(
-        (widget) =>
-            widget is AnimatedContainer &&
-            (widget.decoration as BoxDecoration?)?.color ==
-                ViewerPalette.accentSoft,
-      ),
+      find.descendant(of: _washFinder, matching: find.text('Denomination')),
       findsOneWidget,
     );
 
     await mouse.removePointer();
   });
+
+  testWidgets('hovering the select highlights text and arrow as one', (
+    tester,
+  ) async {
+    final controller = DatasetController(repository: _FakeViewerRepository());
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    final dropdownFinder = find.byKey(const ValueKey('filterScope'));
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(tester.getCenter(dropdownFinder));
+    await tester.pumpAndSettle();
+
+    // One wash wrapping the whole select (label and arrow together),
+    // not a separate pill behind the text.
+    expect(
+      find.ancestor(of: dropdownFinder, matching: _washFinder),
+      findsOneWidget,
+    );
+
+    await mouse.removePointer();
+  });
+
+  testWidgets('keyboard focus highlights the select', (tester) async {
+    final controller = DatasetController(repository: _FakeViewerRepository());
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    final dropdownFinder = find.byKey(const ValueKey('filterScope'));
+    tester
+        .widget<DropdownButton<String>>(dropdownFinder)
+        .focusNode!
+        .requestFocus();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.ancestor(of: dropdownFinder, matching: _washFinder),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('arrow keys move the option highlight in the open menu', (
+    tester,
+  ) async {
+    final controller = DatasetController(repository: _FakeViewerRepository());
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('filterScope')));
+    await tester.pumpAndSettle();
+
+    // The focused option reads like a hovered one: the selected option
+    // is highlighted on open…
+    expect(
+      find.descendant(of: _washFinder, matching: find.text('Catalog')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: _washFinder, matching: find.text('Denomination')),
+      findsNothing,
+    );
+
+    // …and the highlight follows the arrows.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.descendant(of: _washFinder, matching: find.text('Denomination')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: _washFinder, matching: find.text('Catalog')),
+      findsNothing,
+    );
+  });
 }
+
+Finder get _washFinder => find.byWidgetPredicate(
+      (widget) =>
+          widget is AnimatedContainer &&
+          (widget.decoration as BoxDecoration?)?.color ==
+              ViewerPalette.accentSoft,
+    );
 
 class _FakeViewerRepository extends ViewerRepository {
   _FakeViewerRepository();

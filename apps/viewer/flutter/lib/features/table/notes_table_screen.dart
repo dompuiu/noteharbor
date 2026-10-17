@@ -455,6 +455,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   final GlobalKey _filterBarKey = GlobalKey();
   String _query = '';
   String _filterScope = _kDefaultFilterScope;
+  bool _scopeHovered = false;
   String _sortKey = 'displayOrder';
   bool _ascending = true;
   int? _lastActiveCollectionId;
@@ -1466,50 +1467,95 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                       ),
                                       child: SizedBox(
                                         height: _kHeaderBadgeHeight,
-                                        // The select is one flat segment of the
-                                        // bar: no hover/focus wash, square ink
-                                        // (the bar owns the rounded corners).
-                                        child: Theme(
-                                          data: Theme.of(context).copyWith(
-                                            hoverColor: Colors.transparent,
-                                            highlightColor: Colors.transparent,
-                                            splashColor: Colors.transparent,
-                                            focusColor: Colors.transparent,
+                                        // The select highlights as one unit
+                                        // (label and arrow together) on hover
+                                        // and on keyboard focus; square ink,
+                                        // the bar owns the rounded corners.
+                                        child: MouseRegion(
+                                          onEnter: (_) => setState(
+                                            () => _scopeHovered = true,
                                           ),
-                                          child: DropdownButtonHideUnderline(
-                                            child: Tooltip(
-                                              message: 'Filter field',
-                                              child: DropdownButton<String>(
-                                                key: const ValueKey(
-                                                  'filterScope',
-                                                ),
-                                                value: _filterScope,
-                                                focusNode: _scopeFocusNode,
-                                                isDense: true,
-                                                isExpanded: true,
+                                          onExit: (_) => setState(
+                                            () => _scopeHovered = false,
+                                          ),
+                                          child: AnimatedContainer(
+                                            duration: const Duration(
+                                              milliseconds: 150,
+                                            ),
+                                            curve: Curves.easeOut,
+                                            width: double.infinity,
+                                            color: _scopeHovered ||
+                                                    _scopeFocusNode.hasFocus
+                                                ? ViewerPalette.accentSoft
+                                                : Colors.transparent,
+                                            child: Theme(
+                                              data: Theme.of(
+                                                context,
+                                              ).copyWith(
+                                                hoverColor: Colors.transparent,
+                                                highlightColor:
+                                                    Colors.transparent,
+                                                splashColor: Colors.transparent,
                                                 focusColor: Colors.transparent,
-                                                borderRadius: BorderRadius.zero,
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                  horizontal: 12,
-                                                ),
-                                                style: const TextStyle(
-                                                  fontFamily: 'Inter',
-                                                  color: ViewerPalette.text,
-                                                  fontSize: 13,
-                                                  fontWeight: FontWeight.w700,
-                                                ),
-                                                items: [
-                                                  for (final scope
-                                                      in _kFilterScopes)
-                                                    DropdownMenuItem<String>(
-                                                      value: scope.value,
-                                                      child: _FilterScopeOption(
-                                                        label: scope.label,
-                                                      ),
+                                              ),
+                                              child:
+                                                  DropdownButtonHideUnderline(
+                                                child: Tooltip(
+                                                  message: 'Filter field',
+                                                  child: DropdownButton<String>(
+                                                    key: const ValueKey(
+                                                      'filterScope',
                                                     ),
-                                                ],
-                                                onChanged: _setFilterScope,
+                                                    value: _filterScope,
+                                                    focusNode: _scopeFocusNode,
+                                                    isDense: true,
+                                                    isExpanded: true,
+                                                    focusColor:
+                                                        Colors.transparent,
+                                                    borderRadius:
+                                                        BorderRadius.zero,
+                                                    padding: const EdgeInsets
+                                                        .symmetric(
+                                                      horizontal: 12,
+                                                    ),
+                                                    style: const TextStyle(
+                                                      fontFamily: 'Inter',
+                                                      color: ViewerPalette.text,
+                                                      fontSize: 13,
+                                                      fontWeight:
+                                                          FontWeight.w700,
+                                                    ),
+                                                    // The button shows plain
+                                                    // labels; the hover wash
+                                                    // lives on the option rows
+                                                    // and on this wrapper, so
+                                                    // label and arrow read as
+                                                    // one.
+                                                    selectedItemBuilder:
+                                                        (context) => [
+                                                      for (final scope
+                                                          in _kFilterScopes)
+                                                        Text(
+                                                          scope.label,
+                                                          overflow: TextOverflow
+                                                              .ellipsis,
+                                                        ),
+                                                    ],
+                                                    items: [
+                                                      for (final scope
+                                                          in _kFilterScopes)
+                                                        DropdownMenuItem<
+                                                            String>(
+                                                          value: scope.value,
+                                                          child:
+                                                              _FilterScopeOption(
+                                                            label: scope.label,
+                                                          ),
+                                                        ),
+                                                    ],
+                                                    onChanged: _setFilterScope,
+                                                  ),
+                                                ),
                                               ),
                                             ),
                                           ),
@@ -1711,8 +1757,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
 }
 
 /// One row of the open filter-scope menu. The label fills the item width and
-/// lifts to a warm wash on mouse hover so the hovered option reads as
-/// selected; the text style is inherited from the scope select.
+/// lifts to a warm wash on mouse hover and on keyboard focus, so the
+/// arrow-keyed option reads exactly like a hovered one; the text style is
+/// inherited from the scope select.
 class _FilterScopeOption extends StatefulWidget {
   const _FilterScopeOption({required this.label});
 
@@ -1727,6 +1774,9 @@ class _FilterScopeOptionState extends State<_FilterScopeOption> {
 
   @override
   Widget build(BuildContext context) {
+    // The menu item's own InkWell owns the focus node, so mirror it without
+    // adding another one that would disturb arrow-key traversal.
+    final focused = Focus.maybeOf(context)?.hasFocus ?? false;
     return MouseRegion(
       onEnter: (_) => setState(() => _hovered = true),
       onExit: (_) => setState(() => _hovered = false),
@@ -1736,7 +1786,9 @@ class _FilterScopeOptionState extends State<_FilterScopeOption> {
         width: double.infinity,
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
         decoration: BoxDecoration(
-          color: _hovered ? ViewerPalette.accentSoft : Colors.transparent,
+          color: _hovered || focused
+              ? ViewerPalette.accentSoft
+              : Colors.transparent,
           borderRadius: BorderRadius.circular(ViewerPalette.radiusSm),
         ),
         child: Text(widget.label, overflow: TextOverflow.ellipsis),
