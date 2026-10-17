@@ -1441,6 +1441,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                 barConstraints.maxWidth * 0.25;
                             final filterFocused = _searchFocusNode.hasFocus ||
                                 _scopeFocusNode.hasFocus;
+                            final filterBorderWidth =
+                                filterFocused ? 1.5 : 1.0;
                             return Material(
                               key: _filterBarKey,
                               color: ViewerPalette.surface,
@@ -1452,7 +1454,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                   color: filterFocused
                                       ? ViewerPalette.accent
                                       : _kTableBorder,
-                                  width: filterFocused ? 1.5 : 1,
+                                  width: filterBorderWidth,
                                 ),
                               ),
                               child: SizedBox(
@@ -1567,7 +1569,11 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                     ),
                                     Container(
                                       width: 1,
-                                      height: 28,
+                                      // Full interior height: the divider
+                                      // touches the bar's top and bottom
+                                      // borders without painting over them.
+                                      height: _kHeaderBadgeHeight -
+                                          filterBorderWidth * 2,
                                       color: _kTableBorder,
                                     ),
                                     Expanded(

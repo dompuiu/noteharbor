@@ -47,6 +47,28 @@ void main() {
     expect(theme.data.hoverColor, Colors.transparent);
   });
 
+  testWidgets("filter divider touches the bar's top and bottom borders", (tester) async {
+    final controller = DatasetController(repository: _FakeViewerRepository());
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    // The 1px divider between the scope select and the text input spans
+    // the bar's full interior height (48px bar minus the 1px borders),
+    // touching the top and bottom edges instead of floating as a stub.
+    final dividerFinder = find.byWidgetPredicate(
+      (widget) =>
+          widget is Container &&
+          widget.constraints?.maxWidth == 1.0 &&
+          widget.color == ViewerPalette.border,
+    );
+    expect(dividerFinder, findsOneWidget);
+    expect(tester.getSize(dividerFinder).height, 48.0 - 2 * 1.0);
+  });
+
   testWidgets('filter text input paints no background of its own', (
     tester,
   ) async {
