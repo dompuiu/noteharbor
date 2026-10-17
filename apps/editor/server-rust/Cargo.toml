@@ -13,6 +13,10 @@ path = "src/main.rs"
 name = "migrate-images"
 path = "src/bin/migrate_images.rs"
 
+[[bin]]
+name = "sample-webp"
+path = "src/bin/sample_webp.rs"
+
 [lib]
 name = "editor_server_rust"
 path = "src/lib.rs"
