@@ -2,7 +2,11 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
-## [Unreleased]
+## [1.12.0] - 2026-10-16
+
+### Changed
+
+- Table screen: the filter bar is now a field-scope select plus the text input — pick All fields, Catalog (the default), Denomination, Date, Company, Grade, Serial, or Tags, then type the value. The inline `field:` prefixes (`cat:`, `denom:`, …) are retired and now match literally. Tapping a tag chip sets the scope to Tags; clearing resets the text only, and the scope resets when switching collections.
 
 ### Fixed
 
