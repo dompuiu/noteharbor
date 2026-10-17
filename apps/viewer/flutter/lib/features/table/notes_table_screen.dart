@@ -1437,110 +1437,112 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                 barConstraints.maxWidth * 0.25;
                             final filterFocused = _searchFocusNode.hasFocus ||
                                 _scopeFocusNode.hasFocus;
-                            return DecoratedBox(
+                            return Material(
                               key: _filterBarKey,
-                              decoration: BoxDecoration(
-                                color: ViewerPalette.surface,
+                              color: ViewerPalette.surface,
+                              clipBehavior: Clip.antiAlias,
+                              shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(
                                     ViewerPalette.radiusLg),
-                                border: Border.all(
+                                side: BorderSide(
                                   color: filterFocused
                                       ? ViewerPalette.accent
                                       : _kTableBorder,
                                   width: filterFocused ? 1.5 : 1,
                                 ),
                               ),
-                              child: Row(
-                                children: [
-                                  ConstrainedBox(
-                                    constraints: BoxConstraints(
-                                      maxWidth: scopeMaxWidth,
-                                      minWidth: math.min(
-                                        120,
-                                        scopeMaxWidth,
+                              child: SizedBox(
+                                height: _kHeaderBadgeHeight,
+                                child: Row(
+                                  crossAxisAlignment: CrossAxisAlignment.center,
+                                  children: [
+                                    ConstrainedBox(
+                                      constraints: BoxConstraints(
+                                        maxWidth: scopeMaxWidth,
+                                        minWidth: math.min(
+                                          120,
+                                          scopeMaxWidth,
+                                        ),
                                       ),
-                                    ),
-                                    child: DropdownButtonHideUnderline(
-                                      child: Tooltip(
-                                        message: 'Filter field',
-                                        child: DropdownButton<String>(
-                                          key: const ValueKey('filterScope'),
-                                          value: _filterScope,
-                                          focusNode: _scopeFocusNode,
-                                          isDense: true,
-                                          isExpanded: true,
-                                          borderRadius: BorderRadius.circular(
-                                              ViewerPalette.radiusLg),
-                                          padding: const EdgeInsets.symmetric(
-                                              horizontal: 12),
-                                          style: const TextStyle(
-                                            fontFamily: 'Inter',
-                                            color: ViewerPalette.text,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                          items: [
-                                            for (final scope in _kFilterScopes)
-                                              DropdownMenuItem<String>(
-                                                value: scope.value,
-                                                child: Text(
-                                                  scope.label,
-                                                  overflow:
-                                                      TextOverflow.ellipsis,
+                                      child: DropdownButtonHideUnderline(
+                                        child: Tooltip(
+                                          message: 'Filter field',
+                                          child: DropdownButton<String>(
+                                            key: const ValueKey('filterScope'),
+                                            value: _filterScope,
+                                            focusNode: _scopeFocusNode,
+                                            isDense: true,
+                                            isExpanded: true,
+                                            borderRadius: BorderRadius.circular(
+                                                ViewerPalette.radiusLg),
+                                            padding: const EdgeInsets.symmetric(
+                                                horizontal: 12),
+                                            style: const TextStyle(
+                                              fontFamily: 'Inter',
+                                              color: ViewerPalette.text,
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w700,
+                                            ),
+                                            items: [
+                                              for (final scope
+                                                  in _kFilterScopes)
+                                                DropdownMenuItem<String>(
+                                                  value: scope.value,
+                                                  child: Text(
+                                                    scope.label,
+                                                    overflow:
+                                                        TextOverflow.ellipsis,
+                                                  ),
                                                 ),
-                                              ),
-                                          ],
-                                          onChanged: _setFilterScope,
+                                            ],
+                                            onChanged: _setFilterScope,
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                                  Container(
-                                    width: 1,
-                                    height: 28,
-                                    color: _kTableBorder,
-                                  ),
-                                  Expanded(
-                                    child: TextField(
-                                      controller: _searchController,
-                                      focusNode: _searchFocusNode,
-                                      // Flutter's default tap-outside behavior
-                                      // drops primary focus to the enclosing
-                                      // route scope. On a drag that never
-                                      // re-fires the table's onTap, so `/` and
-                                      // the arrow keys stop working. Hand
-                                      // keyboard control back to the table
-                                      // instead (taps on the scope select are
-                                      // part of the same bar and ignored).
-                                      onTapOutside: _handleFilterTapOutside,
-                                      decoration: InputDecoration(
-                                        hintText: _filterHint,
-                                        hintStyle: const TextStyle(
-                                          fontFamily: 'Inter',
-                                          color: ViewerPalette.textFaint,
-                                          fontSize: 13,
-                                        ),
-                                        prefixIcon: const Icon(
-                                          Icons.search_rounded,
-                                          size: 20,
-                                        ),
-                                        prefixIconColor:
-                                            ViewerPalette.textMuted,
-                                        suffixIcon: _clearFilterButton(),
-                                        contentPadding:
-                                            const EdgeInsets.symmetric(
-                                                horizontal: 16, vertical: 14),
-                                        border: InputBorder.none,
-                                        enabledBorder: InputBorder.none,
-                                        focusedBorder: InputBorder.none,
-                                      ),
-                                      onChanged: (value) => setState(() {
-                                        _query = value;
-                                        _selectedIndex = null;
-                                      }),
+                                    Container(
+                                      width: 1,
+                                      height: 28,
+                                      color: _kTableBorder,
                                     ),
-                                  ),
-                                ],
+                                    Expanded(
+                                      child: TextField(
+                                        controller: _searchController,
+                                        focusNode: _searchFocusNode,
+                                        textAlignVertical:
+                                            TextAlignVertical.center,
+                                        // Flutter's default tap-outside behavior
+                                        // drops primary focus to the enclosing
+                                        // route scope. On a drag that never
+                                        // re-fires the table's onTap, so `/` and
+                                        // the arrow keys stop working. Hand
+                                        // keyboard control back to the table
+                                        // instead (taps on the scope select are
+                                        // part of the same bar and ignored).
+                                        onTapOutside: _handleFilterTapOutside,
+                                        decoration: InputDecoration(
+                                          hintText: _filterHint,
+                                          hintStyle: const TextStyle(
+                                            fontFamily: 'Inter',
+                                            color: ViewerPalette.textFaint,
+                                            fontSize: 13,
+                                          ),
+                                          suffixIcon: _clearFilterButton(),
+                                          contentPadding:
+                                              const EdgeInsets.symmetric(
+                                                  horizontal: 16, vertical: 14),
+                                          border: InputBorder.none,
+                                          enabledBorder: InputBorder.none,
+                                          focusedBorder: InputBorder.none,
+                                        ),
+                                        onChanged: (value) => setState(() {
+                                          _query = value;
+                                          _selectedIndex = null;
+                                        }),
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
                             );
                           },
