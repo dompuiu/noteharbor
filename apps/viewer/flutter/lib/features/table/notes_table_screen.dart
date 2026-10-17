@@ -1464,38 +1464,56 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                           scopeMaxWidth,
                                         ),
                                       ),
-                                      child: DropdownButtonHideUnderline(
-                                        child: Tooltip(
-                                          message: 'Filter field',
-                                          child: DropdownButton<String>(
-                                            key: const ValueKey('filterScope'),
-                                            value: _filterScope,
-                                            focusNode: _scopeFocusNode,
-                                            isDense: true,
-                                            isExpanded: true,
-                                            borderRadius: BorderRadius.circular(
-                                                ViewerPalette.radiusLg),
-                                            padding: const EdgeInsets.symmetric(
-                                                horizontal: 12),
-                                            style: const TextStyle(
-                                              fontFamily: 'Inter',
-                                              color: ViewerPalette.text,
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w700,
-                                            ),
-                                            items: [
-                                              for (final scope
-                                                  in _kFilterScopes)
-                                                DropdownMenuItem<String>(
-                                                  value: scope.value,
-                                                  child: Text(
-                                                    scope.label,
-                                                    overflow:
-                                                        TextOverflow.ellipsis,
-                                                  ),
+                                      child: SizedBox(
+                                        height: _kHeaderBadgeHeight,
+                                        // The select is one flat segment of the
+                                        // bar: no hover/focus wash, square ink
+                                        // (the bar owns the rounded corners).
+                                        child: Theme(
+                                          data: Theme.of(context).copyWith(
+                                            hoverColor: Colors.transparent,
+                                            highlightColor: Colors.transparent,
+                                            splashColor: Colors.transparent,
+                                            focusColor: Colors.transparent,
+                                          ),
+                                          child: DropdownButtonHideUnderline(
+                                            child: Tooltip(
+                                              message: 'Filter field',
+                                              child: DropdownButton<String>(
+                                                key: const ValueKey(
+                                                  'filterScope',
                                                 ),
-                                            ],
-                                            onChanged: _setFilterScope,
+                                                value: _filterScope,
+                                                focusNode: _scopeFocusNode,
+                                                isDense: true,
+                                                isExpanded: true,
+                                                focusColor: Colors.transparent,
+                                                borderRadius: BorderRadius.zero,
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                  horizontal: 12,
+                                                ),
+                                                style: const TextStyle(
+                                                  fontFamily: 'Inter',
+                                                  color: ViewerPalette.text,
+                                                  fontSize: 13,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                                items: [
+                                                  for (final scope
+                                                      in _kFilterScopes)
+                                                    DropdownMenuItem<String>(
+                                                      value: scope.value,
+                                                      child: Text(
+                                                        scope.label,
+                                                        overflow: TextOverflow
+                                                            .ellipsis,
+                                                      ),
+                                                    ),
+                                                ],
+                                                onChanged: _setFilterScope,
+                                              ),
+                                            ),
                                           ),
                                         ),
                                       ),
