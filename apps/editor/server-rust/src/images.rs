@@ -345,10 +345,33 @@ fn flatten_to_rgb8(image: &image::DynamicImage) -> image::RgbImage {
     out
 }
 
+/// Re-encodes `input` to lossy WebP at `quality` (0–100, clamped), stripping
+/// metadata (no resolution change). GIF input returns `None` so callers can
+/// copy it verbatim; undecodable input also returns `None` so callers can
+/// fall back to a verbatim copy and never lose data.
+pub fn transcode_to_webp(input: &[u8], quality: f32) -> Option<Vec<u8>> {
+    if image::guess_format(input).ok() == Some(image::ImageFormat::Gif) {
+        return None;
+    }
+    let decoded = image::load_from_memory(input).ok()?;
+    let rgb = flatten_to_rgb8(&decoded);
+    Some(
+        webp::Encoder::from_rgb(&rgb.as_raw()[..], rgb.width(), rgb.height())
+            .encode(quality.clamp(1.0, 100.0))
+            .to_vec(),
+    )
+}
+
 /// Maps a managed note-image `localPath` to its migrated file name: `.gif`
 /// stays `.gif` (copied verbatim), every other extension becomes `.jpg`.
 /// Non-managed paths (external URLs) pass through unchanged.
 pub fn migrated_local_path(local_path: &str) -> String {
+    migrated_local_path_with_extension(local_path, ".jpg")
+}
+
+/// Same as [`migrated_local_path`] with an explicit target extension
+/// (`".jpg"` or `".webp"`).
+pub fn migrated_local_path_with_extension(local_path: &str, extension: &str) -> String {
     if !local_path.starts_with(IMAGE_API_PREFIX) {
         return local_path.to_owned();
     }
@@ -356,8 +379,8 @@ pub fn migrated_local_path(local_path: &str) -> String {
         return local_path.to_owned();
     }
     match local_path.rfind('.') {
-        Some(dot) => format!("{}.jpg", &local_path[..dot]),
-        None => format!("{local_path}.jpg"),
+        Some(dot) => format!("{}{extension}", &local_path[..dot]),
+        None => format!("{local_path}{extension}"),
     }
 }
 
@@ -589,5 +612,40 @@ mod tests {
             migrated_local_path("https://example.com/a.png"),
             "https://example.com/a.png"
         );
+        assert_eq!(
+            migrated_local_path_with_extension("/api/images/notes/7/front-full.jpg", ".webp"),
+            "/api/images/notes/7/front-full.webp"
+        );
+        assert_eq!(
+            migrated_local_path_with_extension("/api/images/notes/7/x.gif", ".webp"),
+            "/api/images/notes/7/x.gif"
+        );
+    }
+
+    #[test]
+    fn transcode_to_webp_round_trips_dimensions_and_skips_gif() {
+        let mut pixels = image::RgbImage::new(160, 120);
+        let mut state: u64 = 0x9E3779B97F4A7C15;
+        for pixel in pixels.pixels_mut() {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            *pixel = image::Rgb([(state >> 56) as u8, (state >> 48) as u8, (state >> 40) as u8]);
+        }
+        let mut source = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut source, 95)
+            .encode_image(&image::DynamicImage::ImageRgb8(pixels))
+            .expect("source encodes");
+        let transcoded = transcode_to_webp(&source, 80.0).expect("transcodes");
+        assert!(!transcoded.is_empty());
+        let roundtrip = webp::Decoder::new(&transcoded).decode().expect("webp decodes");
+        assert_eq!((roundtrip.width(), roundtrip.height()), (160, 120));
+
+        let frame = image::RgbaImage::from_pixel(8, 8, image::Rgba([1, 2, 3, 255]));
+        let mut gif = Vec::new();
+        image::codecs::gif::GifEncoder::new(&mut gif)
+            .encode(&frame, 8, 8, image::ExtendedColorType::Rgba8)
+            .expect("gif encodes");
+        assert_eq!(transcode_to_webp(&gif, 80.0), None);
     }
 }

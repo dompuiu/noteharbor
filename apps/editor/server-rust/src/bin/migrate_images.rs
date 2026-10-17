@@ -1,42 +1,64 @@
 //! One-time image migration: copies a data directory to a new location with
-//! all note images re-encoded to optimized JPEG (GIFs copied verbatim), and
-//! rewrites the copied database's image `localPath`s to match.
+//! all note images re-encoded (GIFs copied verbatim), and rewrites the
+//! copied database's image `localPath`s to match.
 //!
 //! The source directory is never modified. Usage:
 //!
 //! ```text
-//! migrate-images --src data --dst data-migrated [--quality 85]
-//!                [--thumbnail-quality 82] [--dry-run] [--report report.csv]
+//! migrate-images --src data --dst data-migrated [--format jpeg|webp]
+//!                [--quality 85] [--thumbnail-quality 82] [--never-grow]
+//!                [--dry-run] [--report report.csv]
 //! ```
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use editor_server_rust::images::{
-    transcode_to_jpeg, IMAGE_API_PREFIX, MIGRATE_FULL_JPEG_QUALITY, MIGRATE_THUMB_JPEG_QUALITY,
+    IMAGE_API_PREFIX, MIGRATE_FULL_JPEG_QUALITY, MIGRATE_THUMB_JPEG_QUALITY, transcode_to_jpeg,
+    transcode_to_webp,
 };
 use serde_json::Value;
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum Format {
+    Jpeg,
+    Webp,
+}
+
+impl Format {
+    fn extension(self) -> &'static str {
+        match self {
+            Format::Jpeg => ".jpg",
+            Format::Webp => ".webp",
+        }
+    }
+}
 
 struct Args {
     src: PathBuf,
     dst: PathBuf,
-    quality: u8,
-    thumbnail_quality: u8,
+    format: Format,
+    quality: f32,
+    thumbnail_quality: f32,
+    never_grow: bool,
     dry_run: bool,
     report: Option<PathBuf>,
 }
 
 fn usage() -> String {
-    "usage: migrate-images --src <data-dir> --dst <out-dir> [--quality 1-100] \
-     [--thumbnail-quality 1-100] [--dry-run] [--report <csv>]"
+    "usage: migrate-images --src <data-dir> --dst <out-dir> [--format jpeg|webp] \
+     [--quality 1-100] [--thumbnail-quality 1-100] [--never-grow] [--dry-run] \
+     [--report <csv>]"
         .to_owned()
 }
 
 fn parse_args() -> Result<Args, String> {
     let mut src = None;
     let mut dst = None;
-    let mut quality = MIGRATE_FULL_JPEG_QUALITY;
-    let mut thumbnail_quality = MIGRATE_THUMB_JPEG_QUALITY;
+    let mut format = Format::Jpeg;
+    let mut quality = f32::from(MIGRATE_FULL_JPEG_QUALITY);
+    let mut thumbnail_quality = f32::from(MIGRATE_THUMB_JPEG_QUALITY);
+    let mut never_grow = false;
     let mut dry_run = false;
     let mut report = None;
     let mut rest = std::env::args().skip(1);
@@ -44,6 +66,13 @@ fn parse_args() -> Result<Args, String> {
         match arg.as_str() {
             "--src" => src = Some(PathBuf::from(rest.next().ok_or("--src needs a value")?)),
             "--dst" => dst = Some(PathBuf::from(rest.next().ok_or("--dst needs a value")?)),
+            "--format" => {
+                format = match rest.next().ok_or("--format needs a value")?.as_str() {
+                    "jpeg" => Format::Jpeg,
+                    "webp" => Format::Webp,
+                    other => return Err(format!("unknown --format \"{other}\" (jpeg|webp)")),
+                };
+            }
             "--quality" => {
                 quality = parse_quality(rest.next().ok_or("--quality needs a value")?)?;
             }
@@ -51,6 +80,7 @@ fn parse_args() -> Result<Args, String> {
                 thumbnail_quality =
                     parse_quality(rest.next().ok_or("--thumbnail-quality needs a value")?)?;
             }
+            "--never-grow" => never_grow = true,
             "--dry-run" => dry_run = true,
             "--report" => {
                 report = Some(PathBuf::from(rest.next().ok_or("--report needs a value")?))
@@ -67,25 +97,34 @@ fn parse_args() -> Result<Args, String> {
     Ok(Args {
         src,
         dst,
+        format,
         quality,
         thumbnail_quality,
+        never_grow,
         dry_run,
         report,
     })
 }
 
-fn parse_quality(raw: String) -> Result<u8, String> {
-    match raw.parse::<u8>() {
-        Ok(value) if (1..=100).contains(&value) => Ok(value),
+fn parse_quality(raw: String) -> Result<f32, String> {
+    match raw.parse::<f32>() {
+        Ok(value) if (1.0..=100.0).contains(&value) => Ok(value),
         _ => Err("--quality must be 1-100".to_owned()),
     }
 }
 
-fn quality_for(relative_posix: &str, args: &Args) -> u8 {
+fn quality_for(relative_posix: &str, args: &Args) -> f32 {
     if relative_posix.to_lowercase().contains("thumbnail") {
         args.thumbnail_quality
     } else {
         args.quality
+    }
+}
+
+fn transcode(bytes: &[u8], format: Format, quality: f32) -> Option<Vec<u8>> {
+    match format {
+        Format::Jpeg => transcode_to_jpeg(bytes, quality as u8),
+        Format::Webp => transcode_to_webp(bytes, quality),
     }
 }
 
@@ -170,7 +209,7 @@ fn run(args: &Args) -> Result<(), String> {
 
     let files = collect_files(&src_images).map_err(|error| error.to_string())?;
     // Old `images/<rel>` -> new `images/<rel>` (identical unless transcoded
-    // across extensions, e.g. `.png` -> `.jpg`).
+    // across extensions, e.g. `.png` -> `.jpg`, or kept verbatim).
     let mut renames: HashMap<String, String> = HashMap::new();
     let mut rows: Vec<(String, u64, u64, &'static str)> = Vec::with_capacity(files.len());
     let (mut total_before, mut total_after) = (0u64, 0u64);
@@ -179,18 +218,21 @@ fn run(args: &Args) -> Result<(), String> {
         let bytes = std::fs::read(absolute).map_err(|error| error.to_string())?;
         let before = bytes.len() as u64;
         total_before += before;
-        let (out_relative, out_bytes, action) =
-            match transcode_to_jpeg(&bytes, quality_for(relative, args)) {
-                Some(jpeg) => {
-                    let stem = relative
-                        .rsplit_once('.')
-                        .map(|(stem, _)| stem)
-                        .unwrap_or(relative);
-                    (format!("{stem}.jpg"), jpeg, "transcoded")
-                }
-                // GIFs and undecodable files travel verbatim so nothing is lost.
-                None => (relative.clone(), bytes, "copied"),
-            };
+        let transcoded = transcode(&bytes, args.format, quality_for(relative, args));
+        let (out_relative, out_bytes, action) = match transcoded {
+            Some(output)
+                if !args.never_grow || (output.len() as u64) < before =>
+            {
+                let stem = relative
+                    .rsplit_once('.')
+                    .map(|(stem, _)| stem)
+                    .unwrap_or(relative);
+                (format!("{stem}{}", args.format.extension()), output, "transcoded")
+            }
+            // GIFs, undecodable files, and (with --never-grow) outputs that
+            // would be larger than the source travel verbatim.
+            _ => (relative.clone(), bytes, "copied"),
+        };
         let after = out_bytes.len() as u64;
         total_after += after;
         if action == "transcoded" {
@@ -290,6 +332,13 @@ fn print_report(
     };
     println!("source:      {}", args.src.display());
     println!("destination: {}", args.dst.display());
+    println!(
+        "format:      {:?} (quality {}, thumbnail {}){}",
+        args.format,
+        args.quality,
+        args.thumbnail_quality,
+        if args.never_grow { ", never-grow" } else { "" }
+    );
     if args.dry_run {
         println!("mode:        dry-run (nothing written)");
     }
