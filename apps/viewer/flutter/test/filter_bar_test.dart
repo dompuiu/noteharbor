@@ -1,6 +1,8 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:note_harbor_viewer/app/viewer_palette.dart';
 import 'package:note_harbor_viewer/data/dataset_controller.dart';
 import 'package:note_harbor_viewer/data/viewer_repository.dart';
 import 'package:note_harbor_viewer/features/table/notes_table_screen.dart';
@@ -42,6 +44,56 @@ void main() {
       find.ancestor(of: dropdownFinder, matching: find.byType(Theme)).first,
     );
     expect(theme.data.hoverColor, Colors.transparent);
+  });
+
+  testWidgets('filter text input paints no background of its own', (
+    tester,
+  ) async {
+    final controller = DatasetController(repository: _FakeViewerRepository());
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    final field = tester.widget<TextField>(find.byType(TextField));
+    // Unfilled inputs paint neither a fill nor a hover wash, so the bar
+    // behind them keeps one flat background on mouse hover.
+    expect(field.decoration?.filled, isFalse);
+  });
+
+  testWidgets('filter scope options highlight on hover', (tester) async {
+    final controller = DatasetController(repository: _FakeViewerRepository());
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.tap(find.byKey(const ValueKey('filterScope')));
+    await tester.pumpAndSettle();
+
+    final optionFinder = find.text('Denomination');
+    expect(optionFinder, findsOneWidget);
+
+    final mouse = await tester.createGesture(kind: PointerDeviceKind.mouse);
+    await mouse.addPointer(location: Offset.zero);
+    await mouse.moveTo(tester.getCenter(optionFinder));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is AnimatedContainer &&
+            (widget.decoration as BoxDecoration?)?.color ==
+                ViewerPalette.accentSoft,
+      ),
+      findsOneWidget,
+    );
+
+    await mouse.removePointer();
   });
 }
 

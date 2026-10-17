@@ -1504,10 +1504,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                       in _kFilterScopes)
                                                     DropdownMenuItem<String>(
                                                       value: scope.value,
-                                                      child: Text(
-                                                        scope.label,
-                                                        overflow: TextOverflow
-                                                            .ellipsis,
+                                                      child: _FilterScopeOption(
+                                                        label: scope.label,
                                                       ),
                                                     ),
                                                 ],
@@ -1545,6 +1543,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                             color: ViewerPalette.textFaint,
                                             fontSize: 13,
                                           ),
+                                          // Unfilled: the bar behind owns the
+                                          // background, so hovering the input
+                                          // cannot wash it with a hover layer.
+                                          filled: false,
                                           suffixIcon: _clearFilterButton(),
                                           contentPadding:
                                               const EdgeInsets.symmetric(
@@ -1703,6 +1705,41 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// One row of the open filter-scope menu. The label fills the item width and
+/// lifts to a warm wash on mouse hover so the hovered option reads as
+/// selected; the text style is inherited from the scope select.
+class _FilterScopeOption extends StatefulWidget {
+  const _FilterScopeOption({required this.label});
+
+  final String label;
+
+  @override
+  State<_FilterScopeOption> createState() => _FilterScopeOptionState();
+}
+
+class _FilterScopeOptionState extends State<_FilterScopeOption> {
+  bool _hovered = false;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      onEnter: (_) => setState(() => _hovered = true),
+      onExit: (_) => setState(() => _hovered = false),
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOut,
+        width: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+        decoration: BoxDecoration(
+          color: _hovered ? ViewerPalette.accentSoft : Colors.transparent,
+          borderRadius: BorderRadius.circular(ViewerPalette.radiusSm),
+        ),
+        child: Text(widget.label, overflow: TextOverflow.ellipsis),
       ),
     );
   }
