@@ -208,6 +208,43 @@ void main() {
     expect(find.text('2 / 2'), findsOneWidget);
   });
 
+  testWidgets('a narrowing pinch within 20% of fit snaps back to fit', (
+    tester,
+  ) async {
+    await pumpMultiItemPopover(tester);
+    await _zoomInWithKeyboard(tester);
+    expect(_maxZoom(tester), greaterThan(1.0));
+
+    final center = tester.getCenter(find.byType(PageView));
+    final first = await tester.startGesture(
+      center + const Offset(-200, 0),
+      pointer: 1,
+    );
+    final second = await tester.startGesture(
+      center + const Offset(200, 0),
+      pointer: 2,
+    );
+
+    // Draw the fingers together until the image is within 20% of fit but
+    // outside the old 10% margin (span 200 of 400 halves the natural-size
+    // zoom of ~2.2 down to ~1.1): without the widened snap this rests above
+    // fit and leaves the sequence unswipeable until a double tap.
+    await first.moveTo(center + const Offset(-100, 0));
+    await second.moveTo(center + const Offset(100, 0));
+    await tester.pump();
+
+    expect(_maxZoom(tester), closeTo(1.0, 0.001));
+
+    await first.up();
+    await second.up();
+    await tester.pumpAndSettle();
+
+    // The sequence is swipeable again without a reset.
+    await tester.drag(find.byType(PageView), const Offset(-600, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('2 / 2'), findsOneWidget);
+  });
+
   testWidgets('a narrowing pinch can still stop at a real zoom stop', (
     tester,
   ) async {
@@ -232,7 +269,7 @@ void main() {
     await second.up();
     await tester.pumpAndSettle();
 
-    expect(_maxZoom(tester), greaterThan(1 + 0.1));
+    expect(_maxZoom(tester), greaterThan(1 + 0.2));
   });
 
   testWidgets('dragging a zoomed image pans it', (tester) async {

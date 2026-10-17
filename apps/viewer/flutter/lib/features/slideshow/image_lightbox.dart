@@ -555,7 +555,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
   /// get before it is drawn all the way back to fit. Pinching out rarely lands
   /// exactly on fit, and any leftover zoom keeps the sequence unswipeable until
   /// a double tap resets it.
-  static const double _kFitSnapFraction = 0.1;
+  static const double _kFitSnapFraction = 0.2;
 
   final Map<int, Offset> _activePointers = <int, Offset>{};
   ImageStream? _imageStream;
