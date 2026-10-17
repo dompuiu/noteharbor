@@ -72,6 +72,23 @@ const List<String> _kSortableHeaderKeys = [
   'tags',
 ];
 
+/// Filter scopes for the unified filter bar. The select holds the field and
+/// the text input holds the value, so `Catalog + "17"` replaces the removed
+/// `cat: 17` inline syntax.
+const String _kAllFieldsScope = 'all';
+const String _kDefaultFilterScope = 'catalogNumber';
+
+const List<({String value, String label, String hint})> _kFilterScopes = [
+  (value: 'all', label: 'All fields', hint: 'Filter…'),
+  (value: 'catalogNumber', label: 'Catalog', hint: 'Filter catalog…'),
+  (value: 'denomination', label: 'Denomination', hint: 'Filter denomination…'),
+  (value: 'issueDate', label: 'Date', hint: 'Filter date…'),
+  (value: 'gradingCompany', label: 'Company', hint: 'Filter company…'),
+  (value: 'grade', label: 'Grade', hint: 'Filter grade…'),
+  (value: 'serial', label: 'Serial', hint: 'Filter serial…'),
+  (value: 'tags', label: 'Tags', hint: 'Filter tags…'),
+];
+
 /// The cursor shown while the columns are being panned. The Windows embedder
 /// has no open/closed-hand cursor: `grab`/`grabbing` are absent from its cursor
 /// map and silently fall back to the plain arrow, so Windows gets the pointing
@@ -105,17 +122,9 @@ const TextStyle _kHeaderLabelTextStyle = TextStyle(
 );
 
 // ---------------------------------------------------------------------------
-// Field-scoped search parsing
+// Scoped search matching (scope comes from the filter-bar select, the value
+// from the text input; `field: value` inline syntax was removed)
 // ---------------------------------------------------------------------------
-
-class _ParsedQuery {
-  const _ParsedQuery({required this.allFields, required this.fields});
-
-  final String allFields;
-  final Map<String, String> fields; // canonical field name → raw field filter
-
-  bool get isEmpty => allFields.isEmpty && fields.isEmpty;
-}
 
 class _FilterToken {
   const _FilterToken({required this.negated, required this.value});
@@ -123,22 +132,6 @@ class _FilterToken {
   final bool negated;
   final String value;
 }
-
-// Matches "fieldkeyword:" (case-insensitive, requires word boundary before).
-final _kFieldPattern = RegExp(
-  r'\b(denomination|denom|date|catalog|cat|grading|company|grade|tag|tags):\s*',
-  caseSensitive: false,
-);
-
-String _canonicalField(String keyword) => switch (keyword.toLowerCase()) {
-      'denomination' || 'denom' => 'denomination',
-      'date' => 'issueDate',
-      'catalog' || 'cat' => 'catalogNumber',
-      'company' || 'grading' => 'gradingCompany',
-      'grade' => 'grade',
-      'tag' || 'tags' => 'tags',
-      _ => keyword,
-    };
 
 List<String> _splitSearchTerms(String rawValue) {
   return RegExp(r'\d(?:[\d,. ]*\d)?|[^\s]+')
@@ -404,39 +397,6 @@ bool _matchesTagFilter(NoteRecord note, String rawFilterValue) {
   });
 }
 
-_ParsedQuery _parseQuery(String raw) {
-  final trimmed = raw.trim();
-  if (trimmed.isEmpty) {
-    return const _ParsedQuery(allFields: '', fields: {});
-  }
-
-  final matches = _kFieldPattern.allMatches(trimmed).toList();
-  if (matches.isEmpty) {
-    return _ParsedQuery(allFields: trimmed.toLowerCase(), fields: const {});
-  }
-
-  final fields = <String, String>{};
-  for (var i = 0; i < matches.length; i++) {
-    final match = matches[i];
-    final canonicalField = _canonicalField(match.group(1)!);
-    final valueStart = match.end;
-    final valueEnd =
-        i + 1 < matches.length ? matches[i + 1].start : trimmed.length;
-    // Strip optional trailing comma (e.g. "catalog: 123, denom: 10")
-    final segment = trimmed.substring(valueStart, valueEnd).trim();
-    final value = segment.endsWith(',')
-        ? segment.substring(0, segment.length - 1).trim()
-        : segment;
-    if (value.isNotEmpty) {
-      fields[canonicalField] = value;
-    }
-  }
-
-  final allFields =
-      trimmed.substring(0, matches.first.start).trim().toLowerCase();
-  return _ParsedQuery(allFields: allFields, fields: fields);
-}
-
 // ---------------------------------------------------------------------------
 
 double _measureTextWidth(String text, TextStyle style) {
@@ -492,7 +452,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
+  final GlobalKey _filterBarKey = GlobalKey();
   String _query = '';
+  String _filterScope = _kDefaultFilterScope;
   String _sortKey = 'displayOrder';
   bool _ascending = true;
   int? _lastActiveCollectionId;
@@ -502,6 +464,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   late final FocusNode _searchFocusNode = FocusNode(
     debugLabel: 'notesSearch',
     onKeyEvent: (_, event) => _handleSearchKey(event),
+  );
+  late final FocusNode _scopeFocusNode = FocusNode(
+    debugLabel: 'notesFilterScope',
+    onKeyEvent: (_, event) => _handleScopeKey(event),
   );
   late final Map<String, FocusNode> _headerFocusNodes = {
     for (final key in _kSortableHeaderKeys)
@@ -743,7 +709,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     super.initState();
     _lastActiveCollectionId = widget.controller.activeCollectionId;
     widget.controller.addListener(_handleControllerChange);
-    _searchFocusNode.addListener(_handleSearchFocusChange);
+    _searchFocusNode.addListener(_handleFilterFocusChange);
+    _scopeFocusNode.addListener(_handleFilterFocusChange);
     FocusManager.instance.addListener(_handleFocusDrain);
   }
 
@@ -764,12 +731,14 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   void dispose() {
     FocusManager.instance.removeListener(_handleFocusDrain);
     widget.controller.removeListener(_handleControllerChange);
-    _searchFocusNode.removeListener(_handleSearchFocusChange);
+    _searchFocusNode.removeListener(_handleFilterFocusChange);
+    _scopeFocusNode.removeListener(_handleFilterFocusChange);
     _searchController.dispose();
     _horizontalScrollController.dispose();
     _verticalScrollController.dispose();
     _tableFocusNode.dispose();
     _searchFocusNode.dispose();
+    _scopeFocusNode.dispose();
     _importButtonFocusNode.dispose();
     for (final node in _headerFocusNodes.values) {
       node.dispose();
@@ -815,6 +784,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
 
     setState(() {
       _query = '';
+      _filterScope = _kDefaultFilterScope;
       _searchController.clear();
       _selectedIndex = null;
     });
@@ -829,41 +799,33 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   }
 
   List<NoteRecord> _sortedNotes(List<NoteRecord> notes) {
-    final parsed = _parseQuery(_query);
+    final trimmedQuery = _query.trim();
     final filtered = notes.where((note) {
-      if (parsed.isEmpty) return true;
+      if (trimmedQuery.isEmpty) return true;
 
-      if (parsed.allFields.isNotEmpty) {
-        if (!_matchesAllFieldsSearch(note, parsed.allFields)) return false;
+      if (_filterScope == _kAllFieldsScope) {
+        return _matchesAllFieldsSearch(note, trimmedQuery);
       }
 
-      for (final entry in parsed.fields.entries) {
-        if (entry.key == 'tags') {
-          if (!_matchesTagFilter(note, entry.value)) {
-            return false;
-          }
-          continue;
-        }
-
-        final fieldValue = note.valueForColumn(entry.key).toLowerCase();
-        final supportsMultipleValues = entry.key == 'catalogNumber' ||
-            entry.key == 'grade' ||
-            entry.key == 'issueDate' ||
-            entry.key == 'denomination';
-        final matches = _matchesScalarFilter(
-          fieldValue,
-          entry.value,
-          multiple: supportsMultipleValues,
-          matcher: switch (entry.key) {
-            'catalogNumber' => _matchesCatalogFilterValue,
-            'denomination' => _matchesDenominationFilterValue,
-            _ => (noteValue, filterValue) => noteValue.contains(filterValue),
-          },
-        );
-        if (!matches) return false;
+      if (_filterScope == 'tags') {
+        return _matchesTagFilter(note, trimmedQuery);
       }
 
-      return true;
+      final fieldValue = note.valueForColumn(_filterScope).toLowerCase();
+      final supportsMultipleValues = _filterScope == 'catalogNumber' ||
+          _filterScope == 'grade' ||
+          _filterScope == 'issueDate' ||
+          _filterScope == 'denomination';
+      return _matchesScalarFilter(
+        fieldValue,
+        trimmedQuery,
+        multiple: supportsMultipleValues,
+        matcher: switch (_filterScope) {
+          'catalogNumber' => _matchesCatalogFilterValue,
+          'denomination' => _matchesDenominationFilterValue,
+          _ => (noteValue, filterValue) => noteValue.contains(filterValue),
+        },
+      );
     }).toList(growable: false);
 
     filtered.sort((left, right) {
@@ -894,10 +856,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   }
 
   void _applyTagFilter(String tagName) {
-    final filterValue = 'tags: $tagName';
-    _searchController.text = filterValue;
+    _searchController.text = tagName;
     setState(() {
-      _query = filterValue;
+      _query = tagName;
+      _filterScope = 'tags';
       _selectedIndex = null;
     });
     if (_horizontalScrollController.hasClients) {
@@ -961,6 +923,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       _searchController.text = result!.tagName!;
       setState(() {
         _query = result.tagName!;
+        _filterScope = 'tags';
         _selectedIndex = null;
       });
     }
@@ -1196,19 +1159,36 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     }
   }
 
-  void _handleSearchFocusChange() {
+  void _handleFilterFocusChange() {
     // Focusing the filter by any means (click, tap, slash, Tab) drops the row
-    // selection so the selection ring doesn't linger behind the field.
-    if (_searchFocusNode.hasFocus && _selectedIndex != null && mounted) {
-      setState(() => _selectedIndex = null);
+    // selection so the selection ring doesn't linger behind the controls.
+    // Rebuilds on every focus change so the unified bar can highlight while
+    // either the scope select or the text field holds focus.
+    if (mounted) {
+      setState(() {
+        if ((_searchFocusNode.hasFocus || _scopeFocusNode.hasFocus) &&
+            _selectedIndex != null) {
+          _selectedIndex = null;
+        }
+      });
     }
   }
 
-  /// Called for each pointer-down outside the filter. On desktop, Flutter's
-  /// default would unfocus the field to the enclosing route scope; because a
-  /// drag never fires an `onTap`, that leaves the table without primary focus
-  /// and its shortcuts (/, arrows) dead. Return keyboard control to the table.
+  /// Called for each pointer-down outside the filter text field. On desktop,
+  /// Flutter's default would unfocus the field to the enclosing route scope;
+  /// because a drag never fires an `onTap`, that leaves the table without
+  /// primary focus and its shortcuts (/, arrows) dead. Return keyboard
+  /// control to the table instead. Pointer-downs on the scope select belong
+  /// to the same unified bar and are ignored so the menu can open.
   void _handleFilterTapOutside(PointerDownEvent event) {
+    final barBox =
+        _filterBarKey.currentContext?.findRenderObject() as RenderBox?;
+    if (barBox != null &&
+        barBox.paintBounds
+            .shift(barBox.localToGlobal(Offset.zero))
+            .contains(event.position)) {
+      return;
+    }
     if (!_keyboardNavEnabled) {
       // Touch platforms keep the default: dismiss the on-screen keyboard.
       _searchFocusNode.unfocus();
@@ -1229,10 +1209,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     }
     final key = event.logicalKey;
     if (key == LogicalKeyboardKey.tab) {
-      // Explicit Tab order from the filter: forward enters the headers at ID,
-      // reverse steps out to the import action above (or stops in place when
-      // imports are unavailable). Collapse a lingering select-all so the
-      // highlight does not sit stale behind the next focus.
+      // Explicit Tab order from the filter field: forward enters the headers
+      // at ID, reverse steps back to the scope select. Collapse a lingering
+      // select-all so the highlight does not sit stale behind the next focus.
       if (HardwareKeyboard.instance.isControlPressed ||
           HardwareKeyboard.instance.isMetaPressed ||
           HardwareKeyboard.instance.isAltPressed) {
@@ -1244,9 +1223,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         );
       }
       if (HardwareKeyboard.instance.isShiftPressed) {
-        if (widget.controller.canManageImportedDatasets) {
-          _importButtonFocusNode.requestFocus();
-        }
+        _scopeFocusNode.requestFocus();
         return KeyEventResult.handled;
       }
       _focusHeader(_kSortableHeaderKeys.first);
@@ -1291,6 +1268,51 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       return KeyEventResult.handled;
     }
     return KeyEventResult.ignored;
+  }
+
+  KeyEventResult _handleScopeKey(KeyEvent event) {
+    if (!_keyboardNavEnabled) {
+      return KeyEventResult.ignored;
+    }
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey != LogicalKeyboardKey.tab) {
+      return KeyEventResult.ignored;
+    }
+    if (HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isAltPressed) {
+      return KeyEventResult.ignored;
+    }
+    // Tab order: import button -> scope select -> filter field -> headers.
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      if (widget.controller.canManageImportedDatasets) {
+        _importButtonFocusNode.requestFocus();
+      }
+      return KeyEventResult.handled;
+    }
+    _focusSearchField();
+    return KeyEventResult.handled;
+  }
+
+  void _setFilterScope(String? scope) {
+    if (scope == null || scope == _filterScope) {
+      return;
+    }
+    setState(() {
+      _filterScope = scope;
+      _selectedIndex = null;
+    });
+  }
+
+  String get _filterHint {
+    for (final scope in _kFilterScopes) {
+      if (scope.value == _filterScope) {
+        return scope.hint;
+      }
+    }
+    return 'Filter…';
   }
 
   Future<void> _openImportScreen() async {
@@ -1406,59 +1428,122 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                       ),
                       const SizedBox(height: 20),
                       ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 420),
-                        child: TextField(
-                          controller: _searchController,
-                          focusNode: _searchFocusNode,
-                          // Flutter's default tap-outside behavior drops
-                          // primary focus to the enclosing route scope. On a
-                          // drag that never re-fires the table's onTap, so `/`
-                          // and the arrow keys stop working. Hand keyboard
-                          // control back to the table instead.
-                          onTapOutside: _handleFilterTapOutside,
-                          decoration: InputDecoration(
-                            filled: true,
-                            fillColor: ViewerPalette.surface,
-                            hintText:
-                                'Filter…  catalog:  denom:  date:  company:  grade:  tags:',
-                            hintStyle: const TextStyle(
-                              fontFamily: 'Inter',
-                              color: ViewerPalette.textFaint,
-                              fontSize: 13,
-                            ),
-                            prefixIcon: const Icon(
-                              Icons.search_rounded,
-                              size: 20,
-                            ),
-                            prefixIconColor: ViewerPalette.textMuted,
-                            suffixIcon: _clearFilterButton(),
-                            contentPadding: const EdgeInsets.symmetric(
-                                horizontal: 16, vertical: 14),
-                            border: OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.circular(ViewerPalette.radiusLg),
-                              borderSide:
-                                  const BorderSide(color: _kTableBorder),
-                            ),
-                            enabledBorder: OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.circular(ViewerPalette.radiusLg),
-                              borderSide:
-                                  const BorderSide(color: _kTableBorder),
-                            ),
-                            focusedBorder: OutlineInputBorder(
-                              borderRadius:
-                                  BorderRadius.circular(ViewerPalette.radiusLg),
-                              borderSide: const BorderSide(
-                                color: ViewerPalette.accent,
-                                width: 1.5,
+                        constraints: const BoxConstraints(maxWidth: 560),
+                        child: LayoutBuilder(
+                          builder: (context, barConstraints) {
+                            // The scope select takes at most 25% of the filter
+                            // bar; the text field takes the rest.
+                            final scopeMaxWidth =
+                                barConstraints.maxWidth * 0.25;
+                            final filterFocused = _searchFocusNode.hasFocus ||
+                                _scopeFocusNode.hasFocus;
+                            return DecoratedBox(
+                              key: _filterBarKey,
+                              decoration: BoxDecoration(
+                                color: ViewerPalette.surface,
+                                borderRadius: BorderRadius.circular(
+                                    ViewerPalette.radiusLg),
+                                border: Border.all(
+                                  color: filterFocused
+                                      ? ViewerPalette.accent
+                                      : _kTableBorder,
+                                  width: filterFocused ? 1.5 : 1,
+                                ),
                               ),
-                            ),
-                          ),
-                          onChanged: (value) => setState(() {
-                            _query = value;
-                            _selectedIndex = null;
-                          }),
+                              child: Row(
+                                children: [
+                                  ConstrainedBox(
+                                    constraints: BoxConstraints(
+                                      maxWidth: scopeMaxWidth,
+                                      minWidth: math.min(
+                                        120,
+                                        scopeMaxWidth,
+                                      ),
+                                    ),
+                                    child: DropdownButtonHideUnderline(
+                                      child: Tooltip(
+                                        message: 'Filter field',
+                                        child: DropdownButton<String>(
+                                          key: const ValueKey('filterScope'),
+                                          value: _filterScope,
+                                          focusNode: _scopeFocusNode,
+                                          isDense: true,
+                                          isExpanded: true,
+                                          borderRadius: BorderRadius.circular(
+                                              ViewerPalette.radiusLg),
+                                          padding: const EdgeInsets.symmetric(
+                                              horizontal: 12),
+                                          style: const TextStyle(
+                                            fontFamily: 'Inter',
+                                            color: ViewerPalette.text,
+                                            fontSize: 13,
+                                            fontWeight: FontWeight.w700,
+                                          ),
+                                          items: [
+                                            for (final scope in _kFilterScopes)
+                                              DropdownMenuItem<String>(
+                                                value: scope.value,
+                                                child: Text(
+                                                  scope.label,
+                                                  overflow:
+                                                      TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                          ],
+                                          onChanged: _setFilterScope,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  Container(
+                                    width: 1,
+                                    height: 28,
+                                    color: _kTableBorder,
+                                  ),
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _searchController,
+                                      focusNode: _searchFocusNode,
+                                      // Flutter's default tap-outside behavior
+                                      // drops primary focus to the enclosing
+                                      // route scope. On a drag that never
+                                      // re-fires the table's onTap, so `/` and
+                                      // the arrow keys stop working. Hand
+                                      // keyboard control back to the table
+                                      // instead (taps on the scope select are
+                                      // part of the same bar and ignored).
+                                      onTapOutside: _handleFilterTapOutside,
+                                      decoration: InputDecoration(
+                                        hintText: _filterHint,
+                                        hintStyle: const TextStyle(
+                                          fontFamily: 'Inter',
+                                          color: ViewerPalette.textFaint,
+                                          fontSize: 13,
+                                        ),
+                                        prefixIcon: const Icon(
+                                          Icons.search_rounded,
+                                          size: 20,
+                                        ),
+                                        prefixIconColor:
+                                            ViewerPalette.textMuted,
+                                        suffixIcon: _clearFilterButton(),
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                                horizontal: 16, vertical: 14),
+                                        border: InputBorder.none,
+                                        enabledBorder: InputBorder.none,
+                                        focusedBorder: InputBorder.none,
+                                      ),
+                                      onChanged: (value) => setState(() {
+                                        _query = value;
+                                        _selectedIndex = null;
+                                      }),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
                         ),
                       ),
                       const SizedBox(height: 20),

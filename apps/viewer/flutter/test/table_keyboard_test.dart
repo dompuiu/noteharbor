@@ -56,14 +56,16 @@ void main() {
   Finder tableRow(int id) => find.byKey(ValueKey('tableRow-$id'));
 
   // The keyboard selection ring is a paint-only overlay and the only accent
-  // border on the table screen.
+  // border on the table screen with a 12px radius (the unified filter bar
+  // also highlights in accent while focused, but with radiusLg).
   Finder selectedRing() => find.byWidgetPredicate((widget) {
         if (widget is! DecoratedBox) return false;
         final decoration = widget.decoration;
         if (decoration is! BoxDecoration) return false;
         final border = decoration.border;
         if (border is! Border) return false;
-        return border.top.color == ViewerPalette.accent;
+        if (border.top.color != ViewerPalette.accent) return false;
+        return decoration.borderRadius == BorderRadius.circular(12);
       });
 
   Finder selectedRow(int id) => find.descendant(
@@ -84,6 +86,13 @@ void main() {
     final scrollerRect = tester.getRect(find.byType(SingleChildScrollView));
     expect(headerRect.left, greaterThanOrEqualTo(scrollerRect.left - 0.5));
     expect(headerRect.right, lessThanOrEqualTo(scrollerRect.right + 0.5));
+  }
+
+  Future<void> selectFilterScope(WidgetTester tester, String label) async {
+    await tester.tap(find.byKey(const ValueKey('filterScope')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text(label).last);
+    await tester.pumpAndSettle();
   }
 
   keyboardTestWidgets('arrow keys move keyboard selection between rows', (
@@ -305,7 +314,8 @@ void main() {
     );
   });
 
-  keyboardTestWidgets('escape from the filter with no matches returns to table', (
+  keyboardTestWidgets('escape from the filter with no matches returns to table',
+      (
     WidgetTester tester,
   ) async {
     await pumpKeyboardTable(tester);
@@ -328,6 +338,7 @@ void main() {
   ) async {
     await pumpKeyboardTable(tester);
 
+    await selectFilterScope(tester, 'All fields');
     await tester.enterText(find.byType(TextField), 'Cello');
     await tester.pumpAndSettle();
     expect(find.text('Alpha Note'), findsNothing);
@@ -407,6 +418,7 @@ void main() {
   ) async {
     await pumpKeyboardTable(tester);
 
+    await selectFilterScope(tester, 'All fields');
     await tester.enterText(find.byType(TextField), 'Cello');
     await tester.pumpAndSettle();
     expect(find.text('Alpha Note'), findsNothing);
@@ -430,6 +442,7 @@ void main() {
     await tester.pump();
     expect(selectedRing(), findsOneWidget);
 
+    await selectFilterScope(tester, 'All fields');
     await tester.enterText(find.byType(TextField), 'Cello');
     await tester.pumpAndSettle();
     expect(selectedRing(), findsNothing);
@@ -1122,13 +1135,17 @@ void main() {
       expectHeaderVisible(tester, visibleLabel);
     }
 
-    // The first header steps back into the filter.
+    // The first header steps back into the filter field.
     await shiftTab();
     expect(filterHasFocus(), isTrue);
 
-    // Shift+Tab stops in the filter instead of wrapping to the last row.
+    // Shift+Tab from the field steps back to the scope select, then stops
+    // there when imports are unavailable.
     await shiftTab();
-    expect(filterHasFocus(), isTrue);
+    expect(filterHasFocus(), isFalse);
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'notesFilterScope');
+    await shiftTab();
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'notesFilterScope');
     expect(selectedRing(), findsNothing);
   });
 
@@ -1347,13 +1364,26 @@ void main() {
       isTrue,
     );
 
+    // The filter field steps back to the scope select first.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pump();
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'notesFilterScope');
+
+    // The scope select steps out to the import action above.
     await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
     await tester.pump();
     expect(FocusManager.instance.primaryFocus?.debugLabel, 'tableImport');
 
-    // Tab from the import button returns to the filter.
+    // Tab from the import button returns to the scope select.
+    await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+    await tester.pump();
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'notesFilterScope');
+
+    // Tab from the scope select returns to the filter field.
     await tester.sendKeyEvent(LogicalKeyboardKey.tab);
     await tester.pump();
     expect(

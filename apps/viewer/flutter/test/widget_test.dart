@@ -58,7 +58,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField), 'cat: 17');
+    // The default scope is Catalog, so a plain value filters catalog numbers.
+    await tester.enterText(find.byType(TextField), '17');
     await tester.pumpAndSettle();
 
     expect(find.text('Match exact'), findsOneWidget);
@@ -68,6 +69,25 @@ void main() {
     expect(find.text('Match slashed'), findsOneWidget);
     expect(find.text('Exclude numeric prefix'), findsNothing);
     expect(find.text('Exclude longer number'), findsNothing);
+  });
+
+  testWidgets('catalog scope treats field syntax as literal text', (
+    WidgetTester tester,
+  ) async {
+    final controller = DatasetController(
+      repository: _CatalogFilterViewerRepository(),
+    );
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'cat: 17');
+    await tester.pumpAndSettle();
+
+    expect(find.text('No notes match the current filter.'), findsOneWidget);
   });
 
   testWidgets('date and denomination filters accept comma-separated values', (
@@ -83,9 +103,10 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _selectFilterScope(tester, 'Date');
     await tester.enterText(
       find.byType(TextField),
-      'date: January 2, 1966, March 4, 1967',
+      'January 2, 1966, March 4, 1967',
     );
     await tester.pumpAndSettle();
 
@@ -94,8 +115,8 @@ void main() {
     expect(find.text('5,000 Lei'), findsNothing);
     expect(find.text('20 Lei'), findsNothing);
 
-    await tester.enterText(
-        find.byType(TextField), 'denom: 1,000 Lei, 5,000 Lei');
+    await _selectFilterScope(tester, 'Denomination');
+    await tester.enterText(find.byType(TextField), '1,000 Lei, 5,000 Lei');
     await tester.pumpAndSettle();
 
     expect(find.text('1,000 Lei'), findsOneWidget);
@@ -104,7 +125,7 @@ void main() {
     expect(find.text('20 Lei'), findsNothing);
   });
 
-  testWidgets('plain search matches denomination numeric formatting variants', (
+  testWidgets('all-fields scope matches denomination numeric variants', (
     WidgetTester tester,
   ) async {
     final controller = DatasetController(
@@ -117,6 +138,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
+    await _selectFilterScope(tester, 'All fields');
     await tester.enterText(find.byType(TextField), '10000');
     await tester.pumpAndSettle();
 
@@ -152,7 +174,8 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    await tester.enterText(find.byType(TextField), 'denom: 10000');
+    await _selectFilterScope(tester, 'Denomination');
+    await tester.enterText(find.byType(TextField), '10000');
     await tester.pumpAndSettle();
 
     expect(find.text('10,000 Lei'), findsOneWidget);
@@ -161,7 +184,7 @@ void main() {
     expect(find.text('110,000 Lei'), findsNothing);
     expect(find.text('1,000 Lei'), findsNothing);
 
-    await tester.enterText(find.byType(TextField), 'denom: !10000');
+    await tester.enterText(find.byType(TextField), '!10000');
     await tester.pumpAndSettle();
 
     expect(find.text('10,000 Lei'), findsNothing);
@@ -381,6 +404,13 @@ Map<String, Object?> _catalogFilterNote({
     'images': [],
     'scrapedData': null,
   };
+}
+
+Future<void> _selectFilterScope(WidgetTester tester, String label) async {
+  await tester.tap(find.byKey(const ValueKey('filterScope')));
+  await tester.pumpAndSettle();
+  await tester.tap(find.text(label).last);
+  await tester.pumpAndSettle();
 }
 
 Map<String, Object?> _filterableNote({
