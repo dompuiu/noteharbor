@@ -306,6 +306,61 @@ pub fn generate_thumbnail_buffer(input: &[u8]) -> Result<Vec<u8>, String> {
     Ok(out)
 }
 
+/// Quality used when re-encoding full-size note images to optimized JPEG
+/// (visually lossless for banknote photos, metadata stripped).
+pub const MIGRATE_FULL_JPEG_QUALITY: u8 = 85;
+/// Quality used when re-encoding thumbnail note images.
+pub const MIGRATE_THUMB_JPEG_QUALITY: u8 = 82;
+
+/// Re-encodes `input` to an optimized JPEG at `quality`, stripping metadata
+/// (no resolution change). GIF input returns `None` so callers can copy it
+/// verbatim (re-encoding would flatten animation); undecodable input also
+/// returns `None` so callers can fall back to a verbatim copy and never lose
+/// data.
+pub fn transcode_to_jpeg(input: &[u8], quality: u8) -> Option<Vec<u8>> {
+    if image::guess_format(input).ok() == Some(image::ImageFormat::Gif) {
+        return None;
+    }
+    let decoded = image::load_from_memory(input).ok()?;
+    let rgb = flatten_to_rgb8(&decoded);
+    let mut out = Vec::new();
+    let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality);
+    encoder
+        .encode_image(&image::DynamicImage::ImageRgb8(rgb))
+        .ok()?;
+    Some(out)
+}
+
+/// Flattens any input (including alpha) onto a white RGB8 canvas: banknote
+/// photos are opaque, and JPEG has no alpha channel.
+fn flatten_to_rgb8(image: &image::DynamicImage) -> image::RgbImage {
+    let rgba = image.to_rgba8();
+    let (width, height) = (rgba.width(), rgba.height());
+    let mut out = image::RgbImage::from_pixel(width, height, image::Rgb([255, 255, 255]));
+    for (x, y, pixel) in rgba.enumerate_pixels() {
+        let alpha = f32::from(pixel[3]) / 255.0;
+        let blend = |foreground: u8| (f32::from(foreground) * alpha + 255.0 * (1.0 - alpha)) as u8;
+        out.put_pixel(x, y, image::Rgb([blend(pixel[0]), blend(pixel[1]), blend(pixel[2])]));
+    }
+    out
+}
+
+/// Maps a managed note-image `localPath` to its migrated file name: `.gif`
+/// stays `.gif` (copied verbatim), every other extension becomes `.jpg`.
+/// Non-managed paths (external URLs) pass through unchanged.
+pub fn migrated_local_path(local_path: &str) -> String {
+    if !local_path.starts_with(IMAGE_API_PREFIX) {
+        return local_path.to_owned();
+    }
+    if local_path.to_lowercase().ends_with(".gif") {
+        return local_path.to_owned();
+    }
+    match local_path.rfind('.') {
+        Some(dot) => format!("{}.jpg", &local_path[..dot]),
+        None => format!("{local_path}.jpg"),
+    }
+}
+
 pub fn remove_file_if_managed(images_dir: &Path, local_path: Option<&str>) {
     let Some(path) = local_path.and_then(|local| resolve_local_path(images_dir, local)) else {
         return;
@@ -450,5 +505,89 @@ mod tests {
             .expect("encode");
         let thumb = generate_thumbnail_buffer(&input).expect("thumbnail");
         assert_eq!(thumb, input);
+    }
+
+    #[test]
+    fn transcode_to_jpeg_shrinks_a_high_quality_photo() {
+        // Noisy pixels defeat DCT compression at high quality, so the q85
+        // re-encode must come out smaller than the q100 source.
+        let mut pixels = image::RgbImage::new(320, 240);
+        let mut state: u64 = 0x9E3779B97F4A7C15;
+        for pixel in pixels.pixels_mut() {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            *pixel = image::Rgb([(state >> 56) as u8, (state >> 48) as u8, (state >> 40) as u8]);
+        }
+        let mut source = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut source, 100)
+            .encode_image(&image::DynamicImage::ImageRgb8(pixels))
+            .expect("source encodes");
+        let transcoded = transcode_to_jpeg(&source, 85).expect("transcodes");
+        assert!(
+            transcoded.len() < source.len(),
+            "{} vs {}",
+            transcoded.len(),
+            source.len()
+        );
+        let decoded = image::load_from_memory(&transcoded).expect("decodes");
+        assert_eq!((decoded.width(), decoded.height()), (320, 240));
+    }
+
+    #[test]
+    fn transcode_to_jpeg_passes_gif_through() {
+        let frame = image::RgbaImage::from_pixel(16, 16, image::Rgba([1, 2, 3, 255]));
+        let mut gif = Vec::new();
+        {
+            let mut encoder = image::codecs::gif::GifEncoder::new(&mut gif);
+            encoder
+                .encode(&frame, 16, 16, image::ExtendedColorType::Rgba8)
+                .expect("gif encodes");
+        }
+        assert_eq!(transcode_to_jpeg(&gif, 85), None);
+        assert_eq!(transcode_to_jpeg(b"not an image", 85), None);
+    }
+
+    #[test]
+    fn transcode_to_jpeg_flattens_alpha_onto_white() {
+        let mut rgba = image::RgbaImage::from_pixel(64, 64, image::Rgba([200, 0, 0, 255]));
+        for x in 0..16 {
+            for y in 0..16 {
+                rgba.put_pixel(x, y, image::Rgba([0, 0, 0, 0]));
+            }
+        }
+        let mut source = Vec::new();
+        image::DynamicImage::ImageRgba8(rgba)
+            .write_to(&mut std::io::Cursor::new(&mut source), image::ImageFormat::Png)
+            .expect("png encodes");
+        let transcoded = transcode_to_jpeg(&source, 90).expect("transcodes");
+        let decoded = image::load_from_memory(&transcoded).expect("decodes").to_rgb8();
+        // Fully transparent pixel lands on white (JPEG lossy: allow rounding).
+        for channel in decoded.get_pixel(0, 0).0 {
+            assert!(channel > 240, "{channel}");
+        }
+        // Opaque red pixel survives approximately.
+        let red = decoded.get_pixel(32, 32).0;
+        assert!(red[0] > 150 && red[1] < 100 && red[2] < 100, "{red:?}");
+    }
+
+    #[test]
+    fn migrated_local_path_only_rewrites_managed_non_gif_paths() {
+        assert_eq!(
+            migrated_local_path("/api/images/notes/7/front-full.png"),
+            "/api/images/notes/7/front-full.jpg"
+        );
+        assert_eq!(
+            migrated_local_path("/api/images/notes/7/front-full.JPG"),
+            "/api/images/notes/7/front-full.jpg"
+        );
+        assert_eq!(
+            migrated_local_path("/api/images/notes/7/front-full.gif"),
+            "/api/images/notes/7/front-full.gif"
+        );
+        assert_eq!(
+            migrated_local_path("https://example.com/a.png"),
+            "https://example.com/a.png"
+        );
     }
 }

@@ -9,6 +9,10 @@ license = "MIT"
 name = "editor_server_rust"
 path = "src/main.rs"
 
+[[bin]]
+name = "migrate-images"
+path = "src/bin/migrate_images.rs"
+
 [lib]
 name = "editor_server_rust"
 path = "src/lib.rs"
