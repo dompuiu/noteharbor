@@ -205,6 +205,11 @@ fn run(args: &Args) -> Result<(), String> {
     let dst_db = args.dst.join("banknotes.db");
     if !args.dry_run {
         std::fs::create_dir_all(&args.dst).map_err(|error| error.to_string())?;
+        // Our own output from a previous (possibly killed) run: replace it so
+        // VACUUM INTO has a fresh target and no stale rows survive.
+        if dst_db.is_file() {
+            std::fs::remove_file(&dst_db).map_err(|error| error.to_string())?;
+        }
         // Consistent compact copy straight from the live file (same VACUUM
         // INTO technique as the export snapshot).
         let src = rusqlite::Connection::open(&src_db).map_err(|error| error.to_string())?;
