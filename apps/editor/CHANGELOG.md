@@ -2,6 +2,16 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.6.0] - 2026-10-18
+
+### Added
+
+- Server: a `migrate-images` one-time tool that copies a data directory to a new location with note images re-encoded (JPEG or WebP, GIFs copied verbatim) and rewrites the copied database's image paths to match. Supports `--format jpeg|webp`, `--quality`, `--thumbnail-quality`, `--never-grow`, `--dry-run`, and `--report`.
+
+### Changed
+
+- Table screen: the Catalog # column moves to first after the thumbnails.
+
 ## [2.5.0] - 2026-10-14
 
 ### Added

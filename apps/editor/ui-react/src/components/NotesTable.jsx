@@ -47,9 +47,9 @@ export function HomeHero() {
 }
 
 const baseColumns = [
+  ["catalog_number", "Catalog #"],
   ["denomination", "Denomination"],
   ["issue_date", "Date"],
-  ["catalog_number", "Catalog #"],
   ["grading_company", "Company"],
   ["grade", "Grade"],
   ["serial", "Serial"],
@@ -4381,6 +4381,7 @@ function NotesTable({
                                   <span className="muted">-</span>
                                 )}
                               </td>
+                              <td>{note.catalog_number}</td>
                               <td>
                                 {note.url ? (
                                   <a
@@ -4397,7 +4398,6 @@ function NotesTable({
                                 )}
                               </td>
                               <td>{note.issue_date}</td>
-                              <td>{note.catalog_number}</td>
                               <td>{note.grading_company}</td>
                               <td>{note.grade}</td>
                               <td>{note.serial}</td>
