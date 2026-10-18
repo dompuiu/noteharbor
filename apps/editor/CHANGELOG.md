@@ -2,6 +2,14 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.7.0] - 2026-10-18
+
+### Added
+
+- WebP image pipeline (44% smaller archives): new note images from uploads and scrape downloads are stored as WebP (fulls at quality 80, thumbnails at 75) instead of verbatim JPEG/PNG. GIFs and undecodable files are kept as-is, and existing JPEG rows display unchanged alongside the new WebP files.
+- `migrate-images --archive <out.zip>`: packs the migrated copy straight into an importable archive using the same zip builder as the export route.
+- `migrate-images` now transcodes with a worker pool (one thread per CPU core minus one) with stderr progress lines (`[done/total %]`, MB before/after, elapsed, ETA), and reruns replace the previous output database instead of failing on it.
+
 ## [2.6.2] - 2026-10-18
 
 ### Fixed
