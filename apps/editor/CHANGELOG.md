@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.6.1] - 2026-10-18
+
+### Fixed
+
+- Table screen: deleting a note (from its row or the note editor) recalculates the ID column immediately instead of leaving gaps. Moving a note to another collection recalculates it the same way.
+
 ## [2.6.0] - 2026-10-18
 
 ### Added
