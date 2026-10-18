@@ -214,46 +214,14 @@ fn run(args: &Args) -> Result<(), String> {
     }
 
     let files = collect_files(&src_images).map_err(|error| error.to_string())?;
-    // Old `images/<rel>` -> new `images/<rel>` (identical unless transcoded
-    // across extensions, e.g. `.png` -> `.jpg`, or kept verbatim).
-    let mut renames: HashMap<String, String> = HashMap::new();
-    let mut rows: Vec<(String, u64, u64, &'static str)> = Vec::with_capacity(files.len());
-    let (mut total_before, mut total_after) = (0u64, 0u64);
-    let mut transcoded_count = 0usize;
-    for (absolute, relative) in &files {
-        let bytes = std::fs::read(absolute).map_err(|error| error.to_string())?;
-        let before = bytes.len() as u64;
-        total_before += before;
-        let transcoded = transcode(&bytes, args.format, quality_for(relative, args));
-        let (out_relative, out_bytes, action) = match transcoded {
-            Some(output)
-                if !args.never_grow || (output.len() as u64) < before =>
-            {
-                let stem = relative
-                    .rsplit_once('.')
-                    .map(|(stem, _)| stem)
-                    .unwrap_or(relative);
-                (format!("{stem}{}", args.format.extension()), output, "transcoded")
-            }
-            // GIFs, undecodable files, and (with --never-grow) outputs that
-            // would be larger than the source travel verbatim.
-            _ => (relative.clone(), bytes, "copied"),
-        };
-        let after = out_bytes.len() as u64;
-        total_after += after;
-        if action == "transcoded" {
-            transcoded_count += 1;
-        }
-        rows.push((relative.clone(), before, after, action));
-        renames.insert(relative.clone(), out_relative.clone());
-        if !args.dry_run {
-            let target = to_fs_path(&args.dst.join("images"), &out_relative);
-            if let Some(parent) = target.parent() {
-                std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
-            }
-            std::fs::write(&target, &out_bytes).map_err(|error| error.to_string())?;
-        }
-    }
+    // Transcoding is CPU-bound and per-file independent: a worker pool feeds
+    // results through a bounded channel while the main thread writes files,
+    // so memory stays flat and progress logs from one place.
+    let workers = std::thread::available_parallelism()
+        .map(|parallelism| parallelism.get().saturating_sub(1).max(1))
+        .unwrap_or(4);
+    let (renames, rows, (total_before, total_after, transcoded_count)) =
+        migrate_files_parallel(&files, args, workers)?;
 
     if !args.dry_run {
         rewrite_image_paths(&dst_db, &renames)?;
@@ -284,6 +252,126 @@ fn run(args: &Args) -> Result<(), String> {
 
     print_report(args, &rows, total_before, total_after, transcoded_count)?;
     Ok(())
+}
+
+struct MigratedFile {
+    relative: String,
+    out_relative: String,
+    bytes: Vec<u8>,
+    before: u64,
+    after: u64,
+    action: &'static str,
+}
+
+fn migrate_one_file(absolute: &Path, relative: &str, args: &Args) -> Result<MigratedFile, String> {
+    let bytes = std::fs::read(absolute).map_err(|error| error.to_string())?;
+    let before = bytes.len() as u64;
+    let transcoded = transcode(&bytes, args.format, quality_for(relative, args));
+    let (out_relative, out_bytes, action) = match transcoded {
+        Some(output) if !args.never_grow || (output.len() as u64) < before => {
+            let stem = relative.rsplit_once('.').map(|(stem, _)| stem).unwrap_or(relative);
+            (format!("{stem}{}", args.format.extension()), output, "transcoded")
+        }
+        // GIFs, undecodable files, and (with --never-grow) outputs that
+        // would be larger than the source travel verbatim.
+        _ => (relative.to_owned(), bytes, "copied"),
+    };
+    let after = out_bytes.len() as u64;
+    Ok(MigratedFile { relative: relative.to_owned(), out_relative, bytes: out_bytes, before, after, action })
+}
+
+#[allow(clippy::type_complexity)]
+fn migrate_files_parallel(
+    files: &[(PathBuf, String)],
+    args: &Args,
+    workers: usize,
+) -> Result<
+    (
+        HashMap<String, String>,
+        Vec<(String, u64, u64, &'static str)>,
+        (u64, u64, usize),
+    ),
+    String,
+> {
+    use std::sync::atomic::{AtomicUsize, Ordering};
+
+    let total = files.len();
+    let next = AtomicUsize::new(0);
+    let next_shared = &next;
+    // Bounded so workers block instead of buffering the whole archive.
+    let (tx, rx) = std::sync::mpsc::sync_channel::<Result<MigratedFile, String>>(workers * 2);
+    std::thread::scope(|scope| {
+        for _ in 0..workers {
+            let tx = tx.clone();
+            scope.spawn(move || {
+                while let Some((absolute, relative)) =
+                    files.get(next_shared.fetch_add(1, Ordering::Relaxed))
+                {
+                    if tx.send(migrate_one_file(absolute, relative, args)).is_err() {
+                        break;
+                    }
+                }
+            });
+        }
+        drop(tx);
+
+        let mut renames = HashMap::with_capacity(total);
+        let mut rows = Vec::with_capacity(total);
+        let (mut total_before, mut total_after) = (0u64, 0u64);
+        let mut transcoded_count = 0usize;
+        let started = std::time::Instant::now();
+        let mut logged = 0usize;
+        let log_every = (total / 20).max(1);
+        for _ in 0..total {
+            // An Err item aborts the run; workers then see the dropped
+            // receiver on their next send and exit, so the scope can join.
+            let item = rx.recv().map_err(|_| "worker thread stopped".to_owned())??;
+            total_before += item.before;
+            total_after += item.after;
+            if item.action == "transcoded" {
+                transcoded_count += 1;
+            }
+            renames.insert(item.relative.clone(), item.out_relative.clone());
+            if !args.dry_run {
+                let target = to_fs_path(&args.dst.join("images"), &item.out_relative);
+                if let Some(parent) = target.parent() {
+                    std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+                }
+                std::fs::write(&target, &item.bytes).map_err(|error| error.to_string())?;
+            }
+            rows.push((item.relative, item.before, item.after, item.action));
+            if rows.len() >= logged + log_every || rows.len() == total {
+                logged = rows.len();
+                log_progress(logged, total, total_before, total_after, &started);
+            }
+        }
+        rows.sort_by(|a, b| a.0.cmp(&b.0));
+        Ok((renames, rows, (total_before, total_after, transcoded_count)))
+    })
+}
+
+fn log_progress(
+    done: usize,
+    total: usize,
+    before: u64,
+    after: u64,
+    started: &std::time::Instant,
+) {
+    let elapsed = started.elapsed().as_secs_f64();
+    let files_pct = 100.0 * done as f64 / total.max(1) as f64;
+    let saved = before.saturating_sub(after);
+    let saved_pct = if before == 0 { 0.0 } else { 100.0 * saved as f64 / before as f64 };
+    let eta = if done == 0 || done >= total {
+        "done".to_owned()
+    } else {
+        format!("ETA {:.0}s", elapsed / done as f64 * (total - done) as f64)
+    };
+    eprintln!(
+        "[{done}/{total} {files_pct:.0}%] {:.1} MB -> {:.1} MB (-{saved_pct:.0}%) elapsed {:.0}s {eta}",
+        before as f64 / 1e6,
+        after as f64 / 1e6,
+        elapsed,
+    );
 }
 
 /// Rewrites `localPath`s in the copied database to the migrated file names.
