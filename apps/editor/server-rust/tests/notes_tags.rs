@@ -636,13 +636,13 @@ async fn multipart_create_uploads_an_image_and_collects_repeated_tags() {
     assert_eq!(created["note"]["images"][0]["origin"], json!("uploaded"));
     assert_eq!(
         created["note"]["images"][0]["localPath"],
-        json!(format!("/api/images/notes/{note_id}/front-full.png")),
+        json!(format!("/api/images/notes/{note_id}/front-full.webp")),
     );
     let mut tags: Vec<String> = created["note"]["tags"]
         .as_array().unwrap().iter().map(|tag| tag["name"].as_str().unwrap().to_owned()).collect();
     tags.sort();
     assert_eq!(tags, vec!["old", "paper"]);
-    assert!(dir.path().join("images").join("notes").join(note_id.to_string()).join("front-full.png").is_file());
+    assert!(dir.path().join("images").join("notes").join(note_id.to_string()).join("front-full.webp").is_file());
 }
 
 #[tokio::test]

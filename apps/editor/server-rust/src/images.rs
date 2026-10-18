@@ -362,6 +362,54 @@ pub fn transcode_to_webp(input: &[u8], quality: f32) -> Option<Vec<u8>> {
     )
 }
 
+/// Quality for full-size note images stored on ingest (visually lossless).
+pub const INGEST_FULL_WEBP_QUALITY: f32 = 80.0;
+/// Quality for thumbnail note images stored on ingest.
+pub const INGEST_THUMB_WEBP_QUALITY: f32 = 75.0;
+
+/// Stores one uploaded/scraped/generated image slot, transcoding to WebP
+/// (GIFs and undecodable input are stored verbatim under `fallback_extension`
+/// so nothing is lost). Thumbnail slots use the thumbnail quality, every
+/// other variant the full quality.
+#[allow(clippy::too_many_arguments)]
+pub fn store_ingest_buffer(
+    images_dir: &Path,
+    note_id: i64,
+    image_type: &str,
+    variant: &str,
+    bytes: &[u8],
+    fallback_extension: &str,
+    origin: &str,
+    source_url: Option<String>,
+) -> std::io::Result<ImageRecord> {
+    let quality = if variant == "thumbnail" {
+        INGEST_THUMB_WEBP_QUALITY
+    } else {
+        INGEST_FULL_WEBP_QUALITY
+    };
+    match transcode_to_webp(bytes, quality) {
+        Some(webp) => write_slot_buffer(
+            images_dir,
+            note_id,
+            image_type,
+            variant,
+            &webp,
+            ".webp",
+            origin,
+            source_url,
+        ),
+        None => write_slot_buffer(
+            images_dir,
+            note_id,
+            image_type,
+            variant,
+            bytes,
+            fallback_extension,
+            origin,
+            source_url,
+        ),
+    }
+}
 /// Maps a managed note-image `localPath` to its migrated file name: `.gif`
 /// stays `.gif` (copied verbatim), every other extension becomes `.jpg`.
 /// Non-managed paths (external URLs) pass through unchanged.
@@ -592,6 +640,58 @@ mod tests {
         // Opaque red pixel survives approximately.
         let red = decoded.get_pixel(32, 32).0;
         assert!(red[0] > 150 && red[1] < 100 && red[2] < 100, "{red:?}");
+    }
+
+    #[test]
+    fn store_ingest_buffer_transcodes_uploads_to_webp() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let images_dir = dir.path();
+        let mut source = Vec::new();
+        let pixels = image::RgbImage::from_pixel(320, 240, image::Rgb([180, 40, 60]));
+        image::DynamicImage::ImageRgb8(pixels)
+            .write_to(&mut std::io::Cursor::new(&mut source), image::ImageFormat::Png)
+            .expect("png encodes");
+        let record = store_ingest_buffer(
+            images_dir,
+            9,
+            "front",
+            "full",
+            &source,
+            ".png",
+            "uploaded",
+            None,
+        )
+        .expect("stores");
+        assert_eq!(record.local_path, "/api/images/notes/9/front-full.webp");
+        assert_eq!(record.origin, "uploaded");
+        let stored =
+            std::fs::read(images_dir.join("notes").join("9").join("front-full.webp"))
+                .expect("webp file written");
+        let decoded = image::load_from_memory(&stored).expect("webp decodes");
+        assert_eq!((decoded.width(), decoded.height()), (320, 240));
+    }
+
+    #[test]
+    fn store_ingest_buffer_keeps_gifs_verbatim() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let frame = image::RgbaImage::from_pixel(8, 8, image::Rgba([1, 2, 3, 255]));
+        let mut gif = Vec::new();
+        image::codecs::gif::GifEncoder::new(&mut gif)
+            .encode(&frame, 8, 8, image::ExtendedColorType::Rgba8)
+            .expect("gif encodes");
+        let record = store_ingest_buffer(
+            dir.path(),
+            9,
+            "back",
+            "full",
+            &gif,
+            ".gif",
+            "uploaded",
+            None,
+        )
+        .expect("stores");
+        assert_eq!(record.local_path, "/api/images/notes/9/back-full.gif");
+        assert!(dir.path().join("notes").join("9").join("back-full.gif").is_file());
     }
 
     #[test]

@@ -847,7 +847,7 @@ async fn download_image_url(
         return Err(format!("Downloaded image exceeds maximum allowed size ({MAX_IMAGE_MB_LABEL})."));
     }
     let extension = get_extension_for_mime_type(&content_type, normalized.path());
-    images::write_slot_buffer(
+    images::store_ingest_buffer(
         images_dir,
         note_id,
         image_type,
@@ -902,7 +902,7 @@ async fn build_next_images(
             images::remove_file_if_managed(images_dir, Some(&stale.local_path));
         }
         let extension = get_extension_for_mime_type(&file.mime, &file.filename);
-        let record = images::write_slot_buffer(
+        let record = images::store_ingest_buffer(
             images_dir,
             note_id,
             slot.image_type,
@@ -965,7 +965,7 @@ async fn build_next_images(
             images::remove_file_if_managed(images_dir, Some(&stale.local_path));
         }
         let extension = get_extension_for_mime_type(&mime, &name);
-        let record = images::write_slot_buffer(
+        let record = images::store_ingest_buffer(
             images_dir,
             note_id,
             image_type,
