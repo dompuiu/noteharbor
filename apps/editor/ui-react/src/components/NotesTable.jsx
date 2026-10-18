@@ -765,6 +765,27 @@ function slideshowLandingNoteId(noteList, removedId) {
   return landing.id;
 }
 
+// Drops `removedId` and closes the ID-column gap the same way the backend
+// does (`display_order - 1 WHERE display_order > removed_order`), so the
+// optimistic list never shows stale IDs while the refetch is skipped. A note
+// without a `display_order` only filters, matching the backend's no-op.
+function dropNoteAndRenumber(noteList, removedId) {
+  const removed = noteList.find((note) => note.id === removedId);
+  const removedOrder = removed?.display_order;
+
+  const remaining = noteList.filter((note) => note.id !== removedId);
+
+  if (removedOrder == null) {
+    return remaining;
+  }
+
+  return remaining.map((note) =>
+    note.display_order != null && note.display_order > removedOrder
+      ? { ...note, display_order: note.display_order - 1 }
+      : note,
+  );
+}
+
 function versionedImagePath(path, version) {
   if (!path) {
     return null;
@@ -2976,14 +2997,14 @@ function NotesTable({
     if (movedToCollection) {
       // The note now belongs to a different collection — it no longer
       // belongs in this view, so drop it instead of merging it in.
-      setNotes((current) =>
-        current.filter((note) => note.id !== updatedNote.id),
-      );
+      // Renumber like a delete: the backend closes the source gap the same
+      // way, so the ID column must not keep stale values.
+      setNotes((current) => dropNoteAndRenumber(current, updatedNote.id));
       setSelectedIds((current) =>
         current.filter((id) => id !== updatedNote.id),
       );
       setSlideshowNotes((current) =>
-        current.filter((note) => note.id !== updatedNote.id),
+        dropNoteAndRenumber(current, updatedNote.id),
       );
       showMoveToast(`Moved to ${movedToCollection.name}.`);
     } else if (reorderedNotes) {
@@ -3276,11 +3297,9 @@ function NotesTable({
         };
       }
 
-      setNotes((current) => current.filter((entry) => entry.id !== noteId));
+      setNotes((current) => dropNoteAndRenumber(current, noteId));
       setSelectedIds((current) => current.filter((id) => id !== noteId));
-      setSlideshowNotes((current) =>
-        current.filter((entry) => entry.id !== noteId),
-      );
+      setSlideshowNotes((current) => dropNoteAndRenumber(current, noteId));
 
       if (!fromSlideshow) {
         landFocusAfterDelete(removal);
