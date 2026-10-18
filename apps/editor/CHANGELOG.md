@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.6.2] - 2026-10-18
+
+### Fixed
+
+- Note editor: PMG scrape fills the denomination and date for descriptions with a trailing sheet qualifier. Descriptions like "Romania, Banca Nationala, 10,000 Lei 2000 - Sheet of 4" left both fields empty because the date and denomination matches are end-anchored; the sheet qualifier (also `Uncut` and bare variants) is now stripped before extraction.
+
 ## [2.6.1] - 2026-10-18
 
 ### Fixed
