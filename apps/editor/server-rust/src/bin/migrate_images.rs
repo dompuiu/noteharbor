@@ -7,7 +7,7 @@
 //! ```text
 //! migrate-images --src data --dst data-migrated [--format jpeg|webp]
 //!                [--quality 85] [--thumbnail-quality 82] [--never-grow]
-//!                [--dry-run] [--report report.csv]
+//!                [--dry-run] [--report report.csv] [--archive out.zip]
 //! ```
 
 use std::collections::HashMap;
@@ -43,12 +43,13 @@ struct Args {
     never_grow: bool,
     dry_run: bool,
     report: Option<PathBuf>,
+    archive: Option<PathBuf>,
 }
 
 fn usage() -> String {
     "usage: migrate-images --src <data-dir> --dst <out-dir> [--format jpeg|webp] \
      [--quality 1-100] [--thumbnail-quality 1-100] [--never-grow] [--dry-run] \
-     [--report <csv>]"
+     [--report <csv>] [--archive <out.zip>]"
         .to_owned()
 }
 
@@ -61,6 +62,7 @@ fn parse_args() -> Result<Args, String> {
     let mut never_grow = false;
     let mut dry_run = false;
     let mut report = None;
+    let mut archive = None;
     let mut rest = std::env::args().skip(1);
     while let Some(arg) = rest.next() {
         match arg.as_str() {
@@ -85,6 +87,9 @@ fn parse_args() -> Result<Args, String> {
             "--report" => {
                 report = Some(PathBuf::from(rest.next().ok_or("--report needs a value")?))
             }
+            "--archive" => {
+                archive = Some(PathBuf::from(rest.next().ok_or("--archive needs a value")?))
+            }
             _ => return Err(format!("unknown argument \"{arg}\"\n{}", usage())),
         }
     }
@@ -103,6 +108,7 @@ fn parse_args() -> Result<Args, String> {
         never_grow,
         dry_run,
         report,
+        archive,
     })
 }
 
@@ -251,6 +257,29 @@ fn run(args: &Args) -> Result<(), String> {
 
     if !args.dry_run {
         rewrite_image_paths(&dst_db, &renames)?;
+    }
+
+    if let Some(archive_path) = &args.archive {
+        if args.dry_run {
+            return Err("--archive needs real output (not --dry-run)".to_owned());
+        }
+        // Same zip the export route produces, so the importer accepts it.
+        let zip_bytes = editor_server_rust::archive::build_export_zip(
+            &dst_db,
+            &args.dst.join("images"),
+        )
+        .map_err(|error| error.message)?;
+        if let Some(parent) = archive_path.parent() {
+            if !parent.as_os_str().is_empty() {
+                std::fs::create_dir_all(parent).map_err(|error| error.to_string())?;
+            }
+        }
+        std::fs::write(archive_path, &zip_bytes).map_err(|error| error.to_string())?;
+        println!(
+            "archive:     {} ({:.1} MB)",
+            archive_path.display(),
+            zip_bytes.len() as f64 / 1e6
+        );
     }
 
     print_report(args, &rows, total_before, total_after, transcoded_count)?;
