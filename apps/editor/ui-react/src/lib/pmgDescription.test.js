@@ -29,6 +29,14 @@ describe("extractPmgDescriptionFields", () => {
     ).toEqual({ denomination: "1000 Lire", issueDate: "1970" });
   });
 
+  test("parses denominations with a trailing sheet qualifier", () => {
+    expect(
+      extractPmgDescriptionFields(
+        "Romania, Banca Nationala, 10,000 Lei 2000 - Sheet of 4",
+      ),
+    ).toEqual({ denomination: "10,000 Lei", issueDate: "2000" });
+  });
+
   test("returns empty fields for blank input", () => {
     expect(extractPmgDescriptionFields("")).toEqual({});
     expect(extractPmgDescriptionFields(null)).toEqual({});
