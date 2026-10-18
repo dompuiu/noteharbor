@@ -1,6 +1,6 @@
 [package]
 name = "editor_server_rust"
-version = "2.6.2"
+version = "2.7.0"
 edition = "2021"
 description = "Note Harbor editor backend (Axum)"
 license = "MIT"
@@ -12,10 +12,6 @@ path = "src/main.rs"
 [[bin]]
 name = "migrate-images"
 path = "src/bin/migrate_images.rs"
-
-[[bin]]
-name = "sample-webp"
-path = "src/bin/sample_webp.rs"
 
 [lib]
 name = "editor_server_rust"
