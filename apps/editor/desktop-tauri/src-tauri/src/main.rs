@@ -415,6 +415,13 @@ pub fn run() {
             )
             .visible(false)
             .initialization_script(DESKTOP_BRIDGE_JS)
+            // Tauri's webview-level file-drop handler swallows dragover/drop
+            // before the page sees them, which breaks the table's HTML5 row
+            // reorder (stuck insertion line, drop disallowed) and the
+            // import screen's archive dropzone in the desktop app. Nothing
+            // in the shell consumes Tauri file-drop events — both features
+            // use page-level handlers — so the handler stays off.
+            .disable_drag_drop_handler()
             .on_navigation(move |url| {
                 if urls::is_external_url(url.as_str(), &navigation_app_url) {
                     let _ = opener.opener().open_url(url.as_str(), None::<&str>);
