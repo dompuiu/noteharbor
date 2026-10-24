@@ -2,6 +2,17 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.7.1] - 2026-10-23
+
+### Fixed
+
+- Table screen: drag-and-drop reorder works in the desktop app again. Tauri's webview-level file-drop handler intercepted drags before the page saw them (stuck insertion line, drop disallowed); the shell now disables it. The import screen's archive dropzone benefits from the same fix.
+- Note editor: PMG scrape fills the denomination when a catalog reference sits between the denomination and the date. Descriptions like "Romania / Russian Occupation WWII, 500 Lei SB445 1944" left the denomination empty because the trailing-amount match only allows pure-alpha words; the catalog token is now stripped before extraction.
+
+### Removed
+
+- `migrate-images` one-time tool: the archive migrations are complete and new images land as WebP on ingest. The reusable transcode/store helpers and their tests stay in `images.rs`.
+
 ## [2.7.0] - 2026-10-18
 
 ### Added
