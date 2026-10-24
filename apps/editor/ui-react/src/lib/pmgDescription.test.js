@@ -37,6 +37,17 @@ describe("extractPmgDescriptionFields", () => {
     ).toEqual({ denomination: "10,000 Lei", issueDate: "2000" });
   });
 
+  test("parses denominations with a trailing catalog reference", () => {
+    expect(
+      extractPmgDescriptionFields(
+        "Romania / Russian Occupation WWII, 500 Lei SB445 1944",
+      ),
+    ).toEqual({ denomination: "500 Lei", issueDate: "1944" });
+    expect(
+      extractPmgDescriptionFields("Romania, Banca Nationala, 1000 Lei P-98 1998"),
+    ).toEqual({ denomination: "1000 Lei", issueDate: "1998" });
+  });
+
   test("returns empty fields for blank input", () => {
     expect(extractPmgDescriptionFields("")).toEqual({});
     expect(extractPmgDescriptionFields(null)).toEqual({});

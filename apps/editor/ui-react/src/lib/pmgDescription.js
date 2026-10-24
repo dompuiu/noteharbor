@@ -29,6 +29,14 @@ function extractPmgDescriptionFields(value) {
     }
   }
 
+  // A catalog reference can sit between the denomination and the date
+  // ("500 Lei SB445 1944"): strip it so the trailing amount anchor matches.
+  // The token starts with letters and contains digits, so pure-alpha
+  // currency names ("Lei", "Mark") are untouched.
+  denominationSource = denominationSource
+    .replace(/\s+[A-Za-z]+-?\d+[A-Za-z0-9-]*$/, "")
+    .trim();
+
   // Match the trailing amount on the full source. Splitting on commas
   // breaks thousands separators ("500,000 Lei" -> "000 Lei").
   const denominationMatch = denominationSource.match(
