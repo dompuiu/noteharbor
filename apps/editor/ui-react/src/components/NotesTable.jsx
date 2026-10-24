@@ -1769,20 +1769,40 @@ function NotesTable({
     rowVirtualizer.scrollToOffset(0);
   }, [filters, rowVirtualizer, sortDirection, sortKey]);
 
+  // Switching collections opens a fresh table view at its first fields and
+  // first rows, not where the previous collection was left. The notes load
+  // unmounts the scrollers, so a reset issued before the remount is lost —
+  // reset again once the new table has mounted (loading false).
+  useEffect(() => {
+    if (loading) {
+      return;
+    }
+
+    resetColumnScroll();
+
+    if (tableScrollYRef.current) {
+      tableScrollYRef.current.scrollTop = 0;
+    }
+
+    rowVirtualizer.scrollToOffset(0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [collectionId, loading]);
+
   useEffect(() => {
     // A changed filter or sort produces a new row order: drop any keyboard
     // focus target from the previous order (including a not-yet-landed
     // virtualized focus) so the next ArrowDown starts at the first row of
     // the new order. The active-row cue belongs to the old order too, and so
     // do the last-focused-row memory and any focus still waiting on a list
-    // change: they name rows of the old order.
+    // change: they name rows of the old order. A collection switch is a new
+    // order too.
     pendingRowFocusNoteIdRef.current = null;
     deferredRowFocusNoteIdRef.current = null;
     deferredAnchorFocusRef.current = false;
     pendingSlideshowLandingRef.current = null;
     lastRowFocusNoteIdRef.current = null;
     clearRowCursor();
-  }, [clearRowCursor, filters, sortDirection, sortKey]);
+  }, [clearRowCursor, collectionId, filters, sortDirection, sortKey]);
 
   useEffect(() => {
     // Land a focus request that was made while the list was still settling.
