@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.7.2] - 2026-10-24
+
+### Fixed
+
+- Table screen: switching collections resets the table to its first fields and first rows instead of keeping the previous collection's scroll position. The row keyboard cursor is cleared as well.
+
 ## [2.7.1] - 2026-10-23
 
 ### Fixed
