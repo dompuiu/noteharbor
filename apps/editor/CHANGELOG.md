@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.7.3] - 2026-10-26
+
+### Fixed
+
+- PMG scrape: descriptions with a trailing printer qualifier (e.g. `... 5000 Lei 1940 - Printer: BWC`) now fill in the denomination and issue date instead of leaving them blank.
+
 ## [2.7.2] - 2026-10-24
 
 ### Fixed
