@@ -48,6 +48,14 @@ describe("extractPmgDescriptionFields", () => {
     ).toEqual({ denomination: "1000 Lei", issueDate: "1998" });
   });
 
+  test("parses denominations with a trailing printer qualifier", () => {
+    expect(
+      extractPmgDescriptionFields(
+        'Romania, Banca Nationala "Commemorative", 5000 Lei 1940 - Printer: BWC',
+      ),
+    ).toEqual({ denomination: "5000 Lei", issueDate: "1940" });
+  });
+
   test("returns empty fields for blank input", () => {
     expect(extractPmgDescriptionFields("")).toEqual({});
     expect(extractPmgDescriptionFields(null)).toEqual({});

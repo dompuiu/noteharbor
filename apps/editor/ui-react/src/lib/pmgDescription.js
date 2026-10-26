@@ -9,6 +9,7 @@ function extractPmgDescriptionFields(value) {
   const cleaned = normalized
     .replace(/\s*"SPECIMEN"\s*/gi, " ")
     .replace(/\s+-\s+Wmk:\s*.+$/i, "")
+    .replace(/\s+-\s*Printer:\s*.+$/i, "")
     // Multiples are listed after the date ("10,000 Lei 2000 - Sheet of 4"):
     // strip the qualifier so the trailing date/denomination anchors match.
     .replace(/\s+-\s*(Uncut\s+)?Sheets?\s+of\s+\d+.*$/i, "")
