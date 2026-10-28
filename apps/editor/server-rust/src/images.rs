@@ -270,16 +270,55 @@ pub fn write_slot_buffer(
     Ok(slot_record(note_id, image_type, variant, &normalized, origin, source_url))
 }
 
+/// Reads the container's EXIF orientation without decoding pixels.
+/// Unknown/unreadable metadata means `NoTransforms`.
+fn image_orientation(input: &[u8]) -> image::metadata::Orientation {
+    use image::ImageDecoder;
+    image::ImageReader::new(std::io::Cursor::new(input))
+        .with_guessed_format()
+        .map_err(|error| error.to_string())
+        .and_then(|reader| reader.into_decoder().map_err(|error| error.to_string()))
+        .and_then(|mut decoder| decoder.orientation().map_err(|error| error.to_string()))
+        .unwrap_or(image::metadata::Orientation::NoTransforms)
+}
+
+/// Decodes `input` and applies the container's EXIF orientation, so the
+/// returned pixels match what browsers display for the same file. `load_from_memory`
+/// ignores the EXIF tag, which rotated TQG scrapes 90° on save: the editor
+/// preview renders the remote URL (browser applies EXIF) while the stored
+/// WebP was transcoded from unrotated pixels with the tag stripped.
+fn decode_oriented(input: &[u8]) -> Result<image::DynamicImage, String> {
+    use image::ImageDecoder;
+    let reader = image::ImageReader::new(std::io::Cursor::new(input))
+        .with_guessed_format()
+        .map_err(|error| error.to_string())?;
+    let mut decoder = reader.into_decoder().map_err(|error| error.to_string())?;
+    let orientation = decoder.orientation().map_err(|error| error.to_string())?;
+    let mut decoded =
+        image::DynamicImage::from_decoder(decoder).map_err(|error| error.to_string())?;
+    decoded.apply_orientation(orientation);
+    Ok(decoded)
+}
+
 /// Downscales `input` to a max width of 500 px, preserving aspect ratio and
 /// never enlarging small images (sharp `withoutEnlargement` parity). The
 /// output keeps the input encoding when it is JPEG/PNG/WebP, else JPEG.
+/// EXIF orientation is applied before measuring: small oriented images are
+/// re-encoded (tag stripped, pixels correct) instead of copied verbatim.
 pub fn generate_thumbnail_buffer(input: &[u8]) -> Result<Vec<u8>, String> {
     let format = image::guess_format(input).map_err(|error| error.to_string())?;
-    let decoded = image::load_from_memory(input).map_err(|error| error.to_string())?;
-    if decoded.width() <= THUMBNAIL_MAX_WIDTH {
+    let orientation = image_orientation(input);
+    let decoded = decode_oriented(input)?;
+    if orientation == image::metadata::Orientation::NoTransforms
+        && decoded.width() <= THUMBNAIL_MAX_WIDTH
+    {
         return Ok(input.to_vec());
     }
-    let resized = decoded.thumbnail(THUMBNAIL_MAX_WIDTH, u32::MAX);
+    let resized = if decoded.width() > THUMBNAIL_MAX_WIDTH {
+        decoded.thumbnail(THUMBNAIL_MAX_WIDTH, u32::MAX)
+    } else {
+        decoded
+    };
     let mut out = Vec::new();
     // The output keeps the input encoding (sharp `toBuffer()` parity);
     // anything else is encoded as JPEG quality 82.
@@ -321,7 +360,7 @@ pub fn transcode_to_jpeg(input: &[u8], quality: u8) -> Option<Vec<u8>> {
     if image::guess_format(input).ok() == Some(image::ImageFormat::Gif) {
         return None;
     }
-    let decoded = image::load_from_memory(input).ok()?;
+    let decoded = decode_oriented(input).ok()?;
     let rgb = flatten_to_rgb8(&decoded);
     let mut out = Vec::new();
     let mut encoder = image::codecs::jpeg::JpegEncoder::new_with_quality(&mut out, quality);
@@ -353,7 +392,7 @@ pub fn transcode_to_webp(input: &[u8], quality: f32) -> Option<Vec<u8>> {
     if image::guess_format(input).ok() == Some(image::ImageFormat::Gif) {
         return None;
     }
-    let decoded = image::load_from_memory(input).ok()?;
+    let decoded = decode_oriented(input).ok()?;
     let rgb = flatten_to_rgb8(&decoded);
     Some(
         webp::Encoder::from_rgb(&rgb.as_raw()[..], rgb.width(), rgb.height())
@@ -747,5 +786,80 @@ mod tests {
             .encode(&frame, 8, 8, image::ExtendedColorType::Rgba8)
             .expect("gif encodes");
         assert_eq!(transcode_to_webp(&gif, 80.0), None);
+    }
+
+    /// Builds a JPEG whose stored pixels are `width`×`height` with a red
+    /// left half / blue right half, tagged with the given EXIF orientation.
+    /// Browsers display it rotated per the tag; naive decoders return the
+    /// stored (unrotated) pixels.
+    fn jpeg_with_exif_orientation(width: u32, height: u32, orientation: u8) -> Vec<u8> {
+        let mut pixels = image::RgbImage::new(width, height);
+        for (x, _y, pixel) in pixels.enumerate_pixels_mut() {
+            *pixel = if x < width / 2 {
+                image::Rgb([230, 30, 30])
+            } else {
+                image::Rgb([30, 30, 230])
+            };
+        }
+        let mut jpeg = Vec::new();
+        image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 95)
+            .encode_image(&image::DynamicImage::ImageRgb8(pixels))
+            .expect("source encodes");
+        assert_eq!(&jpeg[0..2], &[0xFF, 0xD8]);
+
+        // Minimal APP1 `Exif\0\0` + little-endian TIFF with a single
+        // IFD0 entry (tag 0x0112, SHORT, count 1).
+        let mut payload = b"Exif\0\0".to_vec();
+        payload.extend_from_slice(b"II\x2a\x00\x08\x00\x00\x00");
+        payload.extend_from_slice(&[0x01, 0x00]);
+        payload.extend_from_slice(&[0x12, 0x01, 0x03, 0x00, 0x01, 0x00, 0x00, 0x00]);
+        payload.extend_from_slice(&[orientation, 0x00, 0x00, 0x00]);
+        payload.extend_from_slice(&[0x00, 0x00, 0x00, 0x00]);
+        let mut app1 = vec![0xFF, 0xE1];
+        app1.extend_from_slice(&((payload.len() + 2) as u16).to_be_bytes());
+        app1.extend_from_slice(&payload);
+
+        [jpeg[..2].to_vec(), app1, jpeg[2..].to_vec()].concat()
+    }
+
+    #[test]
+    fn transcode_to_webp_applies_exif_orientation() {
+        // Orientation 6 = rotate 90° CW for display: stored 120×80 must
+        // come out 80×120 with the red half on top.
+        let source = jpeg_with_exif_orientation(120, 80, 6);
+        let transcoded = transcode_to_webp(&source, 80.0).expect("transcodes");
+        let roundtrip = webp::Decoder::new(&transcoded).decode().expect("webp decodes");
+        assert_eq!((roundtrip.width(), roundtrip.height()), (80, 120));
+        let pixels = roundtrip.to_image().to_rgb8();
+        let top = pixels.get_pixel(40, 10).0;
+        let bottom = pixels.get_pixel(40, 110).0;
+        assert!(top[0] > 150 && top[2] < 100, "{top:?}");
+        assert!(bottom[2] > 150 && bottom[0] < 100, "{bottom:?}");
+
+        // Orientation 1 is the no-op control.
+        let plain = jpeg_with_exif_orientation(120, 80, 1);
+        let transcoded = transcode_to_webp(&plain, 80.0).expect("transcodes");
+        let roundtrip = webp::Decoder::new(&transcoded).decode().expect("webp decodes");
+        assert_eq!((roundtrip.width(), roundtrip.height()), (120, 80));
+    }
+
+    #[test]
+    fn transcode_to_jpeg_applies_exif_orientation() {
+        let source = jpeg_with_exif_orientation(120, 80, 6);
+        let transcoded = transcode_to_jpeg(&source, 90).expect("transcodes");
+        let decoded = image::load_from_memory(&transcoded).expect("decodes");
+        assert_eq!((decoded.width(), decoded.height()), (80, 120));
+    }
+
+    #[test]
+    fn generate_thumbnail_buffer_applies_exif_orientation_to_small_images() {
+        // 120 px wide fits the verbatim shortcut, but the EXIF tag means the
+        // stored pixels are sideways: the output must be oriented (80×120),
+        // not a copy of the input.
+        let source = jpeg_with_exif_orientation(120, 80, 6);
+        let thumb = generate_thumbnail_buffer(&source).expect("thumbnail");
+        assert_ne!(thumb, source);
+        let decoded = image::load_from_memory(&thumb).expect("decodes");
+        assert_eq!((decoded.width(), decoded.height()), (80, 120));
     }
 }

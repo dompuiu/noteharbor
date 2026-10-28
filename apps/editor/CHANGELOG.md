@@ -2,6 +2,13 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- Scrape front/back sides: PMG (Obverse/Reverse titles), PCGS (Obverse/Reverse embedded labels), and TQG (first/second site image) now land on the matching front/back slots instead of swapped.
+- Note images with an EXIF orientation tag (seen on TQG scrapes) no longer save rotated 90°: uploads, scrape downloads, and generated thumbnails are decoded orientation-aware before the WebP transcode strips the tag.
+
 ## [2.7.3] - 2026-10-26
 
 ### Fixed

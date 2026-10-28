@@ -364,14 +364,13 @@ fn detail_str(details: &Map<String, Value>, key: &str) -> Option<String> {
 }
 
 fn pmg_side(title: &str) -> &'static str {
-    // The grading-site labels come out swapped relative to the note faces
-    // (reported: the scraped "front" picture belongs on the back slot and
-    // vice versa), so the sides are stored swapped on purpose.
+    // Site labels map straight onto the note faces: Obverse is the front,
+    // Reverse/Rev/Back is the back.
     let title = title.to_lowercase();
     if title.contains("rev") || title.contains("back") || title.contains("reverse") {
-        "front"
-    } else {
         "back"
+    } else {
+        "front"
     }
 }
 
@@ -519,12 +518,12 @@ fn extract_embedded_images(source: &str) -> Vec<ScrapedImage> {
     let mut images = Vec::new();
     for captures in re.captures_iter(source) {
         let label = captures.get(1).map(|group| group.as_str()).unwrap_or("");
-        // Sides are stored swapped on purpose: the site's "reverse" picture
-        // belongs on the front slot and vice versa (see `pmg_side`).
+        // The site's "reverse" picture is the back face, anything else
+        // (Obverse) is the front.
         let side = if label.to_lowercase().contains("reverse") {
-            "front"
-        } else {
             "back"
+        } else {
+            "front"
         };
         let full = captures
             .get(4)
@@ -838,10 +837,9 @@ pub fn parse_tqg(html: &str, page_url: &str, note: &NoteRef) -> ParsedScrape {
             continue;
         };
         let side = match index {
-            // Stored swapped on purpose: the first site image belongs on the
-            // back slot and the second on the front slot (see `pmg_side`).
-            0 => "back".to_owned(),
-            1 => "front".to_owned(),
+            // The first site image is the front face, the second the back.
+            0 => "front".to_owned(),
+            1 => "back".to_owned(),
             _ => format!("image_{}", index + 1),
         };
         images.push(ScrapedImage {
@@ -1180,31 +1178,30 @@ mod tests {
             .iter()
             .map(|image| (image.url.as_str(), image))
             .collect();
-        // Sides are stored swapped on purpose (site labels come out
-        // reversed): Obverse lands on the back slot, Reverse on the front.
+        // Obverse is the front face, Reverse the back.
         assert_eq!(
             by_url
                 .get("https://images.example.com/full-front.jpg")
-                .map(|image| (image.side.as_str(), image.variant.as_str())),
-            Some(("back", "full"))
-        );
-        assert_eq!(
-            by_url
-                .get("https://images.example.com/full-back.jpg")
                 .map(|image| (image.side.as_str(), image.variant.as_str())),
             Some(("front", "full"))
         );
         assert_eq!(
             by_url
+                .get("https://images.example.com/full-back.jpg")
+                .map(|image| (image.side.as_str(), image.variant.as_str())),
+            Some(("back", "full"))
+        );
+        assert_eq!(
+            by_url
                 .get("https://images.example.com/thumb-front.jpg")
                 .map(|image| (image.side.as_str(), image.variant.as_str())),
-            Some(("back", "thumbnail"))
+            Some(("front", "thumbnail"))
         );
         assert_eq!(
             by_url
                 .get("https://images.example.com/thumb-back.jpg")
                 .map(|image| (image.side.as_str(), image.variant.as_str())),
-            Some(("front", "thumbnail"))
+            Some(("back", "thumbnail"))
         );
     }
 
@@ -1243,11 +1240,11 @@ mod tests {
             .map(|image| (image.url.as_str(), image))
             .collect();
         let full = by_url.get("https://i.example/p.jpg").expect("full image");
-        // Obverse is stored swapped onto the back slot (see `pmg_side`).
-        assert_eq!(full.side, "back");
+        // Obverse is the front face.
+        assert_eq!(full.side, "front");
         assert_eq!(full.variant, "full");
         let thumbnail = by_url.get("https://i.example/t.jpg").expect("thumbnail");
-        assert_eq!(thumbnail.side, "back");
+        assert_eq!(thumbnail.side, "front");
         assert_eq!(thumbnail.variant, "thumbnail");
     }
 
@@ -1275,12 +1272,12 @@ mod tests {
             parsed.images,
             vec![
                 ScrapedImage {
-                    side: "back".to_owned(),
+                    side: "front".to_owned(),
                     variant: "full".to_owned(),
                     url: "https://tqggrading.com/img/front.jpg".to_owned(),
                 },
                 ScrapedImage {
-                    side: "front".to_owned(),
+                    side: "back".to_owned(),
                     variant: "full".to_owned(),
                     url: "https://tqggrading.com/img/back.jpg".to_owned(),
                 },
