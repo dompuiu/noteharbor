@@ -1,7 +1,7 @@
 {
   "name": "editor_desktop_tauri",
   "private": true,
-  "version": "2.7.4",
+  "version": "2.7.5",
   "description": "Tauri-packaged Note Harbor Editor",
   "scripts": {
     "dev": "tauri dev",

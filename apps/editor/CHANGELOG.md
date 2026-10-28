@@ -2,7 +2,7 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
-## [Unreleased]
+## [2.7.5] - 2026-10-28
 
 ### Fixed
 
