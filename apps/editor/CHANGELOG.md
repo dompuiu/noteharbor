@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [Unreleased]
+
+### Fixed
+
+- PMG scrape: Obverse/Reverse images land on the matching slots again. 2.7.4 mapped PMG labels straight onto the faces like PCGS/TQG, but PMG labels come out reversed, so scraped sides were inverted.
+
 ## [2.7.4] - 2026-10-28
 
 ### Fixed

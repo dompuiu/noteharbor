@@ -364,13 +364,16 @@ fn detail_str(details: &Map<String, Value>, key: &str) -> Option<String> {
 }
 
 fn pmg_side(title: &str) -> &'static str {
-    // Site labels map straight onto the note faces: Obverse is the front,
-    // Reverse/Rev/Back is the back.
+    // PMG labels come out reversed relative to the note faces (verified
+    // against live scrapes: the "Obverse" picture belongs on the back slot
+    // and "Reverse"/"Rev"/"Back" on the front slot), so the sides are stored
+    // swapped. This is PMG-specific: PCGS and TQG labels map straight onto
+    // the faces.
     let title = title.to_lowercase();
     if title.contains("rev") || title.contains("back") || title.contains("reverse") {
-        "back"
-    } else {
         "front"
+    } else {
+        "back"
     }
 }
 
@@ -1178,30 +1181,31 @@ mod tests {
             .iter()
             .map(|image| (image.url.as_str(), image))
             .collect();
-        // Obverse is the front face, Reverse the back.
+        // PMG sides are stored swapped on purpose: Obverse lands on the
+        // back slot, Reverse on the front (see `pmg_side`).
         assert_eq!(
             by_url
                 .get("https://images.example.com/full-front.jpg")
-                .map(|image| (image.side.as_str(), image.variant.as_str())),
-            Some(("front", "full"))
-        );
-        assert_eq!(
-            by_url
-                .get("https://images.example.com/full-back.jpg")
                 .map(|image| (image.side.as_str(), image.variant.as_str())),
             Some(("back", "full"))
         );
         assert_eq!(
             by_url
+                .get("https://images.example.com/full-back.jpg")
+                .map(|image| (image.side.as_str(), image.variant.as_str())),
+            Some(("front", "full"))
+        );
+        assert_eq!(
+            by_url
                 .get("https://images.example.com/thumb-front.jpg")
                 .map(|image| (image.side.as_str(), image.variant.as_str())),
-            Some(("front", "thumbnail"))
+            Some(("back", "thumbnail"))
         );
         assert_eq!(
             by_url
                 .get("https://images.example.com/thumb-back.jpg")
                 .map(|image| (image.side.as_str(), image.variant.as_str())),
-            Some(("back", "thumbnail"))
+            Some(("front", "thumbnail"))
         );
     }
 
