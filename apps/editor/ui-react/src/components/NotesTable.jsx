@@ -50,6 +50,7 @@ import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { NoCollectionsPrompt } from "./NoCollectionsPrompt.jsx";
+import { RowActionsMenu } from "./RowActionsMenu.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 import { TagsField } from "./TagsField.jsx";
 
@@ -2886,6 +2887,21 @@ function NotesTable({
     navigateToTableRoute({ kind: "create", beforeId: referenceNoteId });
   }
 
+  // The create route only positions a new note ahead of a reference note, so
+  // "insert below" positions the form ahead of the next note in the view. The
+  // last row has no next note and inserts at the end.
+  function openCreateNoteAfter(noteId) {
+    const index = orderedNotes.findIndex((note) => note.id === noteId);
+    const nextNote = index >= 0 ? orderedNotes[index + 1] : null;
+
+    if (nextNote) {
+      openCreateNoteBefore(nextNote.id);
+      return;
+    }
+
+    openCreateNote();
+  }
+
   function openCreateNoteOverSlideshow(referenceNoteId) {
     if (isNewCollection) {
       return;
@@ -3719,144 +3735,56 @@ function NotesTable({
   }
 
   function renderActionsCell(note) {
+    const noteLabel =
+      note.denomination || note.catalog_number || `note ${note.id}`;
+    const items = [
+      {
+        key: "open",
+        label: "Open",
+        onSelect: () => openSlideshow(note.id),
+      },
+      {
+        key: "edit",
+        label: "Edit",
+        onSelect: () => openEditor(note.id),
+        shortcut: "e",
+      },
+      {
+        key: "copy",
+        label: "Copy details",
+        onSelect: () => void handleCopyNoteDetails(note),
+        shortcut: "c",
+      },
+      {
+        key: "insert",
+        label: "Insert note below",
+        onSelect: () => openCreateNoteAfter(note.id),
+      },
+    ];
+
+    if (note.url) {
+      items.push({
+        key: "source",
+        label: "Open source",
+        href: note.url,
+      });
+    }
+
+    items.push({
+      key: "delete",
+      label: "Delete",
+      onSelect: () => void handleDeleteNote(note.id),
+      danger: true,
+      separated: true,
+      shortcut: "d",
+    });
+
     return (
       <td>
-        <div className="inline-actions">
-          <button
-            className="icon-link"
-            data-shortcut="c"
-            onClick={(event) => {
-              event.stopPropagation();
-              void handleCopyNoteDetails(note);
-            }}
-            type="button"
-            aria-label={`Copy ${note.denomination || `note ${note.id}`}`}
-          >
-            <svg
-              aria-hidden="true"
-              height="16"
-              viewBox="0 0 24 24"
-              width="16"
-            >
-              <rect
-                fill="none"
-                height="10"
-                rx="2"
-                stroke="currentColor"
-                strokeWidth="2"
-                width="10"
-                x="9"
-                y="9"
-              />
-              <rect
-                fill="none"
-                height="10"
-                rx="2"
-                stroke="currentColor"
-                strokeWidth="2"
-                width="10"
-                x="5"
-                y="5"
-              />
-            </svg>
-          </button>
-          <button
-            className="icon-link"
-            data-shortcut="a"
-            onClick={(event) => {
-              event.stopPropagation();
-              openCreateNoteBefore(note.id);
-            }}
-            type="button"
-            aria-label={`Insert note before ${note.denomination || `note ${note.id}`}`}
-          >
-            <svg
-              aria-hidden="true"
-              height="16"
-              viewBox="0 0 24 24"
-              width="16"
-            >
-              <path
-                d="M12 5v14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              />
-              <path
-                d="M5 12h14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              />
-            </svg>
-          </button>
-          <button
-            className="icon-link"
-            data-shortcut="e"
-            onClick={(event) => {
-              event.stopPropagation();
-              openEditor(note.id);
-            }}
-            type="button"
-            aria-label={`Edit ${note.denomination || `note ${note.id}`}`}
-          >
-            <svg
-              aria-hidden="true"
-              height="16"
-              viewBox="0 0 24 24"
-              width="16"
-            >
-              <path
-                d="M4 20h4l10-10-4-4L4 16v4z"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              />
-              <path
-                d="M12 6l4 4"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              />
-            </svg>
-          </button>
-          <button
-            className="icon-link"
-            data-shortcut="d"
-            onClick={(event) => {
-              event.stopPropagation();
-              void handleDeleteNote(note.id);
-            }}
-            type="button"
-            aria-label={`Delete ${note.denomination || `note ${note.id}`}`}
-          >
-            <svg
-              aria-hidden="true"
-              height="16"
-              viewBox="0 0 24 24"
-              width="16"
-            >
-              <path
-                d="M5 7h14"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              />
-              <path
-                d="M9 7V5h6v2"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              />
-              <path
-                d="M8 7l1 12h6l1-12"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              />
-            </svg>
-          </button>
-        </div>
+        <RowActionsMenu
+          items={items}
+          label={`Actions for ${noteLabel}`}
+        />
       </td>
     );
   }

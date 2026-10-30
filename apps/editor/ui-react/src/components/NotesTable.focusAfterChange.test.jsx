@@ -121,6 +121,15 @@ async function confirmDelete(user) {
   await user.click(within(dialog).getByRole("button", { name: "Delete" }));
 }
 
+// The four row actions live behind one button now; open its menu and pick the
+// item by its accessible name.
+async function chooseRowAction(user, noteLabel, action) {
+  await user.click(
+    screen.getByRole("button", { name: `Actions for ${noteLabel}` }),
+  );
+  await user.click(screen.getByRole("menuitem", { name: action }));
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   notesDb = [note(1, "AAAA"), note(2, "BBBB"), note(3, "CCCC")];
@@ -181,7 +190,7 @@ describe("Delete keeps the cursor on the table", () => {
     renderTable();
     await screen.findByText("AAAA");
 
-    await user.click(screen.getByRole("button", { name: "Delete BBBB" }));
+    await chooseRowAction(user, "BBBB", "Delete");
     await confirmDelete(user);
 
     await waitFor(() => {
@@ -200,7 +209,7 @@ describe("Delete keeps the cursor on the table", () => {
     renderTable();
     await screen.findByText("AAAA");
 
-    await user.click(screen.getByRole("button", { name: "Delete CCCC" }));
+    await chooseRowAction(user, "CCCC", "Delete");
     await confirmDelete(user);
 
     await waitFor(() => {
@@ -243,7 +252,7 @@ describe("Delete keeps the cursor on the table", () => {
     const { container } = renderTable();
     await screen.findByText("AAAA");
 
-    await user.click(screen.getByRole("button", { name: "Delete AAAA" }));
+    await chooseRowAction(user, "AAAA", "Delete");
     await confirmDelete(user);
 
     await waitFor(() => {
@@ -332,7 +341,7 @@ describe("The note editor hands the cursor back", () => {
     const { container } = renderTable();
 
     await screen.findByText("AAAA");
-    await user.click(screen.getByRole("button", { name: "Edit AAAA" }));
+    await chooseRowAction(user, "AAAA", "Edit");
 
     // Move the edited note away while other rows remain: the target is gone
     // but the view is not empty, so the cursor must not jump to another row.
@@ -359,7 +368,7 @@ describe("The note editor hands the cursor back", () => {
     const { container } = renderTable();
 
     await screen.findByText("AAAA");
-    await user.click(screen.getByRole("button", { name: "Edit AAAA" }));
+    await chooseRowAction(user, "AAAA", "Edit");
 
     // Move the only note to the other collection: the save takes the last
     // visible row with it, leaving nothing to focus.
@@ -446,9 +455,7 @@ describe("Note editor Escape", () => {
   async function openEditorOn(user, denomination = "AAAA") {
     renderTable();
     await screen.findByText(denomination);
-    await user.click(
-      screen.getByRole("button", { name: `Edit ${denomination}` }),
-    );
+    await chooseRowAction(user, denomination, "Edit");
 
     const field = await screen.findByLabelText("Denomination");
     await waitFor(() => {
