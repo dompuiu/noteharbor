@@ -214,6 +214,9 @@ describe("NotesTable search", () => {
     renderTable();
 
     const input = await searchBox();
+    await user.click(
+      await screen.findByRole("button", { name: "Filters" }),
+    );
     const denominationFilter = await screen.findByLabelText(
       "Filter Denomination",
     );

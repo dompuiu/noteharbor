@@ -335,6 +335,7 @@ describe("Active row highlight", () => {
   });
 
   test("focusing a filter clears the active row highlight", async () => {
+    const user = userEvent.setup();
     getNotes.mockResolvedValue({
       notes: [notePayload(1, "AAAA"), notePayload(2, "BBBB")],
     });
@@ -350,6 +351,9 @@ describe("Active row highlight", () => {
       expect(firstRow).toHaveClass("table-row-link--active");
     });
 
+    await user.click(
+      await screen.findByRole("button", { name: "Filters" }),
+    );
     const filter = await screen.findByLabelText("Filter Denomination");
     await act(async () => {
       filter.focus();
@@ -599,6 +603,9 @@ describe("Arrow modifiers and h/j/k/l aliases", () => {
     renderTable();
 
     const firstRow = (await screen.findByText("AAAA")).closest("tr");
+    await user.click(
+      await screen.findByRole("button", { name: "Filters" }),
+    );
     const filter = await screen.findByLabelText("Filter Denomination");
 
     await act(async () => {

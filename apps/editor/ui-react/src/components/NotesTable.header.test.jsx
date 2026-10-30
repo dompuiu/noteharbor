@@ -224,6 +224,9 @@ describe("NotesTable header emphasis", () => {
     renderTable();
     const user = userEvent.setup();
 
+    await user.click(
+      await screen.findByRole("button", { name: "Filters" }),
+    );
     const denominationFilter = await screen.findByLabelText(
       "Filter Denomination",
     );

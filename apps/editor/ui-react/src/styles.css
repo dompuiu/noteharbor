@@ -3102,6 +3102,31 @@ thead tr:first-child th {
   color: var(--text);
 }
 
+/* The Filters toggle sits right after search and opens the on-demand filter
+   row. The badge reports how many column filters are active. */
+.table-filter-toggle {
+  gap: 6px;
+}
+
+.table-filter-toggle--open {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.table-filter-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-strong);
+  color: var(--accent-ink);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
 .table-helper-text {
   margin: 0;
   display: flex;

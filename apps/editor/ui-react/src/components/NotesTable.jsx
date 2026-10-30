@@ -1111,6 +1111,10 @@ function NotesTable({
     }
     return initialTableStateRef.current?.filters ?? {};
   });
+  // The filter row is on demand: hidden by default, opened from the toolbar,
+  // and force-opened whenever a column filter has a value so a filtered view
+  // never hides the reason rows are missing. Not persisted.
+  const [filtersOpen, setFiltersOpen] = useState(false);
   // The search query is view state only: it is not written to saved table
   // state, and it is cleared with the collection. A cold-opened slideshow URL
   // carries the query so closing the slideshow returns to the searched table.
@@ -1708,6 +1712,19 @@ function NotesTable({
     () => Object.values(filters).some((value) => String(value).trim()),
     [filters],
   );
+  // Active column filters, in column order, for the toolbar badge, chips and
+  // Clear all. Tags is one column, so its many values count once.
+  const activeColumnFilters = useMemo(
+    () =>
+      filterColumns
+        .map((column) => ({
+          column,
+          value: String(filters[column.key] ?? "").trim(),
+        }))
+        .filter((entry) => entry.value),
+    [filters],
+  );
+  const filterRowOpen = filtersOpen || hasActiveFilters;
   const hasActiveQuery = Boolean(query.trim());
   const isDefaultOrder =
     sortKey === defaultSortKey && sortDirection === "asc";
@@ -4256,6 +4273,25 @@ function NotesTable({
                   <kbd className="table-search-hint">/</kbd>
                 )}
               </div>
+              <button
+                aria-controls="table-filter-row"
+                aria-expanded={filterRowOpen}
+                aria-label={
+                  activeColumnFilters.length
+                    ? `Filters (${activeColumnFilters.length} active)`
+                    : "Filters"
+                }
+                className={`button table-filter-toggle${filterRowOpen ? " table-filter-toggle--open" : ""}`}
+                onClick={() => setFiltersOpen((open) => !open)}
+                type="button"
+              >
+                Filters
+                {activeColumnFilters.length ? (
+                  <span aria-hidden="true" className="table-filter-count">
+                    {activeColumnFilters.length}
+                  </span>
+                ) : null}
+              </button>
               <div className="inline-select-group">
                 {hasSavedTableState ? (
                   <button
@@ -4379,77 +4415,79 @@ function NotesTable({
                           />
                         ) : null}
                       </tr>
-                      <tr>
-                        {tableColumns.map((column) => {
-                          if (column.kind === "reorder") {
+                      {filterRowOpen ? (
+                        <tr id="table-filter-row">
+                          {tableColumns.map((column) => {
+                            if (column.kind === "reorder") {
+                              return (
+                                <th className="drag-cell" key={column.key} />
+                              );
+                            }
+
+                            if (!column.filterable) {
+                              return <th key={column.key} />;
+                            }
+
                             return (
-                              <th className="drag-cell" key={column.key} />
+                              <th
+                                className={
+                                  column.isTags ? "tags-column" : undefined
+                                }
+                                key={`${column.key}-filter`}
+                              >
+                                {column.isTags ? (
+                                  <MultiValueFilterCombobox
+                                    columnLabel={column.label}
+                                    onChange={(nextValue) =>
+                                      setFilters((current) => ({
+                                        ...current,
+                                        [column.key]: nextValue,
+                                      }))
+                                    }
+                                    onArrowDown={handleFilterArrowDown}
+                                    onFocus={() => rememberFilter(column.key)}
+                                    onHeightChange={(height) =>
+                                      reportColumnFilterHeight(
+                                        column.key,
+                                        height,
+                                      )
+                                    }
+                                    options={allTagNames}
+                                    ref={getFilterRef(column.key)}
+                                    value={filters[column.key] ?? ""}
+                                  />
+                                ) : (
+                                  <input
+                                    aria-label={`Filter ${column.label}`}
+                                    className={`filter-input${String(filters[column.key] ?? "").trim() ? " filter-input--active" : ""}`}
+                                    ref={getFilterRef(column.key)}
+                                    onFocus={() => rememberFilter(column.key)}
+                                    style={
+                                      filterRowHeight
+                                        ? { height: filterRowHeight }
+                                        : undefined
+                                    }
+                                    value={filters[column.key] ?? ""}
+                                    onChange={(event) =>
+                                      setFilters((current) => ({
+                                        ...current,
+                                        [column.key]: event.target.value,
+                                      }))
+                                    }
+                                    onKeyDown={handleFilterArrowDown}
+                                  />
+                                )}
+                              </th>
                             );
-                          }
-
-                          if (!column.filterable) {
-                            return <th key={column.key} />;
-                          }
-
-                          return (
+                          })}
+                          {vScroll.visible ? (
                             <th
-                              className={
-                                column.isTags ? "tags-column" : undefined
-                              }
-                              key={`${column.key}-filter`}
-                            >
-                              {column.isTags ? (
-                                <MultiValueFilterCombobox
-                                  columnLabel={column.label}
-                                  onChange={(nextValue) =>
-                                    setFilters((current) => ({
-                                      ...current,
-                                      [column.key]: nextValue,
-                                    }))
-                                  }
-                                  onArrowDown={handleFilterArrowDown}
-                                  onFocus={() => rememberFilter(column.key)}
-                                  onHeightChange={(height) =>
-                                    reportColumnFilterHeight(
-                                      column.key,
-                                      height,
-                                    )
-                                  }
-                                  options={allTagNames}
-                                  ref={getFilterRef(column.key)}
-                                  value={filters[column.key] ?? ""}
-                                />
-                              ) : (
-                                <input
-                                  aria-label={`Filter ${column.label}`}
-                                  className={`filter-input${String(filters[column.key] ?? "").trim() ? " filter-input--active" : ""}`}
-                                  ref={getFilterRef(column.key)}
-                                  onFocus={() => rememberFilter(column.key)}
-                                  style={
-                                    filterRowHeight
-                                      ? { height: filterRowHeight }
-                                      : undefined
-                                  }
-                                  value={filters[column.key] ?? ""}
-                                  onChange={(event) =>
-                                    setFilters((current) => ({
-                                      ...current,
-                                      [column.key]: event.target.value,
-                                    }))
-                                  }
-                                  onKeyDown={handleFilterArrowDown}
-                                />
-                              )}
-                            </th>
-                          );
-                        })}
-                        {vScroll.visible ? (
-                          <th
-                            aria-hidden="true"
-                            className="table-gutter-cell"
-                          />
-                        ) : null}
-                      </tr>
+                              aria-hidden="true"
+                              className="table-gutter-cell"
+                            />
+                          ) : null}
+                        </tr>
+                      ) : null}
                     </thead>
                     <tbody
                       onDragOver={(event) => {
