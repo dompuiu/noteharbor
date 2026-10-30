@@ -2710,8 +2710,8 @@ table {
   min-width: 1200px;
   /* Pinned columns are positioned from the model's declared widths, so the
      declared widths must be the rendered widths. `fixed` honours the
-     `<colgroup>` exactly; the last data column has no declared width and
-     takes whatever the viewport has left over. */
+     `<colgroup>` exactly; the last visible field column is left without a
+     width so it takes whatever the viewport has left over. */
   table-layout: fixed;
 }
 

@@ -2260,10 +2260,7 @@ function NotesTable({
   function syncColumnScroll(scroller = tableScrollXRef.current) {
     const scrollLeft = scroller?.scrollLeft ?? 0;
 
-    scroller?.style.setProperty(
-      "--table-sticky-scroll-x",
-      `${scrollLeft}px`,
-    );
+    scroller?.style.setProperty("--table-sticky-scroll-x", `${scrollLeft}px`);
     setColumnsScrolled(isColumnPanShadowVisible(scrollLeft));
   }
 
