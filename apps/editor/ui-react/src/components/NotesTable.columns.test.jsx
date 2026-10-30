@@ -371,4 +371,25 @@ describe("NotesTable columns", () => {
       screen.getByRole("columnheader", { name: "DATE" }),
     ).toBeInTheDocument();
   });
+
+  test("Escape closes the picker and returns focus to Columns", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = userEvent.setup();
+    const button = await columnsButton();
+    await user.click(button);
+    const dialog = await screen.findByRole("dialog", {
+      name: "Visible columns",
+    });
+
+    expect(within(dialog).getAllByRole("checkbox")[0]).toHaveFocus();
+    await user.keyboard("{Escape}");
+
+    expect(
+      screen.queryByRole("dialog", { name: "Visible columns" }),
+    ).not.toBeInTheDocument();
+    expect(button).toHaveFocus();
+    expect(button).toHaveAttribute("aria-expanded", "false");
+  });
 });
