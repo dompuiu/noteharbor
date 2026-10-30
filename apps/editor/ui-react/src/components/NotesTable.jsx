@@ -2725,22 +2725,39 @@ function NotesTable({
   }
 
   function toggleColumnVisibility(key) {
-    setVisibleColumnKeys((current) => {
-      if (!current.includes(key)) {
-        return hideableColumnKeys.filter(
-          (currentKey) => currentKey === key || current.includes(currentKey),
-        );
-      }
-
-      // Never leave the table with no field column at all: the permanent
-      // identity columns alone cannot be read as data.
-      const remaining = current.filter((currentKey) => currentKey !== key);
-      const keepsADataColumn = remaining.some(
-        (currentKey) => getTableColumn(currentKey)?.kind === "data",
+    if (!visibleColumnKeys.includes(key)) {
+      setVisibleColumnKeys(
+        hideableColumnKeys.filter(
+          (currentKey) =>
+            currentKey === key || visibleColumnKeys.includes(currentKey),
+        ),
       );
+      return;
+    }
 
-      return keepsADataColumn ? remaining : current;
-    });
+    // Never leave the table with no field column at all: the permanent
+    // identity columns alone cannot be read as data.
+    const remaining = visibleColumnKeys.filter(
+      (currentKey) => currentKey !== key,
+    );
+    const keepsADataColumn = remaining.some(
+      (currentKey) => getTableColumn(currentKey)?.kind === "data",
+    );
+
+    if (!keepsADataColumn) {
+      return;
+    }
+
+    // A hidden column must not keep hiding rows: drop its filter with it, and
+    // fall back to the default order when the sorted column disappears.
+    clearColumnFilter(key);
+
+    if (sortKey === key) {
+      setSortKey(defaultSortKey);
+      setSortDirection("asc");
+    }
+
+    setVisibleColumnKeys(remaining);
   }
 
   function toggleSort(key) {

@@ -249,4 +249,33 @@ describe("NotesTable columns", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Fr. 2300")).toBeInTheDocument();
   });
+
+  test("hiding a filtered column clears its filter and chip", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "Filters" }));
+    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
+
+    await waitFor(() => {
+      expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("Company: PMG")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Filters (1 active)" }),
+    ).toBeInTheDocument();
+
+    await user.click(await columnsButton());
+    const dialog = await screen.findByRole("dialog", {
+      name: "Visible columns",
+    });
+    await user.click(within(dialog).getByRole("checkbox", { name: "Company" }));
+
+    expect(screen.queryByText("Company: PMG")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Filters \(/ }),
+    ).not.toBeInTheDocument();
+    await screen.findByText("BBBB");
+  });
 });
