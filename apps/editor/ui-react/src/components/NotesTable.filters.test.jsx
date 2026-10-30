@@ -176,7 +176,10 @@ describe("NotesTable filters", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("Tags: Silver Certificate")).toBeInTheDocument();
 
-    await user.type(await screen.findByLabelText("Filter Tags"), "Star Note{Enter}");
+    await user.type(
+      await screen.findByLabelText("Filter Tags"),
+      "Star Note{Enter}",
+    );
 
     expect(
       screen.getByRole("button", { name: "Filters (1 active)" }),
