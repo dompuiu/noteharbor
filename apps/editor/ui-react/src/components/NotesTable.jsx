@@ -35,6 +35,16 @@ import {
   columnPanScrollLeft,
   isColumnPanTarget,
 } from "../lib/tableColumnPan.js";
+import {
+  defaultSortKey,
+  filterColumnKeys,
+  filterColumns,
+  getTableColumn,
+  slideshowFilterKeys,
+  tableColumns,
+  tagsColumnKey,
+  validSortKeys,
+} from "../lib/tableColumns.js";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
@@ -46,23 +56,10 @@ export function HomeHero() {
   return null;
 }
 
-const baseColumns = [
-  ["catalog_number", "Catalog #"],
-  ["denomination", "Denomination"],
-  ["issue_date", "Date"],
-  ["grading_company", "Company"],
-  ["grade", "Grade"],
-  ["serial", "Serial"],
-  ["tags", "Tags"],
-];
-const columns = baseColumns;
-
 const tableStateStorageKey = "noteharbor.notesTableState";
-const validSortKeys = new Set(["id", ...columns.map(([key]) => key)]);
 const rowHeightEstimate = 43;
 const validPreviewKinds = new Set(["front", "back"]);
 const slideshowFilterParamPrefix = "f_";
-const slideshowFilterKeys = columns.map(([key]) => key);
 const tagChipHorizontalPadding = 20;
 const tagListGap = 8;
 const tagChipMeasureSafetyMargin = 2;
@@ -499,15 +496,13 @@ function loadSavedTableState() {
       parsedValue.filters && typeof parsedValue.filters === "object"
         ? Object.fromEntries(
             Object.entries(parsedValue.filters)
-              .filter(([key]) =>
-                columns.some(([columnKey]) => columnKey === key),
-              )
+              .filter(([key]) => filterColumnKeys.includes(key))
               .map(([key, value]) => [key, String(value ?? "")]),
           )
         : {};
     const nextSortKey = validSortKeys.has(parsedValue.sortKey)
       ? parsedValue.sortKey
-      : "id";
+      : defaultSortKey;
     const nextSortDirection =
       parsedValue.sortDirection === "desc" ? "desc" : "asc";
     const nextSelectedIds = Array.isArray(parsedValue.selectedIds)
@@ -529,7 +524,7 @@ function loadSavedTableState() {
 }
 
 function valueToString(note, key) {
-  if (key === "tags") {
+  if (getTableColumn(key)?.isTags) {
     return note.tags.map((tag) => tag.name).join(", ");
   }
 
@@ -550,26 +545,6 @@ function parseFilterValue(rawValue, normalizeValue) {
     ? normalizeValue(rawParsedValue)
     : rawParsedValue;
   return value ? { negated, value } : { negated: false, value: "" };
-}
-
-function addThousandsSeparators(value) {
-  return value.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
-}
-
-function normalizeDenominationFilterValue(value) {
-  const trimmed = String(value ?? "").trim();
-  const match = trimmed.match(/^(\d[\d,]*)(\.\d+)?(.*)$/);
-  if (!match) {
-    return trimmed;
-  }
-
-  const [, rawIntegerPart, decimalPart = "", suffix = ""] = match;
-  const integerDigits = rawIntegerPart.replace(/,/g, "");
-  if (!/^\d+$/.test(integerDigits)) {
-    return trimmed;
-  }
-
-  return `${addThousandsSeparators(integerDigits)}${decimalPart}${suffix}`;
 }
 
 function parseScalarFilters(rawFilterValue, normalizeValue) {
@@ -668,27 +643,18 @@ const rowSortCollator = new Intl.Collator(undefined, {
 function filterNotesByFilters(noteList, filterObj) {
   const activeFilters = filterObj ?? {};
   return noteList.filter((note) =>
-    columns.every(([key]) => {
-      if (key === "tags") {
-        return matchesTagFilter(note, activeFilters[key]);
+    filterColumns.every((column) => {
+      if (column.isTags) {
+        return matchesTagFilter(note, activeFilters[column.key]);
       }
 
-      const supportsMultipleValues =
-        key === "catalog_number" ||
-        key === "grade" ||
-        key === "issue_date" ||
-        key === "denomination";
-
       return matchesFilterValue(
-        valueToString(note, key),
-        activeFilters[key],
-        key === "catalog_number" ? "catalogPrefix" : "includes",
+        valueToString(note, column.key),
+        activeFilters[column.key],
+        column.matchMode,
         {
-          multiple: supportsMultipleValues,
-          normalizeFilterValue:
-            key === "denomination"
-              ? normalizeDenominationFilterValue
-              : undefined,
+          multiple: column.multiple,
+          normalizeFilterValue: column.normalize,
         },
       );
     }),
@@ -696,10 +662,10 @@ function filterNotesByFilters(noteList, filterObj) {
 }
 
 function sortNotesBySort(noteList, key, direction) {
-  const sortKey = validSortKeys.has(key) ? key : "id";
+  const sortKey = validSortKeys.has(key) ? key : defaultSortKey;
   const sortDirection = direction === "desc" ? "desc" : "asc";
   return [...noteList].sort((left, right) => {
-    if (sortKey === "id") {
+    if (sortKey === defaultSortKey) {
       const orderResult = noteOrderValue(left) - noteOrderValue(right);
       const result = orderResult || left.id - right.id;
       return sortDirection === "asc" ? result : -result;
@@ -1130,7 +1096,7 @@ function NotesTable({
         return routeSortKey;
       }
     }
-    return initialTableStateRef.current?.sortKey ?? "id";
+    return initialTableStateRef.current?.sortKey ?? defaultSortKey;
   });
   const [sortDirection, setSortDirection] = useState(() => {
     if (initialRouteRef.current?.kind === "slideshow") {
@@ -1221,7 +1187,6 @@ function NotesTable({
 
   const showSelection = true;
   const showReorder = true;
-  const showActions = true;
   // An empty library is not an outage; a failed load keeps its inline
   // `collectionsError` instead.
   const noCollections = isEmptyLibrary({
@@ -1229,11 +1194,6 @@ function NotesTable({
     collectionsError,
     loadingCollections,
   });
-  const visibleColumns = baseColumns;
-  const filterColumnKeys = useMemo(
-    () => visibleColumns.map(([key]) => key),
-    [visibleColumns],
-  );
   const { focusFilter, focusRememberedFilter, getFilterRef, rememberFilter } =
     useFilterFocusMemory(filterColumnKeys);
   const filterRowHeight = Object.keys(columnFilterHeights).length
@@ -1380,7 +1340,7 @@ function NotesTable({
       currentRoute.slideshowSortKey &&
       validSortKeys.has(currentRoute.slideshowSortKey)
         ? currentRoute.slideshowSortKey
-        : "id";
+        : defaultSortKey;
     const contextSortDirection =
       currentRoute.slideshowSortDirection === "desc" ? "desc" : "asc";
 
@@ -1440,11 +1400,7 @@ function NotesTable({
   }
 
   const totalColumnCount =
-    visibleColumns.length +
-    2 +
-    (showSelection ? 1 : 0) +
-    (showReorder ? 1 : 0) +
-    (showActions ? 1 : 0) +
+    tableColumns.length +
     // Trailing gutter column in the header that the rows stop before, so
     // the overlay scrollbar never covers row content.
     (vScroll.visible ? 1 : 0);
@@ -1716,7 +1672,8 @@ function NotesTable({
     () => Object.values(filters).some((value) => String(value).trim()),
     [filters],
   );
-  const isDefaultOrder = sortKey === "id" && sortDirection === "asc";
+  const isDefaultOrder =
+    sortKey === defaultSortKey && sortDirection === "asc";
   const canReorder =
     showReorder && !hasActiveFilters && isDefaultOrder && !reorderLoading;
 
@@ -1734,7 +1691,7 @@ function NotesTable({
   const hasSavedTableState = useMemo(
     () =>
       hasActiveFilters ||
-      sortKey !== "id" ||
+      sortKey !== defaultSortKey ||
       sortDirection !== "asc" ||
       selectedIds.length > 0,
     [hasActiveFilters, selectedIds, sortDirection, sortKey],
@@ -2575,7 +2532,7 @@ function NotesTable({
 
   function resetTableState() {
     setFilters({});
-    setSortKey("id");
+    setSortKey(defaultSortKey);
     setSortDirection("asc");
     if (showSelection) {
       setSelectedIds([]);
@@ -2591,10 +2548,10 @@ function NotesTable({
   function applyTagFilter(tagName, { replace = false } = {}) {
     setFilters((current) => {
       if (replace) {
-        return { ...current, tags: tagName };
+        return { ...current, [tagsColumnKey]: tagName };
       }
 
-      const existingTags = String(current.tags ?? "")
+      const existingTags = String(current[tagsColumnKey] ?? "")
         .split(",")
         .map((token) => token.trim())
         .filter(Boolean);
@@ -2607,14 +2564,14 @@ function NotesTable({
 
       return {
         ...current,
-        tags: nextTags.join(","),
+        [tagsColumnKey]: nextTags.join(","),
       };
     });
 
     resetColumnScroll();
 
     window.requestAnimationFrame(() => {
-      focusFilter("tags");
+      focusFilter(tagsColumnKey);
     });
   }
 
@@ -3544,6 +3501,335 @@ function NotesTable({
     return true;
   }
 
+  // Row cells are rendered from the column model, so column order and the
+  // set of columns live in one place. Each kind keeps its existing markup.
+  function renderReorderCell(note) {
+    return (
+      <td
+        className={`drag-cell${canReorder ? " drag-cell--enabled" : ""}`}
+        onClick={(event) => event.stopPropagation()}
+      >
+        {canReorder ? (
+          <button
+            aria-label={`Move ${note.denomination}`}
+            className="drag-handle"
+            draggable={canReorder}
+            onClick={(event) => event.stopPropagation()}
+            onDragEnd={clearDragState}
+            onDragStart={(event) => {
+              const row = rowElementMapRef.current.get(note.id);
+
+              clearDragPreview();
+              event.stopPropagation();
+              event.dataTransfer.effectAllowed = "move";
+              event.dataTransfer.setData("text/plain", String(note.id));
+
+              if (row) {
+                const preview = row.cloneNode(true);
+                preview.classList.add("table-drag-preview");
+                preview.style.width = `${row.getBoundingClientRect().width}px`;
+                document.body.appendChild(preview);
+                dragPreviewRef.current = preview;
+                event.dataTransfer.setDragImage(preview, 24, 24);
+              }
+
+              setDraggedNoteId(note.id);
+              setDropTarget({
+                noteId: note.id,
+                placement: "before",
+              });
+            }}
+            type="button"
+          >
+            <span className="drag-handle-dots" aria-hidden="true">
+              <span />
+              <span />
+              <span />
+              <span />
+              <span />
+              <span />
+            </span>
+          </button>
+        ) : null}
+      </td>
+    );
+  }
+
+  function renderSelectionCell(note) {
+    return (
+      <td onClick={(event) => event.stopPropagation()}>
+        <input
+          aria-label={`Select ${note.denomination}`}
+          checked={selectedIdSet.has(note.id)}
+          onChange={() => toggleNote(note.id)}
+          type="checkbox"
+        />
+      </td>
+    );
+  }
+
+  function renderThumbnailCell(note, frontThumb, frontPreview) {
+    return (
+      <td>
+        {frontThumb ? (
+          <span
+            className="table-thumb-wrap"
+            onBlur={(event) => {
+              if (!event.currentTarget.contains(event.relatedTarget)) {
+                hideThumbPreview(note.id);
+              }
+            }}
+            onFocus={() => showThumbPreview(note.id)}
+            onMouseEnter={() => showThumbPreview(note.id)}
+            onMouseLeave={() => hideThumbPreview(note.id)}
+            ref={(element) => {
+              if (element) {
+                thumbPreviewElementMapRef.current.set(note.id, element);
+              } else {
+                thumbPreviewElementMapRef.current.delete(note.id);
+              }
+            }}
+          >
+            <img
+              alt={`${note.denomination} front`}
+              className="table-thumb"
+              decoding="async"
+              loading="lazy"
+              src={frontThumb}
+            />
+            {frontPreview ? (
+              <span
+                className={`table-thumb-preview${
+                  thumbPreviewState?.noteId === note.id ? " is-visible" : ""
+                }`}
+                style={{
+                  "--table-thumb-preview-offset": `${
+                    thumbPreviewState?.noteId === note.id
+                      ? thumbPreviewState.offsetY
+                      : 0
+                  }px`,
+                }}
+              >
+                {thumbPreviewState?.noteId === note.id ? (
+                  <img
+                    alt={`${note.denomination} preview`}
+                    src={frontPreview}
+                  />
+                ) : null}
+              </span>
+            ) : null}
+          </span>
+        ) : (
+          <span className="muted">-</span>
+        )}
+      </td>
+    );
+  }
+
+  function renderDataCell(column, note) {
+    if (column.isTags) {
+      return (
+        <td className="tags-column">
+          <TagsCell onApplyFilter={applyTagFilter} tags={note.tags} />
+        </td>
+      );
+    }
+
+    if (column.key === "denomination") {
+      return (
+        <td>
+          {note.url ? (
+            <a
+              draggable={false}
+              href={note.url}
+              onClick={(event) => event.stopPropagation()}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {note.denomination}
+            </a>
+          ) : (
+            note.denomination
+          )}
+        </td>
+      );
+    }
+
+    return <td>{note[column.key]}</td>;
+  }
+
+  function renderActionsCell(note) {
+    return (
+      <td>
+        <div className="inline-actions">
+          <button
+            className="icon-link"
+            data-shortcut="c"
+            onClick={(event) => {
+              event.stopPropagation();
+              void handleCopyNoteDetails(note);
+            }}
+            type="button"
+            aria-label={`Copy ${note.denomination || `note ${note.id}`}`}
+          >
+            <svg
+              aria-hidden="true"
+              height="16"
+              viewBox="0 0 24 24"
+              width="16"
+            >
+              <rect
+                fill="none"
+                height="10"
+                rx="2"
+                stroke="currentColor"
+                strokeWidth="2"
+                width="10"
+                x="9"
+                y="9"
+              />
+              <rect
+                fill="none"
+                height="10"
+                rx="2"
+                stroke="currentColor"
+                strokeWidth="2"
+                width="10"
+                x="5"
+                y="5"
+              />
+            </svg>
+          </button>
+          <button
+            className="icon-link"
+            data-shortcut="a"
+            onClick={(event) => {
+              event.stopPropagation();
+              openCreateNoteBefore(note.id);
+            }}
+            type="button"
+            aria-label={`Insert note before ${note.denomination || `note ${note.id}`}`}
+          >
+            <svg
+              aria-hidden="true"
+              height="16"
+              viewBox="0 0 24 24"
+              width="16"
+            >
+              <path
+                d="M12 5v14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              <path
+                d="M5 12h14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+            </svg>
+          </button>
+          <button
+            className="icon-link"
+            data-shortcut="e"
+            onClick={(event) => {
+              event.stopPropagation();
+              openEditor(note.id);
+            }}
+            type="button"
+            aria-label={`Edit ${note.denomination || `note ${note.id}`}`}
+          >
+            <svg
+              aria-hidden="true"
+              height="16"
+              viewBox="0 0 24 24"
+              width="16"
+            >
+              <path
+                d="M4 20h4l10-10-4-4L4 16v4z"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              <path
+                d="M12 6l4 4"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+            </svg>
+          </button>
+          <button
+            className="icon-link"
+            data-shortcut="d"
+            onClick={(event) => {
+              event.stopPropagation();
+              void handleDeleteNote(note.id);
+            }}
+            type="button"
+            aria-label={`Delete ${note.denomination || `note ${note.id}`}`}
+          >
+            <svg
+              aria-hidden="true"
+              height="16"
+              viewBox="0 0 24 24"
+              width="16"
+            >
+              <path
+                d="M5 7h14"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              <path
+                d="M9 7V5h6v2"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+              <path
+                d="M8 7l1 12h6l1-12"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              />
+            </svg>
+          </button>
+        </div>
+      </td>
+    );
+  }
+
+  function renderTableCell(column, note, frontThumb, frontPreview) {
+    let cell = null;
+
+    switch (column.kind) {
+      case "reorder":
+        cell = renderReorderCell(note);
+        break;
+      case "selection":
+        cell = renderSelectionCell(note);
+        break;
+      case "order":
+        cell = <td>{note.display_order ?? "-"}</td>;
+        break;
+      case "thumbnail":
+        cell = renderThumbnailCell(note, frontThumb, frontPreview);
+        break;
+      case "data":
+        cell = renderDataCell(column, note);
+        break;
+      case "actions":
+        cell = renderActionsCell(note);
+        break;
+      default:
+        break;
+    }
+
+    return cell ? <Fragment key={column.key}>{cell}</Fragment> : null;
+  }
+
   return (
     <section className="screen-stack">
       {showShortcutsHelp ? (
@@ -3931,55 +4217,62 @@ function NotesTable({
                   <table aria-busy={rowsPending || undefined}>
                     <thead>
                       <tr>
-                        {showReorder ? <th className="drag-cell" /> : null}
-                        {showSelection ? (
-                          <th>
-                            <input
-                              aria-label="Select all visible rows"
-                              checked={allVisibleSelected}
-                              onChange={toggleAllVisible}
-                              ref={selectAllRef}
-                              type="checkbox"
-                            />
-                          </th>
-                        ) : null}
-                        <th>
-                          <button
-                            className={`sort-button${sortKey === "id" ? " sort-button--active" : ""}`}
-                            onClick={() => toggleSort("id")}
-                            type="button"
-                          >
-                            ID
-                            {sortKey === "id" ? (
-                              <span>
-                                {sortDirection === "asc" ? " ▲" : " ▼"}
-                              </span>
-                            ) : null}
-                          </button>
-                        </th>
-                        <th>FRONT</th>
-                        {visibleColumns.map(([key, label]) => (
-                          <th
-                            className={
-                              key === "tags" ? "tags-column" : undefined
-                            }
-                            key={key}
-                          >
-                            <button
-                              className={`sort-button${sortKey === key ? " sort-button--active" : ""}`}
-                              onClick={() => toggleSort(key)}
-                              type="button"
+                        {tableColumns.map((column) => {
+                          if (column.kind === "reorder") {
+                            return (
+                              <th className="drag-cell" key={column.key} />
+                            );
+                          }
+
+                          if (column.kind === "selection") {
+                            return (
+                              <th key={column.key}>
+                                <input
+                                  aria-label="Select all visible rows"
+                                  checked={allVisibleSelected}
+                                  onChange={toggleAllVisible}
+                                  ref={selectAllRef}
+                                  type="checkbox"
+                                />
+                              </th>
+                            );
+                          }
+
+                          if (!column.sortable) {
+                            return (
+                              <th
+                                className={
+                                  column.isTags ? "tags-column" : undefined
+                                }
+                                key={column.key}
+                              >
+                                {column.label.toUpperCase()}
+                              </th>
+                            );
+                          }
+
+                          return (
+                            <th
+                              className={
+                                column.isTags ? "tags-column" : undefined
+                              }
+                              key={column.key}
                             >
-                              {label.toUpperCase()}
-                              {sortKey === key ? (
-                                <span>
-                                  {sortDirection === "asc" ? " ▲" : " ▼"}
-                                </span>
-                              ) : null}
-                            </button>
-                          </th>
-                        ))}
-                        {showActions ? <th>ACTIONS</th> : null}
+                              <button
+                                className={`sort-button${sortKey === column.key ? " sort-button--active" : ""}`}
+                                onClick={() => toggleSort(column.key)}
+                                type="button"
+                              >
+                                {column.label.toUpperCase()}
+                                {sortKey === column.key ? (
+                                  <span>
+                                    {sortDirection === "asc" ? " ▲" : " ▼"}
+                                  </span>
+                                ) : null}
+                              </button>
+                            </th>
+                          );
+                        })}
                         {vScroll.visible ? (
                           <th
                             aria-hidden="true"
@@ -3988,54 +4281,61 @@ function NotesTable({
                         ) : null}
                       </tr>
                       <tr>
-                        {showReorder ? <th className="drag-cell" /> : null}
-                        {showSelection ? <th /> : null}
-                        <th />
-                        <th />
-                        {visibleColumns.map(([key, label]) => {
-                          const isTagsColumn = key === "tags";
+                        {tableColumns.map((column) => {
+                          if (column.kind === "reorder") {
+                            return (
+                              <th className="drag-cell" key={column.key} />
+                            );
+                          }
+
+                          if (!column.filterable) {
+                            return <th key={column.key} />;
+                          }
 
                           return (
                             <th
                               className={
-                                isTagsColumn ? "tags-column" : undefined
+                                column.isTags ? "tags-column" : undefined
                               }
-                              key={`${key}-filter`}
+                              key={`${column.key}-filter`}
                             >
-                              {isTagsColumn ? (
+                              {column.isTags ? (
                                 <MultiValueFilterCombobox
-                                  columnLabel={label}
+                                  columnLabel={column.label}
                                   onChange={(nextValue) =>
                                     setFilters((current) => ({
                                       ...current,
-                                      [key]: nextValue,
+                                      [column.key]: nextValue,
                                     }))
                                   }
                                   onArrowDown={handleFilterArrowDown}
-                                  onFocus={() => rememberFilter(key)}
+                                  onFocus={() => rememberFilter(column.key)}
                                   onHeightChange={(height) =>
-                                    reportColumnFilterHeight(key, height)
+                                    reportColumnFilterHeight(
+                                      column.key,
+                                      height,
+                                    )
                                   }
                                   options={allTagNames}
-                                  ref={getFilterRef(key)}
-                                  value={filters[key] ?? ""}
+                                  ref={getFilterRef(column.key)}
+                                  value={filters[column.key] ?? ""}
                                 />
                               ) : (
                                 <input
-                                  aria-label={`Filter ${label}`}
-                                  className={`filter-input${String(filters[key] ?? "").trim() ? " filter-input--active" : ""}`}
-                                  ref={getFilterRef(key)}
-                                  onFocus={() => rememberFilter(key)}
+                                  aria-label={`Filter ${column.label}`}
+                                  className={`filter-input${String(filters[column.key] ?? "").trim() ? " filter-input--active" : ""}`}
+                                  ref={getFilterRef(column.key)}
+                                  onFocus={() => rememberFilter(column.key)}
                                   style={
                                     filterRowHeight
                                       ? { height: filterRowHeight }
                                       : undefined
                                   }
-                                  value={filters[key] ?? ""}
+                                  value={filters[column.key] ?? ""}
                                   onChange={(event) =>
                                     setFilters((current) => ({
                                       ...current,
-                                      [key]: event.target.value,
+                                      [column.key]: event.target.value,
                                     }))
                                   }
                                   onKeyDown={handleFilterArrowDown}
@@ -4044,7 +4344,6 @@ function NotesTable({
                             </th>
                           );
                         })}
-                        {showActions ? <th /> : null}
                         {vScroll.visible ? (
                           <th
                             aria-hidden="true"
@@ -4272,320 +4571,14 @@ function NotesTable({
                               role="button"
                               tabIndex={0}
                             >
-                              {showReorder ? (
-                                <td
-                                  className={`drag-cell${canReorder ? " drag-cell--enabled" : ""}`}
-                                  onClick={(event) => event.stopPropagation()}
-                                >
-                                  {canReorder ? (
-                                    <button
-                                      aria-label={`Move ${note.denomination}`}
-                                      className="drag-handle"
-                                      draggable={canReorder}
-                                      onClick={(event) =>
-                                        event.stopPropagation()
-                                      }
-                                      onDragEnd={clearDragState}
-                                      onDragStart={(event) => {
-                                        const row =
-                                          rowElementMapRef.current.get(note.id);
-
-                                        clearDragPreview();
-                                        event.stopPropagation();
-                                        event.dataTransfer.effectAllowed =
-                                          "move";
-                                        event.dataTransfer.setData(
-                                          "text/plain",
-                                          String(note.id),
-                                        );
-
-                                        if (row) {
-                                          const preview = row.cloneNode(true);
-                                          preview.classList.add(
-                                            "table-drag-preview",
-                                          );
-                                          preview.style.width = `${row.getBoundingClientRect().width}px`;
-                                          document.body.appendChild(preview);
-                                          dragPreviewRef.current = preview;
-                                          event.dataTransfer.setDragImage(
-                                            preview,
-                                            24,
-                                            24,
-                                          );
-                                        }
-
-                                        setDraggedNoteId(note.id);
-                                        setDropTarget({
-                                          noteId: note.id,
-                                          placement: "before",
-                                        });
-                                      }}
-                                      type="button"
-                                    >
-                                      <span
-                                        className="drag-handle-dots"
-                                        aria-hidden="true"
-                                      >
-                                        <span />
-                                        <span />
-                                        <span />
-                                        <span />
-                                        <span />
-                                        <span />
-                                      </span>
-                                    </button>
-                                  ) : null}
-                                </td>
-                              ) : null}
-                              {showSelection ? (
-                                <td
-                                  onClick={(event) => event.stopPropagation()}
-                                >
-                                  <input
-                                    aria-label={`Select ${note.denomination}`}
-                                    checked={selectedIdSet.has(note.id)}
-                                    onChange={() => toggleNote(note.id)}
-                                    type="checkbox"
-                                  />
-                                </td>
-                              ) : null}
-                              <td>{note.display_order ?? "-"}</td>
-                              <td>
-                                {frontThumb ? (
-                                  <span
-                                    className="table-thumb-wrap"
-                                    onBlur={(event) => {
-                                      if (
-                                        !event.currentTarget.contains(
-                                          event.relatedTarget,
-                                        )
-                                      ) {
-                                        hideThumbPreview(note.id);
-                                      }
-                                    }}
-                                    onFocus={() => showThumbPreview(note.id)}
-                                    onMouseEnter={() =>
-                                      showThumbPreview(note.id)
-                                    }
-                                    onMouseLeave={() =>
-                                      hideThumbPreview(note.id)
-                                    }
-                                    ref={(element) => {
-                                      if (element) {
-                                        thumbPreviewElementMapRef.current.set(
-                                          note.id,
-                                          element,
-                                        );
-                                      } else {
-                                        thumbPreviewElementMapRef.current.delete(
-                                          note.id,
-                                        );
-                                      }
-                                    }}
-                                  >
-                                    <img
-                                      alt={`${note.denomination} front`}
-                                      className="table-thumb"
-                                      decoding="async"
-                                      loading="lazy"
-                                      src={frontThumb}
-                                    />
-                                    {frontPreview ? (
-                                      <span
-                                        className={`table-thumb-preview${
-                                          thumbPreviewState?.noteId === note.id
-                                            ? " is-visible"
-                                            : ""
-                                        }`}
-                                        style={{
-                                          "--table-thumb-preview-offset": `${
-                                            thumbPreviewState?.noteId ===
-                                            note.id
-                                              ? thumbPreviewState.offsetY
-                                              : 0
-                                          }px`,
-                                        }}
-                                      >
-                                        {thumbPreviewState?.noteId ===
-                                        note.id ? (
-                                          <img
-                                            alt={`${note.denomination} preview`}
-                                            src={frontPreview}
-                                          />
-                                        ) : null}
-                                      </span>
-                                    ) : null}
-                                  </span>
-                                ) : (
-                                  <span className="muted">-</span>
-                                )}
-                              </td>
-                              <td>{note.catalog_number}</td>
-                              <td>
-                                {note.url ? (
-                                  <a
-                                    draggable={false}
-                                    href={note.url}
-                                    onClick={(event) => event.stopPropagation()}
-                                    rel="noreferrer"
-                                    target="_blank"
-                                  >
-                                    {note.denomination}
-                                  </a>
-                                ) : (
-                                  note.denomination
-                                )}
-                              </td>
-                              <td>{note.issue_date}</td>
-                              <td>{note.grading_company}</td>
-                              <td>{note.grade}</td>
-                              <td>{note.serial}</td>
-                              <td className="tags-column">
-                                <TagsCell
-                                  onApplyFilter={applyTagFilter}
-                                  tags={note.tags}
-                                />
-                              </td>
-                              {showActions ? (
-                                <td>
-                                  <div className="inline-actions">
-                                    <button
-                                      className="icon-link"
-                                      data-shortcut="c"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        void handleCopyNoteDetails(note);
-                                      }}
-                                      type="button"
-                                      aria-label={`Copy ${note.denomination || `note ${note.id}`}`}
-                                    >
-                                      <svg
-                                        aria-hidden="true"
-                                        height="16"
-                                        viewBox="0 0 24 24"
-                                        width="16"
-                                      >
-                                        <rect
-                                          fill="none"
-                                          height="10"
-                                          rx="2"
-                                          stroke="currentColor"
-                                          strokeWidth="2"
-                                          width="10"
-                                          x="9"
-                                          y="9"
-                                        />
-                                        <rect
-                                          fill="none"
-                                          height="10"
-                                          rx="2"
-                                          stroke="currentColor"
-                                          strokeWidth="2"
-                                          width="10"
-                                          x="5"
-                                          y="5"
-                                        />
-                                      </svg>
-                                    </button>
-                                    <button
-                                      className="icon-link"
-                                      data-shortcut="a"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        openCreateNoteBefore(note.id);
-                                      }}
-                                      type="button"
-                                      aria-label={`Insert note before ${note.denomination || `note ${note.id}`}`}
-                                    >
-                                      <svg
-                                        aria-hidden="true"
-                                        height="16"
-                                        viewBox="0 0 24 24"
-                                        width="16"
-                                      >
-                                        <path
-                                          d="M12 5v14"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          strokeWidth="2"
-                                        />
-                                        <path
-                                          d="M5 12h14"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          strokeWidth="2"
-                                        />
-                                      </svg>
-                                    </button>
-                                    <button
-                                      className="icon-link"
-                                      data-shortcut="e"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        openEditor(note.id);
-                                      }}
-                                      type="button"
-                                      aria-label={`Edit ${note.denomination || `note ${note.id}`}`}
-                                    >
-                                      <svg
-                                        aria-hidden="true"
-                                        height="16"
-                                        viewBox="0 0 24 24"
-                                        width="16"
-                                      >
-                                        <path
-                                          d="M4 20h4l10-10-4-4L4 16v4z"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          strokeWidth="2"
-                                        />
-                                        <path
-                                          d="M12 6l4 4"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          strokeWidth="2"
-                                        />
-                                      </svg>
-                                    </button>
-                                    <button
-                                      className="icon-link"
-                                      data-shortcut="d"
-                                      onClick={(event) => {
-                                        event.stopPropagation();
-                                        void handleDeleteNote(note.id);
-                                      }}
-                                      type="button"
-                                      aria-label={`Delete ${note.denomination || `note ${note.id}`}`}
-                                    >
-                                      <svg
-                                        aria-hidden="true"
-                                        height="16"
-                                        viewBox="0 0 24 24"
-                                        width="16"
-                                      >
-                                        <path
-                                          d="M5 7h14"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          strokeWidth="2"
-                                        />
-                                        <path
-                                          d="M9 7V5h6v2"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          strokeWidth="2"
-                                        />
-                                        <path
-                                          d="M8 7l1 12h6l1-12"
-                                          fill="none"
-                                          stroke="currentColor"
-                                          strokeWidth="2"
-                                        />
-                                      </svg>
-                                    </button>
-                                  </div>
-                                </td>
-                              ) : null}
+                              {tableColumns.map((column) =>
+                                renderTableCell(
+                                  column,
+                                  note,
+                                  frontThumb,
+                                  frontPreview,
+                                ),
+                              )}
                             </tr>
                             {showPlaceholderAfter ? (
                               <tr
