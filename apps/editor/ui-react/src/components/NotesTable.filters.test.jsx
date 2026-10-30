@@ -163,6 +163,29 @@ describe("NotesTable filters", () => {
     ).toBeInTheDocument();
   });
 
+  test("a tags filter counts once and reads as one chip", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = await openFilters();
+
+    const tags = await screen.findByLabelText("Filter Tags");
+    await user.type(tags, "Silver Certificate{Enter}");
+    expect(
+      await screen.findByRole("button", { name: "Filters (1 active)" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Tags: Silver Certificate")).toBeInTheDocument();
+
+    await user.type(await screen.findByLabelText("Filter Tags"), "Star Note{Enter}");
+
+    expect(
+      screen.getByRole("button", { name: "Filters (1 active)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("Tags: Silver Certificate, Star Note"),
+    ).toBeInTheDocument();
+  });
+
   test("the filter row stays open after closing the toggle while a filter has a value", async () => {
     renderTable();
 
