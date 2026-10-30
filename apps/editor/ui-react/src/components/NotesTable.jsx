@@ -2245,15 +2245,26 @@ function NotesTable({
     }
 
     scroller.scrollLeft = left;
-    syncColumnPanShadow(scroller);
+    syncColumnScroll(scroller);
   }
 
-  // The pinned block's edge shadow is a scroll state, not a hover state: it
-  // only paints once the columns have moved underneath. Kept in sync from the
-  // scroller's scroll event and from every programmatic pan, because jsdom's
-  // direct scrollLeft writes never dispatch a scroll event.
-  function syncColumnPanShadow(scroller = tableScrollXRef.current) {
-    setColumnsScrolled(isColumnPanShadowVisible(scroller?.scrollLeft));
+  // The pinned block's edge shadow and its left offsets are scroll state, not
+  // hover state: they only apply once the columns have moved underneath. Kept
+  // in sync from the scroller's scroll event and from every programmatic pan,
+  // because jsdom's direct scrollLeft writes never dispatch a scroll event.
+  //
+  // Every pinned cell's `left` adds this offset to its column offset. The
+  // table lives inside the vertical scroller, which is also a non-scrolling
+  // horizontal scroll container, so `sticky` resolves against that inner box
+  // and needs the pan offset folded in (see .table-sticky-cell in styles.css).
+  function syncColumnScroll(scroller = tableScrollXRef.current) {
+    const scrollLeft = scroller?.scrollLeft ?? 0;
+
+    scroller?.style.setProperty(
+      "--table-sticky-scroll-x",
+      `${scrollLeft}px`,
+    );
+    setColumnsScrolled(isColumnPanShadowVisible(scrollLeft));
   }
 
   function panColumnsBy(delta) {
@@ -2290,7 +2301,7 @@ function NotesTable({
 
     if (scroller) {
       scroller.scrollLeft = 0;
-      syncColumnPanShadow(scroller);
+      syncColumnScroll(scroller);
     }
   }
 
@@ -2360,7 +2371,7 @@ function NotesTable({
       clientX: event.clientX,
       max: scroller.scrollWidth - scroller.clientWidth,
     });
-    syncColumnPanShadow(scroller);
+    syncColumnScroll(scroller);
   }
 
   function handleColumnPanPointerEnd(event) {
@@ -4045,7 +4056,10 @@ function NotesTable({
       ]
         .filter(Boolean)
         .join(" "),
-      style: { left: stickyLeftByColumn[column.key] },
+      // The stylesheet adds the scroller's pan offset to this value.
+      style: {
+        "--table-sticky-left": `${stickyLeftByColumn[column.key] ?? 0}px`,
+      },
     };
   }
 
@@ -4540,7 +4554,7 @@ function NotesTable({
                 onPointerDown={handleColumnPanPointerDown}
                 onPointerMove={handleColumnPanPointerMove}
                 onPointerUp={handleColumnPanPointerEnd}
-                onScroll={() => syncColumnPanShadow()}
+                onScroll={() => syncColumnScroll()}
                 ref={tableScrollXRef}
               >
                 <div className="table-scroll-y" ref={tableScrollYRef}>

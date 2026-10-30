@@ -171,8 +171,12 @@ describe("table styles", () => {
     expect(cell[1]).toMatch(/position:\s*sticky/);
     expect(cell[1]).toMatch(/z-index:\s*2/);
     expect(cell[1]).toMatch(/background-color:\s*var\(--surface\)/);
-    // The left offset is written by the renderer from stickyOffsets().
-    expect(cell[1]).not.toMatch(/left:/);
+    // The per-column offset is written by the renderer from stickyOffsets();
+    // the stylesheet adds the scroller's pan offset to it because the table's
+    // nearest scrollport is the inner, non-scrolling horizontal container.
+    expect(cell[1]).toMatch(
+      /left:\s*calc\(\s*var\(--table-sticky-left,?\s*0px\)\s*\+\s*var\(--table-sticky-scroll-x,?\s*0px\)/,
+    );
   });
 
   // The sticky header owns the top of the table: pinned body cells stay

@@ -130,9 +130,12 @@ describe("NotesTable pinned identity columns", () => {
     const thumbnail = screen.getByAltText("$1 front").closest("td");
     const catalog = screen.getByText("Fr. 2300").closest("td");
 
-    expect(selection.style.left).toBe("0px");
-    expect(thumbnail.style.left).toBe("44px");
-    expect(catalog.style.left).toBe("108px");
+    // The stylesheet turns this offset into `left` (plus the pan offset).
+    expect(selection.style.getPropertyValue("--table-sticky-left")).toBe("0px");
+    expect(thumbnail.style.getPropertyValue("--table-sticky-left")).toBe(
+      "44px",
+    );
+    expect(catalog.style.getPropertyValue("--table-sticky-left")).toBe("108px");
 
     // Only the right-most pinned cell carries the pan-shadow marker.
     expect(catalog.classList.contains("table-sticky-end")).toBe(true);
@@ -143,10 +146,16 @@ describe("NotesTable pinned identity columns", () => {
     renderTable();
     await screen.findByText("Fr. 2300");
 
-    expect(screen.getByText("FRONT").closest("th").style.left).toBe("44px");
-    expect(screen.getByText("CATALOG #").closest("th").style.left).toBe(
-      "108px",
-    );
+    expect(
+      screen.getByText("FRONT").closest("th").style.getPropertyValue(
+        "--table-sticky-left",
+      ),
+    ).toBe("44px");
+    expect(
+      screen.getByText("CATALOG #").closest("th").style.getPropertyValue(
+        "--table-sticky-left",
+      ),
+    ).toBe("108px");
   });
 
   test("shows the pan shadow only while the columns are scrolled", async () => {
@@ -159,10 +168,17 @@ describe("NotesTable pinned identity columns", () => {
     scroller.scrollLeft = 120;
     fireEvent.scroll(scroller);
     expect(scroller.classList.contains("is-scrolled-x")).toBe(true);
+    // The pinned cells' `left` is offset by the scroller's pan position.
+    expect(
+      scroller.style.getPropertyValue("--table-sticky-scroll-x"),
+    ).toBe("120px");
 
     scroller.scrollLeft = 0;
     fireEvent.scroll(scroller);
     expect(scroller.classList.contains("is-scrolled-x")).toBe(false);
+    expect(
+      scroller.style.getPropertyValue("--table-sticky-scroll-x"),
+    ).toBe("0px");
   });
 
   test("keeps the shadow state in sync when the keyboard pans", async () => {
@@ -174,6 +190,9 @@ describe("NotesTable pinned identity columns", () => {
     await user.keyboard("l");
     expect(scroller.scrollLeft).toBe(200);
     expect(scroller.classList.contains("is-scrolled-x")).toBe(true);
+    expect(
+      scroller.style.getPropertyValue("--table-sticky-scroll-x"),
+    ).toBe("200px");
 
     await user.keyboard("h");
     expect(scroller.scrollLeft).toBe(0);

@@ -2897,6 +2897,12 @@ td {
    the renderer from stickyOffsets(), so it always reflects the visible pinned
    columns and a hidden column leaves no gap.
 
+   The table sits inside a vertical scroller that is also a (non-scrolling)
+   horizontal scroll container, so `sticky` resolves against that inner box,
+   which travels with the pan instead of staying put. The scroller publishes
+   its scrollLeft as --table-sticky-scroll-x; adding it to the offset makes the
+   pin exact, while sticky still handles the moment each cell starts to pin.
+
    The cells are opaque: the scrolling columns pass beneath them, so anything
    translucent would show the content underneath. Row tints are layered as a
    gradient over the opaque surface for the same reason (see below).
@@ -2907,6 +2913,9 @@ td {
 .table-sticky-cell {
   position: sticky;
   z-index: 2;
+  left: calc(
+    var(--table-sticky-left, 0px) + var(--table-sticky-scroll-x, 0px)
+  );
   background-color: var(--surface);
 }
 
