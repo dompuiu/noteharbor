@@ -3190,6 +3190,90 @@ thead tr:first-child th {
   color: var(--text);
 }
 
+/* The Filters toggle sits right after search and opens the on-demand filter
+   row. The badge reports how many column filters are active. */
+.table-filter-toggle {
+  gap: 6px;
+}
+
+.table-filter-toggle--open {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.table-filter-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-strong);
+  color: var(--accent-ink);
+  font-size: 0.7rem;
+  font-weight: 800;
+}
+
+/* Active filters sit beside the toggle as removable chips, so a filtered view
+   is visible without opening the row. */
+.table-filter-chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.table-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  height: 26px;
+  padding: 0 4px 0 10px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 0.76rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.table-filter-chip-remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: inherit;
+  font-size: 0.95rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.table-filter-chip-remove:hover {
+  background: var(--accent);
+  color: var(--accent-ink);
+}
+
+.table-filter-clear-all {
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.76rem;
+  padding: 2px 6px;
+  text-decoration: underline;
+  white-space: nowrap;
+}
+
+.table-filter-clear-all:hover {
+  color: var(--accent-strong);
+}
+
 .table-helper-text {
   margin: 0;
   display: flex;
