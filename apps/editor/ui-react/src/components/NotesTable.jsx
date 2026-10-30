@@ -3759,21 +3759,25 @@ function NotesTable({
     }
 
     if (column.key === "denomination") {
+      // The denomination is the row's primary action: it opens the Note
+      // slideshow through the router. The source URL lives in the row menu.
       return (
         <td>
-          {note.url ? (
-            <a
-              draggable={false}
-              href={note.url}
-              onClick={(event) => event.stopPropagation()}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {note.denomination}
-            </a>
-          ) : (
-            note.denomination
-          )}
+          <a
+            draggable={false}
+            href={buildTableHash(slideshowRoute(note.id))}
+            onClick={(event) => {
+              if (event.defaultPrevented) {
+                return;
+              }
+
+              event.preventDefault();
+              event.stopPropagation();
+              openSlideshow(note.id);
+            }}
+          >
+            {note.denomination}
+          </a>
         </td>
       );
     }
@@ -4330,13 +4334,17 @@ function NotesTable({
                         {tableColumns.map((column) => {
                           if (column.kind === "reorder") {
                             return (
-                              <th className="drag-cell" key={column.key} />
+                              <th
+                                className="drag-cell"
+                                key={column.key}
+                                scope="col"
+                              />
                             );
                           }
 
                           if (column.kind === "selection") {
                             return (
-                              <th key={column.key}>
+                              <th key={column.key} scope="col">
                                 <input
                                   aria-label="Select all visible rows"
                                   checked={allVisibleSelected}
@@ -4355,6 +4363,7 @@ function NotesTable({
                                   column.isTags ? "tags-column" : undefined
                                 }
                                 key={column.key}
+                                scope="col"
                               >
                                 {column.label.toUpperCase()}
                               </th>
@@ -4367,6 +4376,7 @@ function NotesTable({
                                 column.isTags ? "tags-column" : undefined
                               }
                               key={column.key}
+                              scope="col"
                             >
                               <button
                                 className={`sort-button${sortKey === column.key ? " sort-button--active" : ""}`}
@@ -4387,6 +4397,7 @@ function NotesTable({
                           <th
                             aria-hidden="true"
                             className="table-gutter-cell"
+                            scope="col"
                           />
                         ) : null}
                       </tr>
@@ -4395,12 +4406,16 @@ function NotesTable({
                           {tableColumns.map((column) => {
                             if (column.kind === "reorder") {
                               return (
-                                <th className="drag-cell" key={column.key} />
+                                <th
+                                  className="drag-cell"
+                                  key={column.key}
+                                  scope="col"
+                                />
                               );
                             }
 
                             if (!column.filterable) {
-                              return <th key={column.key} />;
+                              return <th key={column.key} scope="col" />;
                             }
 
                             return (
@@ -4409,6 +4424,7 @@ function NotesTable({
                                   column.isTags ? "tags-column" : undefined
                                 }
                                 key={`${column.key}-filter`}
+                                scope="col"
                               >
                                 {column.isTags ? (
                                   <MultiValueFilterCombobox
@@ -4459,6 +4475,7 @@ function NotesTable({
                             <th
                               aria-hidden="true"
                               className="table-gutter-cell"
+                              scope="col"
                             />
                           ) : null}
                         </tr>
@@ -4658,7 +4675,20 @@ function NotesTable({
                                       : "after";
                                 void handleReorder(note.id, nextPlacement);
                               }}
-                              onClick={() => {
+                              onClick={(event) => {
+                                // Controls inside the row (the checkbox, drag
+                                // handle, links and the actions button) handle
+                                // their own activation. A click that reaches
+                                // the row itself, or one of its plain cells,
+                                // opens the note.
+                                if (
+                                  event.target.closest(
+                                    "a, button, input, select, textarea",
+                                  )
+                                ) {
+                                  return;
+                                }
+
                                 openSlideshow(note.id);
                               }}
                               onKeyDown={(event) => {
@@ -4680,7 +4710,6 @@ function NotesTable({
                                   openSlideshow(note.id);
                                 }
                               }}
-                              role="button"
                               tabIndex={0}
                             >
                               {tableColumns.map((column) =>
