@@ -1,5 +1,6 @@
 import { describe, expect, test } from "vitest";
 import {
+  defaultSortKey,
   filterColumnKeys,
   getTableColumn,
   normalizeDenominationFilterValue,
@@ -107,6 +108,7 @@ describe("table column model", () => {
     expect(validSortKeys.has("thumbnail")).toBe(false);
     expect(validSortKeys.has("reorder")).toBe(false);
     expect(getTableColumn("id").kind).toBe("order");
+    expect(defaultSortKey).toBe("id");
   });
 
   test("shares the slideshow filter parameters with the filter columns", () => {

@@ -170,6 +170,18 @@ export const dataColumns = tableColumns.filter(
   (column) => column.kind === "data",
 );
 
+export const displayOrderColumn = tableColumns.find(
+  (column) => column.kind === "order",
+);
+
+// Display order is the table's default sort and still sorts under the `id`
+// key, exactly as it did before the column model.
+export const defaultSortKey = displayOrderColumn.key;
+
+export const tagsColumn = tableColumns.find((column) => column.isTags);
+
+export const tagsColumnKey = tagsColumn.key;
+
 export const filterColumns = tableColumns.filter((column) => column.filterable);
 
 export const filterColumnKeys = filterColumns.map((column) => column.key);
