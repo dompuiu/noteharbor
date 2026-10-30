@@ -40,6 +40,7 @@ import {
   filterColumnKeys,
   filterColumns,
   getTableColumn,
+  matchesSearchQuery,
   slideshowFilterKeys,
   tableColumns,
   tagsColumnKey,
@@ -679,9 +680,17 @@ function sortNotesBySort(noteList, key, direction) {
   });
 }
 
-function applyTableView(noteList, filterObj, key, direction) {
+function applyTableView(
+  noteList,
+  filterObj,
+  key,
+  direction,
+  query = "",
+) {
   return sortNotesBySort(
-    filterNotesByFilters(noteList, filterObj),
+    filterNotesByFilters(noteList, filterObj).filter((note) =>
+      matchesSearchQuery(note, query),
+    ),
     key,
     direction,
   );
@@ -797,6 +806,7 @@ function emptyTableRoute() {
     previewKind: null,
     slideshowCollectionId: null,
     slideshowFilters: null,
+    slideshowQuery: null,
     slideshowSortDirection: null,
     slideshowSortKey: null,
   };
@@ -821,6 +831,7 @@ function hasSlideshowContext(route) {
     route.kind === "slideshow" &&
     (route.slideshowCollectionId != null ||
       route.slideshowFilters != null ||
+      route.slideshowQuery != null ||
       route.slideshowSortKey != null ||
       route.slideshowSortDirection != null),
   );
@@ -861,6 +872,11 @@ function parseSlideshowSortDirection(value) {
     return normalized;
   }
   return null;
+}
+
+function parseSlideshowQuery(value) {
+  const normalized = String(value ?? "").trim();
+  return normalized ? normalized : null;
 }
 
 function parseTableHash(hash) {
@@ -914,6 +930,7 @@ function parseTableHash(hash) {
       previewKind,
       slideshowCollectionId: parsePositiveInteger(params.get("collection")),
       slideshowFilters: parseSlideshowFilters(params),
+      slideshowQuery: parseSlideshowQuery(params.get("q")),
       slideshowSortDirection: parseSlideshowSortDirection(params.get("dir")),
       slideshowSortKey: parseSlideshowSortKey(params.get("sort")),
     };
@@ -958,6 +975,10 @@ function buildTableHash(route) {
 
     if (Number.isInteger(route.slideshowCollectionId)) {
       params.set("collection", String(route.slideshowCollectionId));
+    }
+
+    if (route.slideshowQuery) {
+      params.set("q", String(route.slideshowQuery));
     }
 
     if (route.slideshowFilters) {
@@ -1032,6 +1053,7 @@ function NotesTable({
   const editorOverlayRef = useRef(null);
   const focusedRowIdRef = useRef(null);
   const tableFocusAnchorRef = useRef(null);
+  const searchInputRef = useRef(null);
   const currentRouteRef = useRef(null);
   const pendingRowFocusNoteIdRef = useRef(null);
   const focusRestoreNoteIdRef = useRef(null);
@@ -1089,6 +1111,15 @@ function NotesTable({
       }
     }
     return initialTableStateRef.current?.filters ?? {};
+  });
+  // The search query is view state only: it is not written to saved table
+  // state, and it is cleared with the collection. A cold-opened slideshow URL
+  // carries the query so closing the slideshow returns to the searched table.
+  const [query, setQuery] = useState(() => {
+    if (initialRouteRef.current?.kind === "slideshow") {
+      return initialRouteRef.current.slideshowQuery ?? "";
+    }
+    return "";
   });
   const [sortKey, setSortKey] = useState(() => {
     if (initialRouteRef.current?.kind === "slideshow") {
@@ -1224,8 +1255,8 @@ function NotesTable({
   // the filter reset below, which answers only to collection changes).
   currentRouteRef.current = currentRoute;
   const orderedNotes = useMemo(
-    () => applyTableView(notes, filters, sortKey, sortDirection),
-    [filters, notes, sortDirection, sortKey],
+    () => applyTableView(notes, filters, sortKey, sortDirection, query),
+    [filters, notes, query, sortDirection, sortKey],
   );
   // The painted row list lags one step behind the filter state: inputs,
   // chips, and counts stay instant while the heavy row re-mount happens in
@@ -1350,6 +1381,7 @@ function NotesTable({
       contextFilters,
       contextSortKey,
       contextSortDirection,
+      currentRoute.slideshowQuery ?? "",
     );
   }, [currentRoute, notes]);
 
@@ -1370,6 +1402,7 @@ function NotesTable({
       return {
         slideshowCollectionId: currentRoute.slideshowCollectionId,
         slideshowFilters: currentRoute.slideshowFilters,
+        slideshowQuery: currentRoute.slideshowQuery,
         slideshowSortDirection: currentRoute.slideshowSortDirection,
         slideshowSortKey: currentRoute.slideshowSortKey,
       };
@@ -1380,6 +1413,7 @@ function NotesTable({
         ? collectionId
         : null,
       slideshowFilters: { ...filters },
+      slideshowQuery: query.trim() || null,
       slideshowSortDirection: sortDirection,
       slideshowSortKey: sortKey,
     };
@@ -1473,6 +1507,7 @@ function NotesTable({
     }
 
     setFilters({});
+    setQuery("");
   }, [collectionId]);
 
   useEffect(() => {
@@ -1601,6 +1636,7 @@ function NotesTable({
           previewKind: null,
           slideshowCollectionId: currentRoute.slideshowCollectionId,
           slideshowFilters: currentRoute.slideshowFilters,
+          slideshowQuery: currentRoute.slideshowQuery,
           slideshowSortDirection: currentRoute.slideshowSortDirection,
           slideshowSortKey: currentRoute.slideshowSortKey,
         },
@@ -1673,10 +1709,15 @@ function NotesTable({
     () => Object.values(filters).some((value) => String(value).trim()),
     [filters],
   );
+  const hasActiveQuery = Boolean(query.trim());
   const isDefaultOrder =
     sortKey === defaultSortKey && sortDirection === "asc";
   const canReorder =
-    showReorder && !hasActiveFilters && isDefaultOrder && !reorderLoading;
+    showReorder &&
+    !hasActiveFilters &&
+    !hasActiveQuery &&
+    isDefaultOrder &&
+    !reorderLoading;
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const allVisibleSelected = useMemo(
@@ -1692,10 +1733,11 @@ function NotesTable({
   const hasSavedTableState = useMemo(
     () =>
       hasActiveFilters ||
+      hasActiveQuery ||
       sortKey !== defaultSortKey ||
       sortDirection !== "asc" ||
       selectedIds.length > 0,
-    [hasActiveFilters, selectedIds, sortDirection, sortKey],
+    [hasActiveFilters, hasActiveQuery, selectedIds, sortDirection, sortKey],
   );
   const rowVirtualizer = useVirtualizer({
     count: deferredOrderedNotes.length,
@@ -1725,7 +1767,7 @@ function NotesTable({
 
   useEffect(() => {
     rowVirtualizer.scrollToOffset(0);
-  }, [filters, rowVirtualizer, sortDirection, sortKey]);
+  }, [filters, query, rowVirtualizer, sortDirection, sortKey]);
 
   // Switching collections opens a fresh table view at its first fields and
   // first rows, not where the previous collection was left. The notes load
@@ -1760,7 +1802,7 @@ function NotesTable({
     pendingSlideshowLandingRef.current = null;
     lastRowFocusNoteIdRef.current = null;
     clearRowCursor();
-  }, [clearRowCursor, collectionId, filters, sortDirection, sortKey]);
+  }, [clearRowCursor, collectionId, filters, query, sortDirection, sortKey]);
 
   useEffect(() => {
     // Land a focus request that was made while the list was still settling.
@@ -2328,7 +2370,7 @@ function NotesTable({
 
       if (event.key === "/" && !editable) {
         event.preventDefault();
-        focusRememberedFilter();
+        searchInputRef.current?.focus();
         return;
       }
 
@@ -2533,11 +2575,29 @@ function NotesTable({
 
   function resetTableState() {
     setFilters({});
+    setQuery("");
     setSortKey(defaultSortKey);
     setSortDirection("asc");
     if (showSelection) {
       setSelectedIds([]);
     }
+  }
+
+  function clearSearch() {
+    setQuery("");
+    searchInputRef.current?.focus();
+  }
+
+  function handleSearchKeyDown(event) {
+    if (event.key !== "Escape") {
+      return;
+    }
+
+    // Escape leaves the field without clearing the query or reaching the
+    // table's row/anchor Escape handling, which only applies elsewhere.
+    event.preventDefault();
+    event.stopPropagation();
+    event.currentTarget.blur();
   }
 
   function reportColumnFilterHeight(key, height) {
@@ -4086,6 +4146,45 @@ function NotesTable({
         {!loading && !loadError ? (
           <>
             <div className="toolbar-row toolbar-row--table-controls">
+              <div className="table-search">
+                <svg
+                  aria-hidden="true"
+                  className="table-search-icon"
+                  fill="none"
+                  focusable="false"
+                  stroke="currentColor"
+                  strokeLinecap="round"
+                  strokeWidth="1.9"
+                  viewBox="0 0 24 24"
+                >
+                  <circle cx="11" cy="11" r="7" />
+                  <path d="m20 20-3.5-3.5" />
+                </svg>
+                <input
+                  aria-label="Search notes"
+                  autoComplete="off"
+                  className="table-search-input"
+                  onChange={(event) => setQuery(event.target.value)}
+                  onKeyDown={handleSearchKeyDown}
+                  placeholder="Search serial, catalog, denomination, company, grade, date, tags…"
+                  ref={searchInputRef}
+                  type="search"
+                  value={query}
+                />
+                {query ? (
+                  <button
+                    aria-label="Clear search"
+                    className="table-search-clear"
+                    onClick={clearSearch}
+                    title="Clear search"
+                    type="button"
+                  >
+                    &times;
+                  </button>
+                ) : (
+                  <kbd className="table-search-hint">/</kbd>
+                )}
+              </div>
               <div className="inline-select-group">
                 {hasSavedTableState ? (
                   <button
