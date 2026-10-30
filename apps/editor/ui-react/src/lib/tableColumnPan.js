@@ -37,3 +37,12 @@ export function clampColumnScrollLeft(current, delta, max) {
 export function columnPanScrollLeft({ startScrollLeft, startX, clientX, max }) {
   return clampColumnScrollLeft(startScrollLeft, -(clientX - startX), max);
 }
+
+// How far the table must pan before the pinned identity block shows its edge
+// shadow. Sub-pixel offsets left over from a smooth scroll at rest must not
+// paint a shadow, matching the prototype's 2px guard.
+export const COLUMN_PAN_SHADOW_THRESHOLD_PX = 2;
+
+export function isColumnPanShadowVisible(scrollLeft) {
+  return Number(scrollLeft) > COLUMN_PAN_SHADOW_THRESHOLD_PX;
+}
