@@ -1461,12 +1461,6 @@ function NotesTable({
     };
   }
 
-  const totalColumnCount =
-    tableColumns.length +
-    // Trailing gutter column in the header that the rows stop before, so
-    // the overlay scrollbar never covers row content.
-    (vScroll.visible ? 1 : 0);
-
   async function loadNotes() {
     if (!Number.isInteger(collectionId)) {
       setNotes([]);
@@ -1750,6 +1744,21 @@ function NotesTable({
     [filters],
   );
   const filterRowOpen = filtersOpen || hasActiveFilters;
+  // Permanent columns are always rendered; a hideable column is rendered only
+  // while the collector's per-collection choice includes it.
+  const visibleColumns = useMemo(
+    () =>
+      tableColumns.filter(
+        (column) =>
+          !column.hideable || visibleColumnKeys.includes(column.key),
+      ),
+    [visibleColumnKeys],
+  );
+  const totalColumnCount =
+    visibleColumns.length +
+    // Trailing gutter column in the header that the rows stop before, so
+    // the overlay scrollbar never covers row content.
+    (vScroll.visible ? 1 : 0);
   const hasActiveQuery = Boolean(query.trim());
   const isDefaultOrder =
     sortKey === defaultSortKey && sortDirection === "asc";
@@ -2701,6 +2710,16 @@ function NotesTable({
   function hideThumbPreview(noteId) {
     setThumbPreviewState((current) =>
       current?.noteId === noteId ? null : current,
+    );
+  }
+
+  function toggleColumnVisibility(key) {
+    setVisibleColumnKeys((current) =>
+      current.includes(key)
+        ? current.filter((currentKey) => currentKey !== key)
+        : hideableColumnKeys.filter(
+            (currentKey) => currentKey === key || current.includes(currentKey),
+          ),
     );
   }
 
@@ -4295,6 +4314,7 @@ function NotesTable({
               ) : null}
               <ColumnPicker
                 columns={hideableColumns}
+                onToggle={toggleColumnVisibility}
                 visibleColumnKeys={visibleColumnKeys}
               />
               <div className="inline-select-group">
@@ -4346,7 +4366,7 @@ function NotesTable({
                   <table aria-busy={rowsPending || undefined}>
                     <thead>
                       <tr>
-                        {tableColumns.map((column) => {
+                        {visibleColumns.map((column) => {
                           if (column.kind === "reorder") {
                             return (
                               <th
@@ -4418,7 +4438,7 @@ function NotesTable({
                       </tr>
                       {filterRowOpen ? (
                         <tr id="table-filter-row">
-                          {tableColumns.map((column) => {
+                          {visibleColumns.map((column) => {
                             if (column.kind === "reorder") {
                               return (
                                 <th
@@ -4727,7 +4747,7 @@ function NotesTable({
                               }}
                               tabIndex={0}
                             >
-                              {tableColumns.map((column) =>
+                              {visibleColumns.map((column) =>
                                 renderTableCell(
                                   column,
                                   note,

@@ -167,4 +167,29 @@ describe("NotesTable columns", () => {
     ).not.toBeInTheDocument();
     expect(button).toHaveAttribute("aria-expanded", "false");
   });
+
+  test("unchecking a column hides its header and every cell", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const { user } = await openPicker();
+
+    await user.click(columnCheckbox("Serial"));
+
+    expect(columnCheckbox("Serial")).not.toBeChecked();
+    expect(
+      screen.queryByRole("columnheader", { name: "SERIAL" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("SER-1")).not.toBeInTheDocument();
+    expect(screen.queryByText("SER-2")).not.toBeInTheDocument();
+    expect(screen.getByText("AAAA")).toBeInTheDocument();
+
+    await user.click(columnCheckbox("Serial"));
+
+    expect(columnCheckbox("Serial")).toBeChecked();
+    expect(
+      await screen.findByRole("columnheader", { name: "SERIAL" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("SER-1")).toBeInTheDocument();
+  });
 });

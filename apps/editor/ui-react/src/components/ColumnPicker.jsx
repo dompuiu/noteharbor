@@ -4,7 +4,7 @@ import { createPortal } from "react-dom";
 // The Columns toolbar control and its checkbox menu. The menu is portalled
 // into <body> so the table's scroll containers cannot clip it; the caller owns
 // which columns are visible and what toggling one means.
-export function ColumnPicker({ columns, visibleColumnKeys }) {
+export function ColumnPicker({ columns, onToggle, visibleColumnKeys }) {
   const [open, setOpen] = useState(false);
   const buttonRef = useRef(null);
   const menuId = useId();
@@ -49,7 +49,7 @@ export function ColumnPicker({ columns, visibleColumnKeys }) {
                 <label className="table-columns-option" key={column.key}>
                   <input
                     checked={visibleColumnKeys.includes(column.key)}
-                    readOnly
+                    onChange={() => onToggle(column.key)}
                     type="checkbox"
                   />
                   <span>{column.label}</span>
