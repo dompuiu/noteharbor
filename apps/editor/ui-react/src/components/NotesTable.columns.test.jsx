@@ -392,4 +392,23 @@ describe("NotesTable columns", () => {
     expect(button).toHaveFocus();
     expect(button).toHaveAttribute("aria-expanded", "false");
   });
+
+  test("Reset view restores every column", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const { user } = await openPicker();
+    await user.click(columnCheckbox("Serial"));
+    await user.keyboard("{Escape}");
+
+    const reset = await screen.findByRole("button", {
+      name: "Reset filters, sorting, and selection",
+    });
+    await user.click(reset);
+
+    expect(
+      await screen.findByRole("columnheader", { name: "SERIAL" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("SER-1")).toBeInTheDocument();
+  });
 });
