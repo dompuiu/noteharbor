@@ -36,7 +36,7 @@ describe("table column model", () => {
     expect(tableColumns.map((column) => column.label)).toEqual([
       "",
       "",
-      "ID",
+      "#",
       "FRONT",
       "Catalog #",
       "Denomination",

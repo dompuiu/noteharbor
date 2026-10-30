@@ -2720,9 +2720,31 @@ td {
   padding: 8px 10px;
   border-bottom: 1px solid var(--border-soft);
   vertical-align: middle;
-  text-align: center;
+  text-align: left;
   font-size: 0.84rem;
   font-variant-numeric: tabular-nums;
+}
+
+/* Column alignment is emitted from the column model: text data left,
+   display order right, control columns centered. The base cell alignment is
+   left, so an unclassified column still reads as a data column. */
+.align-left {
+  text-align: left;
+}
+
+.align-right {
+  text-align: right;
+}
+
+.align-center {
+  text-align: center;
+}
+
+/* Body density: 14px text in a 48px row. The virtualizer's estimate matches
+   (rowHeightEstimate), and real measurements still win once rows mount. */
+tbody td {
+  height: 48px;
+  font-size: 14px;
 }
 
 .table-empty-row td {
@@ -2759,11 +2781,18 @@ td {
 
 .table-thumb {
   display: block;
-  width: 36px;
-  height: 24px;
+  width: 48px;
+  height: 28px;
   object-fit: contain;
   border-radius: 4px;
   background: rgba(255, 255, 255, 0.65);
+}
+
+/* 48px of image plus 8px of padding on each side fills the model's 64px
+   thumbnail column exactly, so the pinned offsets stay aligned. */
+.table-thumb-cell {
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 .table-thumb-wrap {
@@ -2997,7 +3026,7 @@ thead tr:first-child th {
   display: inline-flex;
   width: 100%;
   align-items: center;
-  justify-content: center;
+  justify-content: flex-start;
   gap: 4px;
   white-space: nowrap;
   border: 0;
@@ -3008,6 +3037,26 @@ thead tr:first-child th {
   border-radius: 12px;
   color: inherit;
   transition: background 0.15s ease;
+}
+
+/* The button spans the cell, so its label follows the column's alignment
+   rather than always centering. */
+.align-center .sort-button {
+  justify-content: center;
+}
+
+.align-right .sort-button {
+  justify-content: flex-end;
+}
+
+/* Decorative sort direction marker: only the active column renders it. */
+.sort-chevron {
+  flex: 0 0 auto;
+  transition: transform 0.15s ease;
+}
+
+th[aria-sort="descending"] .sort-chevron {
+  transform: rotate(180deg);
 }
 
 /* The sorted column stands out in accent-strong while the rest stay
@@ -3183,6 +3232,16 @@ thead tr:first-child th {
 .inline-select-group .select-input {
   width: auto;
   min-width: 88px;
+}
+
+/* The Reset view slot keeps its width while the control is hidden, so a
+   non-default view does not shift the toolbar when the button appears. */
+.table-reset-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  min-width: 7rem;
 }
 
 .toolbar-row--table-controls {
@@ -3424,6 +3483,23 @@ thead tr:first-child th {
   align-self: center;
   color: var(--text-muted);
   font-size: 0.8rem;
+}
+
+/* The hint is a real flex child of the shell, after the rows and the bulk bar,
+   so it takes its own band at the foot instead of overlayering them. It stays
+   a single muted, non-interactive line. */
+.table-footer-hint {
+  display: block;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 6px 14px;
+  border-top: 1px solid var(--border-soft);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .drag-cell {
@@ -4824,7 +4900,8 @@ kbd {
   color: var(--on-dark-text);
 }
 
-.table-helper-text kbd {
+.table-helper-text kbd,
+.table-footer-hint kbd {
   margin: 0 1px;
 }
 

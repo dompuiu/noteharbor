@@ -67,7 +67,7 @@ export function HomeHero() {
 
 const tableStateStorageKey = "noteharbor.notesTableState";
 const tableColumnsStorageKeyPrefix = "noteharbor.notesTableColumns";
-const rowHeightEstimate = 43;
+const rowHeightEstimate = 48;
 const validPreviewKinds = new Set(["front", "back"]);
 const slideshowFilterParamPrefix = "f_";
 const tagChipHorizontalPadding = 20;
@@ -79,6 +79,14 @@ const tagsPopoverOpenDelay = 300;
 const tagsPopoverCloseDelay = 150;
 
 let tagTextMeasureContext = null;
+
+// Alignment travels with the column model (`align`: text left, display order
+// right, selection/thumbnail/actions centered) and is emitted as a class on
+// every header and body cell. The stylesheet owns the actual text-align, so
+// hidden and reordered columns cannot drift out of alignment.
+function alignmentClass(column) {
+  return `align-${column?.align ?? "left"}`;
+}
 
 function getTagTextMeasureContext() {
   if (tagTextMeasureContext || typeof document === "undefined") {
@@ -3820,10 +3828,10 @@ function NotesTable({
 
   // Row cells are rendered from the column model, so column order and the
   // set of columns live in one place. Each kind keeps its existing markup.
-  function renderReorderCell(note) {
+  function renderReorderCell(column, note) {
     return (
       <td
-        className={`drag-cell${canReorder ? " drag-cell--enabled" : ""}`}
+        className={`drag-cell${canReorder ? " drag-cell--enabled" : ""} ${alignmentClass(column)}`}
         onClick={(event) => event.stopPropagation()}
       >
         {canReorder ? (
@@ -3875,6 +3883,7 @@ function NotesTable({
   function renderSelectionCell(column, note) {
     return (
       <td
+        className={alignmentClass(column)}
         onClick={(event) => event.stopPropagation()}
         {...stickyCellAttributes(column)}
       >
@@ -3890,7 +3899,10 @@ function NotesTable({
 
   function renderThumbnailCell(column, note, frontThumb, frontPreview) {
     return (
-      <td {...stickyCellAttributes(column)}>
+      <td
+        className={`table-thumb-cell ${alignmentClass(column)}`}
+        {...stickyCellAttributes(column)}
+      >
         {frontThumb ? (
           <span
             className="table-thumb-wrap"
@@ -3949,7 +3961,7 @@ function NotesTable({
   function renderDataCell(column, note) {
     if (column.isTags) {
       return (
-        <td className="tags-column">
+        <td className={`tags-column ${alignmentClass(column)}`}>
           <TagsCell onApplyFilter={applyTagFilter} tags={note.tags} />
         </td>
       );
@@ -3959,7 +3971,7 @@ function NotesTable({
       // The denomination is the row's primary action: it opens the Note
       // slideshow through the router. The source URL lives in the row menu.
       return (
-        <td>
+        <td className={alignmentClass(column)}>
           <a
             draggable={false}
             href={buildTableHash(slideshowRoute(note.id))}
@@ -3979,10 +3991,14 @@ function NotesTable({
       );
     }
 
-    return <td {...stickyCellAttributes(column)}>{note[column.key]}</td>;
+    return (
+      <td className={alignmentClass(column)} {...stickyCellAttributes(column)}>
+        {note[column.key]}
+      </td>
+    );
   }
 
-  function renderActionsCell(note) {
+  function renderActionsCell(column, note) {
     const noteLabel =
       note.denomination || note.catalog_number || `note ${note.id}`;
     const items = [
@@ -4028,7 +4044,7 @@ function NotesTable({
     });
 
     return (
-      <td>
+      <td className={alignmentClass(column)}>
         <RowActionsMenu
           items={items}
           label={`Actions for ${noteLabel}`}
@@ -4065,13 +4081,15 @@ function NotesTable({
 
     switch (column.kind) {
       case "reorder":
-        cell = renderReorderCell(note);
+        cell = renderReorderCell(column, note);
         break;
       case "selection":
         cell = renderSelectionCell(column, note);
         break;
       case "order":
-        cell = <td>{note.display_order ?? "-"}</td>;
+        cell = (
+          <td className={alignmentClass(column)}>{note.display_order ?? "-"}</td>
+        );
         break;
       case "thumbnail":
         cell = renderThumbnailCell(column, note, frontThumb, frontPreview);
@@ -4080,7 +4098,7 @@ function NotesTable({
         cell = renderDataCell(column, note);
         break;
       case "actions":
-        cell = renderActionsCell(note);
+        cell = renderActionsCell(column, note);
         break;
       default:
         break;
@@ -4508,26 +4526,17 @@ function NotesTable({
                 onToggle={toggleColumnVisibility}
                 visibleColumnKeys={visibleColumnKeys}
               />
-              <div className="inline-select-group">
+              <div className="table-reset-slot">
                 {hasSavedTableState ? (
                   <button
                     className="button"
                     onClick={resetTableState}
                     type="button"
                   >
-                    Reset filters, sorting, and selection
+                    Reset view
                   </button>
                 ) : null}
               </div>
-              <p className="table-helper-text">
-                {reorderLoading
-                  ? "Saving manual order..."
-                  : canReorder
-                    ? "Drag rows from the handle to change the default order."
-                    : "Reordering is available only in the default unfiltered view."}{" "}
-                Press <kbd>/</kbd> to filter, <kbd>&uarr;</kbd>/
-                <kbd>&darr;</kbd> to browse rows, or <kbd>?</kbd> for shortcuts.
-              </p>
             </div>
 
             <div
@@ -4577,7 +4586,7 @@ function NotesTable({
                           if (column.kind === "reorder") {
                             return (
                               <th
-                                className="drag-cell"
+                                className="drag-cell align-center"
                                 key={column.key}
                                 scope="col"
                               />
@@ -4589,7 +4598,7 @@ function NotesTable({
                               <th
                                 key={column.key}
                                 scope="col"
-                                {...stickyCellAttributes(column)}
+                                {...stickyCellAttributes(column, "align-center")}
                               >
                                 <input
                                   aria-label="Select all visible rows"
@@ -4605,6 +4614,18 @@ function NotesTable({
                           if (!column.sortable) {
                             return (
                               <th
+                                className={[
+                                  alignmentClass(column),
+                                  column.isTags ? "tags-column" : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
+                                key={column.key}
+                                scope="col"
+                                {...stickyCellAttributes(
+                                  column,
+                                  column.isTags ? "tags-column" : undefined,
+                                )}
                                 key={column.key}
                                 scope="col"
                                 {...stickyCellAttributes(
@@ -4617,8 +4638,30 @@ function NotesTable({
                             );
                           }
 
+                          const isSorted = sortKey === column.key;
+                          const className = [
+                            alignmentClass(column),
+                            column.isTags ? "tags-column" : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" ");
+
                           return (
                             <th
+                              aria-sort={
+                                isSorted
+                                  ? sortDirection === "asc"
+                                    ? "ascending"
+                                    : "descending"
+                                  : "none"
+                              }
+                              className={className}
+                              key={column.key}
+                              scope="col"
+                              {...stickyCellAttributes(
+                                column,
+                                column.isTags ? "tags-column" : undefined,
+                              )}
                               key={column.key}
                               scope="col"
                               {...stickyCellAttributes(
@@ -4627,15 +4670,29 @@ function NotesTable({
                               )}
                             >
                               <button
-                                className={`sort-button${sortKey === column.key ? " sort-button--active" : ""}`}
+                                className={`sort-button${isSorted ? " sort-button--active" : ""}`}
                                 onClick={() => toggleSort(column.key)}
                                 type="button"
                               >
                                 {column.label.toUpperCase()}
-                                {sortKey === column.key ? (
-                                  <span>
-                                    {sortDirection === "asc" ? " ▲" : " ▼"}
-                                  </span>
+                                {isSorted ? (
+                                  <svg
+                                    aria-hidden="true"
+                                    className="sort-chevron"
+                                    focusable="false"
+                                    height="11"
+                                    viewBox="0 0 24 24"
+                                    width="11"
+                                  >
+                                    <path
+                                      d="m6 15 6-6 6 6"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth="2.4"
+                                    />
+                                  </svg>
                                 ) : null}
                               </button>
                             </th>
@@ -5058,6 +5115,16 @@ function NotesTable({
                   </button>
                 </div>
               ) : null}
+              <p className="table-footer-hint">
+                {reorderLoading ? (
+                  "Saving manual order..."
+                ) : (
+                  <>
+                    Drag the handle to reorder · <kbd>&uarr;</kbd>{" "}
+                    <kbd>&darr;</kbd> to browse · <kbd>?</kbd> shortcuts
+                  </>
+                )}
+              </p>
             </div>
           </>
         ) : null}

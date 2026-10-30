@@ -190,9 +190,7 @@ describe("NotesTable header emphasis", () => {
 
     const labels = Array.from(
       container.querySelectorAll("thead tr:first-child .sort-button"),
-    ).map((button) =>
-      button.textContent.replace(/[▲▼]/g, "").trim(),
-    );
+    ).map((button) => button.textContent.trim());
     expect(labels.length).toBeGreaterThan(0);
     for (const label of labels) {
       expect(label).toBe(label.toUpperCase());
@@ -203,7 +201,7 @@ describe("NotesTable header emphasis", () => {
     renderTable();
     const user = userEvent.setup();
 
-    const idButton = await screen.findByRole("button", { name: /^ID/ });
+    const idButton = await screen.findByRole("button", { name: /^#/ });
     const denominationButton = screen.getByRole("button", {
       name: /DENOMINATION/,
     });

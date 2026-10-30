@@ -82,7 +82,9 @@ export const tableColumns = [
   },
   {
     key: "id",
-    label: "ID",
+    // Display order, not the note id: the `#` label keeps collectors from
+    // reading this column as a database identifier.
+    label: "#",
     kind: "order",
     width: 48,
     align: "right",

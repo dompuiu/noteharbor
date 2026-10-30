@@ -58,6 +58,16 @@ describe("table styles", () => {
     );
   });
 
+  // The footer hint is the last band of the shell, not an overlay: it keeps
+  // its own fixed-size slot below the scroller and the bulk bar, on one line.
+  test("the footer hint reserves its own band inside the table shell", () => {
+    const hint = styles.match(/\.table-footer-hint\s*\{([^}]*)\}/);
+    expect(hint).not.toBeNull();
+    expect(hint[1]).toMatch(/flex:\s*0\s+0\s+auto/);
+    expect(hint[1]).not.toMatch(/position:\s*absolute/);
+    expect(hint[1]).toMatch(/white-space:\s*nowrap/);
+  });
+
   test("sort buttons tint with accent-soft on hover", () => {
     expect(styles).toMatch(
       /\.sort-button:hover\s*\{\s*background:\s*var\(--accent-soft\)/,
@@ -230,6 +240,51 @@ describe("table styles", () => {
     const cell = styles.match(/\.table-sticky-cell\s*\{([^}]*)\}/);
     expect(cell[1]).not.toMatch(/outline:/);
     expect(cell[1]).not.toMatch(/overflow:\s*hidden/);
+
+  });
+  // Scanning: alignment comes from the column model, so the stylesheet owns
+  // the three hooks and the cells carry the model's choice. Numbers line up
+  // through tabular figures rather than centred text.
+  test("text aligns left, numbers right and control columns centre", () => {
+    const base = styles.match(/th,\s*td\s*\{([^}]*)\}/);
+    expect(base).not.toBeNull();
+    expect(base[1]).toMatch(/text-align:\s*left/);
+    expect(base[1]).toMatch(/font-variant-numeric:\s*tabular-nums/);
+
+    expect(styles).toMatch(/\.align-left\s*\{\s*text-align:\s*left/);
+    expect(styles).toMatch(/\.align-right\s*\{\s*text-align:\s*right/);
+    expect(styles).toMatch(/\.align-center\s*\{\s*text-align:\s*center/);
+    expect(styles).toMatch(
+      /\.align-right \.sort-button\s*\{\s*justify-content:\s*flex-end/,
+    );
+    expect(styles).toMatch(
+      /\.align-center \.sort-button\s*\{\s*justify-content:\s*center/,
+    );
+  });
+
+  test("body rows are 48px at 14px text", () => {
+    const bodyCells = styles.match(/tbody td\s*\{([^}]*)\}/);
+    expect(bodyCells).not.toBeNull();
+    expect(bodyCells[1]).toMatch(/height:\s*48px/);
+    expect(bodyCells[1]).toMatch(/font-size:\s*14px/);
+  });
+
+  test("thumbnails are 48x28 without distortion", () => {
+    const thumb = styles.match(/\.table-thumb\s*\{([^}]*)\}/);
+    expect(thumb).not.toBeNull();
+    expect(thumb[1]).toMatch(/width:\s*48px/);
+    expect(thumb[1]).toMatch(/height:\s*28px/);
+    expect(thumb[1]).toMatch(/object-fit:\s*contain/);
+  });
+
+  test("the active sort header draws a chevron that flips on descending", () => {
+    const chevron = styles.match(/\.sort-chevron\s*\{([^}]*)\}/);
+    expect(chevron).not.toBeNull();
+    expect(chevron[1]).toMatch(/flex:\s*0\s+0\s+auto/);
+    expect(styles).toMatch(
+      /th\[aria-sort="descending"\]\s+\.sort-chevron\s*\{[^}]*transform:\s*rotate\(180deg\)/,
+    );
+
   });
 });
 
