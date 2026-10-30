@@ -69,6 +69,28 @@ describe("table styles", () => {
       /thead tr:first-child th\s*\{[^}]*font-weight:\s*800/,
     );
   });
+
+  // The row action button is intentionally invisible until the pointer or
+  // keyboard arrives. jsdom cannot resolve :hover, so the reveal is pinned
+  // here as a static contract over the stylesheet.
+  test("row actions stay hidden until the row is hovered or focused", () => {
+    const base = styles.match(/\.row-menu-btn\s*\{([^}]*)\}/);
+    expect(base).not.toBeNull();
+    expect(base[1]).toMatch(/opacity:\s*0/);
+    expect(styles).toMatch(
+      /\.table-row-link:hover \.row-menu-btn[^{]*\{[^}]*opacity:\s*1/,
+    );
+    expect(styles).toMatch(
+      /\.table-row-link:focus-within \.row-menu-btn[^{]*\{[^}]*opacity:\s*1/,
+    );
+    expect(styles).toMatch(/\.row-menu-btn\.is-open\s*\{[^}]*opacity:\s*1/);
+  });
+
+  test("touch devices always show the row actions button", () => {
+    const media = styles.match(/@media \(hover: none\)\s*\{([\s\S]*?)\n\}/);
+    expect(media).not.toBeNull();
+    expect(media[1]).toMatch(/\.row-menu-btn\s*\{[^}]*opacity:\s*1/);
+  });
 });
 
 describe("sidebar styles", () => {
