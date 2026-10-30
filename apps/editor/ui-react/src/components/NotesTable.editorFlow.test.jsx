@@ -114,8 +114,9 @@ function slideshowAddButton() {
 async function openEditorOn(user, denomination) {
   await screen.findByText(denomination);
   await user.click(
-    screen.getByRole("button", { name: `Edit ${denomination}` }),
+    screen.getByRole("button", { name: `Actions for ${denomination}` }),
   );
+  await user.click(screen.getByRole("menuitem", { name: "Edit" }));
   const field = await screen.findByLabelText("Denomination");
   await waitFor(() => {
     expect(field).toHaveFocus();
@@ -258,10 +259,12 @@ describe("Adding from the Note slideshow", () => {
     const slideshowSurvivor = screen.getByTitle("Previous note (←)");
     expect(slideshowSurvivor).toBeInTheDocument();
     expect(slideshowSurvivor.closest("[inert]")).not.toBeNull();
-    // The table behind is inert too, so a Tab cannot reach a row's Edit action
-    // (or the toolbar) and silently drop the new Note.
+    // The table behind is inert too, so a Tab cannot reach a row's actions
+    // menu (or the toolbar) and silently drop the new Note.
     expect(
-      screen.getByRole("button", { name: "Edit AAAA" }).closest("[inert]"),
+      screen
+        .getByRole("button", { name: "Actions for AAAA" })
+        .closest("[inert]"),
     ).not.toBeNull();
   });
 
@@ -1016,7 +1019,7 @@ describe("The a shortcut in the Table", () => {
     renderTable();
     await screen.findByText("BBBB");
 
-    screen.getByRole("button", { name: "Insert note before BBBB" }).focus();
+    screen.getByRole("button", { name: "Actions for BBBB" }).focus();
 
     await user.keyboard("a");
 
@@ -1027,22 +1030,26 @@ describe("The a shortcut in the Table", () => {
 });
 
 describe("Shortcut tooltips", () => {
-  test("the table's note buttons and Add note expose their shortcuts", async () => {
+  test("the row actions menu and Add note expose their shortcuts", async () => {
+    const user = userEvent.setup();
     renderTable();
     await screen.findByText("AAAA");
 
-    expect(screen.getByRole("button", { name: "Copy AAAA" })).toHaveAttribute(
-      "data-shortcut",
-      "c",
+    await user.click(
+      screen.getByRole("button", { name: "Actions for AAAA" }),
     );
+
     expect(
-      screen.getByRole("button", { name: "Insert note before AAAA" }),
+      screen.getByRole("menuitem", { name: "Copy details" }),
+    ).toHaveAttribute("data-shortcut", "c");
+    expect(
+      screen.getByRole("menuitem", { name: "Insert note below" }),
     ).toHaveAttribute("data-shortcut", "a");
-    expect(screen.getByRole("button", { name: "Edit AAAA" })).toHaveAttribute(
+    expect(screen.getByRole("menuitem", { name: "Edit" })).toHaveAttribute(
       "data-shortcut",
       "e",
     );
-    expect(screen.getByRole("button", { name: "Delete AAAA" })).toHaveAttribute(
+    expect(screen.getByRole("menuitem", { name: "Delete" })).toHaveAttribute(
       "data-shortcut",
       "d",
     );
@@ -1056,7 +1063,10 @@ describe("Destructive confirmations use the app dialog", () => {
     renderTable();
     await screen.findByText("BBBB");
 
-    await user.click(screen.getByRole("button", { name: "Delete BBBB" }));
+    await user.click(
+      screen.getByRole("button", { name: "Actions for BBBB" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
 
@@ -1068,7 +1078,10 @@ describe("Destructive confirmations use the app dialog", () => {
     renderTable();
     await screen.findByText("BBBB");
 
-    await user.click(screen.getByRole("button", { name: "Delete BBBB" }));
+    await user.click(
+      screen.getByRole("button", { name: "Actions for BBBB" }),
+    );
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
     const dialog = await screen.findByRole("dialog");
     expect(
       within(dialog).getByRole("heading", { name: "Delete BBBB?" }),
