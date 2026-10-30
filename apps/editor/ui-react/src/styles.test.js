@@ -69,6 +69,20 @@ describe("table styles", () => {
       /thead tr:first-child th\s*\{[^}]*font-weight:\s*800/,
     );
   });
+
+  // Active filters stay legible without opening the row: the chip fill and
+  // the count badge use the warm accent family, not a new palette.
+  test("filter chips and the count badge stay in the accent family", () => {
+    const chip = styles.match(/\.table-filter-chip\s*\{([^}]*)\}/);
+    expect(chip).not.toBeNull();
+    expect(chip[1]).toMatch(/background:\s*var\(--accent-soft\)/);
+    expect(chip[1]).toMatch(/color:\s*var\(--accent-strong\)/);
+
+    const count = styles.match(/\.table-filter-count\s*\{([^}]*)\}/);
+    expect(count).not.toBeNull();
+    expect(count[1]).toMatch(/background:\s*var\(--accent-strong\)/);
+    expect(count[1]).toMatch(/color:\s*var\(--accent-ink\)/);
+  });
 });
 
 describe("sidebar styles", () => {

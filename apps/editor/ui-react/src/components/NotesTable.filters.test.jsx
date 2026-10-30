@@ -179,4 +179,83 @@ describe("NotesTable filters", () => {
     expect(await filtersToggle()).toHaveAttribute("aria-expanded", "true");
     expect(screen.getByText("Company: PMG")).toBeInTheDocument();
   });
+
+  test("removing a chip clears that column filter", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = await openFilters();
+
+    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
+    await waitFor(() => {
+      expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
+    });
+
+    await user.click(
+      screen.getByRole("button", { name: "Remove Company filter" }),
+    );
+
+    expect(await screen.findByLabelText("Filter Company")).toHaveValue("");
+    expect(screen.queryByText("Company: PMG")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /active\)/ }),
+    ).not.toBeInTheDocument();
+    await screen.findByText("BBBB");
+  });
+
+  test("Clear all clears every column filter", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = await openFilters();
+
+    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
+    await user.type(await screen.findByLabelText("Filter Serial"), "SER-3");
+    expect(screen.getByText("Company: PMG")).toBeInTheDocument();
+    expect(screen.getByText("Serial: SER-3")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear all" }));
+
+    expect(await screen.findByLabelText("Filter Company")).toHaveValue("");
+    expect(screen.getByLabelText("Filter Serial")).toHaveValue("");
+    expect(screen.queryByText("Company: PMG")).not.toBeInTheDocument();
+    expect(screen.queryByText("Serial: SER-3")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /active\)/ }),
+    ).not.toBeInTheDocument();
+    await screen.findByText("BBBB");
+  });
+
+  test("the filter inputs tab in column order", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = await openFilters();
+
+    await user.click(await screen.findByLabelText("Filter Catalog #"));
+
+    for (const label of [
+      "Filter Denomination",
+      "Filter Date",
+      "Filter Company",
+      "Filter Grade",
+      "Filter Serial",
+      "Filter Tags",
+    ]) {
+      await user.tab();
+      expect(screen.getByLabelText(label)).toHaveFocus();
+    }
+  });
+
+  test("the / key focuses search, not a column filter", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    await openFilters();
+    const search = screen.getByRole("searchbox", { name: "Search notes" });
+
+    await userEvent.setup().keyboard("/");
+
+    expect(search).toHaveFocus();
+  });
 });
