@@ -18,6 +18,46 @@ describe("table styles", () => {
     );
   });
 
+  test("defines the selected row tint token", () => {
+    expect(styles).toMatch(
+      /--row-selected:\s*rgba\(150,\s*98,\s*47,\s*0\.14\)/,
+    );
+  });
+
+  // Selection is painted on the cells so the zebra stripe and the
+  // hover/focus/active paint composite with it rather than replace it. The
+  // accent edge lives on the first cell, apart from the keyboard cursor's
+  // inset ring.
+  test("a selected row carries the accent tint and edge", () => {
+    expect(styles).toMatch(
+      /\.table-row-link--selected > td\s*\{\s*background-color:\s*var\(--row-selected\)/,
+    );
+    const edge = styles.match(
+      /\.table-row-link--selected > td:first-child\s*\{([^}]*)\}/,
+    );
+    expect(edge).not.toBeNull();
+    expect(edge[1]).toMatch(/var\(--accent\)/);
+  });
+
+  // The bulk bar is a layout band, not an overlay, so the last row is never
+  // covered: the shell stays a column flex container and the bar takes its own
+  // fixed-size slot below the scroller.
+  test("the bulk bar reserves its own band inside the table shell", () => {
+    expect(styles).toMatch(
+      /\.table-shell\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column/,
+    );
+    const bar = styles.match(/\.table-bulk-bar\s*\{([^}]*)\}/);
+    expect(bar).not.toBeNull();
+    expect(bar[1]).toMatch(/flex:\s*0\s+0\s+auto/);
+    expect(bar[1]).not.toMatch(/position:\s*absolute/);
+  });
+
+  test("the overlay scrollbar stays inside the rows viewport", () => {
+    expect(styles).toMatch(
+      /\.table-viewport\s*\{[^}]*position:\s*relative/,
+    );
+  });
+
   test("sort buttons tint with accent-soft on hover", () => {
     expect(styles).toMatch(
       /\.sort-button:hover\s*\{\s*background:\s*var\(--accent-soft\)/,

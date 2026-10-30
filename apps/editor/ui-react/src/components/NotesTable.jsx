@@ -4204,18 +4204,6 @@ function NotesTable({
                 Press <kbd>/</kbd> to filter, <kbd>&uarr;</kbd>/
                 <kbd>&darr;</kbd> to browse rows, or <kbd>?</kbd> for shortcuts.
               </p>
-              {selectedIds.length ? (
-                <div className="inline-select-group inline-select-group--bulk">
-                  <button
-                    className="button button-primary"
-                    disabled={bulkLoading}
-                    onClick={handleBulkDelete}
-                    type="button"
-                  >
-                    {bulkLoading ? "Working..." : "Delete selected"}
-                  </button>
-                </div>
-              ) : null}
             </div>
 
             <div
@@ -4229,6 +4217,7 @@ function NotesTable({
                 ref={tableFocusAnchorRef}
                 tabIndex={-1}
               />
+              <div className="table-viewport">
               <div
                 className={`table-scroll-x${columnsDragging ? " is-panning" : ""}`}
                 onClickCapture={handleColumnPanClickCapture}
@@ -4461,7 +4450,7 @@ function NotesTable({
                               </tr>
                             ) : null}
                             <tr
-                              className={`table-row-link${virtualRow.index % 2 === 1 ? " table-row-link--zebra" : ""}${draggedNoteId === note.id ? " table-row-link--dragging" : ""}${activeNoteId === note.id ? " table-row-link--active" : ""}`}
+                              className={`table-row-link${virtualRow.index % 2 === 1 ? " table-row-link--zebra" : ""}${draggedNoteId === note.id ? " table-row-link--dragging" : ""}${selectedIdSet.has(note.id) ? " table-row-link--selected" : ""}${activeNoteId === note.id ? " table-row-link--active" : ""}`}
                               data-index={virtualRow.index}
                               key={note.id}
                               ref={(element) => {
@@ -4660,6 +4649,33 @@ function NotesTable({
                     }}
                     type="button"
                   />
+                </div>
+              ) : null}
+              </div>
+              {selectedIds.length ? (
+                <div
+                  aria-label="Selection actions"
+                  className="table-bulk-bar"
+                  role="region"
+                >
+                  <span className="table-bulk-bar-count">
+                    {selectedIds.length} selected
+                  </span>
+                  <button
+                    className="table-bulk-bar-delete"
+                    disabled={bulkLoading}
+                    onClick={handleBulkDelete}
+                    type="button"
+                  >
+                    {bulkLoading ? "Working..." : "Delete"}
+                  </button>
+                  <button
+                    className="table-bulk-bar-clear"
+                    onClick={clearSelection}
+                    type="button"
+                  >
+                    Clear
+                  </button>
                 </div>
               ) : null}
             </div>
