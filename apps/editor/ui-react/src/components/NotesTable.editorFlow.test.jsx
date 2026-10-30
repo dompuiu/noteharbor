@@ -1042,9 +1042,11 @@ describe("Shortcut tooltips", () => {
     expect(
       screen.getByRole("menuitem", { name: "Copy details" }),
     ).toHaveAttribute("data-shortcut", "c");
+    // Insert note below has no shortcut tooltip: `a` still inserts ahead of
+    // the focused row, so advertising it on a "below" item would lie.
     expect(
       screen.getByRole("menuitem", { name: "Insert note below" }),
-    ).toHaveAttribute("data-shortcut", "a");
+    ).not.toHaveAttribute("data-shortcut");
     expect(screen.getByRole("menuitem", { name: "Edit" })).toHaveAttribute(
       "data-shortcut",
       "e",

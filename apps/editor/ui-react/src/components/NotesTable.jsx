@@ -3759,7 +3759,6 @@ function NotesTable({
         key: "insert",
         label: "Insert note below",
         onSelect: () => openCreateNoteAfter(note.id),
-        shortcut: "a",
       },
     ];
 
