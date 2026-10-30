@@ -170,6 +170,35 @@ export const dataColumns = tableColumns.filter(
   (column) => column.kind === "data",
 );
 
+// The search field looks across every data column, including tag names. It is
+// deliberately broader than a column filter: one substring, case-insensitive,
+// matched against any one field.
+export const searchColumnKeys = dataColumns.map((column) => column.key);
+
+function searchableColumnValue(note, column) {
+  if (column.isTags) {
+    return (note.tags ?? [])
+      .map((tag) => String(tag.name ?? "").trim())
+      .join(" ");
+  }
+
+  return String(note[column.key] ?? "");
+}
+
+export function matchesSearchQuery(note, query) {
+  const needle = String(query ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (!needle) {
+    return true;
+  }
+
+  return dataColumns.some((column) =>
+    searchableColumnValue(note, column).toLowerCase().includes(needle),
+  );
+}
+
 export const displayOrderColumn = tableColumns.find(
   (column) => column.kind === "order",
 );
