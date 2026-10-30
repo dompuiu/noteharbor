@@ -18,6 +18,27 @@ describe("table styles", () => {
     );
   });
 
+  test("defines the selected row tint token", () => {
+    expect(styles).toMatch(
+      /--row-selected:\s*rgba\(150,\s*98,\s*47,\s*0\.14\)/,
+    );
+  });
+
+  // Selection is painted on the cells so the zebra stripe and the
+  // hover/focus/active paint composite with it rather than replace it. The
+  // accent edge lives on the first cell, apart from the keyboard cursor's
+  // inset ring.
+  test("a selected row carries the accent tint and edge", () => {
+    expect(styles).toMatch(
+      /\.table-row-link--selected > td\s*\{\s*background-color:\s*var\(--row-selected\)/,
+    );
+    const edge = styles.match(
+      /\.table-row-link--selected > td:first-child\s*\{([^}]*)\}/,
+    );
+    expect(edge).not.toBeNull();
+    expect(edge[1]).toMatch(/var\(--accent\)/);
+  });
+
   test("sort buttons tint with accent-soft on hover", () => {
     expect(styles).toMatch(
       /\.sort-button:hover\s*\{\s*background:\s*var\(--accent-soft\)/,

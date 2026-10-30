@@ -23,6 +23,7 @@
   --accent-strong: #71461f;
   --accent-soft: rgba(150, 98, 47, 0.12);
   --row-zebra: rgba(150, 98, 47, 0.05);
+  --row-selected: rgba(150, 98, 47, 0.14);
   --accent-ink: #fffaf1;
   --success: #2f6b3c;
   --success-bg: rgba(47, 107, 60, 0.1);
@@ -2733,6 +2734,23 @@ td {
   background: var(--row-zebra);
 }
 
+/* A selected row is tinted on the cells, so the row's zebra stripe still
+   shows through the translucent tint and the hover/focus/active cell paint
+   below still lands above it. The accent edge is a background gradient on
+   the first cell rather than another ring, so the keyboard cursor's inset
+   ring and the selection edge can appear on the same row. */
+.table-row-link--selected > td {
+  background-color: var(--row-selected);
+}
+
+.table-row-link--selected > td:first-child {
+  background-image: linear-gradient(
+    to right,
+    var(--accent) 0 3px,
+    transparent 3px
+  );
+}
+
 /* Row highlight and focus ring are painted on the cells (not the row) so
    they stop at the last content cell instead of running under the overlay
    scrollbar in the header-only gutter column. The ring uses inset
@@ -2753,7 +2771,7 @@ td {
 .table-row-link:focus-visible > td,
 .table-row-link:has(:focus-visible) > td,
 .table-row-link--active > td {
-  background: var(--accent-soft);
+  background-color: var(--accent-soft);
 }
 
 .table-row-link:focus-visible,
