@@ -278,4 +278,22 @@ describe("NotesTable columns", () => {
     ).not.toBeInTheDocument();
     await screen.findByText("BBBB");
   });
+
+  test("hiding the sorted column returns the table to # ascending", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = userEvent.setup();
+    await user.click(screen.getByRole("button", { name: "COMPANY" }));
+    expect(screen.getByRole("button", { name: "ID" })).toBeInTheDocument();
+
+    await user.click(await columnsButton());
+    const dialog = await screen.findByRole("dialog", {
+      name: "Visible columns",
+    });
+    await user.click(within(dialog).getByRole("checkbox", { name: "Company" }));
+
+    const idHeader = screen.getByRole("columnheader", { name: /^ID/ });
+    expect(within(idHeader).getByRole("button")).toHaveTextContent("▲");
+  });
 });
