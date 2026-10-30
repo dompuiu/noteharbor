@@ -4,7 +4,7 @@ const shortcutGroups = [
   {
     title: "Table",
     items: [
-      { keys: ["/"], description: "Focus the last-used filter field" },
+      { keys: ["/"], description: "Focus the search field" },
       {
         keys: ["↑", "↓"],
         description:
