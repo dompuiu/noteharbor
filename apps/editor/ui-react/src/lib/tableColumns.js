@@ -170,6 +170,18 @@ export const dataColumns = tableColumns.filter(
   (column) => column.kind === "data",
 );
 
+// The columns the collector may hide, in table order. Everything else
+// (selection, thumbnail, catalog number, actions, reorder) is permanent.
+export const hideableColumns = tableColumns.filter((column) => column.hideable);
+
+export const hideableColumnKeys = hideableColumns.map((column) => column.key);
+
+// Hiding is only a choice for field columns; at least one of these must stay
+// visible so the table is never reduced to identity columns alone.
+export const hideableDataColumns = hideableColumns.filter(
+  (column) => column.kind === "data",
+);
+
 // The search field looks across every data column, including tag names. It is
 // deliberately broader than a column filter: one substring, case-insensitive,
 // matched against any one field.

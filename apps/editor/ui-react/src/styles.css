@@ -3259,6 +3259,72 @@ thead tr:first-child th {
   color: var(--accent-ink);
 }
 
+/* The Columns control and its picker. The menu is portalled into <body> and
+   positioned from the button, so the table's scroll containers cannot clip
+   it. */
+.table-columns-toggle {
+  gap: 6px;
+}
+
+.table-columns-toggle--open {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.table-columns-menu {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-width: 210px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
+.table-columns-menu-heading {
+  margin: 2px 8px 6px;
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.table-columns-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: var(--radius-sm);
+  color: var(--text);
+  font-size: 0.84rem;
+  cursor: pointer;
+}
+
+.table-columns-option:hover {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.table-columns-option input {
+  accent-color: var(--accent-strong);
+  cursor: inherit;
+}
+
+.table-columns-option:has(input:disabled) {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.table-columns-option:has(input:disabled):hover {
+  background: transparent;
+  color: var(--text-faint);
+}
+
 .table-filter-clear-all {
   border: 0;
   border-radius: var(--radius-pill);

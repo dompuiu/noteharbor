@@ -40,12 +40,15 @@ import {
   filterColumnKeys,
   filterColumns,
   getTableColumn,
+  hideableColumnKeys,
+  hideableColumns,
   matchesSearchQuery,
   slideshowFilterKeys,
   tableColumns,
   tagsColumnKey,
   validSortKeys,
 } from "../lib/tableColumns.js";
+import { ColumnPicker } from "./ColumnPicker.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
@@ -1130,6 +1133,12 @@ function NotesTable({
   // and force-opened whenever a column filter has a value so a filtered view
   // never hides the reason rows are missing. Not persisted.
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Which hideable columns the collector has chosen to show. Permanent
+  // columns are never in this set; a column absent here is hidden. Persisted
+  // per collection, unlike filters/sort/selection which share one global key.
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => [
+    ...hideableColumnKeys,
+  ]);
   // The search query is view state only: it is not written to saved table
   // state, and it is cleared with the collection. A cold-opened slideshow URL
   // carries the query so closing the slideshow returns to the searched table.
@@ -4284,6 +4293,10 @@ function NotesTable({
                   ) : null}
                 </div>
               ) : null}
+              <ColumnPicker
+                columns={hideableColumns}
+                visibleColumnKeys={visibleColumnKeys}
+              />
               <div className="inline-select-group">
                 {hasSavedTableState ? (
                   <button

@@ -122,9 +122,17 @@ describe("table styles", () => {
     expect(count).not.toBeNull();
     expect(count[1]).toMatch(/background:\s*var\(--accent-strong\)/);
     expect(count[1]).toMatch(/color:\s*var\(--accent-ink\)/);
-||||||| 6edccec
-
   });
+
+  // The column picker is portalled so the table's scroll containers cannot
+  // clip it, exactly like the row actions menu.
+  test("the column picker floats above the table in a portal", () => {
+    const menu = styles.match(/\.table-columns-menu\s*\{([^}]*)\}/);
+    expect(menu).not.toBeNull();
+    expect(menu[1]).toMatch(/position:\s*fixed/);
+    expect(menu[1]).toMatch(/z-index:\s*\d+/);
+  });
+
   // The row action button is intentionally invisible until the pointer or
   // keyboard arrives. jsdom cannot resolve :hover, so the reveal is pinned
   // here as a static contract over the stylesheet.
