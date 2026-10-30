@@ -2506,6 +2506,17 @@ input[type="radio"] {
   min-height: 0;
 }
 
+/* The scroller and its overlay scrollbar share one positioned box, so the
+   track stops at the rows area even when the bulk bar (a sibling below this
+   box) is shown. */
+.table-viewport {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 /* The bulk bar is a real flex child of the shell, so it takes its own band
    below the rows instead of floating over them: the scroller shrinks and the
    last row stays fully readable while the bar is shown. */

@@ -1818,16 +1818,10 @@ function NotesTable({
 
     const headerHeight = scroller.querySelector("thead")?.offsetHeight ?? 0;
     // The horizontal scrollbar is hidden now, so the vertical track runs to
-    // the bottom edge of the rows area instead of stopping above a bar. The
-    // track is drawn in the table shell, while the selection bar is a flex
-    // sibling below the scroller, so measure that gap and keep the track
-    // above the bar rather than drawing across it.
+    // the bottom edge instead of stopping above a bar.
     const top = headerHeight + 4;
-    const shellBottom =
-      tableShellRef.current?.getBoundingClientRect().bottom ?? 0;
-    const scrollerBottom = xScroller.getBoundingClientRect().bottom;
-    const bottom = Math.max(0, Math.round(shellBottom - scrollerBottom)) + 4;
-    const trackHeight = Math.max(0, xScroller.clientHeight - top - 4);
+    const bottom = 4;
+    const trackHeight = Math.max(0, xScroller.clientHeight - top - bottom);
 
     if (trackHeight <= 40) {
       vMetricsRef.current = { max: 0, range: 0, thumbHeight: 0 };
@@ -4196,6 +4190,7 @@ function NotesTable({
                 ref={tableFocusAnchorRef}
                 tabIndex={-1}
               />
+              <div className="table-viewport">
               <div
                 className={`table-scroll-x${columnsDragging ? " is-panning" : ""}`}
                 onClickCapture={handleColumnPanClickCapture}
@@ -4629,6 +4624,7 @@ function NotesTable({
                   />
                 </div>
               ) : null}
+              </div>
               {selectedIds.length ? (
                 <div
                   aria-label="Selection actions"

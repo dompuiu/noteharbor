@@ -52,6 +52,12 @@ describe("table styles", () => {
     expect(bar[1]).not.toMatch(/position:\s*absolute/);
   });
 
+  test("the overlay scrollbar stays inside the rows viewport", () => {
+    expect(styles).toMatch(
+      /\.table-viewport\s*\{[^}]*position:\s*relative/,
+    );
+  });
+
   test("sort buttons tint with accent-soft on hover", () => {
     expect(styles).toMatch(
       /\.sort-button:hover\s*\{\s*background:\s*var\(--accent-soft\)/,
