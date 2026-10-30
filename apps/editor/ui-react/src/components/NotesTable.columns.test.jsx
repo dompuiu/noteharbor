@@ -142,7 +142,7 @@ describe("NotesTable columns", () => {
 
     expect(button).toHaveAttribute("aria-expanded", "true");
     for (const name of [
-      "ID",
+      "#",
       "Denomination",
       "Date",
       "Company",
@@ -226,7 +226,7 @@ describe("NotesTable columns", () => {
     const { user } = await openPicker();
 
     for (const name of [
-      "ID",
+      "#",
       "Denomination",
       "Date",
       "Company",
@@ -289,7 +289,7 @@ describe("NotesTable columns", () => {
     await screen.findByText("AAAA");
     const user = userEvent.setup();
     await user.click(screen.getByRole("button", { name: "COMPANY" }));
-    expect(screen.getByRole("button", { name: "ID" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "#" })).toBeInTheDocument();
 
     await user.click(await columnsButton());
     const dialog = await screen.findByRole("dialog", {
@@ -297,8 +297,9 @@ describe("NotesTable columns", () => {
     });
     await user.click(within(dialog).getByRole("checkbox", { name: "Company" }));
 
-    const idHeader = screen.getByRole("columnheader", { name: /^ID/ });
-    expect(within(idHeader).getByRole("button")).toHaveTextContent("▲");
+    const idHeader = screen.getByRole("columnheader", { name: /^#/ });
+    expect(idHeader).toHaveAttribute("aria-sort", "ascending");
+    expect(idHeader.querySelector(".sort-chevron")).not.toBeNull();
   });
 
   test("the choice is saved per collection and survives a reload", async () => {
