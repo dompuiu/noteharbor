@@ -294,7 +294,7 @@ describe("NotesTable filters", () => {
     await user.type(await screen.findByLabelText("Filter Company"), "PMG");
     await user.click(
       screen.getByRole("button", {
-        name: "Reset filters, sorting, and selection",
+        name: "Reset view",
       }),
     );
 

@@ -402,7 +402,7 @@ describe("NotesTable columns", () => {
     await user.keyboard("{Escape}");
 
     const reset = await screen.findByRole("button", {
-      name: "Reset filters, sorting, and selection",
+      name: "Reset view",
     });
     await user.click(reset);
 
