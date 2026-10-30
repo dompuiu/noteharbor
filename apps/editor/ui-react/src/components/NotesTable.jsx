@@ -1525,6 +1525,7 @@ function NotesTable({
     }
 
     setFilters({});
+    setFiltersOpen(false);
     setQuery("");
   }, [collectionId]);
 
@@ -2606,6 +2607,7 @@ function NotesTable({
 
   function resetTableState() {
     setFilters({});
+    setFiltersOpen(false);
     setQuery("");
     setSortKey(defaultSortKey);
     setSortDirection("asc");

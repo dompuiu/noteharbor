@@ -284,4 +284,24 @@ describe("NotesTable filters", () => {
 
     expect(search).toHaveFocus();
   });
+
+  test("Reset filters closes the row once the filters are cleared", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = await openFilters();
+
+    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
+    await user.click(
+      screen.getByRole("button", {
+        name: "Reset filters, sorting, and selection",
+      }),
+    );
+
+    expect(
+      screen.queryByLabelText("Filter Company"),
+    ).not.toBeInTheDocument();
+    expect(await filtersToggle()).toHaveAttribute("aria-expanded", "false");
+    await screen.findByText("BBBB");
+  });
 });
