@@ -33,6 +33,7 @@ import {
   COLUMN_SCROLL_STEP,
   clampColumnScrollLeft,
   columnPanScrollLeft,
+  isColumnPanShadowVisible,
   isColumnPanTarget,
 } from "../lib/tableColumnPan.js";
 import {
@@ -43,8 +44,10 @@ import {
   hideableColumnKeys,
   hideableColumns,
   hideableDataColumns,
+  lastStickyKey,
   matchesSearchQuery,
   slideshowFilterKeys,
+  stickyOffsets,
   tableColumns,
   tagsColumnKey,
   validSortKeys,
@@ -1241,6 +1244,7 @@ function NotesTable({
   const [draggedNoteId, setDraggedNoteId] = useState(null);
   const [dropTarget, setDropTarget] = useState(null);
   const [columnsDragging, setColumnsDragging] = useState(false);
+  const [columnsScrolled, setColumnsScrolled] = useState(false);
   const [thumbPreviewState, setThumbPreviewState] = useState(null);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [columnFilterHeights, setColumnFilterHeights] = useState({});
@@ -1814,6 +1818,28 @@ function NotesTable({
       ),
     [visibleColumnKeys],
   );
+  // Pinned identity columns take a cumulative left offset over the visible
+  // sticky columns only, so a hidden column never leaves a gap in the block.
+  const stickyLeftByColumn = useMemo(
+    () => stickyOffsets(visibleColumns),
+    [visibleColumns],
+  );
+  const lastStickyColumnKey = useMemo(
+    () => lastStickyKey(visibleColumns),
+    [visibleColumns],
+  );
+  // A wide window leaves the fixed-width table with space to spare. The last
+  // visible field column takes it, so every declared width — and therefore
+  // every pinned left offset — stays exact.
+  const flexibleColumnKey = useMemo(() => {
+    for (let index = visibleColumns.length - 1; index >= 0; index -= 1) {
+      if (visibleColumns[index].kind === "data") {
+        return visibleColumns[index].key;
+      }
+    }
+
+    return null;
+  }, [visibleColumns]);
   // The one field column that must stay visible: once it is alone, its
   // checkbox is disabled so the collector cannot reduce the table to
   // identity columns only.
@@ -2220,11 +2246,30 @@ function NotesTable({
     // Chromium animates the pan; jsdom (tests) has no scrollTo, so fall back
     // to a direct assignment there.
     if (typeof scroller.scrollTo === "function") {
+      // The shadow follows the scroll event, so it appears as the pan starts
+      // and clears exactly when the table reaches its start.
       scroller.scrollTo({ behavior: "smooth", left });
       return;
     }
 
     scroller.scrollLeft = left;
+    syncColumnScroll(scroller);
+  }
+
+  // The pinned block's edge shadow and its left offsets are scroll state, not
+  // hover state: they only apply once the columns have moved underneath. Kept
+  // in sync from the scroller's scroll event and from every programmatic pan,
+  // because jsdom's direct scrollLeft writes never dispatch a scroll event.
+  //
+  // Every pinned cell's `left` adds this offset to its column offset. The
+  // table lives inside the vertical scroller, which is also a non-scrolling
+  // horizontal scroll container, so `sticky` resolves against that inner box
+  // and needs the pan offset folded in (see .table-sticky-cell in styles.css).
+  function syncColumnScroll(scroller = tableScrollXRef.current) {
+    const scrollLeft = scroller?.scrollLeft ?? 0;
+
+    scroller?.style.setProperty("--table-sticky-scroll-x", `${scrollLeft}px`);
+    setColumnsScrolled(isColumnPanShadowVisible(scrollLeft));
   }
 
   function panColumnsBy(delta) {
@@ -2261,6 +2306,7 @@ function NotesTable({
 
     if (scroller) {
       scroller.scrollLeft = 0;
+      syncColumnScroll(scroller);
     }
   }
 
@@ -2330,6 +2376,7 @@ function NotesTable({
       clientX: event.clientX,
       max: scroller.scrollWidth - scroller.clientWidth,
     });
+    syncColumnScroll(scroller);
   }
 
   function handleColumnPanPointerEnd(event) {
@@ -3838,6 +3885,7 @@ function NotesTable({
       <td
         className={alignmentClass(column)}
         onClick={(event) => event.stopPropagation()}
+        {...stickyCellAttributes(column)}
       >
         <input
           aria-label={`Select ${note.denomination}`}
@@ -3851,7 +3899,10 @@ function NotesTable({
 
   function renderThumbnailCell(column, note, frontThumb, frontPreview) {
     return (
-      <td className={`table-thumb-cell ${alignmentClass(column)}`}>
+      <td
+        className={`table-thumb-cell ${alignmentClass(column)}`}
+        {...stickyCellAttributes(column)}
+      >
         {frontThumb ? (
           <span
             className="table-thumb-wrap"
@@ -3940,7 +3991,11 @@ function NotesTable({
       );
     }
 
-    return <td className={alignmentClass(column)}>{note[column.key]}</td>;
+    return (
+      <td className={alignmentClass(column)} {...stickyCellAttributes(column)}>
+        {note[column.key]}
+      </td>
+    );
   }
 
   function renderActionsCell(column, note) {
@@ -3996,6 +4051,29 @@ function NotesTable({
         />
       </td>
     );
+  }
+
+  // Props shared by every pinned cell: the left offset accumulated from the
+  // visible sticky columns, the end marker on the right-most one, and any
+  // class the cell already needed.
+  function stickyCellAttributes(column, baseClassName) {
+    if (!column.sticky) {
+      return baseClassName ? { className: baseClassName } : {};
+    }
+
+    return {
+      className: [
+        baseClassName,
+        "table-sticky-cell",
+        column.key === lastStickyColumnKey ? "table-sticky-end" : null,
+      ]
+        .filter(Boolean)
+        .join(" "),
+      // The stylesheet adds the scroller's pan offset to this value.
+      style: {
+        "--table-sticky-left": `${stickyLeftByColumn[column.key] ?? 0}px`,
+      },
+    };
   }
 
   function renderTableCell(column, note, frontThumb, frontPreview) {
@@ -4474,7 +4552,7 @@ function NotesTable({
               />
               <div className="table-viewport">
               <div
-                className={`table-scroll-x${columnsDragging ? " is-panning" : ""}`}
+                className={`table-scroll-x${columnsDragging ? " is-panning" : ""}${columnsScrolled ? " is-scrolled-x" : ""}`}
                 onClickCapture={handleColumnPanClickCapture}
                 onLostPointerCapture={handleColumnPanPointerEnd}
                 onMouseDown={handleColumnPanMouseDown}
@@ -4482,10 +4560,26 @@ function NotesTable({
                 onPointerDown={handleColumnPanPointerDown}
                 onPointerMove={handleColumnPanPointerMove}
                 onPointerUp={handleColumnPanPointerEnd}
+                onScroll={() => syncColumnScroll()}
                 ref={tableScrollXRef}
               >
                 <div className="table-scroll-y" ref={tableScrollYRef}>
                   <table aria-busy={rowsPending || undefined}>
+                    <colgroup>
+                      {visibleColumns.map((column) => (
+                        <col
+                          key={column.key}
+                          style={
+                            column.width && column.key !== flexibleColumnKey
+                              ? { width: `${column.width}px` }
+                              : undefined
+                          }
+                        />
+                      ))}
+                      {vScroll.visible ? (
+                        <col style={{ width: "14px" }} />
+                      ) : null}
+                    </colgroup>
                     <thead>
                       <tr>
                         {visibleColumns.map((column) => {
@@ -4502,9 +4596,9 @@ function NotesTable({
                           if (column.kind === "selection") {
                             return (
                               <th
-                                className="align-center"
                                 key={column.key}
                                 scope="col"
+                                {...stickyCellAttributes(column, "align-center")}
                               >
                                 <input
                                   aria-label="Select all visible rows"
@@ -4528,6 +4622,16 @@ function NotesTable({
                                   .join(" ")}
                                 key={column.key}
                                 scope="col"
+                                {...stickyCellAttributes(
+                                  column,
+                                  column.isTags ? "tags-column" : undefined,
+                                )}
+                                key={column.key}
+                                scope="col"
+                                {...stickyCellAttributes(
+                                  column,
+                                  column.isTags ? "tags-column" : undefined,
+                                )}
                               >
                                 {column.label.toUpperCase()}
                               </th>
@@ -4554,6 +4658,16 @@ function NotesTable({
                               className={className}
                               key={column.key}
                               scope="col"
+                              {...stickyCellAttributes(
+                                column,
+                                column.isTags ? "tags-column" : undefined,
+                              )}
+                              key={column.key}
+                              scope="col"
+                              {...stickyCellAttributes(
+                                column,
+                                column.isTags ? "tags-column" : undefined,
+                              )}
                             >
                               <button
                                 className={`sort-button${isSorted ? " sort-button--active" : ""}`}
@@ -4606,16 +4720,23 @@ function NotesTable({
                             }
 
                             if (!column.filterable) {
-                              return <th key={column.key} scope="col" />;
+                              return (
+                                <th
+                                  key={column.key}
+                                  scope="col"
+                                  {...stickyCellAttributes(column)}
+                                />
+                              );
                             }
 
                             return (
                               <th
-                                className={
-                                  column.isTags ? "tags-column" : undefined
-                                }
                                 key={`${column.key}-filter`}
                                 scope="col"
+                                {...stickyCellAttributes(
+                                  column,
+                                  column.isTags ? "tags-column" : undefined,
+                                )}
                               >
                                 {column.isTags ? (
                                   <MultiValueFilterCombobox

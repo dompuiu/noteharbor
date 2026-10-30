@@ -165,6 +165,83 @@ describe("table styles", () => {
     expect(media[1]).toMatch(/\.row-menu-btn\s*\{[^}]*opacity:\s*1/);
   });
 
+  // The pinning metadata only works if the declared widths are the rendered
+  // widths: the left offsets are computed from the model, so the table must
+  // not stretch a pinned column when the viewport has space to spare.
+  test("the table uses fixed column widths so pinned offsets stay exact", () => {
+    expect(styles).toMatch(/table-layout:\s*fixed/);
+    expect(styles).toMatch(/table\s*\{[^}]*width:\s*100cqw/);
+  });
+
+  // Pinned identity cells: sticky against the pan, opaque so the columns
+  // sliding underneath never show through.
+  test("pins identity cells with an opaque background", () => {
+    const cell = styles.match(/\.table-sticky-cell\s*\{([^}]*)\}/);
+    expect(cell).not.toBeNull();
+    expect(cell[1]).toMatch(/position:\s*sticky/);
+    expect(cell[1]).toMatch(/z-index:\s*2/);
+    expect(cell[1]).toMatch(/background-color:\s*var\(--surface\)/);
+    // The per-column offset is written by the renderer from stickyOffsets();
+    // the stylesheet adds the scroller's pan offset to it because the table's
+    // nearest scrollport is the inner, non-scrolling horizontal container.
+    expect(cell[1]).toMatch(
+      /left:\s*calc\(\s*var\(--table-sticky-left,?\s*0px\)\s*\+\s*var\(--table-sticky-scroll-x,?\s*0px\)/,
+    );
+  });
+
+  // The sticky header owns the top of the table: pinned body cells stay
+  // underneath it even though they stack above the scrolling columns.
+  test("pinned header cells stack above the pinned body cells", () => {
+    const head = styles.match(/thead \.table-sticky-cell\s*\{([^}]*)\}/);
+    expect(head).not.toBeNull();
+    expect(head[1]).toMatch(/z-index:\s*5/);
+    // The header keeps its own surface instead of the row surface.
+    expect(head[1]).toMatch(/background-color:\s*var\(--surface-3\)/);
+
+    const thead = styles.match(/\nthead\s*\{([^}]*)\}/);
+    expect(thead).not.toBeNull();
+    const theadZ = Number(thead[1].match(/z-index:\s*(\d+)/)?.[1]);
+    expect(theadZ).toBeGreaterThan(2);
+  });
+
+  // The edge shadow is the only thing that tells a collector the identity
+  // block is pinned; it must not paint while the table sits at its start.
+  test("the pan shadow only exists while the table is horizontally scrolled", () => {
+    const rules = styles.match(/[^{}]*\.table-sticky-end::after[^{]*\{[^}]*\}/g);
+    expect(rules).not.toBeNull();
+    expect(rules).toHaveLength(1);
+    expect(rules[0]).toMatch(/\.table-scroll-x\.is-scrolled-x/);
+    expect(rules[0]).toMatch(/box-shadow:/);
+  });
+
+  // Row tints are layered over an opaque surface so a hovered or selected
+  // pinned cell still blocks the columns panning beneath it.
+  test("row tints keep the pinned cells opaque", () => {
+    for (const rule of [
+      /\.table-row-link:hover > \.table-sticky-cell[^{]*\{([^}]*)\}/,
+      /\.table-row-link--selected > \.table-sticky-cell\s*\{([^}]*)\}/,
+    ]) {
+      const match = styles.match(rule);
+      expect(match).not.toBeNull();
+      expect(match[1]).toMatch(/background-color:\s*var\(--surface\)/);
+      expect(match[1]).toMatch(/background-image:\s*linear-gradient/);
+    }
+  });
+
+  // The row's keyboard ring is drawn inside each cell; pinning must not turn
+  // it into an outline or clip it at the sticky cell's edge.
+  test("pinned cells keep the row's inset focus ring", () => {
+    const ring = styles.match(
+      /\.table-row-link--active > td\s*\{([^}]*box-shadow[^}]*)\}/,
+    );
+    expect(ring).not.toBeNull();
+    expect(ring[1]).toMatch(/inset 0 1px 0 var\(--accent\)/);
+
+    const cell = styles.match(/\.table-sticky-cell\s*\{([^}]*)\}/);
+    expect(cell[1]).not.toMatch(/outline:/);
+    expect(cell[1]).not.toMatch(/overflow:\s*hidden/);
+
+  });
   // Scanning: alignment comes from the column model, so the stylesheet owns
   // the three hooks and the cells carry the model's choice. Numbers line up
   // through tabular figures rather than centred text.
@@ -207,6 +284,7 @@ describe("table styles", () => {
     expect(styles).toMatch(
       /th\[aria-sort="descending"\]\s+\.sort-chevron\s*\{[^}]*transform:\s*rotate\(180deg\)/,
     );
+
   });
 });
 

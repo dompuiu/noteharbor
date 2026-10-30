@@ -4,6 +4,7 @@ import {
   COLUMN_SCROLL_STEP,
   clampColumnScrollLeft,
   columnPanScrollLeft,
+  isColumnPanShadowVisible,
   isColumnPanTarget,
 } from "./tableColumnPan.js";
 
@@ -108,5 +109,21 @@ describe("table column pan constants", () => {
   test("match the Viewer's pan step and pointer slop", () => {
     expect(COLUMN_SCROLL_STEP).toBe(200);
     expect(COLUMN_PAN_THRESHOLD_PX).toBe(2);
+  });
+});
+
+describe("isColumnPanShadowVisible", () => {
+  test("draws nothing at the start of the table", () => {
+    expect(isColumnPanShadowVisible(0)).toBe(false);
+    expect(isColumnPanShadowVisible(1)).toBe(false);
+  });
+
+  test("draws the pinned block's shadow once the columns have moved", () => {
+    expect(isColumnPanShadowVisible(40)).toBe(true);
+  });
+
+  test("treats a missing offset as not scrolled", () => {
+    expect(isColumnPanShadowVisible(undefined)).toBe(false);
+    expect(isColumnPanShadowVisible(null)).toBe(false);
   });
 });

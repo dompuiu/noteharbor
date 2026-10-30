@@ -217,6 +217,38 @@ export const displayOrderColumn = tableColumns.find(
   (column) => column.kind === "order",
 );
 
+// Pinned columns stay put while the table pans, so each needs the sum of the
+// declared widths of the pinned columns that come before it. Only *visible*
+// pinned columns count: a hidden column must leave no gap in the pinned block.
+export function stickyOffsets(visibleColumns = tableColumns) {
+  const offsets = {};
+  let left = 0;
+
+  for (const column of visibleColumns) {
+    if (!column.sticky) {
+      continue;
+    }
+
+    offsets[column.key] = left;
+    left += column.width ?? 0;
+  }
+
+  return offsets;
+}
+
+// The right-most pinned column carries the pan shadow. It is derived from the
+// visible set rather than document order so a hidden column moves the marker
+// with the block.
+export function lastStickyKey(visibleColumns = tableColumns) {
+  for (let index = visibleColumns.length - 1; index >= 0; index -= 1) {
+    if (visibleColumns[index].sticky) {
+      return visibleColumns[index].key;
+    }
+  }
+
+  return null;
+}
+
 // Display order is the table's default sort and still sorts under the `id`
 // key, exactly as it did before the column model.
 export const defaultSortKey = displayOrderColumn.key;

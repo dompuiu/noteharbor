@@ -6,11 +6,13 @@ import {
   hideableColumnKeys,
   hideableColumns,
   hideableDataColumns,
+  lastStickyKey,
   matchesSearchQuery,
   normalizeDenominationFilterValue,
   searchColumnKeys,
   slideshowFilterKeys,
   sortableColumnKeys,
+  stickyOffsets,
   tableColumns,
   validSortKeys,
 } from "./tableColumns.js";
@@ -163,6 +165,59 @@ describe("table column model", () => {
       "catalog_number",
       "actions",
     ]);
+  });
+});
+
+describe("stickyOffsets", () => {
+  test("accumulates the declared widths of the pinned columns in table order", () => {
+    expect(stickyOffsets()).toEqual({
+      selection: 0,
+      thumbnail: 44,
+      catalog_number: 108,
+    });
+  });
+
+  test("uses only the pinned columns, so the scrolling columns between them leave no gap", () => {
+    // `id` sits between selection and thumbnail and pans under the pinned
+    // block, so it must not shift the offsets.
+    const offsets = stickyOffsets(tableColumns);
+
+    expect(offsets.thumbnail).toBe(44);
+    expect(offsets.catalog_number).toBe(44 + 64);
+  });
+
+  test("leaves no gap when a middle pinned column is hidden", () => {
+    const withoutThumbnail = tableColumns.filter(
+      (column) => column.key !== "thumbnail",
+    );
+    const offsets = stickyOffsets(withoutThumbnail);
+
+    expect(offsets).toEqual({ selection: 0, catalog_number: 44 });
+  });
+
+  test("gives no offset to scrolling columns", () => {
+    const offsets = stickyOffsets();
+
+    expect(offsets.id).toBeUndefined();
+    expect(offsets.denomination).toBeUndefined();
+  });
+});
+
+describe("lastStickyKey", () => {
+  test("marks the right-most pinned column as the end of the block", () => {
+    expect(lastStickyKey(tableColumns)).toBe("catalog_number");
+  });
+
+  test("moves the end marker when the right-most pinned column is hidden", () => {
+    const withoutCatalog = tableColumns.filter(
+      (column) => column.key !== "catalog_number",
+    );
+
+    expect(lastStickyKey(withoutCatalog)).toBe("thumbnail");
+  });
+
+  test("has no end marker when nothing pins", () => {
+    expect(lastStickyKey([])).toBeNull();
   });
 });
 
