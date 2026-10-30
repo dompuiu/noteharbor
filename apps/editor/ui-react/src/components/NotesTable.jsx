@@ -64,7 +64,7 @@ export function HomeHero() {
 
 const tableStateStorageKey = "noteharbor.notesTableState";
 const tableColumnsStorageKeyPrefix = "noteharbor.notesTableColumns";
-const rowHeightEstimate = 43;
+const rowHeightEstimate = 48;
 const validPreviewKinds = new Set(["front", "back"]);
 const slideshowFilterParamPrefix = "f_";
 const tagChipHorizontalPadding = 20;
@@ -76,6 +76,14 @@ const tagsPopoverOpenDelay = 300;
 const tagsPopoverCloseDelay = 150;
 
 let tagTextMeasureContext = null;
+
+// Alignment travels with the column model (`align`: text left, display order
+// right, selection/thumbnail/actions centered) and is emitted as a class on
+// every header and body cell. The stylesheet owns the actual text-align, so
+// hidden and reordered columns cannot drift out of alignment.
+function alignmentClass(column) {
+  return `align-${column?.align ?? "left"}`;
+}
 
 function getTagTextMeasureContext() {
   if (tagTextMeasureContext || typeof document === "undefined") {
@@ -3773,10 +3781,10 @@ function NotesTable({
 
   // Row cells are rendered from the column model, so column order and the
   // set of columns live in one place. Each kind keeps its existing markup.
-  function renderReorderCell(note) {
+  function renderReorderCell(column, note) {
     return (
       <td
-        className={`drag-cell${canReorder ? " drag-cell--enabled" : ""}`}
+        className={`drag-cell${canReorder ? " drag-cell--enabled" : ""} ${alignmentClass(column)}`}
         onClick={(event) => event.stopPropagation()}
       >
         {canReorder ? (
@@ -3825,9 +3833,12 @@ function NotesTable({
     );
   }
 
-  function renderSelectionCell(note) {
+  function renderSelectionCell(column, note) {
     return (
-      <td onClick={(event) => event.stopPropagation()}>
+      <td
+        className={alignmentClass(column)}
+        onClick={(event) => event.stopPropagation()}
+      >
         <input
           aria-label={`Select ${note.denomination}`}
           checked={selectedIdSet.has(note.id)}
@@ -3838,9 +3849,9 @@ function NotesTable({
     );
   }
 
-  function renderThumbnailCell(note, frontThumb, frontPreview) {
+  function renderThumbnailCell(column, note, frontThumb, frontPreview) {
     return (
-      <td>
+      <td className={`table-thumb-cell ${alignmentClass(column)}`}>
         {frontThumb ? (
           <span
             className="table-thumb-wrap"
@@ -3899,7 +3910,7 @@ function NotesTable({
   function renderDataCell(column, note) {
     if (column.isTags) {
       return (
-        <td className="tags-column">
+        <td className={`tags-column ${alignmentClass(column)}`}>
           <TagsCell onApplyFilter={applyTagFilter} tags={note.tags} />
         </td>
       );
@@ -3909,7 +3920,7 @@ function NotesTable({
       // The denomination is the row's primary action: it opens the Note
       // slideshow through the router. The source URL lives in the row menu.
       return (
-        <td>
+        <td className={alignmentClass(column)}>
           <a
             draggable={false}
             href={buildTableHash(slideshowRoute(note.id))}
@@ -3929,10 +3940,10 @@ function NotesTable({
       );
     }
 
-    return <td>{note[column.key]}</td>;
+    return <td className={alignmentClass(column)}>{note[column.key]}</td>;
   }
 
-  function renderActionsCell(note) {
+  function renderActionsCell(column, note) {
     const noteLabel =
       note.denomination || note.catalog_number || `note ${note.id}`;
     const items = [
@@ -3978,7 +3989,7 @@ function NotesTable({
     });
 
     return (
-      <td>
+      <td className={alignmentClass(column)}>
         <RowActionsMenu
           items={items}
           label={`Actions for ${noteLabel}`}
@@ -3992,22 +4003,24 @@ function NotesTable({
 
     switch (column.kind) {
       case "reorder":
-        cell = renderReorderCell(note);
+        cell = renderReorderCell(column, note);
         break;
       case "selection":
-        cell = renderSelectionCell(note);
+        cell = renderSelectionCell(column, note);
         break;
       case "order":
-        cell = <td>{note.display_order ?? "-"}</td>;
+        cell = (
+          <td className={alignmentClass(column)}>{note.display_order ?? "-"}</td>
+        );
         break;
       case "thumbnail":
-        cell = renderThumbnailCell(note, frontThumb, frontPreview);
+        cell = renderThumbnailCell(column, note, frontThumb, frontPreview);
         break;
       case "data":
         cell = renderDataCell(column, note);
         break;
       case "actions":
-        cell = renderActionsCell(note);
+        cell = renderActionsCell(column, note);
         break;
       default:
         break;
@@ -4488,7 +4501,7 @@ function NotesTable({
                           if (column.kind === "reorder") {
                             return (
                               <th
-                                className="drag-cell"
+                                className="drag-cell align-center"
                                 key={column.key}
                                 scope="col"
                               />
@@ -4497,7 +4510,11 @@ function NotesTable({
 
                           if (column.kind === "selection") {
                             return (
-                              <th key={column.key} scope="col">
+                              <th
+                                className="align-center"
+                                key={column.key}
+                                scope="col"
+                              >
                                 <input
                                   aria-label="Select all visible rows"
                                   checked={allVisibleSelected}
@@ -4512,9 +4529,12 @@ function NotesTable({
                           if (!column.sortable) {
                             return (
                               <th
-                                className={
-                                  column.isTags ? "tags-column" : undefined
-                                }
+                                className={[
+                                  alignmentClass(column),
+                                  column.isTags ? "tags-column" : null,
+                                ]
+                                  .filter(Boolean)
+                                  .join(" ")}
                                 key={column.key}
                                 scope="col"
                               >
@@ -4523,24 +4543,51 @@ function NotesTable({
                             );
                           }
 
+                          const isSorted = sortKey === column.key;
+                          const className = [
+                            alignmentClass(column),
+                            column.isTags ? "tags-column" : null,
+                          ]
+                            .filter(Boolean)
+                            .join(" ");
+
                           return (
                             <th
-                              className={
-                                column.isTags ? "tags-column" : undefined
+                              aria-sort={
+                                isSorted
+                                  ? sortDirection === "asc"
+                                    ? "ascending"
+                                    : "descending"
+                                  : "none"
                               }
+                              className={className}
                               key={column.key}
                               scope="col"
                             >
                               <button
-                                className={`sort-button${sortKey === column.key ? " sort-button--active" : ""}`}
+                                className={`sort-button${isSorted ? " sort-button--active" : ""}`}
                                 onClick={() => toggleSort(column.key)}
                                 type="button"
                               >
                                 {column.label.toUpperCase()}
-                                {sortKey === column.key ? (
-                                  <span>
-                                    {sortDirection === "asc" ? " ▲" : " ▼"}
-                                  </span>
+                                {isSorted ? (
+                                  <svg
+                                    aria-hidden="true"
+                                    className="sort-chevron"
+                                    focusable="false"
+                                    height="11"
+                                    viewBox="0 0 24 24"
+                                    width="11"
+                                  >
+                                    <path
+                                      d="m6 15 6-6 6 6"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth="2.4"
+                                    />
+                                  </svg>
                                 ) : null}
                               </button>
                             </th>

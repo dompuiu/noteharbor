@@ -111,7 +111,7 @@ describe("NotesTable new collection draft", () => {
 
     // Same chrome as the view: headers, filter row, empty copy, count.
     expect(await screen.findByText("0 notes in the current view.")).toBeInTheDocument();
-    expect(screen.getByRole("button", { name: /ID/ })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "#" })).toBeInTheDocument();
     expect(screen.getByText("FRONT")).toBeInTheDocument();
     expect(
       screen.getByText(/No notes are stored yet/),
