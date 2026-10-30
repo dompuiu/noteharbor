@@ -63,6 +63,7 @@ export function HomeHero() {
 }
 
 const tableStateStorageKey = "noteharbor.notesTableState";
+const tableColumnsStorageKeyPrefix = "noteharbor.notesTableColumns";
 const rowHeightEstimate = 43;
 const validPreviewKinds = new Set(["front", "back"]);
 const slideshowFilterParamPrefix = "f_";
@@ -526,6 +527,52 @@ function loadSavedTableState() {
   } catch {
     window.localStorage.removeItem(tableStateStorageKey);
     return null;
+  }
+}
+
+function columnsStateStorageKey(collectionId) {
+  return `${tableColumnsStorageKeyPrefix}.${collectionId}`;
+}
+
+function defaultVisibleColumnKeys() {
+  return [...hideableColumnKeys];
+}
+
+// Columns are saved per collection, unlike filters/sort/selection which keep
+// the single global table-state key. A collection with no saved choice shows
+// every column; a saved choice that would leave no field column is treated as
+// corrupt and falls back to all of them.
+function loadSavedColumnKeys(collectionId) {
+  if (!Number.isInteger(collectionId) || typeof window === "undefined") {
+    return defaultVisibleColumnKeys();
+  }
+
+  const storageKey = columnsStateStorageKey(collectionId);
+
+  try {
+    const rawValue = window.localStorage.getItem(storageKey);
+
+    if (!rawValue) {
+      return defaultVisibleColumnKeys();
+    }
+
+    const parsedValue = JSON.parse(rawValue);
+
+    if (!Array.isArray(parsedValue)) {
+      return defaultVisibleColumnKeys();
+    }
+
+    const savedKeys = hideableColumnKeys.filter((key) =>
+      parsedValue.includes(key),
+    );
+    const keepsADataColumn = savedKeys.some(
+      (key) => getTableColumn(key)?.kind === "data",
+    );
+
+    return keepsADataColumn ? savedKeys : defaultVisibleColumnKeys();
+  } catch {
+    window.localStorage.removeItem(storageKey);
+    return defaultVisibleColumnKeys();
   }
 }
 
@@ -1137,9 +1184,13 @@ function NotesTable({
   // Which hideable columns the collector has chosen to show. Permanent
   // columns are never in this set; a column absent here is hidden. Persisted
   // per collection, unlike filters/sort/selection which share one global key.
-  const [visibleColumnKeys, setVisibleColumnKeys] = useState(() => [
-    ...hideableColumnKeys,
-  ]);
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState(() =>
+    loadSavedColumnKeys(collectionId),
+  );
+  // The collection whose saved column choice the current state belongs to.
+  // It lets the save effect skip the render that is still carrying the
+  // previous collection's columns while the restore effect catches up.
+  const columnsCollectionRef = useRef(collectionId);
   // The search query is view state only: it is not written to saved table
   // state, and it is cleared with the collection. A cold-opened slideshow URL
   // carries the query so closing the slideshow returns to the searched table.
@@ -1791,14 +1842,23 @@ function NotesTable({
     () => orderedNotes.some((note) => selectedIdSet.has(note.id)),
     [orderedNotes, selectedIdSet],
   );
+  const hasAllColumns = visibleColumnKeys.length === hideableColumnKeys.length;
   const hasSavedTableState = useMemo(
     () =>
       hasActiveFilters ||
       hasActiveQuery ||
+      !hasAllColumns ||
       sortKey !== defaultSortKey ||
       sortDirection !== "asc" ||
       selectedIds.length > 0,
-    [hasActiveFilters, hasActiveQuery, selectedIds, sortDirection, sortKey],
+    [
+      hasActiveFilters,
+      hasActiveQuery,
+      hasAllColumns,
+      selectedIds,
+      sortDirection,
+      sortKey,
+    ],
   );
   const rowVirtualizer = useVirtualizer({
     count: deferredOrderedNotes.length,
@@ -1825,6 +1885,25 @@ function NotesTable({
       JSON.stringify({ filters, selectedIds, sortKey, sortDirection }),
     );
   }, [filters, selectedIds, sortDirection, sortKey]);
+
+  useEffect(() => {
+    if (!Number.isInteger(collectionId)) {
+      return;
+    }
+
+    // A collection switch restores that collection's own choice before the
+    // save below can write the previous collection's columns under the new id.
+    if (columnsCollectionRef.current !== collectionId) {
+      columnsCollectionRef.current = collectionId;
+      setVisibleColumnKeys(loadSavedColumnKeys(collectionId));
+      return;
+    }
+
+    window.localStorage.setItem(
+      columnsStateStorageKey(collectionId),
+      JSON.stringify(visibleColumnKeys),
+    );
+  }, [collectionId, visibleColumnKeys]);
 
   useEffect(() => {
     rowVirtualizer.scrollToOffset(0);
@@ -2640,6 +2719,7 @@ function NotesTable({
     setQuery("");
     setSortKey(defaultSortKey);
     setSortDirection("asc");
+    setVisibleColumnKeys(defaultVisibleColumnKeys());
     if (showSelection) {
       setSelectedIds([]);
     }

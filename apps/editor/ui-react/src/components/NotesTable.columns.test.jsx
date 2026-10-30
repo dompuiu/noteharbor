@@ -71,8 +71,8 @@ const collectionNotes = [
   }),
 ];
 
-function renderTable(collectionId = 1) {
-  return render(
+function tableScreen(collectionId = 1) {
+  return (
     <MemoryRouter
       initialEntries={[`/catalog/collections/${collectionId}/view`]}
     >
@@ -86,8 +86,12 @@ function renderTable(collectionId = 1) {
         collectionsError=""
         loadingCollections={false}
       />
-    </MemoryRouter>,
+    </MemoryRouter>
   );
+}
+
+function renderTable(collectionId = 1) {
+  return render(tableScreen(collectionId));
 }
 
 function columnsButton() {
@@ -295,5 +299,76 @@ describe("NotesTable columns", () => {
 
     const idHeader = screen.getByRole("columnheader", { name: /^ID/ });
     expect(within(idHeader).getByRole("button")).toHaveTextContent("▲");
+  });
+
+  test("the choice is saved per collection and survives a reload", async () => {
+    const { unmount } = renderTable(1);
+
+    await screen.findByText("AAAA");
+    const { user } = await openPicker();
+    await user.click(columnCheckbox("Serial"));
+
+    await waitFor(() => {
+      const savedColumns = JSON.parse(
+        window.localStorage.getItem("noteharbor.notesTableColumns.1"),
+      );
+      expect(savedColumns).not.toContain("serial");
+    });
+
+    // The global view state keeps its existing shape: columns do not join it.
+    const savedState = JSON.parse(
+      window.localStorage.getItem("noteharbor.notesTableState"),
+    );
+    expect(Object.keys(savedState).sort()).toEqual([
+      "filters",
+      "selectedIds",
+      "sortDirection",
+      "sortKey",
+    ]);
+
+    unmount();
+    renderTable(1);
+
+    await screen.findByText("AAAA");
+    expect(
+      screen.queryByRole("columnheader", { name: "SERIAL" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("SER-1")).not.toBeInTheDocument();
+  });
+
+  test("each collection keeps its own column choice", async () => {
+    const { rerender } = renderTable(1);
+
+    await screen.findByText("AAAA");
+    const { user } = await openPicker();
+    await user.click(columnCheckbox("Serial"));
+
+    rerender(tableScreen(2));
+
+    expect(
+      await screen.findByRole("columnheader", { name: "SERIAL" }),
+    ).toBeInTheDocument();
+
+    await user.click(await columnsButton());
+    await screen.findByRole("dialog", { name: "Visible columns" });
+    await user.click(columnCheckbox("Date"));
+    await waitFor(() => {
+      const savedColumns = JSON.parse(
+        window.localStorage.getItem("noteharbor.notesTableColumns.2"),
+      );
+      expect(savedColumns).not.toContain("issue_date");
+      expect(savedColumns).toContain("serial");
+    });
+
+    rerender(tableScreen(1));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("columnheader", { name: "SERIAL" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(
+      screen.getByRole("columnheader", { name: "DATE" }),
+    ).toBeInTheDocument();
   });
 });
