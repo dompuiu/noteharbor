@@ -220,7 +220,8 @@ describe("Delete keeps the cursor on the table", () => {
 
     await user.click(screen.getByRole("checkbox", { name: "Select AAAA" }));
     await user.click(screen.getByRole("checkbox", { name: "Select BBBB" }));
-    await user.click(screen.getByRole("button", { name: "Delete selected" }));
+    const bar = screen.getByRole("region", { name: "Selection actions" });
+    await user.click(within(bar).getByRole("button", { name: "Delete" }));
     await confirmDelete(user);
 
     await waitFor(() => {

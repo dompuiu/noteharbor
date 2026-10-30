@@ -1818,10 +1818,16 @@ function NotesTable({
 
     const headerHeight = scroller.querySelector("thead")?.offsetHeight ?? 0;
     // The horizontal scrollbar is hidden now, so the vertical track runs to
-    // the bottom edge instead of stopping above a bar.
+    // the bottom edge of the rows area instead of stopping above a bar. The
+    // track is drawn in the table shell, while the selection bar is a flex
+    // sibling below the scroller, so measure that gap and keep the track
+    // above the bar rather than drawing across it.
     const top = headerHeight + 4;
-    const bottom = 4;
-    const trackHeight = Math.max(0, xScroller.clientHeight - top - bottom);
+    const shellBottom =
+      tableShellRef.current?.getBoundingClientRect().bottom ?? 0;
+    const scrollerBottom = xScroller.getBoundingClientRect().bottom;
+    const bottom = Math.max(0, Math.round(shellBottom - scrollerBottom)) + 4;
+    const trackHeight = Math.max(0, xScroller.clientHeight - top - 4);
 
     if (trackHeight <= 40) {
       vMetricsRef.current = { max: 0, range: 0, thumbHeight: 0 };
@@ -4177,18 +4183,6 @@ function NotesTable({
                 Press <kbd>/</kbd> to filter, <kbd>&uarr;</kbd>/
                 <kbd>&darr;</kbd> to browse rows, or <kbd>?</kbd> for shortcuts.
               </p>
-              {selectedIds.length ? (
-                <div className="inline-select-group inline-select-group--bulk">
-                  <button
-                    className="button button-primary"
-                    disabled={bulkLoading}
-                    onClick={handleBulkDelete}
-                    type="button"
-                  >
-                    {bulkLoading ? "Working..." : "Delete selected"}
-                  </button>
-                </div>
-              ) : null}
             </div>
 
             <div
@@ -4633,6 +4627,32 @@ function NotesTable({
                     }}
                     type="button"
                   />
+                </div>
+              ) : null}
+              {selectedIds.length ? (
+                <div
+                  aria-label="Selection actions"
+                  className="table-bulk-bar"
+                  role="region"
+                >
+                  <span className="table-bulk-bar-count">
+                    {selectedIds.length} selected
+                  </span>
+                  <button
+                    className="table-bulk-bar-delete"
+                    disabled={bulkLoading}
+                    onClick={handleBulkDelete}
+                    type="button"
+                  >
+                    {bulkLoading ? "Working..." : "Delete"}
+                  </button>
+                  <button
+                    className="table-bulk-bar-clear"
+                    onClick={clearSelection}
+                    type="button"
+                  >
+                    Clear
+                  </button>
                 </div>
               ) : null}
             </div>

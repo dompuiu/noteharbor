@@ -39,6 +39,19 @@ describe("table styles", () => {
     expect(edge[1]).toMatch(/var\(--accent\)/);
   });
 
+  // The bulk bar is a layout band, not an overlay, so the last row is never
+  // covered: the shell stays a column flex container and the bar takes its own
+  // fixed-size slot below the scroller.
+  test("the bulk bar reserves its own band inside the table shell", () => {
+    expect(styles).toMatch(
+      /\.table-shell\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column/,
+    );
+    const bar = styles.match(/\.table-bulk-bar\s*\{([^}]*)\}/);
+    expect(bar).not.toBeNull();
+    expect(bar[1]).toMatch(/flex:\s*0\s+0\s+auto/);
+    expect(bar[1]).not.toMatch(/position:\s*absolute/);
+  });
+
   test("sort buttons tint with accent-soft on hover", () => {
     expect(styles).toMatch(
       /\.sort-button:hover\s*\{\s*background:\s*var\(--accent-soft\)/,
