@@ -144,4 +144,39 @@ describe("NotesTable filters", () => {
     ).not.toBeInTheDocument();
     expect(await filtersToggle()).toHaveAttribute("aria-expanded", "false");
   });
+
+  test("typing a filter updates the badge and shows a removable chip", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = await openFilters();
+
+    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
+
+    const toggle = await screen.findByRole("button", {
+      name: "Filters (1 active)",
+    });
+    expect(within(toggle).getByText("1")).toBeInTheDocument();
+    expect(screen.getByText("Company: PMG")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Remove Company filter" }),
+    ).toBeInTheDocument();
+  });
+
+  test("the filter row stays open after closing the toggle while a filter has a value", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = await openFilters();
+
+    const company = await screen.findByLabelText("Filter Company");
+    await user.type(company, "PMG");
+
+    await user.click(await filtersToggle());
+
+    const stillOpen = await screen.findByLabelText("Filter Company");
+    expect(stillOpen).toHaveValue("PMG");
+    expect(await filtersToggle()).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText("Company: PMG")).toBeInTheDocument();
+  });
 });

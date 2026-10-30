@@ -532,6 +532,20 @@ function valueToString(note, key) {
   return String(note[key] ?? "");
 }
 
+// Tags filters store their values comma-separated; chips read better with
+// the same separator the table uses. Every other column keeps its raw input.
+function formatFilterChipValue(column, value) {
+  if (!column.isTags) {
+    return value;
+  }
+
+  return value
+    .split(",")
+    .map((token) => token.trim())
+    .filter(Boolean)
+    .join(", ");
+}
+
 function parseFilterValue(rawValue, normalizeValue) {
   const normalized = String(rawValue ?? "")
     .trim()
@@ -2599,6 +2613,22 @@ function NotesTable({
     }
   }
 
+  function clearColumnFilter(key) {
+    setFilters((current) => {
+      if (!(key in current)) {
+        return current;
+      }
+
+      const next = { ...current };
+      delete next[key];
+      return next;
+    });
+  }
+
+  function clearAllFilters() {
+    setFilters({});
+  }
+
   function clearSearch() {
     setQuery("");
     searchInputRef.current?.focus();
@@ -4292,6 +4322,34 @@ function NotesTable({
                   </span>
                 ) : null}
               </button>
+              {activeColumnFilters.length ? (
+                <div className="table-filter-chips">
+                  {activeColumnFilters.map(({ column, value }) => (
+                    <span className="table-filter-chip" key={column.key}>
+                      <span className="table-filter-chip-label">
+                        {`${column.label}: ${formatFilterChipValue(column, value)}`}
+                      </span>
+                      <button
+                        aria-label={`Remove ${column.label} filter`}
+                        className="table-filter-chip-remove"
+                        onClick={() => clearColumnFilter(column.key)}
+                        type="button"
+                      >
+                        &times;
+                      </button>
+                    </span>
+                  ))}
+                  {activeColumnFilters.length > 1 ? (
+                    <button
+                      className="table-filter-clear-all"
+                      onClick={clearAllFilters}
+                      type="button"
+                    >
+                      Clear all
+                    </button>
+                  ) : null}
+                </div>
+              ) : null}
               <div className="inline-select-group">
                 {hasSavedTableState ? (
                   <button
