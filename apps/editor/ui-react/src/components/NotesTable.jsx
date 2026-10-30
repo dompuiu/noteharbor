@@ -42,6 +42,7 @@ import {
   getTableColumn,
   hideableColumnKeys,
   hideableColumns,
+  hideableDataColumns,
   matchesSearchQuery,
   slideshowFilterKeys,
   tableColumns,
@@ -1754,6 +1755,16 @@ function NotesTable({
       ),
     [visibleColumnKeys],
   );
+  // The one field column that must stay visible: once it is alone, its
+  // checkbox is disabled so the collector cannot reduce the table to
+  // identity columns only.
+  const lastVisibleDataColumnKey = useMemo(() => {
+    const visibleDataKeys = hideableDataColumns
+      .filter((column) => visibleColumnKeys.includes(column.key))
+      .map((column) => column.key);
+
+    return visibleDataKeys.length === 1 ? visibleDataKeys[0] : null;
+  }, [visibleColumnKeys]);
   const totalColumnCount =
     visibleColumns.length +
     // Trailing gutter column in the header that the rows stop before, so
@@ -2714,13 +2725,22 @@ function NotesTable({
   }
 
   function toggleColumnVisibility(key) {
-    setVisibleColumnKeys((current) =>
-      current.includes(key)
-        ? current.filter((currentKey) => currentKey !== key)
-        : hideableColumnKeys.filter(
-            (currentKey) => currentKey === key || current.includes(currentKey),
-          ),
-    );
+    setVisibleColumnKeys((current) => {
+      if (!current.includes(key)) {
+        return hideableColumnKeys.filter(
+          (currentKey) => currentKey === key || current.includes(currentKey),
+        );
+      }
+
+      // Never leave the table with no field column at all: the permanent
+      // identity columns alone cannot be read as data.
+      const remaining = current.filter((currentKey) => currentKey !== key);
+      const keepsADataColumn = remaining.some(
+        (currentKey) => getTableColumn(currentKey)?.kind === "data",
+      );
+
+      return keepsADataColumn ? remaining : current;
+    });
   }
 
   function toggleSort(key) {
@@ -4314,6 +4334,7 @@ function NotesTable({
               ) : null}
               <ColumnPicker
                 columns={hideableColumns}
+                disabledColumnKey={lastVisibleDataColumnKey}
                 onToggle={toggleColumnVisibility}
                 visibleColumnKeys={visibleColumnKeys}
               />

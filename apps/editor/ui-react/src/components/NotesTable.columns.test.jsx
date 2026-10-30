@@ -192,4 +192,61 @@ describe("NotesTable columns", () => {
     ).toBeInTheDocument();
     expect(screen.getByText("SER-1")).toBeInTheDocument();
   });
+
+  test("the last visible data column cannot be hidden", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const { user } = await openPicker();
+
+    for (const name of ["Denomination", "Date", "Company", "Grade", "Serial"]) {
+      await user.click(columnCheckbox(name));
+    }
+
+    expect(columnCheckbox("Tags")).toBeDisabled();
+    await user.click(columnCheckbox("Tags"));
+    expect(columnCheckbox("Tags")).toBeChecked();
+    expect(
+      screen.getByRole("columnheader", { name: "TAGS" }),
+    ).toBeInTheDocument();
+
+    await user.click(columnCheckbox("Denomination"));
+
+    expect(columnCheckbox("Tags")).not.toBeDisabled();
+  });
+
+  test("permanent columns stay rendered when every hideable column is hidden", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const { user } = await openPicker();
+
+    for (const name of [
+      "ID",
+      "Denomination",
+      "Date",
+      "Company",
+      "Grade",
+      "Serial",
+    ]) {
+      await user.click(columnCheckbox(name));
+    }
+
+    expect(
+      screen.getByRole("columnheader", { name: "CATALOG #" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "FRONT" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: "ACTIONS" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: "Select all visible rows" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Actions for AAAA" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Fr. 2300")).toBeInTheDocument();
+  });
 });
