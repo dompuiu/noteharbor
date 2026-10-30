@@ -3,7 +3,9 @@ import {
   defaultSortKey,
   filterColumnKeys,
   getTableColumn,
+  matchesSearchQuery,
   normalizeDenominationFilterValue,
+  searchColumnKeys,
   slideshowFilterKeys,
   sortableColumnKeys,
   tableColumns,
@@ -133,6 +135,66 @@ describe("table column model", () => {
       "catalog_number",
       "actions",
     ]);
+  });
+});
+
+describe("matchesSearchQuery", () => {
+  const searchNote = {
+    id: 7,
+    display_order: 7,
+    serial: "SER-9001",
+    catalog_number: "Fr. 2300",
+    denomination: "Two Dollars",
+    grading_company: "PMG",
+    grade: "65 EPQ",
+    issue_date: "1917",
+    tags: [{ id: 1, name: "star note" }, { id: 2, name: "large size" }],
+  };
+
+  test("searches every data column and tag names", () => {
+    expect(searchColumnKeys).toEqual([
+      "catalog_number",
+      "denomination",
+      "issue_date",
+      "grading_company",
+      "grade",
+      "serial",
+      "tags",
+    ]);
+
+    for (const query of [
+      "9001",
+      "2300",
+      "two dollars",
+      "pmg",
+      "65 epq",
+      "1917",
+      "STAR NOTE",
+    ]) {
+      expect(matchesSearchQuery(searchNote, query)).toBe(true);
+    }
+  });
+
+  test("is case-insensitive and substring-based", () => {
+    expect(matchesSearchQuery(searchNote, "fr. 2300")).toBe(true);
+    expect(matchesSearchQuery(searchNote, "2300")).toBe(true);
+    expect(matchesSearchQuery(searchNote, "  2300  ")).toBe(true);
+  });
+
+  test("rejects a note that matches none of the fields", () => {
+    expect(matchesSearchQuery(searchNote, "silver certificate")).toBe(false);
+  });
+
+  test("an empty query keeps every note", () => {
+    expect(matchesSearchQuery(searchNote, "")).toBe(true);
+    expect(matchesSearchQuery(searchNote, "   ")).toBe(true);
+    expect(matchesSearchQuery(searchNote, null)).toBe(true);
+  });
+
+  test("matches tag names without matching tag ids", () => {
+    expect(matchesSearchQuery(searchNote, "star")).toBe(true);
+    expect(matchesSearchQuery(searchNote, "large size")).toBe(true);
+    expect(matchesSearchQuery(searchNote, "1,2")).toBe(false);
   });
 });
 
