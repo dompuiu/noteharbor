@@ -4448,26 +4448,17 @@ function NotesTable({
                 onToggle={toggleColumnVisibility}
                 visibleColumnKeys={visibleColumnKeys}
               />
-              <div className="inline-select-group">
+              <div className="table-reset-slot">
                 {hasSavedTableState ? (
                   <button
                     className="button"
                     onClick={resetTableState}
                     type="button"
                   >
-                    Reset filters, sorting, and selection
+                    Reset view
                   </button>
                 ) : null}
               </div>
-              <p className="table-helper-text">
-                {reorderLoading
-                  ? "Saving manual order..."
-                  : canReorder
-                    ? "Drag rows from the handle to change the default order."
-                    : "Reordering is available only in the default unfiltered view."}{" "}
-                Press <kbd>/</kbd> to filter, <kbd>&uarr;</kbd>/
-                <kbd>&darr;</kbd> to browse rows, or <kbd>?</kbd> for shortcuts.
-              </p>
             </div>
 
             <div
@@ -5003,6 +4994,16 @@ function NotesTable({
                   </button>
                 </div>
               ) : null}
+              <p className="table-footer-hint">
+                {reorderLoading ? (
+                  "Saving manual order..."
+                ) : (
+                  <>
+                    Drag the handle to reorder · <kbd>&uarr;</kbd>{" "}
+                    <kbd>&darr;</kbd> to browse · <kbd>?</kbd> shortcuts
+                  </>
+                )}
+              </p>
             </div>
           </>
         ) : null}

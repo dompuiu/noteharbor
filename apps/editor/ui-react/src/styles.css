@@ -3158,6 +3158,16 @@ th[aria-sort="descending"] .sort-chevron {
   min-width: 88px;
 }
 
+/* The Reset view slot keeps its width while the control is hidden, so a
+   non-default view does not shift the toolbar when the button appears. */
+.table-reset-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex: 0 0 auto;
+  min-width: 7rem;
+}
+
 .toolbar-row--table-controls {
   align-items: stretch;
 }
@@ -3397,6 +3407,23 @@ th[aria-sort="descending"] .sort-chevron {
   align-self: center;
   color: var(--text-muted);
   font-size: 0.8rem;
+}
+
+/* The hint is a real flex child of the shell, after the rows and the bulk bar,
+   so it takes its own band at the foot instead of overlayering them. It stays
+   a single muted, non-interactive line. */
+.table-footer-hint {
+  display: block;
+  flex: 0 0 auto;
+  margin: 0;
+  padding: 6px 14px;
+  border-top: 1px solid var(--border-soft);
+  color: var(--text-muted);
+  font-size: 0.78rem;
+  line-height: 1.5;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .drag-cell {
@@ -4797,7 +4824,8 @@ kbd {
   color: var(--on-dark-text);
 }
 
-.table-helper-text kbd {
+.table-helper-text kbd,
+.table-footer-hint kbd {
   margin: 0 1px;
 }
 

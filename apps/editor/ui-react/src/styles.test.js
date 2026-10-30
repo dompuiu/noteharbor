@@ -58,6 +58,16 @@ describe("table styles", () => {
     );
   });
 
+  // The footer hint is the last band of the shell, not an overlay: it keeps
+  // its own fixed-size slot below the scroller and the bulk bar, on one line.
+  test("the footer hint reserves its own band inside the table shell", () => {
+    const hint = styles.match(/\.table-footer-hint\s*\{([^}]*)\}/);
+    expect(hint).not.toBeNull();
+    expect(hint[1]).toMatch(/flex:\s*0\s+0\s+auto/);
+    expect(hint[1]).not.toMatch(/position:\s*absolute/);
+    expect(hint[1]).toMatch(/white-space:\s*nowrap/);
+  });
+
   test("sort buttons tint with accent-soft on hover", () => {
     expect(styles).toMatch(
       /\.sort-button:hover\s*\{\s*background:\s*var\(--accent-soft\)/,
