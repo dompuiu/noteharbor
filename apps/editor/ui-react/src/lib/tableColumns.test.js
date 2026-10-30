@@ -3,6 +3,9 @@ import {
   defaultSortKey,
   filterColumnKeys,
   getTableColumn,
+  hideableColumnKeys,
+  hideableColumns,
+  hideableDataColumns,
   matchesSearchQuery,
   normalizeDenominationFilterValue,
   searchColumnKeys,
@@ -118,6 +121,31 @@ describe("table column model", () => {
     for (const key of slideshowFilterKeys) {
       expect(getTableColumn(key).slideshowFilter).toBe(true);
     }
+  });
+
+  test("derives the picker's choices from hideable metadata", () => {
+    expect(hideableColumns).toEqual(
+      tableColumns.filter((column) => column.hideable),
+    );
+    expect(hideableColumnKeys).toEqual([
+      "id",
+      "denomination",
+      "issue_date",
+      "grading_company",
+      "grade",
+      "serial",
+      "tags",
+    ]);
+    // The permanent catalog column is data but not a choice; the one-column
+    // floor applies to the field columns the collector can hide.
+    expect(hideableDataColumns.map((column) => column.key)).toEqual([
+      "denomination",
+      "issue_date",
+      "grading_company",
+      "grade",
+      "serial",
+      "tags",
+    ]);
   });
 
   test("marks which columns pin and which stay permanent", () => {
