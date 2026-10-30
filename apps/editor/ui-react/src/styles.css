@@ -2708,6 +2708,11 @@ table {
   border-collapse: separate;
   border-spacing: 0;
   min-width: 1200px;
+  /* Pinned columns are positioned from the model's declared widths, so the
+     declared widths must be the rendered widths. `fixed` honours the
+     `<colgroup>` exactly; the last data column has no declared width and
+     takes whatever the viewport has left over. */
+  table-layout: fixed;
 }
 
 th,
@@ -2887,11 +2892,73 @@ td {
   border-radius: 6px;
 }
 
+/* Pinned identity columns — selection, thumbnail and catalog number stay put
+   while the columns pan underneath them. The left offset is written inline by
+   the renderer from stickyOffsets(), so it always reflects the visible pinned
+   columns and a hidden column leaves no gap.
+
+   The cells are opaque: the scrolling columns pass beneath them, so anything
+   translucent would show the content underneath. Row tints are layered as a
+   gradient over the opaque surface for the same reason (see below).
+
+   Body cells stack at z-index 2, above the panning cells. The header pins them
+   under the sticky header: each header cell takes z-index 5 inside the
+   thead's own stacking context, and the thead itself sits above z-index 2. */
+.table-sticky-cell {
+  position: sticky;
+  z-index: 2;
+  background-color: var(--surface);
+}
+
+thead .table-sticky-cell {
+  z-index: 5;
+  /* Header cells keep the header surface; the body base above paints rows. */
+  background-color: var(--surface-3);
+}
+
+/* The row's zebra and hover/selected paints normally land on the cells as
+   background-color. Pinned cells cannot accept a translucent colour, so they
+   re-assert the opaque surface and draw the same tint as a gradient over it. */
+.table-row-link--zebra > .table-sticky-cell {
+  background-image: linear-gradient(var(--row-zebra), var(--row-zebra));
+}
+
+.table-row-link--selected > .table-sticky-cell {
+  background-color: var(--surface);
+  background-image: linear-gradient(var(--row-selected), var(--row-selected));
+}
+
+.table-row-link:hover > .table-sticky-cell,
+.table-row-link:focus-visible > .table-sticky-cell,
+.table-row-link:has(:focus-visible) > .table-sticky-cell,
+.table-row-link--active > .table-sticky-cell {
+  background-color: var(--surface);
+  background-image: linear-gradient(var(--accent-soft), var(--accent-soft));
+}
+
+/* Edge shadow: only the right-most pinned cell carries it, and only while the
+   table is actually panned (jsdom cannot evaluate this, so styles.test.js pins
+   the scoped selector). At scrollLeft 0 there is nothing to draw. */
+.table-scroll-x.is-scrolled-x .table-sticky-end::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border-soft);
+  box-shadow: 6px 0 10px -6px rgba(62, 44, 20, 0.35);
+  pointer-events: none;
+}
+
 thead {
   background: var(--surface-3);
   position: sticky;
   top: 0;
-  z-index: 1;
+  /* Above the pinned body cells (z-index 2) so a pinned cell scrolling up
+     never paints over the header; the header's own pinned cells use 5 within
+     this context. */
+  z-index: 3;
   isolation: isolate;
   /* No shadow below the header: the second header row's own bottom border
      is the divider, and any strip painted here would cover the top ring of
