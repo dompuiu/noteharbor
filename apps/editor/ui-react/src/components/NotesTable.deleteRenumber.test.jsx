@@ -77,6 +77,12 @@ function renderTable() {
   );
 }
 
+async function openRowMenu(user, denomination) {
+  await user.click(
+    screen.getByRole("button", { name: `Actions for ${denomination}` }),
+  );
+}
+
 function idCells() {
   const checks = screen
     .getAllByRole("checkbox")
@@ -119,7 +125,8 @@ describe("deleting a note renumbers the ID column", () => {
     await screen.findByText("BBBB");
     expect(idCells()).toEqual(["1", "2", "3"]);
 
-    await user.click(screen.getByRole("button", { name: "Delete BBBB" }));
+    await openRowMenu(user, "BBBB");
+    await user.click(screen.getByRole("menuitem", { name: "Delete" }));
     await user.click(
       within(await screen.findByRole("dialog")).getByRole("button", {
         name: "Delete",
@@ -137,7 +144,8 @@ describe("deleting a note renumbers the ID column", () => {
     renderTable();
     await screen.findByText("BBBB");
 
-    await user.click(screen.getByRole("button", { name: "Edit BBBB" }));
+    await openRowMenu(user, "BBBB");
+    await user.click(screen.getByRole("menuitem", { name: "Edit" }));
     await screen.findByLabelText("Denomination");
     await user.click(screen.getByRole("button", { name: "Delete" }));
     await user.click(

@@ -165,11 +165,19 @@ describe("NotesTable keyboard focus inside a row", () => {
     row.focus();
     expect(row).toHaveFocus();
 
-    const deleteButton = screen.getByRole("button", {
-      name: /delete ZZTEST/i,
+    const actionsButton = screen.getByRole("button", {
+      name: "Actions for ZZTEST",
     });
-    deleteButton.focus();
-    expect(deleteButton).toHaveFocus();
+    actionsButton.focus();
+    expect(actionsButton).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+
+    const deleteItem = await screen.findByRole("menuitem", {
+      name: "Delete",
+    });
+    deleteItem.focus();
+    expect(deleteItem).toHaveFocus();
 
     await user.keyboard("{Enter}");
 

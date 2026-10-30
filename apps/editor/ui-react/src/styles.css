@@ -23,6 +23,7 @@
   --accent-strong: #71461f;
   --accent-soft: rgba(150, 98, 47, 0.12);
   --row-zebra: rgba(150, 98, 47, 0.05);
+  --row-selected: rgba(150, 98, 47, 0.14);
   --accent-ink: #fffaf1;
   --success: #2f6b3c;
   --success-bg: rgba(47, 107, 60, 0.1);
@@ -2505,6 +2506,80 @@ input[type="radio"] {
   min-height: 0;
 }
 
+/* The scroller and its overlay scrollbar share one positioned box, so the
+   track stops at the rows area even when the bulk bar (a sibling below this
+   box) is shown. */
+.table-viewport {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The bulk bar is a real flex child of the shell, so it takes its own band
+   below the rows instead of floating over them: the scroller shrinks and the
+   last row stays fully readable while the bar is shown. */
+.table-bulk-bar {
+  display: flex;
+  align-items: center;
+  align-self: center;
+  flex: 0 0 auto;
+  gap: 10px;
+  margin: 10px 12px;
+  padding: 6px 8px 6px 14px;
+  border-radius: var(--radius-pill);
+  background: var(--accent-strong);
+  color: var(--accent-ink);
+  box-shadow: var(--shadow-md);
+  white-space: nowrap;
+}
+
+.table-bulk-bar-count {
+  font-size: 0.82rem;
+  font-weight: 700;
+  margin-right: 4px;
+}
+
+.table-bulk-bar button {
+  display: inline-flex;
+  align-items: center;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid rgba(255, 250, 241, 0.24);
+  border-radius: var(--radius-pill);
+  background: rgba(255, 250, 241, 0.1);
+  color: inherit;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.table-bulk-bar button:hover {
+  background: rgba(255, 250, 241, 0.2);
+}
+
+.table-bulk-bar button:focus-visible {
+  outline: 2px solid var(--accent-ink);
+  outline-offset: 2px;
+}
+
+.table-bulk-bar button:disabled {
+  cursor: progress;
+  opacity: 0.6;
+}
+
+.table-bulk-bar .table-bulk-bar-delete {
+  border-color: transparent;
+  background: rgba(255, 250, 241, 0.94);
+  color: var(--danger);
+}
+
+.table-bulk-bar .table-bulk-bar-delete:hover {
+  background: #fffaf1;
+}
+
 .table-scroll-x {
   flex: 1 1 auto;
   min-height: 0;
@@ -2733,6 +2808,23 @@ td {
   background: var(--row-zebra);
 }
 
+/* A selected row is tinted on the cells, so the row's zebra stripe still
+   shows through the translucent tint and the hover/focus/active cell paint
+   below still lands above it. The accent edge is a background gradient on
+   the first cell rather than another ring, so the keyboard cursor's inset
+   ring and the selection edge can appear on the same row. */
+.table-row-link--selected > td {
+  background-color: var(--row-selected);
+}
+
+.table-row-link--selected > td:first-child {
+  background-image: linear-gradient(
+    to right,
+    var(--accent) 0 3px,
+    transparent 3px
+  );
+}
+
 /* Row highlight and focus ring are painted on the cells (not the row) so
    they stop at the last content cell instead of running under the overlay
    scrollbar in the header-only gutter column. The ring uses inset
@@ -2753,7 +2845,7 @@ td {
 .table-row-link:focus-visible > td,
 .table-row-link:has(:focus-visible) > td,
 .table-row-link--active > td {
-  background: var(--accent-soft);
+  background-color: var(--accent-soft);
 }
 
 .table-row-link:focus-visible,
@@ -3017,10 +3109,6 @@ thead tr:first-child th {
   min-width: 88px;
 }
 
-.inline-select-group--bulk {
-  margin-left: auto;
-}
-
 .toolbar-row--table-controls {
   align-items: stretch;
 }
@@ -3269,6 +3357,108 @@ td.drag-cell {
 
 .table-row-link--dragging {
   opacity: 0.38;
+}
+
+/* The row's one action: a three-dot button that stays out of the data until
+   the pointer or keyboard arrives. It is portalled menu's anchor, so the rule
+   below keys off the row rather than the button itself. */
+.row-menu-btn {
+  display: inline-grid;
+  place-items: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    background 0.12s ease,
+    border-color 0.12s ease;
+}
+
+.row-menu-btn svg {
+  width: 16px;
+  height: 16px;
+}
+
+.table-row-link:hover .row-menu-btn,
+.table-row-link:focus-within .row-menu-btn,
+.row-menu-btn.is-open {
+  opacity: 1;
+}
+
+.row-menu-btn:hover,
+.row-menu-btn.is-open {
+  border-color: var(--border-control);
+  background: var(--surface);
+  color: var(--text);
+}
+
+/* Where hover does not exist (touch), the reveal never fires, so the button
+   is always visible instead of undiscoverable. */
+@media (hover: none) {
+  .row-menu-btn {
+    opacity: 1;
+  }
+}
+
+/* The menu floats above the table in a portal, positioned from the button's
+   viewport rect, so the table's scroll containers cannot clip it. */
+.row-actions-menu {
+  position: fixed;
+  z-index: 40;
+  display: flex;
+  flex-direction: column;
+  min-width: 180px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
+.row-actions-menu-item {
+  position: relative;
+  display: block;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.84rem;
+  text-align: left;
+  text-decoration: none;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.row-actions-menu-item:hover,
+.row-actions-menu-item:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  outline: none;
+}
+
+.row-actions-menu-item--danger {
+  color: var(--danger);
+}
+
+.row-actions-menu-item--danger:hover,
+.row-actions-menu-item--danger:focus-visible {
+  background: var(--danger-bg);
+  color: var(--danger);
+}
+
+.row-actions-menu-separator {
+  height: 1px;
+  margin: 4px 6px;
+  background: var(--border);
 }
 
 .table-drop-placeholder-row td {
