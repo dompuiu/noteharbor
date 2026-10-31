@@ -99,26 +99,43 @@ describe("table styles", () => {
   });
 
   // The accent edge marks the row's outer left edge. It lives on the drag
-  // cell, not the checkbox cell, and the drag cell pins so the edge stays put
-  // while the columns pan. The handle paints an opaque surface over the whole
-  // cell, so the edge is a pseudo-element stacked above it, outside the
-  // interaction rules and never in the way of the drag target.
+  // cell's `::before`, not the checkbox cell, and the drag cell pins so the
+  // edge stays put while the columns pan. The handle paints an opaque surface
+  // over the whole cell, so the edge is a pseudo-element stacked above it,
+  // outside the interaction rules and never in the way of the drag target.
+  // Keeping it off `::after` leaves the pinned-cell divider untouched on
+  // selected rows.
   test("the selected edge sits on the pinned drag cell above the handle", () => {
     const cell = styles.match(/td\.drag-cell\s*\{([^}]*)\}/);
     expect(cell).not.toBeNull();
     expect(cell[1]).toMatch(/position:\s*sticky/);
 
     const edge = styles.match(
-      /\.table-row-link--selected > td\.drag-cell::after\s*\{([^}]*)\}/,
+      /\.table-row-link--selected > td\.drag-cell::before,[\s\S]*?\{([^}]*)\}/,
     );
     expect(edge).not.toBeNull();
     expect(edge[1]).toMatch(/content:\s*""/);
     expect(edge[1]).toMatch(/position:\s*absolute/);
-    expect(edge[1]).toMatch(/left:\s*0/);
-    expect(edge[1]).toMatch(/width:\s*3px/);
-    expect(edge[1]).toMatch(/background:\s*var\(--accent\)/);
+    expect(edge[1]).toMatch(/inset:\s*0/);
     expect(edge[1]).toMatch(/z-index:\s*1/);
     expect(edge[1]).toMatch(/pointer-events:\s*none/);
+
+    const accent = styles.match(
+      /\.table-row-link--selected > td\.drag-cell::before\s*\{([^}]*)\}/,
+    );
+    expect(accent).not.toBeNull();
+    expect(accent[1]).toMatch(
+      /linear-gradient\(var\(--accent\),\s*var\(--accent\)\)\s*left\s*\/\s*3px\s+100%/,
+    );
+
+    // The divider is owned by the base pinned-cell rule, so no selected-row
+    // override may replace it.
+    expect(styles).not.toMatch(
+      /\.table-row-link--selected > td\.drag-cell::after/,
+    );
+    expect(styles).toMatch(
+      /\.table-sticky-cell::after\s*\{[^}]*right:\s*0;[^}]*width:\s*1px;[^}]*background:\s*var\(--border-soft\)/,
+    );
     expect(styles).not.toMatch(/\.table-sticky-lead/);
   });
 
@@ -487,18 +504,14 @@ describe("table styles", () => {
   // cell's share of the row ring has to be painted above the handle.
   test("the drag cell repaints the row ring above the handle", () => {
     const ring = styles.match(
-      /\.table-row-link:focus-visible > td\.drag-cell::before,[\s\S]*?\{([^}]*)\}/,
+      /\.table-row-link:focus-visible > td\.drag-cell::before,[^{]*\{([^}]*box-shadow[^}]*)\}/,
     );
     expect(ring).not.toBeNull();
     expect(ring[0]).toMatch(/:has\(:focus-visible\)/);
     expect(ring[0]).toMatch(/\.table-row-link--active/);
-    expect(ring[1]).toMatch(/position:\s*absolute/);
-    expect(ring[1]).toMatch(/inset:\s*0/);
     expect(ring[1]).toMatch(/inset 0 1px 0 var\(--accent\)/);
     expect(ring[1]).toMatch(/inset 0 -1px 0 var\(--accent\)/);
     expect(ring[1]).toMatch(/inset 1px 0 0 var\(--accent\)/);
-    expect(ring[1]).toMatch(/pointer-events:\s*none/);
-    expect(ring[1]).toMatch(/z-index:\s*1/);
   });
 
   // The collections table has the same reorder handle and needs the same

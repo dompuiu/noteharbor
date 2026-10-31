@@ -2931,7 +2931,7 @@ td.table-col-id {
    (see `--row-selected`), and the rules below re-assert it on hover, focus and
    the keyboard cursor, so hovering a selected row never lightens or hides it.
    The accent edge marks the row's outer left edge, on the pinned drag cell (see
-   `td.drag-cell::after` below), rather than the checkbox cell, where it would
+   `td.drag-cell::before` below), rather than the checkbox cell, where it would
    read as a divider between the drag handle and the index. */
 .table-row-link--selected > td {
   background-color: var(--row-selected);
@@ -3085,44 +3085,45 @@ thead .table-sticky-cell {
   background-image: linear-gradient(var(--row-selected), var(--row-selected));
 }
 
-/* The drag cell is the row's first cell, so its share of the focus ring is the
-   top and bottom lines plus the left edge. The handle paints an opaque surface
-   over the cell's own inset shadow, so this pseudo-element repeats those three
-   lines above the handle. A selected row still paints its wider 3px edge on
-   the left (see the `::after` rule below), which covers this rule's 1px line. */
+/* The handle paints an opaque surface over the drag cell, hiding both the
+   cell's own inset focus ring and anything painted underneath it. This
+   pseudo-element sits above the handle and carries the two states that need to
+   be visible there: the selected row's 3px accent on the outer left edge and
+   the row's inset focus ring. Keeping the accent here leaves the cell's
+   `::after` free to draw the pinned column's right hairline in every row
+   state, so a selected row keeps the same divider as an unselected one. The
+   drag cell pins with the identity block, so the accent stays on that outer
+   edge through a horizontal pan. pointer-events keeps the drag target intact.
+
+   `::before` paints above the opaque handle by tree order. Its z-index lifts
+   it above the cell's `::after` divider too, so the focus ring stays
+   continuous where it crosses the divider. */
+.table-row-link--selected > td.drag-cell::before,
 .table-row-link:focus-visible > td.drag-cell::before,
 .table-row-link:has(:focus-visible) > td.drag-cell::before,
 .table-row-link--active > td.drag-cell::before {
   content: "";
   position: absolute;
   inset: 0;
-  box-shadow:
-    inset 0 1px 0 var(--accent),
-    inset 0 -1px 0 var(--accent),
-    inset 1px 0 0 var(--accent);
   pointer-events: none;
   z-index: 1;
 }
 
-/* The selection edge belongs to the row's outer left edge, so it is painted on
-   the drag cell — the first cell — and not on the checkbox cell, where it would
-   sit between the drag handle and the index. The drag cell pins with the
-   identity block, so the edge stays on that outer edge through a horizontal
-   pan. The handle paints an opaque surface over the whole cell, so the edge is
-   a pseudo-element stacked above it; a cell background would be hidden
-   underneath. Keeping it off the interaction rules means a hover or the
-   keyboard cursor never wipes it out, and pointer-events keeps the drag target
-   intact. */
-.table-row-link--selected > td.drag-cell::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  bottom: 0;
-  left: 0;
-  width: 3px;
-  background: var(--accent);
-  pointer-events: none;
-  z-index: 1;
+.table-row-link--selected > td.drag-cell::before {
+  background: linear-gradient(var(--accent), var(--accent)) left / 3px 100%
+    no-repeat;
+}
+
+/* The focus ring is the top and bottom lines plus the left edge. A selected
+   row's wider accent sits underneath it on the same pseudo-element, so the
+   two share the left edge without either hiding the other. */
+.table-row-link:focus-visible > td.drag-cell::before,
+.table-row-link:has(:focus-visible) > td.drag-cell::before,
+.table-row-link--active > td.drag-cell::before {
+  box-shadow:
+    inset 0 1px 0 var(--accent),
+    inset 0 -1px 0 var(--accent),
+    inset 1px 0 0 var(--accent);
 }
 
 /* Edge shadow: only the right-most pinned cell carries it, and only while the
