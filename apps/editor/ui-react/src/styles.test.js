@@ -173,6 +173,10 @@ describe("table styles", () => {
     expect(styles).not.toMatch(/th:has\(\.sort-button\)/);
   });
 
+  test("sort bubbles leave breathing room around the label", () => {
+    expect(styles).toMatch(/\.sort-button\s*\{[^}]*padding:\s*2px 8px/);
+  });
+
   test("the sorted column stands out in accent-strong", () => {
     expect(styles).toMatch(
       /\.sort-button--active\s*\{\s*color:\s*var\(--accent-strong\)/,

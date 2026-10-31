@@ -119,7 +119,7 @@ describe("NotesTable pinned identity columns", () => {
     ).map((col) => col.style.width);
 
     // reorder, selection, id, thumbnail, catalog #
-    expect(widths.slice(0, 5)).toEqual(["26px", "44px", "48px", "64px", "116px"]);
+    expect(widths.slice(0, 5)).toEqual(["26px", "44px", "64px", "64px", "116px"]);
   });
 
   test("pins selection, thumbnail and catalog at accumulated left offsets", async () => {

@@ -3098,7 +3098,7 @@ thead tr:first-child th {
   background: transparent;
   font-weight: 800;
   font-size: inherit;
-  padding: 2px 4px;
+  padding: 2px 8px;
   border-radius: 12px;
   color: inherit;
   transition: background 0.15s ease;

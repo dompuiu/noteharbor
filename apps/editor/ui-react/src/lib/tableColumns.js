@@ -86,7 +86,7 @@ export const tableColumns = [
     // reading this column as a database identifier.
     label: "#",
     kind: "order",
-    width: 48,
+    width: 64,
     align: "right",
     sortable: true,
     sticky: false,
