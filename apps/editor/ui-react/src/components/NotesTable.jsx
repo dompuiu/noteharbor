@@ -5056,7 +5056,7 @@ function NotesTable({
                                 openSlideshow(note.id);
                               }}
                               onKeyDown={(event) => {
-                                // Only the row itself opens the note. Tab can
+                                // Only the row itself acts on keys. Tab can
                                 // move focus onto a control inside the row
                                 // (drag handle, checkbox, denomination link,
                                 // action buttons), and those must activate
@@ -5066,12 +5066,18 @@ function NotesTable({
                                   return;
                                 }
 
-                                if (
-                                  event.key === "Enter" ||
-                                  event.key === " "
-                                ) {
+                                if (event.key === "Enter") {
                                   event.preventDefault();
                                   openSlideshow(note.id);
+                                  return;
+                                }
+
+                                // Space toggles the row's selection, like the
+                                // checkbox it shares a row with, rather than
+                                // opening the note as Enter does.
+                                if (event.key === " ") {
+                                  event.preventDefault();
+                                  toggleNote(note.id);
                                 }
                               }}
                               tabIndex={0}

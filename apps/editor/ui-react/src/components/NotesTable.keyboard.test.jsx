@@ -157,6 +157,28 @@ describe("NotesTable keyboard focus inside a row", () => {
     });
   });
 
+  test("Space on the focused row toggles its selection instead of opening the note", async () => {
+    renderTable();
+    const user = userEvent.setup();
+    const row = await findRow();
+    const checkbox = screen.getByRole("checkbox", {
+      name: /select ZZTEST/i,
+    });
+
+    row.focus();
+    expect(row).toHaveFocus();
+
+    await user.keyboard(" ");
+
+    expect(checkbox).toBeChecked();
+    expect(currentHash()).not.toContain("slideshow");
+
+    await user.keyboard(" ");
+
+    expect(checkbox).not.toBeChecked();
+    expect(currentHash()).not.toContain("slideshow");
+  });
+
   test("Enter on a nested action button runs its own action, not the row's", async () => {
     renderTable();
     const user = userEvent.setup();
