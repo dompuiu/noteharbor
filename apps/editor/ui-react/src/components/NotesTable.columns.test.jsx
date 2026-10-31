@@ -302,6 +302,31 @@ describe("NotesTable columns", () => {
     expect(idHeader.querySelector(".sort-chevron")).not.toBeNull();
   });
 
+  test("hiding the # column moves the sort to a rendered sortable column", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = userEvent.setup();
+
+    await user.click(await columnsButton());
+    const dialog = await screen.findByRole("dialog", {
+      name: "Visible columns",
+    });
+    await user.click(within(dialog).getByRole("checkbox", { name: "#" }));
+
+    expect(
+      screen.queryByRole("columnheader", { name: /^#/ }),
+    ).not.toBeInTheDocument();
+
+    // The old sort key is no longer rendered, so the table falls back to the
+    // first visible sortable column instead of sorting by a hidden one.
+    const catalogHeader = screen.getByRole("columnheader", {
+      name: "CATALOG #",
+    });
+    expect(catalogHeader).toHaveAttribute("aria-sort", "ascending");
+    expect(catalogHeader.querySelector(".sort-chevron")).not.toBeNull();
+  });
+
   test("the choice is saved per collection and survives a reload", async () => {
     const { unmount } = renderTable(1);
 

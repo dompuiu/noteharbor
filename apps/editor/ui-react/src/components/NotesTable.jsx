@@ -2883,12 +2883,21 @@ function NotesTable({
       return;
     }
 
-    // A hidden column must not keep hiding rows: drop its filter with it, and
-    // fall back to the default order when the sorted column disappears.
+    // A hidden column must not keep hiding rows: drop its filter with it.
     clearColumnFilter(key);
 
     if (sortKey === key) {
-      setSortKey(defaultSortKey);
+      // The sorted column is about to disappear. Fall back to the first
+      // still-rendered sortable column (the display-order `id` when it is
+      // visible) so the active sort is always one of the rendered headers.
+      const remainingVisible = tableColumns.filter(
+        (column) => !column.hideable || remaining.includes(column.key),
+      );
+      const nextSortColumn =
+        remainingVisible.find((column) => column.sortable) ??
+        getTableColumn(defaultSortKey);
+
+      setSortKey(nextSortColumn?.key ?? defaultSortKey);
       setSortDirection("asc");
     }
 
