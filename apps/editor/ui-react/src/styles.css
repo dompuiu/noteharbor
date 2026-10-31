@@ -2894,8 +2894,9 @@ tbody td {
 /* Selection is painted on the cells with the same wash as hover (see
    `--row-selected`), and the rules below re-assert it on hover, focus and the
    keyboard cursor, so hovering a selected row never lightens or hides it. The
-   accent edge is painted on the first pinned identity cell (see
-   `.table-sticky-lead`), so panning cannot slide it out of view. */
+   accent edge marks the row's outer left edge, on the pinned drag cell (see
+   `td.drag-cell::after` below), rather than the checkbox cell, where it would
+   read as a divider between the drag handle and the index. */
 .table-row-link--selected > td {
   background-color: var(--row-selected);
 }
@@ -2974,10 +2975,10 @@ tbody td {
   border-radius: 6px;
 }
 
-/* Pinned identity columns — selection, thumbnail and catalog number stay put
-   while the columns pan underneath them. The left offset is written inline by
-   the renderer from stickyOffsets(), so it always reflects the visible pinned
-   columns and a hidden column leaves no gap.
+/* Pinned identity columns — the drag handle, selection, thumbnail and catalog
+   number stay put while the columns pan underneath them. The left offset is
+   written inline by the renderer from stickyOffsets(), so it always reflects
+   the visible pinned columns and a hidden column leaves no gap.
 
    The table sits inside a vertical scroller that is also a (non-scrolling)
    horizontal scroll container, so `sticky` resolves against that inner box,
@@ -3044,19 +3045,25 @@ thead .table-sticky-cell {
   background-image: linear-gradient(var(--row-selected), var(--row-selected));
 }
 
-/* The selection edge belongs to the first pinned identity cell, which never
-   pans away, rather than the scrolling reorder cell. Every state that
-   repaints the pinned cell repeats the edge so a hover or cursor cannot wipe
-   it out; the selected wash stays underneath it. */
-.table-row-link--selected > .table-sticky-lead,
-.table-row-link--selected:hover > .table-sticky-lead,
-.table-row-link--selected:focus-visible > .table-sticky-lead,
-.table-row-link--selected:has(:focus-visible) > .table-sticky-lead,
-.table-row-link--selected.table-row-link--active > .table-sticky-lead {
-  background-color: var(--surface);
-  background-image:
-    linear-gradient(to right, var(--accent) 0 3px, transparent 3px),
-    linear-gradient(var(--row-selected), var(--row-selected));
+/* The selection edge belongs to the row's outer left edge, so it is painted on
+   the drag cell — the first cell — and not on the checkbox cell, where it would
+   sit between the drag handle and the index. The drag cell pins with the
+   identity block, so the edge stays on that outer edge through a horizontal
+   pan. The handle paints an opaque surface over the whole cell, so the edge is
+   a pseudo-element stacked above it; a cell background would be hidden
+   underneath. Keeping it off the interaction rules means a hover or the
+   keyboard cursor never wipes it out, and pointer-events keeps the drag target
+   intact. */
+.table-row-link--selected > td.drag-cell::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--accent);
+  pointer-events: none;
+  z-index: 1;
 }
 
 /* Edge shadow: only the right-most pinned cell carries it, and only while the
@@ -3621,12 +3628,11 @@ th[aria-sort="descending"] .sort-chevron {
   overflow: hidden;
 }
 
+/* The drag cell pins with the identity block, so `sticky` (which also
+   establishes the containing block for the selection edge) replaces the
+   plain relative positioning it needed before. */
 td.drag-cell {
-  position: relative;
-}
-
-.drag-cell--enabled {
-  background: transparent;
+  position: sticky;
 }
 
 .drag-handle {

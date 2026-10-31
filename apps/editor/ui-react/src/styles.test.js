@@ -29,20 +29,10 @@ describe("table styles", () => {
   });
 
   // Selection is painted on the cells and outranks the zebra stripe and the
-  // hover/focus/active wash. The accent edge lives on the first pinned
-  // identity cell, not the reorder cell, so panning cannot slide it under the
-  // pinned block.
-  test("a selected row carries the accent tint and edge", () => {
+  // hover/focus/active wash.
+  test("a selected row carries the accent tint", () => {
     expect(styles).toMatch(
       /\.table-row-link--selected > td\s*\{\s*background-color:\s*var\(--row-selected\)/,
-    );
-    const edge = styles.match(
-      /\.table-row-link--selected > \.table-sticky-lead[\s\S]*?\{([^}]*)\}/,
-    );
-    expect(edge).not.toBeNull();
-    expect(edge[1]).toMatch(/var\(--accent\)/);
-    expect(styles).not.toMatch(
-      /\.table-row-link--selected > td:first-child\s*\{/,
     );
   });
 
@@ -106,17 +96,28 @@ describe("table styles", () => {
     );
   });
 
-  test("the selected edge survives panning and the keyboard cursor", () => {
+  // The accent edge marks the row's outer left edge. It lives on the drag
+  // cell, not the checkbox cell, and the drag cell pins so the edge stays put
+  // while the columns pan. The handle paints an opaque surface over the whole
+  // cell, so the edge is a pseudo-element stacked above it, outside the
+  // interaction rules and never in the way of the drag target.
+  test("the selected edge sits on the pinned drag cell above the handle", () => {
+    const cell = styles.match(/td\.drag-cell\s*\{([^}]*)\}/);
+    expect(cell).not.toBeNull();
+    expect(cell[1]).toMatch(/position:\s*sticky/);
+
     const edge = styles.match(
-      /\.table-row-link--selected > \.table-sticky-lead[\s\S]*?\{([^}]*)\}/,
+      /\.table-row-link--selected > td\.drag-cell::after\s*\{([^}]*)\}/,
     );
     expect(edge).not.toBeNull();
-    // The same rule covers every state that repaints the pinned cell, so a
-    // hover or cursor never wipes the edge out.
-    expect(edge[0]).toMatch(/:hover/);
-    expect(edge[0]).toMatch(/:focus-visible/);
-    expect(edge[0]).toMatch(/\.table-row-link--active/);
-    expect(edge[1]).toMatch(/background-image:\s*[\s\S]*var\(--accent\)/);
+    expect(edge[1]).toMatch(/content:\s*""/);
+    expect(edge[1]).toMatch(/position:\s*absolute/);
+    expect(edge[1]).toMatch(/left:\s*0/);
+    expect(edge[1]).toMatch(/width:\s*3px/);
+    expect(edge[1]).toMatch(/background:\s*var\(--accent\)/);
+    expect(edge[1]).toMatch(/z-index:\s*1/);
+    expect(edge[1]).toMatch(/pointer-events:\s*none/);
+    expect(styles).not.toMatch(/\.table-sticky-lead/);
   });
 
   // The bulk bar is an overlay, not a layout band: it reserves no flex slot,

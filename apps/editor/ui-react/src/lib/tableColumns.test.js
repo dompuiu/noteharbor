@@ -169,7 +169,7 @@ describe("table column model", () => {
   test("marks which columns pin and which stay permanent", () => {
     expect(
       tableColumns.filter((column) => column.sticky).map((column) => column.key),
-    ).toEqual(["selection", "thumbnail", "catalog_number"]);
+    ).toEqual(["reorder", "selection", "thumbnail", "catalog_number"]);
     expect(
       tableColumns
         .filter((column) => !column.hideable)
@@ -235,9 +235,10 @@ describe("tableColumnWidths", () => {
 describe("stickyOffsets", () => {
   test("accumulates the declared widths of the pinned columns in table order", () => {
     expect(stickyOffsets()).toEqual({
-      selection: 0,
-      thumbnail: 44,
-      catalog_number: 102,
+      reorder: 0,
+      selection: 24,
+      thumbnail: 68,
+      catalog_number: 126,
     });
   });
 
@@ -246,8 +247,9 @@ describe("stickyOffsets", () => {
     // block, so it must not shift the offsets.
     const offsets = stickyOffsets(tableColumns);
 
-    expect(offsets.thumbnail).toBe(44);
-    expect(offsets.catalog_number).toBe(44 + 58);
+    expect(offsets.reorder).toBe(0);
+    expect(offsets.thumbnail).toBe(68);
+    expect(offsets.catalog_number).toBe(24 + 44 + 58);
   });
 
   test("leaves no gap when a middle pinned column is hidden", () => {
@@ -256,7 +258,11 @@ describe("stickyOffsets", () => {
     );
     const offsets = stickyOffsets(withoutThumbnail);
 
-    expect(offsets).toEqual({ selection: 0, catalog_number: 44 });
+    expect(offsets).toEqual({
+      reorder: 0,
+      selection: 24,
+      catalog_number: 24 + 44,
+    });
   });
 
   test("gives no offset to scrolling columns", () => {
@@ -273,9 +279,10 @@ describe("stickyOffsets", () => {
     });
 
     expect(offsets).toEqual({
-      selection: 0,
-      thumbnail: 50,
-      catalog_number: 110,
+      reorder: 0,
+      selection: 24,
+      thumbnail: 24 + 50,
+      catalog_number: 24 + 50 + 60,
     });
   });
 });

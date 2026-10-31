@@ -3886,7 +3886,7 @@ function NotesTable({
   function renderReorderCell(column, note) {
     return (
       <td
-        className={`${cellClass(column)}${canReorder ? " drag-cell--enabled" : ""}`}
+        {...stickyCellAttributes(column, cellClass(column))}
         onClick={(event) => event.stopPropagation()}
       >
         {canReorder ? (
@@ -4119,9 +4119,6 @@ function NotesTable({
       className: [
         baseClassName,
         "table-sticky-cell",
-        // The first pinned cell owns the selection edge, so panning cannot
-        // slide the accent under the pinned block.
-        stickyLeftByColumn[column.key] === 0 ? "table-sticky-lead" : null,
         column.key === lastStickyColumnKey ? "table-sticky-end" : null,
       ]
         .filter(Boolean)
@@ -4643,9 +4640,12 @@ function NotesTable({
                           if (column.kind === "reorder") {
                             return (
                               <th
-                                className={cellClass(column)}
                                 key={column.key}
                                 scope="col"
+                                {...stickyCellAttributes(
+                                  column,
+                                  cellClass(column),
+                                )}
                               />
                             );
                           }
@@ -4758,9 +4758,12 @@ function NotesTable({
                             if (column.kind === "reorder") {
                               return (
                                 <th
-                                  className={cellClass(column)}
                                   key={column.key}
                                   scope="col"
+                                  {...stickyCellAttributes(
+                                    column,
+                                    cellClass(column),
+                                  )}
                                 />
                               );
                             }

@@ -62,7 +62,10 @@ export const tableColumns = [
     width: 24,
     align: "center",
     sortable: false,
-    sticky: false,
+    // The drag cell is the row's outer left edge, so it pins with the
+    // identity block: the selection border then stays at that edge instead
+    // of sliding under the pinned columns when the table is panned.
+    sticky: true,
     hideable: false,
     filterable: false,
     matchMode: null,
