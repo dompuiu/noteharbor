@@ -4074,6 +4074,9 @@ function NotesTable({
       className: [
         baseClassName,
         "table-sticky-cell",
+        // The first pinned cell owns the selection edge, so panning cannot
+        // slide the accent under the pinned block.
+        stickyLeftByColumn[column.key] === 0 ? "table-sticky-lead" : null,
         column.key === lastStickyColumnKey ? "table-sticky-end" : null,
       ]
         .filter(Boolean)
