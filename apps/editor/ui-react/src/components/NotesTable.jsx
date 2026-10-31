@@ -2883,12 +2883,21 @@ function NotesTable({
       return;
     }
 
-    // A hidden column must not keep hiding rows: drop its filter with it, and
-    // fall back to the default order when the sorted column disappears.
+    // A hidden column must not keep hiding rows: drop its filter with it.
     clearColumnFilter(key);
 
     if (sortKey === key) {
-      setSortKey(defaultSortKey);
+      // The sorted column is about to disappear. Fall back to the first
+      // still-rendered sortable column (the display-order `id` when it is
+      // visible) so the active sort is always one of the rendered headers.
+      const remainingVisible = tableColumns.filter(
+        (column) => !column.hideable || remaining.includes(column.key),
+      );
+      const nextSortColumn =
+        remainingVisible.find((column) => column.sortable) ??
+        getTableColumn(defaultSortKey);
+
+      setSortKey(nextSortColumn?.key ?? defaultSortKey);
       setSortDirection("asc");
     }
 
@@ -4065,6 +4074,9 @@ function NotesTable({
       className: [
         baseClassName,
         "table-sticky-cell",
+        // The first pinned cell owns the selection edge, so panning cannot
+        // slide the accent under the pinned block.
+        stickyLeftByColumn[column.key] === 0 ? "table-sticky-lead" : null,
         column.key === lastStickyColumnKey ? "table-sticky-end" : null,
       ]
         .filter(Boolean)
@@ -4475,6 +4487,7 @@ function NotesTable({
               </div>
               <button
                 aria-controls="table-filter-row"
+                aria-disabled={hasActiveFilters || undefined}
                 aria-expanded={filterRowOpen}
                 aria-label={
                   activeColumnFilters.length
@@ -4482,7 +4495,20 @@ function NotesTable({
                     : "Filters"
                 }
                 className={`button table-filter-toggle${filterRowOpen ? " table-filter-toggle--open" : ""}`}
-                onClick={() => setFiltersOpen((open) => !open)}
+                onClick={() => {
+                  // Active filters force the row open, so the toggle has no
+                  // visible effect; leaving the intent alone keeps it honest.
+                  if (hasActiveFilters) {
+                    return;
+                  }
+
+                  setFiltersOpen((open) => !open);
+                }}
+                title={
+                  hasActiveFilters
+                    ? "Filters stay open while any filter is active"
+                    : undefined
+                }
                 type="button"
               >
                 Filters
@@ -4509,15 +4535,13 @@ function NotesTable({
                       </button>
                     </span>
                   ))}
-                  {activeColumnFilters.length > 1 ? (
-                    <button
-                      className="table-filter-clear-all"
-                      onClick={clearAllFilters}
-                      type="button"
-                    >
-                      Clear all
-                    </button>
-                  ) : null}
+                  <button
+                    className="table-filter-clear-all"
+                    onClick={clearAllFilters}
+                    type="button"
+                  >
+                    Clear all
+                  </button>
                 </div>
               ) : null}
               <ColumnPicker

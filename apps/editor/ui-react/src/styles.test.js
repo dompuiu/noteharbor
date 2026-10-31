@@ -26,17 +26,54 @@ describe("table styles", () => {
 
   // Selection is painted on the cells so the zebra stripe and the
   // hover/focus/active paint composite with it rather than replace it. The
-  // accent edge lives on the first cell, apart from the keyboard cursor's
-  // inset ring.
+  // accent edge lives on the first pinned identity cell, not the reorder
+  // cell, so panning cannot slide it under the pinned block.
   test("a selected row carries the accent tint and edge", () => {
     expect(styles).toMatch(
       /\.table-row-link--selected > td\s*\{\s*background-color:\s*var\(--row-selected\)/,
     );
     const edge = styles.match(
-      /\.table-row-link--selected > td:first-child\s*\{([^}]*)\}/,
+      /\.table-row-link--selected > \.table-sticky-lead[\s\S]*?\{([^}]*)\}/,
     );
     expect(edge).not.toBeNull();
     expect(edge[1]).toMatch(/var\(--accent\)/);
+    expect(styles).not.toMatch(
+      /\.table-row-link--selected > td:first-child\s*\{/,
+    );
+  });
+
+  // A selected row must not lose its wash when the pointer or keyboard cursor
+  // arrives: the selection tint stays, while the cursor adds its own ring.
+  test("a selected row keeps its tint on hover, focus and the keyboard cursor", () => {
+    const tint = styles.match(
+      /\.table-row-link--selected:hover > td,[\s\S]*?\{([^}]*)\}/,
+    );
+    expect(tint).not.toBeNull();
+    expect(tint[0]).toMatch(/:focus-visible/);
+    expect(tint[0]).toMatch(/:has\(:focus-visible\)/);
+    expect(tint[0]).toMatch(/\.table-row-link--active/);
+    expect(tint[1]).toMatch(/background-color:\s*var\(--row-selected\)/);
+
+    const pinned = styles.match(
+      /\.table-row-link--selected:hover > \.table-sticky-cell,[\s\S]*?\{([^}]*)\}/,
+    );
+    expect(pinned).not.toBeNull();
+    expect(pinned[0]).toMatch(/\.table-row-link--active/);
+    expect(pinned[1]).toMatch(/background-color:\s*var\(--surface\)/);
+    expect(pinned[1]).toMatch(/linear-gradient\(var\(--row-selected\)/);
+  });
+
+  test("the selected edge survives panning and the keyboard cursor", () => {
+    const edge = styles.match(
+      /\.table-row-link--selected > \.table-sticky-lead[\s\S]*?\{([^}]*)\}/,
+    );
+    expect(edge).not.toBeNull();
+    // The same rule covers every state that repaints the pinned cell, so a
+    // hover or cursor never wipes the edge out.
+    expect(edge[0]).toMatch(/:hover/);
+    expect(edge[0]).toMatch(/:focus-visible/);
+    expect(edge[0]).toMatch(/\.table-row-link--active/);
+    expect(edge[1]).toMatch(/background-image:\s*[\s\S]*var\(--accent\)/);
   });
 
   // The bulk bar is a layout band, not an overlay, so the last row is never

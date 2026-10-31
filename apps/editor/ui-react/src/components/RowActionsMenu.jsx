@@ -1,103 +1,20 @@
-import {
-  Fragment,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { Fragment, useEffect, useId, useRef } from "react";
 import { createPortal } from "react-dom";
-import { useLocation } from "react-router-dom";
-
-// Gap between the button and the floating menu, and the margin the menu keeps
-// from the viewport edges when it flips or slides into view.
-const menuOffset = 6;
-const viewportMargin = 12;
+import { useAnchoredPopover } from "../lib/useAnchoredPopover.js";
 
 // A row's actions button and its menu. The menu is portalled into <body> and
 // positioned from the button's viewport rect, so the table's scroll containers
 // can never clip it. Open state, focus return and dismissal live here; the
 // caller supplies the items (label, handler, optional href).
 export function RowActionsMenu({ items, label }) {
-  const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState(null);
-  const buttonRef = useRef(null);
-  const menuRef = useRef(null);
+  const { buttonRef, menuRef, open, position, setOpen } = useAnchoredPopover({
+    align: "end",
+    closeOnRouteChange: true,
+  });
   // Which item receives focus when the menu opens: the menu button opens on
   // the first item, ArrowUp opens on the last.
   const initialFocusRef = useRef("first");
   const menuId = useId();
-  const location = useLocation();
-  const locationKey = `${location.pathname}${location.search}${location.hash}`;
-
-  useEffect(() => {
-    // A route change means the row (or the whole screen) moved on; a menu
-    // pinned to the old button would float over the new screen.
-    setOpen(false);
-  }, [locationKey]);
-
-  useEffect(() => {
-    if (!open) {
-      setPosition(null);
-      return undefined;
-    }
-
-    function closeOnOutsidePress(event) {
-      if (menuRef.current?.contains(event.target)) {
-        return;
-      }
-
-      if (buttonRef.current?.contains(event.target)) {
-        return;
-      }
-
-      setOpen(false);
-    }
-
-    function closeOnMove() {
-      setOpen(false);
-    }
-
-    document.addEventListener("mousedown", closeOnOutsidePress);
-    document.addEventListener("touchstart", closeOnOutsidePress);
-    window.addEventListener("scroll", closeOnMove, true);
-    window.addEventListener("resize", closeOnMove);
-
-    return () => {
-      document.removeEventListener("mousedown", closeOnOutsidePress);
-      document.removeEventListener("touchstart", closeOnOutsidePress);
-      window.removeEventListener("scroll", closeOnMove, true);
-      window.removeEventListener("resize", closeOnMove);
-    };
-  }, [open]);
-
-  useLayoutEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const button = buttonRef.current;
-    const menu = menuRef.current;
-
-    if (!button || !menu) {
-      return;
-    }
-
-    const buttonRect = button.getBoundingClientRect();
-    const menuRect = menu.getBoundingClientRect();
-    let top = buttonRect.bottom + menuOffset;
-
-    if (top + menuRect.height > window.innerHeight - viewportMargin) {
-      top = Math.max(viewportMargin, buttonRect.top - menuRect.height - menuOffset);
-    }
-
-    const left = Math.min(
-      Math.max(viewportMargin, buttonRect.right - menuRect.width),
-      Math.max(viewportMargin, window.innerWidth - menuRect.width - viewportMargin),
-    );
-
-    setPosition({ left, top });
-  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -116,7 +33,7 @@ export function RowActionsMenu({ items, label }) {
         : menuItems[0];
     initialFocusRef.current = "first";
     target.focus();
-  }, [open]);
+  }, [menuRef, open]);
 
   function openMenu(initialFocus) {
     initialFocusRef.current = initialFocus;

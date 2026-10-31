@@ -206,6 +206,34 @@ describe("NotesTable filters", () => {
     expect(screen.getByText("Company: PMG")).toBeInTheDocument();
   });
 
+  test("clicking Filters while a filter forces the row open is a no-op", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = await openFilters();
+
+    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
+    const toggle = await filtersToggle();
+
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(toggle).toHaveAttribute("aria-disabled", "true");
+    expect(toggle).toHaveAttribute(
+      "title",
+      "Filters stay open while any filter is active",
+    );
+
+    await user.click(toggle);
+    expect(toggle).toHaveAttribute("aria-expanded", "true");
+
+    // Clearing the forcing filter leaves the row open: the click above did
+    // not flip the collector's open/closed intent behind the scenes.
+    await user.click(
+      screen.getByRole("button", { name: "Remove Company filter" }),
+    );
+    expect(await screen.findByLabelText("Filter Company")).toBeInTheDocument();
+    expect(await filtersToggle()).toHaveAttribute("aria-expanded", "true");
+  });
+
   test("removing a chip clears that column filter", async () => {
     renderTable();
 
@@ -226,6 +254,22 @@ describe("NotesTable filters", () => {
     expect(
       screen.queryByRole("button", { name: /active\)/ }),
     ).not.toBeInTheDocument();
+    await screen.findByText("BBBB");
+  });
+
+  test("Clear all is available as soon as one filter is active", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = await openFilters();
+
+    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
+    expect(screen.getByText("Company: PMG")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear all" }));
+
+    expect(await screen.findByLabelText("Filter Company")).toHaveValue("");
+    expect(screen.queryByText("Company: PMG")).not.toBeInTheDocument();
     await screen.findByText("BBBB");
   });
 

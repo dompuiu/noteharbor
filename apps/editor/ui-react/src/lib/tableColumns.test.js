@@ -268,6 +268,15 @@ describe("matchesSearchQuery", () => {
     expect(matchesSearchQuery(searchNote, "silver certificate")).toBe(false);
   });
 
+  test("normalises the denomination so 1000 finds a stored $1,000", () => {
+    const note = { ...searchNote, denomination: "$1,000" };
+
+    expect(matchesSearchQuery(note, "1000")).toBe(true);
+    expect(matchesSearchQuery(note, "1,000")).toBe(true);
+    expect(matchesSearchQuery(note, "$1,000")).toBe(true);
+    expect(matchesSearchQuery(note, "1000.50")).toBe(false);
+  });
+
   test("an empty query keeps every note", () => {
     expect(matchesSearchQuery(searchNote, "")).toBe(true);
     expect(matchesSearchQuery(searchNote, "   ")).toBe(true);

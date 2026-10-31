@@ -3,9 +3,9 @@
 // context, rendering and (later) sizing/pinning all read the same list instead
 // of keeping parallel key lists.
 //
-// This is a prefactor: metadata such as width, align and sticky is declared
-// but not applied yet. Labels, keys, column order and behaviour match the
-// table as it stood before the model was extracted.
+// The model is applied at HEAD: the table renders from this list, and
+// filtering, sorting, alignment, sizing, sticky pinning and the column picker
+// all read the metadata below instead of keeping parallel key lists.
 
 function addThousandsSeparators(value) {
   return value.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -199,6 +199,20 @@ function searchableColumnValue(note, column) {
   return String(note[column.key] ?? "");
 }
 
+function searchableColumnMatches(note, column, needle) {
+  const value = searchableColumnValue(note, column);
+
+  // Denominations are stored with thousands separators, so the query goes
+  // through the same normaliser as the column filter: `1000` finds `$1,000`.
+  if (column.normalize) {
+    return String(column.normalize(value))
+      .toLowerCase()
+      .includes(String(column.normalize(needle)).toLowerCase());
+  }
+
+  return value.toLowerCase().includes(needle);
+}
+
 export function matchesSearchQuery(note, query) {
   const needle = String(query ?? "")
     .trim()
@@ -209,7 +223,7 @@ export function matchesSearchQuery(note, query) {
   }
 
   return dataColumns.some((column) =>
-    searchableColumnValue(note, column).toLowerCase().includes(needle),
+    searchableColumnMatches(note, column, needle),
   );
 }
 

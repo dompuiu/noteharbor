@@ -2843,20 +2843,13 @@ tbody td {
 }
 
 /* A selected row is tinted on the cells, so the row's zebra stripe still
-   shows through the translucent tint and the hover/focus/active cell paint
-   below still lands above it. The accent edge is a background gradient on
-   the first cell rather than another ring, so the keyboard cursor's inset
-   ring and the selection edge can appear on the same row. */
+   shows through the translucent tint. The rules below re-assert that tint on
+   hover, focus and the keyboard cursor, which would otherwise repaint the
+   cells with the accent wash and hide the selection. The accent edge is
+   painted on the first pinned identity cell (see `.table-sticky-lead`), so
+   panning cannot slide it out of view. */
 .table-row-link--selected > td {
   background-color: var(--row-selected);
-}
-
-.table-row-link--selected > td:first-child {
-  background-image: linear-gradient(
-    to right,
-    var(--accent) 0 3px,
-    transparent 3px
-  );
 }
 
 /* Row highlight and focus ring are painted on the cells (not the row) so
@@ -2972,6 +2965,38 @@ thead .table-sticky-cell {
 .table-row-link--active > .table-sticky-cell {
   background-color: var(--surface);
   background-image: linear-gradient(var(--accent-soft), var(--accent-soft));
+}
+
+/* Selection outranks the pointer and the keyboard cursor. The cursor still
+   adds its own inset ring above, so the two states stay distinguishable. */
+.table-row-link--selected:hover > td,
+.table-row-link--selected:focus-visible > td,
+.table-row-link--selected:has(:focus-visible) > td,
+.table-row-link--selected.table-row-link--active > td {
+  background-color: var(--row-selected);
+}
+
+.table-row-link--selected:hover > .table-sticky-cell,
+.table-row-link--selected:focus-visible > .table-sticky-cell,
+.table-row-link--selected:has(:focus-visible) > .table-sticky-cell,
+.table-row-link--selected.table-row-link--active > .table-sticky-cell {
+  background-color: var(--surface);
+  background-image: linear-gradient(var(--row-selected), var(--row-selected));
+}
+
+/* The selection edge belongs to the first pinned identity cell, which never
+   pans away, rather than the scrolling reorder cell. Every state that
+   repaints the pinned cell repeats the edge so a hover or cursor cannot wipe
+   it out; the selected wash stays underneath it. */
+.table-row-link--selected > .table-sticky-lead,
+.table-row-link--selected:hover > .table-sticky-lead,
+.table-row-link--selected:focus-visible > .table-sticky-lead,
+.table-row-link--selected:has(:focus-visible) > .table-sticky-lead,
+.table-row-link--selected.table-row-link--active > .table-sticky-lead {
+  background-color: var(--surface);
+  background-image:
+    linear-gradient(to right, var(--accent) 0 3px, transparent 3px),
+    linear-gradient(var(--row-selected), var(--row-selected));
 }
 
 /* Edge shadow: only the right-most pinned cell carries it, and only while the
