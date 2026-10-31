@@ -2601,11 +2601,12 @@ input[type="radio"] {
   flex: 1 1 auto;
   min-height: 0;
   min-width: 0;
-  overflow-x: auto;
-  overflow-y: hidden;
-  /* No horizontal scrollbar: off-screen columns are panned by dragging the
-     table with the mouse or with the Left/Right arrows, matching the Viewer's
-     Flutter table. The scroller itself stays scrollable. */
+  /* One scroller owns both axes, so the sticky header and the pinned columns
+     resolve against the same scrollport and stay fixed without per-frame
+     JavaScript offsets. The native bars are hidden: the horizontal one is
+     replaced by dragging/arrow keys and the vertical one by the custom track
+     below. */
+  overflow: auto;
   scrollbar-width: none;
   -ms-overflow-style: none;
   /* Query container for the table's width below. Sizing is inline-size
@@ -2634,20 +2635,12 @@ input[type="radio"] {
   -webkit-user-drag: none;
 }
 
-.table-scroll-y {
-  height: 100%;
-  min-width: 100%;
+/* A plain sizing wrapper, not a scroller: keeping overflow visible here lets
+   the pinned cells resolve `left` against .table-scroll-x instead of a nested
+   scrollport, so the browser keeps them fixed with no JS compensation. */
+.table-scroll-content {
   width: max-content;
-  overflow-x: hidden;
-  overflow-y: auto;
-  scrollbar-width: none;
-  -ms-overflow-style: none;
-}
-
-.table-scroll-y::-webkit-scrollbar {
-  width: 0;
-  height: 0;
-  display: none;
+  min-width: 100%;
 }
 
 /* Trailing empty column that reserves the scrollbar gutter inside the table
@@ -2980,11 +2973,9 @@ tbody td {
    stickyOffsets(), so it always reflects the visible pinned columns and a
    hidden column leaves no gap.
 
-   The table sits inside a vertical scroller that is also a (non-scrolling)
-   horizontal scroll container, so `sticky` resolves against that inner box,
-   which travels with the pan instead of staying put. The scroller publishes
-   its scrollLeft as --table-sticky-scroll-x; adding it to the offset makes the
-   pin exact, while sticky still handles the moment each cell starts to pin.
+   The table scrolls inside .table-scroll-x, which is the scrollport for
+   both axes, so each pinned cell's `left` is the plain column offset from
+   stickyOffsets() and the browser keeps it fixed while the columns pan.
 
    The cells are opaque: the scrolling columns pass beneath them, so anything
    translucent would show the content underneath. Row tints are layered as a
@@ -2996,9 +2987,7 @@ tbody td {
 .table-sticky-cell {
   position: sticky;
   z-index: 2;
-  left: calc(
-    var(--table-sticky-left, 0px) + var(--table-sticky-scroll-x, 0px)
-  );
+  left: var(--table-sticky-left, 0px);
   background-color: var(--surface);
 }
 

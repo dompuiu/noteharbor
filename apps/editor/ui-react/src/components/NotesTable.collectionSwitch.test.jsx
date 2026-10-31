@@ -80,17 +80,15 @@ describe("NotesTable collection switch scroll reset", () => {
 
     await screen.findByText("C1-N101");
 
-    const xScroller = container.querySelector(".table-scroll-x");
-    const yScroller = container.querySelector(".table-scroll-y");
-    expect(xScroller).not.toBeNull();
-    expect(yScroller).not.toBeNull();
+    const scroller = container.querySelector(".table-scroll-x");
+    expect(scroller).not.toBeNull();
 
     // Simulate the user having panned right and scrolled down in the first
-    // collection.
-    xScroller.scrollLeft = 400;
-    yScroller.scrollTop = 200;
-    expect(xScroller.scrollLeft).toBe(400);
-    expect(yScroller.scrollTop).toBe(200);
+    // collection. One scroller owns both axes.
+    scroller.scrollLeft = 400;
+    scroller.scrollTop = 200;
+    expect(scroller.scrollLeft).toBe(400);
+    expect(scroller.scrollTop).toBe(200);
 
     scrollToOffsetMock.mockClear();
 
@@ -112,10 +110,9 @@ describe("NotesTable collection switch scroll reset", () => {
     await screen.findByText("C2-N201");
 
     await waitFor(() => {
-      const nextX = container.querySelector(".table-scroll-x");
-      const nextY = container.querySelector(".table-scroll-y");
-      expect(nextX?.scrollLeft).toBe(0);
-      expect(nextY?.scrollTop).toBe(0);
+      const next = container.querySelector(".table-scroll-x");
+      expect(next?.scrollLeft).toBe(0);
+      expect(next?.scrollTop).toBe(0);
     });
 
     // The virtualized rows render through the vertical scroller, so its

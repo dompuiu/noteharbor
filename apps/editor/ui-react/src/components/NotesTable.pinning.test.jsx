@@ -226,17 +226,15 @@ describe("NotesTable pinned identity columns", () => {
     scroller.scrollLeft = 120;
     fireEvent.scroll(scroller);
     expect(scroller.classList.contains("is-scrolled-x")).toBe(true);
-    // The pinned cells' `left` is offset by the scroller's pan position.
+    // Pinned alignment is native sticky now, so no per-frame scroll offset is
+    // written back to the scroller.
     expect(
       scroller.style.getPropertyValue("--table-sticky-scroll-x"),
-    ).toBe("120px");
+    ).toBe("");
 
     scroller.scrollLeft = 0;
     fireEvent.scroll(scroller);
     expect(scroller.classList.contains("is-scrolled-x")).toBe(false);
-    expect(
-      scroller.style.getPropertyValue("--table-sticky-scroll-x"),
-    ).toBe("0px");
   });
 
   test("keeps the shadow state in sync when the keyboard pans", async () => {
@@ -248,9 +246,6 @@ describe("NotesTable pinned identity columns", () => {
     await user.keyboard("l");
     expect(scroller.scrollLeft).toBe(200);
     expect(scroller.classList.contains("is-scrolled-x")).toBe(true);
-    expect(
-      scroller.style.getPropertyValue("--table-sticky-scroll-x"),
-    ).toBe("200px");
 
     await user.keyboard("h");
     expect(scroller.scrollLeft).toBe(0);

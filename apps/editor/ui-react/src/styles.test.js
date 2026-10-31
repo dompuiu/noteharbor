@@ -307,6 +307,18 @@ describe("table styles", () => {
     expect(styles).toMatch(
       /\.table-scroll-x\s*\{[^}]*container-type:\s*inline-size/,
     );
+    // Both axes scroll in one element so sticky resolves against the same
+    // scrollport for the header (top) and the pinned columns (left).
+    expect(styles).toMatch(/\.table-scroll-x\s*\{[^}]*overflow:\s*auto/);
+  });
+
+  // The inner wrapper must stay a plain box: making it a scroll container
+  // would move the pinned cells' scrollport away from .table-scroll-x and
+  // reintroduce the per-frame JavaScript offset.
+  test("the table's inner wrapper is not a scroll container", () => {
+    const wrapper = styles.match(/\.table-scroll-content\s*\{([^}]*)\}/);
+    expect(wrapper).not.toBeNull();
+    expect(wrapper[1]).not.toMatch(/overflow/);
   });
 
   // The renderer computes every column width and writes it to the <colgroup>.
@@ -354,12 +366,13 @@ describe("table styles", () => {
     expect(cell[1]).toMatch(/position:\s*sticky/);
     expect(cell[1]).toMatch(/z-index:\s*2/);
     expect(cell[1]).toMatch(/background-color:\s*var\(--surface\)/);
-    // The per-column offset is written by the renderer from stickyOffsets();
-    // the stylesheet adds the scroller's pan offset to it because the table's
-    // nearest scrollport is the inner, non-scrolling horizontal container.
+    // The per-column offset is written by the renderer from stickyOffsets().
+    // The table scroller is the scrollport for both axes, so native sticky
+    // keeps the cell fixed with no scroll offset folded in.
     expect(cell[1]).toMatch(
-      /left:\s*calc\(\s*var\(--table-sticky-left,?\s*0px\)\s*\+\s*var\(--table-sticky-scroll-x,?\s*0px\)/,
+      /left:\s*var\(--table-sticky-left,?\s*0px\)/,
     );
+    expect(cell[1]).not.toMatch(/table-sticky-scroll-x/);
   });
 
   // The sticky header owns the top of the table: pinned body cells stay

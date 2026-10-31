@@ -1139,8 +1139,7 @@ function NotesTable({
   const thumbPreviewElementMapRef = useRef(new Map());
   const dragPreviewRef = useRef(null);
   const tableShellRef = useRef(null);
-  const tableScrollXRef = useRef(null);
-  const tableScrollYRef = useRef(null);
+  const tableScrollRef = useRef(null);
   const [tableWidth, setTableWidth] = useState(null);
   const columnPanRef = useRef(null);
   const suppressColumnPanClickRef = useRef(false);
@@ -1920,7 +1919,7 @@ function NotesTable({
   const rowVirtualizer = useVirtualizer({
     count: deferredOrderedNotes.length,
     estimateSize: () => rowHeightEstimate,
-    getScrollElement: () => tableScrollYRef.current,
+    getScrollElement: () => tableScrollRef.current,
     overscan: 10,
   });
   const virtualRows = rowVirtualizer.getVirtualItems();
@@ -1977,8 +1976,8 @@ function NotesTable({
 
     resetColumnScroll();
 
-    if (tableScrollYRef.current) {
-      tableScrollYRef.current.scrollTop = 0;
+    if (tableScrollRef.current) {
+      tableScrollRef.current.scrollTop = 0;
     }
 
     rowVirtualizer.scrollToOffset(0);
@@ -2037,12 +2036,11 @@ function NotesTable({
   // The vertical scrollbar is custom-drawn so its track spans only the rows
   // area below the sticky header (a native scrollbar would always run the
   // full height of the scroll container, header included). These metrics
-  // keep the custom thumb in sync with the inner vertical scroller.
+  // keep the custom thumb in sync with the table scroller.
   const updateVScroll = useCallback(() => {
-    const scroller = tableScrollYRef.current;
-    const xScroller = tableScrollXRef.current;
+    const scroller = tableScrollRef.current;
 
-    if (!scroller || !xScroller) {
+    if (!scroller) {
       return;
     }
 
@@ -2057,11 +2055,11 @@ function NotesTable({
     }
 
     const headerHeight = scroller.querySelector("thead")?.offsetHeight ?? 0;
-    // The horizontal scrollbar is hidden now, so the vertical track runs to
-    // the bottom edge instead of stopping above a bar.
+    // Both native scrollbars are hidden, so the custom track runs to the
+    // bottom edge instead of stopping above a bar.
     const top = headerHeight + 4;
     const bottom = 4;
-    const trackHeight = Math.max(0, xScroller.clientHeight - top - bottom);
+    const trackHeight = Math.max(0, scroller.clientHeight - top - bottom);
 
     if (trackHeight <= 40) {
       vMetricsRef.current = { max: 0, range: 0, thumbHeight: 0 };
@@ -2104,8 +2102,7 @@ function NotesTable({
   }, []);
 
   useEffect(() => {
-    const scroller = tableScrollYRef.current;
-    const xScroller = tableScrollXRef.current;
+    const scroller = tableScrollRef.current;
 
     if (!scroller) {
       return undefined;
@@ -2120,15 +2117,10 @@ function NotesTable({
 
     updateVScroll();
     scroller.addEventListener("scroll", scheduleUpdate, { passive: true });
-    xScroller?.addEventListener("scroll", scheduleUpdate, { passive: true });
     window.addEventListener("resize", scheduleUpdate);
 
     const observer = new ResizeObserver(scheduleUpdate);
     observer.observe(scroller);
-
-    if (xScroller) {
-      observer.observe(xScroller);
-    }
 
     const header = scroller.querySelector("thead");
 
@@ -2140,7 +2132,6 @@ function NotesTable({
       cancelAnimationFrame(frameId);
       observer.disconnect();
       scroller.removeEventListener("scroll", scheduleUpdate);
-      xScroller?.removeEventListener("scroll", scheduleUpdate);
       window.removeEventListener("resize", scheduleUpdate);
     };
   }, [filterRowHeight, loading, deferredOrderedNotes.length, updateVScroll]);
@@ -2150,7 +2141,7 @@ function NotesTable({
   // shrink below their total. The scroller is independent of that content and
   // keeps shrinking with the window.
   useLayoutEffect(() => {
-    const scroller = tableScrollXRef.current;
+    const scroller = tableScrollRef.current;
 
     if (!scroller) {
       return undefined;
@@ -2173,7 +2164,7 @@ function NotesTable({
     event.preventDefault();
     event.stopPropagation();
 
-    const scroller = tableScrollYRef.current;
+    const scroller = tableScrollRef.current;
 
     if (!scroller) {
       return;
@@ -2188,7 +2179,7 @@ function NotesTable({
 
   function handleVThumbPointerMove(event) {
     const drag = vThumbDragRef.current;
-    const scroller = tableScrollYRef.current;
+    const scroller = tableScrollRef.current;
     const metrics = vMetricsRef.current;
 
     if (
@@ -2215,7 +2206,7 @@ function NotesTable({
       return;
     }
 
-    const scroller = tableScrollYRef.current;
+    const scroller = tableScrollRef.current;
     const metrics = vMetricsRef.current;
 
     if (!scroller || !metrics || metrics.max <= 0 || metrics.range <= 0) {
@@ -2235,7 +2226,7 @@ function NotesTable({
   }
 
   function handleVThumbKeyDown(event) {
-    const scroller = tableScrollYRef.current;
+    const scroller = tableScrollRef.current;
 
     if (!scroller) {
       return;
@@ -2280,7 +2271,7 @@ function NotesTable({
   // Returns the horizontal scroller when the columns actually overflow, so
   // panning is a no-op on a wide window just like the Viewer's table.
   function columnScroller() {
-    const scroller = tableScrollXRef.current;
+    const scroller = tableScrollRef.current;
 
     if (!scroller || scroller.scrollWidth <= scroller.clientWidth + 1) {
       return null;
@@ -2303,20 +2294,16 @@ function NotesTable({
     syncColumnScroll(scroller);
   }
 
-  // The pinned block's edge shadow and its left offsets are scroll state, not
-  // hover state: they only apply once the columns have moved underneath. Kept
-  // in sync from the scroller's scroll event and from every programmatic pan,
-  // because jsdom's direct scrollLeft writes never dispatch a scroll event.
+  // The pinned block's edge shadow is scroll state, not hover state: it only
+  // applies once the columns have moved underneath. Kept in sync from the
+  // scroller's scroll event and from every programmatic pan, because jsdom's
+  // direct scrollLeft writes never dispatch a scroll event.
   //
-  // Every pinned cell's `left` adds this offset to its column offset. The
-  // table lives inside the vertical scroller, which is also a non-scrolling
-  // horizontal scroll container, so `sticky` resolves against that inner box
-  // and needs the pan offset folded in (see .table-sticky-cell in styles.css).
-  function syncColumnScroll(scroller = tableScrollXRef.current) {
-    const scrollLeft = scroller?.scrollLeft ?? 0;
-
-    scroller?.style.setProperty("--table-sticky-scroll-x", `${scrollLeft}px`);
-    setColumnsScrolled(isColumnPanShadowVisible(scrollLeft));
+  // The pinned cells themselves need no scroll offset: .table-scroll-x is the
+  // scrollport for both axes, so native sticky keeps them fixed while the
+  // columns pan (see .table-sticky-cell in styles.css).
+  function syncColumnScroll(scroller = tableScrollRef.current) {
+    setColumnsScrolled(isColumnPanShadowVisible(scroller?.scrollLeft ?? 0));
   }
 
   function panColumnsBy(delta) {
@@ -2349,7 +2336,7 @@ function NotesTable({
   }
 
   function resetColumnScroll() {
-    const scroller = tableScrollXRef.current;
+    const scroller = tableScrollRef.current;
 
     if (scroller) {
       scroller.scrollLeft = 0;
@@ -2393,7 +2380,7 @@ function NotesTable({
 
   function handleColumnPanPointerMove(event) {
     const pan = columnPanRef.current;
-    const scroller = tableScrollXRef.current;
+    const scroller = tableScrollRef.current;
 
     if (!pan || !scroller || event.pointerId !== pan.pointerId) {
       return;
@@ -2469,7 +2456,7 @@ function NotesTable({
       return undefined;
     }
 
-    const shell = tableScrollYRef.current;
+    const shell = tableScrollRef.current;
 
     if (!shell) {
       return undefined;
@@ -3087,7 +3074,7 @@ function NotesTable({
   }
 
   function ensureRowVisible(element) {
-    const scroller = tableScrollYRef.current;
+    const scroller = tableScrollRef.current;
 
     if (!scroller) {
       return;
@@ -3106,7 +3093,7 @@ function NotesTable({
   }
 
   function pinRowToTop(element) {
-    const scroller = tableScrollYRef.current;
+    const scroller = tableScrollRef.current;
 
     if (!scroller) {
       return;
@@ -3118,7 +3105,7 @@ function NotesTable({
   }
 
   function pageTable(direction) {
-    const scroller = tableScrollYRef.current;
+    const scroller = tableScrollRef.current;
 
     if (!scroller || !orderedNotes.length) {
       return;
@@ -3481,7 +3468,7 @@ function NotesTable({
 
   function autoScrollTableShell(event) {
     const shell = tableShellRef.current;
-    const scroller = tableScrollYRef.current;
+    const scroller = tableScrollRef.current;
 
     if (!shell || !scroller || draggedNoteId === null) {
       return;
@@ -4618,9 +4605,9 @@ function NotesTable({
                 onPointerMove={handleColumnPanPointerMove}
                 onPointerUp={handleColumnPanPointerEnd}
                 onScroll={() => syncColumnScroll()}
-                ref={tableScrollXRef}
+                ref={tableScrollRef}
               >
-                <div className="table-scroll-y" ref={tableScrollYRef}>
+                <div className="table-scroll-content">
                   <table aria-busy={rowsPending || undefined}>
                     <colgroup>
                       {visibleColumns.map((column) => (
