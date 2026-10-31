@@ -117,8 +117,8 @@ export const tableColumns = [
     key: "thumbnail",
     label: "FRONT",
     kind: "thumbnail",
-    // The 48px front image and the FRONT header both fit, with 4px of
-    // padding on each side.
+    // The 44px front image and the FRONT header both fit, with 4px of
+    // padding on each side (the column keeps its wider pinned offset).
     width: 58,
     align: "center",
     sortable: false,

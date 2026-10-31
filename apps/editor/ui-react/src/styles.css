@@ -23,10 +23,10 @@
   --accent-strong: #71461f;
   --accent-soft: rgba(150, 98, 47, 0.12);
   --row-zebra: rgba(150, 98, 47, 0.05);
-  /* A selected row uses the same wash as a hovered one, matching the
-     prototype. The accent edge and the checked box carry selection; keeping
-     the tint separate would leave selected rows a shade darker than hover. */
-  --row-selected: var(--accent-soft);
+  /* A selected row sits a shade darker than hover (0.14 against 0.12),
+     matching the prototype. The accent edge and the checked box carry
+     selection; the extra 0.02 keeps selected rows distinct while hovered. */
+  --row-selected: rgba(150, 98, 47, 0.14);
   --accent-ink: #fffaf1;
   --success: #2f6b3c;
   --success-bg: rgba(47, 107, 60, 0.1);
@@ -2728,7 +2728,7 @@ table {
 
 th,
 td {
-  padding: 8px 10px;
+  padding: 8px 12px;
   border-bottom: 1px solid var(--border-soft);
   vertical-align: middle;
   text-align: left;
@@ -2751,10 +2751,14 @@ td {
   text-align: center;
 }
 
-/* Body density: 14px text in a 48px row. The virtualizer's estimate matches
-   (rowHeightEstimate), and real measurements still win once rows mount. */
+/* Body density: 14px text in a 46px row. Vertical padding stays at 0: the
+   30px row menu button plus 8px top and bottom would otherwise floor the row
+   at 47px, and the prototype's compact rows have none. The virtualizer's
+   estimate matches (rowHeightEstimate), and real measurements still win once
+   rows mount. */
 tbody td {
-  height: 48px;
+  height: 46px;
+  padding: 0 12px;
   font-size: 14px;
 }
 
@@ -2792,11 +2796,14 @@ tbody td {
 
 .table-thumb {
   display: block;
-  width: 48px;
-  height: 28px;
+  width: 44px;
+  height: 26px;
   object-fit: contain;
-  border-radius: 4px;
-  background: rgba(255, 255, 255, 0.65);
+  border-radius: 3px;
+  background: #fff;
+  /* The prototype rings each note so a pale scan still reads as one object
+     against the row tint. */
+  box-shadow: 0 0 0 1px var(--border-soft);
 }
 
 /* Compact: 4px of padding each side instead of the table's usual 10px, so the
@@ -2806,7 +2813,7 @@ tbody td {
   padding-right: 4px;
 }
 
-/* 4px of padding each side, so the model's 58px fits the 48px image and the
+/* 4px of padding each side, so the model's 58px fits the 44px image and the
    FRONT header, and the pinned offsets stay aligned. */
 .table-thumb-cell {
   padding-left: 4px;
@@ -2822,6 +2829,36 @@ tbody td {
   white-space: nowrap;
 }
 
+/* Data emphasis from the prototype: the two identity fields read as strong
+   text, the serial carries a little tracking, and the display order stays
+   muted like a row number. Scoped to body cells so the header keeps its own
+   type treatment. */
+td.table-col-catalog_number {
+  font-weight: 700;
+}
+
+td.table-col-denomination a {
+  color: var(--text);
+  font-weight: 700;
+  text-decoration: none;
+}
+
+td.table-col-denomination a:hover,
+td.table-col-denomination a:focus-visible {
+  color: var(--accent-strong);
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+td.table-col-serial {
+  letter-spacing: 0.03em;
+  color: #4a3a28;
+}
+
+td.table-col-id {
+  color: var(--text-muted);
+}
+
 .table-thumb-wrap {
   position: relative;
   display: inline-flex;
@@ -2830,7 +2867,7 @@ tbody td {
 .table-thumb-preview {
   --table-thumb-preview-offset: 0px;
   position: absolute;
-  left: calc(100% + 10px);
+  left: calc(100% + 12px);
   top: 50%;
   transform: translateY(calc(-50% + var(--table-thumb-preview-offset)));
   display: none;
@@ -2849,8 +2886,8 @@ tbody td {
 
 .table-thumb-preview img {
   display: block;
-  width: 180px;
-  height: 120px;
+  width: 210px;
+  height: 118px;
   object-fit: contain;
 }
 
@@ -2890,10 +2927,10 @@ tbody td {
   background: transparent;
 }
 
-/* Selection is painted on the cells with the same wash as hover (see
-   `--row-selected`), and the rules below re-assert it on hover, focus and the
-   keyboard cursor, so hovering a selected row never lightens or hides it. The
-   accent edge marks the row's outer left edge, on the pinned drag cell (see
+/* Selection is painted on the cells with a slightly darker wash than hover
+   (see `--row-selected`), and the rules below re-assert it on hover, focus and
+   the keyboard cursor, so hovering a selected row never lightens or hides it.
+   The accent edge marks the row's outer left edge, on the pinned drag cell (see
    `td.drag-cell::after` below), rather than the checkbox cell, where it would
    read as a divider between the drag handle and the index. */
 .table-row-link--selected > td {
@@ -2997,6 +3034,20 @@ thead .table-sticky-cell {
   background-color: var(--surface-3);
 }
 
+/* A permanent hairline marks each pinned column's right edge, matching the
+   prototype. The pan-only shadow below strengthens the last one, so the block
+   still reads as pinned once the columns move underneath it. */
+.table-sticky-cell::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  right: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border-soft);
+  pointer-events: none;
+}
+
 /* The row's zebra and hover/selected paints normally land on the cells as
    background-color. Pinned cells cannot accept a translucent colour, so they
    re-assert the opaque surface and draw the same tint as a gradient over it. */
@@ -3076,17 +3127,11 @@ thead .table-sticky-cell {
 
 /* Edge shadow: only the right-most pinned cell carries it, and only while the
    table is actually panned (jsdom cannot evaluate this, so styles.test.js pins
-   the scoped selector). At scrollLeft 0 there is nothing to draw. */
+   the scoped selector). At scrollLeft 0 the base hairline above is the only
+   mark. */
 .table-scroll-x.is-scrolled-x .table-sticky-end::after {
-  content: "";
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 1px;
-  background: var(--border-soft);
+  background: var(--border);
   box-shadow: 6px 0 10px -6px rgba(62, 44, 20, 0.35);
-  pointer-events: none;
 }
 
 thead {
@@ -3796,7 +3841,7 @@ td.drag-cell {
 }
 
 /* The drop placeholder is a gap marker, not a row: it must stay as thin as its
-   dashed line. `tbody td` sizes every body cell at 48px (a floor for table
+   dashed line. `tbody td` sizes every body cell at 46px (a floor for table
    cells), which would otherwise turn the placeholder into a full row and push
    the dragged row down a slot the moment a drag starts. */
 .table-drop-placeholder-row td {
@@ -4030,6 +4075,7 @@ td.drag-cell {
 
 .tag-list-clip {
   flex-wrap: nowrap;
+  gap: 5px;
   overflow: hidden;
   min-width: 0;
 }
@@ -4046,10 +4092,12 @@ td.drag-cell {
   flex-shrink: 0;
 }
 
-.tag.tag-more {
-  background: var(--accent-strong);
-  border: 0;
-  color: var(--accent-ink);
+.table-tag.table-tag--more {
+  padding: 2px 6px;
+  border: 1px dashed var(--border-control);
+  background: transparent;
+  color: var(--text-muted);
+  font-weight: 700;
 }
 
 .tag-popover {
@@ -4085,6 +4133,17 @@ td.drag-cell {
   font-weight: 600;
   white-space: nowrap;
   flex-shrink: 0;
+}
+
+/* Table tags follow the prototype: a compact, borderless tinted pill. The
+   global `.tag` stays as-is for the slideshow and showcase tooltips. */
+.table-tag {
+  padding: 2px 8px;
+  border: 0;
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-size: 0.72rem;
+  font-weight: 600;
 }
 
 button.tag {

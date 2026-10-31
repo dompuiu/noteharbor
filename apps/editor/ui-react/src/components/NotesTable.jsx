@@ -68,14 +68,18 @@ export function HomeHero() {
 
 const tableStateStorageKey = "noteharbor.notesTableState";
 const tableColumnsStorageKeyPrefix = "noteharbor.notesTableColumns";
-const rowHeightEstimate = 48;
+const rowHeightEstimate = 46;
 // Mirrors the table's CSS min-width and the trailing scrollbar-gutter column.
 const minTableWidth = 1200;
 const tableGutterWidth = 14;
 const validPreviewKinds = new Set(["front", "back"]);
 const slideshowFilterParamPrefix = "f_";
-const tagChipHorizontalPadding = 20;
-const tagListGap = 8;
+// Shared by the rendered tags and the hidden-tag measurer below, so the probe
+// can never drift from the tag it is measuring.
+const tableTagClass = "tag table-tag";
+const tagChipHorizontalPadding = 16;
+const tagMoreChipHorizontalPadding = 14;
+const tagListGap = 5;
 const tagChipMeasureSafetyMargin = 2;
 const tagsPopoverWidth = 280;
 const tagsPopoverMaxHeight = 320;
@@ -97,6 +101,7 @@ function alignmentClass(column) {
 function cellClass(column) {
   return [
     alignmentClass(column),
+    column.key ? `table-col-${column.key}` : null,
     column.kind === "reorder" ? "drag-cell" : null,
     column.kind === "order" ? "table-order-cell" : null,
     column.kind === "thumbnail" ? "table-thumb-cell" : null,
@@ -113,7 +118,7 @@ function getTagTextMeasureContext() {
   }
 
   const probe = document.createElement("button");
-  probe.className = "tag";
+  probe.className = tableTagClass;
   probe.style.position = "absolute";
   probe.style.visibility = "hidden";
   probe.style.pointerEvents = "none";
@@ -129,16 +134,19 @@ function getTagTextMeasureContext() {
   return tagTextMeasureContext;
 }
 
-function measureTagChipWidth(text) {
+function measureTagChipWidth(
+  text,
+  horizontalPadding = tagChipHorizontalPadding,
+) {
   const context = getTagTextMeasureContext();
 
   if (!context) {
-    return text.length * 8 + tagChipHorizontalPadding;
+    return text.length * 8 + horizontalPadding;
   }
 
   return (
     Math.ceil(context.measureText(text).width) +
-    tagChipHorizontalPadding +
+    horizontalPadding +
     tagChipMeasureSafetyMargin
   );
 }
@@ -164,7 +172,10 @@ function computeVisibleTagPlan(tags, availableWidth) {
     visibleCount -= 1
   ) {
     const hiddenCount = tags.length - visibleCount;
-    let width = measureTagChipWidth(`+${hiddenCount}`);
+    let width = measureTagChipWidth(
+      `+${hiddenCount}`,
+      tagMoreChipHorizontalPadding,
+    );
 
     for (let i = 0; i < visibleCount; i += 1) {
       width += chipWidths[i] + tagListGap;
@@ -410,7 +421,7 @@ function TagsCell({ onApplyFilter, tags }) {
       {!tags.length ? <span className="muted">-</span> : null}
       {visibleTags.map((tag) => (
         <button
-          className="tag"
+          className={tableTagClass}
           key={tag.id || tag.name}
           onClick={(event) => {
             event.stopPropagation();
@@ -426,7 +437,7 @@ function TagsCell({ onApplyFilter, tags }) {
         <span className="tag-more-wrap">
           <button
             aria-label={`${hiddenTags.length} more tags`}
-            className="tag tag-more"
+            className={`${tableTagClass} table-tag--more`}
             onBlur={handleMouseLeave}
             onClick={handleTriggerClick}
             onFocus={handleTriggerFocus}
@@ -456,7 +467,7 @@ function TagsCell({ onApplyFilter, tags }) {
                 >
                   {hiddenTags.map((tag) => (
                     <button
-                      className="tag"
+                      className={tableTagClass}
                       key={tag.id || tag.name}
                       onClick={(event) => {
                         event.stopPropagation();
@@ -4018,31 +4029,31 @@ function NotesTable({
     }
 
     if (column.key === "denomination") {
-      // The denomination is the row's primary action: it opens the Note
-      // slideshow through the router. The source URL lives in the row menu.
+      // The denomination is the note's source link: collectors expect it to
+      // open the page the note came from, not the slideshow. The row itself
+      // and the row menu's Open item still reach the Note slideshow. A note
+      // without a source URL renders as plain text.
       return (
-        <td className={alignmentClass(column)}>
-          <a
-            draggable={false}
-            href={buildTableHash(slideshowRoute(note.id))}
-            onClick={(event) => {
-              if (event.defaultPrevented) {
-                return;
-              }
-
-              event.preventDefault();
-              event.stopPropagation();
-              openSlideshow(note.id);
-            }}
-          >
-            {note.denomination}
-          </a>
+        <td className={cellClass(column)}>
+          {note.url ? (
+            <a
+              draggable={false}
+              href={note.url}
+              onClick={(event) => event.stopPropagation()}
+              rel="noreferrer"
+              target="_blank"
+            >
+              {note.denomination}
+            </a>
+          ) : (
+            note.denomination
+          )}
         </td>
       );
     }
 
     return (
-      <td className={alignmentClass(column)} {...stickyCellAttributes(column)}>
+      <td {...stickyCellAttributes(column, cellClass(column))}>
         {note[column.key]}
       </td>
     );

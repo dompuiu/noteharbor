@@ -162,22 +162,33 @@ describe("NotesTable semantics", () => {
     }
   });
 
-  test("the denomination links to the note slideshow and opens it", async () => {
+  test("the denomination links to the note's source URL, not the note", async () => {
     const user = userEvent.setup();
     renderTable();
     await screen.findByText("AAAA");
 
     const link = screen.getByRole("link", { name: "AAAA" });
-    expect(link.getAttribute("href")).toMatch(/^#slideshow\/1(?:\?|$)/);
+    expect(link).toHaveAttribute("href", "https://example.test/aaaa");
+    expect(link).toHaveAttribute("target", "_blank");
+    expect(link).toHaveAttribute("rel", "noreferrer");
 
+    // Stop jsdom from attempting the new-tab navigation; the click must still
+    // bubble so this proves the row's slideshow handler is suppressed.
+    link.addEventListener("click", (event) => event.preventDefault(), {
+      once: true,
+    });
     await user.click(link);
 
-    await waitFor(() => {
-      expect(currentHash()).toContain("slideshow/1");
-    });
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent(
-      "AAAA",
-    );
+    expect(currentHash()).not.toContain("slideshow");
+  });
+
+  test("a note without a source URL renders its denomination as text", async () => {
+    renderTable();
+    await screen.findByText("BBBB");
+
+    expect(
+      screen.queryByRole("link", { name: "BBBB" }),
+    ).not.toBeInTheDocument();
   });
 
   test("the source URL stays reachable from the row menu", async () => {

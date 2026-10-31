@@ -77,7 +77,7 @@ function rowFor(denomination) {
 function bodyDenominations(container) {
   return within(container.querySelector("tbody"))
     .getAllByRole("row")
-    .map((row) => row.querySelector("a")?.textContent)
+    .map((row) => row.querySelector(".table-col-denomination")?.textContent)
     .filter(Boolean);
 }
 

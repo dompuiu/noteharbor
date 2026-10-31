@@ -18,11 +18,13 @@ describe("table styles", () => {
     );
   });
 
-  // Hover and selection share one wash, so a selected row is never a shade
-  // darker than a hovered one. The accent edge and the checkbox carry the
+  // Selected rows sit a shade darker than the hover wash (0.14 against 0.12),
+  // matching the prototype. The accent edge and the checkbox still carry the
   // selection state.
-  test("the selected row tint matches the hover tint", () => {
-    expect(styles).toMatch(/--row-selected:\s*var\(--accent-soft\)/);
+  test("the selected row tint is darker than the hover tint", () => {
+    expect(styles).toMatch(
+      /--row-selected:\s*rgba\(150,\s*98,\s*47,\s*0\.14\)/,
+    );
     expect(styles).toMatch(
       /--accent-soft:\s*rgba\(150,\s*98,\s*47,\s*0\.12\)/,
     );
@@ -410,14 +412,22 @@ describe("table styles", () => {
     expect(theadZ).toBeGreaterThan(cellZ);
   });
 
-  // The edge shadow is the only thing that tells a collector the identity
-  // block is pinned; it must not paint while the table sits at its start.
+  // The edge shadow marks the pinned block while it is panned; at rest the
+  // permanent hairline on every pinned cell is the only separator.
   test("the pan shadow only exists while the table is horizontally scrolled", () => {
     const rules = styles.match(/[^{}]*\.table-sticky-end::after[^{]*\{[^}]*\}/g);
     expect(rules).not.toBeNull();
     expect(rules).toHaveLength(1);
     expect(rules[0]).toMatch(/\.table-scroll-x\.is-scrolled-x/);
     expect(rules[0]).toMatch(/box-shadow:/);
+  });
+
+  test("pinned cells carry a resting hairline", () => {
+    const hairline = styles.match(/\.table-sticky-cell::after\s*\{([^}]*)\}/);
+    expect(hairline).not.toBeNull();
+    expect(hairline[1]).toMatch(/position:\s*absolute/);
+    expect(hairline[1]).toMatch(/right:\s*0/);
+    expect(hairline[1]).toMatch(/background:\s*var\(--border-soft\)/);
   });
 
   // Row tints are layered over an opaque surface so a hovered or selected
@@ -530,10 +540,11 @@ describe("table styles", () => {
     );
   });
 
-  test("body rows are 48px at 14px text", () => {
+  test("body rows are 46px at 14px text", () => {
     const bodyCells = styles.match(/tbody td\s*\{([^}]*)\}/);
     expect(bodyCells).not.toBeNull();
-    expect(bodyCells[1]).toMatch(/height:\s*48px/);
+    expect(bodyCells[1]).toMatch(/height:\s*46px/);
+    expect(bodyCells[1]).toMatch(/padding:\s*0\s+12px/);
     expect(bodyCells[1]).toMatch(/font-size:\s*14px/);
   });
 
@@ -545,12 +556,52 @@ describe("table styles", () => {
     expect(placeholder[1]).toMatch(/height:\s*auto/);
   });
 
-  test("thumbnails are 48x28 without distortion", () => {
+  test("thumbnails are 44x26 with a hairline ring", () => {
     const thumb = styles.match(/\.table-thumb\s*\{([^}]*)\}/);
     expect(thumb).not.toBeNull();
-    expect(thumb[1]).toMatch(/width:\s*48px/);
-    expect(thumb[1]).toMatch(/height:\s*28px/);
+    expect(thumb[1]).toMatch(/width:\s*44px/);
+    expect(thumb[1]).toMatch(/height:\s*26px/);
     expect(thumb[1]).toMatch(/object-fit:\s*contain/);
+    expect(thumb[1]).toMatch(/border-radius:\s*3px/);
+    expect(thumb[1]).toMatch(/background:\s*#fff/);
+    expect(thumb[1]).toMatch(/box-shadow:\s*0\s+0\s+0\s+1px\s+var\(--border-soft\)/);
+    expect(styles).toMatch(
+      /\.table-thumb-preview img\s*\{[^}]*width:\s*210px;[^}]*height:\s*118px/,
+    );
+  });
+
+  test("catalog and denomination read as strong text, serial gets tracking", () => {
+    expect(styles).toMatch(
+      /td\.table-col-catalog_number\s*\{[^}]*font-weight:\s*700/,
+    );
+    expect(styles).toMatch(
+      /td\.table-col-denomination a\s*\{[^}]*font-weight:\s*700;[^}]*text-decoration:\s*none/,
+    );
+    expect(styles).toMatch(
+      /td\.table-col-denomination a:hover,[\s\S]*?text-decoration:\s*underline/,
+    );
+    expect(styles).toMatch(
+      /td\.table-col-serial\s*\{[^}]*letter-spacing:\s*0\.03em;[^}]*color:\s*#4a3a28/,
+    );
+    expect(styles).toMatch(
+      /td\.table-col-id\s*\{[^}]*color:\s*var\(--text-muted\)/,
+    );
+  });
+
+  test("table tags follow the prototype's compact tinted pill", () => {
+    const chip = styles.match(/\.table-tag\s*\{([^}]*)\}/);
+    expect(chip).not.toBeNull();
+    expect(chip[1]).toMatch(/padding:\s*2px\s+8px/);
+    expect(chip[1]).toMatch(/border:\s*0/);
+    expect(chip[1]).toMatch(/background:\s*var\(--accent-soft\)/);
+    expect(chip[1]).toMatch(/color:\s*var\(--accent-strong\)/);
+    expect(chip[1]).toMatch(/font-size:\s*0\.72rem/);
+
+    const more = styles.match(/\.table-tag\.table-tag--more\s*\{([^}]*)\}/);
+    expect(more).not.toBeNull();
+    expect(more[1]).toMatch(/border:\s*1px\s+dashed\s+var\(--border-control\)/);
+    expect(more[1]).toMatch(/background:\s*transparent/);
+    expect(more[1]).toMatch(/color:\s*var\(--text-muted\)/);
   });
 
   test("the active sort header draws a chevron that flips on descending", () => {
