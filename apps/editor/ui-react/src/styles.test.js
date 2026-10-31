@@ -124,6 +124,33 @@ describe("table styles", () => {
     );
   });
 
+  // The gutter must be one column size shared by the header and body rows:
+  // a body row without a trailing gutter cell leaves its zebra/selected tint
+  // short of the scrollbar. jsdom cannot paint this (the vertical scrollbar
+  // only appears from measured heights, which jsdom reports as zero), so the
+  // contract lives in the stylesheet instead of a rendered assertion.
+  test("the scrollbar gutter keeps one cell size for header and body", () => {
+    const gutter = styles.match(/\.table-gutter-cell\s*\{([^}]*)\}/);
+
+    expect(gutter).not.toBeNull();
+    expect(gutter[1]).toMatch(/width:\s*14px/);
+    expect(gutter[1]).toMatch(/min-width:\s*14px/);
+    expect(gutter[1]).toMatch(/max-width:\s*14px/);
+    expect(gutter[1]).toMatch(/padding:\s*0/);
+  });
+
+  // The gutter removes the pale strip before the scrollbar, not the scrollbar
+  // itself: the track stays opaque behind the thumb.
+  test("the overlay scrollbar keeps an opaque track and thumb", () => {
+    const track = styles.match(/\.table-vtrack\s*\{([^}]*)\}/);
+    const thumb = styles.match(/\.table-vthumb\s*\{([^}]*)\}/);
+
+    expect(track).not.toBeNull();
+    expect(track[1]).toMatch(/background:\s*var\(--scroll-track\)/);
+    expect(thumb).not.toBeNull();
+    expect(thumb[1]).toMatch(/background:\s*var\(--scroll-thumb\)/);
+  });
+
   // The footer is a band below the table card, not an overlay and not part of
   // the bordered shell: it keeps its own fixed-size slot, on one line.
   test("the footer hint sits outside the table shell", () => {

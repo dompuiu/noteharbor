@@ -2650,13 +2650,14 @@ input[type="radio"] {
   display: none;
 }
 
-/* Trailing header-only column that reserves the scrollbar gutter inside
-   the table itself. Because these are genuine header cells, the header
-   background, the white divider between the two header rows, and the
-   bottom border all continue over the gutter with no extra measurements.
-   Body rows have no cell here, so row content stops before the overlay
-   scrollbar. */
-th.table-gutter-cell {
+/* Trailing empty column that reserves the scrollbar gutter inside the table
+   itself. The header and filter rows need genuine header cells so the header
+   background, the white divider between the two header rows, and the bottom
+   border all continue over the gutter with no extra measurements. Every body
+   row carries the same empty cell, so its zebra or selected tint reaches the
+   scrollbar track instead of leaving a pale strip before it. Row content
+   still stops before the gutter, so the track never covers text. */
+.table-gutter-cell {
   width: 14px;
   min-width: 14px;
   max-width: 14px;
@@ -2668,9 +2669,10 @@ th.table-gutter-cell {
    scroll container, header included, so the vertical bar is drawn here
    instead: it floats above the rows and reserves no layout space, leaving
    the header (and column widths) untouched. */
-/* Opaque so scrolled row text never shows through the bar. Track and
-   thumb share the --scroll-* tokens with the horizontal scrollbar above,
-   so both bars always stay in sync. */
+/* Opaque so panned row text never shows through the bar. The empty gutter
+   cell still lets the row tint reach the track's edge, so the strip before
+   the track is not left pale. Track and thumb share the --scroll-* tokens
+   with the horizontal scrollbar above, so both bars always stay in sync. */
 .table-vtrack {
   position: absolute;
   right: 0;
@@ -2880,9 +2882,10 @@ tbody td {
 
 /* Row highlight and focus ring are painted on the cells (not the row) so
    they stop at the last content cell instead of running under the overlay
-   scrollbar in the header-only gutter column. The ring uses inset
-   box-shadow rather than borders so focusing a row never changes its
-   geometry or shifts its text.
+   scrollbar in the gutter column. The ring uses inset box-shadow rather
+   than borders so focusing a row never changes its geometry or shifts its
+   text. The gutter cell is exempted below: it continues the row tint under
+   the scrollbar, but the ring still ends at the last content cell.
 
    `:has(:focus-visible)` keeps the ring on while Tab moves focus onto a
    control inside the row (drag handle, checkbox, denomination link, action
@@ -2924,13 +2927,24 @@ tbody td {
     inset 1px 0 0 var(--accent);
 }
 
+/* The ring closes on the last content cell. When a body gutter follows it,
+   that cell is no longer :last-child, so `:has(+ ...)` closes it too. */
 .table-row-link:focus-visible > td:last-child,
 .table-row-link:has(:focus-visible) > td:last-child,
-.table-row-link--active > td:last-child {
+.table-row-link--active > td:last-child,
+.table-row-link:focus-visible > td:has(+ td.table-gutter-cell),
+.table-row-link:has(:focus-visible) > td:has(+ td.table-gutter-cell),
+.table-row-link--active > td:has(+ td.table-gutter-cell) {
   box-shadow:
     inset 0 1px 0 var(--accent),
     inset 0 -1px 0 var(--accent),
     inset -1px 0 0 var(--accent);
+}
+
+.table-row-link:focus-visible > td.table-gutter-cell,
+.table-row-link:has(:focus-visible) > td.table-gutter-cell,
+.table-row-link--active > td.table-gutter-cell {
+  box-shadow: none;
 }
 
 .table-row-link:focus-visible .drag-handle,

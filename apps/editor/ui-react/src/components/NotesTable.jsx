@@ -1852,8 +1852,9 @@ function NotesTable({
   }, [visibleColumnKeys]);
   const totalColumnCount =
     visibleColumns.length +
-    // Trailing gutter column in the header that the rows stop before, so
-    // the overlay scrollbar never covers row content.
+    // Trailing empty gutter column shared by the header and every body row,
+    // so row paint continues under the overlay scrollbar while row content
+    // still stops before it.
     (vScroll.visible ? 1 : 0);
   const hasActiveQuery = Boolean(query.trim());
   const isDefaultOrder =
@@ -5046,6 +5047,12 @@ function NotesTable({
                                   frontPreview,
                                 ),
                               )}
+                              {vScroll.visible ? (
+                                <td
+                                  aria-hidden="true"
+                                  className="table-gutter-cell"
+                                />
+                              ) : null}
                             </tr>
                             {showPlaceholderAfter ? (
                               <tr
