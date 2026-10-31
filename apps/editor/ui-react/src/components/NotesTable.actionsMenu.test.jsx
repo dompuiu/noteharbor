@@ -327,7 +327,7 @@ describe("Row actions menu", () => {
     await screen.findByText("BBBB");
 
     actionsButton("BBBB").focus();
-    await user.keyboard("{ArrowDown}");
+    await user.keyboard("{Enter}");
 
     const menu = await screen.findByRole("menu", {
       name: "Actions for BBBB",
@@ -366,6 +366,24 @@ describe("Row actions menu", () => {
       await screen.findByRole("menu", { name: "Actions for AAAA" }),
     ).toBeInTheDocument();
     expect(currentHash()).not.toContain("slideshow");
+  });
+
+  test("arrow keys from the actions button move to the next or previous row", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("BBBB");
+
+    actionsButton("BBBB").focus();
+    await user.keyboard("{ArrowDown}");
+
+    expect(screen.getByText("CCCC").closest("tr")).toHaveFocus();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+
+    actionsButton("BBBB").focus();
+    await user.keyboard("{ArrowUp}");
+
+    expect(screen.getByText("AAAA").closest("tr")).toHaveFocus();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
   });
 
   test("clicking outside or scrolling the table closes the menu", async () => {

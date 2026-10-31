@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useId, useRef } from "react";
+import { Fragment, useEffect, useId } from "react";
 import { createPortal } from "react-dom";
 import { useAnchoredPopover } from "../lib/useAnchoredPopover.js";
 
@@ -11,9 +11,6 @@ export function RowActionsMenu({ items, label }) {
     align: "end",
     closeOnRouteChange: true,
   });
-  // Which item receives focus when the menu opens: the menu button opens on
-  // the first item, ArrowUp opens on the last.
-  const initialFocusRef = useRef("first");
   const menuId = useId();
 
   useEffect(() => {
@@ -21,24 +18,8 @@ export function RowActionsMenu({ items, label }) {
       return;
     }
 
-    const menuItems = menuRef.current?.querySelectorAll('[role="menuitem"]');
-
-    if (!menuItems?.length) {
-      return;
-    }
-
-    const target =
-      initialFocusRef.current === "last"
-        ? menuItems[menuItems.length - 1]
-        : menuItems[0];
-    initialFocusRef.current = "first";
-    target.focus();
+    menuRef.current?.querySelector('[role="menuitem"]')?.focus();
   }, [menuRef, open]);
-
-  function openMenu(initialFocus) {
-    initialFocusRef.current = initialFocus;
-    setOpen(true);
-  }
 
   function closeMenu({ returnFocus }) {
     setOpen(false);
@@ -123,15 +104,6 @@ export function RowActionsMenu({ items, label }) {
         onClick={(event) => {
           event.stopPropagation();
           setOpen((current) => !current);
-        }}
-        onKeyDown={(event) => {
-          if (event.key === "ArrowDown") {
-            event.preventDefault();
-            openMenu("first");
-          } else if (event.key === "ArrowUp") {
-            event.preventDefault();
-            openMenu("last");
-          }
         }}
         ref={buttonRef}
         type="button"
