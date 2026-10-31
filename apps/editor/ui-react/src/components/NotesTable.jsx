@@ -4487,6 +4487,7 @@ function NotesTable({
               </div>
               <button
                 aria-controls="table-filter-row"
+                aria-disabled={hasActiveFilters || undefined}
                 aria-expanded={filterRowOpen}
                 aria-label={
                   activeColumnFilters.length
@@ -4494,7 +4495,20 @@ function NotesTable({
                     : "Filters"
                 }
                 className={`button table-filter-toggle${filterRowOpen ? " table-filter-toggle--open" : ""}`}
-                onClick={() => setFiltersOpen((open) => !open)}
+                onClick={() => {
+                  // Active filters force the row open, so the toggle has no
+                  // visible effect; leaving the intent alone keeps it honest.
+                  if (hasActiveFilters) {
+                    return;
+                  }
+
+                  setFiltersOpen((open) => !open);
+                }}
+                title={
+                  hasActiveFilters
+                    ? "Filters stay open while any filter is active"
+                    : undefined
+                }
                 type="button"
               >
                 Filters
@@ -4521,15 +4535,13 @@ function NotesTable({
                       </button>
                     </span>
                   ))}
-                  {activeColumnFilters.length > 1 ? (
-                    <button
-                      className="table-filter-clear-all"
-                      onClick={clearAllFilters}
-                      type="button"
-                    >
-                      Clear all
-                    </button>
-                  ) : null}
+                  <button
+                    className="table-filter-clear-all"
+                    onClick={clearAllFilters}
+                    type="button"
+                  >
+                    Clear all
+                  </button>
                 </div>
               ) : null}
               <ColumnPicker
