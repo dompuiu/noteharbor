@@ -1,17 +1,6 @@
-import {
-  Fragment,
-  useEffect,
-  useId,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { Fragment, useEffect, useId } from "react";
 import { createPortal } from "react-dom";
-
-// Gap between the button and the floating menu, and the margin the menu keeps
-// from the viewport edges when it slides into view.
-const menuOffset = 6;
-const viewportMargin = 12;
+import { useAnchoredPopover } from "../lib/useAnchoredPopover.js";
 
 // The Columns toolbar control and its checkbox menu. The menu is portalled
 // into <body> so the table's scroll containers cannot clip it; the caller owns
@@ -22,79 +11,8 @@ export function ColumnPicker({
   onToggle,
   visibleColumnKeys,
 }) {
-  const [open, setOpen] = useState(false);
-  const [position, setPosition] = useState(null);
-  const buttonRef = useRef(null);
-  const menuRef = useRef(null);
+  const { buttonRef, menuRef, open, position, setOpen } = useAnchoredPopover();
   const menuId = useId();
-
-  useEffect(() => {
-    if (!open) {
-      setPosition(null);
-      return undefined;
-    }
-
-    function closeOnOutsidePress(event) {
-      if (
-        menuRef.current?.contains(event.target) ||
-        buttonRef.current?.contains(event.target)
-      ) {
-        return;
-      }
-
-      setOpen(false);
-    }
-
-    function closeOnMove() {
-      setOpen(false);
-    }
-
-    document.addEventListener("mousedown", closeOnOutsidePress);
-    document.addEventListener("touchstart", closeOnOutsidePress);
-    window.addEventListener("scroll", closeOnMove, true);
-    window.addEventListener("resize", closeOnMove);
-
-    return () => {
-      document.removeEventListener("mousedown", closeOnOutsidePress);
-      document.removeEventListener("touchstart", closeOnOutsidePress);
-      window.removeEventListener("scroll", closeOnMove, true);
-      window.removeEventListener("resize", closeOnMove);
-    };
-  }, [open]);
-
-  useLayoutEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    const button = buttonRef.current;
-    const menu = menuRef.current;
-
-    if (!button || !menu) {
-      return;
-    }
-
-    const buttonRect = button.getBoundingClientRect();
-    const menuRect = menu.getBoundingClientRect();
-    let top = buttonRect.bottom + menuOffset;
-
-    if (top + menuRect.height > window.innerHeight - viewportMargin) {
-      top = Math.max(
-        viewportMargin,
-        buttonRect.top - menuRect.height - menuOffset,
-      );
-    }
-
-    const left = Math.min(
-      Math.max(viewportMargin, buttonRect.left),
-      Math.max(
-        viewportMargin,
-        window.innerWidth - menuRect.width - viewportMargin,
-      ),
-    );
-
-    setPosition({ left, top });
-  }, [open]);
 
   useEffect(() => {
     if (!open) {
@@ -108,7 +26,7 @@ export function ColumnPicker({
       'input[type="checkbox"]:not(:disabled)',
     );
     (firstCheckbox ?? menuRef.current)?.focus();
-  }, [open]);
+  }, [menuRef, open]);
 
   function closePicker({ returnFocus = false } = {}) {
     setOpen(false);

@@ -398,6 +398,29 @@ describe("NotesTable columns", () => {
     ).toBeInTheDocument();
   });
 
+  test("clicking outside or scrolling closes the picker", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const { user } = await openPicker();
+
+    expect(
+      screen.getByRole("dialog", { name: "Visible columns" }),
+    ).toBeInTheDocument();
+    await user.click(document.body);
+    expect(
+      screen.queryByRole("dialog", { name: "Visible columns" }),
+    ).not.toBeInTheDocument();
+
+    await openPicker();
+    window.dispatchEvent(new Event("scroll"));
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("dialog", { name: "Visible columns" }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
   test("Escape closes the picker and returns focus to Columns", async () => {
     renderTable();
 
