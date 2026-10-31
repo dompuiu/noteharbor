@@ -5196,12 +5196,12 @@ function NotesTable({
             </div>
             <div className="table-footer-hint">
               <span className="table-footer-summary">
-                Showing {deferredOrderedNotes.length} of {notes.length} notes
-                {showSelection && selectedIds.length
-                  ? ` · ${selectedIds.length} selected`
-                  : ""} ·
+                Showing {deferredOrderedNotes.length} of {notes.length} notes ·
                 sorted by {getTableColumn(sortKey)?.label ?? "#"}{" "}
                 {sortDirection === "asc" ? "ascending" : "descending"}
+                {showSelection && selectedIds.length
+                  ? ` · ${selectedIds.length} selected`
+                  : ""}
               </span>
               <span className="table-footer-right">
                 {reorderLoading ? (

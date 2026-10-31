@@ -184,7 +184,7 @@ describe("NotesTable bulk bar", () => {
 
     expect(
       screen.getByText(
-        "Showing 3 of 3 notes · 2 selected · sorted by # ascending",
+        "Showing 3 of 3 notes · sorted by # ascending · 2 selected",
       ),
     ).toBeInTheDocument();
     expect(
