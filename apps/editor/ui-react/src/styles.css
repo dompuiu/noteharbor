@@ -122,6 +122,56 @@ input[type="radio"] {
   flex-shrink: 0;
 }
 
+/* Table selection checkboxes. The native control paints a square white
+   background behind its rounded border, so a halo drawn around the control
+   shows white notches where those corners stick out. Clip the control's
+   corners and paint the halo on the cell behind it instead: the notches fall
+   away and the halo reads as one soft shape around the box. The halo lives on
+   the cell (not the input) because `clip-path` would clip a box-shadow too. */
+.table-sticky-cell.align-center > input[type="checkbox"] {
+  position: relative;
+  z-index: 1;
+  clip-path: inset(0 round 4px);
+}
+
+/* The cell centres its line box, but the input sits on the font baseline,
+   which lifts the box ~2.5px above the halo's centre. Collapsing the strut
+   makes the line box exactly the checkbox, so box and halo share a centre.
+   Scoped with `:has` because the thumbnail column is also pinned and centred. */
+.table-sticky-cell.align-center:has(> input[type="checkbox"]) {
+  line-height: 0;
+}
+
+.table-sticky-cell.align-center > input[type="checkbox"]:focus-visible {
+  outline: none;
+}
+
+.table-sticky-cell.align-center:has(> input[type="checkbox"]:focus-visible)::before {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 21px;
+  height: 21px;
+  border-radius: 7px;
+  background: rgba(150, 98, 47, 0.28);
+  content: "";
+  pointer-events: none;
+  transform: translate(-50%, -50%);
+}
+
+/* Forced colours drop the translucent halo, so fall back to a real outline
+   and leave the control's corners unclipped for the system's own ring. */
+@media (forced-colors: active) {
+  .table-sticky-cell.align-center > input[type="checkbox"] {
+    clip-path: none;
+  }
+
+  .table-sticky-cell.align-center > input[type="checkbox"]:focus-visible {
+    outline: 2px solid;
+    outline-offset: 1px;
+  }
+}
+
 #root {
   min-height: 100vh;
 }

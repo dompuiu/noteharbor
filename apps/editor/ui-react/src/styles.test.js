@@ -139,6 +139,44 @@ describe("table styles", () => {
     expect(styles).not.toMatch(/\.table-sticky-lead/);
   });
 
+  // Keyboard focus on a row checkbox is a halo behind the box, not an offset
+  // outline around it. The native control paints a square white background
+  // behind its rounded border, so those corners would show as notches inside
+  // the halo; clipping the control removes them, and the halo is painted on
+  // the cell because `clip-path` would clip a shadow on the input.
+  test("the row checkbox draws focus as a clipped halo on the cell", () => {
+    const clipped = styles.match(
+      /\.table-sticky-cell\.align-center > input\[type="checkbox"\]\s*\{([^}]*)\}/,
+    );
+    expect(clipped).not.toBeNull();
+    expect(clipped[1]).toMatch(/clip-path:\s*inset\(0 round 4px\)/);
+    expect(clipped[1]).toMatch(/z-index:\s*1/);
+
+    // Collapsing the cell's strut centres the inline checkbox on the halo.
+    // The `:has` guard keeps the centred thumbnail column on its own rhythm.
+    const cell = styles.match(
+      /\.table-sticky-cell\.align-center:has\(> input\[type="checkbox"\]\)\s*\{([^}]*)\}/,
+    );
+    expect(cell).not.toBeNull();
+    expect(cell[1]).toMatch(/line-height:\s*0/);
+
+    const reset = styles.match(
+      /\.table-sticky-cell\.align-center > input\[type="checkbox"\]:focus-visible\s*\{([^}]*)\}/,
+    );
+    expect(reset).not.toBeNull();
+    expect(reset[1]).toMatch(/outline:\s*none/);
+
+    const halo = styles.match(
+      /\.table-sticky-cell\.align-center:has\(> input\[type="checkbox"\]:focus-visible\)::before\s*\{([^}]*)\}/,
+    );
+    expect(halo).not.toBeNull();
+    expect(halo[1]).toMatch(/position:\s*absolute/);
+    expect(halo[1]).toMatch(
+      /background:\s*rgba\(150,\s*98,\s*47,\s*0\.28\)/,
+    );
+    expect(halo[1]).toMatch(/pointer-events:\s*none/);
+  });
+
   // The bulk bar is an overlay, not a layout band: it reserves no flex slot,
   // so showing it never pushes the scroller or leaves a gap below the table.
   // The shell is its containing block, so the pill stays inside the card.
