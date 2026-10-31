@@ -2557,6 +2557,45 @@ function NotesTable({
   }, [clearRowCursor]);
 
   useEffect(() => {
+    // The row-navigation keys share one meaning whether the row itself or a
+    // checkbox inside it holds focus: arrows/j/k move the cursor, Page and
+    // Home/End jump, and a held Shift rests where it is. Returns whether the
+    // key was one of them.
+    function handleRowNavigation(event) {
+      if (!event.shiftKey && (event.key === "ArrowDown" || event.key === "j")) {
+        event.preventDefault();
+        moveRowFocus(1);
+        return true;
+      }
+
+      if (!event.shiftKey && (event.key === "ArrowUp" || event.key === "k")) {
+        event.preventDefault();
+        moveRowFocus(-1);
+        return true;
+      }
+
+      if (event.key === "PageDown" || event.key === "PageUp") {
+        event.preventDefault();
+        pageTable(event.key === "PageDown" ? 1 : -1);
+        return true;
+      }
+
+      if (event.key === "Home" || event.key === "End") {
+        event.preventDefault();
+        const note =
+          event.key === "Home"
+            ? orderedNotes[0]
+            : orderedNotes[orderedNotes.length - 1];
+
+        if (note) {
+          focusRowByNoteId(note.id);
+        }
+        return true;
+      }
+
+      return false;
+    }
+
     function handleGlobalKeyDown(event) {
       if (showShortcutsHelp || confirmOpenRef.current) {
         return;
@@ -2615,6 +2654,18 @@ function NotesTable({
       }
 
       if (editable) {
+        // A row's checkbox is a form control, but it has no caret or text to
+        // edit: the row-navigation keys must still walk the table instead of
+        // being swallowed here. Other keys keep the control's own behaviour.
+        const isRowCheckbox =
+          event.target instanceof HTMLInputElement &&
+          event.target.type === "checkbox" &&
+          event.target.closest("tbody tr.table-row-link");
+
+        if (isRowCheckbox && handleRowNavigation(event)) {
+          return;
+        }
+
         if (event.key === "Escape" && event.target.closest("thead")) {
           event.preventDefault();
           // Leave the filter and land straight on the first row (Esc
@@ -2631,17 +2682,7 @@ function NotesTable({
         return;
       }
 
-      // Row focus only moves for the plain keys: a held Shift rests the focus
-      // where it is instead of pulling it to another note.
-      if (!event.shiftKey && (event.key === "ArrowDown" || event.key === "j")) {
-        event.preventDefault();
-        moveRowFocus(1);
-        return;
-      }
-
-      if (!event.shiftKey && (event.key === "ArrowUp" || event.key === "k")) {
-        event.preventDefault();
-        moveRowFocus(-1);
+      if (handleRowNavigation(event)) {
         return;
       }
 
@@ -2650,25 +2691,6 @@ function NotesTable({
 
         if (panColumnsBy(delta)) {
           event.preventDefault();
-        }
-        return;
-      }
-
-      if (event.key === "PageDown" || event.key === "PageUp") {
-        event.preventDefault();
-        pageTable(event.key === "PageDown" ? 1 : -1);
-        return;
-      }
-
-      if (event.key === "Home" || event.key === "End") {
-        event.preventDefault();
-        const note =
-          event.key === "Home"
-            ? orderedNotes[0]
-            : orderedNotes[orderedNotes.length - 1];
-
-        if (note) {
-          focusRowByNoteId(note.id);
         }
         return;
       }

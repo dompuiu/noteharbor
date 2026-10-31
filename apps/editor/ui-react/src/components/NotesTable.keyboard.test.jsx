@@ -179,6 +179,27 @@ describe("NotesTable keyboard focus inside a row", () => {
     expect(currentHash()).not.toContain("slideshow");
   });
 
+  test("ArrowDown from a focused row checkbox moves focus to the next row", async () => {
+    getNotes.mockResolvedValue({
+      notes: [notePayload(1, "AAAA"), notePayload(2, "BBBB")],
+    });
+    renderTable();
+    const user = userEvent.setup();
+    const checkbox = await screen.findByRole("checkbox", {
+      name: /select AAAA/i,
+    });
+
+    checkbox.focus();
+    expect(checkbox).toHaveFocus();
+
+    await user.keyboard("{ArrowDown}");
+
+    const secondRow = (await screen.findByText("BBBB")).closest("tr");
+    await waitFor(() => {
+      expect(secondRow).toHaveFocus();
+    });
+  });
+
   test("Enter on a nested action button runs its own action, not the row's", async () => {
     renderTable();
     const user = userEvent.setup();
