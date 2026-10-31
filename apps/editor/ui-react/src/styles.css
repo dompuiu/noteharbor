@@ -23,7 +23,10 @@
   --accent-strong: #71461f;
   --accent-soft: rgba(150, 98, 47, 0.12);
   --row-zebra: rgba(150, 98, 47, 0.05);
-  --row-selected: rgba(150, 98, 47, 0.14);
+  /* A selected row uses the same wash as a hovered one, matching the
+     prototype. The accent edge and the checked box carry selection; keeping
+     the tint separate would leave selected rows a shade darker than hover. */
+  --row-selected: var(--accent-soft);
   --accent-ink: #fffaf1;
   --success: #2f6b3c;
   --success-bg: rgba(47, 107, 60, 0.1);
@@ -2888,11 +2891,11 @@ tbody td {
   background: transparent;
 }
 
-/* Selection is painted on the cells. The rules below re-assert its tint on
-   hover, focus and the keyboard cursor, which would otherwise repaint the
-   cells with the accent wash and hide the selection. The accent edge is
-   painted on the first pinned identity cell (see `.table-sticky-lead`), so
-   panning cannot slide it out of view. */
+/* Selection is painted on the cells with the same wash as hover (see
+   `--row-selected`), and the rules below re-assert it on hover, focus and the
+   keyboard cursor, so hovering a selected row never lightens or hides it. The
+   accent edge is painted on the first pinned identity cell (see
+   `.table-sticky-lead`), so panning cannot slide it out of view. */
 .table-row-link--selected > td {
   background-color: var(--row-selected);
 }

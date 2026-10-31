@@ -18,9 +18,13 @@ describe("table styles", () => {
     );
   });
 
-  test("defines the selected row tint token", () => {
+  // Hover and selection share one wash, so a selected row is never a shade
+  // darker than a hovered one. The accent edge and the checkbox carry the
+  // selection state.
+  test("the selected row tint matches the hover tint", () => {
+    expect(styles).toMatch(/--row-selected:\s*var\(--accent-soft\)/);
     expect(styles).toMatch(
-      /--row-selected:\s*rgba\(150,\s*98,\s*47,\s*0\.14\)/,
+      /--accent-soft:\s*rgba\(150,\s*98,\s*47,\s*0\.12\)/,
     );
   });
 
