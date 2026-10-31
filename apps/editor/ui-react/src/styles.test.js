@@ -453,6 +453,14 @@ describe("table styles", () => {
     expect(bodyCells[1]).toMatch(/font-size:\s*14px/);
   });
 
+  test("the drop placeholder stays a thin gap, not a body row", () => {
+    const placeholder = styles.match(
+      /\.table-drop-placeholder-row td\s*\{([^}]*)\}/,
+    );
+    expect(placeholder).not.toBeNull();
+    expect(placeholder[1]).toMatch(/height:\s*auto/);
+  });
+
   test("thumbnails are 48x28 without distortion", () => {
     const thumb = styles.match(/\.table-thumb\s*\{([^}]*)\}/);
     expect(thumb).not.toBeNull();

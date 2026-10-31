@@ -3787,7 +3787,12 @@ td.drag-cell {
   background: var(--border);
 }
 
+/* The drop placeholder is a gap marker, not a row: it must stay as thin as its
+   dashed line. `tbody td` sizes every body cell at 48px (a floor for table
+   cells), which would otherwise turn the placeholder into a full row and push
+   the dragged row down a slot the moment a drag starts. */
 .table-drop-placeholder-row td {
+  height: auto;
   padding: 0;
   border-bottom: 0;
 }
