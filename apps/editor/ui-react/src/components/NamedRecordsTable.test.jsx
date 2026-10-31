@@ -515,6 +515,19 @@ describe("NamedRecordsTable reordering", () => {
     expect(handle.querySelectorAll(".drag-handle-dots span")).toHaveLength(6);
   });
 
+  test("tabbing from a row skips the pointer-only drag handle", async () => {
+    const user = userEvent.setup();
+    render(<Harness onReorder={vi.fn()} />);
+
+    const row = rowFor("Alpha");
+    act(() => row.focus());
+    await user.tab();
+
+    // Alpha is already the default, so its star is disabled and the rename
+    // button is the row's first stop after the handle.
+    expect(screen.getByRole("button", { name: "Rename Alpha" })).toHaveFocus();
+  });
+
   test("dropping a row hands the caller the new id order", async () => {
     const onReorder = vi.fn().mockResolvedValue(undefined);
     const { container } = render(<Harness onReorder={onReorder} />);

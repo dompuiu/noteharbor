@@ -3915,6 +3915,7 @@ function NotesTable({
             aria-label={`Move ${note.denomination}`}
             className="drag-handle"
             draggable={canReorder}
+            tabIndex={-1}
             onClick={(event) => event.stopPropagation()}
             onDragEnd={clearDragState}
             onDragStart={(event) => {
@@ -5080,8 +5081,8 @@ function NotesTable({
                               onKeyDown={(event) => {
                                 // Only the row itself acts on keys. Tab can
                                 // move focus onto a control inside the row
-                                // (drag handle, checkbox, denomination link,
-                                // action buttons), and those must activate
+                                // (checkbox, denomination link, action
+                                // buttons), and those must activate
                                 // themselves instead of the row swallowing
                                 // Enter/Space as it bubbles up.
                                 if (event.target !== event.currentTarget) {

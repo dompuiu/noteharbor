@@ -1,5 +1,6 @@
 import { MemoryRouter } from "react-router-dom";
 import { act, render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
 
@@ -109,6 +110,21 @@ function rowFor(container, denomination) {
 }
 
 describe("NotesTable row reordering", () => {
+  test("tabbing from a row skips the pointer-only drag handle", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+
+    await screen.findByLabelText("Move AAAA");
+    const row = rowFor(container, "AAAA");
+    act(() => row.focus());
+    await user.tab();
+
+    // The handle sits first in the row, so Tab must step over it straight to
+    // the selection checkbox; keyboard focus never lands on a control the
+    // keys cannot operate.
+    expect(screen.getByLabelText("Select AAAA")).toHaveFocus();
+  });
+
   test("hovering the gap between rows keeps the drop placeholder steady", async () => {
     const { container } = renderTable();
 

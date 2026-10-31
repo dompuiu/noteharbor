@@ -2995,11 +2995,10 @@ td.table-col-id {
    the scrollbar, but the ring still ends at the last content cell.
 
    `:has(:focus-visible)` keeps the ring on while Tab moves focus onto a
-   control inside the row (drag handle, checkbox, denomination link, action
-   buttons). It keys off `:focus-visible` rather than `:focus-within` so the
-   ring stays a keyboard affordance and does not linger after a mouse click.
-   The row's own `:focus-visible` rule is still needed: `:has()` only looks
-   at descendants.
+   control inside the row (checkbox, denomination link, action buttons). It
+   keys off `:focus-visible` rather than `:focus-within` so the ring stays a
+   keyboard affordance and does not linger after a mouse click. The row's own
+   `:focus-visible` rule is still needed: `:has()` only looks at descendants.
 
    `.table-row-link--active` extends the same paint to the row that owns
    the keyboard cursor, since programmatic focus (slideshow Close button,

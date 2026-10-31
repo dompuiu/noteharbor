@@ -757,6 +757,7 @@ function NamedRecordsTable({
                           aria-label={`Move ${record.name}`}
                           className="drag-handle"
                           draggable
+                          tabIndex={-1}
                           onClick={(event) => event.stopPropagation()}
                           onDragEnd={clearDragState}
                           onDragStart={(event) => {

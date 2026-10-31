@@ -208,6 +208,36 @@ describe("showcase child reordering", () => {
     ]);
   });
 
+  test("tabbing through the canvas never lands on a drag handle", async () => {
+    const user = userEvent.setup();
+    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+    await openSummer();
+
+    const start = screen.getByRole("button", { name: "Remove Summer" });
+    act(() => start.focus());
+
+    const canvas = document.querySelector(".showcase-screen");
+
+    await user.tab();
+    // The first child cell's handle sits before its card, so Tab must step
+    // over it straight to that cell's Remove control.
+    expect(screen.getByRole("button", { name: "Remove Sub" })).toHaveFocus();
+
+    // Keep walking across every child cell; dragging is pointer-only, so no
+    // stop inside the canvas may be a reorder handle the keys cannot operate.
+    for (let step = 0; step < 20; step += 1) {
+      await user.tab();
+
+      if (!canvas?.contains(document.activeElement)) {
+        break;
+      }
+
+      expect(
+        document.activeElement?.getAttribute("aria-label") ?? "",
+      ).not.toMatch(/^Reorder /);
+    }
+  });
+
   test("dragging a grouping past its notes stages the order and saves it on Save", async () => {
     const user = userEvent.setup();
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));

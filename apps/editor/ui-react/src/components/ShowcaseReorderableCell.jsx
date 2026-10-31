@@ -28,6 +28,7 @@ function ShowcaseReorderableCell({ nodeId, label, reorder, children }) {
         aria-label={`Reorder ${label}`}
         className="showcase-reorder-handle"
         draggable
+        tabIndex={-1}
         onDragEnd={clear}
         onDragStart={(event) => handleDragStart(event, nodeId)}
         type="button"

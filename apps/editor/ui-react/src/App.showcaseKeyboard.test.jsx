@@ -870,26 +870,22 @@ describe("edit-mode add tiles in the arrow sequence", () => {
     expect(search()).toBe("");
   });
 
-  test("the arrows from a reorder handle move relative to its own card", async () => {
+  test("the arrows from a card move relative to its own card", async () => {
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     const summer = await screen.findByRole("heading", { name: "Summer" });
     const note = screen.getByRole("button", { name: "1 leu, 1917" });
     const sub = screen.getByRole("button", { name: "Open grouping Sub" });
-    const reorderNote = screen.getByRole("button", {
-      name: "Reorder 1 leu 1917",
-    });
-    const reorderSub = screen.getByRole("button", { name: "Reorder Sub" });
 
-    act(() => reorderNote.focus());
+    act(() => note.focus());
     fireEvent.keyDown(document.body, { key: "ArrowDown" });
     expect(sub).toHaveFocus();
 
-    act(() => reorderSub.focus());
+    act(() => sub.focus());
     fireEvent.keyDown(document.body, { key: "ArrowDown" });
     expect(screen.getAllByRole("button", { name: "Add notes" })[0]).toHaveFocus();
 
-    act(() => reorderNote.focus());
+    act(() => note.focus());
     fireEvent.keyDown(document.body, { key: "ArrowUp" });
     expect(summer).toHaveFocus();
 
