@@ -271,6 +271,34 @@ describe("table styles", () => {
     expect(styles).toMatch(/table\s*\{[^}]*width:\s*100cqw/);
   });
 
+  // One column must stay auto, or the browser spreads a wide viewport's
+  // leftover across every column and stretches the pinned identity ones.
+  test("the tags column stays flexible instead of fixing a width", () => {
+    const tags = styles.match(/\.tags-column\s*\{([^}]*)\}/);
+    expect(tags).not.toBeNull();
+    expect(tags[1]).not.toMatch(/(?:^|[^a-z-])(?:max-)?width:/i);
+  });
+
+  test("the compact control columns use a few pixels of horizontal padding", () => {
+    const order = styles.match(/\.table-order-cell\s*\{([^}]*)\}/);
+    expect(order).not.toBeNull();
+    expect(order[1]).toMatch(/padding-left:\s*4px/);
+    expect(order[1]).toMatch(/padding-right:\s*4px/);
+
+    const thumb = styles.match(/\.table-thumb-cell\s*\{([^}]*)\}/);
+    expect(thumb).not.toBeNull();
+    expect(thumb[1]).toMatch(/padding-left:\s*4px/);
+    expect(thumb[1]).toMatch(/padding-right:\s*4px/);
+  });
+
+  test("the drag handle column is 24px wide", () => {
+    const drag = styles.match(/\.drag-cell\s*\{([^}]*)\}/);
+    expect(drag).not.toBeNull();
+    expect(drag[1]).toMatch(/width:\s*24px/);
+    expect(drag[1]).toMatch(/min-width:\s*24px/);
+    expect(drag[1]).toMatch(/max-width:\s*24px/);
+  });
+
   // Pinned identity cells: sticky against the pan, opaque so the columns
   // sliding underneath never show through.
   test("pins identity cells with an opaque background", () => {

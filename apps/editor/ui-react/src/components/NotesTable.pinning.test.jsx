@@ -71,7 +71,16 @@ function armHorizontalOverflow(container) {
   return scroller;
 }
 
+// Indexes of the <col> elements the renderer left widthless — exactly one
+// should be the auto column absorbing a wide viewport's leftover.
+function flexibleColumnIndexes(container) {
+  return Array.from(container.querySelectorAll("table > colgroup > col"))
+    .map((col, index) => (col.style.width ? null : index))
+    .filter((index) => index !== null);
+}
+
 beforeEach(() => {
+  window.localStorage.clear();
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
     width: 1000,
@@ -119,7 +128,32 @@ describe("NotesTable pinned identity columns", () => {
     ).map((col) => col.style.width);
 
     // reorder, selection, id, thumbnail, catalog #
-    expect(widths.slice(0, 5)).toEqual(["26px", "44px", "64px", "64px", "116px"]);
+    expect(widths.slice(0, 5)).toEqual(["24px", "44px", "48px", "58px", "116px"]);
+  });
+
+  // If every column has a width, the browser spreads a wide viewport's
+  // leftover across all of them and the fixed identity columns stretch.
+  test("leaves the tags column as the only flexible width", async () => {
+    const { container } = renderTable();
+    await screen.findByText("Fr. 2300");
+
+    expect(flexibleColumnIndexes(container)).toEqual([
+      screen.getByText("TAGS").closest("th").cellIndex,
+    ]);
+  });
+
+  test("moves the flexible width to the next field column when tags is hidden", async () => {
+    window.localStorage.setItem(
+      "noteharbor.notesTableColumns.1",
+      JSON.stringify(["denomination", "serial"]),
+    );
+
+    const { container } = renderTable();
+    await screen.findByText("Fr. 2300");
+
+    expect(flexibleColumnIndexes(container)).toEqual([
+      screen.getByText("SERIAL").closest("th").cellIndex,
+    ]);
   });
 
   test("pins selection, thumbnail and catalog at accumulated left offsets", async () => {
@@ -135,7 +169,7 @@ describe("NotesTable pinned identity columns", () => {
     expect(thumbnail.style.getPropertyValue("--table-sticky-left")).toBe(
       "44px",
     );
-    expect(catalog.style.getPropertyValue("--table-sticky-left")).toBe("108px");
+    expect(catalog.style.getPropertyValue("--table-sticky-left")).toBe("102px");
 
     // Only the right-most pinned cell carries the pan-shadow marker.
     expect(catalog.classList.contains("table-sticky-end")).toBe(true);
@@ -155,7 +189,7 @@ describe("NotesTable pinned identity columns", () => {
       screen.getByText("CATALOG #").closest("th").style.getPropertyValue(
         "--table-sticky-left",
       ),
-    ).toBe("108px");
+    ).toBe("102px");
   });
 
   test("shows the pan shadow only while the columns are scrolled", async () => {

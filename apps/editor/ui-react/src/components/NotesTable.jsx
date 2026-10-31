@@ -88,6 +88,20 @@ function alignmentClass(column) {
   return `align-${column?.align ?? "left"}`;
 }
 
+// Header and body cells build their classes from the same column model, so a
+// compact column keeps one content box and one alignment in both places.
+function cellClass(column) {
+  return [
+    alignmentClass(column),
+    column.kind === "reorder" ? "drag-cell" : null,
+    column.kind === "order" ? "table-order-cell" : null,
+    column.kind === "thumbnail" ? "table-thumb-cell" : null,
+    column.isTags ? "tags-column" : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
 function getTagTextMeasureContext() {
   if (tagTextMeasureContext || typeof document === "undefined") {
     return tagTextMeasureContext;
@@ -1828,9 +1842,11 @@ function NotesTable({
     () => lastStickyKey(visibleColumns),
     [visibleColumns],
   );
-  // A wide window leaves the fixed-width table with space to spare. The last
-  // visible field column takes it, so every declared width — and therefore
-  // every pinned left offset — stays exact.
+  // A wide window leaves the fixed-width table with space to spare, so the last
+  // visible field column takes it and every declared width — and therefore
+  // every pinned left offset — stays exact. The one-data-column floor
+  // guarantees such a column exists and is never the pinned catalog #; without
+  // it the browser would spread the leftover across all columns instead.
   const flexibleColumnKey = useMemo(() => {
     for (let index = visibleColumns.length - 1; index >= 0; index -= 1) {
       if (visibleColumns[index].kind === "data") {
@@ -3841,7 +3857,7 @@ function NotesTable({
   function renderReorderCell(column, note) {
     return (
       <td
-        className={`drag-cell${canReorder ? " drag-cell--enabled" : ""} ${alignmentClass(column)}`}
+        className={`${cellClass(column)}${canReorder ? " drag-cell--enabled" : ""}`}
         onClick={(event) => event.stopPropagation()}
       >
         {canReorder ? (
@@ -3910,8 +3926,7 @@ function NotesTable({
   function renderThumbnailCell(column, note, frontThumb, frontPreview) {
     return (
       <td
-        className={`table-thumb-cell ${alignmentClass(column)}`}
-        {...stickyCellAttributes(column)}
+        {...stickyCellAttributes(column, cellClass(column))}
       >
         {frontThumb ? (
           <span
@@ -3971,7 +3986,7 @@ function NotesTable({
   function renderDataCell(column, note) {
     if (column.isTags) {
       return (
-        <td className={`tags-column ${alignmentClass(column)}`}>
+        <td className={cellClass(column)}>
           <TagsCell onApplyFilter={applyTagFilter} tags={note.tags} />
         </td>
       );
@@ -4101,7 +4116,7 @@ function NotesTable({
         break;
       case "order":
         cell = (
-          <td className={alignmentClass(column)}>{note.display_order ?? "-"}</td>
+          <td className={cellClass(column)}>{note.display_order ?? "-"}</td>
         );
         break;
       case "thumbnail":
@@ -4601,7 +4616,7 @@ function NotesTable({
                           if (column.kind === "reorder") {
                             return (
                               <th
-                                className="drag-cell align-center"
+                                className={cellClass(column)}
                                 key={column.key}
                                 scope="col"
                               />
@@ -4639,13 +4654,7 @@ function NotesTable({
                                 scope="col"
                                 {...stickyCellAttributes(
                                   column,
-                                  column.isTags ? "tags-column" : undefined,
-                                )}
-                                key={column.key}
-                                scope="col"
-                                {...stickyCellAttributes(
-                                  column,
-                                  column.isTags ? "tags-column" : undefined,
+                                  cellClass(column),
                                 )}
                               >
                                 {column.label.toUpperCase()}
@@ -4654,12 +4663,7 @@ function NotesTable({
                           }
 
                           const isSorted = sortKey === column.key;
-                          const className = [
-                            alignmentClass(column),
-                            column.isTags ? "tags-column" : null,
-                          ]
-                            .filter(Boolean)
-                            .join(" ");
+                          const className = cellClass(column);
 
                           return (
                             <th
@@ -4727,7 +4731,7 @@ function NotesTable({
                             if (column.kind === "reorder") {
                               return (
                                 <th
-                                  className="drag-cell"
+                                  className={cellClass(column)}
                                   key={column.key}
                                   scope="col"
                                 />

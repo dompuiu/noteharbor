@@ -2807,11 +2807,18 @@ tbody td {
   background: rgba(255, 255, 255, 0.65);
 }
 
-/* 48px of image plus 8px of padding on each side fills the model's 64px
-   thumbnail column exactly, so the pinned offsets stay aligned. */
+/* Compact: 4px of padding each side instead of the table's usual 10px, so the
+   model's 48px fits four tabular digits and the sort chevron. */
+.table-order-cell {
+  padding-left: 4px;
+  padding-right: 4px;
+}
+
+/* 4px of padding each side, so the model's 58px fits the 48px image and the
+   FRONT header, and the pinned offsets stay aligned. */
 .table-thumb-cell {
-  padding-left: 8px;
-  padding-right: 8px;
+  padding-left: 4px;
+  padding-right: 4px;
 }
 
 .table-thumb-wrap {
@@ -3603,18 +3610,9 @@ th[aria-sort="descending"] .sort-chevron {
 }
 
 .drag-cell {
-  width: 26px;
-  min-width: 26px;
-  max-width: 26px;
-  padding: 0;
-  overflow: hidden;
-}
-
-th.drag-cell,
-td.drag-cell {
-  width: 26px;
-  min-width: 26px;
-  max-width: 26px;
+  width: 24px;
+  min-width: 24px;
+  max-width: 24px;
   padding: 0;
   overflow: hidden;
 }
@@ -3993,9 +3991,13 @@ td.drag-cell {
   grid-column: 1 / -1;
 }
 
+/* The tags column is the table's flexible column: the renderer leaves its <col>
+   widthless so it absorbs the viewport leftover. A width here would leave the
+   fixed-layout table with no auto column, and the browser would spread the
+   leftover across every column — stretching the pinned identity columns and
+   invalidating their sticky offsets. */
 .tags-column {
-  width: 260px;
-  max-width: 260px;
+  min-width: 0;
 }
 
 .tag-list {

@@ -150,6 +150,16 @@ describe("table column model", () => {
     ]);
   });
 
+  test("keeps the control columns at their compact, content-sized widths", () => {
+    expect(getTableColumn("reorder")).toMatchObject({ width: 24 });
+    expect(getTableColumn("id")).toMatchObject({ width: 48 });
+    expect(getTableColumn("thumbnail")).toMatchObject({ width: 58 });
+  });
+
+  test("leaves tags without a width so it can flex", () => {
+    expect(getTableColumn("tags")).toMatchObject({ width: null });
+  });
+
   test("marks which columns pin and which stay permanent", () => {
     expect(
       tableColumns.filter((column) => column.sticky).map((column) => column.key),
@@ -173,7 +183,7 @@ describe("stickyOffsets", () => {
     expect(stickyOffsets()).toEqual({
       selection: 0,
       thumbnail: 44,
-      catalog_number: 108,
+      catalog_number: 102,
     });
   });
 
@@ -183,7 +193,7 @@ describe("stickyOffsets", () => {
     const offsets = stickyOffsets(tableColumns);
 
     expect(offsets.thumbnail).toBe(44);
-    expect(offsets.catalog_number).toBe(44 + 64);
+    expect(offsets.catalog_number).toBe(44 + 58);
   });
 
   test("leaves no gap when a middle pinned column is hidden", () => {

@@ -52,7 +52,9 @@ export const tableColumns = [
     key: "reorder",
     label: "",
     kind: "reorder",
-    width: 26,
+    // The drag handle is 12px of dots; 6px of breathing room on each side
+    // keeps the target at the 24px accessibility minimum.
+    width: 24,
     align: "center",
     sortable: false,
     sticky: false,
@@ -86,7 +88,9 @@ export const tableColumns = [
     // reading this column as a database identifier.
     label: "#",
     kind: "order",
-    width: 64,
+    // Sized for four tabular digits in the body and the active sort chevron
+    // in the header, with 4px of horizontal cell padding.
+    width: 48,
     align: "right",
     sortable: true,
     sticky: false,
@@ -102,7 +106,9 @@ export const tableColumns = [
     key: "thumbnail",
     label: "FRONT",
     kind: "thumbnail",
-    width: 64,
+    // The 48px front image and the FRONT header both fit, with 4px of
+    // padding on each side.
+    width: 58,
     align: "center",
     sortable: false,
     sticky: true,
@@ -141,7 +147,9 @@ export const tableColumns = [
     width: 148,
   }),
   scalarColumn("tags", "Tags", {
-    width: 230,
+    // No width: the table's flexible column, sized from the viewport leftover
+    // so a wide window cannot stretch the fixed identity columns.
+    width: null,
     isTags: true,
   }),
   {
