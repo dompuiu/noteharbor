@@ -164,7 +164,12 @@ export const tableColumns = [
     key: "actions",
     label: "ACTIONS",
     kind: "actions",
-    width: 54,
+    // Wide enough for the ACTIONS header (roughly 62-67px depending on the
+    // fallback font) with 4px of compact padding each side (see
+    // .table-actions-cell), so the label never overflows into the scrollbar
+    // gutter where the shell's overflow clips it. The 30px row menu button
+    // sits inside with room.
+    width: 80,
     align: "center",
     sortable: false,
     sticky: false,

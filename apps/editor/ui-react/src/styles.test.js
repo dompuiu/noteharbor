@@ -328,6 +328,14 @@ describe("table styles", () => {
     expect(thumb).not.toBeNull();
     expect(thumb[1]).toMatch(/padding-left:\s*4px/);
     expect(thumb[1]).toMatch(/padding-right:\s*4px/);
+
+    const actions = styles.match(/\.table-actions-cell\s*\{([^}]*)\}/);
+    expect(actions).not.toBeNull();
+    expect(actions[1]).toMatch(/padding-left:\s*4px/);
+    expect(actions[1]).toMatch(/padding-right:\s*4px/);
+    // The ACTIONS label is a word, so it must stay on one line instead of
+    // wrapping into a taller header row.
+    expect(actions[1]).toMatch(/white-space:\s*nowrap/);
   });
 
   test("the drag handle column is 24px wide", () => {
@@ -763,7 +771,7 @@ describe("sidebar styles", () => {
   });
 
   // The Editor holds a fixed 1200px desktop layout at every viewport width:
-  // narrow windows scroll horizontally instead of reflowing, so there are no
+  // narrow windows crop the overhang instead of reflowing, so there are no
   // width-based media queries and no narrow-screen drawer to conflict with
   // the "b" rail shortcut.
   test("has no width-based media queries", () => {
@@ -779,19 +787,19 @@ describe("sidebar styles", () => {
 
 describe("app minimum width", () => {
   // The Editor targets desktop estates: below 1200px the layout breaks, so
-  // the app holds a 1200px floor and scrolls horizontally instead of
-  // squeezing.
+  // the app holds a 1200px floor. The window crops the overhang instead of
+  // exposing a page scrollbar; the table's own pan handles off-screen columns.
   test("the body holds the 1200px floor", () => {
     const body = styles.match(/body\s*\{([^}]*)\}/);
     expect(body).not.toBeNull();
     expect(body[1]).toMatch(/min-width:\s*1200px/);
   });
 
-  test("the body scrolls horizontally instead of clipping", () => {
+  test("the body crops the overhang below the 1200px floor", () => {
     const body = styles.match(/body\s*\{([^}]*)\}/);
     expect(body).not.toBeNull();
-    expect(body[1]).toMatch(/overflow-x:\s*auto/);
-    expect(body[1]).not.toMatch(/overflow:\s*hidden/);
+    expect(body[1]).toMatch(/overflow:\s*hidden/);
+    expect(body[1]).not.toMatch(/overflow-x:\s*auto/);
   });
 
   test("the app shell holds the 1200px floor", () => {

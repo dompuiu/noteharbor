@@ -100,6 +100,7 @@ function cellClass(column) {
     column.kind === "reorder" ? "drag-cell" : null,
     column.kind === "order" ? "table-order-cell" : null,
     column.kind === "thumbnail" ? "table-thumb-cell" : null,
+    column.kind === "actions" ? "table-actions-cell" : null,
     column.isTags ? "tags-column" : null,
   ]
     .filter(Boolean)
@@ -4098,7 +4099,7 @@ function NotesTable({
     });
 
     return (
-      <td className={alignmentClass(column)}>
+      <td className={cellClass(column)}>
         <RowActionsMenu
           items={items}
           label={`Actions for ${noteLabel}`}
@@ -4773,7 +4774,10 @@ function NotesTable({
                                 <th
                                   key={column.key}
                                   scope="col"
-                                  {...stickyCellAttributes(column)}
+                                  {...stickyCellAttributes(
+                                    column,
+                                    cellClass(column),
+                                  )}
                                 />
                               );
                             }

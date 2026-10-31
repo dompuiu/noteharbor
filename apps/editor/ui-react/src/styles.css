@@ -2822,6 +2822,15 @@ tbody td {
   padding-right: 4px;
 }
 
+/* Compact like the other control columns, and kept on one line: the model
+   sizes this column for the ACTIONS label, but a larger user font would
+   otherwise wrap the word and make the header row taller. */
+.table-actions-cell {
+  padding-left: 4px;
+  padding-right: 4px;
+  white-space: nowrap;
+}
+
 .table-thumb-wrap {
   position: relative;
   display: inline-flex;
