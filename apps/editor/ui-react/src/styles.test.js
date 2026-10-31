@@ -302,6 +302,25 @@ describe("table styles", () => {
     expect(theadZ).toBeGreaterThan(2);
   });
 
+  // The thumbnail bubble is absolutely positioned inside the pinned thumbnail
+  // cell. A pinned cell is its own stacking context, so without lifting the
+  // cell the bubble slips under the catalog number in the same row and under
+  // the pinned cells of the rows below. The header must stay above it.
+  test("the thumbnail preview clears the pinned columns but not the header", () => {
+    const cell = styles.match(
+      /\.table-row-link:has\(\.table-thumb-preview\.is-visible\) > \.table-thumb-cell\s*\{([^}]*)\}/,
+    );
+    expect(cell).not.toBeNull();
+
+    const cellZ = Number(cell[1].match(/z-index:\s*(\d+)/)?.[1]);
+    expect(cellZ).toBeGreaterThan(2);
+
+    const thead = styles.match(/\nthead\s*\{([^}]*)\}/);
+    expect(thead).not.toBeNull();
+    const theadZ = Number(thead[1].match(/z-index:\s*(\d+)/)?.[1]);
+    expect(theadZ).toBeGreaterThan(cellZ);
+  });
+
   // The edge shadow is the only thing that tells a collector the identity
   // block is pinned; it must not paint while the table sits at its start.
   test("the pan shadow only exists while the table is horizontally scrolled", () => {

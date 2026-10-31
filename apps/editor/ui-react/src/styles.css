@@ -2846,6 +2846,15 @@ tbody td {
   object-fit: contain;
 }
 
+/* The bubble is absolutely positioned inside the pinned thumbnail cell, and a
+   pinned cell is its own stacking context. Without this lift the bubble would
+   slide under the catalog number in the same row and under the pinned cells of
+   the rows below, which also paint at z-index 2. The header keeps the top
+   layer (see `thead`), so a row scrolling beneath it still disappears. */
+.table-row-link:has(.table-thumb-preview.is-visible) > .table-thumb-cell {
+  z-index: 3;
+}
+
 .table-row-link {
   cursor: pointer;
   transition: background 0.18s ease;
@@ -3058,10 +3067,11 @@ thead {
   background: var(--surface-3);
   position: sticky;
   top: 0;
-  /* Above the pinned body cells (z-index 2) so a pinned cell scrolling up
-     never paints over the header; the header's own pinned cells use 5 within
-     this context. */
-  z-index: 3;
+  /* Above the pinned body cells (z-index 2, or 3 for the thumbnail cell while
+     its preview bubble is open) so a pinned cell scrolling up never paints
+     over the header; the header's own pinned cells use 5 within this
+     context. */
+  z-index: 4;
   isolation: isolate;
   /* No shadow below the header: the second header row's own bottom border
      is the divider, and any strip painted here would cover the top ring of
