@@ -71,28 +71,34 @@ function armHorizontalOverflow(container) {
   return scroller;
 }
 
-// Indexes of the <col> elements the renderer left widthless — exactly one
-// should be the auto column absorbing a wide viewport's leftover.
-function flexibleColumnIndexes(container) {
-  return Array.from(container.querySelectorAll("table > colgroup > col"))
-    .map((col, index) => (col.style.width ? null : index))
-    .filter((index) => index !== null);
+function columnGroupWidths(container) {
+  return Array.from(
+    container.querySelectorAll("table > colgroup > col"),
+  ).map((col) => col.style.width);
 }
 
 beforeEach(() => {
   window.localStorage.clear();
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
-  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
-    width: 1000,
-    height: 600,
-    top: 0,
-    left: 0,
-    right: 1000,
-    bottom: 600,
-    x: 0,
-    y: 0,
-    toJSON: () => ({}),
-  });
+  vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockImplementation(
+    function () {
+      // The scroller stands in for a wide window; the table's width follows it
+      // (clamped to the 1200px minimum). Other elements keep the old 1000px.
+      const width = this.classList?.contains("table-scroll-x") ? 1600 : 1000;
+
+      return {
+        width,
+        height: 600,
+        top: 0,
+        left: 0,
+        right: width,
+        bottom: 600,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      };
+    },
+  );
   getNotes.mockResolvedValue({
     notes: [
       {
@@ -119,40 +125,38 @@ beforeEach(() => {
 });
 
 describe("NotesTable pinned identity columns", () => {
-  test("applies the declared identity widths through the column group", async () => {
+  test("keeps the control widths exact and gives every data column a width", async () => {
     const { container } = renderTable();
     await screen.findByText("Fr. 2300");
 
-    const widths = Array.from(
-      container.querySelectorAll("table > colgroup > col"),
-    ).map((col) => col.style.width);
+    const widths = columnGroupWidths(container);
 
-    // reorder, selection, id, thumbnail, catalog #
-    expect(widths.slice(0, 5)).toEqual(["24px", "44px", "48px", "58px", "116px"]);
+    // reorder, selection, id, thumbnail
+    expect(widths.slice(0, 4)).toEqual(["24px", "44px", "48px", "58px"]);
+    expect(
+      widths.every((width) => width.endsWith("px") && parseFloat(width) > 0),
+    ).toBe(true);
+    // Every column, including the scrollbar gutter, adds up to the table width
+    // so the browser has no leftover to spread across the fixed columns.
+    expect(
+      widths.reduce((total, width) => total + parseFloat(width), 0),
+    ).toBeCloseTo(1600);
   });
 
-  // If every column has a width, the browser spreads a wide viewport's
-  // leftover across all of them and the fixed identity columns stretch.
-  test("leaves the tags column as the only flexible width", async () => {
-    const { container } = renderTable();
-    await screen.findByText("Fr. 2300");
-
-    expect(flexibleColumnIndexes(container)).toEqual([
-      screen.getByText("TAGS").closest("th").cellIndex,
-    ]);
-  });
-
-  test("moves the flexible width to the next field column when tags is hidden", async () => {
+  test("keeps the control widths when tags is hidden", async () => {
     window.localStorage.setItem(
       "noteharbor.notesTableColumns.1",
-      JSON.stringify(["denomination", "serial"]),
+      JSON.stringify(["id", "denomination", "serial"]),
     );
 
     const { container } = renderTable();
     await screen.findByText("Fr. 2300");
 
-    expect(flexibleColumnIndexes(container)).toEqual([
-      screen.getByText("SERIAL").closest("th").cellIndex,
+    expect(columnGroupWidths(container).slice(0, 4)).toEqual([
+      "24px",
+      "44px",
+      "48px",
+      "58px",
     ]);
   });
 

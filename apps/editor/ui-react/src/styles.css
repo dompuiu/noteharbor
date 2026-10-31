@@ -2727,10 +2727,9 @@ table {
   border-collapse: separate;
   border-spacing: 0;
   min-width: 1200px;
-  /* Pinned columns are positioned from the model's declared widths, so the
-     declared widths must be the rendered widths. `fixed` honours the
-     `<colgroup>` exactly; the last visible field column is left without a
-     width so it takes whatever the viewport has left over. */
+  /* Pinned columns are positioned from the rendered widths, so the renderer
+     writes every <col>'s width and `fixed` honours the <colgroup> exactly.
+     The control columns are exact; the data columns flex. */
   table-layout: fixed;
 }
 
@@ -3991,11 +3990,9 @@ td.drag-cell {
   grid-column: 1 / -1;
 }
 
-/* The tags column is the table's flexible column: the renderer leaves its <col>
-   widthless so it absorbs the viewport leftover. A width here would leave the
-   fixed-layout table with no auto column, and the browser would spread the
-   leftover across every column — stretching the pinned identity columns and
-   invalidating their sticky offsets. */
+/* The renderer owns every column width through the <colgroup>. Keeping a
+   width off this cell avoids a second sizing source competing with it;
+   `min-width: 0` only records that the cell has no floor of its own. */
 .tags-column {
   min-width: 0;
 }

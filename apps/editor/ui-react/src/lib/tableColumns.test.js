@@ -14,6 +14,7 @@ import {
   sortableColumnKeys,
   stickyOffsets,
   tableColumns,
+  tableColumnWidths,
   validSortKeys,
 } from "./tableColumns.js";
 
@@ -156,8 +157,13 @@ describe("table column model", () => {
     expect(getTableColumn("thumbnail")).toMatchObject({ width: 58 });
   });
 
-  test("leaves tags without a width so it can flex", () => {
-    expect(getTableColumn("tags")).toMatchObject({ width: null });
+  test("gives every data column a positive flex weight", () => {
+    for (const column of tableColumns.filter(
+      (entry) => entry.kind === "data",
+    )) {
+      expect(typeof column.width).toBe("number");
+      expect(column.width).toBeGreaterThan(0);
+    }
   });
 
   test("marks which columns pin and which stay permanent", () => {
@@ -175,6 +181,54 @@ describe("table column model", () => {
       "catalog_number",
       "actions",
     ]);
+  });
+});
+
+describe("tableColumnWidths", () => {
+  test("keeps control columns exact and scales data columns by weight", () => {
+    const widths = tableColumnWidths(tableColumns, 1600, 14);
+    const available = 1600 - 14 - (24 + 44 + 48 + 58 + 54);
+    const weightTotal = 116 + 150 + 96 + 106 + 96 + 148 + 230;
+
+    expect(widths).toMatchObject({
+      reorder: 24,
+      selection: 44,
+      id: 48,
+      thumbnail: 58,
+      actions: 54,
+    });
+    expect(widths.catalog_number).toBeCloseTo(
+      (available * 116) / weightTotal,
+    );
+    expect(widths.denomination).toBeCloseTo((available * 150) / weightTotal);
+    expect(widths.tags).toBeCloseTo((available * 230) / weightTotal);
+
+    const total = tableColumns.reduce(
+      (sum, column) => sum + widths[column.key],
+      0,
+    );
+    expect(total).toBeCloseTo(1600 - 14);
+  });
+
+  test("shrinks the data columns but not the control columns on a narrow table", () => {
+    const wide = tableColumnWidths(tableColumns, 1600, 14);
+    const narrow = tableColumnWidths(tableColumns, 1200, 14);
+
+    expect(narrow.id).toBe(wide.id);
+    expect(narrow.thumbnail).toBe(wide.thumbnail);
+    expect(narrow.denomination).toBeLessThan(wide.denomination);
+  });
+
+  test("gives a hidden column's share to the remaining data columns", () => {
+    const withoutTags = tableColumns.filter(
+      (column) => column.key !== "tags",
+    );
+    const withTags = tableColumnWidths(tableColumns, 1600, 14);
+    const widths = tableColumnWidths(withoutTags, 1600, 14);
+
+    expect(widths.tags).toBeUndefined();
+    expect(widths.serial).toBeGreaterThan(withTags.serial);
+    expect(widths.id).toBe(48);
   });
 });
 
@@ -210,6 +264,19 @@ describe("stickyOffsets", () => {
 
     expect(offsets.id).toBeUndefined();
     expect(offsets.denomination).toBeUndefined();
+  });
+
+  test("uses rendered widths when the pinned columns flex", () => {
+    const offsets = stickyOffsets(tableColumns, {
+      selection: 50,
+      thumbnail: 60,
+    });
+
+    expect(offsets).toEqual({
+      selection: 0,
+      thumbnail: 50,
+      catalog_number: 110,
+    });
   });
 });
 

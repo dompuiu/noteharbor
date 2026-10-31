@@ -49,6 +49,7 @@ import {
   slideshowFilterKeys,
   stickyOffsets,
   tableColumns,
+  tableColumnWidths,
   tagsColumnKey,
   validSortKeys,
 } from "../lib/tableColumns.js";
@@ -68,6 +69,9 @@ export function HomeHero() {
 const tableStateStorageKey = "noteharbor.notesTableState";
 const tableColumnsStorageKeyPrefix = "noteharbor.notesTableColumns";
 const rowHeightEstimate = 48;
+// Mirrors the table's CSS min-width and the trailing scrollbar-gutter column.
+const minTableWidth = 1200;
+const tableGutterWidth = 14;
 const validPreviewKinds = new Set(["front", "back"]);
 const slideshowFilterParamPrefix = "f_";
 const tagChipHorizontalPadding = 20;
@@ -1136,6 +1140,7 @@ function NotesTable({
   const tableShellRef = useRef(null);
   const tableScrollXRef = useRef(null);
   const tableScrollYRef = useRef(null);
+  const [tableWidth, setTableWidth] = useState(null);
   const columnPanRef = useRef(null);
   const suppressColumnPanClickRef = useRef(false);
   const vMetricsRef = useRef({ max: 0, range: 0, thumbHeight: 0 });
@@ -1832,30 +1837,30 @@ function NotesTable({
       ),
     [visibleColumnKeys],
   );
+  // Control columns keep their declared width; the data columns share the
+  // viewport leftover in proportion to theirs. Every <col> therefore gets an
+  // explicit width that adds up to the table width, so a wide window cannot
+  // fall back to stretching the fixed identity columns.
+  const columnWidths = useMemo(
+    () =>
+      tableColumnWidths(
+        visibleColumns,
+        Math.max(tableWidth ?? minTableWidth, minTableWidth),
+        vScroll.visible ? tableGutterWidth : 0,
+      ),
+    [visibleColumns, tableWidth, vScroll.visible],
+  );
   // Pinned identity columns take a cumulative left offset over the visible
   // sticky columns only, so a hidden column never leaves a gap in the block.
+  // The rendered widths are used because a pinned data column flexes.
   const stickyLeftByColumn = useMemo(
-    () => stickyOffsets(visibleColumns),
-    [visibleColumns],
+    () => stickyOffsets(visibleColumns, columnWidths),
+    [visibleColumns, columnWidths],
   );
   const lastStickyColumnKey = useMemo(
     () => lastStickyKey(visibleColumns),
     [visibleColumns],
   );
-  // A wide window leaves the fixed-width table with space to spare, so the last
-  // visible field column takes it and every declared width — and therefore
-  // every pinned left offset — stays exact. The one-data-column floor
-  // guarantees such a column exists and is never the pinned catalog #; without
-  // it the browser would spread the leftover across all columns instead.
-  const flexibleColumnKey = useMemo(() => {
-    for (let index = visibleColumns.length - 1; index >= 0; index -= 1) {
-      if (visibleColumns[index].kind === "data") {
-        return visibleColumns[index].key;
-      }
-    }
-
-    return null;
-  }, [visibleColumns]);
   // The one field column that must stay visible: once it is alone, its
   // checkbox is disabled so the collector cannot reduce the table to
   // identity columns only.
@@ -2138,6 +2143,30 @@ function NotesTable({
       window.removeEventListener("resize", scheduleUpdate);
     };
   }, [filterRowHeight, loading, deferredOrderedNotes.length, updateVScroll]);
+
+  // The data columns need the space the table can occupy, not the table's own
+  // rendered width: once the columns are wide, a fixed-layout table refuses to
+  // shrink below their total. The scroller is independent of that content and
+  // keeps shrinking with the window.
+  useLayoutEffect(() => {
+    const scroller = tableScrollXRef.current;
+
+    if (!scroller) {
+      return undefined;
+    }
+
+    const measure = () => {
+      const nextWidth = scroller.getBoundingClientRect().width;
+      setTableWidth((current) =>
+        current === nextWidth ? current : nextWidth,
+      );
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, [loading, loadError]);
 
   function handleVThumbPointerDown(event) {
     event.preventDefault();
@@ -4599,15 +4628,13 @@ function NotesTable({
                       {visibleColumns.map((column) => (
                         <col
                           key={column.key}
-                          style={
-                            column.width && column.key !== flexibleColumnKey
-                              ? { width: `${column.width}px` }
-                              : undefined
-                          }
+                          style={{
+                            width: `${columnWidths[column.key] ?? column.width ?? 0}px`,
+                          }}
                         />
                       ))}
                       {vScroll.visible ? (
-                        <col style={{ width: "14px" }} />
+                        <col style={{ width: `${tableGutterWidth}px` }} />
                       ) : null}
                     </colgroup>
                     <thead>

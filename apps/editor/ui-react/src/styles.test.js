@@ -269,11 +269,18 @@ describe("table styles", () => {
   test("the table uses fixed column widths so pinned offsets stay exact", () => {
     expect(styles).toMatch(/table-layout:\s*fixed/);
     expect(styles).toMatch(/table\s*\{[^}]*width:\s*100cqw/);
+    // The renderer's minimum mirrors these two values; keep the CSS side
+    // pinned so the JS constants in NotesTable cannot drift silently.
+    expect(styles).toMatch(/table\s*\{[^}]*min-width:\s*1200px/);
+    expect(styles).toMatch(
+      /\.table-scroll-x\s*\{[^}]*container-type:\s*inline-size/,
+    );
   });
 
-  // One column must stay auto, or the browser spreads a wide viewport's
-  // leftover across every column and stretches the pinned identity ones.
-  test("the tags column stays flexible instead of fixing a width", () => {
+  // The renderer computes every column width and writes it to the <colgroup>.
+  // A CSS width on a first-row cell would override that <col> and restart the
+  // proportional stretch of the fixed identity columns.
+  test("the tags column never fixes its own width", () => {
     const tags = styles.match(/\.tags-column\s*\{([^}]*)\}/);
     expect(tags).not.toBeNull();
     expect(tags[1]).not.toMatch(/(?:^|[^a-z-])(?:max-)?width:/i);

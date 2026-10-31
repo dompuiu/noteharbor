@@ -6,6 +6,11 @@
 // The model is applied at HEAD: the table renders from this list, and
 // filtering, sorting, alignment, sizing, sticky pinning and the column picker
 // all read the metadata below instead of keeping parallel key lists.
+//
+// `width` is exact for the non-data control columns (drag handle, selection,
+// display order, thumbnail, row actions). For a data column it is the flex
+// weight: tableColumnWidths() shares the viewport leftover between the data
+// columns in those proportions, so only the control columns are fixed.
 
 function addThousandsSeparators(value) {
   return value.replace(/\B(?=(\d{3})+(?!\d))/g, ",");
@@ -147,9 +152,9 @@ export const tableColumns = [
     width: 148,
   }),
   scalarColumn("tags", "Tags", {
-    // No width: the table's flexible column, sized from the viewport leftover
-    // so a wide window cannot stretch the fixed identity columns.
-    width: null,
+    // A flex weight rather than a fixed width: every data column scales with
+    // the viewport, while the control columns keep their exact width.
+    width: 230,
     isTags: true,
   }),
   {
@@ -239,10 +244,63 @@ export const displayOrderColumn = tableColumns.find(
   (column) => column.kind === "order",
 );
 
+// Computes the rendered width of every visible column for a table of
+// `tableWidth` px. Control columns keep their declared width exactly; the data
+// columns share the leftover in proportion to their declared width, so they
+// flex with the viewport while the identity columns stay put. `reservedWidth`
+// covers cells outside the model, such as the scrollbar gutter.
+export function tableColumnWidths(
+  visibleColumns,
+  tableWidth,
+  reservedWidth = 0,
+) {
+  const widths = {};
+  const fixedColumns = visibleColumns.filter(
+    (column) => column.kind !== "data",
+  );
+  const flexibleColumns = visibleColumns.filter(
+    (column) => column.kind === "data",
+  );
+  const fixedTotal = fixedColumns.reduce(
+    (sum, column) => sum + (column.width ?? 0),
+    0,
+  );
+  const available = Math.max(0, tableWidth - reservedWidth - fixedTotal);
+  const weightTotal = flexibleColumns.reduce(
+    (sum, column) => sum + (column.width ?? 0),
+    0,
+  );
+
+  for (const column of fixedColumns) {
+    widths[column.key] = column.width ?? 0;
+  }
+
+  // Give the last flexible column whatever rounding is left, so the columns
+  // always add up to the table width and the browser has no leftover to
+  // spread across — and thereby stretch — the fixed columns.
+  let remaining = available;
+
+  flexibleColumns.forEach((column, index) => {
+    const isLast = index === flexibleColumns.length - 1;
+    const width = isLast
+      ? remaining
+      : weightTotal > 0
+        ? (available * (column.width ?? 0)) / weightTotal
+        : available / flexibleColumns.length;
+
+    widths[column.key] = Math.max(0, width);
+    remaining -= width;
+  });
+
+  return widths;
+}
+
 // Pinned columns stay put while the table pans, so each needs the sum of the
 // declared widths of the pinned columns that come before it. Only *visible*
 // pinned columns count: a hidden column must leave no gap in the pinned block.
-export function stickyOffsets(visibleColumns = tableColumns) {
+// A pinned data column flexes, so the caller may pass the rendered widths
+// instead of the model's preferred widths.
+export function stickyOffsets(visibleColumns = tableColumns, widths = null) {
   const offsets = {};
   let left = 0;
 
@@ -252,7 +310,7 @@ export function stickyOffsets(visibleColumns = tableColumns) {
     }
 
     offsets[column.key] = left;
-    left += column.width ?? 0;
+    left += widths?.[column.key] ?? column.width ?? 0;
   }
 
   return offsets;
