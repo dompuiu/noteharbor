@@ -221,12 +221,12 @@ describe("NotesTable search", () => {
     renderTable();
 
     const input = await searchBox();
-    await screen.findByText("3 notes in the current view.");
+    await screen.findByText("Showing 3 of 3 notes · sorted by # ascending");
 
     await user.type(input, "2300");
 
     expect(
-      await screen.findByText("2 notes in the current view."),
+      await screen.findByText("Showing 2 of 3 notes · sorted by # ascending"),
     ).toBeInTheDocument();
   });
 
@@ -271,7 +271,9 @@ describe("NotesTable search", () => {
     expect(input).toHaveValue("");
     expect(screen.getByText("AAAA")).toBeInTheDocument();
     expect(screen.getByText("CCCC")).toBeInTheDocument();
-    expect(screen.getByText("3 notes in the current view.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Showing 3 of 3 notes · sorted by # ascending"),
+    ).toBeInTheDocument();
   });
 
   test("no matches says the view is empty, not the collection", async () => {
@@ -350,7 +352,9 @@ describe("NotesTable search", () => {
 
     await screen.findByText("DDDD");
     expect(await searchBox()).toHaveValue("");
-    expect(screen.getByText("1 notes in the current view.")).toBeInTheDocument();
+    expect(
+      screen.getByText("Showing 1 of 1 notes · sorted by # ascending"),
+    ).toBeInTheDocument();
 
     unmount();
 

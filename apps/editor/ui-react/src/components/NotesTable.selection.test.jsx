@@ -174,6 +174,24 @@ describe("NotesTable bulk bar", () => {
     expect(clearButton).toBeEnabled();
   });
 
+  test("reports the selected count in the footer summary, not above the table", async () => {
+    renderTable();
+    const user = userEvent.setup();
+    await screen.findByText("AAAA");
+
+    await user.click(screen.getByRole("checkbox", { name: "Select AAAA" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select CCCC" }));
+
+    expect(
+      screen.getByText(
+        "Showing 3 of 3 notes · 2 selected · sorted by # ascending",
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/notes in the current view/),
+    ).not.toBeInTheDocument();
+  });
+
   test("Delete asks for confirmation and deletes every selected note", async () => {
     renderTable();
     const user = userEvent.setup();

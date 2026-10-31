@@ -109,8 +109,10 @@ describe("NotesTable new collection draft", () => {
     const { getNotes } = await import("../lib/api.js");
     renderNewCollection();
 
-    // Same chrome as the view: headers, filter row, empty copy, count.
-    expect(await screen.findByText("0 notes in the current view.")).toBeInTheDocument();
+    // Same chrome as the view: headers, filter row, empty copy, footer summary.
+    expect(
+      await screen.findByText("Showing 0 of 0 notes · sorted by # ascending"),
+    ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "#" })).toBeInTheDocument();
     expect(screen.getByText("FRONT")).toBeInTheDocument();
     expect(

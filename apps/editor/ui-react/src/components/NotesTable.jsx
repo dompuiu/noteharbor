@@ -4381,12 +4381,6 @@ function NotesTable({
                 </p>
               ) : null
             ) : null}
-            <p>
-              {orderedNotes.length} notes in the current view.
-              {showSelection && selectedIds.length
-                ? ` ${selectedIds.length} selected.`
-                : ""}
-            </p>
           </div>
           <div className="inline-actions">
             {isCollectionEditing ? (
@@ -5197,7 +5191,10 @@ function NotesTable({
             </div>
             <div className="table-footer-hint">
               <span className="table-footer-summary">
-                Showing {deferredOrderedNotes.length} of {notes.length} notes ·
+                Showing {deferredOrderedNotes.length} of {notes.length} notes
+                {showSelection && selectedIds.length
+                  ? ` · ${selectedIds.length} selected`
+                  : ""} ·
                 sorted by {getTableColumn(sortKey)?.label ?? "#"}{" "}
                 {sortDirection === "asc" ? "ascending" : "descending"}
               </span>
