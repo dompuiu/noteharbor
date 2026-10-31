@@ -248,6 +248,101 @@ describe("NotesTable keyboard focus inside a row", () => {
     expect(checkbox).toBeChecked();
     expect(currentHash()).not.toContain("slideshow");
   });
+
+  test("Escape on the row checkbox drops the row cursor to the table anchor", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+    const row = await findRow();
+    const checkbox = screen.getByRole("checkbox", {
+      name: /select ZZTEST/i,
+    });
+
+    checkbox.focus();
+    expect(checkbox).toHaveFocus();
+    await waitFor(() => {
+      expect(row).toHaveClass("table-row-link--active");
+    });
+
+    await user.keyboard("{Escape}");
+
+    expect(container.querySelector(".table-focus-anchor")).toHaveFocus();
+    await waitFor(() => {
+      expect(row).not.toHaveClass("table-row-link--active");
+    });
+  });
+
+  test("Escape on the denomination link drops the row cursor to the table anchor", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+    const row = await findRow();
+    const link = screen.getByRole("link", { name: "ZZTEST" });
+
+    link.focus();
+    expect(link).toHaveFocus();
+    await waitFor(() => {
+      expect(row).toHaveClass("table-row-link--active");
+    });
+
+    await user.keyboard("{Escape}");
+
+    expect(container.querySelector(".table-focus-anchor")).toHaveFocus();
+    await waitFor(() => {
+      expect(row).not.toHaveClass("table-row-link--active");
+    });
+  });
+
+  test("Escape on the actions button drops the row cursor to the table anchor", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+    const row = await findRow();
+    const actionsButton = screen.getByRole("button", {
+      name: "Actions for ZZTEST",
+    });
+
+    actionsButton.focus();
+    expect(actionsButton).toHaveFocus();
+    await waitFor(() => {
+      expect(row).toHaveClass("table-row-link--active");
+    });
+
+    await user.keyboard("{Escape}");
+
+    expect(container.querySelector(".table-focus-anchor")).toHaveFocus();
+    await waitFor(() => {
+      expect(row).not.toHaveClass("table-row-link--active");
+    });
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  test("Escape closes an open actions menu before dropping the row cursor", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+    const row = await findRow();
+    const actionsButton = screen.getByRole("button", {
+      name: "Actions for ZZTEST",
+    });
+
+    actionsButton.focus();
+    await user.keyboard("{Enter}");
+    expect(
+      await screen.findByRole("menu", { name: "Actions for ZZTEST" }),
+    ).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    expect(actionsButton).toHaveFocus();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    await waitFor(() => {
+      expect(row).toHaveClass("table-row-link--active");
+    });
+
+    await user.keyboard("{Escape}");
+
+    expect(container.querySelector(".table-focus-anchor")).toHaveFocus();
+    await waitFor(() => {
+      expect(row).not.toHaveClass("table-row-link--active");
+    });
+  });
 });
 
 describe("Active row highlight", () => {

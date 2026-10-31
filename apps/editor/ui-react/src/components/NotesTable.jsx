@@ -2596,6 +2596,28 @@ function NotesTable({
       return false;
     }
 
+    function handleRowEscape(event) {
+      // Escape anywhere in a row — the row itself or a control inside it,
+      // such as the checkbox, the denomination link or the actions button —
+      // drops the row cursor and returns focus to the table anchor. Menus
+      // and popovers that own Escape stop the event before it reaches here,
+      // so they still close first. The anchor is focused explicitly (rather
+      // than just blurring) so a following Tab press lands on the header's
+      // "select all" checkbox, and a further Escape can still clear filters.
+      if (
+        event.key !== "Escape" ||
+        !(event.target instanceof HTMLElement) ||
+        !event.target.closest("tr.table-row-link")
+      ) {
+        return false;
+      }
+
+      event.preventDefault();
+      focusTableAnchor();
+      clearRowCursor();
+      return true;
+    }
+
     function handleGlobalKeyDown(event) {
       if (showShortcutsHelp || confirmOpenRef.current) {
         return;
@@ -2653,6 +2675,10 @@ function NotesTable({
         return;
       }
 
+      if (handleRowEscape(event)) {
+        return;
+      }
+
       if (editable) {
         // A row's checkbox is a form control, but it has no caret or text to
         // edit: the row-navigation keys must still walk the table instead of
@@ -2692,21 +2718,6 @@ function NotesTable({
         if (panColumnsBy(delta)) {
           event.preventDefault();
         }
-        return;
-      }
-
-      if (
-        event.key === "Escape" &&
-        event.target instanceof HTMLElement &&
-        event.target.classList.contains("table-row-link")
-      ) {
-        event.preventDefault();
-        // Focus the anchor right before the table (instead of just calling
-        // blur()) so a following Tab press lands on the header's "select
-        // all" checkbox rather than wherever the browser's default tab
-        // order would otherwise resume from.
-        focusTableAnchor();
-        clearRowCursor();
         return;
       }
 
