@@ -2852,19 +2852,28 @@ tbody td {
 /* Odd rows carry a faint accent tint so long rows stay trackable across
    the wide table. Painted on the row, not the cells, so the
    semi-transparent hover/focus/active cell paint composites over it
-   instead of replacing it — the two tints stack. Parity comes from the
+   instead of replacing it — the two tints stack. Selection is the
+   exception and replaces the stripe (see below). Parity comes from the
    row's visual index (see NotesTable), so filtering and sorting
    re-stripe the list. */
 .table-row-link--zebra {
   background: var(--row-zebra);
 }
 
-/* A selected row is tinted on the cells, so the row's zebra stripe still
-   shows through the translucent tint. The rules below re-assert that tint on
-   hover, focus and the keyboard cursor, which would otherwise repaint the
-   cells with the accent wash and hide the selection. The accent edge is
-   painted on the first pinned identity cell (see `.table-sticky-lead`), so
-   panning cannot slide it out of view. */
+/* Selection replaces the zebra stripe rather than stacking on it. Scrolling
+   cells paint a translucent selected tint over the row, while pinned cells
+   paint the opaque surface plus the same tint; if the stripe stayed on the
+   row, selected zebra rows would read darker than even ones and darker than
+   their own pinned columns. The rules below re-assert the tint on hover,
+   focus and the keyboard cursor, which would otherwise repaint the cells
+   with the accent wash and hide the selection. The accent edge is painted on
+   the first pinned identity cell (see `.table-sticky-lead`), so panning
+   cannot slide it out of view. */
+.table-row-link--zebra.table-row-link--selected {
+  background: transparent;
+  transition: none;
+}
+
 .table-row-link--selected > td {
   background-color: var(--row-selected);
 }

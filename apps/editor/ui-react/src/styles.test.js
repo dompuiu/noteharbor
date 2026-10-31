@@ -42,6 +42,18 @@ describe("table styles", () => {
     );
   });
 
+  // Selection replaces the zebra stripe rather than stacking on it, so a
+  // selected odd row matches a selected even one and its own pinned columns.
+  // The compound selector says so without relying on source order.
+  test("selection replaces the zebra stripe so every selected row matches", () => {
+    const selectedZebra = styles.match(
+      /\.table-row-link--zebra\.table-row-link--selected\s*\{([^}]*)\}/,
+    );
+    expect(selectedZebra).not.toBeNull();
+    expect(selectedZebra[1]).toMatch(/background:\s*transparent/);
+    expect(selectedZebra[1]).toMatch(/transition:\s*none/);
+  });
+
   // A selected row must not lose its wash when the pointer or keyboard cursor
   // arrives: the selection tint stays, while the cursor adds its own ring.
   test("a selected row keeps its tint on hover, focus and the keyboard cursor", () => {
