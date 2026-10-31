@@ -5112,6 +5112,10 @@ function NotesTable({
                   <span className="table-bulk-bar-count">
                     {selectedIds.length} selected
                   </span>
+                  <span
+                    aria-hidden="true"
+                    className="table-bulk-bar-separator"
+                  />
                   <button
                     className="table-bulk-bar-delete"
                     disabled={bulkLoading}
@@ -5121,11 +5125,27 @@ function NotesTable({
                     {bulkLoading ? "Working..." : "Delete"}
                   </button>
                   <button
+                    aria-label="Clear selection"
                     className="table-bulk-bar-clear"
                     onClick={clearSelection}
+                    title="Clear selection"
                     type="button"
                   >
-                    Clear
+                    <svg
+                      aria-hidden="true"
+                      focusable="false"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      width="13"
+                    >
+                      <path
+                        d="M6 6l12 12M18 6L6 18"
+                        fill="none"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeWidth="2"
+                      />
+                    </svg>
                   </button>
                 </div>
               ) : null}

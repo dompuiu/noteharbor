@@ -2507,8 +2507,8 @@ input[type="radio"] {
 }
 
 /* The scroller and its overlay scrollbar share one positioned box, so the
-   track stops at the rows area even when the bulk bar (a sibling below this
-   box) is shown. */
+   track stops at the rows area while the floating bulk bar overlays the
+   bottom of this box. */
 .table-viewport {
   position: relative;
   display: flex;
@@ -2517,17 +2517,22 @@ input[type="radio"] {
   min-height: 0;
 }
 
-/* The bulk bar is a real flex child of the shell, so it takes its own band
-   below the rows instead of floating over them: the scroller shrinks and the
-   last row stays fully readable while the bar is shown. */
+/* The bulk bar floats over the bottom of the rows inside the shell instead of
+   taking a flex band: it reserves no layout space, so showing it never pushes
+   the scroller or leaves a gap below the table. The shell is the relatively
+   positioned containing block, keeping the pill inside the card's cropped
+   bounds at every width. */
 .table-bulk-bar {
+  position: absolute;
+  bottom: 16px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 4;
   display: flex;
   align-items: center;
-  align-self: center;
-  flex: 0 0 auto;
   gap: 10px;
-  margin: 10px 12px;
-  padding: 6px 8px 6px 14px;
+  max-width: calc(100% - 24px);
+  padding: 6px 8px 6px 16px;
   border-radius: var(--radius-pill);
   background: var(--accent-strong);
   color: var(--accent-ink);
@@ -2538,7 +2543,13 @@ input[type="radio"] {
 .table-bulk-bar-count {
   font-size: 0.82rem;
   font-weight: 700;
-  margin-right: 4px;
+}
+
+.table-bulk-bar-separator {
+  flex: none;
+  width: 1px;
+  height: 20px;
+  background: rgba(255, 250, 241, 0.24);
 }
 
 .table-bulk-bar button {
@@ -2578,6 +2589,12 @@ input[type="radio"] {
 
 .table-bulk-bar .table-bulk-bar-delete:hover {
   background: #fffaf1;
+}
+
+.table-bulk-bar .table-bulk-bar-clear {
+  width: 30px;
+  padding: 0;
+  justify-content: center;
 }
 
 .table-scroll-x {

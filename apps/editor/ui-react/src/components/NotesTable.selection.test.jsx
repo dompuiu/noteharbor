@@ -155,7 +155,7 @@ describe("NotesTable bulk bar", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("shows the selection count with Delete and Clear", async () => {
+  test("shows the count with Delete before the clear icon", async () => {
     renderTable();
     const user = userEvent.setup();
     await screen.findByText("AAAA");
@@ -165,8 +165,13 @@ describe("NotesTable bulk bar", () => {
 
     const bar = screen.getByRole("region", { name: "Selection actions" });
     expect(within(bar).getByText("2 selected")).toBeInTheDocument();
-    expect(within(bar).getByRole("button", { name: "Delete" })).toBeEnabled();
-    expect(within(bar).getByRole("button", { name: "Clear" })).toBeEnabled();
+
+    const [deleteButton, clearButton] = within(bar).getAllByRole("button");
+    expect(deleteButton).toHaveTextContent("Delete");
+    expect(deleteButton).not.toHaveAttribute("aria-label");
+    expect(deleteButton).toBeEnabled();
+    expect(clearButton).toHaveAccessibleName("Clear selection");
+    expect(clearButton).toBeEnabled();
   });
 
   test("Delete asks for confirmation and deletes every selected note", async () => {
@@ -206,7 +211,9 @@ describe("NotesTable bulk bar", () => {
     await user.click(screen.getByRole("checkbox", { name: "Select BBBB" }));
 
     const bar = screen.getByRole("region", { name: "Selection actions" });
-    await user.click(within(bar).getByRole("button", { name: "Clear" }));
+    await user.click(
+      within(bar).getByRole("button", { name: "Clear selection" }),
+    );
 
     await waitFor(() => {
       expect(

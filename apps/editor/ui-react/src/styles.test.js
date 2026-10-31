@@ -76,17 +76,34 @@ describe("table styles", () => {
     expect(edge[1]).toMatch(/background-image:\s*[\s\S]*var\(--accent\)/);
   });
 
-  // The bulk bar is a layout band, not an overlay, so the last row is never
-  // covered: the shell stays a column flex container and the bar takes its own
-  // fixed-size slot below the scroller.
-  test("the bulk bar reserves its own band inside the table shell", () => {
+  // The bulk bar is an overlay, not a layout band: it reserves no flex slot,
+  // so showing it never pushes the scroller or leaves a gap below the table.
+  // The shell is its containing block, so the pill stays inside the card.
+  test("the bulk bar floats over the rows inside the table shell", () => {
+    expect(styles).toMatch(/\.table-shell\s*\{[^}]*position:\s*relative/);
     expect(styles).toMatch(
       /\.table-shell\s*\{[^}]*display:\s*flex;[^}]*flex-direction:\s*column/,
     );
+
     const bar = styles.match(/\.table-bulk-bar\s*\{([^}]*)\}/);
     expect(bar).not.toBeNull();
-    expect(bar[1]).toMatch(/flex:\s*0\s+0\s+auto/);
-    expect(bar[1]).not.toMatch(/position:\s*absolute/);
+    expect(bar[1]).toMatch(/position:\s*absolute/);
+    expect(bar[1]).toMatch(/bottom:/);
+    expect(bar[1]).toMatch(/left:\s*50%/);
+    expect(bar[1]).toMatch(/transform:\s*translateX\(-50%\)/);
+
+    const separator = styles.match(
+      /\.table-bulk-bar-separator\s*\{([^}]*)\}/,
+    );
+    expect(separator).not.toBeNull();
+    expect(separator[1]).toMatch(/width:\s*1px/);
+
+    const clear = styles.match(
+      /\.table-bulk-bar \.table-bulk-bar-clear\s*\{([^}]*)\}/,
+    );
+    expect(clear).not.toBeNull();
+    expect(clear[1]).toMatch(/width:\s*30px/);
+    expect(clear[1]).toMatch(/padding:\s*0/);
   });
 
   test("the overlay scrollbar stays inside the rows viewport", () => {
