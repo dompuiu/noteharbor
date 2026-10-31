@@ -3953,6 +3953,14 @@ function NotesTable({
     );
   }
 
+  function renderOrderCell(column, note) {
+    return (
+      <td {...stickyCellAttributes(column, cellClass(column))}>
+        {note.display_order ?? "-"}
+      </td>
+    );
+  }
+
   function renderThumbnailCell(column, note, frontThumb, frontPreview) {
     return (
       <td
@@ -4142,9 +4150,7 @@ function NotesTable({
         cell = renderSelectionCell(column, note);
         break;
       case "order":
-        cell = (
-          <td className={cellClass(column)}>{note.display_order ?? "-"}</td>
-        );
+        cell = renderOrderCell(column, note);
         break;
       case "thumbnail":
         cell = renderThumbnailCell(column, note, frontThumb, frontPreview);

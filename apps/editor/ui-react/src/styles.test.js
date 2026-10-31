@@ -770,10 +770,9 @@ describe("sidebar styles", () => {
     expect(block[1]).toMatch(/transition:\s*none/);
   });
 
-  // The Editor holds a fixed 1200px desktop layout at every viewport width:
-  // narrow windows crop the overhang instead of reflowing, so there are no
-  // width-based media queries and no narrow-screen drawer to conflict with
-  // the "b" rail shortcut.
+  // The app follows the window with no breakpoint-specific layout: narrow
+  // windows shrink the main area, so there are no width-based media queries
+  // and no narrow-screen drawer to conflict with the "b" rail shortcut.
   test("has no width-based media queries", () => {
     expect(styles).not.toMatch(/@media\s*\((max|min)-width/);
   });
@@ -785,27 +784,29 @@ describe("sidebar styles", () => {
   });
 });
 
-describe("app minimum width", () => {
-  // The Editor targets desktop estates: below 1200px the layout breaks, so
-  // the app holds a 1200px floor. The window crops the overhang instead of
-  // exposing a page scrollbar; the table's own pan handles off-screen columns.
-  test("the body holds the 1200px floor", () => {
+describe("app viewport width", () => {
+  // The app follows the window instead of holding a desktop-sized floor. On a
+  // narrow browser window the main area shrinks and the Table screen's own
+  // horizontal scroller reaches every column; the Tauri shell keeps its
+  // minimum window width, so this only changes the web build.
+  test("the body does not hold a fixed-width floor", () => {
     const body = styles.match(/body\s*\{([^}]*)\}/);
     expect(body).not.toBeNull();
-    expect(body[1]).toMatch(/min-width:\s*1200px/);
+    expect(body[1]).not.toMatch(/min-width:\s*\d+px/);
   });
 
-  test("the body crops the overhang below the 1200px floor", () => {
+  test("the body still crops the page scrollbar", () => {
     const body = styles.match(/body\s*\{([^}]*)\}/);
     expect(body).not.toBeNull();
     expect(body[1]).toMatch(/overflow:\s*hidden/);
     expect(body[1]).not.toMatch(/overflow-x:\s*auto/);
   });
 
-  test("the app shell holds the 1200px floor", () => {
+  test("the app shell follows the viewport width", () => {
     const shell = styles.match(/\.app-shell\s*\{([^}]*)\}/);
     expect(shell).not.toBeNull();
-    expect(shell[1]).toMatch(/min-width:\s*1200px/);
+    expect(shell[1]).toMatch(/width:\s*100%/);
+    expect(shell[1]).not.toMatch(/min-width:\s*\d+px/);
   });
 });
 
@@ -835,9 +836,9 @@ describe("slideshow overlay styles", () => {
     expect(panel[1]).toMatch(/min-height:\s*calc\(100vh/);
   });
 
-  // Fixed overlays size against the viewport, so the body's 1200px floor
-  // never reaches them. Each overlay freezes its content at its 1200px
-  // rendering and scrolls instead of reflowing on smaller windows.
+  // Fixed overlays size against the viewport. Each overlay freezes its
+  // content at a desktop rendering and scrolls instead of reflowing on
+  // smaller windows.
   test("the slideshow panel holds the 1200px floor", () => {
     const panel = styles.match(
       /\.slideshow-screen--overlay \.slideshow-panel\s*\{([^}]*)\}/,

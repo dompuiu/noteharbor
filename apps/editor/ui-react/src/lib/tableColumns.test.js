@@ -177,7 +177,13 @@ describe("table column model", () => {
   test("marks which columns pin and which stay permanent", () => {
     expect(
       tableColumns.filter((column) => column.sticky).map((column) => column.key),
-    ).toEqual(["reorder", "selection", "thumbnail", "catalog_number"]);
+    ).toEqual([
+      "reorder",
+      "selection",
+      "id",
+      "thumbnail",
+      "catalog_number",
+    ]);
     expect(
       tableColumns
         .filter((column) => !column.hideable)
@@ -245,19 +251,20 @@ describe("stickyOffsets", () => {
     expect(stickyOffsets()).toEqual({
       reorder: 0,
       selection: 24,
-      thumbnail: 68,
-      catalog_number: 126,
+      id: 68,
+      thumbnail: 116,
+      catalog_number: 174,
     });
   });
 
-  test("uses only the pinned columns, so the scrolling columns between them leave no gap", () => {
-    // `id` sits between selection and thumbnail and pans under the pinned
-    // block, so it must not shift the offsets.
-    const offsets = stickyOffsets(tableColumns);
+  test("skips a scrolling column between pinned columns, so the offsets leave no gap", () => {
+    const interleaved = [
+      { key: "first", sticky: true, width: 10 },
+      { key: "middle", sticky: false, width: 20 },
+      { key: "last", sticky: true, width: 30 },
+    ];
 
-    expect(offsets.reorder).toBe(0);
-    expect(offsets.thumbnail).toBe(68);
-    expect(offsets.catalog_number).toBe(24 + 44 + 58);
+    expect(stickyOffsets(interleaved)).toEqual({ first: 0, last: 10 });
   });
 
   test("leaves no gap when a middle pinned column is hidden", () => {
@@ -269,15 +276,16 @@ describe("stickyOffsets", () => {
     expect(offsets).toEqual({
       reorder: 0,
       selection: 24,
-      catalog_number: 24 + 44,
+      id: 68,
+      catalog_number: 68 + 48,
     });
   });
 
   test("gives no offset to scrolling columns", () => {
     const offsets = stickyOffsets();
 
-    expect(offsets.id).toBeUndefined();
     expect(offsets.denomination).toBeUndefined();
+    expect(offsets.serial).toBeUndefined();
   });
 
   test("uses rendered widths when the pinned columns flex", () => {
@@ -289,8 +297,9 @@ describe("stickyOffsets", () => {
     expect(offsets).toEqual({
       reorder: 0,
       selection: 24,
-      thumbnail: 24 + 50,
-      catalog_number: 24 + 50 + 60,
+      id: 24 + 50,
+      thumbnail: 24 + 50 + 48,
+      catalog_number: 24 + 50 + 48 + 60,
     });
   });
 });

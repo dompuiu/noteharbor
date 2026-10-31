@@ -71,7 +71,6 @@
 body {
   margin: 0;
   min-height: 100vh;
-  min-width: 1200px;
   overflow: hidden;
 }
 
@@ -131,7 +130,6 @@ input[type="radio"] {
   display: flex;
   flex-direction: row;
   width: 100%;
-  min-width: 1200px;
   height: 100vh;
   overflow: hidden;
 }
@@ -155,9 +153,9 @@ input[type="radio"] {
 }
 
 /* ── Catalog sidebar: hover-expanding rail ──────────────────────────────
-   The layout holds a fixed 1200px desktop floor at every viewport width, so
-   the rail never becomes a drawer: narrow windows scroll horizontally and the
-   rail keeps its hover/keyboard expansion everywhere. */
+   The rail never becomes a drawer: narrow windows keep the collapsed rail
+   and the main area shrinks beside it, while hover and the keyboard still
+   expand it over the content. */
 .sidebar-dock {
   position: relative;
   flex: 0 0 auto;
@@ -2976,10 +2974,11 @@ tbody td {
   box-shadow: none;
 }
 
-/* Pinned identity columns — the drag handle, selection, thumbnail and catalog
-   number stay put while the columns pan underneath them. The left offset is
-   written inline by the renderer from stickyOffsets(), so it always reflects
-   the visible pinned columns and a hidden column leaves no gap.
+/* Pinned identity columns — the drag handle, selection, display order,
+   thumbnail and catalog number stay put while the columns pan underneath
+   them. The left offset is written inline by the renderer from
+   stickyOffsets(), so it always reflects the visible pinned columns and a
+   hidden column leaves no gap.
 
    The table sits inside a vertical scroller that is also a (non-scrolling)
    horizontal scroll container, so `sticky` resolves against that inner box,

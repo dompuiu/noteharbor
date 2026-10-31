@@ -101,7 +101,10 @@ export const tableColumns = [
     width: 48,
     align: "right",
     sortable: true,
-    sticky: false,
+    // Display order is part of the row's identity: pin it with the selection
+    // and thumbnail cells so panning the data columns can never slide it
+    // under the pinned block.
+    sticky: true,
     hideable: true,
     filterable: false,
     matchMode: null,

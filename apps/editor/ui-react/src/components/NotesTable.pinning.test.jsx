@@ -160,12 +160,13 @@ describe("NotesTable pinned identity columns", () => {
     ]);
   });
 
-  test("pins the drag cell, selection, thumbnail and catalog at accumulated left offsets", async () => {
+  test("pins the drag cell, selection, display order, thumbnail and catalog at accumulated left offsets", async () => {
     renderTable();
     await screen.findByText("Fr. 2300");
 
     const reorder = screen.getByLabelText("Move $1").closest("td");
     const selection = screen.getByLabelText("Select $1").closest("td");
+    const order = screen.getByRole("cell", { name: "1" }).closest("td");
     const thumbnail = screen.getByAltText("$1 front").closest("td");
     const catalog = screen.getByText("Fr. 2300").closest("td");
 
@@ -176,13 +177,17 @@ describe("NotesTable pinned identity columns", () => {
     expect(selection.style.getPropertyValue("--table-sticky-left")).toBe(
       "24px",
     );
+    expect(order.style.getPropertyValue("--table-sticky-left")).toBe("68px");
     expect(thumbnail.style.getPropertyValue("--table-sticky-left")).toBe(
-      "68px",
+      "116px",
     );
-    expect(catalog.style.getPropertyValue("--table-sticky-left")).toBe("126px");
+    expect(catalog.style.getPropertyValue("--table-sticky-left")).toBe(
+      "174px",
+    );
 
     // Only the right-most pinned cell carries the pan-shadow marker.
     expect(catalog.classList.contains("table-sticky-end")).toBe(true);
+    expect(order.classList.contains("table-sticky-end")).toBe(false);
     expect(thumbnail.classList.contains("table-sticky-end")).toBe(false);
   });
 
@@ -195,15 +200,20 @@ describe("NotesTable pinned identity columns", () => {
       reorderHeader.style.getPropertyValue("--table-sticky-left"),
     ).toBe("0px");
     expect(
-      screen.getByText("FRONT").closest("th").style.getPropertyValue(
+      screen.getByText("#").closest("th").style.getPropertyValue(
         "--table-sticky-left",
       ),
     ).toBe("68px");
     expect(
+      screen.getByText("FRONT").closest("th").style.getPropertyValue(
+        "--table-sticky-left",
+      ),
+    ).toBe("116px");
+    expect(
       screen.getByText("CATALOG #").closest("th").style.getPropertyValue(
         "--table-sticky-left",
       ),
-    ).toBe("126px");
+    ).toBe("174px");
   });
 
   test("shows the pan shadow only while the columns are scrolled", async () => {
