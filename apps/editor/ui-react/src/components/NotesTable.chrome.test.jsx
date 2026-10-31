@@ -170,6 +170,40 @@ describe("NotesTable chrome", () => {
     expect(within(hint).getByText("?")).toBeInTheDocument();
   });
 
+  test("the footer shows the view summary before the reorder hint", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+
+    const summary = screen.getByText(/^Showing /);
+    expect(summary).toHaveTextContent(
+      "Showing 3 of 3 notes · sorted by # ascending",
+    );
+
+    const hint = screen.getByText(/Drag the handle to reorder/);
+    expect(
+      summary.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  test("the footer summary follows the filter and the sort", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = userEvent.setup();
+
+    await user.type(
+      screen.getByRole("searchbox", { name: "Search notes" }),
+      "AAAA",
+    );
+    await screen.findByText("Showing 1 of 3 notes · sorted by # ascending");
+
+    await user.click(screen.getByRole("button", { name: "COMPANY" }));
+    await screen.findByText(
+      "Showing 1 of 3 notes · sorted by Company ascending",
+    );
+  });
+
   test("the shortcuts dialog still lists the full set", async () => {
     renderTable();
 

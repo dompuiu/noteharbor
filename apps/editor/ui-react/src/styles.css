@@ -3511,11 +3511,14 @@ th[aria-sort="descending"] .sort-chevron {
 }
 
 /* The hint is a real flex child of the shell, after the rows and the bulk bar,
-   so it takes its own band at the foot instead of overlayering them. It stays
-   a single muted, non-interactive line. */
+   so it takes its own band at the foot instead of overlayering them. The
+   view summary sits at the left and the keyboard hint at the right. */
 .table-footer-hint {
-  display: block;
+  display: flex;
   flex: 0 0 auto;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
   margin: 0;
   padding: 6px 14px;
   border-top: 1px solid var(--border-soft);
@@ -3523,8 +3526,31 @@ th[aria-sort="descending"] .sort-chevron {
   font-size: 0.78rem;
   line-height: 1.5;
   white-space: nowrap;
+}
+
+.table-footer-summary {
+  flex: 1 1 auto;
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.table-footer-right {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 16px;
+  margin-left: auto;
+}
+
+.table-footer-status,
+.table-footer-keys {
+  white-space: nowrap;
+}
+
+.table-footer-keys {
+  text-align: right;
 }
 
 .drag-cell {

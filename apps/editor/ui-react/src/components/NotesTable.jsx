@@ -4415,16 +4415,6 @@ function NotesTable({
             >
               Add note
             </button>
-            <button
-              aria-label="Keyboard shortcuts"
-              className="icon-link"
-              data-shortcut="?"
-              onClick={() => setShowShortcutsHelp(true)}
-              title="Keyboard shortcuts (?)"
-              type="button"
-            >
-              Shortcuts
-            </button>
               </>
             )}
           </div>
@@ -5139,16 +5129,24 @@ function NotesTable({
                   </button>
                 </div>
               ) : null}
-              <p className="table-footer-hint">
-                {reorderLoading ? (
-                  "Saving manual order..."
-                ) : (
-                  <>
+              <div className="table-footer-hint">
+                <span className="table-footer-summary">
+                  Showing {deferredOrderedNotes.length} of {notes.length} notes ·
+                  sorted by {getTableColumn(sortKey)?.label ?? "#"}{" "}
+                  {sortDirection === "asc" ? "ascending" : "descending"}
+                </span>
+                <span className="table-footer-right">
+                  {reorderLoading ? (
+                    <span className="table-footer-status">
+                      Saving manual order...
+                    </span>
+                  ) : null}
+                  <span className="table-footer-keys">
                     Drag the handle to reorder · <kbd>&uarr;</kbd>{" "}
                     <kbd>&darr;</kbd> to browse · <kbd>?</kbd> shortcuts
-                  </>
-                )}
-              </p>
+                  </span>
+                </span>
+              </div>
             </div>
           </>
         ) : null}
