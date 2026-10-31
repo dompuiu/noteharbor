@@ -24,10 +24,10 @@ describe("table styles", () => {
     );
   });
 
-  // Selection is painted on the cells so the zebra stripe and the
-  // hover/focus/active paint composite with it rather than replace it. The
-  // accent edge lives on the first pinned identity cell, not the reorder
-  // cell, so panning cannot slide it under the pinned block.
+  // Selection is painted on the cells and outranks the zebra stripe and the
+  // hover/focus/active wash. The accent edge lives on the first pinned
+  // identity cell, not the reorder cell, so panning cannot slide it under the
+  // pinned block.
   test("a selected row carries the accent tint and edge", () => {
     expect(styles).toMatch(
       /\.table-row-link--selected > td\s*\{\s*background-color:\s*var\(--row-selected\)/,
@@ -42,16 +42,19 @@ describe("table styles", () => {
     );
   });
 
-  // Selection replaces the zebra stripe rather than stacking on it, so a
-  // selected odd row matches a selected even one and its own pinned columns.
-  // The compound selector says so without relying on source order.
-  test("selection replaces the zebra stripe so every selected row matches", () => {
-    const selectedZebra = styles.match(
-      /\.table-row-link--zebra\.table-row-link--selected\s*\{([^}]*)\}/,
+  // Interaction states replace the stripe instead of stacking on it, so a
+  // hovered or focused striped row matches a plain one and its pinned columns.
+  // Selection is one of those states.
+  test("hover, focus, the cursor and selection drop the zebra stripe", () => {
+    const states = styles.match(
+      /\.table-row-link--zebra:hover,\s*\n[\s\S]*?\{([^}]*)\}/,
     );
-    expect(selectedZebra).not.toBeNull();
-    expect(selectedZebra[1]).toMatch(/background:\s*transparent/);
-    expect(selectedZebra[1]).toMatch(/transition:\s*none/);
+    expect(states).not.toBeNull();
+    expect(states[0]).toMatch(/:focus-visible/);
+    expect(states[0]).toMatch(/:has\(:focus-visible\)/);
+    expect(states[0]).toMatch(/\.table-row-link--active/);
+    expect(states[0]).toMatch(/\.table-row-link--selected/);
+    expect(states[1]).toMatch(/background:\s*transparent/);
   });
 
   // A selected row must not lose its wash when the pointer or keyboard cursor
@@ -73,6 +76,30 @@ describe("table styles", () => {
     expect(pinned[0]).toMatch(/\.table-row-link--active/);
     expect(pinned[1]).toMatch(/background-color:\s*var\(--surface\)/);
     expect(pinned[1]).toMatch(/linear-gradient\(var\(--row-selected\)/);
+  });
+
+  // A hovered zebra row must not paint a different tint on the pinned block
+  // than on the scrolling cells: the stripe is cleared on the row, so the
+  // pinned cells only lay the accent wash over the opaque surface. A stripe
+  // repeated here would make hovered striped rows darker than plain ones.
+  test("hover, focus and the cursor paint one tint on every cell", () => {
+    const pinned = styles.match(
+      /\.table-row-link:hover > \.table-sticky-cell,[\s\S]*?\{([^}]*)\}/,
+    );
+    expect(pinned).not.toBeNull();
+    expect(pinned[0]).toMatch(/:focus-visible/);
+    expect(pinned[0]).toMatch(/:has\(:focus-visible\)/);
+    expect(pinned[0]).toMatch(/\.table-row-link--active/);
+    expect(pinned[1]).toMatch(/background-color:\s*var\(--surface\)/);
+    expect(pinned[1]).toMatch(
+      /linear-gradient\(var\(--accent-soft\),\s*var\(--accent-soft\)\)/,
+    );
+    expect(pinned[1]).not.toMatch(/--row-zebra/);
+
+    // No state-specific pinned rule may reintroduce the stripe.
+    expect(styles).not.toMatch(
+      /\.table-row-link--zebra:hover > \.table-sticky-cell/,
+    );
   });
 
   test("the selected edge survives panning and the keyboard cursor", () => {
