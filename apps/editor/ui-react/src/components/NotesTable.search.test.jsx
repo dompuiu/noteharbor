@@ -150,6 +150,27 @@ describe("NotesTable search", () => {
     expect(screen.getByText("CCCC")).toBeInTheDocument();
   });
 
+  test("1000 finds a stored denomination of $1,000", async () => {
+    getNotes.mockResolvedValue({
+      notes: [
+        note(1, { denomination: "$1,000", catalog_number: "Fr. 1" }),
+        note(2, { denomination: "$5", catalog_number: "Fr. 2" }),
+      ],
+    });
+    const user = userEvent.setup();
+    renderTable();
+
+    const input = await searchBox();
+    await screen.findByText("$1,000");
+
+    await user.type(input, "1000");
+
+    await waitFor(() => {
+      expect(screen.queryByText("$5")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("$1,000")).toBeInTheDocument();
+  });
+
   test("the / key focuses the search field and the dialog says so", async () => {
     const user = userEvent.setup();
     renderTable();
