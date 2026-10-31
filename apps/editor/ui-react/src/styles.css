@@ -2706,14 +2706,14 @@ input[type="radio"] {
   border: 0;
 }
 
-/* The inner vertical scroller is `width: max-content`, so it shrink-wraps
-   its contents and a plain `width: 100%` here would resolve against that
-   shrink-wrapped box instead of the visible viewport (fixed-width columns
-   and a premature horizontal scrollbar). `100cqw` resolves against the
-   outer horizontal scroller instead, in the same layout pass, so the
+/* The sizing wrapper is `width: max-content`, so it shrink-wraps its
+   contents and a plain `width: 100%` here would resolve against that
+   shrink-wrapped box instead of the visible viewport (fixed-width columns and
+   a premature horizontal scrollbar). `100cqw` resolves against the
+   .table-scroll-x query container instead, in the same layout pass, so the
    auto-layout columns stay adaptive with no resize flicker. The plain
-   `width: 100%` above remains as a fallback for browsers without
-   container query units. */
+   `width: 100%` above remains as a fallback for browsers without container
+   query units. */
 table {
   width: 100%;
   width: 100cqw;

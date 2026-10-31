@@ -307,18 +307,19 @@ describe("table styles", () => {
     expect(styles).toMatch(
       /\.table-scroll-x\s*\{[^}]*container-type:\s*inline-size/,
     );
-    // Both axes scroll in one element so sticky resolves against the same
-    // scrollport for the header (top) and the pinned columns (left).
-    expect(styles).toMatch(/\.table-scroll-x\s*\{[^}]*overflow:\s*auto/);
   });
 
-  // The inner wrapper must stay a plain box: making it a scroll container
-  // would move the pinned cells' scrollport away from .table-scroll-x and
-  // reintroduce the per-frame JavaScript offset.
-  test("the table's inner wrapper is not a scroll container", () => {
+  // Both axes scroll in one element so sticky resolves against the same
+  // scrollport for the header (top) and the pinned columns (left). The inner
+  // wrapper must stay a plain box: making it a scroll container would move the
+  // pinned cells' scrollport away from .table-scroll-x and reintroduce the
+  // per-frame JavaScript offset.
+  test("one scroller owns both axes and the wrapper does not scroll", () => {
+    expect(styles).toMatch(/\.table-scroll-x\s*\{[^}]*overflow:\s*auto/);
+
     const wrapper = styles.match(/\.table-scroll-content\s*\{([^}]*)\}/);
     expect(wrapper).not.toBeNull();
-    expect(wrapper[1]).not.toMatch(/overflow/);
+    expect(wrapper[1]).not.toMatch(/(?:^|[;\s])overflow(?:-[xy])?\s*:/);
   });
 
   // The renderer computes every column width and writes it to the <colgroup>.

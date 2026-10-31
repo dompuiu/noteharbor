@@ -115,9 +115,9 @@ describe("NotesTable collection switch scroll reset", () => {
       expect(next?.scrollTop).toBe(0);
     });
 
-    // The virtualized rows render through the vertical scroller, so its
-    // offset has to reset too — otherwise the new collection opens
-    // part-way down its rows.
+    // The virtualized rows render through the table scroller, so its offset
+    // has to reset too — otherwise the new collection opens part-way down its
+    // rows.
     expect(scrollToOffsetMock).toHaveBeenCalledWith(0);
   });
 });

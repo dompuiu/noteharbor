@@ -2268,7 +2268,7 @@ function NotesTable({
     }
   }
 
-  // Returns the horizontal scroller when the columns actually overflow, so
+  // Returns the table scroller when the columns actually overflow, so
   // panning is a no-op on a wide window just like the Viewer's table.
   function columnScroller() {
     const scroller = tableScrollRef.current;
@@ -2456,9 +2456,9 @@ function NotesTable({
       return undefined;
     }
 
-    const shell = tableScrollRef.current;
+    const scroller = tableScrollRef.current;
 
-    if (!shell) {
+    if (!scroller) {
       return undefined;
     }
 
@@ -2472,16 +2472,16 @@ function NotesTable({
         return;
       }
 
-      const shellBounds = shell.getBoundingClientRect();
+      const scrollerBounds = scroller.getBoundingClientRect();
       const thumbBounds = thumbElement.getBoundingClientRect();
       const headerBottom =
-        shell.querySelector("thead")?.getBoundingClientRect().bottom ??
-        shellBounds.top;
+        scroller.querySelector("thead")?.getBoundingClientRect().bottom ??
+        scrollerBounds.top;
       const previewHeight = 138;
       const desiredTop =
         thumbBounds.top + thumbBounds.height / 2 - previewHeight / 2;
-      const minTop = Math.max(shellBounds.top + 8, headerBottom + 8);
-      const maxTop = shellBounds.bottom - previewHeight - 8;
+      const minTop = Math.max(scrollerBounds.top + 8, headerBottom + 8);
+      const maxTop = scrollerBounds.bottom - previewHeight - 8;
       const clampedTop = Math.min(Math.max(desiredTop, minTop), maxTop);
       const offsetY = Math.round(clampedTop - desiredTop);
 
@@ -2495,13 +2495,13 @@ function NotesTable({
     }
 
     updateThumbPreviewPosition();
-    shell.addEventListener("scroll", updateThumbPreviewPosition, {
+    scroller.addEventListener("scroll", updateThumbPreviewPosition, {
       passive: true,
     });
     window.addEventListener("resize", updateThumbPreviewPosition);
 
     return () => {
-      shell.removeEventListener("scroll", updateThumbPreviewPosition);
+      scroller.removeEventListener("scroll", updateThumbPreviewPosition);
       window.removeEventListener("resize", updateThumbPreviewPosition);
     };
   }, [thumbPreviewState]);
@@ -4119,7 +4119,8 @@ function NotesTable({
       ]
         .filter(Boolean)
         .join(" "),
-      // The stylesheet adds the scroller's pan offset to this value.
+      // Native sticky positions the cell at this offset in the shared
+      // horizontal scrollport.
       style: {
         "--table-sticky-left": `${stickyLeftByColumn[column.key] ?? 0}px`,
       },

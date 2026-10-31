@@ -143,6 +143,31 @@ describe("NotesTable column keyboard panning", () => {
     expect(scroller.scrollLeft).toBe(0);
   });
 
+  test("keyboard pans use the smooth scroll path when the platform has one", async () => {
+    const { container } = renderTable();
+    const user = userEvent.setup();
+    await screen.findByText("ZZTEST");
+    const scroller = armHorizontalOverflow(container);
+    const scrollTo = vi.fn();
+
+    Object.defineProperty(scroller, "scrollTo", {
+      configurable: true,
+      value: scrollTo,
+    });
+
+    await user.keyboard("{Control>}{ArrowRight}{/Control}");
+    expect(scrollTo).toHaveBeenLastCalledWith({
+      behavior: "smooth",
+      left: 1600,
+    });
+
+    await user.keyboard("{ArrowRight}");
+    expect(scrollTo).toHaveBeenLastCalledWith({
+      behavior: "smooth",
+      left: 200,
+    });
+  });
+
   test("h/l pan one step and with a modifier jump to the edge", async () => {
     const { container } = renderTable();
     const user = userEvent.setup();
