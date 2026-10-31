@@ -171,7 +171,7 @@ describe("NotesTable chrome", () => {
   });
 
   test("the footer shows the view summary before the reorder hint", async () => {
-    renderTable();
+    const { container } = renderTable();
 
     await screen.findByText("AAAA");
 
@@ -179,6 +179,11 @@ describe("NotesTable chrome", () => {
     expect(summary).toHaveTextContent(
       "Showing 3 of 3 notes · sorted by # ascending",
     );
+
+    // The footer lives below the table card, not inside its border.
+    const shell = container.querySelector(".table-shell");
+    expect(shell).not.toBeNull();
+    expect(shell.contains(summary)).toBe(false);
 
     const hint = screen.getByText(/Drag the handle to reorder/);
     expect(

@@ -5129,24 +5129,24 @@ function NotesTable({
                   </button>
                 </div>
               ) : null}
-              <div className="table-footer-hint">
-                <span className="table-footer-summary">
-                  Showing {deferredOrderedNotes.length} of {notes.length} notes ·
-                  sorted by {getTableColumn(sortKey)?.label ?? "#"}{" "}
-                  {sortDirection === "asc" ? "ascending" : "descending"}
-                </span>
-                <span className="table-footer-right">
-                  {reorderLoading ? (
-                    <span className="table-footer-status">
-                      Saving manual order...
-                    </span>
-                  ) : null}
-                  <span className="table-footer-keys">
-                    Drag the handle to reorder · <kbd>&uarr;</kbd>{" "}
-                    <kbd>&darr;</kbd> to browse · <kbd>?</kbd> shortcuts
+            </div>
+            <div className="table-footer-hint">
+              <span className="table-footer-summary">
+                Showing {deferredOrderedNotes.length} of {notes.length} notes ·
+                sorted by {getTableColumn(sortKey)?.label ?? "#"}{" "}
+                {sortDirection === "asc" ? "ascending" : "descending"}
+              </span>
+              <span className="table-footer-right">
+                {reorderLoading ? (
+                  <span className="table-footer-status">
+                    Saving manual order...
                   </span>
+                ) : null}
+                <span className="table-footer-keys">
+                  Drag the handle to reorder · <kbd>&uarr;</kbd>{" "}
+                  <kbd>&darr;</kbd> to browse · <kbd>?</kbd> shortcuts
                 </span>
-              </div>
+              </span>
             </div>
           </>
         ) : null}

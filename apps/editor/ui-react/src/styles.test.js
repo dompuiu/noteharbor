@@ -95,13 +95,14 @@ describe("table styles", () => {
     );
   });
 
-  // The footer hint is the last band of the shell, not an overlay: it keeps
-  // its own fixed-size slot below the scroller and the bulk bar, on one line.
-  test("the footer hint reserves its own band inside the table shell", () => {
+  // The footer is a band below the table card, not an overlay and not part of
+  // the bordered shell: it keeps its own fixed-size slot, on one line.
+  test("the footer hint sits outside the table shell", () => {
     const hint = styles.match(/\.table-footer-hint\s*\{([^}]*)\}/);
     expect(hint).not.toBeNull();
     expect(hint[1]).toMatch(/flex:\s*0\s+0\s+auto/);
     expect(hint[1]).not.toMatch(/position:\s*absolute/);
+    expect(hint[1]).not.toMatch(/border-top/);
     expect(hint[1]).toMatch(/white-space:\s*nowrap/);
   });
 
