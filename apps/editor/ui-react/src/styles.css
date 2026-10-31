@@ -2967,13 +2967,6 @@ tbody td {
   box-shadow: none;
 }
 
-.table-row-link:focus-visible .drag-handle,
-.table-row-link:has(:focus-visible) .drag-handle,
-.table-row-link--active .drag-handle {
-  inset: 2px;
-  border-radius: 6px;
-}
-
 /* Pinned identity columns — the drag handle, selection, thumbnail and catalog
    number stay put while the columns pan underneath them. The left offset is
    written inline by the renderer from stickyOffsets(), so it always reflects
@@ -3042,6 +3035,25 @@ thead .table-sticky-cell {
 .table-row-link--selected.table-row-link--active > .table-sticky-cell {
   background-color: var(--surface);
   background-image: linear-gradient(var(--row-selected), var(--row-selected));
+}
+
+/* The drag cell is the row's first cell, so its share of the focus ring is the
+   top and bottom lines plus the left edge. The handle paints an opaque surface
+   over the cell's own inset shadow, so this pseudo-element repeats those three
+   lines above the handle. A selected row still paints its wider 3px edge on
+   the left (see the `::after` rule below), which covers this rule's 1px line. */
+.table-row-link:focus-visible > td.drag-cell::before,
+.table-row-link:has(:focus-visible) > td.drag-cell::before,
+.table-row-link--active > td.drag-cell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  box-shadow:
+    inset 0 1px 0 var(--accent),
+    inset 0 -1px 0 var(--accent),
+    inset 1px 0 0 var(--accent);
+  pointer-events: none;
+  z-index: 1;
 }
 
 /* The selection edge belongs to the row's outer left edge, so it is painted on
@@ -5351,29 +5363,27 @@ kbd {
     inset -1px 0 0 var(--accent);
 }
 
-/* Modal focus rings are drawn as an inset box-shadow on the handle, not
-   borders, so the handle keeps its full-bleed fill and never shifts. The
-   banknote table paints the row ring across the top/bottom of every cell, so
-   here the handle's cell gets the same top/bottom edges plus its left edge —
-   the row highlight then reads as one continuous band.
+/* The handle keeps its full-bleed fill and square shape in every row state, so
+   focusing a row never shifts or reshapes it. Because the opaque handle covers
+   the drag cell's own inset shadow, this pseudo-element paints the cell's share
+   of the row ring above it — the top and bottom lines plus the left edge — so
+   the row highlight reads as one continuous band.
    The background stays the untouched grey fill: the handle is a grab target,
    and giving it the accent on hover made it look already grabbed. Only the
    pointer directly over the handle itself lights it up (the base
    `.drag-handle:hover` rule below). */
-.named-record-row:focus-visible > td.named-records-drag-cell,
-.named-record-row:has(:focus-visible) > td.named-records-drag-cell,
-.named-record-row--focused > td.named-records-drag-cell {
+.named-record-row:focus-visible > td.named-records-drag-cell::before,
+.named-record-row:has(:focus-visible) > td.named-records-drag-cell::before,
+.named-record-row--focused > td.named-records-drag-cell::before {
+  content: "";
+  position: absolute;
+  inset: 0;
   box-shadow:
     inset 0 1px 0 var(--accent),
     inset 0 -1px 0 var(--accent),
     inset 1px 0 0 var(--accent);
-}
-
-.named-record-row:focus-visible .drag-handle,
-.named-record-row:has(:focus-visible) .drag-handle,
-.named-record-row--focused .drag-handle {
-  inset: 2px;
-  border-radius: 6px;
+  pointer-events: none;
+  z-index: 1;
 }
 
 .named-records-name-input {

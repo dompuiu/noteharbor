@@ -426,6 +426,68 @@ describe("table styles", () => {
     expect(cell[1]).not.toMatch(/overflow:\s*hidden/);
 
   });
+
+  // The handle fills its whole cell in every defined state. Focusing a row
+  // used to inset and round it, which made it narrower and shorter than the
+  // handle on the rows around it.
+  test("the drag handle keeps its full size and square shape when a row is focused", () => {
+    // The base handle fills the cell and stays square; no row state may
+    // override that with an inset or a rounded corner.
+    const base = styles.match(/^\.drag-handle\s*\{([^}]*)\}/m);
+    expect(base).not.toBeNull();
+    expect(base[1]).toMatch(/inset:\s*0/);
+    expect(base[1]).toMatch(/border-radius:\s*0/);
+    // The base handle must not open a stacking context that would cover the
+    // ring painted above it (see the next test).
+    expect(base[1]).not.toMatch(/z-index/);
+
+    expect(styles).not.toMatch(
+      /\.(?:table-row-link|named-record-row)[^{}]*\.drag-handle[^{]*\{[^}]*(?:inset:|border-radius)/,
+    );
+    // A selected row is one of those states: its accent edge replaces the
+    // handle shape, it does not round or inset it.
+    expect(styles).not.toMatch(
+      /\.table-row-link--selected[^{}]*\.drag-handle[^{]*\{[^}]*(?:inset:|border-radius)/,
+    );
+  });
+
+  // The handle's opaque fill hides the drag cell's own inset shadow, so the
+  // cell's share of the row ring has to be painted above the handle.
+  test("the drag cell repaints the row ring above the handle", () => {
+    const ring = styles.match(
+      /\.table-row-link:focus-visible > td\.drag-cell::before,[\s\S]*?\{([^}]*)\}/,
+    );
+    expect(ring).not.toBeNull();
+    expect(ring[0]).toMatch(/:has\(:focus-visible\)/);
+    expect(ring[0]).toMatch(/\.table-row-link--active/);
+    expect(ring[1]).toMatch(/position:\s*absolute/);
+    expect(ring[1]).toMatch(/inset:\s*0/);
+    expect(ring[1]).toMatch(/inset 0 1px 0 var\(--accent\)/);
+    expect(ring[1]).toMatch(/inset 0 -1px 0 var\(--accent\)/);
+    expect(ring[1]).toMatch(/inset 1px 0 0 var\(--accent\)/);
+    expect(ring[1]).toMatch(/pointer-events:\s*none/);
+    expect(ring[1]).toMatch(/z-index:\s*1/);
+  });
+
+  // The collections table has the same reorder handle and needs the same
+  // treatment; keep the two from drifting apart.
+  test("the named-records drag cell repaints its row ring above the handle", () => {
+    const ring = styles.match(
+      /\.named-record-row:focus-visible > td\.named-records-drag-cell::before,[\s\S]*?\{([^}]*)\}/,
+    );
+    expect(ring).not.toBeNull();
+    expect(ring[0]).toMatch(/:has\(:focus-visible\)/);
+    expect(ring[0]).toMatch(/\.named-record-row--focused/);
+    expect(ring[1]).toMatch(/content:\s*""/);
+    expect(ring[1]).toMatch(/position:\s*absolute/);
+    expect(ring[1]).toMatch(/inset:\s*0/);
+    expect(ring[1]).toMatch(/inset 0 1px 0 var\(--accent\)/);
+    expect(ring[1]).toMatch(/inset 0 -1px 0 var\(--accent\)/);
+    expect(ring[1]).toMatch(/inset 1px 0 0 var\(--accent\)/);
+    expect(ring[1]).toMatch(/pointer-events:\s*none/);
+    expect(ring[1]).toMatch(/z-index:\s*1/);
+  });
+
   // Scanning: alignment comes from the column model, so the stylesheet owns
   // the three hooks and the cells carry the model's choice. Numbers line up
   // through tabular figures rather than centred text.
