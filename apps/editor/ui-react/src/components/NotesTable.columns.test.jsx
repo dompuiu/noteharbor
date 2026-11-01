@@ -347,7 +347,6 @@ describe("NotesTable columns", () => {
     );
     expect(Object.keys(savedState).sort()).toEqual([
       "filters",
-      "selectedIds",
       "sortDirection",
       "sortKey",
     ]);

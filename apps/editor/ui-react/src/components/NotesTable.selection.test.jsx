@@ -155,6 +155,28 @@ describe("NotesTable bulk bar", () => {
     ).not.toBeInTheDocument();
   });
 
+  test("a saved selection is not restored on a reload", async () => {
+    window.localStorage.setItem(
+      "noteharbor.notesTableState",
+      JSON.stringify({
+        filters: {},
+        selectedIds: [1],
+        sortKey: "id",
+        sortDirection: "asc",
+      }),
+    );
+
+    renderTable();
+    await screen.findByText("AAAA");
+
+    expect(
+      screen.queryByRole("region", { name: "Selection actions" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("checkbox", { name: "Select AAAA" }),
+    ).not.toBeChecked();
+  });
+
   test("shows the count with Delete before the clear icon", async () => {
     renderTable();
     const user = userEvent.setup();

@@ -556,15 +556,9 @@ function loadSavedTableState() {
       : defaultSortKey;
     const nextSortDirection =
       parsedValue.sortDirection === "desc" ? "desc" : "asc";
-    const nextSelectedIds = Array.isArray(parsedValue.selectedIds)
-      ? parsedValue.selectedIds.filter(
-          (value) => Number.isInteger(value) && value > 0,
-        )
-      : [];
 
     return {
       filters: nextFilters,
-      selectedIds: [...new Set(nextSelectedIds)],
       sortKey: nextSortKey,
       sortDirection: nextSortDirection,
     };
@@ -1283,9 +1277,10 @@ function NotesTable({
     }
     return initialTableStateRef.current?.sortDirection ?? "asc";
   });
-  const [selectedIds, setSelectedIds] = useState(
-    () => initialTableStateRef.current?.selectedIds ?? [],
-  );
+  // Selection is deliberately memory-only: restoring a stale bulk-delete
+  // queue after a reload is worse than starting clean, and it leaves a bar
+  // on screen with no row cursor to return to.
+  const [selectedIds, setSelectedIds] = useState([]);
   useEffect(() => {
     // Arming is deliberately tied to user actions: the bar appearing and a
     // checkbox/select-all toggle. A background refresh that prunes deleted
@@ -2023,9 +2018,9 @@ function NotesTable({
   useEffect(() => {
     window.localStorage.setItem(
       tableStateStorageKey,
-      JSON.stringify({ filters, selectedIds, sortKey, sortDirection }),
+      JSON.stringify({ filters, sortKey, sortDirection }),
     );
-  }, [filters, selectedIds, sortDirection, sortKey]);
+  }, [filters, sortDirection, sortKey]);
 
   useEffect(() => {
     if (!Number.isInteger(collectionId)) {
@@ -2723,6 +2718,66 @@ function NotesTable({
       return true;
     }
 
+    function handleSelectionEscape(event) {
+      // Selection is a level above the row cursor. Escape with a selection
+      // on screen drops the selection and leaves focus (and the cursor)
+      // alone, so a second Escape is what sends the cursor to the anchor.
+      // Only surfaces that belong to the table's selection respond: rows,
+      // the selection bar, the header's select-all checkbox, and the
+      // anchor. Text fields keep their own Escape.
+      if (
+        event.key !== "Escape" ||
+        !selectedIdsRef.current.length ||
+        !(event.target instanceof Element)
+      ) {
+        return false;
+      }
+
+      // A text field inside a row still owns its own Escape.
+      const isCheckbox =
+        event.target instanceof HTMLInputElement &&
+        event.target.type === "checkbox";
+
+      if (!isCheckbox && isEditableElement(event.target)) {
+        return false;
+      }
+
+      const inBulkBar = Boolean(event.target.closest(".table-bulk-bar"));
+      const inRow = Boolean(event.target.closest("tr.table-row-link"));
+      const isSelectAll = event.target === selectAllRef.current;
+      const onAnchor = event.target === tableFocusAnchorRef.current;
+
+      if (!inBulkBar && !inRow && !isSelectAll && !onAnchor) {
+        return false;
+      }
+
+      event.preventDefault();
+      clearSelection();
+
+      if (!inBulkBar) {
+        return true;
+      }
+
+      // The bar unmounts with the selection, so hand focus back before it
+      // goes. With a live row cursor (the painted highlight, not just the
+      // focus memory a mouse click leaves) the cursor survives and the
+      // next Escape drops it; without one (select-all, then Tab) the
+      // anchor is the only sensible place left.
+      const cursorId =
+        activeNoteId != null &&
+        orderedNotes.some((note) => note.id === activeNoteId)
+          ? activeNoteId
+          : null;
+
+      if (cursorId != null) {
+        focusRowByNoteId(cursorId);
+      } else {
+        focusTableAnchor();
+      }
+
+      return true;
+    }
+
     function handleGlobalKeyDown(event) {
       if (showShortcutsHelp || confirmOpenRef.current) {
         return;
@@ -2800,6 +2855,10 @@ function NotesTable({
       if (event.key === "/" && !editable) {
         event.preventDefault();
         searchInputRef.current?.focus();
+        return;
+      }
+
+      if (handleSelectionEscape(event)) {
         return;
       }
 
@@ -3014,6 +3073,7 @@ function NotesTable({
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [
+    activeNoteId,
     clearRowCursor,
     clearSelection,
     collection,

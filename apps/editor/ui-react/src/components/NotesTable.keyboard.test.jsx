@@ -1293,3 +1293,204 @@ describe("Selection actions tab cycle", () => {
     expect(deleteButton).not.toHaveFocus();
   });
 });
+
+describe("Escape clears the selection before the row cursor", () => {
+  function checkbox(denomination) {
+    return screen.getByRole("checkbox", { name: `Select ${denomination}` });
+  }
+
+  function selectionBar() {
+    return screen.queryByRole("region", { name: "Selection actions" });
+  }
+
+  beforeEach(() => {
+    getNotes.mockResolvedValue({ notes: threeNotes });
+  });
+
+  test("Escape on a selected row clears the selection and keeps the cursor", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+    const row = (await screen.findByText("AAAA")).closest("tr");
+
+    row.focus();
+    await user.keyboard(" ");
+
+    expect(checkbox("AAAA")).toBeChecked();
+    expect(selectionBar()).toBeInTheDocument();
+    expect(row).toHaveClass("table-row-link--active");
+
+    await user.keyboard("{Escape}");
+
+    expect(checkbox("AAAA")).not.toBeChecked();
+    expect(selectionBar()).not.toBeInTheDocument();
+    expect(row).toHaveFocus();
+    expect(row).toHaveClass("table-row-link--active");
+
+    // The cursor is still a level below the selection: a second Escape
+    // sends it to the anchor, exactly as it did before.
+    await user.keyboard("{Escape}");
+
+    expect(container.querySelector(".table-focus-anchor")).toHaveFocus();
+    await waitFor(() => {
+      expect(row).not.toHaveClass("table-row-link--active");
+    });
+  });
+
+  test("Escape on the table anchor clears the selection", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+    await screen.findByText("AAAA");
+
+    await user.click(checkbox("AAAA"));
+    expect(selectionBar()).toBeInTheDocument();
+
+    const anchor = container.querySelector(".table-focus-anchor");
+    act(() => {
+      anchor.focus();
+    });
+
+    await user.keyboard("{Escape}");
+
+    expect(selectionBar()).not.toBeInTheDocument();
+    expect(checkbox("AAAA")).not.toBeChecked();
+    expect(anchor).toHaveFocus();
+  });
+
+  test("Escape in the search field keeps the selection", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("AAAA");
+
+    await user.click(checkbox("AAAA"));
+
+    const search = screen.getByRole("searchbox", { name: "Search notes" });
+    await user.type(search, "AAA");
+    await user.keyboard("{Escape}");
+
+    expect(search).not.toHaveFocus();
+    expect(selectionBar()).toBeInTheDocument();
+    expect(checkbox("AAAA")).toBeChecked();
+  });
+
+  test("Tab after clearing the selection enters the row's checkbox", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    const row = (await screen.findByText("AAAA")).closest("tr");
+
+    row.focus();
+    await user.keyboard(" ");
+    expect(checkbox("AAAA")).toBeChecked();
+
+    await user.keyboard("{Escape}");
+    expect(selectionBar()).not.toBeInTheDocument();
+    expect(row).toHaveFocus();
+
+    await user.tab();
+
+    expect(checkbox("AAAA")).toHaveFocus();
+  });
+
+  test("Escape in the bar clears the selection and returns to the cursor row", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    const row = (await screen.findByText("AAAA")).closest("tr");
+
+    row.focus();
+    await user.keyboard(" ");
+
+    const bar = await screen.findByRole("region", {
+      name: "Selection actions",
+    });
+    const deleteButton = within(bar).getByRole("button", { name: "Delete" });
+
+    await user.tab();
+    expect(deleteButton).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+
+    expect(selectionBar()).not.toBeInTheDocument();
+    expect(row).toHaveFocus();
+    expect(row).toHaveClass("table-row-link--active");
+    expect(checkbox("AAAA")).not.toBeChecked();
+  });
+
+  test("Escape in the bar without a cursor returns to the table anchor", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+
+    await user.click(
+      await screen.findByRole("checkbox", { name: "Select all visible rows" }),
+    );
+
+    const bar = await screen.findByRole("region", {
+      name: "Selection actions",
+    });
+    await user.tab();
+    expect(
+      within(bar).getByRole("button", { name: "Delete" }),
+    ).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+
+    expect(selectionBar()).not.toBeInTheDocument();
+    expect(container.querySelector(".table-focus-anchor")).toHaveFocus();
+  });
+
+  test("Escape on select-all clears the selection before leaving the header", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    const selectAll = await screen.findByRole("checkbox", {
+      name: "Select all visible rows",
+    });
+    const firstRow = (await screen.findByText("AAAA")).closest("tr");
+
+    await user.click(selectAll);
+    expect(selectAll).toBeChecked();
+    expect(selectionBar()).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    expect(selectionBar()).not.toBeInTheDocument();
+    expect(selectAll).not.toBeChecked();
+    expect(selectAll).toHaveFocus();
+
+    // With the selection gone the header's own Escape takes over again.
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(firstRow).toHaveFocus();
+    });
+  });
+
+  test("the actions menu closes before the selection clears", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    const row = (await screen.findByText("AAAA")).closest("tr");
+
+    row.focus();
+    await user.keyboard(" ");
+
+    const actionsButton = screen.getByRole("button", {
+      name: "Actions for AAAA",
+    });
+    actionsButton.focus();
+    await user.keyboard("{Enter}");
+    expect(
+      await screen.findByRole("menu", { name: "Actions for AAAA" }),
+    ).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(actionsButton).toHaveFocus();
+    expect(checkbox("AAAA")).toBeChecked();
+    expect(selectionBar()).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    expect(selectionBar()).not.toBeInTheDocument();
+    expect(checkbox("AAAA")).not.toBeChecked();
+    expect(actionsButton).toHaveFocus();
+    expect(row).toHaveClass("table-row-link--active");
+  });
+});
