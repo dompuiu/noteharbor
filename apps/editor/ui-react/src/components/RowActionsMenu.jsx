@@ -166,13 +166,19 @@ export const RowActionsMenu = forwardRef(function RowActionsMenu(
   { items, label, shortcut },
   ref,
 ) {
-  const { buttonRef, menuRef, open, position, setOpen } = useAnchoredPopover({
-    align: "end",
-    closeOnRouteChange: true,
-  });
+  const { buttonRef, menuRef, open, openPopover, position, setOpen } =
+    useAnchoredPopover({
+      align: "end",
+      closeOnRouteChange: true,
+      // The actions column is the table's last, unpinned column, so on a
+      // narrow window its button can be scrolled out of view. Opening from
+      // the keyboard has to bring it back first, or the menu anchors to a
+      // button the collector cannot see.
+      revealOnOpen: true,
+    });
   const menuId = useId();
 
-  useImperativeHandle(ref, () => ({ open: () => setOpen(true) }), [setOpen]);
+  useImperativeHandle(ref, () => ({ open: openPopover }), [openPopover]);
 
   useEffect(() => {
     if (!open) {
@@ -265,7 +271,13 @@ export const RowActionsMenu = forwardRef(function RowActionsMenu(
         className={`row-menu-btn${open ? " is-open" : ""}`}
         onClick={(event) => {
           event.stopPropagation();
-          setOpen((current) => !current);
+
+          if (open) {
+            setOpen(false);
+            return;
+          }
+
+          openPopover();
         }}
         ref={buttonRef}
         type="button"

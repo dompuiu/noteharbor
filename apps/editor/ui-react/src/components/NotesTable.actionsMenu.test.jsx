@@ -1,5 +1,5 @@
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { render, screen, waitFor, within } from "@testing-library/react";
+import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
@@ -404,6 +404,77 @@ describe("Row actions menu", () => {
       within(menu).getByRole("menuitem", { name: "Open" }),
     ).toHaveFocus();
     expect(currentHash()).not.toContain("slideshow");
+  });
+
+  test("o brings the actions button into view before opening its menu", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("BBBB");
+
+    const button = actionsButton("BBBB");
+    const reveal = vi.fn();
+    // jsdom does not implement scrolling; hand the button its own spy so the
+    // test can prove the reveal targets this row's actions button.
+    button.scrollIntoView = reveal;
+
+    screen.getByText("BBBB").closest("tr").focus();
+    await user.keyboard("o");
+
+    await screen.findByRole("menu", { name: "Actions for BBBB" });
+    expect(reveal).toHaveBeenCalledTimes(1);
+  });
+
+  test("clicking the actions button also brings it into view", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("AAAA");
+
+    const button = actionsButton("AAAA");
+    const reveal = vi.fn();
+    button.scrollIntoView = reveal;
+
+    await user.click(button);
+
+    await screen.findByRole("menu", { name: "Actions for AAAA" });
+    expect(reveal).toHaveBeenCalledTimes(1);
+  });
+
+  test("the reveal's own scroll does not close the menu it just opened", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("BBBB");
+
+    const button = actionsButton("BBBB");
+    const scroller = button.closest(".table-scroll-x");
+    // The button sits in the table's last, unpinned column: on a narrow
+    // window the reveal has to pan the table to reach it, and the browser
+    // dispatches that scroll after the reveal returns.
+    button.scrollIntoView = vi.fn(() => {
+      scroller.scrollLeft = 120;
+    });
+
+    screen.getByText("BBBB").closest("tr").focus();
+    await user.keyboard("o");
+
+    const menu = await screen.findByRole("menu", {
+      name: "Actions for BBBB",
+    });
+    await act(async () => {
+      scroller.dispatchEvent(new Event("scroll"));
+    });
+    expect(screen.getByRole("menu", { name: "Actions for BBBB" })).toBe(menu);
+    expect(
+      within(menu).getByRole("menuitem", { name: "Open" }),
+    ).toHaveFocus();
+
+    // The next scroll is the collector panning the table: the menu follows
+    // the usual rule and closes.
+    await act(async () => {
+      scroller.dispatchEvent(new Event("scroll"));
+    });
+    await waitFor(() => {
+      expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    });
   });
 
   test("o reopens the menu after Escape returns focus to the actions button", async () => {
