@@ -13,10 +13,11 @@ import { memo } from "react";
 //     const { trackNoteRows } = await import("../test/noteRowRenderCounter.jsx");
 //     return { NoteRow: trackNoteRows(actual.NoteRow) };
 //   });
-export const noteRowRenders = { count: 0 };
+export const noteRowRenders = { count: 0, ids: [] };
 
 export function resetNoteRowRenders() {
   noteRowRenders.count = 0;
+  noteRowRenders.ids = [];
 }
 
 export function noteRowRenderCount() {
@@ -28,6 +29,7 @@ export function trackNoteRows(NoteRowComponent) {
   // when that row's props change rather than on every parent render.
   return memo(function TrackedNoteRow(props) {
     noteRowRenders.count += 1;
+    noteRowRenders.ids.push(props.note.id);
     return <NoteRowComponent {...props} />;
   });
 }

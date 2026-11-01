@@ -2,7 +2,7 @@ import { useEffect, useReducer, useRef } from "react";
 
 // Every call to the mocked hook is one Table screen commit. Budget tests reset
 // this before an interaction to prove a scroll tick commits once.
-export const virtualizerStats = { renders: 0 };
+export const virtualizerStats = { renders: 0, measureElementCalls: 0 };
 
 function windowBounds(scroller, count, rowHeight, overscan, viewportHeight) {
   const scrollTop = scroller?.scrollTop ?? 0;
@@ -97,7 +97,9 @@ export function makeWindowedVirtualizer({
         getVirtualItems: () => stateRef.current.virtualItems,
         getTotalSize: () =>
           stateRef.current.count * stateRef.current.rowHeight,
-        measureElement: () => {},
+        measureElement: () => {
+          virtualizerStats.measureElementCalls += 1;
+        },
         scrollToIndex: (index) => {
           const element = stateRef.current.scroller;
 

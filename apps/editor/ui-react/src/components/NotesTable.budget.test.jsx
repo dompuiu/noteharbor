@@ -6,6 +6,7 @@ import { NotesTable } from "./NotesTable.jsx";
 import { chooseFilterField } from "../test/filterBar.js";
 import {
   noteRowRenderCount,
+  noteRowRenders,
   resetNoteRowRenders,
 } from "../test/noteRowRenderCounter.jsx";
 import { virtualizerStats } from "../test/windowedVirtualizer.js";
@@ -213,6 +214,154 @@ describe("NotesTable render budget", () => {
       "tbody tr.table-row-link",
     ).length;
     expect(noteRowRenderCount()).toBeLessThanOrEqual(visibleRows);
+  });
+
+  test("moving the keyboard cursor renders at most two rows", async () => {
+    getNotes.mockResolvedValue({ notes: manyNotes(60) });
+    const { container } = renderTable();
+
+    await screen.findByText("NOTE-1");
+    setScrollMetrics(scrollerFor(container));
+    await flushFrame();
+
+    const user = userEvent.setup();
+    resetNoteRowRenders();
+    virtualizerStats.measureElementCalls = 0;
+
+    await user.keyboard("{ArrowDown}");
+    await user.keyboard("{ArrowDown}");
+
+    expect(noteRowRenderCount()).toBeLessThanOrEqual(4);
+    // Stable row refs mean no detach/attach cycle per commit.
+    expect(virtualizerStats.measureElementCalls).toBe(0);
+  });
+
+  test("ticking a checkbox renders one row", async () => {
+    getNotes.mockResolvedValue({ notes: manyNotes(60) });
+    const { container } = renderTable();
+
+    await screen.findByText("NOTE-1");
+    setScrollMetrics(scrollerFor(container));
+    await flushFrame();
+
+    const user = userEvent.setup();
+    resetNoteRowRenders();
+
+    await user.click(screen.getByRole("checkbox", { name: "Select NOTE-2" }));
+
+    expect(noteRowRenderCount()).toBeLessThanOrEqual(1);
+  });
+
+  test("opening a row's actions menu renders one row", async () => {
+    getNotes.mockResolvedValue({ notes: manyNotes(60) });
+    const { container } = renderTable();
+
+    await screen.findByText("NOTE-1");
+    setScrollMetrics(scrollerFor(container));
+    await flushFrame();
+
+    const user = userEvent.setup();
+    resetNoteRowRenders();
+
+    await user.click(
+      screen.getByRole("button", { name: "Actions for NOTE-1" }),
+    );
+
+    expect(
+      await screen.findByRole("menu", { name: /NOTE-1/ }),
+    ).toBeInTheDocument();
+    expect(noteRowRenderCount()).toBeLessThanOrEqual(1);
+  });
+
+  test("hovering a thumbnail renders its row only", async () => {
+    getNotes.mockResolvedValue({
+      notes: manyNotes(60).map((item, index) =>
+        index === 0
+          ? {
+              ...item,
+              images: [
+                {
+                  type: "front",
+                  variant: "thumbnail",
+                  localPath: "/images/front-thumb.png",
+                },
+              ],
+            }
+          : item,
+      ),
+    });
+    const { container } = renderTable();
+
+    await screen.findByText("NOTE-1");
+    setScrollMetrics(scrollerFor(container));
+    await flushFrame();
+
+    const user = userEvent.setup();
+    resetNoteRowRenders();
+
+    await user.hover(screen.getByAltText("NOTE-1 front"));
+
+    await waitFor(() => {
+      expect(container.querySelector(".table-thumb-preview.is-visible")).not
+        .toBeNull();
+    });
+    // The preview can reposition itself after it mounts, but only the hovered
+    // row may render.
+    expect(new Set(noteRowRenders.ids)).toEqual(new Set([1]));
+  });
+
+  test("starting a drag renders the dragged row only", async () => {
+    getNotes.mockResolvedValue({ notes: manyNotes(60) });
+    const { container } = renderTable();
+
+    await screen.findByText("NOTE-1");
+    setScrollMetrics(scrollerFor(container));
+    await flushFrame();
+
+    resetNoteRowRenders();
+
+    const dataTransfer = {
+      effectAllowed: "",
+      setData: vi.fn(),
+      setDragImage: vi.fn(),
+      getData: vi.fn(() => ""),
+    };
+    const event = new Event("dragstart", { bubbles: true, cancelable: true });
+    Object.assign(event, { dataTransfer });
+
+    await act(async () => {
+      screen.getByLabelText("Move NOTE-1").dispatchEvent(event);
+    });
+
+    expect(noteRowRenderCount()).toBeLessThanOrEqual(2);
+  });
+
+  test("zebra parity follows the row's list position while scrolling", async () => {
+    getNotes.mockResolvedValue({ notes: manyNotes(60) });
+    const { container } = renderTable();
+
+    await screen.findByText("NOTE-1");
+    const scroller = scrollerFor(container);
+    setScrollMetrics(scroller);
+    await flushFrame();
+
+    function rowAt(index) {
+      return container.querySelector(`tbody tr[data-index="${index}"]`);
+    }
+
+    const before = rowAt(17).classList.contains("table-row-link--zebra");
+    await scrollBy(scroller, 2 * rowHeight);
+    const after = rowAt(17).classList.contains("table-row-link--zebra");
+
+    expect(after).toBe(before);
+    expect(after).toBe(17 % 2 === 1);
+    // Every row on screen agrees with its position in the filtered list.
+    for (const row of container.querySelectorAll("tbody tr.table-row-link")) {
+      const index = Number(row.dataset.index);
+      expect(row.classList.contains("table-row-link--zebra")).toBe(
+        index % 2 === 1,
+      );
+    }
   });
 
   test("the custom scrollbar hides on a short list and tracks a long one", async () => {
