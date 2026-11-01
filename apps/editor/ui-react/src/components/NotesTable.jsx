@@ -57,6 +57,7 @@ import {
   hideableDataColumns,
   lastStickyKey,
   matchesSearchQuery,
+  parseGradeValue,
   slideshowFilterKeys,
   stickyOffsets,
   tableColumns,
@@ -569,6 +570,42 @@ function valueToString(note, key) {
   return String(note[key] ?? "");
 }
 
+// How a note names itself outside the table. A denomination alone is not an
+// identity — a collection holds three notes called "1 Leu" — so the catalog
+// number leads and the row is disambiguated by the same fields the table
+// shows: company, grade, serial, date. Every destructive control reads this,
+// never `note.denomination`.
+function noteDisplayName(note) {
+  const catalog = String(note?.catalog_number ?? "").trim();
+  const denomination = String(note?.denomination ?? "").trim();
+  const name = [catalog, denomination].filter(Boolean).join(" · ");
+
+  return name || `Note ${note?.id ?? ""}`.replace(/\s+$/, "");
+}
+
+function noteIdentityDetails(note) {
+  return [
+    note?.grading_company,
+    note?.grade,
+    note?.serial ? `serial ${note.serial}` : null,
+    note?.issue_date,
+  ]
+    .map((part) => String(part ?? "").trim())
+    .filter(Boolean)
+    .join(" · ");
+}
+
+function noteThumbPath(note) {
+  return (
+    pickFirstAvailableImage(note, [
+      ["front", "thumbnail"],
+      ["front", "full"],
+      ["back", "thumbnail"],
+      ["back", "full"],
+    ])?.path ?? null
+  );
+}
+
 // Tags filters store their values comma-separated; chips read better with
 // the same separator the table uses. Every other column keeps its raw input.
 function formatFilterChipValue(column, value) {
@@ -716,6 +753,7 @@ function filterNotesByFilters(noteList, filterObj) {
 function sortNotesBySort(noteList, key, direction) {
   const sortKey = validSortKeys.has(key) ? key : defaultSortKey;
   const sortDirection = direction === "desc" ? "desc" : "asc";
+  const sortValue = getTableColumn(sortKey)?.sortValue ?? null;
   return [...noteList].sort((left, right) => {
     if (sortKey === defaultSortKey) {
       const orderResult = noteOrderValue(left) - noteOrderValue(right);
@@ -723,9 +761,33 @@ function sortNotesBySort(noteList, key, direction) {
       return sortDirection === "asc" ? result : -result;
     }
 
-    const leftValue = valueToString(left, sortKey).toLowerCase();
-    const rightValue = valueToString(right, sortKey).toLowerCase();
-    const result = rowSortCollator.compare(leftValue, rightValue);
+    const leftText = valueToString(left, sortKey).toLowerCase();
+    const rightText = valueToString(right, sortKey).toLowerCase();
+    // Ordering on the printed text is wrong the moment a column carries a
+    // number or a date (`1917` vs `01/01/1917`, `1,000 Lei` vs `100 Lei`), so
+    // a column that can be read declares its own comparable value.
+    const leftValue = sortValue ? sortValue(left) : null;
+    const rightValue = sortValue ? sortValue(right) : null;
+    const leftMissing = leftValue == null || Number.isNaN(leftValue);
+    const rightMissing = rightValue == null || Number.isNaN(rightValue);
+
+    if (leftMissing || rightMissing) {
+      if (leftMissing && rightMissing) {
+        // Both unreadable: fall back to the printed text, in the same
+        // direction, so a column of free-form values still reverses.
+        const result = rowSortCollator.compare(leftText, rightText);
+        return sortDirection === "asc" ? result : -result;
+      }
+
+      // An unreadable value is an absence, not a smallest value: it sits at
+      // the end in both directions instead of leading "sorted by date".
+      return leftMissing ? 1 : -1;
+    }
+
+    const result =
+      leftValue === rightValue
+        ? rowSortCollator.compare(leftText, rightText)
+        : leftValue - rightValue;
     return sortDirection === "asc" ? result : -result;
   });
 }
@@ -1844,7 +1906,11 @@ function NotesTable({
         .filter((entry) => entry.value),
     [filters],
   );
-  const filterRowOpen = filtersOpen || hasActiveFilters;
+  // Active filters do not pin the row open. The toolbar keeps the chips (with
+  // their own remove controls), so collapsing the row never hides the state —
+  // and the toggle stays a toggle instead of a button that silently does
+  // nothing, which is indistinguishable from a broken control.
+  const filterRowOpen = filtersOpen;
   // Permanent columns are always rendered; a hideable column is rendered only
   // while the collector's per-collection choice includes it.
   const visibleColumns = useMemo(
@@ -2470,6 +2536,9 @@ function NotesTable({
       return undefined;
     }
 
+    // The preview hangs beside the thumbnail, inside its cell. It is 138px
+    // tall against a 46px row, so it is nudged up or down to stay inside the
+    // rows area instead of running under the header or past the last row.
     function updateThumbPreviewPosition() {
       const thumbElement = thumbPreviewElementMapRef.current.get(
         thumbPreviewState.noteId,
@@ -3192,6 +3261,9 @@ function NotesTable({
       };
     });
 
+    // Applying a filter from a row's tag chip reveals the row that owns it,
+    // so the new filter is editable where it appears.
+    setFiltersOpen(true);
     resetColumnScroll();
 
     window.requestAnimationFrame(() => {
@@ -4005,17 +4077,51 @@ function NotesTable({
     }
 
     setActionError("");
-    setBulkLoading(true);
 
     try {
+      // Name the rows being destroyed, in the order they appear on screen.
+      // "Delete 3 selected notes?" asks the collector to trust a count; the
+      // first identities prove the selection is the one they meant.
+      const selectedNotes = orderedNotes.filter((note) =>
+        selectedIdSet.has(note.id),
+      );
+      const listedNotes = selectedNotes.slice(0, 3);
+      const remainingCount = selectedNotes.length - listedNotes.length;
       const confirmed = await requestConfirmation({
         title: `Delete ${selectedIds.length} selected note${selectedIds.length === 1 ? "" : "s"}?`,
+        body: "This cannot be undone.",
         confirmLabel: "Delete",
+        children: listedNotes.length ? (
+          <div className="confirm-note-list">
+            <ul>
+              {listedNotes.map((note) => (
+                <li key={note.id}>
+                  <span className="confirm-note-name">
+                    {noteDisplayName(note)}
+                  </span>
+                  <span className="confirm-note-sub">
+                    {noteIdentityDetails(note)}
+                  </span>
+                </li>
+              ))}
+            </ul>
+            {remainingCount > 0 ? (
+              <p className="confirm-note-more">
+                and {remainingCount} more
+              </p>
+            ) : null}
+          </div>
+        ) : null,
       });
 
       if (!confirmed) {
         return;
       }
+
+      // The button reports progress only once work has started: it used to be
+      // set before the dialog opened, so the pill behind an unanswered
+      // "Delete 4 selected notes?" already read "Working…".
+      setBulkLoading(true);
 
       // Land the cursor where the selection started: the row that takes
       // the topmost deleted slot, or the new last row when the selection
@@ -4039,11 +4145,32 @@ function NotesTable({
   }
 
   async function handleDeleteNote(noteId, { fromSlideshow = false } = {}) {
-    const note = notes.find((entry) => entry.id === noteId);
-    const noteLabel = note?.denomination || `note #${noteId}`;
+    const note =
+      notes.find((entry) => entry.id === noteId) ??
+      slideshowNotes.find((entry) => entry.id === noteId) ??
+      null;
+    const thumbnail = note ? noteThumbPath(note) : null;
+    const details = note ? noteIdentityDetails(note) : "";
     const confirmed = await requestConfirmation({
-      title: `Delete ${noteLabel}?`,
+      title: `Delete ${note ? noteDisplayName(note) : `note ${noteId}`}?`,
+      body: "This cannot be undone.",
       confirmLabel: "Delete",
+      // The title names the note; this shows it, so a collector confirms the
+      // object rather than a word three other rows also answer to.
+      children: note ? (
+        <div className="confirm-note">
+          {thumbnail ? (
+            <img
+              alt=""
+              className="confirm-note-thumb"
+              src={thumbnail}
+            />
+          ) : null}
+          <span className="confirm-note-meta">
+            {details || "No grade, serial or date recorded."}
+          </span>
+        </div>
+      ) : null,
     });
 
     if (!confirmed) {
@@ -4384,7 +4511,7 @@ function NotesTable({
     );
   }
 
-  function renderThumbnailCell(column, note, frontThumb, frontPreview) {
+  function renderThumbnailCell(column, note, frontThumb) {
     return (
       <td
         {...stickyCellAttributes(column, cellClass(column))}
@@ -4415,27 +4542,22 @@ function NotesTable({
               loading="lazy"
               src={frontThumb}
             />
-            {frontPreview ? (
-              <span
-                className={`table-thumb-preview${
-                  thumbPreviewState?.noteId === note.id ? " is-visible" : ""
-                }`}
-                style={{
-                  "--table-thumb-preview-offset": `${
-                    thumbPreviewState?.noteId === note.id
-                      ? thumbPreviewState.offsetY
-                      : 0
-                  }px`,
-                }}
-              >
-                {thumbPreviewState?.noteId === note.id ? (
-                  <img
-                    alt={`${note.denomination} preview`}
-                    src={frontPreview}
-                  />
-                ) : null}
-              </span>
-            ) : null}
+            <span
+              className={`table-thumb-preview${
+                thumbPreviewState?.noteId === note.id ? " is-visible" : ""
+              }`}
+              style={{
+                "--table-thumb-preview-offset": `${
+                  thumbPreviewState?.noteId === note.id
+                    ? thumbPreviewState.offsetY
+                    : 0
+                }px`,
+              }}
+            >
+              {thumbPreviewState?.noteId === note.id ? (
+                <img alt="" src={frontThumb} />
+              ) : null}
+            </span>
           </span>
         ) : (
           <span className="muted">-</span>
@@ -4449,6 +4571,40 @@ function NotesTable({
       return (
         <td className={cellClass(column)}>
           <TagsCell onApplyFilter={applyTagFilter} tags={note.tags} />
+        </td>
+      );
+    }
+
+    if (column.key === "grade") {
+      // Grade is the first attribute a collector compares across a row, and
+      // the one the catalogue is bought and sold on. It reads as a value, not
+      // as more body text: tabular figures so columns of grades line up, and
+      // a tint that separates the uncirculated band from the rest.
+      const gradeValue = String(note.grade ?? "").trim();
+
+      if (!gradeValue) {
+        return (
+          <td {...stickyCellAttributes(column, cellClass(column))}>
+            <span className="muted">-</span>
+          </td>
+        );
+      }
+
+      const numericGrade = parseGradeValue(gradeValue);
+      const tier =
+        numericGrade == null
+          ? "none"
+          : numericGrade >= 65
+            ? "unc"
+            : numericGrade >= 50
+              ? "choice"
+              : "circulated";
+
+      return (
+        <td {...stickyCellAttributes(column, cellClass(column))}>
+          <span className={`table-grade table-grade--${tier}`}>
+            {gradeValue}
+          </span>
         </td>
       );
     }
@@ -4578,7 +4734,7 @@ function NotesTable({
     };
   }
 
-  function renderTableCell(column, note, frontThumb, frontPreview) {
+  function renderTableCell(column, note, frontThumb) {
     let cell = null;
 
     switch (column.kind) {
@@ -4592,7 +4748,7 @@ function NotesTable({
         cell = renderOrderCell(column, note);
         break;
       case "thumbnail":
-        cell = renderThumbnailCell(column, note, frontThumb, frontPreview);
+        cell = renderThumbnailCell(column, note, frontThumb);
         break;
       case "data":
         cell = renderDataCell(column, note);
@@ -4959,28 +5115,15 @@ function NotesTable({
               </div>
               <button
                 aria-controls="table-filter-row"
-                aria-disabled={hasActiveFilters || undefined}
                 aria-expanded={filterRowOpen}
                 aria-label={
                   activeColumnFilters.length
                     ? `Filters (${activeColumnFilters.length} active)`
                     : "Filters"
                 }
-                className={`button table-filter-toggle${filterRowOpen ? " table-filter-toggle--open" : ""}`}
-                onClick={() => {
-                  // Active filters force the row open, so the toggle has no
-                  // visible effect; leaving the intent alone keeps it honest.
-                  if (hasActiveFilters) {
-                    return;
-                  }
-
-                  setFiltersOpen((open) => !open);
-                }}
-                title={
-                  hasActiveFilters
-                    ? "Filters stay open while any filter is active"
-                    : undefined
-                }
+                className={`button table-filter-toggle${filterRowOpen ? " table-filter-toggle--open" : ""}${hasActiveFilters ? " table-filter-toggle--applied" : ""}`}
+                onClick={() => setFiltersOpen((open) => !open)}
+                title={filterRowOpen ? "Hide filters" : "Show filters"}
                 type="button"
               >
                 Filters
@@ -5133,7 +5276,7 @@ function NotesTable({
                                   cellClass(column),
                                 )}
                               >
-                                {isActions ? null : column.label.toUpperCase()}
+                                {isActions ? null : column.label}
                               </th>
                             );
                           }
@@ -5169,7 +5312,7 @@ function NotesTable({
                                 onClick={() => toggleSort(column.key)}
                                 type="button"
                               >
-                                {column.label.toUpperCase()}
+                                {column.label}
                                 {isSorted ? (
                                   <svg
                                     aria-hidden="true"
@@ -5336,7 +5479,40 @@ function NotesTable({
                             {noCollections ? (
                               <NoCollectionsPrompt />
                             ) : notes.length ? (
-                              "No notes match the current view."
+                              // A filter that matches nothing is the most
+                              // travelled error path in the screen: name the
+                              // query, and put the recovery next to it.
+                              <div className="table-empty-state">
+                                <p className="table-empty-title">
+                                  {hasActiveQuery
+                                    ? `No notes match “${query.trim()}”.`
+                                    : "No notes match the active filters."}
+                                </p>
+                                <div className="table-empty-actions">
+                                  {hasActiveQuery ? (
+                                    <button
+                                      className="button"
+                                      onClick={clearSearch}
+                                      type="button"
+                                    >
+                                      Clear search
+                                    </button>
+                                  ) : null}
+                                  {hasActiveFilters ? (
+                                    <button
+                                      className="button"
+                                      onClick={clearAllFilters}
+                                      type="button"
+                                    >
+                                      Clear filters
+                                    </button>
+                                  ) : null}
+                                </div>
+                                <p className="table-empty-hint">
+                                  Search covers serial, catalog number,
+                                  denomination, company, grade, date and tags.
+                                </p>
+                              </div>
                             ) : (
                               "No notes are stored yet in this collection."
                             )}
@@ -5352,7 +5528,6 @@ function NotesTable({
                           ["back", "full"],
                         ]);
                         const frontThumb = displayImage?.path ?? null;
-                        const frontPreview = displayImage?.path ?? null;
                         const showPlaceholderBefore =
                           dropTarget?.noteId === note.id &&
                           dropTarget.placement === "before";
@@ -5606,12 +5781,7 @@ function NotesTable({
                               tabIndex={0}
                             >
                               {visibleColumns.map((column) =>
-                                renderTableCell(
-                                  column,
-                                  note,
-                                  frontThumb,
-                                  frontPreview,
-                                ),
+                                renderTableCell(column, note, frontThumb),
                               )}
                               {vScroll.visible ? (
                                 <td

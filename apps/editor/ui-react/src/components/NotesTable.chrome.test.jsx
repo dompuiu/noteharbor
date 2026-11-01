@@ -203,7 +203,7 @@ describe("NotesTable chrome", () => {
     );
     await screen.findByText("Showing 1 of 3 notes · sorted by # ascending");
 
-    await user.click(screen.getByRole("button", { name: "COMPANY" }));
+    await user.click(screen.getByRole("button", { name: "Company" }));
     await screen.findByText(
       "Showing 1 of 3 notes · sorted by Company ascending",
     );
@@ -263,7 +263,7 @@ describe("NotesTable chrome", () => {
       "a non-default sort",
       async (user) => {
         await user.click(
-          screen.getByRole("button", { name: "DENOMINATION" }),
+          screen.getByRole("button", { name: "Denomination" }),
         );
       },
     ],
@@ -301,12 +301,12 @@ describe("NotesTable chrome", () => {
     );
     await openFilters(user);
     await user.type(await screen.findByLabelText("Filter Company"), "PMG");
-    await user.click(screen.getByRole("button", { name: "DENOMINATION" }));
+    await user.click(screen.getByRole("button", { name: "Denomination" }));
     await user.click(screen.getByRole("checkbox", { name: "Select AAAA" }));
     await hideSerialColumn(user);
 
     expect(
-      screen.queryByRole("columnheader", { name: "SERIAL" }),
+      screen.queryByRole("columnheader", { name: "Serial" }),
     ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: "Reset view" }));
@@ -316,7 +316,7 @@ describe("NotesTable chrome", () => {
     ).toHaveValue("");
     expect(screen.queryByLabelText("Filter Company")).not.toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "DENOMINATION" }),
+      screen.getByRole("button", { name: "Denomination" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("checkbox", { name: "Select AAAA" }),
@@ -326,7 +326,7 @@ describe("NotesTable chrome", () => {
     ).not.toBeInTheDocument();
     // Columns are structure, not view state: Reset view leaves them alone.
     expect(
-      screen.queryByRole("columnheader", { name: "SERIAL" }),
+      screen.queryByRole("columnheader", { name: "Serial" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("SER-1")).not.toBeInTheDocument();
     expect(resetViewButton()).not.toBeInTheDocument();

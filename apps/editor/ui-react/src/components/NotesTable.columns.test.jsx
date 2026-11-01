@@ -188,7 +188,7 @@ describe("NotesTable columns", () => {
     // Permanent columns are not choices at all.
     for (const name of [
       "Catalog #",
-      "FRONT",
+      "Front",
       "ACTIONS",
       "Select all visible rows",
     ]) {
@@ -214,7 +214,7 @@ describe("NotesTable columns", () => {
 
     expect(columnCheckbox("Serial")).not.toBeChecked();
     expect(
-      screen.queryByRole("columnheader", { name: "SERIAL" }),
+      screen.queryByRole("columnheader", { name: "Serial" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("SER-1")).not.toBeInTheDocument();
     expect(screen.queryByText("SER-2")).not.toBeInTheDocument();
@@ -224,7 +224,7 @@ describe("NotesTable columns", () => {
 
     expect(columnCheckbox("Serial")).toBeChecked();
     expect(
-      await screen.findByRole("columnheader", { name: "SERIAL" }),
+      await screen.findByRole("columnheader", { name: "Serial" }),
     ).toBeInTheDocument();
     expect(screen.getByText("SER-1")).toBeInTheDocument();
   });
@@ -243,7 +243,7 @@ describe("NotesTable columns", () => {
     await user.click(columnCheckbox("Tags"));
     expect(columnCheckbox("Tags")).toBeChecked();
     expect(
-      screen.getByRole("columnheader", { name: "TAGS" }),
+      screen.getByRole("columnheader", { name: "Tags" }),
     ).toBeInTheDocument();
 
     await user.click(columnCheckbox("Denomination"));
@@ -269,10 +269,10 @@ describe("NotesTable columns", () => {
     }
 
     expect(
-      screen.getByRole("columnheader", { name: "CATALOG #" }),
+      screen.getByRole("columnheader", { name: "Catalog #" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("columnheader", { name: "FRONT" }),
+      screen.getByRole("columnheader", { name: "Front" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("columnheader", { name: "ACTIONS" }),
@@ -320,7 +320,7 @@ describe("NotesTable columns", () => {
 
     await screen.findByText("AAAA");
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "COMPANY" }));
+    await user.click(screen.getByRole("button", { name: "Company" }));
     expect(screen.getByRole("button", { name: "#" })).toBeInTheDocument();
 
     await user.click(await columnsButton());
@@ -353,7 +353,7 @@ describe("NotesTable columns", () => {
     // The old sort key is no longer rendered, so the table falls back to the
     // first visible sortable column instead of sorting by a hidden one.
     const catalogHeader = screen.getByRole("columnheader", {
-      name: "CATALOG #",
+      name: "Catalog #",
     });
     expect(catalogHeader).toHaveAttribute("aria-sort", "ascending");
     expect(catalogHeader.querySelector(".sort-chevron")).not.toBeNull();
@@ -388,7 +388,7 @@ describe("NotesTable columns", () => {
 
     await screen.findByText("AAAA");
     expect(
-      screen.queryByRole("columnheader", { name: "SERIAL" }),
+      screen.queryByRole("columnheader", { name: "Serial" }),
     ).not.toBeInTheDocument();
     expect(screen.queryByText("SER-1")).not.toBeInTheDocument();
   });
@@ -403,7 +403,7 @@ describe("NotesTable columns", () => {
     rerender(tableScreen(2));
 
     expect(
-      await screen.findByRole("columnheader", { name: "SERIAL" }),
+      await screen.findByRole("columnheader", { name: "Serial" }),
     ).toBeInTheDocument();
 
     await user.click(await columnsButton());
@@ -427,11 +427,11 @@ describe("NotesTable columns", () => {
 
     await waitFor(() => {
       expect(
-        screen.queryByRole("columnheader", { name: "SERIAL" }),
+        screen.queryByRole("columnheader", { name: "Serial" }),
       ).not.toBeInTheDocument();
     });
     expect(
-      screen.getByRole("columnheader", { name: "DATE" }),
+      screen.getByRole("columnheader", { name: "Date" }),
     ).toBeInTheDocument();
   });
 
@@ -442,9 +442,9 @@ describe("NotesTable columns", () => {
     const user = userEvent.setup();
     const header = (name) => screen.findByRole("columnheader", { name });
 
-    await user.click(screen.getByRole("button", { name: "DENOMINATION" }));
-    await user.click(screen.getByRole("button", { name: "DENOMINATION" }));
-    expect(await header("DENOMINATION")).toHaveAttribute(
+    await user.click(screen.getByRole("button", { name: "Denomination" }));
+    await user.click(screen.getByRole("button", { name: "Denomination" }));
+    expect(await header("Denomination")).toHaveAttribute(
       "aria-sort",
       "descending",
     );
@@ -460,11 +460,11 @@ describe("NotesTable columns", () => {
     rerender(tableScreen(2));
 
     expect(await header(/^#/)).toHaveAttribute("aria-sort", "ascending");
-    expect(await header("DENOMINATION")).toHaveAttribute("aria-sort", "none");
+    expect(await header("Denomination")).toHaveAttribute("aria-sort", "none");
 
     rerender(tableScreen(1));
 
-    expect(await header("DENOMINATION")).toHaveAttribute(
+    expect(await header("Denomination")).toHaveAttribute(
       "aria-sort",
       "descending",
     );
@@ -527,14 +527,14 @@ describe("NotesTable columns", () => {
       screen.queryByRole("button", { name: "Reset view" }),
     ).not.toBeInTheDocument();
 
-    await user.click(screen.getByRole("button", { name: "COMPANY" }));
+    await user.click(screen.getByRole("button", { name: "Company" }));
     const reset = await screen.findByRole("button", {
       name: "Reset view",
     });
     await user.click(reset);
 
     expect(
-      screen.queryByRole("columnheader", { name: "SERIAL" }),
+      screen.queryByRole("columnheader", { name: "Serial" }),
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("columnheader", { name: /^#/ }),

@@ -34,6 +34,107 @@ export function normalizeDenominationFilterValue(value) {
   return `${addThousandsSeparators(integerDigits)}${decimalPart}${suffix}`;
 }
 
+// ── Sort values ──────────────────────────────────────────────────────────
+// Filters and search read the printed text, but ordering must not: `1917`
+// and `01/01/1917` are the same year yet compare as unrelated strings, and
+// `1,000 Lei` sorts before `100 Lei`. A column that reads as a number or a
+// date declares `sortValue`, and the table orders on that instead of on the
+// rendered string. Null means "cannot be read" and always sorts last, so a
+// missing field never floats to the top of a view labelled "sorted by date".
+
+const MONTH_FIRST_DATE = /^(\d{1,2})\/(\d{1,2})\/(\d{4})$/;
+const ISO_DATE = /^(\d{4})-(\d{1,2})-(\d{1,2})$/;
+const YEAR_ONLY = /^\d{4}$/;
+
+// Returns a YYYYMMDD-shaped number. The stored dates are month-first
+// (`12/21/1938`, `05/13/1893`), so the first group is the month. A year-only
+// value is a year, not a missing date: it sorts as the first day of that
+// year instead of being pushed to the end of the list.
+export function parseNoteDate(value) {
+  const raw = String(value ?? "").trim();
+
+  if (!raw) {
+    return null;
+  }
+
+  if (YEAR_ONLY.test(raw)) {
+    return Number(raw) * 10000 + 101;
+  }
+
+  let match = raw.match(MONTH_FIRST_DATE);
+  let year;
+  let month;
+  let day;
+
+  if (match) {
+    [, month, day, year] = match;
+  } else {
+    match = raw.match(ISO_DATE);
+
+    if (!match) {
+      return null;
+    }
+
+    [, year, month, day] = match;
+  }
+
+  const yearNumber = Number(year);
+  const monthNumber = Number(month);
+  const dayNumber = Number(day);
+
+  if (monthNumber < 1 || monthNumber > 12 || dayNumber < 1 || dayNumber > 31) {
+    return null;
+  }
+
+  return yearNumber * 10000 + monthNumber * 100 + dayNumber;
+}
+
+const DENOMINATION_PATTERN = /^(\d[\d.,]*)\s*(.*)$/;
+
+// Returns the denomination in the smallest unit the catalogue uses, so
+// `25 Bani` (25) sorts below `1 Leu` (100) and `1,000 Lei` (100000) sorts
+// above `100 Lei` (10000). The unit is part of the value, not a label.
+export function parseDenominationValue(value) {
+  const raw = String(value ?? "").trim();
+  const match = raw.match(DENOMINATION_PATTERN);
+
+  if (!match) {
+    return null;
+  }
+
+  const amount = Number.parseFloat(match[1].replace(/,/g, ""));
+
+  if (!Number.isFinite(amount)) {
+    return null;
+  }
+
+  const unit = match[2].trim().toLowerCase();
+  const perLeu = unit.startsWith("ban")
+    ? 1
+    : unit.startsWith("leu") || unit.startsWith("lei")
+      ? 100
+      : 1;
+
+  return amount * perLeu;
+}
+
+const GRADE_NUMBER = /(\d+(?:\.\d+)?)/;
+
+// Returns the grade's numeric part. The suffix (EPQ, PL, a star) is a
+// qualifier on the same grade, so a `66 EPQ` and a `66` tie and are broken
+// by the display string rather than by the alphabet.
+export function parseGradeValue(value) {
+  const match = String(value ?? "").match(GRADE_NUMBER);
+
+  if (!match) {
+    return null;
+  }
+
+  const numeric = Number.parseFloat(match[1]);
+
+  return Number.isFinite(numeric) ? numeric : null;
+}
+
 // For data columns `width` is a preferred share of the viewport rather than a
 // pixel width: the shares are close to the space each field needs, so the
 // table stretches evenly instead of one short-code column swallowing the
@@ -53,6 +154,9 @@ const scalarColumn = (key, label, overrides = {}) => ({
   normalize: null,
   isTags: false,
   slideshowFilter: true,
+  // Optional `(note) => number | null`: the ordering value, when the printed
+  // text is not the sort the collector means (see parseNoteDate).
+  sortValue: null,
   ...overrides,
 });
 
@@ -119,11 +223,12 @@ export const tableColumns = [
   },
   {
     key: "thumbnail",
-    label: "FRONT",
+    label: "Front",
     kind: "thumbnail",
-    // The 44px front image and the FRONT header both fit, with 4px of
-    // padding on each side (the column keeps its wider pinned offset).
-    width: 58,
+    // The 56px front image and the FRONT header both fit, with 6px of
+    // padding on each side. A note is identified by its picture, so the
+    // image gets the size of a field, not of an icon.
+    width: 68,
     align: "center",
     sortable: false,
     sticky: true,
@@ -148,17 +253,20 @@ export const tableColumns = [
     width: 200,
     multiple: true,
     normalize: normalizeDenominationFilterValue,
+    sortValue: (note) => parseDenominationValue(note.denomination),
   }),
   scalarColumn("issue_date", "Date", {
-    width: 96,
+    width: 110,
     multiple: true,
+    sortValue: (note) => parseNoteDate(note.issue_date),
   }),
   scalarColumn("grading_company", "Company", {
     width: 96,
   }),
   scalarColumn("grade", "Grade", {
-    width: 96,
+    width: 110,
     multiple: true,
+    sortValue: (note) => parseGradeValue(note.grade),
   }),
   scalarColumn("serial", "Serial", {
     width: 132,

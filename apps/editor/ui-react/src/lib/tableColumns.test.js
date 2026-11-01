@@ -38,7 +38,7 @@ describe("table column model", () => {
       "",
       "",
       "#",
-      "FRONT",
+      "Front",
       "Catalog #",
       "Denomination",
       "Date",
@@ -154,7 +154,7 @@ describe("table column model", () => {
   test("keeps the control columns at their compact, content-sized widths", () => {
     expect(getTableColumn("reorder")).toMatchObject({ width: 24 });
     expect(getTableColumn("id")).toMatchObject({ width: 48 });
-    expect(getTableColumn("thumbnail")).toMatchObject({ width: 58 });
+    expect(getTableColumn("thumbnail")).toMatchObject({ width: 68 });
   });
 
   // The actions header has no visible label, so the column only has to fit
@@ -199,14 +199,14 @@ describe("table column model", () => {
 describe("tableColumnWidths", () => {
   test("keeps control columns exact and scales data columns by weight", () => {
     const widths = tableColumnWidths(tableColumns, 1600, 14);
-    const available = 1600 - 14 - (24 + 44 + 48 + 58 + 54);
-    const weightTotal = 116 + 200 + 96 + 96 + 96 + 132 + 180;
+    const available = 1600 - 14 - (24 + 44 + 48 + 68 + 54);
+    const weightTotal = 116 + 200 + 110 + 96 + 110 + 132 + 180;
 
     expect(widths).toMatchObject({
       reorder: 24,
       selection: 44,
       id: 48,
-      thumbnail: 58,
+      thumbnail: 68,
       actions: 54,
     });
     expect(widths.catalog_number).toBeCloseTo(
@@ -255,7 +255,7 @@ describe("stickyOffsets", () => {
       selection: 24,
       id: 68,
       thumbnail: 116,
-      catalog_number: 174,
+      catalog_number: 184,
     });
   });
 

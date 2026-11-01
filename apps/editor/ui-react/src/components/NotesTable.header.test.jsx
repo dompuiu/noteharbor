@@ -183,7 +183,9 @@ describe("NotesTable header controls", () => {
 });
 
 describe("NotesTable header emphasis", () => {
-  test("sort button labels render uppercase in markup", async () => {
+  // Uppercasing is the stylesheet's job. Doing it in markup would make a
+  // screen reader shout "CATALOG #" for a column named "Catalog #".
+  test("sort button labels keep sentence case for assistive tech", async () => {
     const { container } = renderTable();
 
     await screen.findByLabelText("Move AAAA");
@@ -192,10 +194,10 @@ describe("NotesTable header emphasis", () => {
       container.querySelectorAll("thead tr:first-child .sort-button"),
     ).map((button) => button.textContent.trim());
     expect(labels.length).toBeGreaterThan(0);
-    for (const label of labels) {
-      expect(label).toBe(label.toUpperCase());
-    }
-    expect(labels).toContain("DENOMINATION");
+    expect(labels).toContain("Denomination");
+    expect(labels).toContain("Catalog #");
+    expect(labels).not.toContain("DENOMINATION");
+    expect(labels).not.toContain("CATALOG #");
   });
   test("only the sorted column carries the active sort class", async () => {
     renderTable();
@@ -203,7 +205,7 @@ describe("NotesTable header emphasis", () => {
 
     const idButton = await screen.findByRole("button", { name: /^#/ });
     const denominationButton = screen.getByRole("button", {
-      name: /DENOMINATION/,
+      name: /Denomination/,
     });
     expect(idButton.classList.contains("sort-button--active")).toBe(true);
     expect(

@@ -132,7 +132,7 @@ describe("NotesTable pinned identity columns", () => {
     const widths = columnGroupWidths(container);
 
     // reorder, selection, id, thumbnail
-    expect(widths.slice(0, 4)).toEqual(["24px", "44px", "48px", "58px"]);
+    expect(widths.slice(0, 4)).toEqual(["24px", "44px", "48px", "68px"]);
     expect(
       widths.every((width) => width.endsWith("px") && parseFloat(width) > 0),
     ).toBe(true);
@@ -160,7 +160,7 @@ describe("NotesTable pinned identity columns", () => {
       "24px",
       "44px",
       "48px",
-      "58px",
+      "68px",
     ]);
   });
 
@@ -186,7 +186,7 @@ describe("NotesTable pinned identity columns", () => {
       "116px",
     );
     expect(catalog.style.getPropertyValue("--table-sticky-left")).toBe(
-      "174px",
+      "184px",
     );
 
     // Only the right-most pinned cell carries the pan-shadow marker.
@@ -209,15 +209,15 @@ describe("NotesTable pinned identity columns", () => {
       ),
     ).toBe("68px");
     expect(
-      screen.getByText("FRONT").closest("th").style.getPropertyValue(
+      screen.getByText("Front").closest("th").style.getPropertyValue(
         "--table-sticky-left",
       ),
     ).toBe("116px");
     expect(
-      screen.getByText("CATALOG #").closest("th").style.getPropertyValue(
+      screen.getByText("Catalog #").closest("th").style.getPropertyValue(
         "--table-sticky-left",
       ),
-    ).toBe("174px");
+    ).toBe("184px");
   });
 
   test("shows the pan shadow only while the columns are scrolled", async () => {

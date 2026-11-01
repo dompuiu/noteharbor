@@ -17,8 +17,11 @@
   --border-soft: rgba(120, 86, 50, 0.12);
   --border-control: rgba(120, 86, 50, 0.32);
   --text: #2e2318;
-  --text-muted: #8a755a;
-  --text-faint: #b5a488;
+  /* Both secondary tones clear WCAG AA (4.5:1) on every ground they sit on,
+     including the header's `--surface-3`. The old pair measured 3.5:1 on the
+     header and 2.3:1 on placeholders. */
+  --text-muted: #6f5c40;
+  --text-faint: #7a6749;
   --accent: #96622f;
   --accent-strong: #71461f;
   --accent-soft: rgba(150, 98, 47, 0.12);
@@ -2859,6 +2862,8 @@ td:is(
    estimate matches (rowHeightEstimate), and real measurements still win once
    rows mount. */
 tbody td {
+  /* 46px keeps the table as dense as it was; the 32px front image still sits
+     in it with 7px above and below. */
   height: 46px;
   padding: 0 12px;
   font-size: 14px;
@@ -2869,9 +2874,41 @@ tbody td {
 }
 
 .table-empty-cell {
-  padding: 32px 16px;
+  padding: 56px 16px;
   color: var(--text-muted);
   text-align: center;
+}
+
+/* A query that matches nothing is the table's most travelled error path, so
+   it names the query and carries its own recovery instead of leaving a line
+   of text in a void. */
+.table-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 54ch;
+  margin: 0 auto;
+}
+
+.table-empty-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.table-empty-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.table-empty-hint {
+  margin: 0;
+  font-size: 0.82rem;
+  color: var(--text-muted);
 }
 
 /* The empty-library prompt reuses the shared dashed empty-state box, so the
@@ -2898,8 +2935,8 @@ tbody td {
 
 .table-thumb {
   display: block;
-  width: 44px;
-  height: 26px;
+  width: 56px;
+  height: 32px;
   object-fit: contain;
   border-radius: 3px;
   background: #fff;
@@ -2915,11 +2952,11 @@ tbody td {
   padding-right: 4px;
 }
 
-/* 4px of padding each side, so the model's 58px fits the 44px image and the
+/* 6px of padding each side, so the model's 68px fits the 56px image and the
    FRONT header, and the pinned offsets stay aligned. */
 .table-thumb-cell {
-  padding-left: 4px;
-  padding-right: 4px;
+  padding-left: 6px;
+  padding-right: 6px;
 }
 
 /* Compact like the other control columns, and kept on one line: the cell
@@ -2956,6 +2993,46 @@ td.table-col-serial {
   color: #4a3a28;
 }
 
+/* Grade is the attribute a collector compares across a row, so it reads as a
+   measured value rather than as another line of body text: tabular figures so
+   a column of grades aligns digit for digit, and three tints for the bands the
+   catalogue trade already uses — uncirculated (65+), choice (50–64), and
+   circulated below that. The text alone still carries the value; the tint only
+   speeds the scan. */
+.table-grade {
+  display: inline-flex;
+  align-items: baseline;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  font-size: 13px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+  box-shadow: inset 0 0 0 1px var(--border-soft);
+}
+
+.table-grade--unc {
+  color: #2f5b34;
+  background: rgba(47, 107, 60, 0.1);
+  box-shadow: inset 0 0 0 1px rgba(47, 107, 60, 0.24);
+}
+
+.table-grade--choice {
+  color: #6a4a1c;
+  background: rgba(168, 132, 40, 0.14);
+  box-shadow: inset 0 0 0 1px rgba(168, 132, 40, 0.3);
+}
+
+.table-grade--circulated {
+  color: var(--text-muted);
+  background: rgba(111, 92, 64, 0.07);
+}
+
+.table-grade--none {
+  color: var(--text-muted);
+}
+
 td.table-col-id {
   color: var(--text-muted);
 }
@@ -2965,6 +3042,9 @@ td.table-col-id {
   display: inline-flex;
 }
 
+/* The hover preview hangs beside the thumbnail it belongs to. Its vertical
+   offset is set by NotesTable so a 138px panel stays inside the rows area
+   instead of running under the header or past the last row. */
 .table-thumb-preview {
   --table-thumb-preview-offset: 0px;
   position: absolute;
@@ -3593,6 +3673,14 @@ th[aria-sort="descending"] .sort-chevron {
 .table-filter-toggle--open {
   border-color: var(--accent);
   background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+/* Filters applied with the row collapsed: the toggle still carries the count
+   badge and the accent label, so it reads as "filters are on" instead of as a
+   button that stopped responding. */
+.table-filter-toggle--applied:not(.table-filter-toggle--open) {
+  border-color: var(--border-control);
   color: var(--accent-strong);
 }
 
@@ -4636,6 +4724,66 @@ button.tag {
 .confirm-dialog-body {
   margin: 0;
   color: var(--text-muted);
+}
+
+/* The object a destructive request is about. A denomination is not an
+   identity — a collection holds three notes called "1 Leu" — so the dialog
+   shows the note itself rather than asking the collector to trust a word. */
+.confirm-note {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.confirm-note-thumb {
+  flex: none;
+  width: 96px;
+  height: 54px;
+  object-fit: contain;
+  border-radius: 4px;
+  background: #fff;
+  box-shadow: 0 0 0 1px var(--border-soft);
+}
+
+.confirm-note-meta {
+  font-size: 0.86rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.confirm-note-list ul {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 12px 14px;
+  list-style: none;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.confirm-note-list li {
+  display: grid;
+  gap: 1px;
+}
+
+.confirm-note-list .confirm-note-name {
+  font-weight: 650;
+}
+
+.confirm-note-sub,
+.confirm-note-more {
+  font-size: 0.82rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+}
+
+.confirm-note-more {
+  margin: 8px 0 0;
 }
 
 .confirm-dialog-actions {

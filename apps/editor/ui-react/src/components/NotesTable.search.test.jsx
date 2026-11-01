@@ -276,7 +276,7 @@ describe("NotesTable search", () => {
     ).toBeInTheDocument();
   });
 
-  test("no matches says the view is empty, not the collection", async () => {
+  test("no matches names the query and offers the recovery", async () => {
     const user = userEvent.setup();
     renderTable();
 
@@ -286,11 +286,21 @@ describe("NotesTable search", () => {
     await user.type(input, "no-such-note");
 
     expect(
-      await screen.findByText("No notes match the current view."),
+      await screen.findByText("No notes match “no-such-note”."),
     ).toBeInTheDocument();
     expect(
       screen.queryByText("No notes are stored yet in this collection."),
     ).not.toBeInTheDocument();
+
+    // The clear control inside the field is 14px; the empty state carries the
+    // same recovery at the size of the decision it belongs to.
+    const emptyCell = screen
+      .getByText("No notes match “no-such-note”.")
+      .closest(".table-empty-cell");
+    await user.click(
+      within(emptyCell).getByRole("button", { name: "Clear search" }),
+    );
+    expect(await screen.findByText("AAAA")).toBeInTheDocument();
   });
 
   test("an empty collection still says the collection is empty", async () => {

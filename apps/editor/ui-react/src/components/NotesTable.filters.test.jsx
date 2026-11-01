@@ -189,7 +189,7 @@ describe("NotesTable filters", () => {
     ).toBeInTheDocument();
   });
 
-  test("the filter row stays open after closing the toggle while a filter has a value", async () => {
+  test("a filter row collapses without losing the applied filter", async () => {
     renderTable();
 
     await screen.findByText("AAAA");
@@ -200,13 +200,19 @@ describe("NotesTable filters", () => {
 
     await user.click(await filtersToggle());
 
-    const stillOpen = await screen.findByLabelText("Filter Company");
-    expect(stillOpen).toHaveValue("PMG");
-    expect(await filtersToggle()).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText("Company: PMG")).toBeInTheDocument();
+    // The row closes, the chip keeps the state visible, and the filter still
+    // applies. Reopening restores the typed value.
+    expect(
+      await screen.findByText("Company: PMG"),
+    ).toBeInTheDocument();
+    expect(await filtersToggle()).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
+
+    await user.click(await filtersToggle());
+    expect(await screen.findByLabelText("Filter Company")).toHaveValue("PMG");
   });
 
-  test("clicking Filters while a filter forces the row open is a no-op", async () => {
+  test("the Filters toggle keeps working while a filter is applied", async () => {
     renderTable();
 
     await screen.findByText("AAAA");
@@ -215,22 +221,15 @@ describe("NotesTable filters", () => {
     await user.type(await screen.findByLabelText("Filter Company"), "PMG");
     const toggle = await filtersToggle();
 
+    // A control that ignores a click reads as broken; with the chip carrying
+    // the state, the row is free to close.
+    expect(toggle).not.toHaveAttribute("aria-disabled");
     expect(toggle).toHaveAttribute("aria-expanded", "true");
-    expect(toggle).toHaveAttribute("aria-disabled", "true");
-    expect(toggle).toHaveAttribute(
-      "title",
-      "Filters stay open while any filter is active",
-    );
 
     await user.click(toggle);
-    expect(toggle).toHaveAttribute("aria-expanded", "true");
+    expect(await filtersToggle()).toHaveAttribute("aria-expanded", "false");
 
-    // Clearing the forcing filter leaves the row open: the click above did
-    // not flip the collector's open/closed intent behind the scenes.
-    await user.click(
-      screen.getByRole("button", { name: "Remove Company filter" }),
-    );
-    expect(await screen.findByLabelText("Filter Company")).toBeInTheDocument();
+    await user.click(await filtersToggle());
     expect(await filtersToggle()).toHaveAttribute("aria-expanded", "true");
   });
 
@@ -326,7 +325,7 @@ describe("NotesTable filters", () => {
 
     await user.type(await screen.findByLabelText("Filter Company"), "PMG");
 
-    const sort = screen.getByRole("button", { name: "DENOMINATION" });
+    const sort = screen.getByRole("button", { name: "Denomination" });
     sort.focus();
     await user.keyboard("{Escape}");
 
@@ -404,7 +403,7 @@ describe("NotesTable filters", () => {
     ).toBeNull();
 
     // A structural change saves the payload, and it still carries no filters.
-    await user.click(screen.getByRole("button", { name: "DENOMINATION" }));
+    await user.click(screen.getByRole("button", { name: "Denomination" }));
 
     await waitFor(() => {
       const savedState = JSON.parse(

@@ -130,19 +130,19 @@ describe("NotesTable scanning", () => {
     await screen.findByText("AAAA");
 
     expect(headerCell("#")).toHaveAttribute("aria-sort", "ascending");
-    expect(headerCell("DENOMINATION")).toHaveAttribute("aria-sort", "none");
+    expect(headerCell("Denomination")).toHaveAttribute("aria-sort", "none");
 
-    await user.click(screen.getByRole("button", { name: "DENOMINATION" }));
+    await user.click(screen.getByRole("button", { name: "Denomination" }));
 
     expect(headerCell("#")).toHaveAttribute("aria-sort", "none");
-    expect(headerCell("DENOMINATION")).toHaveAttribute(
+    expect(headerCell("Denomination")).toHaveAttribute(
       "aria-sort",
       "ascending",
     );
 
-    await user.click(screen.getByRole("button", { name: "DENOMINATION" }));
+    await user.click(screen.getByRole("button", { name: "Denomination" }));
 
-    expect(headerCell("DENOMINATION")).toHaveAttribute(
+    expect(headerCell("Denomination")).toHaveAttribute(
       "aria-sort",
       "descending",
     );
@@ -155,7 +155,7 @@ describe("NotesTable scanning", () => {
     await screen.findByText("AAAA");
 
     const orderHeader = headerCell("#");
-    const denominationHeader = headerCell("DENOMINATION");
+    const denominationHeader = headerCell("Denomination");
     const chevrons = () => document.querySelectorAll("thead .sort-chevron");
 
     expect(chevrons()).toHaveLength(1);
@@ -185,8 +185,8 @@ describe("NotesTable scanning", () => {
     await screen.findByText("AAAA");
 
     expect(headerCell("#")).toHaveClass("align-right");
-    expect(headerCell("SERIAL")).toHaveClass("align-left");
-    expect(headerCell("FRONT")).toHaveClass("align-center");
+    expect(headerCell("Serial")).toHaveClass("align-left");
+    expect(headerCell("Front")).toHaveClass("align-center");
 
     const row = rowFor("AAAA");
     const orderCell = within(row).getByText("1");

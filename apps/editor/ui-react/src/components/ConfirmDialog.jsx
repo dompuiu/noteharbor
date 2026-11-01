@@ -8,6 +8,7 @@ import { useCallback, useEffect, useId, useRef, useState } from "react";
 function ConfirmDialog({
   body,
   cancelLabel = "Cancel",
+  children,
   confirmLabel = "Confirm",
   onCancel,
   onConfirm,
@@ -74,6 +75,9 @@ function ConfirmDialog({
             {body}
           </p>
         ) : null}
+        {/* Extra detail for a destructive request that names a thing rather
+            than a count: the thumbnail, the serial, the rows about to go. */}
+        {children ? <div className="confirm-dialog-detail">{children}</div> : null}
         <div className="confirm-dialog-actions">
           <button
             className="button"

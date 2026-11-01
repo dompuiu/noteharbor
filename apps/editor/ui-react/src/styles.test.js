@@ -416,8 +416,8 @@ describe("table styles", () => {
 
     const thumb = styles.match(/\.table-thumb-cell\s*\{([^}]*)\}/);
     expect(thumb).not.toBeNull();
-    expect(thumb[1]).toMatch(/padding-left:\s*4px/);
-    expect(thumb[1]).toMatch(/padding-right:\s*4px/);
+    expect(thumb[1]).toMatch(/padding-left:\s*6px/);
+    expect(thumb[1]).toMatch(/padding-right:\s*6px/);
 
     const actions = styles.match(/\.table-actions-cell\s*\{([^}]*)\}/);
     expect(actions).not.toBeNull();
@@ -472,6 +472,8 @@ describe("table styles", () => {
   // cell. A pinned cell is its own stacking context, so without lifting the
   // cell the bubble slips under the catalog number in the same row and under
   // the pinned cells of the rows below. The header must stay above it.
+  // The bubble hangs off the pinned thumbnail cell, so it needs the cell's
+  // stacking context lifted above the pinned cells of the rows below it.
   test("the thumbnail preview clears the pinned columns but not the header", () => {
     const cell = styles.match(
       /\.table-row-link:has\(\.table-thumb-preview\.is-visible\) > \.table-thumb-cell\s*\{([^}]*)\}/,
@@ -665,11 +667,11 @@ describe("table styles", () => {
     expect(placeholder[1]).toMatch(/height:\s*auto/);
   });
 
-  test("thumbnails are 44x26 with a hairline ring", () => {
+  test("thumbnails are 56x32 with a hairline ring", () => {
     const thumb = styles.match(/\.table-thumb\s*\{([^}]*)\}/);
     expect(thumb).not.toBeNull();
-    expect(thumb[1]).toMatch(/width:\s*44px/);
-    expect(thumb[1]).toMatch(/height:\s*26px/);
+    expect(thumb[1]).toMatch(/width:\s*56px/);
+    expect(thumb[1]).toMatch(/height:\s*32px/);
     expect(thumb[1]).toMatch(/object-fit:\s*contain/);
     expect(thumb[1]).toMatch(/border-radius:\s*3px/);
     expect(thumb[1]).toMatch(/background:\s*#fff/);

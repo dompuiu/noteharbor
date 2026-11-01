@@ -114,7 +114,7 @@ describe("NotesTable new collection draft", () => {
       await screen.findByText("Showing 0 of 0 notes · sorted by # ascending"),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "#" })).toBeInTheDocument();
-    expect(screen.getByText("FRONT")).toBeInTheDocument();
+    expect(screen.getByText("Front")).toBeInTheDocument();
     expect(
       screen.getByText(/No notes are stored yet/),
     ).toBeInTheDocument();
