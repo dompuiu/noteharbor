@@ -1167,6 +1167,19 @@ function NotesTable({
   const searchInputRef = useRef(null);
   const currentRouteRef = useRef(null);
   const pendingRowFocusNoteIdRef = useRef(null);
+  // Tab from a row enters the selection actions bar before the row's own
+  // controls; Shift+Tab out of the bar's first item goes to the row's
+  // actions button. These requests can only be honoured once a virtualized
+  // row mounts, so they are held here like `pendingRowFocusNoteIdRef`.
+  const pendingRowCheckboxFocusNoteIdRef = useRef(null);
+  const pendingRowActionsFocusNoteIdRef = useRef(null);
+  // The bar's own buttons come before the rows in the intended tab cycle
+  // once a selection exists. The ref tracks whether the next Tab should
+  // honour that, and the live selection size so the window-level handler
+  // can read it without re-subscribing on every toggle.
+  const selectionTabArmedRef = useRef(false);
+  const selectedIdsRef = useRef([]);
+  const bulkBarRef = useRef(null);
   const focusRestoreNoteIdRef = useRef(null);
   // The row the keyboard cursor last landed on, kept apart from
   // `focusedRowIdRef` because it has to outlive focus leaving the table:
@@ -1267,6 +1280,13 @@ function NotesTable({
   const [selectedIds, setSelectedIds] = useState(
     () => initialTableStateRef.current?.selectedIds ?? [],
   );
+  useEffect(() => {
+    // Every selection change while the bar is visible re-arms the next Tab
+    // (a checkbox click, Space on a row, select-all, or a row being
+    // unticked). Clearing the selection removes the bar and disarms.
+    selectedIdsRef.current = selectedIds;
+    selectionTabArmedRef.current = selectedIds.length > 0;
+  }, [selectedIds]);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
   const [moveToast, setMoveToast] = useState("");
@@ -2568,6 +2588,16 @@ function NotesTable({
         return;
       }
 
+      if (event.target.closest(".table-bulk-bar")) {
+        // The selection bar is part of the row's tab cycle: focusing it
+        // must keep the row cursor (and the remembered exit target) alive.
+        return;
+      }
+
+      // Any focus move that is not one of the arming actions (a selection
+      // change or a keyboard row move) cancels a pending Tab-to-bar jump.
+      selectionTabArmedRef.current = false;
+
       if (event.target.closest("tr.table-row-link")) {
         return;
       }
@@ -2591,22 +2621,33 @@ function NotesTable({
     // checkbox inside it holds focus: arrows/j/k move the cursor, Page and
     // Home/End jump, and a held Shift rests where it is. Returns whether the
     // key was one of them.
+    function armSelectionTabForRowMove() {
+      // With a selection on screen, moving the row cursor makes the bar the
+      // next Tab stop again.
+      if (selectedIdsRef.current.length) {
+        selectionTabArmedRef.current = true;
+      }
+    }
+
     function handleRowNavigation(event) {
       if (!event.shiftKey && (event.key === "ArrowDown" || event.key === "j")) {
         event.preventDefault();
         moveRowFocus(1);
+        armSelectionTabForRowMove();
         return true;
       }
 
       if (!event.shiftKey && (event.key === "ArrowUp" || event.key === "k")) {
         event.preventDefault();
         moveRowFocus(-1);
+        armSelectionTabForRowMove();
         return true;
       }
 
       if (event.key === "PageDown" || event.key === "PageUp") {
         event.preventDefault();
         pageTable(event.key === "PageDown" ? 1 : -1);
+        armSelectionTabForRowMove();
         return true;
       }
 
@@ -2619,6 +2660,7 @@ function NotesTable({
 
         if (note) {
           focusRowByNoteId(note.id);
+          armSelectionTabForRowMove();
         }
         return true;
       }
@@ -2707,6 +2749,29 @@ function NotesTable({
 
       if (handleRowEscape(event)) {
         return;
+      }
+
+      if (
+        event.key === "Tab" &&
+        !event.shiftKey &&
+        tableKeysActive &&
+        selectionTabArmedRef.current &&
+        selectedIdsRef.current.length > 0
+      ) {
+        // A fresh selection (or a row-cursor move while one exists) puts
+        // the selection bar at the front of the table's tab cycle: the
+        // next Tab enters its first enabled control instead of walking
+        // the row's checkbox and links.
+        const firstBarItem = bulkBarRef.current?.querySelector(
+          "button:not([disabled])",
+        );
+
+        if (firstBarItem) {
+          event.preventDefault();
+          selectionTabArmedRef.current = false;
+          firstBarItem.focus();
+          return;
+        }
       }
 
       if (editable) {
@@ -3111,6 +3176,104 @@ function NotesTable({
     rowVirtualizer.scrollToIndex(index, {
       align: options.pinToTop ? "start" : "auto",
     });
+  }
+
+  // The row a bar exit returns to: the live keyboard cursor when it still
+  // exists, otherwise the row selected most recently (the end of the
+  // selection array, which is also the checkbox the user touched last).
+  function bulkBarExitNoteId() {
+    const activeId = focusedRowIdRef.current;
+
+    if (
+      activeId != null &&
+      orderedNotes.some((note) => note.id === activeId)
+    ) {
+      return activeId;
+    }
+
+    const ids = selectedIdsRef.current;
+    return ids.length ? ids[ids.length - 1] : null;
+  }
+
+  function focusRowControlByNoteId(noteId, selector, pendingRef) {
+    if (noteId == null) {
+      focusTableAnchor();
+      return;
+    }
+
+    const row = rowElementMapRef.current.get(noteId);
+    const control = row?.querySelector(selector);
+
+    if (row && control) {
+      control.focus({ preventScroll: true });
+      focusedRowIdRef.current = noteId;
+      setActiveNoteId(noteId);
+      ensureRowVisible(row);
+      return;
+    }
+
+    const index = orderedNotes.findIndex((note) => note.id === noteId);
+
+    if (index < 0) {
+      focusTableAnchor();
+      return;
+    }
+
+    // The target row is outside the virtualized window. Scroll it in and
+    // let the row ref callback focus the control once it mounts.
+    pendingRef.current = noteId;
+    rowVirtualizer.scrollToIndex(index, { align: "auto" });
+  }
+
+  function focusRowCheckboxByNoteId(noteId) {
+    focusRowControlByNoteId(
+      noteId,
+      'input[type="checkbox"]',
+      pendingRowCheckboxFocusNoteIdRef,
+    );
+  }
+
+  function focusRowActionsButtonByNoteId(noteId) {
+    focusRowControlByNoteId(
+      noteId,
+      'button[aria-haspopup="menu"]',
+      pendingRowActionsFocusNoteIdRef,
+    );
+  }
+
+  function handleBulkBarKeyDown(event) {
+    if (event.key !== "Tab") {
+      return;
+    }
+
+    const items = Array.from(
+      bulkBarRef.current?.querySelectorAll("button:not([disabled])") ?? [],
+    );
+
+    if (!items.length) {
+      return;
+    }
+
+    const atFirst = document.activeElement === items[0];
+    const atLast = document.activeElement === items[items.length - 1];
+
+    // The bar sits between a row and its controls in the tab cycle:
+    // forward from Clear lands on the row's checkbox, backward from Delete
+    // lands on the row's actions menu button.
+    if (event.shiftKey && atFirst) {
+      event.preventDefault();
+      event.stopPropagation();
+      selectionTabArmedRef.current = false;
+      focusRowActionsButtonByNoteId(bulkBarExitNoteId());
+      return;
+    }
+
+    if (!event.shiftKey && atLast) {
+      event.preventDefault();
+      event.stopPropagation();
+      selectionTabArmedRef.current = false;
+      focusRowCheckboxByNoteId(bulkBarExitNoteId());
+    }
   }
 
   function moveRowFocus(offset) {
@@ -5035,6 +5198,36 @@ function NotesTable({
                                   rowVirtualizer.measureElement(element);
 
                                   if (
+                                    pendingRowCheckboxFocusNoteIdRef.current ===
+                                    note.id
+                                  ) {
+                                    pendingRowCheckboxFocusNoteIdRef.current =
+                                      null;
+                                    const checkbox = element.querySelector(
+                                      'input[type="checkbox"]',
+                                    );
+                                    (checkbox ?? element).focus({
+                                      preventScroll: true,
+                                    });
+                                    focusedRowIdRef.current = note.id;
+                                    setActiveNoteId(note.id);
+                                    ensureRowVisible(element);
+                                  } else if (
+                                    pendingRowActionsFocusNoteIdRef.current ===
+                                    note.id
+                                  ) {
+                                    pendingRowActionsFocusNoteIdRef.current =
+                                      null;
+                                    const actionsButton = element.querySelector(
+                                      'button[aria-haspopup="menu"]',
+                                    );
+                                    (actionsButton ?? element).focus({
+                                      preventScroll: true,
+                                    });
+                                    focusedRowIdRef.current = note.id;
+                                    setActiveNoteId(note.id);
+                                    ensureRowVisible(element);
+                                  } else if (
                                     pendingRowFocusNoteIdRef.current === note.id
                                   ) {
                                     pendingRowFocusNoteIdRef.current = null;
@@ -5074,7 +5267,17 @@ function NotesTable({
                                 }
                               }}
                               onBlur={(event) => {
+                                // The selection bar belongs to the row's tab
+                                // cycle, so moving focus into it keeps the
+                                // cursor (and the bar's exit target) alive.
+                                const toBulkBar =
+                                  event.relatedTarget instanceof Element &&
+                                  event.relatedTarget.closest(
+                                    ".table-bulk-bar",
+                                  );
+
                                 if (
+                                  !toBulkBar &&
                                   !event.currentTarget.contains(
                                     event.relatedTarget,
                                   )
@@ -5274,6 +5477,8 @@ function NotesTable({
                 <div
                   aria-label="Selection actions"
                   className="table-bulk-bar"
+                  onKeyDown={handleBulkBarKeyDown}
+                  ref={bulkBarRef}
                   role="region"
                 >
                   <span className="table-bulk-bar-count">

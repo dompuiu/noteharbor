@@ -1062,3 +1062,170 @@ describe("Arrow modifiers and h/j/k/l aliases", () => {
     expect(rowFocusRow.textContent).toContain("Shift+↑/↓ does nothing");
   });
 });
+
+describe("Selection actions tab cycle", () => {
+  function actionsButton(denomination) {
+    return screen.getByRole("button", {
+      name: `Actions for ${denomination}`,
+    });
+  }
+
+  function checkbox(denomination) {
+    return screen.getByRole("checkbox", {
+      name: `Select ${denomination}`,
+    });
+  }
+
+  test("Tab after a checkbox selection lands on the bar's first action", async () => {
+    const user = userEvent.setup();
+    getNotes.mockResolvedValue({ notes: threeNotes });
+    renderTable();
+
+    await user.click(await screen.findByRole("checkbox", { name: "Select AAAA" }));
+
+    const bar = await screen.findByRole("region", {
+      name: "Selection actions",
+    });
+    const deleteButton = within(bar).getByRole("button", { name: "Delete" });
+
+    await user.tab();
+
+    expect(deleteButton).toHaveFocus();
+  });
+
+  test("Tab walks Delete, Clear, then the last selected row's checkbox", async () => {
+    const user = userEvent.setup();
+    getNotes.mockResolvedValue({ notes: threeNotes });
+    renderTable();
+
+    await user.click(await screen.findByRole("checkbox", { name: "Select AAAA" }));
+
+    const bar = await screen.findByRole("region", {
+      name: "Selection actions",
+    });
+    const deleteButton = within(bar).getByRole("button", { name: "Delete" });
+    const clearButton = within(bar).getByRole("button", {
+      name: "Clear selection",
+    });
+
+    await user.tab();
+    expect(deleteButton).toHaveFocus();
+
+    await user.tab();
+    expect(clearButton).toHaveFocus();
+
+    // A mouse selection leaves no live row cursor, so the exit targets the
+    // row selected most recently.
+    await user.tab();
+    expect(checkbox("AAAA")).toHaveFocus();
+  });
+
+  test("moving the row cursor while a selection exists re-arms the bar", async () => {
+    const user = userEvent.setup();
+    getNotes.mockResolvedValue({ notes: threeNotes });
+    renderTable();
+
+    const firstRow = (await screen.findByText("AAAA")).closest("tr");
+    firstRow.focus();
+
+    await user.keyboard(" ");
+    expect(checkbox("AAAA")).toBeChecked();
+
+    await user.keyboard("{ArrowDown}");
+
+    const secondRow = (await screen.findByText("BBBB")).closest("tr");
+    await waitFor(() => {
+      expect(secondRow).toHaveFocus();
+    });
+
+    const bar = await screen.findByRole("region", {
+      name: "Selection actions",
+    });
+    const deleteButton = within(bar).getByRole("button", { name: "Delete" });
+
+    await user.tab();
+    expect(deleteButton).toHaveFocus();
+
+    // After the bar, focus returns to the row the cursor now sits on.
+    const clearButton = within(bar).getByRole("button", {
+      name: "Clear selection",
+    });
+    await user.tab();
+    expect(clearButton).toHaveFocus();
+    await user.tab();
+    expect(checkbox("BBBB")).toHaveFocus();
+  });
+
+  test("select-all also puts the bar first in the tab cycle", async () => {
+    const user = userEvent.setup();
+    getNotes.mockResolvedValue({ notes: threeNotes });
+    renderTable();
+
+    await user.click(
+      await screen.findByRole("checkbox", { name: "Select all visible rows" }),
+    );
+
+    const bar = await screen.findByRole("region", {
+      name: "Selection actions",
+    });
+    const deleteButton = within(bar).getByRole("button", { name: "Delete" });
+    const clearButton = within(bar).getByRole("button", {
+      name: "Clear selection",
+    });
+
+    await user.tab();
+    expect(deleteButton).toHaveFocus();
+
+    await user.tab();
+    expect(clearButton).toHaveFocus();
+
+    // With no cursor, the exit is the row selected most recently, which for
+    // select-all is the last row in the current view.
+    await user.tab();
+    expect(checkbox("CCCC")).toHaveFocus();
+  });
+
+  test("Shift+Tab from the first bar action goes to the cursor row's actions button", async () => {
+    const user = userEvent.setup();
+    getNotes.mockResolvedValue({ notes: threeNotes });
+    renderTable();
+
+    const firstRow = (await screen.findByText("AAAA")).closest("tr");
+    firstRow.focus();
+    await user.keyboard(" ");
+
+    const bar = await screen.findByRole("region", {
+      name: "Selection actions",
+    });
+    const deleteButton = within(bar).getByRole("button", { name: "Delete" });
+
+    await user.tab();
+    expect(deleteButton).toHaveFocus();
+
+    await user.tab({ shift: true });
+
+    expect(actionsButton("AAAA")).toHaveFocus();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+  });
+
+  test("focus moving outside the table disarms the jump to the bar", async () => {
+    const user = userEvent.setup();
+    getNotes.mockResolvedValue({ notes: threeNotes });
+    renderTable();
+
+    await user.click(await screen.findByRole("checkbox", { name: "Select AAAA" }));
+
+    const bar = await screen.findByRole("region", {
+      name: "Selection actions",
+    });
+    const deleteButton = within(bar).getByRole("button", { name: "Delete" });
+
+    const search = screen.getByRole("searchbox");
+    await user.click(search);
+    expect(search).toHaveFocus();
+
+    await user.tab();
+
+    expect(deleteButton).not.toHaveFocus();
+  });
+});
