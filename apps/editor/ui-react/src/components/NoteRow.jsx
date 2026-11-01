@@ -21,6 +21,14 @@ export const NoteRow = memo(function NoteRow({
   showGutter,
   totalColumnCount,
 }) {
+  // The dev readout counts the distinct rows that ran in the current commit.
+  // Its set lives on a global that exists only while the readout is mounted,
+  // so the optional call costs nothing when the readout is off and the whole
+  // branch is dropped from production builds.
+  if (import.meta.env.DEV) {
+    globalThis.__noteHarborPerfRows?.add(note.id);
+  }
+
   const zebra = index % 2 === 1;
 
   const rowRef = useCallback(
