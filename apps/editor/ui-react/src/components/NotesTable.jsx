@@ -1636,9 +1636,13 @@ function NotesTable({
   );
   const rowVirtualizer = useVirtualizer({
     count: deferredOrderedNotes.length,
+    // Rows are one line and never wrap, so their height is fixed. Without
+    // dynamic measurement the offsets are pure arithmetic, which lets the
+    // virtualizer skip the synchronous render on every scroll tick.
     estimateSize: () => rowHeightEstimate,
     getScrollElement: () => tableScrollRef.current,
-    overscan: 10,
+    overscan: 4,
+    useFlushSync: false,
   });
   const virtualRows = rowVirtualizer.getVirtualItems();
   const topSpacerHeight = virtualRows.length ? virtualRows[0].start : 0;
@@ -3904,7 +3908,6 @@ function NotesTable({
     }
 
     rowElementMapRef.current.set(noteId, element);
-    rowVirtualizer.measureElement(element);
 
     if (pendingRowCheckboxFocusNoteIdRef.current === noteId) {
       pendingRowCheckboxFocusNoteIdRef.current = null;

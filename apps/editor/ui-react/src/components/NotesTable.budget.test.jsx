@@ -216,6 +216,24 @@ describe("NotesTable render budget", () => {
     expect(noteRowRenderCount()).toBeLessThanOrEqual(visibleRows);
   });
 
+  test("fixed row height keeps the rendered window near 22 rows", async () => {
+    getNotes.mockResolvedValue({ notes: manyNotes(200) });
+    const { container } = renderTable();
+
+    await screen.findByText("NOTE-1");
+    const scroller = scrollerFor(container);
+    setScrollMetrics(scroller);
+    await flushFrame();
+
+    // Land mid-list so both overscan bands are painted.
+    await scrollBy(scroller, 80 * rowHeight);
+
+    const rows = container.querySelectorAll("tbody tr.table-row-link").length;
+    // 14 rows fit the viewport; the overscan is four above and four below.
+    expect(rows).toBeGreaterThanOrEqual(14);
+    expect(rows).toBeLessThanOrEqual(22);
+  });
+
   test("moving the keyboard cursor renders at most two rows", async () => {
     getNotes.mockResolvedValue({ notes: manyNotes(60) });
     const { container } = renderTable();
