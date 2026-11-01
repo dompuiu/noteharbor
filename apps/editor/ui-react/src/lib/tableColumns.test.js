@@ -202,7 +202,7 @@ describe("tableColumnWidths", () => {
   test("keeps control columns exact and scales data columns by weight", () => {
     const widths = tableColumnWidths(tableColumns, 1600, 14);
     const available = 1600 - 14 - (24 + 44 + 48 + 58 + 80);
-    const weightTotal = 116 + 150 + 96 + 106 + 96 + 148 + 230;
+    const weightTotal = 116 + 200 + 96 + 96 + 96 + 132 + 180;
 
     expect(widths).toMatchObject({
       reorder: 24,
@@ -214,8 +214,12 @@ describe("tableColumnWidths", () => {
     expect(widths.catalog_number).toBeCloseTo(
       (available * 116) / weightTotal,
     );
-    expect(widths.denomination).toBeCloseTo((available * 150) / weightTotal);
-    expect(widths.tags).toBeCloseTo((available * 230) / weightTotal);
+    expect(widths.denomination).toBeCloseTo((available * 200) / weightTotal);
+    expect(widths.tags).toBeCloseTo((available * 180) / weightTotal);
+    // The row's primary label earns the largest share, so the wide value sits
+    // where the eye lands first instead of in the narrowest data column.
+    expect(widths.denomination).toBeGreaterThan(widths.tags);
+    expect(widths.denomination).toBeGreaterThan(widths.serial);
 
     const total = tableColumns.reduce(
       (sum, column) => sum + widths[column.key],

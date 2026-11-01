@@ -130,6 +130,38 @@ beforeEach(() => {
 });
 
 describe("NotesTable columns", () => {
+  test("every cell carries its column's class, so one CSS rule reaches every column", async () => {
+    const { container } = renderTable();
+    await screen.findByText("AAAA");
+
+    const keys = [
+      "reorder",
+      "selection",
+      "id",
+      "thumbnail",
+      "catalog_number",
+      "denomination",
+      "issue_date",
+      "grading_company",
+      "grade",
+      "serial",
+      "tags",
+      "actions",
+    ];
+    const classOf = (cell) =>
+      keys.find((key) => cell.classList.contains(`table-col-${key}`));
+
+    const headerRow = container.querySelector("thead tr");
+    expect([...headerRow.children].slice(0, keys.length).map(classOf)).toEqual(
+      keys,
+    );
+
+    const bodyRow = container.querySelector("tbody tr");
+    expect([...bodyRow.children].slice(0, keys.length).map(classOf)).toEqual(
+      keys,
+    );
+  });
+
   test("the Columns control opens the hideable columns as checkboxes", async () => {
     renderTable();
 

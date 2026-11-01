@@ -34,6 +34,10 @@ export function normalizeDenominationFilterValue(value) {
   return `${addThousandsSeparators(integerDigits)}${decimalPart}${suffix}`;
 }
 
+// For data columns `width` is a preferred share of the viewport rather than a
+// pixel width: the shares are close to the space each field needs, so the
+// table stretches evenly instead of one short-code column swallowing the
+// slack. The whole row still fills the viewport at every width.
 const scalarColumn = (key, label, overrides = {}) => ({
   key,
   label,
@@ -139,7 +143,9 @@ export const tableColumns = [
     multiple: true,
   }),
   scalarColumn("denomination", "Denomination", {
-    width: 150,
+    // The row's primary label: it holds a collector's eye, so it carries the
+    // largest share of the leftover viewport.
+    width: 200,
     multiple: true,
     normalize: normalizeDenominationFilterValue,
   }),
@@ -148,19 +154,21 @@ export const tableColumns = [
     multiple: true,
   }),
   scalarColumn("grading_company", "Company", {
-    width: 106,
+    width: 96,
   }),
   scalarColumn("grade", "Grade", {
     width: 96,
     multiple: true,
   }),
   scalarColumn("serial", "Serial", {
-    width: 148,
+    width: 132,
   }),
   scalarColumn("tags", "Tags", {
     // A flex weight rather than a fixed width: every data column scales with
-    // the viewport, while the control columns keep their exact width.
-    width: 230,
+    // the viewport, while the control columns keep their exact width. The
+    // chip strip is the second-widest share, so a couple of tags fit before
+    // the overflow marker has to stand in for them.
+    width: 180,
     isTags: true,
   }),
   {

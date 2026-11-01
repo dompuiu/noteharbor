@@ -2801,6 +2801,43 @@ td {
   text-align: center;
 }
 
+/* A hairline closes each column boundary, so the flexed columns read as one
+   grid instead of islands of short values. The rule covers the pinned identity
+   fields (`#`, FRONT, Catalog #) because those are values a collector scans
+   down the column; the drag handle is the one cell left unruled, since it and
+   the selection checkbox are the row's controls rather than fields, and a rule
+   between them would separate a control from itself. Catalog number's right
+   edge is also left to the pinned block's own divider (see
+   .table-sticky-end::after), which would otherwise double the hairline.
+
+   Painting the rule as a border keeps it out of the flex maths — a
+   fixed-layout table folds cell borders into the column width, so the
+   <colgroup> widths the renderer writes still add up exactly. */
+th:is(
+  .table-col-selection,
+  .table-col-id,
+  .table-col-thumbnail,
+  .table-col-denomination,
+  .table-col-issue_date,
+  .table-col-grading_company,
+  .table-col-grade,
+  .table-col-serial,
+  .table-col-tags
+),
+td:is(
+  .table-col-selection,
+  .table-col-id,
+  .table-col-thumbnail,
+  .table-col-denomination,
+  .table-col-issue_date,
+  .table-col-grading_company,
+  .table-col-grade,
+  .table-col-serial,
+  .table-col-tags
+) {
+  border-right: 1px solid var(--border-soft);
+}
+
 /* Body density: 14px text in a 46px row. Vertical padding stays at 0: the
    30px row menu button plus 8px top and bottom would otherwise floor the row
    at 47px, and the prototype's compact rows have none. The virtualizer's
@@ -3083,13 +3120,13 @@ thead .table-sticky-cell {
   background-color: var(--surface-3);
 }
 
-/* One permanent hairline closes the pinned identity block, on the right edge
-   of the catalog number column. The control columns inside the block
-   (drag handle, selection, display order, thumbnail) carry no divider of their
-   own: they read as one identity group, and only the hand-off to the scrolling
-   data columns needs a mark. The pan-only shadow below strengthens this same
-   hairline, so the block still reads as pinned once the columns move
-   underneath it. */
+/* The pinned block's end divider sits on the right edge of the catalog number
+   column. Its identity fields carry their own column hairlines (see the
+   .table-col-* rule near `.align-center`), so the block keeps the same grid as
+   the scrolling columns; this rule only marks the hand-off to the panned area.
+   It is drawn as a pseudo-element rather than a border because the pan-only
+   shadow below strengthens this same hairline, so the block still reads as
+   pinned once the columns move underneath it. */
 .table-sticky-cell.table-sticky-end::after {
   content: "";
   position: absolute;

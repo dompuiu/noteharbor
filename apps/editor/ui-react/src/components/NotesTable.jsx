@@ -4364,7 +4364,7 @@ function NotesTable({
       <td
         className={alignmentClass(column)}
         onClick={(event) => event.stopPropagation()}
-        {...stickyCellAttributes(column)}
+        {...stickyCellAttributes(column, cellClass(column))}
       >
         <input
           aria-label={`Select ${note.denomination}`}
@@ -5095,7 +5095,10 @@ function NotesTable({
                               <th
                                 key={column.key}
                                 scope="col"
-                                {...stickyCellAttributes(column, "align-center")}
+                                {...stickyCellAttributes(
+                                  column,
+                                  cellClass(column),
+                                )}
                               >
                                 <input
                                   aria-label="Select all visible rows"
@@ -5227,7 +5230,7 @@ function NotesTable({
                                 scope="col"
                                 {...stickyCellAttributes(
                                   column,
-                                  column.isTags ? "tags-column" : undefined,
+                                  cellClass(column),
                                 )}
                               >
                                 {column.isTags ? (

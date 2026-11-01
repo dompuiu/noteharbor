@@ -136,8 +136,9 @@ describe("table styles", () => {
     expect(styles).toMatch(
       /\.table-sticky-cell\.table-sticky-end::after\s*\{[^}]*right:\s*0;[^}]*width:\s*1px;[^}]*background:\s*var\(--border-soft\)/,
     );
-    // The control columns inside the identity block stay undivided: only the
-    // catalog number's right edge closes the block.
+    // Every pinned cell must not paint a divider of its own: the column
+    // hairlines come from the model's classes, and only the last pinned
+    // column adds the block's end marker.
     expect(styles).not.toMatch(/\.table-sticky-cell::after\s*\{/);
     expect(styles).not.toMatch(/\.table-sticky-lead/);
   });
@@ -626,6 +627,35 @@ describe("table styles", () => {
     expect(styles).toMatch(
       /\.align-center \.sort-button\s*\{\s*justify-content:\s*center/,
     );
+  });
+
+  // Columns flex with the viewport, so a wide window leaves a lot of air
+  // between a short value and the next column. A hairline on every field
+  // column keeps the grid legible; the drag handle shares the selection
+  // cell's control group, and the pinned block draws its own end divider.
+  test("hairlines divide every field column", () => {
+    const rules = styles.match(
+      /th:is\([\s\S]*?\)\s*,\s*td:is\([\s\S]*?\)\s*\{([^}]*)\}/,
+    );
+    expect(rules).not.toBeNull();
+    for (const key of [
+      "selection",
+      "id",
+      "thumbnail",
+      "denomination",
+      "issue_date",
+      "grading_company",
+      "grade",
+      "serial",
+      "tags",
+    ]) {
+      expect(rules[0]).toMatch(new RegExp(`\\.table-col-${key}\\b`));
+    }
+    // The drag handle is a control beside the checkbox, not a field.
+    expect(rules[0]).not.toMatch(/\.table-col-reorder\b/);
+    // Catalog number's right edge is the pinned block's own divider.
+    expect(rules[0]).not.toMatch(/\.table-col-catalog_number/);
+    expect(rules[1]).toMatch(/border-right:\s*1px solid var\(--border-soft\)/);
   });
 
   test("body rows are 46px at 14px text", () => {
