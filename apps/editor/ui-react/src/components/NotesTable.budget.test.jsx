@@ -178,48 +178,78 @@ beforeEach(() => {
 });
 
 describe("NotesTable render budget", () => {
-  test("typing in the filter field renders zero note rows", async () => {
-    getNotes.mockResolvedValue({ notes: manyNotes(60) });
-    const { container } = renderTable();
+  // The budget from the performance spec, written down so a regression fails
+  // here instead of being felt as a stutter: one cursor move paints at most two
+  // note rows, a filter draft keystroke paints none, and a scroll tick commits
+  // the table body exactly once. Break any of these and this block goes red.
+  describe("performance guard rail", () => {
+    test("a cursor move renders at most two note rows", async () => {
+      getNotes.mockResolvedValue({ notes: manyNotes(60) });
+      const { container } = renderTable();
 
-    await screen.findByText("NOTE-1");
-    setScrollMetrics(scrollerFor(container));
-    await flushFrame();
+      await screen.findByText("NOTE-1");
+      setScrollMetrics(scrollerFor(container));
+      await flushFrame();
 
-    const user = userEvent.setup();
-    await chooseFilterField(user, "Denomination");
+      const user = userEvent.setup();
+      resetNoteRowRenders();
+      virtualizerStats.measureElementCalls = 0;
 
-    resetNoteRowRenders();
-    await user.type(
-      screen.getByRole("searchbox", { name: "Filter Denomination" }),
-      "NOTE-1",
-    );
+      await user.keyboard("{ArrowDown}");
 
-    expect(noteRowRenderCount()).toBe(0);
-  });
+      // Moving the highlight from one note to the next changes the two rows
+      // that carry it; every other row keeps its props and does not render.
+      expect(noteRowRenderCount()).toBeLessThanOrEqual(2);
+      expect(noteRowRenderCount()).toBeGreaterThan(0);
+      // Stable row refs mean no detach/attach cycle per commit.
+      expect(virtualizerStats.measureElementCalls).toBe(0);
+    });
 
-  test("a scroll tick renders only the rows that entered the window, once", async () => {
-    getNotes.mockResolvedValue({ notes: manyNotes(60) });
-    const { container } = renderTable();
+    test("a filter keystroke renders no note row", async () => {
+      getNotes.mockResolvedValue({ notes: manyNotes(60) });
+      const { container } = renderTable();
 
-    await screen.findByText("NOTE-1");
+      await screen.findByText("NOTE-1");
+      setScrollMetrics(scrollerFor(container));
+      await flushFrame();
 
-    const scroller = scrollerFor(container);
-    setScrollMetrics(scroller);
-    await flushFrame();
+      const user = userEvent.setup();
+      await chooseFilterField(user, "Denomination");
 
-    resetNoteRowRenders();
-    virtualizerStats.renders = 0;
+      resetNoteRowRenders();
+      await user.type(
+        screen.getByRole("searchbox", { name: "Filter Denomination" }),
+        "NOTE-1",
+      );
 
-    await scrollBy(scroller, 2 * rowHeight);
+      // The draft lives in the filter bar, so the table body never sees the
+      // keystroke.
+      expect(noteRowRenderCount()).toBe(0);
+    });
 
-    // Two rows scrolled out at the top, two entered at the bottom; the rows
-    // that stayed in the window did not re-render.
-    expect(noteRowRenderCount()).toBeLessThanOrEqual(2);
-    expect(noteRowRenderCount()).toBeGreaterThan(0);
-    // One table commit per wheel tick: the custom scrollbar keeps its metrics
-    // to itself.
-    expect(virtualizerStats.renders).toBe(1);
+    test("a scroll tick commits the table body once", async () => {
+      getNotes.mockResolvedValue({ notes: manyNotes(60) });
+      const { container } = renderTable();
+
+      await screen.findByText("NOTE-1");
+
+      const scroller = scrollerFor(container);
+      setScrollMetrics(scroller);
+      await flushFrame();
+
+      resetNoteRowRenders();
+      virtualizerStats.renders = 0;
+
+      await scrollBy(scroller, 2 * rowHeight);
+
+      // Two rows scrolled out at the top, two entered at the bottom; the rows
+      // that stayed in the window did not re-render.
+      expect(noteRowRenderCount()).toBeLessThanOrEqual(2);
+      expect(noteRowRenderCount()).toBeGreaterThan(0);
+      // One table commit per wheel tick: the custom scrollbar keeps its metrics
+      // to itself.
+      expect(virtualizerStats.renders).toBe(1);
+    });
   });
 
   test("committing a filter renders each visible row once", async () => {
@@ -381,26 +411,6 @@ describe("NotesTable render budget", () => {
     // Only the bottom two rows are new DOM; the rest are moved into place by
     // React without creating elements again.
     expect(addedRows.length).toBeLessThanOrEqual(2);
-  });
-
-  test("moving the keyboard cursor renders at most two rows", async () => {
-    getNotes.mockResolvedValue({ notes: manyNotes(60) });
-    const { container } = renderTable();
-
-    await screen.findByText("NOTE-1");
-    setScrollMetrics(scrollerFor(container));
-    await flushFrame();
-
-    const user = userEvent.setup();
-    resetNoteRowRenders();
-    virtualizerStats.measureElementCalls = 0;
-
-    await user.keyboard("{ArrowDown}");
-    await user.keyboard("{ArrowDown}");
-
-    expect(noteRowRenderCount()).toBeLessThanOrEqual(4);
-    // Stable row refs mean no detach/attach cycle per commit.
-    expect(virtualizerStats.measureElementCalls).toBe(0);
   });
 
   test("ticking a checkbox renders one row", async () => {
