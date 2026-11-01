@@ -335,20 +335,20 @@ describe("NotesTable columns", () => {
     await user.click(columnCheckbox("Serial"));
 
     await waitFor(() => {
-      const savedColumns = JSON.parse(
-        window.localStorage.getItem("noteharbor.notesTableColumns.1"),
+      const savedState = JSON.parse(
+        window.localStorage.getItem("noteharbor.notesTableState.1"),
       );
-      expect(savedColumns).not.toContain("serial");
+      expect(savedState.visibleColumnKeys).not.toContain("serial");
     });
 
-    // The global view state keeps its existing shape: columns do not join it.
+    // Sort and columns share one per-collection payload; nothing else joins it.
     const savedState = JSON.parse(
-      window.localStorage.getItem("noteharbor.notesTableState"),
+      window.localStorage.getItem("noteharbor.notesTableState.1"),
     );
     expect(Object.keys(savedState).sort()).toEqual([
-      "filters",
       "sortDirection",
       "sortKey",
+      "visibleColumnKeys",
     ]);
 
     unmount();
@@ -378,12 +378,18 @@ describe("NotesTable columns", () => {
     await screen.findByRole("dialog", { name: "Visible columns" });
     await user.click(columnCheckbox("Date"));
     await waitFor(() => {
-      const savedColumns = JSON.parse(
-        window.localStorage.getItem("noteharbor.notesTableColumns.2"),
+      const savedState = JSON.parse(
+        window.localStorage.getItem("noteharbor.notesTableState.2"),
       );
-      expect(savedColumns).not.toContain("issue_date");
-      expect(savedColumns).toContain("serial");
+      expect(savedState.visibleColumnKeys).not.toContain("issue_date");
+      expect(savedState.visibleColumnKeys).toContain("serial");
     });
+
+    expect(
+      JSON.parse(
+        window.localStorage.getItem("noteharbor.notesTableState.1"),
+      ).visibleColumnKeys,
+    ).not.toContain("serial");
 
     rerender(tableScreen(1));
 
@@ -395,6 +401,41 @@ describe("NotesTable columns", () => {
     expect(
       screen.getByRole("columnheader", { name: "DATE" }),
     ).toBeInTheDocument();
+  });
+
+  test("sort is saved per collection", async () => {
+    const { rerender } = renderTable(1);
+
+    await screen.findByText("AAAA");
+    const user = userEvent.setup();
+    const header = (name) => screen.findByRole("columnheader", { name });
+
+    await user.click(screen.getByRole("button", { name: "DENOMINATION" }));
+    await user.click(screen.getByRole("button", { name: "DENOMINATION" }));
+    expect(await header("DENOMINATION")).toHaveAttribute(
+      "aria-sort",
+      "descending",
+    );
+
+    await waitFor(() => {
+      const savedState = JSON.parse(
+        window.localStorage.getItem("noteharbor.notesTableState.1"),
+      );
+      expect(savedState.sortKey).toBe("denomination");
+      expect(savedState.sortDirection).toBe("desc");
+    });
+
+    rerender(tableScreen(2));
+
+    expect(await header(/^#/)).toHaveAttribute("aria-sort", "ascending");
+    expect(await header("DENOMINATION")).toHaveAttribute("aria-sort", "none");
+
+    rerender(tableScreen(1));
+
+    expect(await header("DENOMINATION")).toHaveAttribute(
+      "aria-sort",
+      "descending",
+    );
   });
 
   test("clicking outside or scrolling closes the picker", async () => {
@@ -441,7 +482,7 @@ describe("NotesTable columns", () => {
     expect(button).toHaveAttribute("aria-expanded", "false");
   });
 
-  test("Reset view restores every column", async () => {
+  test("Reset view leaves the column choice alone", async () => {
     renderTable();
 
     await screen.findByText("AAAA");
@@ -449,14 +490,22 @@ describe("NotesTable columns", () => {
     await user.click(columnCheckbox("Serial"));
     await user.keyboard("{Escape}");
 
+    // Columns are structure, so hiding one is not a view reset on its own.
+    expect(
+      screen.queryByRole("button", { name: "Reset view" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "COMPANY" }));
     const reset = await screen.findByRole("button", {
       name: "Reset view",
     });
     await user.click(reset);
 
     expect(
-      await screen.findByRole("columnheader", { name: "SERIAL" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("SER-1")).toBeInTheDocument();
+      screen.queryByRole("columnheader", { name: "SERIAL" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("columnheader", { name: /^#/ }),
+    ).toHaveAttribute("aria-sort", "ascending");
   });
 });

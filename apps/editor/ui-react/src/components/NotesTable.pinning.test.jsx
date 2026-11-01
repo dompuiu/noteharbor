@@ -145,8 +145,12 @@ describe("NotesTable pinned identity columns", () => {
 
   test("keeps the control widths when tags is hidden", async () => {
     window.localStorage.setItem(
-      "noteharbor.notesTableColumns.1",
-      JSON.stringify(["id", "denomination", "serial"]),
+      "noteharbor.notesTableState.1",
+      JSON.stringify({
+        sortKey: "id",
+        sortDirection: "asc",
+        visibleColumnKeys: ["id", "denomination", "serial"],
+      }),
     );
 
     const { container } = renderTable();

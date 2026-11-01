@@ -120,4 +120,52 @@ describe("NotesTable collection switch scroll reset", () => {
     // rows.
     expect(scrollToOffsetMock).toHaveBeenCalledWith(0);
   });
+
+  test("a deleted collection drops its saved table structure", async () => {
+    const savedStructure = JSON.stringify({
+      sortKey: "id",
+      sortDirection: "asc",
+      visibleColumnKeys: ["id", "denomination"],
+    });
+    window.localStorage.setItem(
+      "noteharbor.notesTableState.1",
+      savedStructure,
+    );
+    window.localStorage.setItem(
+      "noteharbor.notesTableState.2",
+      savedStructure,
+    );
+
+    const collections = [
+      { id: 1, is_default: 1, name: "First" },
+      { id: 2, is_default: 0, name: "Second" },
+    ];
+    const tableFor = (collectionIds) => (
+      <MemoryRouter>
+        <NotesTable
+          collection={collections[0]}
+          collectionId={1}
+          collections={collections.filter((collection) =>
+            collectionIds.includes(collection.id),
+          )}
+          collectionsError=""
+          loadingCollections={false}
+        />
+      </MemoryRouter>
+    );
+
+    const { rerender } = render(tableFor([1, 2]));
+    await screen.findByText("C1-N101");
+
+    rerender(tableFor([1]));
+
+    await waitFor(() => {
+      expect(
+        window.localStorage.getItem("noteharbor.notesTableState.2"),
+      ).toBeNull();
+    });
+    expect(
+      window.localStorage.getItem("noteharbor.notesTableState.1"),
+    ).not.toBeNull();
+  });
 });

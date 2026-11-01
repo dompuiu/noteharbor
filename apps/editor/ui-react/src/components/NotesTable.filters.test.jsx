@@ -386,4 +386,56 @@ describe("NotesTable filters", () => {
     expect(await filtersToggle()).toHaveAttribute("aria-expanded", "false");
     await screen.findByText("BBBB");
   });
+
+  test("filters are never written to saved table state", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = await openFilters();
+    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
+
+    await waitFor(() => {
+      expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
+    });
+
+    // Filtering alone is not a structural change, so nothing is saved yet.
+    expect(
+      window.localStorage.getItem("noteharbor.notesTableState.1"),
+    ).toBeNull();
+
+    // A structural change saves the payload, and it still carries no filters.
+    await user.click(screen.getByRole("button", { name: "DENOMINATION" }));
+
+    await waitFor(() => {
+      const savedState = JSON.parse(
+        window.localStorage.getItem("noteharbor.notesTableState.1"),
+      );
+      expect(Object.keys(savedState).sort()).toEqual([
+        "sortDirection",
+        "sortKey",
+        "visibleColumnKeys",
+      ]);
+    });
+    expect(
+      window.localStorage.getItem("noteharbor.notesTableState.1"),
+    ).not.toContain("PMG");
+  });
+
+  test("a saved filter does not come back on a reload", async () => {
+    window.localStorage.setItem(
+      "noteharbor.notesTableState.1",
+      JSON.stringify({
+        filters: { grading_company: "PMG" },
+        sortKey: "id",
+        sortDirection: "asc",
+        visibleColumnKeys: ["id", "denomination"],
+      }),
+    );
+
+    renderTable();
+
+    await screen.findByText("AAAA");
+    expect(screen.getByText("BBBB")).toBeInTheDocument();
+    expect(screen.queryByLabelText("Filter Company")).not.toBeInTheDocument();
+  });
 });

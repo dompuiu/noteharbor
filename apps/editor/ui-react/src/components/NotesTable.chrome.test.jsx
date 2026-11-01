@@ -275,12 +275,6 @@ describe("NotesTable chrome", () => {
         );
       },
     ],
-    [
-      "a hidden column",
-      async (user) => {
-        await hideSerialColumn(user);
-      },
-    ],
   ])("Reset view appears after %s", async (_label, change) => {
     renderTable();
 
@@ -295,7 +289,7 @@ describe("NotesTable chrome", () => {
     ).toBeInTheDocument();
   });
 
-  test("Reset view clears the query, filters, sort, selection and columns in one click", async () => {
+  test("Reset view clears the query, filters, sort and selection but keeps the columns", async () => {
     renderTable();
 
     await screen.findByText("AAAA");
@@ -330,10 +324,11 @@ describe("NotesTable chrome", () => {
     expect(
       screen.queryByRole("region", { name: "Selection actions" }),
     ).not.toBeInTheDocument();
+    // Columns are structure, not view state: Reset view leaves them alone.
     expect(
-      await screen.findByRole("columnheader", { name: "SERIAL" }),
-    ).toBeInTheDocument();
-    expect(screen.getByText("SER-1")).toBeInTheDocument();
+      screen.queryByRole("columnheader", { name: "SERIAL" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("SER-1")).not.toBeInTheDocument();
     expect(resetViewButton()).not.toBeInTheDocument();
   });
 

@@ -28,6 +28,14 @@ import {
 } from "../lib/editableElement.js";
 import { isEmptyLibrary } from "../lib/libraryState.js";
 import {
+  clearLegacyTableState,
+  defaultTableState,
+  keepsADataColumn,
+  loadTableState,
+  pruneTableStates,
+  saveTableState,
+} from "../lib/notesTableState.js";
+import {
   shouldHandOffToFilters,
   useFilterFocusMemory,
 } from "../lib/filterFocusMemory.js";
@@ -69,8 +77,6 @@ export function HomeHero() {
   return null;
 }
 
-const tableStateStorageKey = "noteharbor.notesTableState";
-const tableColumnsStorageKeyPrefix = "noteharbor.notesTableColumns";
 const rowHeightEstimate = 46;
 // Mirrors the table's CSS min-width and the trailing scrollbar-gutter column.
 const minTableWidth = 1200;
@@ -530,88 +536,29 @@ const MultiValueFilterCombobox = forwardRef(function MultiValueFilterCombobox(
   );
 });
 
-function loadSavedTableState() {
-  if (typeof window === "undefined") {
-    return null;
+// A slideshow URL that carries sort context owns the sort for the render it
+// opens on; a plain visit uses the collection's saved structure.
+function initialTableView(collectionId, route) {
+  const savedState = loadTableState(collectionId);
+
+  if (route?.kind !== "slideshow") {
+    return savedState;
   }
 
-  try {
-    const rawValue = window.localStorage.getItem(tableStateStorageKey);
+  const routeSortKey = route.slideshowSortKey;
+  const routeSortDirection = route.slideshowSortDirection;
 
-    if (!rawValue) {
-      return null;
-    }
-
-    const parsedValue = JSON.parse(rawValue);
-    const nextFilters =
-      parsedValue.filters && typeof parsedValue.filters === "object"
-        ? Object.fromEntries(
-            Object.entries(parsedValue.filters)
-              .filter(([key]) => filterColumnKeys.includes(key))
-              .map(([key, value]) => [key, String(value ?? "")]),
-          )
-        : {};
-    const nextSortKey = validSortKeys.has(parsedValue.sortKey)
-      ? parsedValue.sortKey
-      : defaultSortKey;
-    const nextSortDirection =
-      parsedValue.sortDirection === "desc" ? "desc" : "asc";
-
-    return {
-      filters: nextFilters,
-      sortKey: nextSortKey,
-      sortDirection: nextSortDirection,
-    };
-  } catch {
-    window.localStorage.removeItem(tableStateStorageKey);
-    return null;
-  }
-}
-
-function columnsStateStorageKey(collectionId) {
-  return `${tableColumnsStorageKeyPrefix}.${collectionId}`;
-}
-
-function defaultVisibleColumnKeys() {
-  return [...hideableColumnKeys];
-}
-
-// Columns are saved per collection, unlike filters/sort/selection which keep
-// the single global table-state key. A collection with no saved choice shows
-// every column; a saved choice that would leave no field column is treated as
-// corrupt and falls back to all of them.
-function loadSavedColumnKeys(collectionId) {
-  if (!Number.isInteger(collectionId) || typeof window === "undefined") {
-    return defaultVisibleColumnKeys();
-  }
-
-  const storageKey = columnsStateStorageKey(collectionId);
-
-  try {
-    const rawValue = window.localStorage.getItem(storageKey);
-
-    if (!rawValue) {
-      return defaultVisibleColumnKeys();
-    }
-
-    const parsedValue = JSON.parse(rawValue);
-
-    if (!Array.isArray(parsedValue)) {
-      return defaultVisibleColumnKeys();
-    }
-
-    const savedKeys = hideableColumnKeys.filter((key) =>
-      parsedValue.includes(key),
-    );
-    const keepsADataColumn = savedKeys.some(
-      (key) => getTableColumn(key)?.kind === "data",
-    );
-
-    return keepsADataColumn ? savedKeys : defaultVisibleColumnKeys();
-  } catch {
-    window.localStorage.removeItem(storageKey);
-    return defaultVisibleColumnKeys();
-  }
+  return {
+    ...savedState,
+    sortKey:
+      routeSortKey && validSortKeys.has(routeSortKey)
+        ? routeSortKey
+        : savedState.sortKey,
+    sortDirection:
+      routeSortDirection === "asc" || routeSortDirection === "desc"
+        ? routeSortDirection
+        : savedState.sortDirection,
+  };
 }
 
 function valueToString(note, key) {
@@ -1141,7 +1088,6 @@ function NotesTable({
   canSaveCollectionEdit = false,
   collectionEditDialog = null,
 }) {
-  const initialTableStateRef = useRef(undefined);
   const initialRouteRef = useRef(
     typeof window === "undefined"
       ? emptyTableRoute()
@@ -1225,9 +1171,41 @@ function NotesTable({
   const location = useLocation();
   const navigate = useNavigate();
 
-  if (initialTableStateRef.current === undefined) {
-    initialTableStateRef.current = loadSavedTableState();
+  // Table structure — sort and visible columns — is one saved, per-collection
+  // preference. Filters, search and selection are not: they are seeded from a
+  // slideshow URL when it carries context and otherwise start empty.
+  const [tableView, setTableView] = useState(() =>
+    initialTableView(collectionId, initialRouteRef.current),
+  );
+  const [tableViewCollectionId, setTableViewCollectionId] =
+    useState(collectionId);
+  // The payload the table is currently showing, so the save effect can tell a
+  // user change from a collection switch or the initial load.
+  const savedTableViewRef = useRef({ collectionId, tableView });
+
+  // A collection switch swaps in that collection's saved structure during the
+  // same render, so no commit ever paints the previous collection's sort or
+  // columns and the save effect cannot write them under the new id.
+  if (tableViewCollectionId !== collectionId) {
+    setTableViewCollectionId(collectionId);
+    setTableView(loadTableState(collectionId));
   }
+
+  const { sortDirection, sortKey, visibleColumnKeys } = tableView;
+
+  useEffect(() => {
+    // Drops saved settings from before the per-collection table state.
+    clearLegacyTableState();
+  }, []);
+
+  useEffect(() => {
+    // A deleted collection leaves nobody to read its saved table structure.
+    if (loadingCollections || collectionsError || !Array.isArray(collections)) {
+      return;
+    }
+
+    pruneTableStates(collections.map((collection) => collection.id));
+  }, [collections, collectionsError, loadingCollections]);
 
   const [notes, setNotes] = useState([]);
   // When landing directly on a slideshow URL carrying filter+sort context,
@@ -1240,22 +1218,12 @@ function NotesTable({
         return { ...routeFilters };
       }
     }
-    return initialTableStateRef.current?.filters ?? {};
+    return {};
   });
   // The filter row is on demand: hidden by default, opened from the toolbar,
   // and force-opened whenever a column filter has a value so a filtered view
   // never hides the reason rows are missing. Not persisted.
   const [filtersOpen, setFiltersOpen] = useState(false);
-  // Which hideable columns the collector has chosen to show. Permanent
-  // columns are never in this set; a column absent here is hidden. Persisted
-  // per collection, unlike filters/sort/selection which share one global key.
-  const [visibleColumnKeys, setVisibleColumnKeys] = useState(() =>
-    loadSavedColumnKeys(collectionId),
-  );
-  // The collection whose saved column choice the current state belongs to.
-  // It lets the save effect skip the render that is still carrying the
-  // previous collection's columns while the restore effect catches up.
-  const columnsCollectionRef = useRef(collectionId);
   // The search query is view state only: it is not written to saved table
   // state, and it is cleared with the collection. A cold-opened slideshow URL
   // carries the query so closing the slideshow returns to the searched table.
@@ -1264,24 +1232,6 @@ function NotesTable({
       return initialRouteRef.current.slideshowQuery ?? "";
     }
     return "";
-  });
-  const [sortKey, setSortKey] = useState(() => {
-    if (initialRouteRef.current?.kind === "slideshow") {
-      const routeSortKey = initialRouteRef.current.slideshowSortKey;
-      if (routeSortKey && validSortKeys.has(routeSortKey)) {
-        return routeSortKey;
-      }
-    }
-    return initialTableStateRef.current?.sortKey ?? defaultSortKey;
-  });
-  const [sortDirection, setSortDirection] = useState(() => {
-    if (initialRouteRef.current?.kind === "slideshow") {
-      const routeSortDirection = initialRouteRef.current.slideshowSortDirection;
-      if (routeSortDirection === "asc" || routeSortDirection === "desc") {
-        return routeSortDirection;
-      }
-    }
-    return initialTableStateRef.current?.sortDirection ?? "asc";
   });
   // Selection is deliberately memory-only: restoring a stale bulk-delete
   // queue after a reload is worse than starting clean, and it leaves a bar
@@ -1429,14 +1379,6 @@ function NotesTable({
   // nav, slideshow) keeps using the urgent list.
   const deferredOrderedNotes = useDeferredValue(orderedNotes);
   const rowsPending = deferredOrderedNotes !== orderedNotes;
-  const defaultOrderedNotes = useMemo(
-    () =>
-      [...notes].sort((left, right) => {
-        const orderResult = noteOrderValue(left) - noteOrderValue(right);
-        return orderResult || left.id - right.id;
-      }),
-    [notes],
-  );
   const slideshowRouteActive = currentRoute.kind === "slideshow";
   const creatingNote = isCreateRoute(currentRoute);
   const editingNoteId = isEditNoteRoute(currentRoute)
@@ -1761,21 +1703,12 @@ function NotesTable({
 
     const hasSlideshowUrlContext = hasSlideshowContext(currentRoute);
     // A slideshow URL carrying filter+sort context rebuilds that exact list,
-    // so a new tab, refresh, or bookmark keeps the same 1/N position.
-    // Legacy URLs without context keep the previous behavior below.
-    let baseNotes = null;
-
-    if (hasSlideshowUrlContext) {
-      baseNotes = slideshowContextNotes ?? [];
-    } else {
-      const hasRestoredTableState = Boolean(initialTableStateRef.current);
-      baseNotes =
-        initialRouteRef.current.kind === "slideshow" &&
-        slideshowNotes.length === 0 &&
-        !hasRestoredTableState
-          ? defaultOrderedNotes
-          : orderedNotes;
-    }
+    // so a new tab, refresh, or bookmark keeps the same 1/N position. Without
+    // context the slideshow walks the table's own order: filters start empty
+    // and the sort is the collection's saved one.
+    const baseNotes = hasSlideshowUrlContext
+      ? (slideshowContextNotes ?? [])
+      : orderedNotes;
 
     const targetIndex = baseNotes.findIndex(
       (note) => note.id === currentRoute.noteId,
@@ -1837,7 +1770,6 @@ function NotesTable({
   }, [
     collectionId,
     currentRoute,
-    defaultOrderedNotes,
     loading,
     notes,
     orderedNotes,
@@ -1984,19 +1916,18 @@ function NotesTable({
     () => orderedNotes.some((note) => selectedIdSet.has(note.id)),
     [orderedNotes, selectedIdSet],
   );
-  const hasAllColumns = visibleColumnKeys.length === hideableColumnKeys.length;
-  const hasSavedTableState = useMemo(
+  // Reset view only undoes view state; the column choice is structure and
+  // stays put, so it must not offer a reset that would change nothing.
+  const canResetView = useMemo(
     () =>
       hasActiveFilters ||
       hasActiveQuery ||
-      !hasAllColumns ||
       sortKey !== defaultSortKey ||
       sortDirection !== "asc" ||
       selectedIds.length > 0,
     [
       hasActiveFilters,
       hasActiveQuery,
-      hasAllColumns,
       selectedIds,
       sortDirection,
       sortKey,
@@ -2022,30 +1953,21 @@ function NotesTable({
   }, [allVisibleSelected, someVisibleSelected]);
 
   useEffect(() => {
-    window.localStorage.setItem(
-      tableStateStorageKey,
-      JSON.stringify({ filters, sortKey, sortDirection }),
-    );
-  }, [filters, sortDirection, sortKey]);
+    const saved = savedTableViewRef.current;
+    const switchedCollection = saved.collectionId !== collectionId;
+    const unchanged = saved.tableView === tableView;
 
-  useEffect(() => {
-    if (!Number.isInteger(collectionId)) {
+    savedTableViewRef.current = { collectionId, tableView };
+
+    // The first load and a collection switch adopt what storage already says;
+    // only a user change is written back. That keeps a slideshow link's sort
+    // from rewriting the collection's saved one.
+    if (switchedCollection || unchanged) {
       return;
     }
 
-    // A collection switch restores that collection's own choice before the
-    // save below can write the previous collection's columns under the new id.
-    if (columnsCollectionRef.current !== collectionId) {
-      columnsCollectionRef.current = collectionId;
-      setVisibleColumnKeys(loadSavedColumnKeys(collectionId));
-      return;
-    }
-
-    window.localStorage.setItem(
-      columnsStateStorageKey(collectionId),
-      JSON.stringify(visibleColumnKeys),
-    );
-  }, [collectionId, visibleColumnKeys]);
+    saveTableState(collectionId, tableView);
+  }, [collectionId, tableView]);
 
   useEffect(() => {
     rowVirtualizer.scrollToOffset(0);
@@ -3195,9 +3117,14 @@ function NotesTable({
     setFilters({});
     setFiltersOpen(false);
     setQuery("");
-    setSortKey(defaultSortKey);
-    setSortDirection("asc");
-    setVisibleColumnKeys(defaultVisibleColumnKeys());
+    // Columns are structure, not view state: Reset view restores the default
+    // order but leaves the collector's column choice alone.
+    const defaults = defaultTableState();
+    setTableView((current) => ({
+      ...current,
+      sortKey: defaults.sortKey,
+      sortDirection: defaults.sortDirection,
+    }));
     if (showSelection) {
       setSelectedIds([]);
     }
@@ -3284,12 +3211,15 @@ function NotesTable({
 
   function toggleColumnVisibility(key) {
     if (!visibleColumnKeys.includes(key)) {
-      setVisibleColumnKeys(
-        hideableColumnKeys.filter(
-          (currentKey) =>
-            currentKey === key || visibleColumnKeys.includes(currentKey),
-        ),
+      const restoredColumns = hideableColumnKeys.filter(
+        (currentKey) =>
+          currentKey === key || visibleColumnKeys.includes(currentKey),
       );
+
+      setTableView((current) => ({
+        ...current,
+        visibleColumnKeys: restoredColumns,
+      }));
       return;
     }
 
@@ -3298,16 +3228,16 @@ function NotesTable({
     const remaining = visibleColumnKeys.filter(
       (currentKey) => currentKey !== key,
     );
-    const keepsADataColumn = remaining.some(
-      (currentKey) => getTableColumn(currentKey)?.kind === "data",
-    );
 
-    if (!keepsADataColumn) {
+    if (!keepsADataColumn(remaining)) {
       return;
     }
 
     // A hidden column must not keep hiding rows: drop its filter with it.
     clearColumnFilter(key);
+
+    let nextSortKey = sortKey;
+    let nextSortDirection = sortDirection;
 
     if (sortKey === key) {
       // The sorted column is about to disappear. Fall back to the first
@@ -3320,23 +3250,27 @@ function NotesTable({
         remainingVisible.find((column) => column.sortable) ??
         getTableColumn(defaultSortKey);
 
-      setSortKey(nextSortColumn?.key ?? defaultSortKey);
-      setSortDirection("asc");
+      nextSortKey = nextSortColumn?.key ?? defaultSortKey;
+      nextSortDirection = "asc";
     }
 
-    setVisibleColumnKeys(remaining);
+    setTableView((current) => ({
+      ...current,
+      sortKey: nextSortKey,
+      sortDirection: nextSortDirection,
+      visibleColumnKeys: remaining,
+    }));
   }
 
   function toggleSort(key) {
-    if (sortKey === key) {
-      setSortDirection((currentDirection) =>
-        currentDirection === "asc" ? "desc" : "asc",
-      );
-      return;
-    }
-
-    setSortKey(key);
-    setSortDirection("asc");
+    setTableView((current) => ({
+      ...current,
+      sortKey: key,
+      sortDirection:
+        current.sortKey === key && current.sortDirection === "asc"
+          ? "desc"
+          : "asc",
+    }));
   }
 
   function openSlideshow(startId) {
@@ -5089,7 +5023,7 @@ function NotesTable({
                 visibleColumnKeys={visibleColumnKeys}
               />
               <div className="table-reset-slot">
-                {hasSavedTableState ? (
+                {canResetView ? (
                   <button
                     className="button"
                     onClick={resetTableState}

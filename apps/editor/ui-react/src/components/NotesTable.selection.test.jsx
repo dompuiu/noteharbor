@@ -157,12 +157,12 @@ describe("NotesTable bulk bar", () => {
 
   test("a saved selection is not restored on a reload", async () => {
     window.localStorage.setItem(
-      "noteharbor.notesTableState",
+      "noteharbor.notesTableState.1",
       JSON.stringify({
-        filters: {},
         selectedIds: [1],
         sortKey: "id",
         sortDirection: "asc",
+        visibleColumnKeys: ["id", "denomination", "issue_date", "serial"],
       }),
     );
 

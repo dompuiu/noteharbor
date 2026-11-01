@@ -333,10 +333,10 @@ describe("NotesTable search", () => {
       expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
     });
 
-    // The query is view state only: it must never reach saved table state.
-    expect(window.localStorage.getItem("noteharbor.notesTableState")).not.toContain(
-      "2300",
-    );
+    // The query is view state only: searching writes no saved table state.
+    expect(
+      window.localStorage.getItem("noteharbor.notesTableState.1"),
+    ).toBeNull();
 
     rerender(
       <MemoryRouter initialEntries={["/catalog/collections/2/view"]}>
