@@ -4054,13 +4054,19 @@ th[aria-sort="descending"] .sort-chevron {
   cursor: text;
 }
 
-/* The value is its own target in the table filter, so it rings just its slice
-   — rounded on the left, square where it meets the cross — rather than the
-   whole chip. 2px, not the old hairline, and inset so it stays inside the
-   24px chip. `currentColor` keeps the negated (danger) chips red. */
-.table-filter-chip-value:focus-visible {
-  outline: 2px solid currentColor;
-  outline-offset: -2px;
+/* The value is what the filter chip is for, so focusing it — or the input it
+   opens — rings the whole chip with the app's normal 2px accent outline, set
+   2px off the border so the chip's own light frame stays visible inside it,
+   just like a focused tag in the table. The remove cross keeps its own ring. */
+.table-filter-chip:has(.table-filter-chip-value:focus-visible),
+.table-filter-chip:has(.table-filter-chip-input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The slice itself draws no second, inset ring. */
+.table-filter-chip .table-filter-chip-value:focus-visible {
+  outline: none;
 }
 
 .table-filter-chip--negated .table-filter-chip-value {

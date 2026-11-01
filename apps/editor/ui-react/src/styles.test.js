@@ -533,21 +533,27 @@ describe("table styles", () => {
     expect(ring).not.toBeNull();
   });
 
-  // The value slice and the cross are separate targets in the table filter, so
-  // each rings its own slice: a rounded 2px ring in the value's colour on the
-  // left, the danger ring on the cross. Both stay inside the 24px chip.
-  test("the chip value rings its own slice", () => {
+  // The value is what the filter chip is for, so editing it rings the whole
+  // chip: the same 2px accent outline, 2px off the border, that a focused tag
+  // in the table wears. The cross keeps its own danger ring.
+  test("editing a filter chip rings the whole chip", () => {
     const value = styles.match(/^\.table-filter-chip-value\s*\{([^}]*)\}/m);
     expect(value).not.toBeNull();
     expect(value[1]).toMatch(/height:\s*22px/);
     expect(value[1]).toMatch(/border-radius:\s*6px 0 0 6px/);
 
     const ring = styles.match(
-      /\.table-filter-chip-value:focus-visible\s*\{([^}]*)\}/,
+      /\.table-filter-chip:has\(\.table-filter-chip-value:focus-visible\),[^{]*\{([^}]*)\}/,
     );
     expect(ring).not.toBeNull();
-    expect(ring[1]).toMatch(/outline:\s*2px solid currentColor/);
-    expect(ring[1]).toMatch(/outline-offset:\s*-2px/);
+    expect(ring[0]).toMatch(/\.table-filter-chip-input:focus-visible/);
+    expect(ring[1]).toMatch(/outline:\s*2px solid var\(--accent\)/);
+    expect(ring[1]).toMatch(/outline-offset:\s*2px/);
+
+    // The slice itself draws no second, inset ring.
+    expect(styles).toMatch(
+      /\.table-filter-chip \.table-filter-chip-value:focus-visible\s*\{\s*outline:\s*none/,
+    );
   });
 
   // Tag suggestions float on their own surface, and the create arm is split
