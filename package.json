@@ -6,6 +6,8 @@
     "dev:editor:tauri": "pnpm --filter editor_desktop_tauri dev",
     "build:editor:tauri:windows": "pnpm --filter editor_desktop_tauri build:windows",
     "build:editor:tauri:linux": "pnpm --filter editor_desktop_tauri build:linux",
+    "build:editor:tauri:macos": "pnpm --filter editor_desktop_tauri build:macos",
+    "build:editor:tauri:macos": "pnpm --filter editor_desktop_tauri build:macos",
     "dev:viewer:flutter": "cd apps/viewer/flutter && flutter pub get && flutter run",
     "build:viewer:flutter:windows": "cd apps/viewer/flutter && flutter pub get && flutter build windows",
     "build:viewer:flutter:ios": "cd apps/viewer/flutter && flutter pub get && flutter build ios",

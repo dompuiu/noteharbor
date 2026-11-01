@@ -131,6 +131,18 @@ For Linux artifacts:
 pnpm build:editor:tauri:linux
 ```
 
+For macOS artifacts (`.app` and `.dmg`), build on macOS:
+
+```bash
+pnpm build:editor:tauri:macos
+```
+
+For macOS artifacts (`.app` and `.dmg`), build on macOS:
+
+```bash
+pnpm build:editor:tauri:macos
+```
+
 ### Run the Flutter viewer locally
 
 ```bash
