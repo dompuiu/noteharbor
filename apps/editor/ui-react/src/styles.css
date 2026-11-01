@@ -2972,12 +2972,12 @@ tbody td {
    muted like a row number. Scoped to body cells so the header keeps its own
    type treatment. */
 td.table-col-catalog_number {
-  font-weight: 700;
+  font-weight: 600;
 }
 
 td.table-col-denomination a {
   color: var(--text);
-  font-weight: 700;
+  font-weight: 600;
   text-decoration: none;
 }
 

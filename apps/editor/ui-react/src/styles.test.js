@@ -718,10 +718,10 @@ describe("table styles", () => {
 
   test("catalog and denomination read as strong text, serial gets tracking", () => {
     expect(styles).toMatch(
-      /td\.table-col-catalog_number\s*\{[^}]*font-weight:\s*700/,
+      /td\.table-col-catalog_number\s*\{[^}]*font-weight:\s*600/,
     );
     expect(styles).toMatch(
-      /td\.table-col-denomination a\s*\{[^}]*font-weight:\s*700;[^}]*text-decoration:\s*none/,
+      /td\.table-col-denomination a\s*\{[^}]*font-weight:\s*600;[^}]*text-decoration:\s*none/,
     );
     expect(styles).toMatch(
       /td\.table-col-denomination a:hover,[\s\S]*?text-decoration:\s*underline/,
