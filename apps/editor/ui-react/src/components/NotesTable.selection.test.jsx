@@ -247,6 +247,97 @@ describe("NotesTable bulk bar", () => {
     ).toBe(false);
   });
 
+  test("pressing `b` from the selection actions bar clears the selection", async () => {
+    const { container } = renderTable();
+    const user = userEvent.setup();
+    await screen.findByText("AAAA");
+
+    await user.click(screen.getByRole("checkbox", { name: "Select AAAA" }));
+    await user.click(screen.getByRole("checkbox", { name: "Select BBBB" }));
+
+    const bar = screen.getByRole("region", { name: "Selection actions" });
+    const deleteButton = within(bar).getByRole("button", { name: "Delete" });
+    deleteButton.focus();
+
+    await user.keyboard("{b}");
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("region", { name: "Selection actions" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(screen.getByRole("checkbox", { name: "Select AAAA" })).not.toBeChecked();
+    expect(screen.getByRole("checkbox", { name: "Select BBBB" })).not.toBeChecked();
+    expect(
+      rowsInOrder(container).some((row) =>
+        row.classList.contains("table-row-link--selected"),
+      ),
+    ).toBe(false);
+  });
+
+  test("pressing `b` in a text field keeps the selection", async () => {
+    renderTable();
+    const user = userEvent.setup();
+    await screen.findByText("AAAA");
+
+    await user.click(screen.getByRole("checkbox", { name: "Select AAAA" }));
+
+    const search = screen.getByRole("searchbox");
+    search.focus();
+    await user.keyboard("{b}");
+
+    expect(search).toHaveValue("b");
+    expect(
+      screen.getByRole("region", { name: "Selection actions" }),
+    ).toBeInTheDocument();
+  });
+
+  test("pressing `b` while the sidebar holds focus clears the selection", async () => {
+    renderTable();
+    const user = userEvent.setup();
+    await screen.findByText("AAAA");
+
+    await user.click(screen.getByRole("checkbox", { name: "Select AAAA" }));
+
+    const sidebar = document.createElement("nav");
+    sidebar.id = "app-sidebar";
+    sidebar.innerHTML = "<button type='button'>Banknotes</button>";
+    document.body.append(sidebar);
+    const railButton = sidebar.querySelector("button");
+    railButton.focus();
+
+    await user.keyboard("{b}");
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("region", { name: "Selection actions" }),
+      ).not.toBeInTheDocument();
+    });
+    sidebar.remove();
+  });
+
+  test("pressing `b` in a dialog keeps the selection", async () => {
+    renderTable();
+    const user = userEvent.setup();
+    await screen.findByText("AAAA");
+
+    await user.click(screen.getByRole("checkbox", { name: "Select AAAA" }));
+
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    dialog.innerHTML = "<button type='button'>Delete</button>";
+    document.body.append(dialog);
+    const confirm = dialog.querySelector("button");
+    confirm.focus();
+
+    await user.keyboard("{b}");
+
+    expect(
+      screen.getByRole("region", { name: "Selection actions" }),
+    ).toBeInTheDocument();
+    dialog.remove();
+  });
+
   test("the bar leaves the last row in the document", async () => {
     const { container } = renderTable();
     const user = userEvent.setup();

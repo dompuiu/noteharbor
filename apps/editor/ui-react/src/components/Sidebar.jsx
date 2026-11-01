@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useCollections } from "../lib/collections.jsx";
+import { ownsPrintableShortcut } from "../lib/editableElement.js";
 import { useShowcases } from "../lib/showcases.jsx";
 import { APP_VERSION } from "../lib/version.js";
 import {
@@ -22,14 +23,16 @@ import {
 // actions stage a draft row and open its edit canvas; nothing POSTs until
 // Save, and Cancel or leaving the route discards the draft.
 //
-// Keyboard model (matches the tables): with nothing focused — or with a note
-// row focused — "b" opens the rail and puts the cursor on the current option.
+// Keyboard model (matches the tables): "b" is global — from a row, the
+// selection bar, or any other control — and opens the rail with the cursor on
+// the current option. Text fields and modal surfaces keep the letter.
 // ↑/↓ and j/k move the cursor through every stop in DOM order — each group's
-// Reorder toggle, each row link/action, and the enabled Move up/down buttons while that group is in
-// reorder mode; Home/End jump; Enter/Space activates the stop (toggles
-// reorder, moves the row, or follows the option); Escape returns focus to the
-// page and collapses the rail. Tab cycles the stops like ↓, and Shift+Tab
-// like ↑, both wrapping off the ends, so the rail is left with Escape.
+// Reorder toggle, each row link/action, and the enabled Move up/down buttons
+// while that group is in reorder mode; Home/End jump; Enter/Space activates
+// the stop (toggles reorder, moves the row, or follows the option); Escape
+// returns focus to the page and collapses the rail. Tab cycles the stops like
+// ↓, and Shift+Tab like ↑, both wrapping off the ends, so the rail is left
+// with Escape.
 
 // Per-destination icons, lifted from the settled layout-D prototype.
 const ICONS = {
@@ -465,42 +468,14 @@ function Sidebar({ pageFocusRef }) {
         target instanceof Node && navRef.current?.contains(target);
 
       if (!inSidebar) {
-        // "b" opens the rail unless something else owns the keyboard. The
-        // tables keep their own keys, so bail when focus sits in an editable
-        // field or on a focusable control. "Inside a table" is matched via the
-        // <table> itself: the shell's inert `.table-focus-anchor`, where focus
-        // rests after Escape clears a row cursor, sits beside the <table>, so
-        // that empty-row state still reads as "nothing focused" and "b" opens
-        // the rail.
-        const active = document.activeElement;
-        const insideTableOutsideDialog =
-          active instanceof HTMLElement &&
-          Boolean(active.closest("table")) &&
-          !active.closest("[role='dialog']");
-        // A checkbox holds no text, so "b" would otherwise have nothing to
-        // type into: it opens the rail when the checkbox sits inside a table.
-        // Dialogs still own their keys.
-        const activeIsTableCheckbox =
-          insideTableOutsideDialog &&
-          active instanceof HTMLInputElement &&
-          active.type === "checkbox";
-        // A focused row is the table's keyboard cursor, not a control with a
-        // caret or an activation key. "b" must reach the rail whether the
-        // cursor sits on a row or the table is empty. Controls nested inside
-        // the row (buttons, links, fields) still own the keyboard.
-        const activeIsTableRow =
-          insideTableOutsideDialog &&
-          active.tagName === "TR" &&
-          active.hasAttribute("tabindex");
-        const ownsKeyboard =
-          active instanceof HTMLElement &&
-          !activeIsTableCheckbox &&
-          !activeIsTableRow &&
-          active.closest(
-            "input, textarea, select, [contenteditable], button, a, table, [role='dialog']",
-          );
-
-        if (!ownsKeyboard && event.key === "b") {
+        // "b" opens the rail from anywhere: table rows, the selection actions
+        // bar, buttons, links. Text-entry controls keep it for typing, and
+        // modal surfaces (dialogs, the Note editor, the Note slideshow) own
+        // their keys until dismissed.
+        if (
+          !ownsPrintableShortcut(document.activeElement) &&
+          event.key === "b"
+        ) {
           event.preventDefault();
           openCursor();
         }

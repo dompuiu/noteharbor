@@ -528,18 +528,18 @@ describe("Sidebar keyboard cursor", () => {
     expect(document.activeElement).toHaveTextContent("Archive");
   });
 
-  test("`b` does nothing while another control has focus", async () => {
+  test("`b` opens the rail from any focusable control", async () => {
     const user = userEvent.setup();
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
 
-    // Focus any real control outside the sidebar, then press "b".
+    // "b" is global: a focused button does not own the letter.
     const outside = document.createElement("button");
     document.body.append(outside);
     outside.focus();
     await user.keyboard("{b}");
 
-    expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
-    expect(document.activeElement).toBe(outside);
+    expect(container.querySelector(".sidebar-link--cursor")).not.toBeNull();
+    expect(document.activeElement).toHaveTextContent("Default");
     outside.remove();
   });
 
@@ -565,12 +565,12 @@ describe("Sidebar keyboard cursor", () => {
     shell.remove();
   });
 
-  test("`b` does nothing while a control inside a table row has focus", async () => {
+  test("`b` opens the rail from a control inside a table row", async () => {
     const user = userEvent.setup();
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
 
-    // A button inside a focused row still owns Space/Enter, so "b" must not
-    // yank focus out of it.
+    // The selection actions bar and a row's own actions button are focusable
+    // controls, but "b" is still global and reaches the rail.
     const shell = document.createElement("div");
     shell.className = "table-shell";
     shell.innerHTML =
@@ -581,9 +581,113 @@ describe("Sidebar keyboard cursor", () => {
 
     await user.keyboard("{b}");
 
+    expect(container.querySelector(".sidebar-link--cursor")).not.toBeNull();
+    expect(document.activeElement).toHaveTextContent("Default");
+    shell.remove();
+  });
+
+  test("`b` does nothing while a text field has focus", async () => {
+    const user = userEvent.setup();
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    // A text field needs the letter for typing, so it keeps "b" even though
+    // the shortcut is otherwise global.
+    const field = document.createElement("input");
+    field.type = "text";
+    document.body.append(field);
+    field.focus();
+    await user.keyboard("{b}");
+
+    expect(field).toHaveValue("b");
+    expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
+    field.remove();
+  });
+
+  test("`b` does nothing while a dialog has focus", async () => {
+    const user = userEvent.setup();
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    // Dialogs own their keys until dismissed.
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "dialog");
+    dialog.innerHTML = "<button type='button'>Confirm</button>";
+    document.body.append(dialog);
+    const button = dialog.querySelector("button");
+    button.focus();
+    await user.keyboard("{b}");
+
     expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
     expect(document.activeElement).toBe(button);
-    shell.remove();
+    dialog.remove();
+  });
+
+  test("`b` does nothing while an alert dialog has focus", async () => {
+    const user = userEvent.setup();
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    const dialog = document.createElement("div");
+    dialog.setAttribute("role", "alertdialog");
+    dialog.innerHTML = "<button type='button'>Cancel</button>";
+    document.body.append(dialog);
+    const button = dialog.querySelector("button");
+    button.focus();
+    await user.keyboard("{b}");
+
+    expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
+    expect(document.activeElement).toBe(button);
+    dialog.remove();
+  });
+
+  test("`b` does nothing inside the note editor overlay", async () => {
+    const user = userEvent.setup();
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    // The Note editor is a full-screen overlay, not a role="dialog", but it
+    // owns its keys until closed.
+    const overlay = document.createElement("section");
+    overlay.className = "edit-note-overlay";
+    overlay.innerHTML = "<button type='button'>Save</button>";
+    document.body.append(overlay);
+    const button = overlay.querySelector("button");
+    button.focus();
+    await user.keyboard("{b}");
+
+    expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
+    expect(document.activeElement).toBe(button);
+    overlay.remove();
+  });
+
+  test("`b` does nothing inside the note slideshow", async () => {
+    const user = userEvent.setup();
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    const slideshow = document.createElement("div");
+    slideshow.className = "slideshow-screen--overlay";
+    slideshow.innerHTML = "<button type='button'>Close</button>";
+    document.body.append(slideshow);
+    const button = slideshow.querySelector("button");
+    button.focus();
+    await user.keyboard("{b}");
+
+    expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
+    expect(document.activeElement).toBe(button);
+    slideshow.remove();
+  });
+
+  test("`b` opens the rail from a checkbox outside a table", async () => {
+    const user = userEvent.setup();
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    // A checkbox holds no text, so it keeps the global shortcut too.
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    document.body.append(checkbox);
+    checkbox.focus();
+    await user.keyboard("{b}");
+
+    expect(container.querySelector(".sidebar-link--cursor")).not.toBeNull();
+    expect(document.activeElement).toHaveTextContent("Default");
+    checkbox.remove();
   });
 
   test("`b` opens the rail when a table row checkbox has focus", async () => {

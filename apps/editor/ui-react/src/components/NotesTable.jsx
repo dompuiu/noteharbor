@@ -22,7 +22,10 @@ import {
   copyTextToClipboard,
   formatNoteAsTsvRow,
 } from "../lib/noteClipboard.js";
-import { isEditableElement } from "../lib/editableElement.js";
+import {
+  isEditableElement,
+  ownsPrintableShortcut,
+} from "../lib/editableElement.js";
 import { isEmptyLibrary } from "../lib/libraryState.js";
 import {
   shouldHandOffToFilters,
@@ -2736,6 +2739,21 @@ function NotesTable({
       const editable = !tableCheckboxFocused && isEditableElement(event.target);
       const tableKeysActive = !slideshowRouteActive && !editorOverlayOpen;
 
+      // "b" is the global sidebar shortcut. Entering the rail drops any
+      // pending table selection, even when the rail already holds focus.
+      // Text fields and modal surfaces keep the letter, matching the rail's
+      // own rule.
+      if (
+        event.key === "b" &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.altKey &&
+        !event.shiftKey &&
+        !ownsPrintableShortcut(event.target)
+      ) {
+        clearSelection();
+      }
+
       // The sidebar owns its keys while it holds focus. Bail before any of the
       // table's single-key handling so the rail's cursor and navigation win.
       if (
@@ -2997,6 +3015,7 @@ function NotesTable({
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [
     clearRowCursor,
+    clearSelection,
     collection,
     collectionId,
     creatingNote,
