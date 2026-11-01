@@ -2856,7 +2856,7 @@ td:is(
   border-right: 1px solid var(--border-soft);
 }
 
-/* Body density: 14px text in a 46px row. Vertical padding stays at 0: the
+/* Body density: 13.5px text in a 46px row. Vertical padding stays at 0: the
    30px row menu button plus 8px top and bottom would otherwise floor the row
    at 47px, and the prototype's compact rows have none. The virtualizer's
    estimate matches (rowHeightEstimate), and real measurements still win once
@@ -2866,7 +2866,7 @@ tbody td {
      in it with 7px above and below. */
   height: 46px;
   padding: 0 12px;
-  font-size: 14px;
+  font-size: 13.5px;
 }
 
 .table-empty-row td {
@@ -3211,7 +3211,7 @@ td.table-col-id {
 thead .table-sticky-cell {
   z-index: 5;
   /* Header cells keep the header surface; the body base above paints rows. */
-  background-color: var(--surface-2);
+  background-color: var(--surface-3);
 }
 
 /* The pinned block's end divider sits on the right edge of the catalog number
@@ -3346,24 +3346,25 @@ thead tr:first-child th {
   border-bottom-color: var(--border);
 }
 
-/* The Table screen's labels follow the prototype: heavy wide-tracked caps at
-   the smaller 0.72rem on the lighter surface, in a fixed 40px band, so the
-   header reads as a caption over the rows rather than a shaded block. No
-   text-align here: the column model's align-* classes own the header's
-   alignment, the same as the body cells. */
+/* The Table screen's labels follow the prototype: wide-tracked caps at 10px
+   on the darker surface-3 band, in a fixed 40px row, so the header reads as a
+   caption over the rows. The label tone is the prototype's muted brown
+   (#8a755a), not the darker accessible `--text-muted`. No text-align here: the
+   column model's align-* classes own the header's alignment, the same as the
+   body cells. */
 .table-shell thead {
-  background: var(--surface-2);
+  background: var(--surface-3);
 }
 
 .table-shell thead th {
   height: 40px;
   padding: 0 12px;
-  background: var(--surface-2);
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.06em;
+  background: var(--surface-3);
+  font-size: 0.625rem;
+  font-weight: 650;
+  letter-spacing: 0.075em;
   text-transform: uppercase;
-  color: var(--text-muted);
+  color: #8a755a;
   white-space: nowrap;
 }
 

@@ -341,13 +341,14 @@ describe("table styles", () => {
     expect(rule[1]).not.toMatch(/^\s*background(?:-color)?\s*:/m);
   });
 
-  test("label-row headers use heavy wide-tracked caps", () => {
+  test("label-row headers use wide-tracked caps", () => {
     const head = styles.match(/\.table-shell thead th\s*\{([^}]*)\}/);
     expect(head).not.toBeNull();
-    expect(head[1]).toMatch(/font-weight:\s*800/);
-    expect(head[1]).toMatch(/font-size:\s*0\.72rem/);
-    expect(head[1]).toMatch(/letter-spacing:\s*0\.06em/);
+    expect(head[1]).toMatch(/font-weight:\s*650/);
+    expect(head[1]).toMatch(/font-size:\s*0\.625rem/);
+    expect(head[1]).toMatch(/letter-spacing:\s*0\.075em/);
     expect(head[1]).toMatch(/text-transform:\s*uppercase/);
+    expect(head[1]).toMatch(/color:\s*#8a755a/);
   });
 
   // A single-class align-* rule is weaker than `.table-shell thead th`, so an
@@ -487,7 +488,7 @@ describe("table styles", () => {
     expect(head).not.toBeNull();
     expect(head[1]).toMatch(/z-index:\s*5/);
     // The header keeps its own surface instead of the row surface.
-    expect(head[1]).toMatch(/background-color:\s*var\(--surface-2\)/);
+    expect(head[1]).toMatch(/background-color:\s*var\(--surface-3\)/);
 
     const thead = styles.match(/\nthead\s*\{([^}]*)\}/);
     expect(thead).not.toBeNull();
@@ -495,10 +496,10 @@ describe("table styles", () => {
     expect(theadZ).toBeGreaterThan(2);
   });
 
-  test("the table header sits on the lighter prototype surface", () => {
+  test("the table header sits on the darker prototype surface", () => {
     const head = styles.match(/\.table-shell thead th\s*\{([^}]*)\}/);
     expect(head).not.toBeNull();
-    expect(head[1]).toMatch(/background:\s*var\(--surface-2\)/);
+    expect(head[1]).toMatch(/background:\s*var\(--surface-3\)/);
     expect(head[1]).toMatch(/height:\s*40px/);
     expect(head[1]).toMatch(/padding:\s*0\s+12px/);
   });
@@ -685,12 +686,12 @@ describe("table styles", () => {
     expect(rules[1]).toMatch(/border-right:\s*1px solid var\(--border-soft\)/);
   });
 
-  test("body rows are 46px at 14px text", () => {
+  test("body rows are 46px at 13.5px text", () => {
     const bodyCells = styles.match(/tbody td\s*\{([^}]*)\}/);
     expect(bodyCells).not.toBeNull();
     expect(bodyCells[1]).toMatch(/height:\s*46px/);
     expect(bodyCells[1]).toMatch(/padding:\s*0\s+12px/);
-    expect(bodyCells[1]).toMatch(/font-size:\s*14px/);
+    expect(bodyCells[1]).toMatch(/font-size:\s*13\.5px/);
   });
 
   test("the drop placeholder stays a thin gap, not a body row", () => {
