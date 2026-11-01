@@ -4090,9 +4090,17 @@ th[aria-sort="descending"] .sort-chevron {
   height: 8px;
 }
 
-.table-filter-chip-remove:hover {
+.table-filter-chip-remove:hover,
+.table-filter-chip-remove:focus-visible {
   background: var(--danger);
   color: var(--accent-ink);
+}
+
+/* The keyboard focus ring matches the hover fill, so tabbing to the cross
+   shows the same red target a mouse hover does. */
+.table-filter-chip-remove:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 1px;
 }
 
 /* The Columns control and its picker. The menu is portalled into <body> and

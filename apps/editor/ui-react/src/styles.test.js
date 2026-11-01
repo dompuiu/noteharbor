@@ -455,6 +455,22 @@ describe("table styles", () => {
     expect(cross[1]).toMatch(/width:\s*8px/);
   });
 
+  // Tabbing to a chip's remove cross should light it up exactly like a mouse
+  // hover: same red fill, with a ring so the focused target is still clear.
+  test("keyboard focus on a chip cross matches its hover state", () => {
+    const fill = styles.match(
+      /\.table-filter-chip-remove:hover,\s*\.table-filter-chip-remove:focus-visible\s*\{([^}]*)\}/,
+    );
+    expect(fill).not.toBeNull();
+    expect(fill[1]).toMatch(/background:\s*var\(--danger\)/);
+    expect(fill[1]).toMatch(/color:\s*var\(--accent-ink\)/);
+
+    const ring = styles.match(
+      /\.table-filter-chip-remove:focus-visible\s*\{\s*outline:\s*2px solid var\(--danger\)/,
+    );
+    expect(ring).not.toBeNull();
+  });
+
   // Tag suggestions float on their own surface, and the create arm is split
   // off by a dashed rule.
   test("tag suggestions keep the floating list look", () => {
