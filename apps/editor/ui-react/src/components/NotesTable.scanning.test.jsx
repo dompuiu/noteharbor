@@ -150,34 +150,44 @@ describe("NotesTable scanning", () => {
     expect(container.querySelector("thead").textContent).not.toMatch(/[▲▼]/);
   });
 
-  test("keeps the active column accent and a decorative chevron", async () => {
+  test("keeps the active column accent and a chevron on every sortable header", async () => {
     renderTable();
     await screen.findByText("AAAA");
 
     const orderHeader = headerCell("#");
     const denominationHeader = headerCell("Denomination");
-    const chevrons = () => document.querySelectorAll("thead .sort-chevron");
 
-    expect(chevrons()).toHaveLength(1);
+    // Every sortable header carries the decorative chevron; the stylesheet
+    // hides it until hover and holds it at full strength only on the sorted
+    // column, which is also the one wearing the active class.
     expect(orderHeader.querySelector(".sort-chevron")).not.toBeNull();
+    expect(denominationHeader.querySelector(".sort-chevron")).not.toBeNull();
     expect(
       within(orderHeader).getByRole("button").classList.contains(
         "sort-button--active",
       ),
     ).toBe(true);
-    expect(denominationHeader.querySelector(".sort-chevron")).toBeNull();
+    expect(
+      within(denominationHeader)
+        .getByRole("button")
+        .classList.contains("sort-button--active"),
+    ).toBe(false);
 
     const user = userEvent.setup();
     await user.click(within(denominationHeader).getByRole("button"));
 
-    expect(chevrons()).toHaveLength(1);
     expect(denominationHeader.querySelector(".sort-chevron")).not.toBeNull();
-    expect(orderHeader.querySelector(".sort-chevron")).toBeNull();
+    expect(orderHeader.querySelector(".sort-chevron")).not.toBeNull();
     expect(
-      within(denominationHeader).getByRole("button").classList.contains(
+      within(denominationHeader)
+        .getByRole("button")
+        .classList.contains("sort-button--active"),
+    ).toBe(true);
+    expect(
+      within(orderHeader).getByRole("button").classList.contains(
         "sort-button--active",
       ),
-    ).toBe(true);
+    ).toBe(false);
   });
 
   test("aligns text left and the display order right", async () => {

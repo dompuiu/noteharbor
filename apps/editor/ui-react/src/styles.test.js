@@ -261,13 +261,22 @@ describe("table styles", () => {
     );
   });
 
-  test("sort buttons span their header cell width", () => {
-    expect(styles).toMatch(/\.sort-button\s*\{[^}]*width:\s*100%/);
+  // The prototype's sort control sits on the label, not on the whole column
+  // head: it hugs the text and is pulled 6px left so the label still lines up
+  // with the cell padding.
+  test("sort buttons hug their label instead of filling the cell", () => {
+    const button = styles.match(/\.sort-button\s*\{([^}]*)\}/);
+    expect(button).not.toBeNull();
+    expect(button[1]).toMatch(/display:\s*inline-flex/);
+    expect(button[1]).not.toMatch(/width:\s*100%/);
+    expect(button[1]).toMatch(/margin-left:\s*-6px/);
     expect(styles).not.toMatch(/th:has\(\.sort-button\)/);
   });
 
   test("sort bubbles leave breathing room around the label", () => {
-    expect(styles).toMatch(/\.sort-button\s*\{[^}]*padding:\s*2px 8px/);
+    expect(styles).toMatch(
+      /\.sort-button\s*\{[^}]*padding:\s*4px 6px[^}]*border-radius:\s*7px/,
+    );
   });
 
   test("the sorted column stands out in accent-strong", () => {
@@ -333,9 +342,27 @@ describe("table styles", () => {
   });
 
   test("label-row headers use heavy wide-tracked caps", () => {
-    expect(styles).toMatch(
-      /thead tr:first-child th\s*\{[^}]*font-weight:\s*800/,
-    );
+    const head = styles.match(/\.table-shell thead th\s*\{([^}]*)\}/);
+    expect(head).not.toBeNull();
+    expect(head[1]).toMatch(/font-weight:\s*800/);
+    expect(head[1]).toMatch(/font-size:\s*0\.72rem/);
+    expect(head[1]).toMatch(/letter-spacing:\s*0\.06em/);
+    expect(head[1]).toMatch(/text-transform:\s*uppercase/);
+  });
+
+  // A single-class align-* rule is weaker than `.table-shell thead th`, so an
+  // explicit text-align here would silently left-align the right-aligned `#`
+  // header and the centred thumbnail header. The same goes for tracking: the
+  // older first-child rule outranks the band, so it must not declare any.
+  test("the header band leaves alignment and tracking to their owners", () => {
+    const head = styles.match(/\.table-shell thead th\s*\{([^}]*)\}/);
+    expect(head).not.toBeNull();
+    expect(head[1]).not.toMatch(/text-align:/);
+
+    const firstChild = styles.match(/thead tr:first-child th\s*\{([^}]*)\}/);
+    expect(firstChild).not.toBeNull();
+    expect(firstChild[1]).not.toMatch(/letter-spacing:/);
+    expect(firstChild[1]).not.toMatch(/font-weight:/);
   });
 
   // Active filters stay legible without opening the row: the chip fill and
@@ -460,12 +487,20 @@ describe("table styles", () => {
     expect(head).not.toBeNull();
     expect(head[1]).toMatch(/z-index:\s*5/);
     // The header keeps its own surface instead of the row surface.
-    expect(head[1]).toMatch(/background-color:\s*var\(--surface-3\)/);
+    expect(head[1]).toMatch(/background-color:\s*var\(--surface-2\)/);
 
     const thead = styles.match(/\nthead\s*\{([^}]*)\}/);
     expect(thead).not.toBeNull();
     const theadZ = Number(thead[1].match(/z-index:\s*(\d+)/)?.[1]);
     expect(theadZ).toBeGreaterThan(2);
+  });
+
+  test("the table header sits on the lighter prototype surface", () => {
+    const head = styles.match(/\.table-shell thead th\s*\{([^}]*)\}/);
+    expect(head).not.toBeNull();
+    expect(head[1]).toMatch(/background:\s*var\(--surface-2\)/);
+    expect(head[1]).toMatch(/height:\s*40px/);
+    expect(head[1]).toMatch(/padding:\s*0\s+12px/);
   });
 
   // The thumbnail bubble is absolutely positioned inside the pinned thumbnail
@@ -612,11 +647,10 @@ describe("table styles", () => {
     expect(styles).toMatch(/\.align-left\s*\{\s*text-align:\s*left/);
     expect(styles).toMatch(/\.align-right\s*\{\s*text-align:\s*right/);
     expect(styles).toMatch(/\.align-center\s*\{\s*text-align:\s*center/);
+    // The sort control hugs its label, so the column's alignment is carried by
+    // the cell's text-align plus a compensating pull on the label's own edge.
     expect(styles).toMatch(
-      /\.align-right \.sort-button\s*\{\s*justify-content:\s*flex-end/,
-    );
-    expect(styles).toMatch(
-      /\.align-center \.sort-button\s*\{\s*justify-content:\s*center/,
+      /\.align-right \.sort-button\s*\{\s*margin-right:\s*-6px;\s*margin-left:\s*0/,
     );
   });
 
@@ -715,10 +749,18 @@ describe("table styles", () => {
     expect(more[1]).toMatch(/color:\s*var\(--text-muted\)/);
   });
 
-  test("the active sort header draws a chevron that flips on descending", () => {
+  test("the chevron appears on hover and marks the sorted direction", () => {
     const chevron = styles.match(/\.sort-chevron\s*\{([^}]*)\}/);
     expect(chevron).not.toBeNull();
     expect(chevron[1]).toMatch(/flex:\s*0\s+0\s+auto/);
+    // Hidden at rest so every sortable header can carry one.
+    expect(chevron[1]).toMatch(/opacity:\s*0/);
+    expect(styles).toMatch(
+      /\.sort-button:hover\s+\.sort-chevron\s*\{\s*opacity:\s*0\.45/,
+    );
+    expect(styles).toMatch(
+      /\.sort-button--active\s+\.sort-chevron\s*\{\s*opacity:\s*1/,
+    );
     expect(styles).toMatch(
       /th\[aria-sort="descending"\]\s+\.sort-chevron\s*\{[^}]*transform:\s*rotate\(180deg\)/,
     );

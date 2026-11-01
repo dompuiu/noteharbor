@@ -3211,7 +3211,7 @@ td.table-col-id {
 thead .table-sticky-cell {
   z-index: 5;
   /* Header cells keep the header surface; the body base above paints rows. */
-  background-color: var(--surface-3);
+  background-color: var(--surface-2);
 }
 
 /* The pinned block's end divider sits on the right edge of the catalog number
@@ -3328,23 +3328,43 @@ thead {
      context. */
   z-index: 4;
   isolation: isolate;
-  /* No shadow below the header: the second header row's own bottom border
-     is the divider, and any strip painted here would cover the top ring of
-     a focused first row sitting flush beneath it. */
+  /* No shadow below the header: the header row's own bottom border is the
+     divider, and any strip painted here would cover the top ring of a
+     focused first row sitting flush beneath it. */
 }
 
 thead th {
   background: var(--surface-3);
   font-size: 0.76rem;
+  font-weight: 800;
   text-transform: uppercase;
-  letter-spacing: 0.04em;
+  letter-spacing: 0.06em;
   color: var(--text-muted);
 }
 
 thead tr:first-child th {
   border-bottom-color: var(--border);
+}
+
+/* The Table screen's labels follow the prototype: heavy wide-tracked caps at
+   the smaller 0.72rem on the lighter surface, in a fixed 40px band, so the
+   header reads as a caption over the rows rather than a shaded block. No
+   text-align here: the column model's align-* classes own the header's
+   alignment, the same as the body cells. */
+.table-shell thead {
+  background: var(--surface-2);
+}
+
+.table-shell thead th {
+  height: 40px;
+  padding: 0 12px;
+  background: var(--surface-2);
+  font-size: 0.72rem;
   font-weight: 800;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  white-space: nowrap;
 }
 
 .table-spacer-row td {
@@ -3353,36 +3373,47 @@ thead tr:first-child th {
 }
 
 .sort-button {
+  /* Hugs its label so hover tints only the label, not the whole header cell.
+     The -6px pull keeps the label on the cell's own 12px padding line. */
   display: inline-flex;
-  width: 100%;
   align-items: center;
-  justify-content: flex-start;
   gap: 4px;
-  white-space: nowrap;
+  margin-left: -6px;
+  padding: 4px 6px;
   border: 0;
+  border-radius: 7px;
   background: transparent;
-  font-weight: 800;
-  font-size: inherit;
-  padding: 2px 8px;
-  border-radius: 12px;
+  font: inherit;
+  letter-spacing: inherit;
+  text-transform: inherit;
   color: inherit;
-  transition: background 0.15s ease;
+  white-space: nowrap;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
 }
 
-/* The button spans the cell, so its label follows the column's alignment
-   rather than always centering. */
-.align-center .sort-button {
-  justify-content: center;
-}
-
+/* A right-aligned column keeps its label flush with the cell's right padding,
+   and a centred one stays optically centred. */
 .align-right .sort-button {
-  justify-content: flex-end;
+  margin-right: -6px;
+  margin-left: 0;
 }
 
-/* Decorative sort direction marker: only the active column renders it. */
+.align-center .sort-button {
+  margin-inline: -6px;
+}
+
+/* The chevron is drawn in every sortable header so the affordance appears on
+   hover; the sorted column keeps it at full strength instead. */
 .sort-chevron {
   flex: 0 0 auto;
-  transition: transform 0.15s ease;
+  width: 11px;
+  height: 11px;
+  opacity: 0;
+  transition:
+    opacity 0.12s ease,
+    transform 0.15s ease;
 }
 
 th[aria-sort="descending"] .sort-chevron {
@@ -3395,12 +3426,26 @@ th[aria-sort="descending"] .sort-chevron {
   color: var(--accent-strong);
 }
 
+.sort-button--active .sort-chevron {
+  opacity: 1;
+}
+
 /* Sort header hover tints just the label button, not the whole column or
    the filter row below it. Guarded to hover-capable pointers so a tap
    never leaves a stuck tint. */
 @media (hover: hover) {
   .sort-button:hover {
     background: var(--accent-soft);
+    color: var(--accent-strong);
+  }
+
+  .sort-button:hover .sort-chevron {
+    opacity: 0.45;
+  }
+
+  /* Hovering the sorted column must not dim its own caret. */
+  .sort-button--active:hover .sort-chevron {
+    opacity: 1;
   }
 }
 

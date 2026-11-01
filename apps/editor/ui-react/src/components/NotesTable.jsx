@@ -5313,25 +5313,24 @@ function NotesTable({
                                 type="button"
                               >
                                 {column.label}
-                                {isSorted ? (
-                                  <svg
-                                    aria-hidden="true"
-                                    className="sort-chevron"
-                                    focusable="false"
-                                    height="11"
-                                    viewBox="0 0 24 24"
-                                    width="11"
-                                  >
-                                    <path
-                                      d="m6 15 6-6 6 6"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth="2.4"
-                                    />
-                                  </svg>
-                                ) : null}
+                                {/* Drawn on every sortable header: the
+                                    stylesheet keeps it hidden until hover and
+                                    lets the sorted column keep it visible. */}
+                                <svg
+                                  aria-hidden="true"
+                                  className="sort-chevron"
+                                  focusable="false"
+                                  viewBox="0 0 24 24"
+                                >
+                                  <path
+                                    d="m6 15 6-6 6 6"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                    strokeLinejoin="round"
+                                    strokeWidth="2.4"
+                                  />
+                                </svg>
                               </button>
                             </th>
                           );
