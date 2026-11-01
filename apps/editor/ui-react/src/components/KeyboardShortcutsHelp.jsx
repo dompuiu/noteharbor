@@ -145,7 +145,7 @@ const shortcutGroups = [
       {
         keys: ["b"],
         description:
-          "Open the sidebar and clear selected rows; navigate with ↑/↓ or j/k, Enter, then Esc",
+          "Open the sidebar and navigate it with ↑/↓ or j/k, Enter, then Esc",
       },
     ],
   },

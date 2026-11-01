@@ -531,6 +531,43 @@ describe("Active row highlight", () => {
     });
   });
 
+  test("focus entering the sidebar keeps the active highlight", async () => {
+    renderTable();
+    const row = (await screen.findByText("ZZTEST")).closest("tr");
+    await act(async () => {
+      row.focus();
+    });
+    await waitFor(() => {
+      expect(row).toHaveClass("table-row-link--active");
+    });
+
+    const sidebar = document.createElement("nav");
+    sidebar.id = "app-sidebar";
+    sidebar.innerHTML = "<button type='button'>Banknotes</button>";
+    document.body.append(sidebar);
+    const railButton = sidebar.querySelector("button");
+
+    await act(async () => {
+      railButton.focus();
+    });
+
+    expect(row).toHaveClass("table-row-link--active");
+
+    const outside = document.createElement("button");
+    outside.textContent = "Outside";
+    document.body.append(outside);
+
+    await act(async () => {
+      outside.focus();
+    });
+
+    await waitFor(() => {
+      expect(row).not.toHaveClass("table-row-link--active");
+    });
+    sidebar.remove();
+    outside.remove();
+  });
+
   test("moving to another note then closing highlights that note's row", async () => {
     const user = userEvent.setup();
     await openSlideshowOnFirstRow(user);

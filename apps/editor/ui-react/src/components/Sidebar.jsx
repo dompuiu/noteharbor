@@ -30,9 +30,9 @@ import {
 // Reorder toggle, each row link/action, and the enabled Move up/down buttons
 // while that group is in reorder mode; Home/End jump; Enter/Space activates
 // the stop (toggles reorder, moves the row, or follows the option); Escape
-// returns focus to the page and collapses the rail. Tab cycles the stops like
-// ↓, and Shift+Tab like ↑, both wrapping off the ends, so the rail is left
-// with Escape.
+// returns focus to the control that opened the rail and collapses it. Tab
+// cycles the stops like ↓, and Shift+Tab like ↑, both wrapping off the ends,
+// so the rail is left with Escape.
 
 // Per-destination icons, lifted from the settled layout-D prototype.
 const ICONS = {
@@ -123,6 +123,10 @@ function Sidebar({ pageFocusRef }) {
   const [reorderingShowcases, setReorderingShowcases] = useState(false);
   const navRef = useRef(null);
   const linksRef = useRef([]);
+  // The control that held focus when "b" opened the rail. Escape hands focus
+  // back to it so opening the menu never loses the page's place, whether that
+  // was a table row, the selection bar, or another control.
+  const returnFocusRef = useRef(null);
 
   // The collection rows sit inside the Catalog group, above Import / Export.
   // A collection row stays highlighted in both of its modes: view and edit
@@ -343,6 +347,14 @@ function Sidebar({ pageFocusRef }) {
   }
 
   function openCursor() {
+    const active = document.activeElement;
+    returnFocusRef.current =
+      active instanceof HTMLElement &&
+      active !== document.body &&
+      !navRef.current?.contains(active)
+        ? active
+        : null;
+
     navRef.current?.focus({ preventScroll: true });
 
     if (cursorIndex !== null) {
@@ -358,11 +370,24 @@ function Sidebar({ pageFocusRef }) {
     setCursorIndex(activeIndex === -1 ? 0 : activeIndex);
   }
 
-  // Leaving the rail hands focus back to the page content. The shell puts an
-  // inert focus anchor at the top of <main>, so focus lands inside the page
-  // rather than on <body>; Tab then continues from there.
-  function leaveCursor() {
+  // Leaving the rail hands focus back to the control that opened it when
+  // there is one still on the page (a table row, the selection bar, a button),
+  // so the page keeps its place. Otherwise focus falls to the shell's inert
+  // focus anchor at the top of <main>, which keeps Tab inside the page rather
+  // than on <body>.
+  function leaveCursor({ restoreFocus = false } = {}) {
     setCursorIndex(null);
+
+    const returnFocus = restoreFocus ? returnFocusRef.current : null;
+    returnFocusRef.current = null;
+
+    if (returnFocus?.isConnected) {
+      returnFocus.focus({ preventScroll: true });
+
+      if (document.activeElement === returnFocus) {
+        return;
+      }
+    }
 
     if (pageFocusRef?.current) {
       pageFocusRef.current.focus({ preventScroll: true });
@@ -484,7 +509,7 @@ function Sidebar({ pageFocusRef }) {
 
       if (event.key === "Escape") {
         event.preventDefault();
-        leaveCursor();
+        leaveCursor({ restoreFocus: true });
         return;
       }
 

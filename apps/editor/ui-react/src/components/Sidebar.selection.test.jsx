@@ -83,10 +83,9 @@ beforeEach(() => {
   });
 });
 
-test("b from a selected row clears the real selection and opens the real rail", async () => {
+async function renderApp() {
   const pageFocusRef = createRef();
-  const user = userEvent.setup();
-  render(
+  const view = render(
     <MemoryRouter initialEntries={["/catalog/collections/1/view"]}>
       <CollectionsProvider>
         <ShowcasesProvider>
@@ -107,20 +106,67 @@ test("b from a selected row clears the real selection and opens the real rail", 
   );
 
   await screen.findByRole("link", { name: "Default" });
-  const checkbox = await screen.findByRole("checkbox", { name: "Select AAAA" });
-  await user.click(checkbox);
+  return { ...view, pageFocusRef };
+}
+
+test("b opens the rail without dropping the selection or the row focus", async () => {
+  const user = userEvent.setup();
+  await renderApp();
+
+  const row = (await screen.findByText("AAAA")).closest("tr");
+  const checkbox = screen.getByRole("checkbox", { name: "Select AAAA" });
+
+  row.focus();
+  await user.keyboard(" ");
+  expect(checkbox).toBeChecked();
+  expect(row).toHaveClass("table-row-link--active");
+
+  await user.keyboard("{b}");
+
   expect(
     screen.getByRole("region", { name: "Selection actions" }),
   ).toBeInTheDocument();
+  expect(checkbox).toBeChecked();
+  expect(document.activeElement).toHaveTextContent("Default");
+  // The last-touched row keeps its cursor paint while the rail is open.
+  expect(row).toHaveClass("table-row-link--active");
 
-  checkbox.focus();
-  await user.keyboard("{b}");
+  await user.keyboard("{Escape}");
 
   await waitFor(() => {
-    expect(
-      screen.queryByRole("region", { name: "Selection actions" }),
-    ).not.toBeInTheDocument();
+    expect(row).toHaveFocus();
   });
-  expect(checkbox).not.toBeChecked();
-  expect(document.activeElement).toHaveTextContent("Default");
+  expect(row).toHaveClass("table-row-link--active");
+  expect(checkbox).toBeChecked();
+
+  // Leaving the row for the page content still drops the cursor paint.
+  screen.getByRole("searchbox").focus();
+  await waitFor(() => {
+    expect(row).not.toHaveClass("table-row-link--active");
+  });
+});
+
+test("mouse selection survives b and Escape returns to its checkbox", async () => {
+  const user = userEvent.setup();
+  await renderApp();
+
+  const checkbox = await screen.findByRole("checkbox", {
+    name: "Select AAAA",
+  });
+
+  await user.click(checkbox);
+  expect(checkbox).toBeChecked();
+
+  await user.keyboard("{b}");
+  expect(
+    screen.getByRole("region", { name: "Selection actions" }),
+  ).toBeInTheDocument();
+  expect(checkbox).toBeChecked();
+
+  await user.keyboard("{Escape}");
+
+  await waitFor(() => {
+    expect(checkbox).toHaveFocus();
+  });
+  expect(checkbox).toBeChecked();
 });

@@ -22,10 +22,7 @@ import {
   copyTextToClipboard,
   formatNoteAsTsvRow,
 } from "../lib/noteClipboard.js";
-import {
-  isEditableElement,
-  ownsPrintableShortcut,
-} from "../lib/editableElement.js";
+import { isEditableElement } from "../lib/editableElement.js";
 import { isEmptyLibrary } from "../lib/libraryState.js";
 import {
   shouldHandOffToFilters,
@@ -2618,6 +2615,13 @@ function NotesTable({
         return;
       }
 
+      if (event.target.closest("#app-sidebar")) {
+        // The sidebar is opened with "b" from the row cursor. Keep that
+        // cursor lit while the rail is on screen; focus moving anywhere else
+        // still clears it below.
+        return;
+      }
+
       // Any focus move that is not one of the arming actions (a selection
       // change or a keyboard row move) cancels a pending Tab-to-bar jump.
       selectionTabArmedRef.current = false;
@@ -2856,21 +2860,6 @@ function NotesTable({
         Boolean(event.target.closest("table"));
       const editable = !tableCheckboxFocused && isEditableElement(event.target);
       const tableKeysActive = !slideshowRouteActive && !editorOverlayOpen;
-
-      // "b" is the global sidebar shortcut. Entering the rail drops any
-      // pending table selection, even when the rail already holds focus.
-      // Text fields and modal surfaces keep the letter, matching the rail's
-      // own rule.
-      if (
-        event.key === "b" &&
-        !event.metaKey &&
-        !event.ctrlKey &&
-        !event.altKey &&
-        !event.shiftKey &&
-        !ownsPrintableShortcut(event.target)
-      ) {
-        clearSelection();
-      }
 
       // The sidebar owns its keys while it holds focus. Bail before any of the
       // table's single-key handling so the rail's cursor and navigation win.
@@ -5489,9 +5478,18 @@ function NotesTable({
                                   event.relatedTarget.closest(
                                     ".table-bulk-bar",
                                   );
+                                // Opening the sidebar with "b" keeps the row
+                                // cursor lit, so the page still shows where
+                                // the keyboard was while the rail is open.
+                                const toSidebar =
+                                  event.relatedTarget instanceof Element &&
+                                  Boolean(
+                                    event.relatedTarget.closest("#app-sidebar"),
+                                  );
 
                                 if (
                                   !toBulkBar &&
+                                  !toSidebar &&
                                   !event.currentTarget.contains(
                                     event.relatedTarget,
                                   )

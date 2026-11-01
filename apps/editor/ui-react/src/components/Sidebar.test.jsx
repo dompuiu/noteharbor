@@ -749,6 +749,23 @@ describe("Sidebar keyboard cursor", () => {
     ).toBe(false);
   });
 
+  test("Escape returns focus to the control that opened the rail", async () => {
+    const user = userEvent.setup();
+    await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    const origin = document.createElement("button");
+    origin.textContent = "Row";
+    document.body.append(origin);
+    origin.focus();
+
+    await user.keyboard("{b}");
+    expect(document.activeElement).toHaveTextContent("Default");
+
+    await user.keyboard("{Escape}");
+    expect(document.activeElement).toBe(origin);
+    origin.remove();
+  });
+
   test("Escape hands focus to the page content", async () => {
     const user = userEvent.setup();
     await renderSidebar(CATALOG_ROUTES.importExport);
