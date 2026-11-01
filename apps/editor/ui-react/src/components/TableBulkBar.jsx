@@ -21,13 +21,18 @@ export function TableBulkBar({
       return;
     }
 
-    workingRef.current = true;
-    setWorking(true);
+    // A bulk delete asks before it acts, so progress can only start once the
+    // collector answers: flipping the pill to "Working..." while the dialog is
+    // still open reads as though the deletion already began.
+    function reportWorkStarted() {
+      workingRef.current = true;
+      setWorking(true);
+    }
 
     try {
       // The delete clears the selection when it finishes, which unmounts this
       // bar; the reset then lands on an unmounted component and is a no-op.
-      await onDelete();
+      await onDelete(reportWorkStarted);
     } finally {
       workingRef.current = false;
       setWorking(false);

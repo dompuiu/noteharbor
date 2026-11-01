@@ -3433,7 +3433,7 @@ function NotesTable({
     }
   }
 
-  async function handleBulkDelete() {
+  async function handleBulkDelete(reportWorkStarted) {
     if (!selectedIds.length) {
       return;
     }
@@ -3479,6 +3479,9 @@ function NotesTable({
       if (!confirmed) {
         return;
       }
+
+      // From here the rows are going away, so the bar may say it is working.
+      reportWorkStarted?.();
 
       // Land the cursor where the selection started: the row that takes
       // the topmost deleted slot, or the new last row when the selection
