@@ -3083,10 +3083,14 @@ thead .table-sticky-cell {
   background-color: var(--surface-3);
 }
 
-/* A permanent hairline marks each pinned column's right edge, matching the
-   prototype. The pan-only shadow below strengthens the last one, so the block
-   still reads as pinned once the columns move underneath it. */
-.table-sticky-cell::after {
+/* One permanent hairline closes the pinned identity block, on the right edge
+   of the catalog number column. The control columns inside the block
+   (drag handle, selection, display order, thumbnail) carry no divider of their
+   own: they read as one identity group, and only the hand-off to the scrolling
+   data columns needs a mark. The pan-only shadow below strengthens this same
+   hairline, so the block still reads as pinned once the columns move
+   underneath it. */
+.table-sticky-cell.table-sticky-end::after {
   content: "";
   position: absolute;
   top: 0;
@@ -3138,15 +3142,14 @@ thead .table-sticky-cell {
    cell's own inset focus ring and anything painted underneath it. This
    pseudo-element sits above the handle and carries the two states that need to
    be visible there: the selected row's 3px accent on the outer left edge and
-   the row's inset focus ring. Keeping the accent here leaves the cell's
-   `::after` free to draw the pinned column's right hairline in every row
-   state, so a selected row keeps the same divider as an unselected one. The
-   drag cell pins with the identity block, so the accent stays on that outer
-   edge through a horizontal pan. pointer-events keeps the drag target intact.
+   the row's inset focus ring. The accent lives here (rather than in a
+   divider) because the drag cell no longer draws a right hairline: the
+   identity block's only divider sits after the catalog number. The drag cell
+   pins with the identity block, so the accent stays on that outer edge
+   through a horizontal pan. pointer-events keeps the drag target intact.
 
-   `::before` paints above the opaque handle by tree order. Its z-index lifts
-   it above the cell's `::after` divider too, so the focus ring stays
-   continuous where it crosses the divider. */
+   `::before` paints above the opaque handle by tree order; its z-index keeps
+   the focus ring continuous where it crosses the cell edge. */
 .table-row-link--selected > td.drag-cell::before,
 .table-row-link:focus-visible > td.drag-cell::before,
 .table-row-link:has(:focus-visible) > td.drag-cell::before,

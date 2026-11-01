@@ -103,7 +103,7 @@ describe("table styles", () => {
   // edge stays put while the columns pan. The handle paints an opaque surface
   // over the whole cell, so the edge is a pseudo-element stacked above it,
   // outside the interaction rules and never in the way of the drag target.
-  // Keeping it off `::after` leaves the pinned-cell divider untouched on
+  // Keeping it off `::after` leaves the end-of-block divider untouched on
   // selected rows.
   test("the selected edge sits on the pinned drag cell above the handle", () => {
     const cell = styles.match(/td\.drag-cell\s*\{([^}]*)\}/);
@@ -128,14 +128,17 @@ describe("table styles", () => {
       /linear-gradient\(var\(--accent\),\s*var\(--accent\)\)\s*left\s*\/\s*3px\s+100%/,
     );
 
-    // The divider is owned by the base pinned-cell rule, so no selected-row
-    // override may replace it.
+    // The end-of-block divider is owned by the pinned-cell rule scoped to the
+    // last pinned column, so no selected-row override may replace it.
     expect(styles).not.toMatch(
       /\.table-row-link--selected > td\.drag-cell::after/,
     );
     expect(styles).toMatch(
-      /\.table-sticky-cell::after\s*\{[^}]*right:\s*0;[^}]*width:\s*1px;[^}]*background:\s*var\(--border-soft\)/,
+      /\.table-sticky-cell\.table-sticky-end::after\s*\{[^}]*right:\s*0;[^}]*width:\s*1px;[^}]*background:\s*var\(--border-soft\)/,
     );
+    // The control columns inside the identity block stay undivided: only the
+    // catalog number's right edge closes the block.
+    expect(styles).not.toMatch(/\.table-sticky-cell::after\s*\{/);
     expect(styles).not.toMatch(/\.table-sticky-lead/);
   });
 
@@ -495,21 +498,28 @@ describe("table styles", () => {
   });
 
   // The edge shadow marks the pinned block while it is panned; at rest the
-  // permanent hairline on every pinned cell is the only separator.
+  // permanent hairline on the last pinned cell is the only separator.
   test("the pan shadow only exists while the table is horizontally scrolled", () => {
-    const rules = styles.match(/[^{}]*\.table-sticky-end::after[^{]*\{[^}]*\}/g);
-    expect(rules).not.toBeNull();
-    expect(rules).toHaveLength(1);
-    expect(rules[0]).toMatch(/\.table-scroll-x\.is-scrolled-x/);
-    expect(rules[0]).toMatch(/box-shadow:/);
+    const rules =
+      styles.match(/[^{}]*\.table-sticky-end::after[^{]*\{[^}]*\}/g) ?? [];
+    // The resting hairline is one of these rules; the shadow must belong only
+    // to the scrolled state.
+    const shadowRules = rules.filter((rule) => /box-shadow:/.test(rule));
+    expect(shadowRules).toHaveLength(1);
+    expect(shadowRules[0]).toMatch(/\.table-scroll-x\.is-scrolled-x/);
   });
 
-  test("pinned cells carry a resting hairline", () => {
-    const hairline = styles.match(/\.table-sticky-cell::after\s*\{([^}]*)\}/);
+  test("only the last pinned cell carries a resting hairline", () => {
+    const hairline = styles.match(
+      /\.table-sticky-cell\.table-sticky-end::after\s*\{([^}]*)\}/,
+    );
     expect(hairline).not.toBeNull();
     expect(hairline[1]).toMatch(/position:\s*absolute/);
     expect(hairline[1]).toMatch(/right:\s*0/);
     expect(hairline[1]).toMatch(/background:\s*var\(--border-soft\)/);
+    // The control columns inside the pinned block (drag handle, selection,
+    // display order, thumbnail) must not draw their own vertical border.
+    expect(styles).not.toMatch(/\.table-sticky-cell::after/);
   });
 
   // Row tints are layered over an opaque surface so a hovered or selected
