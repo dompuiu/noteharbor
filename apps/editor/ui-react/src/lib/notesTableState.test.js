@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, test } from "vitest";
 import {
+  clearAllTableStates,
   clearLegacyTableState,
   defaultTableState,
   defaultVisibleColumnKeys,
@@ -144,6 +145,30 @@ describe("notes table state storage", () => {
     expect(
       window.localStorage.getItem("noteharbor.lastVisitedRoute"),
     ).not.toBeNull();
+  });
+
+  test("clears every saved table state for an import", () => {
+    saveTableState(1, defaultTableState());
+    saveTableState(2, defaultTableState());
+    window.localStorage.setItem(
+      "noteharbor.notesTableState",
+      JSON.stringify({ filters: { denomination: "AAA" } }),
+    );
+    window.localStorage.setItem(
+      "noteharbor.notesTableColumns.1",
+      JSON.stringify(["id", "denomination"]),
+    );
+    window.localStorage.setItem("noteharbor.lastVisitedRoute", "/elsewhere");
+    window.localStorage.setItem("noteharbor.showcasePhotoSize", "large");
+
+    clearAllTableStates();
+
+    expect(
+      window.localStorage.getItem("noteharbor.lastVisitedRoute"),
+    ).toBe("/elsewhere");
+    expect(window.localStorage.getItem("noteharbor.showcasePhotoSize")).toBe(
+      "large",
+    );
   });
 
   test("sweeps the legacy global and per-collection keys", () => {

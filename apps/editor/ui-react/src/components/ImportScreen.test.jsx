@@ -56,6 +56,7 @@ function renderImportScreen(overrides = {}) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.localStorage.clear();
   getOperationStatus.mockResolvedValue({
     currentOperation: "idle",
     isBusy: false,
@@ -226,10 +227,18 @@ describe("ImportScreen import mode", () => {
     expect(assign).toHaveBeenCalledWith("/catalog/collections");
   });
 
-  test("a merge import passes the merge mode", async () => {
+  test("a merge import passes the merge mode and also forgets the saved table structure", async () => {
     const user = userEvent.setup();
     stubNavigation();
     importArchive.mockResolvedValue({ success: true, mode: "merge" });
+    window.localStorage.setItem(
+      "noteharbor.notesTableState.1",
+      JSON.stringify({
+        sortKey: "denomination",
+        sortDirection: "desc",
+        visibleColumnKeys: ["id", "denomination"],
+      }),
+    );
     renderImportScreen();
 
     await screen.findByText("Archive Import and Export");
@@ -243,6 +252,99 @@ describe("ImportScreen import mode", () => {
       expect.any(Function),
       "merge",
     );
+    // Merge deletes and re-inserts the collections it matches by name, so
+    // their ids change too.
+    expect(
+      window.localStorage.getItem("noteharbor.notesTableState.1"),
+    ).toBeNull();
+  });
+
+  test("a successful import forgets the saved table structure", async () => {
+    const user = userEvent.setup();
+    const assign = stubNavigation();
+    importArchive.mockResolvedValue({ success: true, mode: "replace" });
+    window.localStorage.setItem(
+      "noteharbor.notesTableState.1",
+      JSON.stringify({
+        sortKey: "denomination",
+        sortDirection: "desc",
+        visibleColumnKeys: ["id", "denomination"],
+      }),
+    );
+    window.localStorage.setItem("noteharbor.lastVisitedRoute", "/elsewhere");
+    window.localStorage.setItem("noteharbor.showcasePhotoSize", "large");
+
+    renderImportScreen();
+
+    await screen.findByText("Archive Import and Export");
+    await chooseArchiveFile(user);
+    await user.click(screen.getByRole("button", { name: "Import archive" }));
+    await user.click(screen.getByRole("button", { name: "Import" }));
+
+    // Import renumbers collections, so every id-keyed payload is meaningless
+    // afterwards and must not be applied to whatever lands on that id.
+    expect(
+      window.localStorage.getItem("noteharbor.notesTableState.1"),
+    ).toBeNull();
+    expect(
+      window.localStorage.getItem("noteharbor.lastVisitedRoute"),
+    ).toBe("/elsewhere");
+    expect(window.localStorage.getItem("noteharbor.showcasePhotoSize")).toBe(
+      "large",
+    );
+    expect(assign).toHaveBeenCalledWith("/catalog/collections");
+  });
+
+  test("a cancelled import keeps the saved table structure", async () => {
+    const user = userEvent.setup();
+    stubNavigation();
+    importArchive.mockResolvedValue({ success: true, mode: "replace" });
+    window.localStorage.setItem(
+      "noteharbor.notesTableState.1",
+      JSON.stringify({
+        sortKey: "denomination",
+        sortDirection: "desc",
+        visibleColumnKeys: ["id", "denomination"],
+      }),
+    );
+
+    renderImportScreen();
+
+    await screen.findByText("Archive Import and Export");
+    await chooseArchiveFile(user);
+    await user.click(screen.getByRole("button", { name: "Import archive" }));
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(importArchive).not.toHaveBeenCalled();
+    expect(
+      window.localStorage.getItem("noteharbor.notesTableState.1"),
+    ).not.toBeNull();
+  });
+
+  test("a failed import keeps the saved table structure", async () => {
+    const user = userEvent.setup();
+    stubNavigation();
+    importArchive.mockRejectedValue(new Error("Archive is corrupt."));
+    window.localStorage.setItem(
+      "noteharbor.notesTableState.1",
+      JSON.stringify({
+        sortKey: "denomination",
+        sortDirection: "desc",
+        visibleColumnKeys: ["id", "denomination"],
+      }),
+    );
+
+    renderImportScreen();
+
+    await screen.findByText("Archive Import and Export");
+    await chooseArchiveFile(user);
+    await user.click(screen.getByRole("button", { name: "Import archive" }));
+    await user.click(screen.getByRole("button", { name: "Import" }));
+
+    expect(await screen.findByText("Archive is corrupt.")).toBeInTheDocument();
+    expect(
+      window.localStorage.getItem("noteharbor.notesTableState.1"),
+    ).not.toBeNull();
   });
 });
 

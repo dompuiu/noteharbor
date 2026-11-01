@@ -140,6 +140,21 @@ export function pruneTableStates(collectionIds) {
   }
 }
 
+// An import renumbers collections (and the archive itself renumbers them on
+// export), so an id-keyed payload would attach to whatever collection lands on
+// that id next. The table structure starts fresh after a successful import.
+export function clearAllTableStates() {
+  if (typeof window === "undefined") {
+    return;
+  }
+
+  for (const key of storedTableStateKeys()) {
+    window.localStorage.removeItem(key);
+  }
+
+  clearLegacyTableState();
+}
+
 // The state this module replaces was written under a global key (with filters
 // and selection in it) and a per-collection column key. Nothing reads them any
 // more, so a single sweep keeps localStorage free of dead settings.

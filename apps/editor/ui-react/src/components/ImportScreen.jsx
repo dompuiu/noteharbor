@@ -7,6 +7,7 @@ import {
 } from "../lib/api.js";
 import { CATALOG_ROUTES } from "../lib/routes.js";
 import { assignLocation } from "../lib/navigation.js";
+import { clearAllTableStates } from "../lib/notesTableState.js";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 
 function isArchiveFile(file) {
@@ -222,6 +223,10 @@ function ImportScreen({
 
     try {
       await importArchive(archiveSource, setArchiveUploadProgress, importMode);
+      // Import renumbers collections, so the saved per-collection table
+      // structure no longer names the same collections. Drop it before the
+      // reload picks the new ids up.
+      clearAllTableStates();
       setArchiveResult({ success: true });
       assignLocation(CATALOG_ROUTES.collections);
     } catch (importError) {
