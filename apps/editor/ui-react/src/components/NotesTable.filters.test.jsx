@@ -376,6 +376,15 @@ describe("NotesTable filter chips", () => {
     });
     expect(screen.getByText("AAAA")).toBeInTheDocument();
     expect(screen.getByText("CCCC")).toBeInTheDocument();
+
+    // Editing keeps the negation tint, so the chip still reads as "not" while
+    // its value is being changed.
+    await user.click(
+      screen.getByRole("button", { name: "Edit Company filter PCGS" }),
+    );
+    expect(
+      screen.getByLabelText("Edit Company filter").closest(".table-filter-chip"),
+    ).toHaveClass("table-filter-chip--negated");
   });
 
   test("a duplicate value is not added twice", async () => {
@@ -441,6 +450,9 @@ describe("NotesTable filter chips", () => {
     expect(editor).toHaveFocus();
     expect(editor.selectionStart).toBe(0);
     expect(editor.selectionEnd).toBe("PMG".length);
+    // The editor stays inside a chip, so the field keeps its frame while the
+    // value is being changed instead of collapsing to a bare input.
+    expect(editor.closest(".table-filter-chip")).not.toBeNull();
     await user.clear(editor);
     await user.type(editor, "PCGS{Enter}");
 

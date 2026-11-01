@@ -5604,62 +5604,64 @@ function NotesTable({
                             {index > 0 ? (
                               <span className="table-filter-or">or</span>
                             ) : null}
-                            {editingConditionId === condition.id ? (
-                              <input
-                                aria-label={`Edit ${filterFieldLabel(field)} filter`}
-                                autoFocus
-                                className="table-filter-chip-input"
-                                onBlur={commitConditionEdit}
-                                onChange={(event) =>
-                                  setConditionDraft(event.target.value)
-                                }
-                                onFocus={(event) =>
-                                  event.currentTarget.select()
-                                }
-                                onKeyDown={(event) => {
-                                  if (event.key === "Enter") {
-                                    event.preventDefault();
-                                    commitConditionEdit();
-                                  } else if (event.key === "Escape") {
-                                    event.preventDefault();
-                                    cancelConditionEdit();
+                            <span
+                              className={`table-filter-chip${condition.negated ? " table-filter-chip--negated" : ""}`}
+                            >
+                              {editingConditionId === condition.id ? (
+                                <input
+                                  aria-label={`Edit ${filterFieldLabel(field)} filter`}
+                                  autoFocus
+                                  className="table-filter-chip-input"
+                                  onBlur={commitConditionEdit}
+                                  onChange={(event) =>
+                                    setConditionDraft(event.target.value)
                                   }
-                                }}
-                                value={conditionDraft}
-                              />
-                            ) : (
-                              <span
-                                className={`table-filter-chip${condition.negated ? " table-filter-chip--negated" : ""}`}
-                              >
-                                <button
-                                  aria-label={`Edit ${filterFieldLabel(field)} filter ${condition.value}`}
-                                  className="table-filter-chip-value"
-                                  onClick={() => startConditionEdit(condition)}
-                                  title="Edit value"
-                                  type="button"
-                                >
-                                  {condition.negated ? "!" : ""}
-                                  {condition.value}
-                                </button>
-                                <button
-                                  aria-label={`Remove ${filterFieldLabel(field)} ${condition.negated ? "not " : ""}${condition.value}`}
-                                  className="table-filter-chip-remove"
-                                  onClick={() => removeCondition(condition.id)}
-                                  type="button"
-                                >
-                                  <svg
-                                    aria-hidden="true"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeLinecap="round"
-                                    strokeWidth="1.6"
-                                    viewBox="0 0 12 12"
+                                  onFocus={(event) =>
+                                    event.currentTarget.select()
+                                  }
+                                  onKeyDown={(event) => {
+                                    if (event.key === "Enter") {
+                                      event.preventDefault();
+                                      commitConditionEdit();
+                                    } else if (event.key === "Escape") {
+                                      event.preventDefault();
+                                      cancelConditionEdit();
+                                    }
+                                  }}
+                                  value={conditionDraft}
+                                />
+                              ) : (
+                                <>
+                                  <button
+                                    aria-label={`Edit ${filterFieldLabel(field)} filter ${condition.value}`}
+                                    className="table-filter-chip-value"
+                                    onClick={() => startConditionEdit(condition)}
+                                    title="Edit value"
+                                    type="button"
                                   >
-                                    <path d="m2.5 2.5 7 7M9.5 2.5l-7 7" />
-                                  </svg>
-                                </button>
-                              </span>
-                            )}
+                                    {condition.negated ? "!" : ""}
+                                    {condition.value}
+                                  </button>
+                                  <button
+                                    aria-label={`Remove ${filterFieldLabel(field)} ${condition.negated ? "not " : ""}${condition.value}`}
+                                    className="table-filter-chip-remove"
+                                    onClick={() => removeCondition(condition.id)}
+                                    type="button"
+                                  >
+                                    <svg
+                                      aria-hidden="true"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeLinecap="round"
+                                      strokeWidth="1.6"
+                                      viewBox="0 0 12 12"
+                                    >
+                                      <path d="m2.5 2.5 7 7M9.5 2.5l-7 7" />
+                                    </svg>
+                                  </button>
+                                </>
+                              )}
+                            </span>
                           </Fragment>
                         ))}
                       </span>
