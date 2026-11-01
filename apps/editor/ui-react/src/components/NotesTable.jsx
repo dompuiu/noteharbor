@@ -1151,6 +1151,7 @@ function NotesTable({
       : parseTableHash(window.location.hash),
   );
   const rowElementMapRef = useRef(new Map());
+  const rowActionsMenuMapRef = useRef(new Map());
   const thumbPreviewElementMapRef = useRef(new Map());
   const dragPreviewRef = useRef(null);
   const tableShellRef = useRef(null);
@@ -2801,6 +2802,24 @@ function NotesTable({
         return;
       }
 
+      // "o" opens the focused row's actions menu through the menu's own
+      // imperative handle, so it shares the button's open path. Focus may sit
+      // on the row or on a control inside it — after Escape returns focus to
+      // the actions button, pressing `o` must still reopen the menu.
+      if (event.key === "o" && focusWithinFocusedRow) {
+        const actionsMenu = rowActionsMenuMapRef.current.get(
+          focusedRowIdRef.current,
+        );
+
+        if (!actionsMenu) {
+          return;
+        }
+
+        event.preventDefault();
+        actionsMenu.open();
+        return;
+      }
+
       if (!rowHasFocus) {
         // No row cursor: Esc leaves the collection edit mode (the title
         // field itself handles this with its own key handler), and `e`
@@ -4178,6 +4197,14 @@ function NotesTable({
         <RowActionsMenu
           items={items}
           label={`Actions for ${noteLabel}`}
+          ref={(instance) => {
+            if (instance) {
+              rowActionsMenuMapRef.current.set(note.id, instance);
+            } else {
+              rowActionsMenuMapRef.current.delete(note.id);
+            }
+          }}
+          shortcut="o"
         />
       </td>
     );

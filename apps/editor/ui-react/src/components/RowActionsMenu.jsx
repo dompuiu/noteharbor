@@ -1,4 +1,10 @@
-import { Fragment, useEffect, useId } from "react";
+import {
+  Fragment,
+  forwardRef,
+  useEffect,
+  useId,
+  useImperativeHandle,
+} from "react";
 import { createPortal } from "react-dom";
 import { useAnchoredPopover } from "../lib/useAnchoredPopover.js";
 
@@ -156,12 +162,17 @@ function ActionIcon({ name }) {
 // positioned from the button's viewport rect, so the table's scroll containers
 // can never clip it. Open state, focus return and dismissal live here; the
 // caller supplies the items (label, handler, optional href, icon).
-export function RowActionsMenu({ items, label }) {
+export const RowActionsMenu = forwardRef(function RowActionsMenu(
+  { items, label, shortcut },
+  ref,
+) {
   const { buttonRef, menuRef, open, position, setOpen } = useAnchoredPopover({
     align: "end",
     closeOnRouteChange: true,
   });
   const menuId = useId();
+
+  useImperativeHandle(ref, () => ({ open: () => setOpen(true) }), [setOpen]);
 
   useEffect(() => {
     if (!open) {
@@ -250,6 +261,7 @@ export function RowActionsMenu({ items, label }) {
         aria-expanded={open}
         aria-haspopup="menu"
         aria-label={label}
+        aria-keyshortcuts={shortcut}
         className={`row-menu-btn${open ? " is-open" : ""}`}
         onClick={(event) => {
           event.stopPropagation();
@@ -329,4 +341,4 @@ export function RowActionsMenu({ items, label }) {
         : null}
     </Fragment>
   );
-}
+});

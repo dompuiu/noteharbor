@@ -382,6 +382,48 @@ describe("Row actions menu", () => {
     expect(await screen.findByLabelText("Denomination")).toBeInTheDocument();
   });
 
+  test("the actions button announces its o shortcut", async () => {
+    renderTable();
+    await screen.findByText("AAAA");
+
+    expect(actionsButton("AAAA")).toHaveAttribute("aria-keyshortcuts", "o");
+  });
+
+  test("o opens the focused row's actions menu", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("BBBB");
+
+    screen.getByText("BBBB").closest("tr").focus();
+    await user.keyboard("o");
+
+    const menu = await screen.findByRole("menu", {
+      name: "Actions for BBBB",
+    });
+    expect(
+      within(menu).getByRole("menuitem", { name: "Open" }),
+    ).toHaveFocus();
+    expect(currentHash()).not.toContain("slideshow");
+  });
+
+  test("o reopens the menu after Escape returns focus to the actions button", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("AAAA");
+
+    screen.getByText("AAAA").closest("tr").focus();
+    await user.keyboard("o");
+    await screen.findByRole("menu", { name: "Actions for AAAA" });
+
+    await user.keyboard("{Escape}");
+    expect(actionsButton("AAAA")).toHaveFocus();
+
+    await user.keyboard("o");
+    expect(
+      await screen.findByRole("menu", { name: "Actions for AAAA" }),
+    ).toBeInTheDocument();
+  });
+
   test("Enter on the actions button opens the menu instead of the slideshow", async () => {
     const user = userEvent.setup();
     renderTable();
