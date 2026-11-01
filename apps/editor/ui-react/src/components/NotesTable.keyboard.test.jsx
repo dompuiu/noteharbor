@@ -416,7 +416,7 @@ describe("Table shortcuts while a row checkbox has focus", () => {
     await user.keyboard("/");
 
     expect(
-      screen.getByRole("searchbox", { name: "Search notes" }),
+      screen.getByRole("searchbox", { name: "Filter Catalog" }),
     ).toHaveFocus();
   });
 
@@ -646,10 +646,9 @@ describe("Active row highlight", () => {
       expect(firstRow).toHaveClass("table-row-link--active");
     });
 
-    await user.click(
-      await screen.findByRole("button", { name: "Filters" }),
-    );
-    const filter = await screen.findByLabelText("Filter Denomination");
+    const filter = await screen.findByRole("searchbox", {
+      name: "Filter Catalog",
+    });
     await act(async () => {
       filter.focus();
     });
@@ -905,10 +904,9 @@ describe("Arrow modifiers and h/j/k/l aliases", () => {
     renderTable();
 
     const firstRow = (await screen.findByText("AAAA")).closest("tr");
-    await user.click(
-      await screen.findByRole("button", { name: "Filters" }),
-    );
-    const filter = await screen.findByLabelText("Filter Denomination");
+    const filter = await screen.findByRole("searchbox", {
+      name: "Filter Catalog",
+    });
 
     await act(async () => {
       filter.focus();
@@ -1491,16 +1489,16 @@ describe("Escape clears the selection before the row cursor", () => {
     await user.click(checkbox("AAAA"));
     expect(selectionBar()).toBeInTheDocument();
 
-    const filtersToggle = await screen.findByRole("button", {
-      name: "Filters",
+    const columnsButton = await screen.findByRole("button", {
+      name: /Columns/,
     });
-    filtersToggle.focus();
+    columnsButton.focus();
 
     await user.keyboard("{Escape}");
 
     expect(selectionBar()).not.toBeInTheDocument();
     expect(checkbox("AAAA")).not.toBeChecked();
-    expect(filtersToggle).toHaveFocus();
+    expect(columnsButton).toHaveFocus();
     expect(container.querySelector(".table-focus-anchor")).not.toHaveFocus();
   });
 
@@ -1511,7 +1509,7 @@ describe("Escape clears the selection before the row cursor", () => {
 
     await user.click(checkbox("AAAA"));
 
-    const search = screen.getByRole("searchbox", { name: "Search notes" });
+    const search = screen.getByRole("searchbox", { name: "Filter Catalog" });
     await user.type(search, "AAA");
     await user.keyboard("{Escape}");
 

@@ -3,6 +3,7 @@ import { render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
+import { chooseFilterField } from "../test/filterBar.js";
 
 vi.mock("../lib/api.js", () => ({
   deleteNote: vi.fn(),
@@ -220,30 +221,34 @@ describe("NotesTable header emphasis", () => {
     ).toBe(true);
   });
 
-  test("a column filter with a value carries the active filter class", async () => {
+  test("a committed chip carries the active state", async () => {
     renderTable();
     const user = userEvent.setup();
 
+    await screen.findByText("AAAA");
+
+    expect(
+      screen.queryByRole("button", { name: /^Edit Denomination filter/ }),
+    ).toBeNull();
+
+    await chooseFilterField(user, "Denomination");
+    await user.type(
+      screen.getByRole("searchbox", { name: "Filter Denomination" }),
+      "AA{Enter}",
+    );
+
+    expect(
+      await screen.findByRole("button", {
+        name: "Edit Denomination filter AA",
+      }),
+    ).toBeInTheDocument();
+
     await user.click(
-      await screen.findByRole("button", { name: "Filters" }),
+      screen.getByRole("button", { name: "Remove Denomination AA" }),
     );
-    const denominationFilter = await screen.findByLabelText(
-      "Filter Denomination",
-    );
-    expect(
-      denominationFilter.classList.contains("filter-input--active"),
-    ).toBe(false);
-
-    await user.type(denominationFilter, "AA");
 
     expect(
-      denominationFilter.classList.contains("filter-input--active"),
-    ).toBe(true);
-
-    await user.clear(denominationFilter);
-
-    expect(
-      denominationFilter.classList.contains("filter-input--active"),
-    ).toBe(false);
+      screen.queryByRole("button", { name: /^Edit Denomination filter/ }),
+    ).toBeNull();
   });
 });

@@ -3,6 +3,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
+import { chooseFilterField, filterFieldButton } from "../test/filterBar.js";
 
 vi.mock("../lib/api.js", () => ({
   deleteNote: vi.fn(),
@@ -197,9 +198,10 @@ describe("NotesTable chrome", () => {
     await screen.findByText("AAAA");
     const user = userEvent.setup();
 
+    await chooseFilterField(user, "Denomination");
     await user.type(
-      screen.getByRole("searchbox", { name: "Search notes" }),
-      "AAAA",
+      screen.getByRole("searchbox", { name: "Filter Denomination" }),
+      "AAAA{Enter}",
     );
     await screen.findByText("Showing 1 of 3 notes · sorted by # ascending");
 
@@ -221,7 +223,7 @@ describe("NotesTable chrome", () => {
     });
 
     expect(
-      within(dialog).getByText("Focus the search field"),
+      within(dialog).getByText("Focus the filter field"),
     ).toBeInTheDocument();
     expect(
       within(dialog).getAllByText(/Move focus between rows/).length,
@@ -244,19 +246,28 @@ describe("NotesTable chrome", () => {
 
   test.each([
     [
-      "a search query",
+      "a committed chip",
       async (user) => {
+        await chooseFilterField(user, "Denomination");
         await user.type(
-          screen.getByRole("searchbox", { name: "Search notes" }),
-          "SER",
+          screen.getByRole("searchbox", { name: "Filter Denomination" }),
+          "AAAA{Enter}",
         );
       },
     ],
     [
-      "an active filter",
+      "two chips",
       async (user) => {
-        await openFilters(user);
-        await user.type(await screen.findByLabelText("Filter Company"), "PMG");
+        await chooseFilterField(user, "Company");
+        await user.type(
+          screen.getByRole("searchbox", { name: "Filter Company" }),
+          "PMG{Enter}",
+        );
+        await chooseFilterField(user, "Serial");
+        await user.type(
+          screen.getByRole("searchbox", { name: "Filter Serial" }),
+          "SER-1{Enter}",
+        );
       },
     ],
     [
@@ -295,12 +306,11 @@ describe("NotesTable chrome", () => {
     await screen.findByText("AAAA");
     const user = userEvent.setup();
 
+    await chooseFilterField(user, "Company");
     await user.type(
-      screen.getByRole("searchbox", { name: "Search notes" }),
-      "SER",
+      screen.getByRole("searchbox", { name: "Filter Company" }),
+      "PMG{Enter}",
     );
-    await openFilters(user);
-    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
     await user.click(screen.getByRole("button", { name: "Denomination" }));
     await user.click(screen.getByRole("checkbox", { name: "Select AAAA" }));
     await hideSerialColumn(user);
@@ -312,9 +322,10 @@ describe("NotesTable chrome", () => {
     await user.click(screen.getByRole("button", { name: "Reset view" }));
 
     expect(
-      screen.getByRole("searchbox", { name: "Search notes" }),
+      screen.getByRole("searchbox", { name: "Filter Catalog" }),
     ).toHaveValue("");
-    expect(screen.queryByLabelText("Filter Company")).not.toBeInTheDocument();
+    expect(filterFieldButton()).toHaveTextContent("Catalog");
+    expect(screen.queryByRole("button", { name: /^Edit / })).toBeNull();
     expect(
       screen.getByRole("button", { name: "Denomination" }),
     ).toBeInTheDocument();

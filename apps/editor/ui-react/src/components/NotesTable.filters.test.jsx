@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
+import { chooseFilterField, filterFieldButton } from "../test/filterBar.js";
 
 vi.mock("../lib/api.js", () => ({
   deleteNote: vi.fn(),
@@ -87,20 +88,28 @@ function renderTable() {
   );
 }
 
-function filtersToggle() {
-  return screen.findByRole("button", { name: /^Filters/ });
+async function chooseField(user, label) {
+  await chooseFilterField(user, label);
 }
 
-async function openFilters() {
-  const user = userEvent.setup();
-  await user.click(await filtersToggle());
-  return user;
+function filterInput(label) {
+  return screen.getByLabelText(`Filter ${label}`);
+}
+
+// Choose the field, type the value and commit it with Enter.
+async function commitChip(user, label, value) {
+  await chooseField(user, label);
+  await user.type(filterInput(label), `${value}{Enter}`);
 }
 
 beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.clear();
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
+  vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
+    font: "",
+    measureText: (text) => ({ width: String(text).length * 8 }),
+  });
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
     width: 1000,
     height: 600,
@@ -115,194 +124,404 @@ beforeEach(() => {
   getNotes.mockResolvedValue({ notes: collectionNotes });
 });
 
-describe("NotesTable filters", () => {
-  test("the table opens without the filter row", async () => {
+describe("NotesTable filter chips", () => {
+  test("the table opens with one filter field and no chips", async () => {
     renderTable();
 
     await screen.findByText("AAAA");
 
+    expect(filterFieldButton()).toHaveTextContent("Catalog");
     expect(
-      screen.queryByLabelText("Filter Denomination"),
-    ).not.toBeInTheDocument();
-    expect(await filtersToggle()).toHaveAttribute("aria-expanded", "false");
+      screen.getByRole("searchbox", { name: "Filter Catalog" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: "Clear all" })).toBeNull();
+    expect(
+      screen.getByText(
+        "No filters yet — pick a field, type, press ⏎. Same field ORs, different fields AND.",
+      ),
+    ).toBeInTheDocument();
   });
 
-  test("the Filters control reveals the filter row", async () => {
+  test("the field menu marks the current field and focuses the input after a pick", async () => {
     renderTable();
+    const user = userEvent.setup();
 
     await screen.findByText("AAAA");
-    const user = await openFilters();
+    await user.click(filterFieldButton());
 
-    const filter = await screen.findByLabelText("Filter Denomination");
-    expect(filter).toBeVisible();
-    expect(await filtersToggle()).toHaveAttribute("aria-expanded", "true");
-
-    await user.click(await filtersToggle());
-
+    const menu = screen.getByRole("menu", { name: "Filter field" });
     expect(
-      screen.queryByLabelText("Filter Denomination"),
-    ).not.toBeInTheDocument();
-    expect(await filtersToggle()).toHaveAttribute("aria-expanded", "false");
+      within(menu).getByRole("menuitemradio", { name: "Catalog" }),
+    ).toHaveAttribute("aria-checked", "true");
+
+    await user.click(
+      within(menu).getByRole("menuitemradio", { name: "Serial" }),
+    );
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(filterFieldButton()).toHaveTextContent("Serial");
+    expect(
+      screen.getByRole("searchbox", { name: "Filter Serial" }),
+    ).toHaveFocus();
   });
 
-  test("typing a filter updates the badge and shows a removable chip", async () => {
+  test("Enter commits a chip and filters the rows", async () => {
     renderTable();
+    const user = userEvent.setup();
 
     await screen.findByText("AAAA");
-    const user = await openFilters();
+    await commitChip(user, "Company", "PMG");
 
-    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
-
-    const toggle = await screen.findByRole("button", {
-      name: "Filters (1 active)",
+    expect(
+      screen.getByRole("button", { name: "Edit Company filter PMG" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Remove Company PMG" }),
+    ).toBeInTheDocument();
+    expect(screen.queryByText(/^No filters yet/)).toBeNull();
+    expect(filterInput("Company")).toHaveValue("");
+    await waitFor(() => {
+      expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
     });
-    expect(within(toggle).getByText("1")).toBeInTheDocument();
-    expect(screen.getByText("Company: PMG")).toBeInTheDocument();
+    expect(screen.getByText("AAAA")).toBeInTheDocument();
+    expect(screen.getByText("CCCC")).toBeInTheDocument();
+  });
+
+  test("typing alone does not filter until Enter", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await chooseField(user, "Company");
+    await user.type(filterInput("Company"), "PCGS");
+
+    // No chip, no rows hidden: the draft is not a filter yet.
+    expect(screen.getByText("AAAA")).toBeInTheDocument();
+    expect(screen.queryByRole("button", { name: /^Edit Company/ })).toBeNull();
+
+    await user.keyboard("{Enter}");
+
     expect(
-      screen.getByRole("button", { name: "Remove Company filter" }),
+      await screen.findByRole("button", { name: "Edit Company filter PCGS" }),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("AAAA")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("BBBB")).toBeInTheDocument();
+  });
+
+  test("two chips on one field are ORed", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Company", "PMG");
+    await commitChip(user, "Company", "PCGS");
+
+    expect(screen.getByText("or")).toBeInTheDocument();
+    expect(screen.getByText("AAAA")).toBeInTheDocument();
+    expect(screen.getByText("BBBB")).toBeInTheDocument();
+    expect(screen.getByText("CCCC")).toBeInTheDocument();
+  });
+
+  test("chips on different fields are ANDed", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Company", "PMG");
+    await commitChip(user, "Serial", "SER-3");
+
+    expect(screen.getByText("and")).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("AAAA")).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
+    expect(screen.getByText("CCCC")).toBeInTheDocument();
+  });
+
+  test("the Tags field opens a ranked suggestion list", async () => {
+    getNotes.mockResolvedValue({
+      notes: [
+        note(1, {
+          denomination: "AAAA",
+          tags: [{ name: "2 digits" }, { name: "BNR: 298b" }],
+        }),
+        note(2, { denomination: "BBBB" }),
+        note(3, { denomination: "CCCC" }),
+      ],
+    });
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    expect(
+      screen.queryByRole("listbox", { name: "Tag suggestions" }),
+    ).toBeNull();
+
+    await chooseField(user, "Tags");
+
+    const list = await screen.findByRole("listbox", {
+      name: "Tag suggestions",
+    });
+    expect(
+      within(list).getByRole("option", { name: "2 digits" }),
+    ).toBeInTheDocument();
+
+    await user.type(filterInput("Tags"), "2");
+
+    expect(
+      within(list).getByRole("option", { name: "2 digits" }),
+    ).toBeInTheDocument();
+    expect(
+      within(list).getByRole("option", { name: "BNR: 298b" }),
+    ).toBeInTheDocument();
+    expect(
+      within(list).getByRole("option", { name: /Create “2”/ }),
     ).toBeInTheDocument();
   });
 
-  test("a tags filter counts once and reads as one chip", async () => {
+  test("picking a tag suggestion commits its chip", async () => {
+    getNotes.mockResolvedValue({
+      notes: [
+        note(1, {
+          denomination: "AAAA",
+          tags: [{ name: "2 digits" }],
+        }),
+        note(2, { denomination: "BBBB" }),
+        note(3, { denomination: "CCCC" }),
+      ],
+    });
     renderTable();
+    const user = userEvent.setup();
 
     await screen.findByText("AAAA");
-    const user = await openFilters();
+    await chooseField(user, "Tags");
 
-    const tags = await screen.findByLabelText("Filter Tags");
-    await user.type(tags, "Silver Certificate{Enter}");
+    const list = await screen.findByRole("listbox", {
+      name: "Tag suggestions",
+    });
+    await user.click(within(list).getByRole("option", { name: "2 digits" }));
+
     expect(
-      await screen.findByRole("button", { name: "Filters (1 active)" }),
+      await screen.findByRole("button", {
+        name: "Edit Tags filter 2 digits",
+      }),
     ).toBeInTheDocument();
-    expect(screen.getByText("Tags: Silver Certificate")).toBeInTheDocument();
+    expect(filterInput("Tags")).toHaveValue("");
+    expect(
+      screen.queryByRole("listbox", { name: "Tag suggestions" }),
+    ).toBeNull();
+  });
 
-    await user.type(
-      await screen.findByLabelText("Filter Tags"),
-      "Star Note{Enter}",
+  test("a brand-new tag is offered as a create row", async () => {
+    getNotes.mockResolvedValue({
+      notes: [
+        note(1, {
+          denomination: "AAAA",
+          tags: [{ name: "2 digits" }],
+        }),
+        note(2, { denomination: "BBBB" }),
+        note(3, { denomination: "CCCC" }),
+      ],
+    });
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await chooseField(user, "Tags");
+    await user.type(filterInput("Tags"), "never seen");
+
+    const list = await screen.findByRole("listbox", {
+      name: "Tag suggestions",
+    });
+    await user.click(
+      within(list).getByRole("option", { name: /Create “never seen”/ }),
     );
 
     expect(
-      screen.getByRole("button", { name: "Filters (1 active)" }),
+      await screen.findByRole("button", {
+        name: "Edit Tags filter never seen",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  test("commas split one input into ORed chips", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Company", "PMG,PCGS");
+
+    expect(
+      screen.getByRole("button", { name: "Edit Company filter PMG" }),
     ).toBeInTheDocument();
     expect(
-      screen.getByText("Tags: Silver Certificate, Star Note"),
+      screen.getByRole("button", { name: "Edit Company filter PCGS" }),
     ).toBeInTheDocument();
   });
 
-  test("a filter row collapses without losing the applied filter", async () => {
+  test("a leading ! negates a chip", async () => {
     renderTable();
+    const user = userEvent.setup();
 
     await screen.findByText("AAAA");
-    const user = await openFilters();
+    await commitChip(user, "Company", "!PCGS");
 
-    const company = await screen.findByLabelText("Filter Company");
-    await user.type(company, "PMG");
-
-    await user.click(await filtersToggle());
-
-    // The row closes, the chip keeps the state visible, and the filter still
-    // applies. Reopening restores the typed value.
     expect(
-      await screen.findByText("Company: PMG"),
+      screen.getByRole("button", { name: "Edit Company filter PCGS" }),
     ).toBeInTheDocument();
-    expect(await filtersToggle()).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
-
-    await user.click(await filtersToggle());
-    expect(await screen.findByLabelText("Filter Company")).toHaveValue("PMG");
+    await waitFor(() => {
+      expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("AAAA")).toBeInTheDocument();
+    expect(screen.getByText("CCCC")).toBeInTheDocument();
   });
 
-  test("the Filters toggle keeps working while a filter is applied", async () => {
+  test("a duplicate value is not added twice", async () => {
     renderTable();
+    const user = userEvent.setup();
 
     await screen.findByText("AAAA");
-    const user = await openFilters();
+    await commitChip(user, "Company", "PMG");
+    await commitChip(user, "Company", "PMG");
 
-    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
-    const toggle = await filtersToggle();
-
-    // A control that ignores a click reads as broken; with the chip carrying
-    // the state, the row is free to close.
-    expect(toggle).not.toHaveAttribute("aria-disabled");
-    expect(toggle).toHaveAttribute("aria-expanded", "true");
-
-    await user.click(toggle);
-    expect(await filtersToggle()).toHaveAttribute("aria-expanded", "false");
-
-    await user.click(await filtersToggle());
-    expect(await filtersToggle()).toHaveAttribute("aria-expanded", "true");
+    expect(
+      screen.getAllByRole("button", { name: "Edit Company filter PMG" }),
+    ).toHaveLength(1);
   });
 
-  test("removing a chip clears that column filter", async () => {
+  test("removing a chip restores the rows", async () => {
     renderTable();
+    const user = userEvent.setup();
 
     await screen.findByText("AAAA");
-    const user = await openFilters();
-
-    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
+    await commitChip(user, "Company", "PMG");
     await waitFor(() => {
       expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
     });
 
     await user.click(
-      screen.getByRole("button", { name: "Remove Company filter" }),
+      screen.getByRole("button", { name: "Remove Company PMG" }),
     );
 
-    expect(await screen.findByLabelText("Filter Company")).toHaveValue("");
-    expect(screen.queryByText("Company: PMG")).not.toBeInTheDocument();
+    expect(await screen.findByText("BBBB")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /active\)/ }),
-    ).not.toBeInTheDocument();
-    await screen.findByText("BBBB");
+      screen.queryByRole("button", { name: "Remove Company PMG" }),
+    ).toBeNull();
   });
 
-  test("Clear all is available as soon as one filter is active", async () => {
+  test("Clear all removes every chip", async () => {
     renderTable();
+    const user = userEvent.setup();
 
     await screen.findByText("AAAA");
-    const user = await openFilters();
-
-    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
-    expect(screen.getByText("Company: PMG")).toBeInTheDocument();
+    await commitChip(user, "Company", "PMG");
+    await commitChip(user, "Serial", "SER-3");
 
     await user.click(screen.getByRole("button", { name: "Clear all" }));
 
-    expect(await screen.findByLabelText("Filter Company")).toHaveValue("");
-    expect(screen.queryByText("Company: PMG")).not.toBeInTheDocument();
-    await screen.findByText("BBBB");
+    expect(screen.queryByRole("button", { name: /^Edit / })).toBeNull();
+    expect(screen.queryByRole("button", { name: "Clear all" })).toBeNull();
+    expect(await screen.findByText("BBBB")).toBeInTheDocument();
   });
 
-  test("Clear all clears every column filter", async () => {
+  test("a chip value can be edited in place", async () => {
     renderTable();
+    const user = userEvent.setup();
 
     await screen.findByText("AAAA");
-    const user = await openFilters();
+    await commitChip(user, "Company", "PMG");
 
-    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
-    await user.type(await screen.findByLabelText("Filter Serial"), "SER-3");
-    expect(screen.getByText("Company: PMG")).toBeInTheDocument();
-    expect(screen.getByText("Serial: SER-3")).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Edit Company filter PMG" }),
+    );
 
-    await user.click(screen.getByRole("button", { name: "Clear all" }));
+    const editor = screen.getByLabelText("Edit Company filter");
+    expect(editor).toHaveFocus();
+    expect(editor.selectionStart).toBe(0);
+    expect(editor.selectionEnd).toBe("PMG".length);
+    await user.clear(editor);
+    await user.type(editor, "PCGS{Enter}");
 
-    expect(await screen.findByLabelText("Filter Company")).toHaveValue("");
-    expect(screen.getByLabelText("Filter Serial")).toHaveValue("");
-    expect(screen.queryByText("Company: PMG")).not.toBeInTheDocument();
-    expect(screen.queryByText("Serial: SER-3")).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /active\)/ }),
-    ).not.toBeInTheDocument();
-    await screen.findByText("BBBB");
+      await screen.findByRole("button", { name: "Edit Company filter PCGS" }),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("AAAA")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("BBBB")).toBeInTheDocument();
   });
 
-  test("Escape after clicking above the table clears the filters", async () => {
+  test("editing a chip to empty removes it", async () => {
     renderTable();
+    const user = userEvent.setup();
 
     await screen.findByText("AAAA");
-    const user = await openFilters();
+    await commitChip(user, "Company", "PMG");
 
-    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
-    expect(screen.getByText("Company: PMG")).toBeInTheDocument();
+    await user.click(
+      screen.getByRole("button", { name: "Edit Company filter PMG" }),
+    );
+    const editor = screen.getByLabelText("Edit Company filter");
+    await user.clear(editor);
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(screen.queryByRole("button", { name: /^Edit Company/ })).toBeNull();
+    });
+    expect(await screen.findByText("BBBB")).toBeInTheDocument();
+  });
+
+  test("an uncommitted draft survives a chip removal", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Company", "PMG");
+    await chooseField(user, "Serial");
+    await user.type(filterInput("Serial"), "SER");
+
+    await user.click(
+      screen.getByRole("button", { name: "Remove Company PMG" }),
+    );
+
+    expect(filterInput("Serial")).toHaveValue("SER");
+  });
+
+  test("Enter on an empty field adds nothing", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await chooseField(user, "Company");
+    await user.keyboard("{Enter}");
+
+    expect(screen.queryByRole("button", { name: "Clear all" })).toBeNull();
+  });
+
+  test("hiding a filtered column drops its chips", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Company", "PMG");
+
+    await user.click(screen.getByRole("button", { name: /Columns/ }));
+    await user.click(screen.getByRole("checkbox", { name: "Company" }));
+
+    expect(
+      screen.queryByRole("button", { name: /^Edit Company/ }),
+    ).toBeNull();
+    expect(await screen.findByText("BBBB")).toBeInTheDocument();
+  });
+
+  test("Escape above the table clears the chips", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Company", "PMG");
 
     // Clicking the page chrome above the table leaves focus on <body>.
     await user.click(screen.getByRole("heading", { name: "Test" }));
@@ -310,92 +529,56 @@ describe("NotesTable filters", () => {
 
     await user.keyboard("{Escape}");
 
-    expect(screen.queryByText("Company: PMG")).not.toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: /active\)/ }),
-    ).not.toBeInTheDocument();
-    await screen.findByText("BBBB");
+    expect(screen.queryByRole("button", { name: /^Edit Company/ })).toBeNull();
+    expect(await screen.findByText("BBBB")).toBeInTheDocument();
   });
 
-  test("Escape on a header sort control keeps the filters", async () => {
+  test("Escape on a header sort control keeps the chips", async () => {
     renderTable();
+    const user = userEvent.setup();
 
     await screen.findByText("AAAA");
-    const user = await openFilters();
-
-    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
+    await commitChip(user, "Company", "PMG");
 
     const sort = screen.getByRole("button", { name: "Denomination" });
     sort.focus();
     await user.keyboard("{Escape}");
 
     expect(sort).toHaveFocus();
-    expect(screen.getByText("Company: PMG")).toBeInTheDocument();
-  });
-
-  test("the filter inputs tab in column order", async () => {
-    renderTable();
-
-    await screen.findByText("AAAA");
-    const user = await openFilters();
-
-    await user.click(await screen.findByLabelText("Filter Catalog #"));
-
-    for (const label of [
-      "Filter Denomination",
-      "Filter Date",
-      "Filter Company",
-      "Filter Grade",
-      "Filter Serial",
-      "Filter Tags",
-    ]) {
-      await user.tab();
-      expect(screen.getByLabelText(label)).toHaveFocus();
-    }
-  });
-
-  test("the / key focuses search, not a column filter", async () => {
-    renderTable();
-
-    await screen.findByText("AAAA");
-    await openFilters();
-    const search = screen.getByRole("searchbox", { name: "Search notes" });
-
-    await userEvent.setup().keyboard("/");
-
-    expect(search).toHaveFocus();
-  });
-
-  test("Reset filters closes the row once the filters are cleared", async () => {
-    renderTable();
-
-    await screen.findByText("AAAA");
-    const user = await openFilters();
-
-    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
-    await user.click(
-      screen.getByRole("button", {
-        name: "Reset view",
-      }),
-    );
-
     expect(
-      screen.queryByLabelText("Filter Company"),
-    ).not.toBeInTheDocument();
-    expect(await filtersToggle()).toHaveAttribute("aria-expanded", "false");
-    await screen.findByText("BBBB");
+      screen.getByRole("button", { name: "Edit Company filter PMG" }),
+    ).toBeInTheDocument();
+  });
+
+  test("Reset view clears the chips", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Company", "PMG");
+
+    await user.click(screen.getByRole("button", { name: "Reset view" }));
+
+    expect(screen.queryByRole("button", { name: /^Edit Company/ })).toBeNull();
+    expect(await screen.findByText("BBBB")).toBeInTheDocument();
+  });
+
+  test("the / key focuses the filter field", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await user.keyboard("/");
+
+    expect(screen.getByRole("searchbox", { name: "Filter Catalog" })).toHaveFocus();
   });
 
   test("filters are never written to saved table state", async () => {
     renderTable();
+    const user = userEvent.setup();
 
     await screen.findByText("AAAA");
-    const user = await openFilters();
-    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
-
-    await waitFor(() => {
-      expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
-    });
+    await commitChip(user, "Company", "PMG");
 
     // Filtering alone is not a structural change, so nothing is saved yet.
     expect(
@@ -435,6 +618,8 @@ describe("NotesTable filters", () => {
 
     await screen.findByText("AAAA");
     expect(screen.getByText("BBBB")).toBeInTheDocument();
-    expect(screen.queryByLabelText("Filter Company")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /^Edit Company/ }),
+    ).toBeNull();
   });
 });

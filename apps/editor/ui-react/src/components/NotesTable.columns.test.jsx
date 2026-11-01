@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
+import { chooseFilterField } from "../test/filterBar.js";
 
 vi.mock("../lib/api.js", () => ({
   deleteNote: vi.fn(),
@@ -291,15 +292,17 @@ describe("NotesTable columns", () => {
 
     await screen.findByText("AAAA");
     const user = userEvent.setup();
-    await user.click(screen.getByRole("button", { name: "Filters" }));
-    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
+    await chooseFilterField(user, "Company");
+    await user.type(
+      screen.getByRole("searchbox", { name: "Filter Company" }),
+      "PMG{Enter}",
+    );
 
     await waitFor(() => {
       expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
     });
-    expect(screen.getByText("Company: PMG")).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: "Filters (1 active)" }),
+      screen.getByRole("button", { name: "Edit Company filter PMG" }),
     ).toBeInTheDocument();
 
     await user.click(await columnsButton());
@@ -308,9 +311,8 @@ describe("NotesTable columns", () => {
     });
     await user.click(within(dialog).getByRole("checkbox", { name: "Company" }));
 
-    expect(screen.queryByText("Company: PMG")).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: /^Filters \(/ }),
+      screen.queryByRole("button", { name: /^Edit Company filter/ }),
     ).not.toBeInTheDocument();
     await screen.findByText("BBBB");
   });

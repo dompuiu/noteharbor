@@ -292,13 +292,17 @@ describe("table styles", () => {
     );
   });
 
-  // The filter row and the toolbar search read as one control band: the
-  // text filter matches the search field's 36px, and the tags combobox does
-  // too once its border is counted.
+  // The toolbar search keeps the prototype's taller 40px bar; the column
+  // filters below stay on their own 36px band.
   test("column filters match the search field's height", () => {
-    const search = styles.match(/\.table-search-input\s*\{([^}]*)\}/);
+    const search = styles.match(/^\.table-search-input\s*\{([^}]*)\}/m);
     expect(search).not.toBeNull();
     expect(search[1]).toMatch(/height:\s*36px/);
+
+    // The scoped field matches the prototype's 40px bar.
+    const scoped = styles.match(/\.table-search--scoped\s*\{([^}]*)\}/);
+    expect(scoped).not.toBeNull();
+    expect(scoped[1]).toMatch(/height:\s*40px/);
 
     const filter = styles.match(/\.filter-input\s*\{([^}]*)\}/);
     expect(filter).not.toBeNull();
@@ -317,6 +321,21 @@ describe("table styles", () => {
     );
     expect(tagsInput).not.toBeNull();
     expect(tagsInput[1]).toMatch(/min-height:\s*0/);
+  });
+
+  // The idle hint under the field and the input placeholder share the
+  // prototype's lighter tone and 12px scale.
+  test("the filter bar hint matches the prototype's tone", () => {
+    const hint = styles.match(/\.table-filter-chips-empty\s*\{([^}]*)\}/);
+    expect(hint).not.toBeNull();
+    expect(hint[1]).toMatch(/color:\s*var\(--text-hint\)/);
+    expect(hint[1]).toMatch(/font-size:\s*0\.75rem/);
+
+    const placeholder = styles.match(
+      /\.table-search--scoped \.table-search-input::placeholder\s*\{([^}]*)\}/,
+    );
+    expect(placeholder).not.toBeNull();
+    expect(placeholder[1]).toMatch(/color:\s*var\(--text-hint\)/);
   });
 
   // The Clear all affordance sits inside the tags filter; hovering it should
@@ -366,18 +385,88 @@ describe("table styles", () => {
     expect(firstChild[1]).not.toMatch(/font-weight:/);
   });
 
-  // Active filters stay legible without opening the row: the chip fill and
-  // the count badge use the warm accent family, not a new palette.
-  test("filter chips and the count badge stay in the accent family", () => {
+  // Filter chips stay legible at rest: the field label reads as a label, the
+  // value chip carries the accent wash, and a negation stays in the danger
+  // family. No new palette.
+  test("filter chips stay in the accent family", () => {
     const chip = styles.match(/\.table-filter-chip\s*\{([^}]*)\}/);
     expect(chip).not.toBeNull();
     expect(chip[1]).toMatch(/background:\s*var\(--accent-soft\)/);
     expect(chip[1]).toMatch(/color:\s*var\(--accent-strong\)/);
 
-    const count = styles.match(/\.table-filter-count\s*\{([^}]*)\}/);
-    expect(count).not.toBeNull();
-    expect(count[1]).toMatch(/background:\s*var\(--accent-strong\)/);
-    expect(count[1]).toMatch(/color:\s*var\(--accent-ink\)/);
+    const label = styles.match(/\.table-filter-facet-label\s*\{([^}]*)\}/);
+    expect(label).not.toBeNull();
+    expect(label[1]).toMatch(/color:\s*var\(--text-muted\)/);
+
+    const negated = styles.match(/\.table-filter-chip--negated\s*\{([^}]*)\}/);
+    expect(negated).not.toBeNull();
+    expect(negated[1]).toMatch(/var\(--danger\)/);
+  });
+
+  // The chip row follows the prototype's metrics: a 28px facet, a 24px value
+  // chip, 12px labels and a 9px "and" separator.
+  test("filter chips match the prototype's metrics", () => {
+    const facet = styles.match(/\.table-filter-facet\s*\{([^}]*)\}/);
+    expect(facet).not.toBeNull();
+    expect(facet[1]).toMatch(/height:\s*28px/);
+    expect(facet[1]).toMatch(/padding:\s*0\s+4px\s+0\s+2px/);
+
+    const chip = styles.match(/\.table-filter-chip\s*\{([^}]*)\}/);
+    expect(chip).not.toBeNull();
+    expect(chip[1]).toMatch(/height:\s*24px/);
+
+    const label = styles.match(/\.table-filter-facet-label\s*\{([^}]*)\}/);
+    expect(label).not.toBeNull();
+    expect(label[1]).toMatch(/font-size:\s*0\.75rem/);
+    expect(label[1]).toMatch(/font-weight:\s*650/);
+
+    const and = styles.match(/\.table-filter-and\s*\{([^}]*)\}/);
+    expect(and).not.toBeNull();
+    expect(and[1]).toMatch(/font-size:\s*0\.5625rem/);
+    expect(and[1]).toMatch(/padding:\s*0\s+6px/);
+
+    const clear = styles.match(/\.table-filter-clear-all\s*\{([^}]*)\}/);
+    expect(clear).not.toBeNull();
+    expect(clear[1]).toMatch(/color:\s*var\(--accent\)/);
+    expect(clear[1]).toMatch(/margin-left:\s*6px/);
+
+    // The remove cross is drawn, not typed, so it centres in its 17px hit box.
+    const cross = styles.match(/\.table-filter-chip-remove svg\s*\{([^}]*)\}/);
+    expect(cross).not.toBeNull();
+    expect(cross[1]).toMatch(/display:\s*block/);
+    expect(cross[1]).toMatch(/width:\s*8px/);
+  });
+
+  // Tag suggestions float on their own surface, and the create arm is split
+  // off by a dashed rule.
+  test("tag suggestions keep the floating list look", () => {
+    const dropdown = styles.match(/\.tags-filter-dropdown\s*\{([^}]*)\}/);
+    expect(dropdown).not.toBeNull();
+    expect(dropdown[1]).toMatch(/border-radius:\s*var\(--radius-md\)/);
+    expect(dropdown[1]).toMatch(/box-shadow:\s*var\(--shadow-md\)/);
+
+    const create = styles.match(
+      /\.tags-filter-option--create\s*\{([^}]*)\}/,
+    );
+    expect(create).not.toBeNull();
+    expect(create[1]).toMatch(/font-weight:\s*700/);
+
+    const rule = styles.match(
+      /\.tags-filter-option--create::before\s*\{([^}]*)\}/,
+    );
+    expect(rule).not.toBeNull();
+    expect(rule[1]).toMatch(
+      /border-top:\s*1px dashed var\(--border-control\)/,
+    );
+  });
+
+  // A matched substring is marked in place: the row explains itself without
+  // changing cell metrics.
+  test("matched text is marked without moving the cell", () => {
+    const mark = styles.match(/\.table-shell mark\s*\{([^}]*)\}/);
+    expect(mark).not.toBeNull();
+    expect(mark[1]).toMatch(/background:/);
+    expect(mark[1]).not.toMatch(/padding:\s*0\s+\d+px\s+0\s+\d+px/);
   });
 
   // The column picker is portalled so the table's scroll containers cannot

@@ -429,7 +429,7 @@ export const TagsField = forwardRef(function TagsField(
               {showCreate ? (
                 <button
                   aria-selected={highlighted === filtered.length}
-                  className={`tags-filter-option${highlighted === filtered.length ? " is-highlighted" : ""}`}
+                  className={`tags-filter-option tags-filter-option--create${highlighted === filtered.length ? " is-highlighted" : ""}`}
                   onClick={() => pick(`__create:${trimmed}`)}
                   onMouseEnter={() => setHighlighted(filtered.length)}
                   ref={
@@ -438,10 +438,6 @@ export const TagsField = forwardRef(function TagsField(
                       : undefined
                   }
                   role="option"
-                  style={{
-                    borderTop: "1px dashed var(--border-control)",
-                    fontWeight: 700,
-                  }}
                   type="button"
                 >
                   + Create “{trimmed}”

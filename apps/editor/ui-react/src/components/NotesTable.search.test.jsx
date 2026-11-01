@@ -28,6 +28,7 @@ vi.mock("@tanstack/react-virtual", () => ({
 }));
 
 import { getNotes } from "../lib/api.js";
+import { chooseFilterField, filterFieldButton } from "../test/filterBar.js";
 
 class FakeResizeObserver {
   observe() {}
@@ -98,8 +99,13 @@ function renderTable(overrides = {}) {
   );
 }
 
-async function searchBox() {
-  return screen.findByRole("searchbox", { name: "Search notes" });
+function filterInput(label = "Catalog") {
+  return screen.getByRole("searchbox", { name: `Filter ${label}` });
+}
+
+async function searchAllFields(user, query) {
+  await chooseFilterField(user, "All fields");
+  await user.type(filterInput("All fields"), `${query}{Enter}`);
 }
 
 async function currentHash() {
@@ -125,14 +131,12 @@ beforeEach(() => {
 });
 
 describe("NotesTable search", () => {
-  test("2300 finds the same rows as Fr. 2300", async () => {
+  test("All fields finds the same rows for 2300 and Fr. 2300", async () => {
     const user = userEvent.setup();
     renderTable();
 
-    const input = await searchBox();
     await screen.findByText("AAAA");
-
-    await user.type(input, "2300");
+    await searchAllFields(user, "2300");
 
     await waitFor(() => {
       expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
@@ -140,8 +144,12 @@ describe("NotesTable search", () => {
     expect(screen.getByText("AAAA")).toBeInTheDocument();
     expect(screen.getByText("CCCC")).toBeInTheDocument();
 
-    await user.clear(input);
-    await user.type(input, "Fr. 2300");
+    await user.click(
+      screen.getByRole("button", { name: "Edit All fields filter 2300" }),
+    );
+    const editor = screen.getByLabelText("Edit All fields filter");
+    await user.clear(editor);
+    await user.type(editor, "Fr. 2300{Enter}");
 
     await waitFor(() => {
       expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
@@ -150,7 +158,21 @@ describe("NotesTable search", () => {
     expect(screen.getByText("CCCC")).toBeInTheDocument();
   });
 
-  test("1000 finds a stored denomination of $1,000", async () => {
+  test("All fields ANDs the words of one query", async () => {
+    const user = userEvent.setup();
+    renderTable();
+
+    await screen.findByText("AAAA");
+    await searchAllFields(user, "2300 CCCC");
+
+    await waitFor(() => {
+      expect(screen.queryByText("AAAA")).not.toBeInTheDocument();
+    });
+    expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
+    expect(screen.getByText("CCCC")).toBeInTheDocument();
+  });
+
+  test("All fields normalises denominations: 1000 finds $1,000", async () => {
     getNotes.mockResolvedValue({
       notes: [
         note(1, { denomination: "$1,000", catalog_number: "Fr. 1" }),
@@ -160,10 +182,8 @@ describe("NotesTable search", () => {
     const user = userEvent.setup();
     renderTable();
 
-    const input = await searchBox();
     await screen.findByText("$1,000");
-
-    await user.type(input, "1000");
+    await searchAllFields(user, "1000");
 
     await waitFor(() => {
       expect(screen.queryByText("$5")).not.toBeInTheDocument();
@@ -171,11 +191,43 @@ describe("NotesTable search", () => {
     expect(screen.getByText("$1,000")).toBeInTheDocument();
   });
 
-  test("the / key focuses the search field and the dialog says so", async () => {
+  test("Catalog scope matches a catalog prefix, not a substring", async () => {
     const user = userEvent.setup();
     renderTable();
 
-    const input = await searchBox();
+    await screen.findByText("AAAA");
+
+    // "2300" is inside "Fr. 2300" but the catalog prefix is "fr. 2300".
+    await user.type(filterInput("Catalog"), "2300{Enter}");
+    await waitFor(() => {
+      expect(screen.queryByText("AAAA")).not.toBeInTheDocument();
+    });
+
+    await user.click(screen.getByRole("button", { name: "Clear all" }));
+    await user.type(filterInput("Catalog"), "Fr. 2300{Enter}");
+
+    await waitFor(() => {
+      expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("AAAA")).toBeInTheDocument();
+    expect(screen.getByText("CCCC")).toBeInTheDocument();
+  });
+
+  test("matched text is marked in the cells", async () => {
+    const user = userEvent.setup();
+    renderTable();
+
+    await screen.findByText("AAAA");
+    await searchAllFields(user, "2300");
+
+    const marks = await screen.findAllByText("2300", { selector: "mark" });
+    expect(marks.length).toBeGreaterThan(0);
+  });
+
+  test("the / key focuses the filter field and the dialog says so", async () => {
+    const user = userEvent.setup();
+    renderTable();
+
     await screen.findByText("AAAA");
 
     await user.keyboard("?");
@@ -183,11 +235,11 @@ describe("NotesTable search", () => {
       name: "Keyboard shortcuts",
     });
     const row = within(dialog)
-      .getByText("Focus the search field")
+      .getByText("Focus the filter field")
       .closest("li");
-    expect(Array.from(row.querySelectorAll("kbd"), (key) => key.textContent)).toEqual([
-      "/",
-    ]);
+    expect(
+      Array.from(row.querySelectorAll("kbd"), (key) => key.textContent),
+    ).toEqual(["/"]);
 
     await user.keyboard("{Escape}");
     await waitFor(() => {
@@ -198,15 +250,15 @@ describe("NotesTable search", () => {
 
     await user.keyboard("/");
 
-    expect(input).toHaveFocus();
+    expect(filterInput("Catalog")).toHaveFocus();
   });
 
-  test("Escape inside the search field blurs it without clearing the query", async () => {
+  test("Escape inside the field lands on the first row without clearing the draft", async () => {
     const user = userEvent.setup();
     renderTable();
 
-    const input = await searchBox();
     await screen.findByText("AAAA");
+    const input = filterInput("Catalog");
     await user.type(input, "2300");
     expect(input).toHaveFocus();
 
@@ -214,61 +266,57 @@ describe("NotesTable search", () => {
 
     expect(input).not.toHaveFocus();
     expect(input).toHaveValue("2300");
+    expect(document.querySelector("tbody tr.table-row-link")).toHaveFocus();
   });
 
-  test("the count sentence follows the query", async () => {
+  test("the count sentence follows the chips", async () => {
     const user = userEvent.setup();
     renderTable();
 
-    const input = await searchBox();
     await screen.findByText("Showing 3 of 3 notes · sorted by # ascending");
 
-    await user.type(input, "2300");
+    await searchAllFields(user, "2300");
 
     expect(
       await screen.findByText("Showing 2 of 3 notes · sorted by # ascending"),
     ).toBeInTheDocument();
   });
 
-  test("search ANDs with a column filter", async () => {
+  test("two fields AND together", async () => {
     const user = userEvent.setup();
     renderTable();
 
-    const input = await searchBox();
-    await user.click(
-      await screen.findByRole("button", { name: "Filters" }),
-    );
-    const denominationFilter = await screen.findByLabelText(
-      "Filter Denomination",
-    );
     await screen.findByText("AAAA");
+    await searchAllFields(user, "2300");
 
-    await user.type(denominationFilter, "AAAA");
-    await user.type(input, "2300");
+    await chooseFilterField(user, "Denomination");
+    await user.type(
+      await screen.findByRole("searchbox", { name: "Filter Denomination" }),
+      "AAAA{Enter}",
+    );
 
+    const table = screen.getByRole("table");
     await waitFor(() => {
-      expect(screen.queryByText("CCCC")).not.toBeInTheDocument();
+      expect(within(table).queryByText("CCCC")).not.toBeInTheDocument();
     });
-    expect(screen.getByText("AAAA")).toBeInTheDocument();
-    expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
+    expect(within(table).getByText("AAAA")).toBeInTheDocument();
+    expect(within(table).queryByText("BBBB")).not.toBeInTheDocument();
   });
 
-  test("Clear search restores the full collection", async () => {
+  test("Clear all restores the full collection", async () => {
     const user = userEvent.setup();
     renderTable();
 
-    const input = await searchBox();
     await screen.findByText("AAAA");
-    await user.type(input, "2300");
+    await searchAllFields(user, "2300");
 
     await waitFor(() => {
       expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
     });
 
-    await user.click(screen.getByRole("button", { name: "Clear search" }));
+    await user.click(screen.getByRole("button", { name: "Clear all" }));
 
     await screen.findByText("BBBB");
-    expect(input).toHaveValue("");
     expect(screen.getByText("AAAA")).toBeInTheDocument();
     expect(screen.getByText("CCCC")).toBeInTheDocument();
     expect(
@@ -276,29 +324,25 @@ describe("NotesTable search", () => {
     ).toBeInTheDocument();
   });
 
-  test("no matches names the query and offers the recovery", async () => {
+  test("no matches says the view is empty and offers the recovery", async () => {
     const user = userEvent.setup();
     renderTable();
 
-    const input = await searchBox();
     await screen.findByText("AAAA");
-
-    await user.type(input, "no-such-note");
+    await searchAllFields(user, "no-such-note");
 
     expect(
-      await screen.findByText("No notes match “no-such-note”."),
+      await screen.findByText("No notes match the active filters."),
     ).toBeInTheDocument();
     expect(
       screen.queryByText("No notes are stored yet in this collection."),
     ).not.toBeInTheDocument();
 
-    // The clear control inside the field is 14px; the empty state carries the
-    // same recovery at the size of the decision it belongs to.
     const emptyCell = screen
-      .getByText("No notes match “no-such-note”.")
+      .getByText("No notes match the active filters.")
       .closest(".table-empty-cell");
     await user.click(
-      within(emptyCell).getByRole("button", { name: "Clear search" }),
+      within(emptyCell).getByRole("button", { name: "Clear filters" }),
     );
     expect(await screen.findByText("AAAA")).toBeInTheDocument();
   });
@@ -307,17 +351,13 @@ describe("NotesTable search", () => {
     getNotes.mockResolvedValue({ notes: [] });
     renderTable();
 
-    await searchBox();
-
+    await screen.findByText("No notes are stored yet in this collection.");
     expect(
-      await screen.findByText("No notes are stored yet in this collection."),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByText("No notes match the current view."),
+      screen.queryByText("No notes match the active filters."),
     ).not.toBeInTheDocument();
   });
 
-  test("switching collections clears the query and a reload does not restore it", async () => {
+  test("switching collections clears the chips and a reload does not restore them", async () => {
     const user = userEvent.setup();
     getNotes.mockImplementation((collectionId) =>
       Promise.resolve({
@@ -335,15 +375,14 @@ describe("NotesTable search", () => {
       </MemoryRouter>,
     );
 
-    const input = await searchBox();
     await screen.findByText("AAAA");
-    await user.type(input, "2300");
+    await searchAllFields(user, "2300");
 
     await waitFor(() => {
       expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
     });
 
-    // The query is view state only: searching writes no saved table state.
+    // Chips are view state only: filtering writes no saved table state.
     expect(
       window.localStorage.getItem("noteharbor.notesTableState.1"),
     ).toBeNull();
@@ -361,7 +400,8 @@ describe("NotesTable search", () => {
     );
 
     await screen.findByText("DDDD");
-    expect(await searchBox()).toHaveValue("");
+    expect(screen.queryByRole("button", { name: /^Edit / })).toBeNull();
+    expect(filterFieldButton()).toHaveTextContent("Catalog");
     expect(
       screen.getByText("Showing 1 of 1 notes · sorted by # ascending"),
     ).toBeInTheDocument();
@@ -370,17 +410,16 @@ describe("NotesTable search", () => {
 
     renderTable();
     await screen.findByText("AAAA");
-    expect(await searchBox()).toHaveValue("");
+    expect(screen.queryByRole("button", { name: /^Edit / })).toBeNull();
     expect(screen.getByText("BBBB")).toBeInTheDocument();
   });
 
-  test("opening a note from a searched view snapshots q and keeps next/previous in the matches", async () => {
+  test("opening a note from a filtered view snapshots the chips and keeps next/previous in the matches", async () => {
     const user = userEvent.setup();
     renderTable();
 
-    const input = await searchBox();
     await screen.findByText("AAAA");
-    await user.type(input, "2300");
+    await searchAllFields(user, "2300");
 
     await waitFor(() => {
       expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
@@ -391,7 +430,7 @@ describe("NotesTable search", () => {
     await waitFor(async () => {
       expect(await currentHash()).toContain("slideshow/1");
     });
-    expect(await currentHash()).toContain("q=2300");
+    expect(await currentHash()).toContain("fc=all%3A2300");
 
     // BBBB (id 2) is filtered out, so Next lands on the next match.
     await user.click(screen.getByRole("button", { name: "Next note" }));
@@ -399,7 +438,7 @@ describe("NotesTable search", () => {
     await waitFor(async () => {
       const hash = await currentHash();
       expect(hash).toContain("slideshow/3");
-      expect(hash).toContain("q=2300");
+      expect(hash).toContain("fc=all%3A2300");
     });
 
     await user.click(screen.getByRole("button", { name: "Previous note" }));
@@ -407,7 +446,7 @@ describe("NotesTable search", () => {
     await waitFor(async () => {
       const hash = await currentHash();
       expect(hash).toContain("slideshow/1");
-      expect(hash).toContain("q=2300");
+      expect(hash).toContain("fc=all%3A2300");
     });
 
     await user.click(screen.getByRole("button", { name: "Close slideshow" }));
@@ -415,9 +454,8 @@ describe("NotesTable search", () => {
     await waitFor(async () => {
       expect(await currentHash()).toBe("");
     });
-    expect(await searchBox()).toHaveValue("2300");
-    expect(screen.getByText("AAAA")).toBeInTheDocument();
-    expect(screen.getByText("CCCC")).toBeInTheDocument();
-    expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
+    expect(
+      await screen.findByRole("button", { name: "Edit All fields filter 2300" }),
+    ).toBeInTheDocument();
   });
 });

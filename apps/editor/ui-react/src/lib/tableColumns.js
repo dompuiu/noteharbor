@@ -323,12 +323,12 @@ export const hideableDataColumns = hideableColumns.filter(
   (column) => column.kind === "data",
 );
 
-// The search field looks across every data column, including tag names. It is
-// deliberately broader than a column filter: one substring, case-insensitive,
-// matched against any one field.
+// The All-fields chip searches every visible data column, including tag names.
+// Terms are ANDed; each term is ORed across the columns, so `22a PMG` reads as
+// "both words appear somewhere in the row".
 export const searchColumnKeys = dataColumns.map((column) => column.key);
 
-function searchableColumnValue(note, column) {
+export function columnSearchValue(note, column) {
   if (column.isTags) {
     return (note.tags ?? [])
       .map((tag) => String(tag.name ?? "").trim())
@@ -338,8 +338,16 @@ function searchableColumnValue(note, column) {
   return String(note[column.key] ?? "");
 }
 
-function searchableColumnMatches(note, column, needle) {
-  const value = searchableColumnValue(note, column);
+export function columnSearchMatches(note, column, term) {
+  const needle = String(term ?? "")
+    .trim()
+    .toLowerCase();
+
+  if (!needle) {
+    return false;
+  }
+
+  const value = columnSearchValue(note, column);
 
   // Denominations are stored with thousands separators, so the query goes
   // through the same normaliser as the column filter: `1000` finds `$1,000`.
@@ -352,17 +360,19 @@ function searchableColumnMatches(note, column, needle) {
   return value.toLowerCase().includes(needle);
 }
 
-export function matchesSearchQuery(note, query) {
-  const needle = String(query ?? "")
+export function matchesSearchQuery(note, query, columns = dataColumns) {
+  const terms = String(query ?? "")
     .trim()
-    .toLowerCase();
+    .toLowerCase()
+    .split(/\s+/)
+    .filter(Boolean);
 
-  if (!needle) {
+  if (!terms.length) {
     return true;
   }
 
-  return dataColumns.some((column) =>
-    searchableColumnMatches(note, column, needle),
+  return terms.every((term) =>
+    columns.some((column) => columnSearchMatches(note, column, term)),
   );
 }
 

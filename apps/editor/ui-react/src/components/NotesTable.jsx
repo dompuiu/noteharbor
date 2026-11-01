@@ -1,6 +1,5 @@
 import {
   Fragment,
-  forwardRef,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -35,10 +34,7 @@ import {
   pruneTableStates,
   saveTableState,
 } from "../lib/notesTableState.js";
-import {
-  shouldHandOffToFilters,
-  useFilterFocusMemory,
-} from "../lib/filterFocusMemory.js";
+import { shouldHandOffToFilters } from "../lib/filterFocusMemory.js";
 import {
   COLUMN_PAN_THRESHOLD_PX,
   COLUMN_SCROLL_STEP,
@@ -48,9 +44,9 @@ import {
   isColumnPanTarget,
 } from "../lib/tableColumnPan.js";
 import {
+  columnSearchMatches,
+  dataColumns,
   defaultSortKey,
-  filterColumnKeys,
-  filterColumns,
   getTableColumn,
   hideableColumnKeys,
   hideableColumns,
@@ -66,13 +62,14 @@ import {
   validSortKeys,
 } from "../lib/tableColumns.js";
 import { ColumnPicker } from "./ColumnPicker.jsx";
+import { FilterFieldMenu } from "./FilterFieldMenu.jsx";
+import { HighlightMatch, rankTagSuggestions } from "./TagsField.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { NoCollectionsPrompt } from "./NoCollectionsPrompt.jsx";
 import { RowActionsMenu } from "./RowActionsMenu.jsx";
 import { Slideshow } from "./Slideshow.jsx";
-import { TagsField } from "./TagsField.jsx";
 
 export function HomeHero() {
   return null;
@@ -500,43 +497,6 @@ function TagsCell({ onApplyFilter, tags }) {
   );
 }
 
-const MultiValueFilterCombobox = forwardRef(function MultiValueFilterCombobox(
-  {
-    columnLabel,
-    onArrowDown,
-    onChange,
-    onFocus,
-    onHeightChange,
-    options,
-    value,
-  },
-  forwardedRef,
-) {
-  const selectedValues = useMemo(
-    () =>
-      String(value ?? "")
-        .split(",")
-        .map((token) => token.trim())
-        .filter(Boolean),
-    [value],
-  );
-
-  return (
-    <TagsField
-      ref={forwardedRef}
-      value={selectedValues}
-      vocabulary={options}
-      onChange={(nextValues) => onChange(nextValues.join(","))}
-      onArrowDown={onArrowDown}
-      ariaLabel={`Filter ${columnLabel}`}
-      emptyText=""
-      inputProps={{ onFocus }}
-      placeholder=""
-      onHeightChange={onHeightChange}
-    />
-  );
-});
-
 // A slideshow URL that carries sort context owns the sort for the render it
 // opens on; a plain visit uses the collection's saved structure.
 function initialTableView(collectionId, route) {
@@ -568,6 +528,34 @@ function valueToString(note, key) {
   }
 
   return String(note[key] ?? "");
+}
+
+function escapeRegExp(value) {
+  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+// Marks the terms a row matched, so a result set explains itself instead of
+// leaving the collector to guess which field matched.
+function highlightTerms(text, terms) {
+  const raw = String(text ?? "");
+  const needles = [
+    ...new Set((terms ?? []).filter(Boolean).map((term) => String(term))),
+  ].sort((left, right) => right.length - left.length);
+
+  if (!needles.length) {
+    return raw;
+  }
+
+  const pattern = new RegExp(`(${needles.map(escapeRegExp).join("|")})`, "gi");
+  const parts = raw.split(pattern);
+
+  if (parts.length === 1) {
+    return raw;
+  }
+
+  return parts.map((part, index) =>
+    index % 2 === 1 ? <mark key={index}>{part}</mark> : part,
+  );
 }
 
 // How a note names itself outside the table. A denomination alone is not an
@@ -606,18 +594,125 @@ function noteThumbPath(note) {
   );
 }
 
-// Tags filters store their values comma-separated; chips read better with
-// the same separator the table uses. Every other column keeps its raw input.
-function formatFilterChipValue(column, value) {
-  if (!column.isTags) {
-    return value;
+// ── Filter chips ───────────────────────────────────────────────────
+// One chip is one condition: a field, a value, and whether it is excluded.
+// Same field ORs, different fields AND (see filterNotesByConditions).
+
+const defaultFilterField = "catalog_number";
+
+const filterFieldLabels = {
+  all: "All fields",
+  catalog_number: "Catalog",
+  denomination: "Denomination",
+  issue_date: "Date",
+  grading_company: "Company",
+  grade: "Grade",
+  serial: "Serial",
+  tags: "Tags",
+};
+
+function filterFieldLabel(field) {
+  return filterFieldLabels[field] ?? "All fields";
+}
+
+let conditionSeq = 0;
+
+function makeCondition(field, value, negated = false) {
+  conditionSeq += 1;
+  return { id: `filter-${conditionSeq}`, field, value, negated };
+}
+
+function conditionIdentity(condition) {
+  return `${condition.field}:${condition.negated ? "!" : ""}${condition.value.toLowerCase()}`;
+}
+
+// One committed input may carry several values (`22, 19`) and a negation
+// (`!PMG`); each becomes its own chip so the row states exactly what it means.
+function conditionsFromInput(field, raw) {
+  const parsed = [];
+
+  for (const token of String(raw ?? "").split(",")) {
+    const trimmed = token.trim();
+    if (!trimmed) {
+      continue;
+    }
+
+    const negated = trimmed.startsWith("!");
+    const value = (negated ? trimmed.slice(1) : trimmed).trim();
+
+    if (value) {
+      parsed.push(makeCondition(field, value, negated));
+    }
   }
 
-  return value
-    .split(",")
-    .map((token) => token.trim())
-    .filter(Boolean)
-    .join(", ");
+  return parsed;
+}
+
+function serializeConditions(conditions) {
+  return (conditions ?? [])
+    .map(
+      (condition) =>
+        `${encodeURIComponent(condition.field)}:${condition.negated ? "!" : ""}${encodeURIComponent(condition.value)}`,
+    )
+    .join(";");
+}
+
+function parseConditionsParam(raw) {
+  const parsed = [];
+
+  for (const part of String(raw ?? "").split(";")) {
+    const separator = part.indexOf(":");
+
+    if (separator <= 0) {
+      continue;
+    }
+
+    const field = decodeURIComponent(part.slice(0, separator));
+    let value = part.slice(separator + 1);
+    let negated = false;
+
+    if (value.startsWith("!")) {
+      negated = true;
+      value = value.slice(1);
+    }
+
+    try {
+      value = decodeURIComponent(value);
+    } catch {
+      continue;
+    }
+
+    if (value.trim()) {
+      parsed.push(makeCondition(field, value.trim(), negated));
+    }
+  }
+
+  return parsed;
+}
+
+// The table behind a cold-opened slideshow mirrors the URL's chip snapshot.
+// Older links carry `f_<column>` filters and `q`; both still parse.
+function conditionsFromRoute(route) {
+  if (route?.kind !== "slideshow") {
+    return [];
+  }
+
+  const parsed = [...(route.slideshowConditions ?? [])];
+
+  for (const [key, raw] of Object.entries(route.slideshowFilters ?? {})) {
+    parsed.push(...conditionsFromInput(key, raw));
+  }
+
+  if (route.slideshowQuery) {
+    parsed.push(makeCondition("all", route.slideshowQuery));
+  }
+
+  return parsed;
+}
+
+// A chip editor should not offer a field the table no longer shows.
+function isConditionVisible(condition, visibleColumnKeys) {
+  return condition.field === "all" || visibleColumnKeys.includes(condition.field);
 }
 
 function parseFilterValue(rawValue, normalizeValue) {
@@ -729,25 +824,117 @@ const rowSortCollator = new Intl.Collator(undefined, {
   sensitivity: "base",
 });
 
-function filterNotesByFilters(noteList, filterObj) {
-  const activeFilters = filterObj ?? {};
-  return noteList.filter((note) =>
-    filterColumns.every((column) => {
-      if (column.isTags) {
-        return matchesTagFilter(note, activeFilters[column.key]);
+// Filter chips: one field, one value, optionally negated. Values inside a
+// field are ORed; different fields are ANDed; a negation must not match.
+function groupConditions(conditions) {
+  const groups = new Map();
+
+  for (const condition of conditions ?? []) {
+    if (!groups.has(condition.field)) {
+      groups.set(condition.field, []);
+    }
+    groups.get(condition.field).push(condition);
+  }
+
+  return groups;
+}
+
+function conditionMatches(note, condition, searchColumns) {
+  if (condition.field === "all") {
+    return matchesSearchQuery(note, condition.value, searchColumns);
+  }
+
+  const column = getTableColumn(condition.field);
+
+  if (!column) {
+    return true;
+  }
+
+  if (column.isTags) {
+    return matchesTagFilter(note, condition.value);
+  }
+
+  return matchesFilterValue(
+    valueToString(note, column.key),
+    condition.value,
+    column.matchMode,
+    { multiple: false, normalizeFilterValue: column.normalize },
+  );
+}
+
+function filterNotesByConditions(noteList, conditions, searchColumns) {
+  if (!conditions?.length) {
+    return noteList;
+  }
+
+  const groups = groupConditions(conditions);
+
+  return noteList.filter((note) => {
+    for (const list of groups.values()) {
+      const positives = list.filter((condition) => !condition.negated);
+
+      if (
+        positives.length &&
+        !positives.some((condition) =>
+          conditionMatches(note, condition, searchColumns),
+        )
+      ) {
+        return false;
       }
 
-      return matchesFilterValue(
-        valueToString(note, column.key),
-        activeFilters[column.key],
-        column.matchMode,
-        {
-          multiple: column.multiple,
-          normalizeFilterValue: column.normalize,
-        },
-      );
-    }),
-  );
+      for (const condition of list) {
+        if (
+          condition.negated &&
+          conditionMatches(note, condition, searchColumns)
+        ) {
+          return false;
+        }
+      }
+    }
+
+    return true;
+  });
+}
+
+// Which columns each row matched, so the table can mark the terms instead of
+// leaving the collector to guess why a row is there.
+function marksForNote(note, conditions, searchColumns) {
+  const marks = {};
+  const add = (key, term) => {
+    const list = marks[key] ?? (marks[key] = []);
+    if (!list.includes(term)) {
+      list.push(term);
+    }
+  };
+
+  for (const condition of conditions ?? []) {
+    if (condition.negated) {
+      continue;
+    }
+
+    if (!conditionMatches(note, condition, searchColumns)) {
+      continue;
+    }
+
+    if (condition.field === "all") {
+      const terms = String(condition.value)
+        .toLowerCase()
+        .split(/\s+/)
+        .filter(Boolean);
+
+      for (const term of terms) {
+        for (const column of searchColumns) {
+          if (columnSearchMatches(note, column, term)) {
+            add(column.key, term);
+          }
+        }
+      }
+    } else {
+      add(condition.field, condition.value);
+    }
+  }
+
+  return marks;
 }
 
 function sortNotesBySort(noteList, key, direction) {
@@ -794,15 +981,13 @@ function sortNotesBySort(noteList, key, direction) {
 
 function applyTableView(
   noteList,
-  filterObj,
+  conditions,
   key,
   direction,
-  query = "",
+  searchColumns = dataColumns,
 ) {
   return sortNotesBySort(
-    filterNotesByFilters(noteList, filterObj).filter((note) =>
-      matchesSearchQuery(note, query),
-    ),
+    filterNotesByConditions(noteList, conditions, searchColumns),
     key,
     direction,
   );
@@ -918,6 +1103,7 @@ function emptyTableRoute() {
     overlayEdit: false,
     previewKind: null,
     slideshowCollectionId: null,
+    slideshowConditions: null,
     slideshowFilters: null,
     slideshowQuery: null,
     slideshowSortDirection: null,
@@ -943,6 +1129,7 @@ function hasSlideshowContext(route) {
     route &&
     route.kind === "slideshow" &&
     (route.slideshowCollectionId != null ||
+      route.slideshowConditions != null ||
       route.slideshowFilters != null ||
       route.slideshowQuery != null ||
       route.slideshowSortKey != null ||
@@ -1043,6 +1230,9 @@ function parseTableHash(hash) {
       overlayEdit: params.get("overlay") === "edit",
       previewKind,
       slideshowCollectionId: parsePositiveInteger(params.get("collection")),
+      slideshowConditions: params.has("fc")
+        ? parseConditionsParam(params.get("fc"))
+        : null,
       slideshowFilters: parseSlideshowFilters(params),
       slideshowQuery: parseSlideshowQuery(params.get("q")),
       slideshowSortDirection: parseSlideshowSortDirection(params.get("dir")),
@@ -1093,17 +1283,8 @@ function buildTableHash(route) {
       params.set("collection", String(route.slideshowCollectionId));
     }
 
-    if (route.slideshowQuery) {
-      params.set("q", String(route.slideshowQuery));
-    }
-
-    if (route.slideshowFilters) {
-      for (const key of slideshowFilterKeys) {
-        const value = route.slideshowFilters[key];
-        if (value != null && String(value).trim()) {
-          params.set(`${slideshowFilterParamPrefix}${key}`, String(value));
-        }
-      }
+    if (route.slideshowConditions) {
+      params.set("fc", serializeConditions(route.slideshowConditions));
     }
 
     if (route.slideshowSortKey) {
@@ -1171,6 +1352,7 @@ function NotesTable({
   const focusedRowIdRef = useRef(null);
   const tableFocusAnchorRef = useRef(null);
   const searchInputRef = useRef(null);
+  const tagSuggestionListRef = useRef(null);
   const currentRouteRef = useRef(null);
   const pendingRowFocusNoteIdRef = useRef(null);
   // Tab from a row enters the selection actions bar before the row's own
@@ -1255,6 +1437,17 @@ function NotesTable({
 
   const { sortDirection, sortKey, visibleColumnKeys } = tableView;
 
+  // The All-fields chip searches only the columns the collector can see, so a
+  // hidden column can never keep hiding rows.
+  const searchColumns = useMemo(
+    () =>
+      dataColumns.filter(
+        (column) =>
+          !column.hideable || visibleColumnKeys.includes(column.key),
+      ),
+    [visibleColumnKeys],
+  );
+
   useEffect(() => {
     // Drops saved settings from before the per-collection table state.
     clearLegacyTableState();
@@ -1270,31 +1463,21 @@ function NotesTable({
   }, [collections, collectionsError, loadingCollections]);
 
   const [notes, setNotes] = useState([]);
-  // When landing directly on a slideshow URL carrying filter+sort context,
-  // seed the table behind the slideshow from the URL so closing the
-  // slideshow returns to the same filtered view.
-  const [filters, setFilters] = useState(() => {
-    if (initialRouteRef.current?.kind === "slideshow") {
-      const routeFilters = initialRouteRef.current.slideshowFilters;
-      if (routeFilters) {
-        return { ...routeFilters };
-      }
-    }
-    return {};
-  });
-  // The filter row is on demand: hidden by default, opened from the toolbar,
-  // and force-opened whenever a column filter has a value so a filtered view
-  // never hides the reason rows are missing. Not persisted.
-  const [filtersOpen, setFiltersOpen] = useState(false);
-  // The search query is view state only: it is not written to saved table
-  // state, and it is cleared with the collection. A cold-opened slideshow URL
-  // carries the query so closing the slideshow returns to the searched table.
-  const [query, setQuery] = useState(() => {
-    if (initialRouteRef.current?.kind === "slideshow") {
-      return initialRouteRef.current.slideshowQuery ?? "";
-    }
-    return "";
-  });
+  // Filter chips: view state only. A cold-opened slideshow URL carries the
+  // chips so closing the slideshow returns to the same filtered table.
+  const [conditions, setConditions] = useState(() =>
+    conditionsFromRoute(initialRouteRef.current),
+  );
+  // Which field the next chip belongs to, and the text not yet committed.
+  // The draft is kept when a chip is edited or removed, so half-typed text is
+  // never lost to a chip action.
+  const [filterField, setFilterField] = useState(defaultFilterField);
+  const [filterDraft, setFilterDraft] = useState("");
+  const [tagSuggestionOpen, setTagSuggestionOpen] = useState(false);
+  const [tagSuggestionIndex, setTagSuggestionIndex] = useState(-1);
+  const [tagSuggestionPosition, setTagSuggestionPosition] = useState(null);
+  const [editingConditionId, setEditingConditionId] = useState(null);
+  const [conditionDraft, setConditionDraft] = useState("");
   // Selection is deliberately memory-only: restoring a stale bulk-delete
   // queue after a reload is worse than starting clean, and it leaves a bar
   // on screen with no row cursor to return to.
@@ -1403,12 +1586,9 @@ function NotesTable({
     collectionsError,
     loadingCollections,
   });
-  const { focusFilter, focusRememberedFilter, getFilterRef, rememberFilter } =
-    useFilterFocusMemory(filterColumnKeys);
-  const filterRowHeight = Object.keys(columnFilterHeights).length
-    ? Math.max(36, ...Object.values(columnFilterHeights))
-    : null;
-  const allTagNames = useMemo(() => {
+  // Tag names offered as suggestions when the Tags field is selected. The
+  // chips still commit with Enter; the list only saves typing.
+  const tagNames = useMemo(() => {
     const seen = new Map();
 
     notes.forEach((note) => {
@@ -1422,8 +1602,88 @@ function NotesTable({
       });
     });
 
-    return Array.from(seen.values()).sort((a, b) => a.localeCompare(b));
+    return Array.from(seen.values()).sort((left, right) =>
+      left.localeCompare(right),
+    );
   }, [notes]);
+
+  const tagMatches = useMemo(
+    () => rankTagSuggestions(tagNames, new Set(), filterDraft),
+    [filterDraft, tagNames],
+  );
+  const trimmedTagDraft = filterDraft.trim();
+  const tagCreateVisible =
+    Boolean(trimmedTagDraft) &&
+    !tagNames.some(
+      (name) => name.toLowerCase() === trimmedTagDraft.toLowerCase(),
+    );
+  const tagNavList = tagCreateVisible
+    ? [...tagMatches, `__create:${trimmedTagDraft}`]
+    : tagMatches;
+  const tagListVisible =
+    filterField === tagsColumnKey &&
+    tagSuggestionOpen &&
+    Boolean(tagSuggestionPosition) &&
+    tagNavList.length > 0;
+
+  useEffect(() => {
+    if (filterField !== tagsColumnKey || !tagSuggestionOpen) {
+      setTagSuggestionPosition(null);
+      return undefined;
+    }
+
+    const updatePosition = () => {
+      const input = searchInputRef.current;
+
+      if (!input) {
+        return;
+      }
+
+      const bounds = input.getBoundingClientRect();
+      setTagSuggestionPosition({
+        top: bounds.bottom + 6,
+        left: bounds.left,
+        width: Math.max(bounds.width, 220),
+      });
+    };
+
+    updatePosition();
+    window.addEventListener("scroll", updatePosition, true);
+    window.addEventListener("resize", updatePosition);
+    return () => {
+      window.removeEventListener("scroll", updatePosition, true);
+      window.removeEventListener("resize", updatePosition);
+    };
+  }, [filterField, tagSuggestionOpen]);
+
+  useEffect(() => {
+    if (!tagListVisible) {
+      return undefined;
+    }
+
+    const closeOnOutsidePress = (event) => {
+      if (
+        searchInputRef.current?.contains(event.target) ||
+        tagSuggestionListRef.current?.contains(event.target)
+      ) {
+        return;
+      }
+
+      setTagSuggestionOpen(false);
+      setTagSuggestionIndex(-1);
+    };
+
+    document.addEventListener("mousedown", closeOnOutsidePress);
+    return () => document.removeEventListener("mousedown", closeOnOutsidePress);
+  }, [tagListVisible]);
+
+  useEffect(() => {
+    if (filterField !== tagsColumnKey) {
+      setTagSuggestionOpen(false);
+      setTagSuggestionIndex(-1);
+    }
+  }, [filterField]);
+
   const currentRoute = useMemo(
     () => parseTableHash(location.hash),
     [location.hash],
@@ -1432,8 +1692,8 @@ function NotesTable({
   // the filter reset below, which answers only to collection changes).
   currentRouteRef.current = currentRoute;
   const orderedNotes = useMemo(
-    () => applyTableView(notes, filters, sortKey, sortDirection, query),
-    [filters, notes, query, sortDirection, sortKey],
+    () => applyTableView(notes, conditions, sortKey, sortDirection, searchColumns),
+    [conditions, notes, searchColumns, sortDirection, sortKey],
   );
   // The painted row list lags one step behind the filter state: inputs,
   // chips, and counts stay instant while the heavy row re-mount happens in
@@ -1558,7 +1818,7 @@ function NotesTable({
       return null;
     }
 
-    const contextFilters = currentRoute.slideshowFilters ?? {};
+    const contextConditions = conditionsFromRoute(currentRoute);
     const contextSortKey =
       currentRoute.slideshowSortKey &&
       validSortKeys.has(currentRoute.slideshowSortKey)
@@ -1569,10 +1829,10 @@ function NotesTable({
 
     return applyTableView(
       notes,
-      contextFilters,
+      contextConditions,
       contextSortKey,
       contextSortDirection,
-      currentRoute.slideshowQuery ?? "",
+      dataColumns,
     );
   }, [currentRoute, notes]);
 
@@ -1592,8 +1852,7 @@ function NotesTable({
     ) {
       return {
         slideshowCollectionId: currentRoute.slideshowCollectionId,
-        slideshowFilters: currentRoute.slideshowFilters,
-        slideshowQuery: currentRoute.slideshowQuery,
+        slideshowConditions: currentRoute.slideshowConditions,
         slideshowSortDirection: currentRoute.slideshowSortDirection,
         slideshowSortKey: currentRoute.slideshowSortKey,
       };
@@ -1603,8 +1862,7 @@ function NotesTable({
       slideshowCollectionId: Number.isInteger(collectionId)
         ? collectionId
         : null,
-      slideshowFilters: { ...filters },
-      slideshowQuery: query.trim() || null,
+      slideshowConditions: conditions,
       slideshowSortDirection: sortDirection,
       slideshowSortKey: sortKey,
     };
@@ -1697,9 +1955,10 @@ function NotesTable({
       return;
     }
 
-    setFilters({});
-    setFiltersOpen(false);
-    setQuery("");
+    setConditions([]);
+    setFilterDraft("");
+    setEditingConditionId(null);
+    setFilterField(defaultFilterField);
   }, [collectionId]);
 
   useEffect(() => {
@@ -1821,8 +2080,7 @@ function NotesTable({
           overlayEdit: currentRoute.overlayEdit,
           previewKind: null,
           slideshowCollectionId: currentRoute.slideshowCollectionId,
-          slideshowFilters: currentRoute.slideshowFilters,
-          slideshowQuery: currentRoute.slideshowQuery,
+          slideshowConditions: currentRoute.slideshowConditions,
           slideshowSortDirection: currentRoute.slideshowSortDirection,
           slideshowSortKey: currentRoute.slideshowSortKey,
         },
@@ -1890,27 +2148,25 @@ function NotesTable({
     return () => window.cancelAnimationFrame(frameId);
   }, [editorOverlayOpen]);
 
-  const hasActiveFilters = useMemo(
-    () => Object.values(filters).some((value) => String(value).trim()),
-    [filters],
-  );
-  // Active column filters, in column order, for the toolbar badge, chips and
-  // Clear all. Tags is one column, so its many values count once.
-  const activeColumnFilters = useMemo(
-    () =>
-      filterColumns
-        .map((column) => ({
-          column,
-          value: String(filters[column.key] ?? "").trim(),
-        }))
-        .filter((entry) => entry.value),
-    [filters],
-  );
-  // Active filters do not pin the row open. The toolbar keeps the chips (with
-  // their own remove controls), so collapsing the row never hides the state —
-  // and the toggle stays a toggle instead of a button that silently does
-  // nothing, which is indistinguishable from a broken control.
-  const filterRowOpen = filtersOpen;
+  const hasActiveFilters = conditions.length > 0;
+  // Chips grouped by field: same-field values OR, different fields AND.
+  const conditionGroups = useMemo(() => {
+    const groups = new Map();
+
+    for (const condition of conditions) {
+      if (!groups.has(condition.field)) {
+        groups.set(condition.field, []);
+      }
+      groups.get(condition.field).push(condition);
+    }
+
+    return Array.from(groups, ([field, items]) => ({ field, items }));
+  }, [conditions]);
+
+  const filterPlaceholder =
+    filterField === "all"
+      ? "Search every visible field…"
+      : `Filter ${filterFieldLabel(filterField).toLowerCase()}…`;
   // Permanent columns are always rendered; a hideable column is rendered only
   // while the collector's per-collection choice includes it.
   const visibleColumns = useMemo(
@@ -1961,15 +2217,10 @@ function NotesTable({
     // so row paint continues under the overlay scrollbar while row content
     // still stops before it.
     (vScroll.visible ? 1 : 0);
-  const hasActiveQuery = Boolean(query.trim());
   const isDefaultOrder =
     sortKey === defaultSortKey && sortDirection === "asc";
   const canReorder =
-    showReorder &&
-    !hasActiveFilters &&
-    !hasActiveQuery &&
-    isDefaultOrder &&
-    !reorderLoading;
+    showReorder && !hasActiveFilters && isDefaultOrder && !reorderLoading;
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const allVisibleSelected = useMemo(
@@ -1987,17 +2238,10 @@ function NotesTable({
   const canResetView = useMemo(
     () =>
       hasActiveFilters ||
-      hasActiveQuery ||
       sortKey !== defaultSortKey ||
       sortDirection !== "asc" ||
       selectedIds.length > 0,
-    [
-      hasActiveFilters,
-      hasActiveQuery,
-      selectedIds,
-      sortDirection,
-      sortKey,
-    ],
+    [hasActiveFilters, selectedIds, sortDirection, sortKey],
   );
   const rowVirtualizer = useVirtualizer({
     count: deferredOrderedNotes.length,
@@ -2037,7 +2281,7 @@ function NotesTable({
 
   useEffect(() => {
     rowVirtualizer.scrollToOffset(0);
-  }, [filters, query, rowVirtualizer, sortDirection, sortKey]);
+  }, [conditions, rowVirtualizer, sortDirection, sortKey]);
 
   // Switching collections opens a fresh table view at its first fields and
   // first rows, not where the previous collection was left. The notes load
@@ -2072,7 +2316,7 @@ function NotesTable({
     pendingSlideshowLandingRef.current = null;
     lastRowFocusNoteIdRef.current = null;
     clearRowCursor();
-  }, [clearRowCursor, collectionId, filters, query, sortDirection, sortKey]);
+  }, [clearRowCursor, collectionId, conditions, sortDirection, sortKey]);
 
   useEffect(() => {
     // Land a focus request that was made while the list was still settling.
@@ -2208,7 +2452,7 @@ function NotesTable({
       scroller.removeEventListener("scroll", scheduleUpdate);
       window.removeEventListener("resize", scheduleUpdate);
     };
-  }, [filterRowHeight, loading, deferredOrderedNotes.length, updateVScroll]);
+  }, [loading, deferredOrderedNotes.length, updateVScroll]);
 
   // The data columns need the space the table can occupy, not the table's own
   // rendered width: once the columns are wide, a fixed-layout table refuses to
@@ -3021,7 +3265,7 @@ function NotesTable({
         // except on the page background, where it lands on the anchor.
         if (hasActiveFilters) {
           event.preventDefault();
-          setFilters({});
+          setConditions([]);
 
           if (pageBackgroundFocused) {
             focusTableAnchor();
@@ -3183,9 +3427,11 @@ function NotesTable({
   ]);
 
   function resetTableState() {
-    setFilters({});
-    setFiltersOpen(false);
-    setQuery("");
+    setConditions([]);
+    setFilterDraft("");
+    setEditingConditionId(null);
+    setConditionDraft("");
+    setFilterField(defaultFilterField);
     // Columns are structure, not view state: Reset view restores the default
     // order but leaves the collector's column choice alone.
     const defaults = defaultTableState();
@@ -3199,76 +3445,190 @@ function NotesTable({
     }
   }
 
-  function clearColumnFilter(key) {
-    setFilters((current) => {
-      if (!(key in current)) {
-        return current;
-      }
+  // Commit is explicit: Enter turns the field text into chips. Duplicates are
+  // ignored, so re-typing a value does not silently add a second OR arm.
+  function commitFilterDraft(raw = filterDraft) {
+    const parsed = conditionsFromInput(filterField, raw);
 
-      const next = { ...current };
-      delete next[key];
-      return next;
-    });
-  }
-
-  function clearAllFilters() {
-    setFilters({});
-  }
-
-  function clearSearch() {
-    setQuery("");
-    searchInputRef.current?.focus();
-  }
-
-  function handleSearchKeyDown(event) {
-    if (event.key !== "Escape") {
+    if (!parsed.length) {
       return;
     }
 
-    // Escape leaves the field without clearing the query or reaching the
-    // table's row/anchor Escape handling, which only applies elsewhere.
-    event.preventDefault();
-    event.stopPropagation();
-    event.currentTarget.blur();
+    setConditions((current) => {
+      const seen = new Set(current.map(conditionIdentity));
+      return [
+        ...current,
+        ...parsed.filter((condition) => !seen.has(conditionIdentity(condition))),
+      ];
+    });
+    setFilterDraft("");
+    closeTagSuggestions();
   }
 
-  function reportColumnFilterHeight(key, height) {
-    setColumnFilterHeights((current) =>
-      current[key] === height ? current : { ...current, [key]: height },
+  function closeTagSuggestions() {
+    setTagSuggestionOpen(false);
+    setTagSuggestionIndex(-1);
+  }
+
+  function scrollTagSuggestionIntoView(element) {
+    // jsdom has no scrollIntoView; the guard keeps highlight paint working
+    // there while a browser scrolls the option into view.
+    element?.scrollIntoView?.({ block: "nearest" });
+  }
+
+  // A suggestion fills the Tags chip directly; the create row commits the
+  // typed text even though no note carries it yet.
+  function pickTagSuggestion(entry) {
+    const value = entry.startsWith("__create:")
+      ? entry.slice("__create:".length)
+      : entry;
+    commitFilterDraft(value);
+    requestAnimationFrame(() => searchInputRef.current?.focus());
+  }
+
+  function removeCondition(id) {
+    setConditions((current) =>
+      current.filter((condition) => condition.id !== id),
     );
   }
 
-  function applyTagFilter(tagName, { replace = false } = {}) {
-    setFilters((current) => {
-      if (replace) {
-        return { ...current, [tagsColumnKey]: tagName };
+  function removeFieldConditions(field) {
+    setConditions((current) =>
+      current.filter((condition) => condition.field !== field),
+    );
+  }
+
+  function clearAllFilters() {
+    setConditions([]);
+  }
+
+  function startConditionEdit(condition) {
+    setEditingConditionId(condition.id);
+    setConditionDraft(`${condition.negated ? "!" : ""}${condition.value}`);
+  }
+
+  function cancelConditionEdit() {
+    setEditingConditionId(null);
+    setConditionDraft("");
+  }
+
+  function commitConditionEdit() {
+    if (editingConditionId == null) {
+      return;
+    }
+
+    const id = editingConditionId;
+    const raw = conditionDraft.trim();
+    setEditingConditionId(null);
+    setConditionDraft("");
+
+    setConditions((current) => {
+      const negated = raw.startsWith("!");
+      const value = (negated ? raw.slice(1) : raw).trim();
+
+      if (!value) {
+        return current.filter((condition) => condition.id !== id);
       }
 
-      const existingTags = String(current[tagsColumnKey] ?? "")
-        .split(",")
-        .map((token) => token.trim())
-        .filter(Boolean);
-      const alreadyIncluded = existingTags.some(
-        (tag) => tag.toLowerCase() === tagName.toLowerCase(),
+      return current.map((condition) =>
+        condition.id === id ? { ...condition, value, negated } : condition,
       );
-      const nextTags = alreadyIncluded
-        ? existingTags
-        : [...existingTags, tagName];
+    });
+  }
 
-      return {
-        ...current,
-        [tagsColumnKey]: nextTags.join(","),
-      };
+  function handleSearchKeyDown(event) {
+    const tagListOpen =
+      filterField === tagsColumnKey &&
+      tagSuggestionOpen &&
+      tagNavList.length > 0;
+
+    if (
+      tagListOpen &&
+      (event.key === "ArrowDown" || event.key === "ArrowUp")
+    ) {
+      event.preventDefault();
+      setTagSuggestionIndex((current) => {
+        const step = event.key === "ArrowDown" ? 1 : -1;
+
+        if (current < 0) {
+          return event.key === "ArrowDown" ? 0 : tagNavList.length - 1;
+        }
+
+        return (current + step + tagNavList.length) % tagNavList.length;
+      });
+      return;
+    }
+
+    if (
+      tagListOpen &&
+      event.key === "Enter" &&
+      tagSuggestionIndex >= 0 &&
+      tagNavList[tagSuggestionIndex]
+    ) {
+      event.preventDefault();
+      pickTagSuggestion(tagNavList[tagSuggestionIndex]);
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      commitFilterDraft();
+      return;
+    }
+
+    if (tagListOpen && event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      closeTagSuggestions();
+      return;
+    }
+
+    if (event.key === "ArrowDown" && !event.shiftKey) {
+      // Plain Down hands off to the first row; Shift+Down stays in the field.
+      event.preventDefault();
+
+      if (orderedNotes[0]) {
+        focusRowByNoteId(orderedNotes[0].id);
+      }
+      return;
+    }
+
+    if (event.key === "Escape") {
+      // Escape leaves the field without clearing the draft or reaching the
+      // table's row/anchor Escape handling. Like ArrowDown, it lands on the
+      // first row so the table has a visible cursor to continue from.
+      event.preventDefault();
+      event.stopPropagation();
+
+      if (orderedNotes[0]) {
+        focusRowByNoteId(orderedNotes[0].id);
+      } else {
+        event.currentTarget.blur();
+      }
+    }
+  }
+
+  function applyTagFilter(tagName, { replace = false } = {}) {
+    setConditions((current) => {
+      const others = replace
+        ? current.filter((condition) => condition.field !== tagsColumnKey)
+        : current;
+
+      if (
+        others.some(
+          (condition) =>
+            condition.field === tagsColumnKey &&
+            !condition.negated &&
+            condition.value.toLowerCase() === tagName.toLowerCase(),
+        )
+      ) {
+        return others;
+      }
+
+      return [...others, makeCondition(tagsColumnKey, tagName)];
     });
 
-    // Applying a filter from a row's tag chip reveals the row that owns it,
-    // so the new filter is editable where it appears.
-    setFiltersOpen(true);
     resetColumnScroll();
-
-    window.requestAnimationFrame(() => {
-      focusFilter(tagsColumnKey);
-    });
   }
 
   function showThumbPreview(noteId) {
@@ -3305,8 +3665,12 @@ function NotesTable({
       return;
     }
 
-    // A hidden column must not keep hiding rows: drop its filter with it.
-    clearColumnFilter(key);
+    // A hidden column must not keep hiding rows: drop its chips with it.
+    removeFieldConditions(key);
+
+    if (filterField === key) {
+      setFilterField(defaultFilterField);
+    }
 
     let nextSortKey = sortKey;
     let nextSortDirection = sortDirection;
@@ -3541,9 +3905,9 @@ function NotesTable({
         currentIndex,
         offset,
         rowElement: currentElement,
-      }) &&
-      focusRememberedFilter()
+      })
     ) {
+      searchInputRef.current?.focus();
       clearRowCursor();
       return null;
     }
@@ -3557,24 +3921,6 @@ function NotesTable({
 
     focusRowByNoteId(targetId);
     return targetId;
-  }
-
-  function handleFilterArrowDown(event) {
-    if (
-      event.key !== "ArrowDown" ||
-      event.metaKey ||
-      event.ctrlKey ||
-      event.altKey ||
-      event.shiftKey
-    ) {
-      return;
-    }
-
-    event.preventDefault();
-
-    if (orderedNotes[0]) {
-      focusRowByNoteId(orderedNotes[0].id);
-    }
   }
 
   function ensureRowVisible(element) {
@@ -4566,7 +4912,8 @@ function NotesTable({
     );
   }
 
-  function renderDataCell(column, note) {
+  function renderDataCell(column, note, marks) {
+    const rowMarks = marks ?? {};
     if (column.isTags) {
       return (
         <td className={cellClass(column)}>
@@ -4603,7 +4950,7 @@ function NotesTable({
       return (
         <td {...stickyCellAttributes(column, cellClass(column))}>
           <span className={`table-grade table-grade--${tier}`}>
-            {gradeValue}
+            {highlightTerms(gradeValue, rowMarks.grade)}
           </span>
         </td>
       );
@@ -4624,10 +4971,10 @@ function NotesTable({
               rel="noreferrer"
               target="_blank"
             >
-              {note.denomination}
+              {highlightTerms(note.denomination, rowMarks.denomination)}
             </a>
           ) : (
-            note.denomination
+            highlightTerms(note.denomination, rowMarks.denomination)
           )}
         </td>
       );
@@ -4635,7 +4982,7 @@ function NotesTable({
 
     return (
       <td {...stickyCellAttributes(column, cellClass(column))}>
-        {note[column.key]}
+        {highlightTerms(note[column.key], rowMarks[column.key])}
       </td>
     );
   }
@@ -4734,7 +5081,7 @@ function NotesTable({
     };
   }
 
-  function renderTableCell(column, note, frontThumb) {
+  function renderTableCell(column, note, frontThumb, marks) {
     let cell = null;
 
     switch (column.kind) {
@@ -4751,7 +5098,7 @@ function NotesTable({
         cell = renderThumbnailCell(column, note, frontThumb);
         break;
       case "data":
-        cell = renderDataCell(column, note);
+        cell = renderDataCell(column, note, marks);
         break;
       case "actions":
         cell = renderActionsCell(column, note);
@@ -5074,7 +5421,7 @@ function NotesTable({
         {!loading && !loadError ? (
           <>
             <div className="toolbar-row toolbar-row--table-controls">
-              <div className="table-search">
+              <div className="table-search table-search--scoped">
                 <svg
                   aria-hidden="true"
                   className="table-search-icon"
@@ -5088,77 +5435,138 @@ function NotesTable({
                   <circle cx="11" cy="11" r="7" />
                   <path d="m20 20-3.5-3.5" />
                 </svg>
+                <FilterFieldMenu
+                  onChange={(field) => {
+                    setFilterField(field);
+
+                    if (field === tagsColumnKey) {
+                      // The input's onFocus handler still closes over the old
+                      // field, so open the list when the pick changes it.
+                      setTagSuggestionOpen(true);
+                    }
+
+                    searchInputRef.current?.focus();
+                  }}
+                  options={[
+                    { key: "all", label: filterFieldLabel("all") },
+                    ...searchColumns.map((column) => ({
+                      key: column.key,
+                      label: filterFieldLabel(column.key),
+                    })),
+                  ]}
+                  value={filterField}
+                />
+                <span aria-hidden="true" className="table-search-divider" />
                 <input
-                  aria-label="Search notes"
+                  aria-autocomplete={
+                    filterField === tagsColumnKey ? "list" : undefined
+                  }
+                  aria-controls={
+                    tagListVisible ? "table-filter-tag-suggestions" : undefined
+                  }
+                  aria-expanded={
+                    filterField === tagsColumnKey
+                      ? tagListVisible
+                      : undefined
+                  }
+                  aria-label={`Filter ${filterFieldLabel(filterField)}`}
                   autoComplete="off"
                   className="table-search-input"
-                  onChange={(event) => setQuery(event.target.value)}
+                  onBlur={
+                    filterField === tagsColumnKey
+                      ? () => closeTagSuggestions()
+                      : undefined
+                  }
+                  onChange={(event) => {
+                    setFilterDraft(event.target.value);
+
+                    if (filterField === tagsColumnKey) {
+                      setTagSuggestionOpen(true);
+                      setTagSuggestionIndex(-1);
+                    }
+                  }}
+                  onFocus={
+                    filterField === tagsColumnKey
+                      ? () => setTagSuggestionOpen(true)
+                      : undefined
+                  }
                   onKeyDown={handleSearchKeyDown}
-                  placeholder="Search serial, catalog, denomination, company, grade, date, tags…"
+                  placeholder={filterPlaceholder}
                   ref={searchInputRef}
                   type="search"
-                  value={query}
+                  value={filterDraft}
                 />
-                {query ? (
-                  <button
-                    aria-label="Clear search"
-                    className="table-search-clear"
-                    onClick={clearSearch}
-                    title="Clear search"
-                    type="button"
-                  >
-                    &times;
-                  </button>
+                {filterDraft.trim() ? (
+                  <span aria-hidden="true" className="table-filter-enter">
+                    ⏎ add
+                  </span>
                 ) : (
                   <kbd className="table-search-hint">/</kbd>
                 )}
               </div>
-              <button
-                aria-controls="table-filter-row"
-                aria-expanded={filterRowOpen}
-                aria-label={
-                  activeColumnFilters.length
-                    ? `Filters (${activeColumnFilters.length} active)`
-                    : "Filters"
-                }
-                className={`button table-filter-toggle${filterRowOpen ? " table-filter-toggle--open" : ""}${hasActiveFilters ? " table-filter-toggle--applied" : ""}`}
-                onClick={() => setFiltersOpen((open) => !open)}
-                title={filterRowOpen ? "Hide filters" : "Show filters"}
-                type="button"
-              >
-                Filters
-                {activeColumnFilters.length ? (
-                  <span aria-hidden="true" className="table-filter-count">
-                    {activeColumnFilters.length}
-                  </span>
-                ) : null}
-              </button>
-              {activeColumnFilters.length ? (
-                <div className="table-filter-chips">
-                  {activeColumnFilters.map(({ column, value }) => (
-                    <span className="table-filter-chip" key={column.key}>
-                      <span className="table-filter-chip-label">
-                        {`${column.label}: ${formatFilterChipValue(column, value)}`}
-                      </span>
-                      <button
-                        aria-label={`Remove ${column.label} filter`}
-                        className="table-filter-chip-remove"
-                        onClick={() => clearColumnFilter(column.key)}
-                        type="button"
-                      >
-                        &times;
-                      </button>
-                    </span>
-                  ))}
-                  <button
-                    className="table-filter-clear-all"
-                    onClick={clearAllFilters}
-                    type="button"
-                  >
-                    Clear all
-                  </button>
-                </div>
-              ) : null}
+              {tagListVisible
+                ? createPortal(
+                    <div
+                      aria-label="Tag suggestions"
+                      className="tags-filter-dropdown"
+                      id="table-filter-tag-suggestions"
+                      ref={tagSuggestionListRef}
+                      role="listbox"
+                      style={{
+                        top: tagSuggestionPosition.top,
+                        left: tagSuggestionPosition.left,
+                        width: tagSuggestionPosition.width,
+                      }}
+                    >
+                      {tagMatches.map((tag, index) => (
+                        <button
+                          aria-selected={index === tagSuggestionIndex}
+                          className={`tags-filter-option${index === tagSuggestionIndex ? " is-highlighted" : ""}`}
+                          key={tag}
+                          onClick={() => pickTagSuggestion(tag)}
+                          onMouseDown={(event) => event.preventDefault()}
+                          onMouseEnter={() =>
+                            setTagSuggestionIndex(index)
+                          }
+                          ref={
+                            index === tagSuggestionIndex
+                              ? scrollTagSuggestionIntoView
+                              : undefined
+                          }
+                          role="option"
+                          type="button"
+                        >
+                          <HighlightMatch text={tag} query={trimmedTagDraft} />
+                        </button>
+                      ))}
+                      {tagCreateVisible ? (
+                        <button
+                          aria-selected={
+                            tagSuggestionIndex === tagMatches.length
+                          }
+                          className={`tags-filter-option tags-filter-option--create${tagSuggestionIndex === tagMatches.length ? " is-highlighted" : ""}`}
+                          onClick={() =>
+                            pickTagSuggestion(`__create:${trimmedTagDraft}`)
+                          }
+                          onMouseDown={(event) => event.preventDefault()}
+                          onMouseEnter={() =>
+                            setTagSuggestionIndex(tagMatches.length)
+                          }
+                          ref={
+                            tagSuggestionIndex === tagMatches.length
+                              ? scrollTagSuggestionIntoView
+                              : undefined
+                          }
+                          role="option"
+                          type="button"
+                        >
+                          + Create “{trimmedTagDraft}”
+                        </button>
+                      ) : null}
+                    </div>,
+                    document.body,
+                  )
+                : null}
               <ColumnPicker
                 columns={hideableColumns}
                 disabledColumnKey={lastVisibleDataColumnKey}
@@ -5176,6 +5584,101 @@ function NotesTable({
                   </button>
                 ) : null}
               </div>
+            </div>
+
+            <div className="table-filter-chips">
+              {conditionGroups.length ? (
+                <>
+                  {conditionGroups.map(({ field, items }, groupIndex) => (
+                    <Fragment key={field}>
+                      {groupIndex > 0 ? (
+                        <span className="table-filter-and">and</span>
+                      ) : null}
+                      <span className="table-filter-facet">
+                        <span className="table-filter-facet-label">
+                          {filterFieldLabel(field)}
+                        </span>
+                        {items.map((condition, index) => (
+                          <Fragment key={condition.id}>
+                            {index > 0 ? (
+                              <span className="table-filter-or">or</span>
+                            ) : null}
+                            {editingConditionId === condition.id ? (
+                              <input
+                                aria-label={`Edit ${filterFieldLabel(field)} filter`}
+                                autoFocus
+                                className="table-filter-chip-input"
+                                onBlur={commitConditionEdit}
+                                onChange={(event) =>
+                                  setConditionDraft(event.target.value)
+                                }
+                                onFocus={(event) =>
+                                  event.currentTarget.select()
+                                }
+                                onKeyDown={(event) => {
+                                  if (event.key === "Enter") {
+                                    event.preventDefault();
+                                    commitConditionEdit();
+                                  } else if (event.key === "Escape") {
+                                    event.preventDefault();
+                                    cancelConditionEdit();
+                                  }
+                                }}
+                                value={conditionDraft}
+                              />
+                            ) : (
+                              <span
+                                className={`table-filter-chip${condition.negated ? " table-filter-chip--negated" : ""}`}
+                              >
+                                <button
+                                  aria-label={`Edit ${filterFieldLabel(field)} filter ${condition.value}`}
+                                  className="table-filter-chip-value"
+                                  onClick={() => startConditionEdit(condition)}
+                                  title="Edit value"
+                                  type="button"
+                                >
+                                  {condition.negated ? "!" : ""}
+                                  {condition.value}
+                                </button>
+                                <button
+                                  aria-label={`Remove ${filterFieldLabel(field)} ${condition.negated ? "not " : ""}${condition.value}`}
+                                  className="table-filter-chip-remove"
+                                  onClick={() => removeCondition(condition.id)}
+                                  type="button"
+                                >
+                                  <svg
+                                    aria-hidden="true"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    strokeLinecap="round"
+                                    strokeWidth="1.6"
+                                    viewBox="0 0 12 12"
+                                  >
+                                    <path d="m2.5 2.5 7 7M9.5 2.5l-7 7" />
+                                  </svg>
+                                </button>
+                              </span>
+                            )}
+                          </Fragment>
+                        ))}
+                      </span>
+                    </Fragment>
+                  ))}
+                  <button
+                    className="table-filter-clear-all"
+                    onClick={clearAllFilters}
+                    type="button"
+                  >
+                    Clear all
+                  </button>
+                </>
+              ) : (
+                <span className="table-filter-chips-empty">
+                  {
+                    "No filters yet — pick a field, type, press ⏎. Same field ORs, different fields AND."
+                  }
+                </span>
+              )}
             </div>
 
             <div
@@ -5343,98 +5846,6 @@ function NotesTable({
                           />
                         ) : null}
                       </tr>
-                      {filterRowOpen ? (
-                        <tr id="table-filter-row">
-                          {visibleColumns.map((column) => {
-                            if (column.kind === "reorder") {
-                              return (
-                                <th
-                                  key={column.key}
-                                  scope="col"
-                                  {...stickyCellAttributes(
-                                    column,
-                                    cellClass(column),
-                                  )}
-                                />
-                              );
-                            }
-
-                            if (!column.filterable) {
-                              return (
-                                <th
-                                  key={column.key}
-                                  scope="col"
-                                  {...stickyCellAttributes(
-                                    column,
-                                    cellClass(column),
-                                  )}
-                                />
-                              );
-                            }
-
-                            return (
-                              <th
-                                key={`${column.key}-filter`}
-                                scope="col"
-                                {...stickyCellAttributes(
-                                  column,
-                                  cellClass(column),
-                                )}
-                              >
-                                {column.isTags ? (
-                                  <MultiValueFilterCombobox
-                                    columnLabel={column.label}
-                                    onChange={(nextValue) =>
-                                      setFilters((current) => ({
-                                        ...current,
-                                        [column.key]: nextValue,
-                                      }))
-                                    }
-                                    onArrowDown={handleFilterArrowDown}
-                                    onFocus={() => rememberFilter(column.key)}
-                                    onHeightChange={(height) =>
-                                      reportColumnFilterHeight(
-                                        column.key,
-                                        height,
-                                      )
-                                    }
-                                    options={allTagNames}
-                                    ref={getFilterRef(column.key)}
-                                    value={filters[column.key] ?? ""}
-                                  />
-                                ) : (
-                                  <input
-                                    aria-label={`Filter ${column.label}`}
-                                    className={`filter-input${String(filters[column.key] ?? "").trim() ? " filter-input--active" : ""}`}
-                                    ref={getFilterRef(column.key)}
-                                    onFocus={() => rememberFilter(column.key)}
-                                    style={
-                                      filterRowHeight
-                                        ? { height: filterRowHeight }
-                                        : undefined
-                                    }
-                                    value={filters[column.key] ?? ""}
-                                    onChange={(event) =>
-                                      setFilters((current) => ({
-                                        ...current,
-                                        [column.key]: event.target.value,
-                                      }))
-                                    }
-                                    onKeyDown={handleFilterArrowDown}
-                                  />
-                                )}
-                              </th>
-                            );
-                          })}
-                          {vScroll.visible ? (
-                            <th
-                              aria-hidden="true"
-                              className="table-gutter-cell"
-                              scope="col"
-                            />
-                          ) : null}
-                        </tr>
-                      ) : null}
                     </thead>
                     <tbody
                       onDragOver={(event) => {
@@ -5479,24 +5890,14 @@ function NotesTable({
                               <NoCollectionsPrompt />
                             ) : notes.length ? (
                               // A filter that matches nothing is the most
-                              // travelled error path in the screen: name the
-                              // query, and put the recovery next to it.
+                              // travelled error path in the screen: say the
+                              // view is empty, not the collection, and put a
+                              // recovery next to it.
                               <div className="table-empty-state">
                                 <p className="table-empty-title">
-                                  {hasActiveQuery
-                                    ? `No notes match “${query.trim()}”.`
-                                    : "No notes match the active filters."}
+                                  No notes match the active filters.
                                 </p>
                                 <div className="table-empty-actions">
-                                  {hasActiveQuery ? (
-                                    <button
-                                      className="button"
-                                      onClick={clearSearch}
-                                      type="button"
-                                    >
-                                      Clear search
-                                    </button>
-                                  ) : null}
                                   {hasActiveFilters ? (
                                     <button
                                       className="button"
@@ -5508,8 +5909,8 @@ function NotesTable({
                                   ) : null}
                                 </div>
                                 <p className="table-empty-hint">
-                                  Search covers serial, catalog number,
-                                  denomination, company, grade, date and tags.
+                                  A chip filters one field. Same field values
+                                  are ORed; different fields are ANDed.
                                 </p>
                               </div>
                             ) : (
@@ -5533,6 +5934,9 @@ function NotesTable({
                         const showPlaceholderAfter =
                           dropTarget?.noteId === note.id &&
                           dropTarget.placement === "after";
+                        const rowMarks = hasActiveFilters
+                          ? marksForNote(note, conditions, searchColumns)
+                          : null;
 
                         return (
                           <Fragment key={note.id}>
@@ -5780,7 +6184,12 @@ function NotesTable({
                               tabIndex={0}
                             >
                               {visibleColumns.map((column) =>
-                                renderTableCell(column, note, frontThumb),
+                                renderTableCell(
+                                  column,
+                                  note,
+                                  frontThumb,
+                                  rowMarks,
+                                ),
                               )}
                               {vScroll.visible ? (
                                 <td

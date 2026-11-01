@@ -22,6 +22,8 @@
      header and 2.3:1 on placeholders. */
   --text-muted: #6f5c40;
   --text-faint: #7a6749;
+  /* Prototype's lighter hint tone, used inside the table filter bar only. */
+  --text-hint: #b5a488;
   --accent: #96622f;
   --accent-strong: #71461f;
   --accent-soft: rgba(150, 98, 47, 0.12);
@@ -2562,6 +2564,15 @@ input[type="radio"] {
   margin-bottom: 0;
 }
 
+.table-shell mark {
+  padding: 0 1px;
+  border-radius: 3px;
+  background: #f6d9a0;
+  box-shadow: 0 0 0 1px rgba(150, 98, 47, 0.26);
+  color: #5c3a12;
+  font-weight: inherit;
+}
+
 .table-shell {
   position: relative;
   overflow: hidden;
@@ -3608,6 +3619,27 @@ th[aria-sort="descending"] .sort-chevron {
   background: var(--accent-soft);
 }
 
+/* The create arm sits below a dashed rule, so an unknown tag reads as a new
+   choice rather than one more member of the list. */
+.tags-filter-option--create {
+  position: relative;
+  margin-top: 5px;
+  border-radius: 0 0 6px 6px;
+  font-weight: 700;
+}
+
+/* Draw the rule separate from the button's border so it keeps square ends on
+   a rounded option. */
+.tags-filter-option--create::before {
+  position: absolute;
+  top: -4px;
+  right: 4px;
+  left: 4px;
+  border-top: 1px dashed var(--border-control);
+  content: "";
+  pointer-events: none;
+}
+
 .inline-select-group {
   display: inline-flex;
   gap: 10px;
@@ -3630,7 +3662,7 @@ th[aria-sort="descending"] .sort-chevron {
 }
 
 .toolbar-row--table-controls {
-  align-items: stretch;
+  align-items: center;
 }
 
 /* The search field is the toolbar's primary control: one query across every
@@ -3652,6 +3684,171 @@ th[aria-sort="descending"] .sort-chevron {
   pointer-events: none;
 }
 
+/* One filter bar: the field button lives inside the field, the value input
+   next to it, and Enter turns the text into a chip. Same field ORs, different
+   fields AND, so the chips row states the whole filter. */
+.table-search--scoped {
+  flex: 0 1 460px;
+  width: min(460px, 100%);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  height: 40px;
+  padding: 0 8px 0 11px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-sm);
+}
+
+.table-search--scoped:focus-within {
+  border-color: var(--accent);
+  outline: none;
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.table-search--scoped .table-search-icon {
+  position: static;
+  flex: none;
+}
+
+.table-filter-field {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  flex: none;
+  max-width: 148px;
+  height: 26px;
+  padding: 0 6px 0 7px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--surface-3);
+  color: var(--accent-strong);
+  font-size: 0.75rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.table-filter-field:hover,
+.table-filter-field--open {
+  background: #e7d9c2;
+}
+
+.table-filter-field:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+
+.table-filter-field-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.table-filter-field svg {
+  flex: none;
+  width: 12px;
+  height: 12px;
+  opacity: 0.7;
+}
+
+/* Portalled out of the field so the toolbar cannot clip it. Mirrors the
+   prototype's field menu: small uppercase heading, 13px options and the
+   checked row filled with the accent wash. */
+.table-filter-menu {
+  position: fixed;
+  z-index: 40;
+  min-width: 200px;
+  padding: 5px;
+  border: 1px solid var(--border-control);
+  border-radius: 12px;
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
+.table-filter-menu-heading {
+  margin: 0;
+  padding: 7px 9px 5px;
+  color: var(--text-faint);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+.table-filter-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 7px 9px;
+  border: 0;
+  border-radius: 7px;
+  background: none;
+  color: var(--text);
+  font-size: 0.8125rem;
+  text-align: left;
+}
+
+.table-filter-menu-item:hover {
+  background: var(--accent-soft);
+}
+
+.table-filter-menu-item[aria-checked="true"] {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.table-search-divider {
+  flex: none;
+  width: 1px;
+  height: 18px;
+  background: var(--border);
+}
+
+.table-search--scoped .table-search-input {
+  flex: 1;
+  width: auto;
+  min-width: 60px;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  font-size: 0.8125rem;
+}
+
+.table-search--scoped .table-search-input:focus {
+  border: 0;
+  outline: none;
+}
+
+.table-search--scoped .table-search-hint {
+  position: static;
+  flex: none;
+  min-width: 0;
+  height: auto;
+  padding: 3px 5px;
+  border: 1px solid var(--border);
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  box-shadow: none;
+  color: var(--text-muted);
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.625rem;
+  font-weight: 500;
+  line-height: 1;
+}
+
+.table-filter-enter {
+  flex: none;
+  color: var(--accent-strong);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 .table-search-input {
   width: 100%;
   height: 36px;
@@ -3666,81 +3863,30 @@ th[aria-sort="descending"] .sort-chevron {
   color: var(--text-faint);
 }
 
+/* The prototype's placeholder tone: lighter than --text-faint so the hint
+   sits behind the field button instead of competing with it. Scoped to the
+   filter bar, leaving the AA-safe token in place everywhere else. */
+.table-search--scoped .table-search-input::placeholder {
+  color: var(--text-hint);
+}
+
 .table-search-input:focus {
   border-color: var(--accent);
   outline: 2px solid var(--accent-soft);
   outline-offset: 0;
 }
 
-/* The explicit clear button replaces the native one, which jsdom (and some
-   browsers) do not render consistently. */
+/* The native clear affordance is not rendered consistently, and the field
+   commits with Enter instead of a separate clear button. */
 .table-search-input::-webkit-search-cancel-button {
   appearance: none;
 }
 
-.table-search-hint,
-.table-search-clear {
+.table-search-hint {
   position: absolute;
   right: 9px;
-}
-
-.table-search-hint {
   pointer-events: none;
   color: var(--text-muted);
-}
-
-.table-search-clear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 22px;
-  height: 22px;
-  padding: 0;
-  border: 0;
-  border-radius: 50%;
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 1rem;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.table-search-clear:hover {
-  background: var(--accent-soft);
-  color: var(--text);
-}
-
-/* The Filters toggle sits right after search and opens the on-demand filter
-   row. The badge reports how many column filters are active. */
-.table-filter-toggle {
-  gap: 6px;
-}
-
-.table-filter-toggle--open {
-  border-color: var(--accent);
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-}
-
-/* Filters applied with the row collapsed: the toggle still carries the count
-   badge and the accent label, so it reads as "filters are on" instead of as a
-   button that stopped responding. */
-.table-filter-toggle--applied:not(.table-filter-toggle--open) {
-  border-color: var(--border-control);
-  color: var(--accent-strong);
-}
-
-.table-filter-count {
-  display: inline-grid;
-  place-items: center;
-  min-width: 18px;
-  height: 18px;
-  padding: 0 5px;
-  border-radius: var(--radius-pill);
-  background: var(--accent-strong);
-  color: var(--accent-ink);
-  font-size: 0.7rem;
-  font-weight: 800;
 }
 
 /* Active filters sit beside the toggle as removable chips, so a filtered view
@@ -3749,41 +3895,123 @@ th[aria-sort="descending"] .sort-chevron {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 6px;
+  gap: 4px;
+  margin: 0 0 4px;
+  min-height: 30px;
+}
+
+/* The empty row keeps the table from jumping when the first chip lands, and
+   states the field/Enter model before the user has tried it. */
+.table-filter-chips-empty {
+  color: var(--text-hint);
+  font-size: 0.75rem;
+}
+
+.table-filter-facet {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  height: 28px;
+  padding: 0 4px 0 2px;
+}
+
+.table-filter-facet-label {
+  margin-right: 1px;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  white-space: nowrap;
+}
+
+.table-filter-or {
+  color: var(--text-hint);
+  font-size: 0.6875rem;
+  font-style: italic;
+  padding: 0 1px;
+}
+
+.table-filter-and {
+  color: var(--text-hint);
+  font-size: 0.5625rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  padding: 0 6px;
 }
 
 .table-filter-chip {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  height: 26px;
-  padding: 0 4px 0 10px;
-  border-radius: var(--radius-pill);
+  gap: 1px;
+  height: 24px;
+  padding: 0 1px 0 0;
+  border: 1px solid rgba(150, 98, 47, 0.18);
+  border-radius: 7px;
   background: var(--accent-soft);
   color: var(--accent-strong);
-  font-size: 0.76rem;
-  font-weight: 700;
   white-space: nowrap;
+}
+
+.table-filter-chip--negated {
+  border-color: rgba(160, 42, 34, 0.22);
+  background: rgba(160, 42, 34, 0.09);
+  color: var(--danger);
+}
+
+.table-filter-chip-value {
+  padding: 0 3px 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: text;
+}
+
+.table-filter-chip--negated .table-filter-chip-value {
+  color: var(--danger);
+}
+
+.table-filter-chip-input {
+  width: 84px;
+  height: 20px;
+  margin-left: 5px;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  font-size: 0.75rem;
+  font-weight: 600;
+  outline: none;
 }
 
 .table-filter-chip-remove {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 18px;
-  height: 18px;
+  width: 17px;
+  height: 17px;
   padding: 0;
   border: 0;
-  border-radius: 50%;
+  border-radius: 5px;
   background: transparent;
-  color: inherit;
-  font-size: 0.95rem;
+  color: var(--text-muted);
   line-height: 1;
   cursor: pointer;
 }
 
+/* A drawn cross centres exactly in the 17px button; the × glyph sits on the
+   font's math axis and reads a hair off-centre. */
+.table-filter-chip-remove svg {
+  display: block;
+  width: 8px;
+  height: 8px;
+}
+
 .table-filter-chip-remove:hover {
-  background: var(--accent);
+  background: var(--danger);
   color: var(--accent-ink);
 }
 
@@ -3854,13 +4082,15 @@ th[aria-sort="descending"] .sort-chevron {
 }
 
 .table-filter-clear-all {
+  margin-left: 6px;
+  padding: 0;
   border: 0;
-  border-radius: var(--radius-pill);
   background: transparent;
-  color: var(--text-muted);
-  font-size: 0.76rem;
-  padding: 2px 6px;
+  color: var(--accent);
+  font-size: 0.75rem;
+  font-weight: 600;
   text-decoration: underline;
+  text-underline-offset: 2px;
   white-space: nowrap;
 }
 
