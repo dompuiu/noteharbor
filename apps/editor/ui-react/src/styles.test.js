@@ -279,6 +279,21 @@ describe("table styles", () => {
     );
   });
 
+  // The display-order column is compact (4px of padding), so the header's wide
+  // 12px band must not win, and the sort button's usual 6px pull would push it
+  // and its 2px ring past the cell's right edge, where the next pinned header
+  // paints over the ring.
+  test("the compact order header keeps its sort ring inside the cell", () => {
+    expect(styles).toMatch(
+      /\.table-shell thead th\.table-order-cell\s*\{[^}]*padding-left:\s*4px[^}]*padding-right:\s*4px/,
+    );
+
+    const button = styles.match(/\.table-order-cell \.sort-button\s*\{([^}]*)\}/);
+    expect(button).not.toBeNull();
+    expect(button[1]).toMatch(/margin-inline:\s*0/);
+    expect(button[1]).toMatch(/padding:\s*4px/);
+  });
+
   test("the sorted column stands out in accent-strong", () => {
     expect(styles).toMatch(
       /\.sort-button--active\s*\{\s*color:\s*var\(--accent-strong\)/,

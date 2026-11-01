@@ -2971,8 +2971,12 @@ tbody td {
 }
 
 /* Compact: 4px of padding each side instead of the table's usual 10px, so the
-   model's 48px fits four tabular digits and the sort chevron. */
-.table-order-cell {
+   model's 48px fits four tabular digits and the sort chevron. The header rule
+   below sets the wide band's 12px padding on every `th`, so the order cell
+   needs a selector specific enough to keep this compact box in the header too
+   — its label and chevron cannot fit in the 23px a 12px pad would leave. */
+.table-order-cell,
+.table-shell thead th.table-order-cell {
   padding-left: 4px;
   padding-right: 4px;
 }
@@ -3428,6 +3432,15 @@ thead tr:first-child th {
 
 .align-center .sort-button {
   margin-inline: -6px;
+}
+
+/* The display-order header is compact (4px of padding), so the pull above
+   would push it and its 2px focus ring past the cell's right edge, where the
+   next pinned header paints over the ring. Drop the pull and match the cell's
+   4px padding: the label stays inside the cell and the ring ends on its edge. */
+.table-order-cell .sort-button {
+  margin-inline: 0;
+  padding: 4px;
 }
 
 /* The chevron is drawn in every sortable header so the affordance appears on
