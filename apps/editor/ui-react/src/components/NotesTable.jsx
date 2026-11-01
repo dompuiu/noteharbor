@@ -1,5 +1,4 @@
 import {
-  Fragment,
   useCallback,
   useDeferredValue,
   useEffect,
@@ -8,7 +7,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CATALOG_ROUTES } from "../lib/routes.js";
@@ -53,7 +51,6 @@ import {
   hideableDataColumns,
   lastStickyKey,
   matchesSearchQuery,
-  parseGradeValue,
   slideshowFilterKeys,
   stickyOffsets,
   tableColumns,
@@ -61,16 +58,21 @@ import {
   tagsColumnKey,
   validSortKeys,
 } from "../lib/tableColumns.js";
-import { ChipRemoveButton } from "./ChipRemoveButton.jsx";
+import {
+  cellClass,
+  pickFirstAvailableImage,
+  tableThumbnailSlots,
+} from "../lib/tableCells.jsx";
+import { conditionsFromInput, makeCondition } from "../lib/tableFilters.js";
 import { ColumnPicker } from "./ColumnPicker.jsx";
-import { FilterFieldMenu } from "./FilterFieldMenu.jsx";
-import { HighlightMatch, rankTagSuggestions } from "./TagsField.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { NoCollectionsPrompt } from "./NoCollectionsPrompt.jsx";
-import { RowActionsMenu } from "./RowActionsMenu.jsx";
+import { NoteRow } from "./NoteRow.jsx";
 import { Slideshow } from "./Slideshow.jsx";
+import { TableFilterBar } from "./TableFilterBar.jsx";
+import { TableScrollbar } from "./TableScrollbar.jsx";
 
 export function HomeHero() {
   return null;
@@ -82,421 +84,6 @@ const minTableWidth = 1200;
 const tableGutterWidth = 14;
 const validPreviewKinds = new Set(["front", "back"]);
 const slideshowFilterParamPrefix = "f_";
-// Shared by the rendered tags and the hidden-tag measurer below, so the probe
-// can never drift from the tag it is measuring.
-const tableTagClass = "tag table-tag";
-const tagChipHorizontalPadding = 16;
-const tagMoreChipHorizontalPadding = 14;
-const tagListGap = 5;
-const tagChipMeasureSafetyMargin = 2;
-const tagsPopoverWidth = 280;
-const tagsPopoverMaxHeight = 320;
-const tagsPopoverOpenDelay = 300;
-const tagsPopoverCloseDelay = 150;
-
-let tagTextMeasureContext = null;
-
-// Alignment travels with the column model (`align`: text left, display order
-// right, selection/thumbnail/actions centered) and is emitted as a class on
-// every header and body cell. The stylesheet owns the actual text-align, so
-// hidden and reordered columns cannot drift out of alignment.
-function alignmentClass(column) {
-  return `align-${column?.align ?? "left"}`;
-}
-
-// Header and body cells build their classes from the same column model, so a
-// compact column keeps one content box and one alignment in both places.
-function cellClass(column) {
-  return [
-    alignmentClass(column),
-    column.key ? `table-col-${column.key}` : null,
-    column.kind === "reorder" ? "drag-cell" : null,
-    column.kind === "order" ? "table-order-cell" : null,
-    column.kind === "thumbnail" ? "table-thumb-cell" : null,
-    column.kind === "actions" ? "table-actions-cell" : null,
-    column.isTags ? "tags-column" : null,
-  ]
-    .filter(Boolean)
-    .join(" ");
-}
-
-function getTagTextMeasureContext() {
-  if (tagTextMeasureContext || typeof document === "undefined") {
-    return tagTextMeasureContext;
-  }
-
-  const probe = document.createElement("button");
-  probe.className = tableTagClass;
-  probe.style.position = "absolute";
-  probe.style.visibility = "hidden";
-  probe.style.pointerEvents = "none";
-  probe.textContent = "x";
-  document.body.appendChild(probe);
-  const computed = window.getComputedStyle(probe);
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-  context.font = `${computed.fontStyle} ${computed.fontWeight} ${computed.fontSize} ${computed.fontFamily}`;
-  document.body.removeChild(probe);
-
-  tagTextMeasureContext = context;
-  return tagTextMeasureContext;
-}
-
-function measureTagChipWidth(
-  text,
-  horizontalPadding = tagChipHorizontalPadding,
-) {
-  const context = getTagTextMeasureContext();
-
-  if (!context) {
-    return text.length * 8 + horizontalPadding;
-  }
-
-  return (
-    Math.ceil(context.measureText(text).width) +
-    horizontalPadding +
-    tagChipMeasureSafetyMargin
-  );
-}
-
-function computeVisibleTagPlan(tags, availableWidth) {
-  if (!tags.length) {
-    return { visibleTags: [], hiddenTags: [] };
-  }
-
-  const chipWidths = tags.map((tag) => measureTagChipWidth(tag.name));
-  const fullWidth = chipWidths.reduce(
-    (sum, width, index) => sum + width + (index > 0 ? tagListGap : 0),
-    0,
-  );
-
-  if (fullWidth <= availableWidth) {
-    return { visibleTags: tags, hiddenTags: [] };
-  }
-
-  for (
-    let visibleCount = tags.length - 1;
-    visibleCount >= 0;
-    visibleCount -= 1
-  ) {
-    const hiddenCount = tags.length - visibleCount;
-    let width = measureTagChipWidth(
-      `+${hiddenCount}`,
-      tagMoreChipHorizontalPadding,
-    );
-
-    for (let i = 0; i < visibleCount; i += 1) {
-      width += chipWidths[i] + tagListGap;
-    }
-
-    // At visibleCount 0 we always accept, so the "+N" counter is never
-    // itself pushed out of view with no indicator left behind.
-    if (width <= availableWidth || visibleCount === 0) {
-      return {
-        visibleTags: tags.slice(0, visibleCount),
-        hiddenTags: tags.slice(visibleCount),
-      };
-    }
-  }
-}
-
-// Anchors the popover under `bounds` (the trigger's rect), flipping above it
-// when there isn't room below, given the popover's (real or estimated) height.
-function computePopoverTop(bounds, height) {
-  const spaceBelow = window.innerHeight - bounds.bottom - 6;
-  const spaceAbove = bounds.top - 6;
-
-  return spaceBelow >= height || spaceBelow >= spaceAbove
-    ? Math.min(bounds.bottom + 6, window.innerHeight - height - 8)
-    : Math.max(8, bounds.top - height - 6);
-}
-
-function TagsCell({ onApplyFilter, tags }) {
-  const containerRef = useRef(null);
-  const triggerRef = useRef(null);
-  const popoverRef = useRef(null);
-  const openTimeoutRef = useRef(null);
-  const closeTimeoutRef = useRef(null);
-  const [availableWidth, setAvailableWidth] = useState(null);
-  const [isOpen, setIsOpen] = useState(false);
-  const [popoverPosition, setPopoverPosition] = useState(null);
-  const popoverHeightRef = useRef(null);
-
-  useLayoutEffect(() => {
-    const element = containerRef.current;
-
-    if (!element) {
-      return undefined;
-    }
-
-    setAvailableWidth(element.clientWidth);
-
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-
-      if (entry) {
-        setAvailableWidth(entry.contentRect.width);
-      }
-    });
-
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setPopoverPosition(null);
-      popoverHeightRef.current = null;
-      return undefined;
-    }
-
-    function updatePosition() {
-      const trigger = triggerRef.current;
-
-      if (!trigger) {
-        setIsOpen(false);
-        return;
-      }
-
-      const bounds = trigger.getBoundingClientRect();
-      const maxLeft = window.innerWidth - tagsPopoverWidth - 8;
-      const left = Math.max(8, Math.min(bounds.left, maxLeft));
-
-      // Before the popover has mounted (and given us a real height to
-      // measure), fall back to its max possible height so the first paint
-      // still avoids running off-screen; the layout effect below corrects
-      // `top` using the real height as soon as it's known.
-      const height =
-        popoverHeightRef.current ??
-        Math.min(tagsPopoverMaxHeight, window.innerHeight - 16);
-      const top = computePopoverTop(bounds, height);
-
-      setPopoverPosition({ top, left });
-    }
-
-    updatePosition();
-    window.addEventListener("scroll", updatePosition, true);
-    window.addEventListener("resize", updatePosition);
-
-    return () => {
-      window.removeEventListener("scroll", updatePosition, true);
-      window.removeEventListener("resize", updatePosition);
-    };
-  }, [isOpen]);
-
-  // The first pass above has to guess the popover's height, since it hasn't
-  // rendered yet. Once it has, re-derive `top` from its actual height so a
-  // short tag list doesn't get positioned as if it were the max height.
-  useLayoutEffect(() => {
-    if (!isOpen || !popoverPosition || !popoverRef.current) {
-      return;
-    }
-
-    const measuredHeight = popoverRef.current.getBoundingClientRect().height;
-
-    if (popoverHeightRef.current === measuredHeight) {
-      return;
-    }
-
-    popoverHeightRef.current = measuredHeight;
-
-    const trigger = triggerRef.current;
-
-    if (!trigger) {
-      return;
-    }
-
-    const bounds = trigger.getBoundingClientRect();
-    const top = computePopoverTop(bounds, measuredHeight);
-
-    setPopoverPosition((current) => (current ? { ...current, top } : current));
-  }, [isOpen, popoverPosition]);
-
-  useEffect(() => {
-    return () => {
-      if (openTimeoutRef.current) {
-        clearTimeout(openTimeoutRef.current);
-      }
-
-      if (closeTimeoutRef.current) {
-        clearTimeout(closeTimeoutRef.current);
-      }
-    };
-  }, []);
-
-  function cancelScheduledOpen() {
-    if (openTimeoutRef.current) {
-      clearTimeout(openTimeoutRef.current);
-      openTimeoutRef.current = null;
-    }
-  }
-
-  function cancelScheduledClose() {
-    if (closeTimeoutRef.current) {
-      clearTimeout(closeTimeoutRef.current);
-      closeTimeoutRef.current = null;
-    }
-  }
-
-  function handleTriggerMouseEnter() {
-    cancelScheduledClose();
-    cancelScheduledOpen();
-    openTimeoutRef.current = setTimeout(() => {
-      setIsOpen(true);
-    }, tagsPopoverOpenDelay);
-  }
-
-  function handleMouseLeave() {
-    cancelScheduledOpen();
-    cancelScheduledClose();
-    closeTimeoutRef.current = setTimeout(() => {
-      setIsOpen(false);
-    }, tagsPopoverCloseDelay);
-  }
-
-  function handleMouseEnterAgain() {
-    cancelScheduledClose();
-  }
-
-  function handleTriggerFocus() {
-    cancelScheduledOpen();
-    cancelScheduledClose();
-    setIsOpen(true);
-  }
-
-  function handleTriggerMouseDown(event) {
-    // Clicking an unfocused button fires a native focus event before click.
-    // Without this, handleTriggerFocus's setIsOpen(true) and this same
-    // click's toggle in handleTriggerClick cancel each other out.
-    event.preventDefault();
-  }
-
-  function handleTriggerClick(event) {
-    event.stopPropagation();
-    cancelScheduledOpen();
-    cancelScheduledClose();
-    setIsOpen((current) => !current);
-  }
-
-  function handleTriggerKeyDown(event) {
-    if (event.key === "Tab" && !event.shiftKey && isOpen) {
-      const firstButton = popoverRef.current?.querySelector("button");
-
-      if (firstButton) {
-        event.preventDefault();
-        firstButton.focus();
-      }
-    }
-  }
-
-  function handlePopoverFocus() {
-    cancelScheduledClose();
-  }
-
-  function handlePopoverKeyDown(event) {
-    if (event.key === "Escape") {
-      event.stopPropagation();
-      setIsOpen(false);
-      triggerRef.current?.focus();
-      return;
-    }
-
-    if (event.key === "Tab") {
-      const buttons = Array.from(
-        popoverRef.current?.querySelectorAll("button") ?? [],
-      );
-      const atLast =
-        !event.shiftKey &&
-        document.activeElement === buttons[buttons.length - 1];
-      const atFirst = event.shiftKey && document.activeElement === buttons[0];
-
-      if (atLast || atFirst) {
-        event.preventDefault();
-        setIsOpen(false);
-        triggerRef.current?.focus();
-      }
-    }
-  }
-
-  const { visibleTags, hiddenTags } = !tags.length
-    ? { visibleTags: [], hiddenTags: [] }
-    : availableWidth == null
-      ? { visibleTags: tags, hiddenTags: [] }
-      : computeVisibleTagPlan(tags, availableWidth);
-
-  return (
-    <div className="tag-list tag-list-clip" ref={containerRef}>
-      {!tags.length ? <span className="muted">-</span> : null}
-      {visibleTags.map((tag) => (
-        <button
-          className={tableTagClass}
-          key={tag.id || tag.name}
-          onClick={(event) => {
-            event.stopPropagation();
-            onApplyFilter(tag.name, { replace: event.shiftKey });
-          }}
-          title={tag.name}
-          type="button"
-        >
-          {tag.name}
-        </button>
-      ))}
-      {hiddenTags.length ? (
-        <span className="tag-more-wrap">
-          <button
-            aria-label={`${hiddenTags.length} more tags`}
-            className={`${tableTagClass} table-tag--more`}
-            onBlur={handleMouseLeave}
-            onClick={handleTriggerClick}
-            onFocus={handleTriggerFocus}
-            onKeyDown={handleTriggerKeyDown}
-            onMouseDown={handleTriggerMouseDown}
-            onMouseEnter={handleTriggerMouseEnter}
-            onMouseLeave={handleMouseLeave}
-            ref={triggerRef}
-            type="button"
-          >
-            +{hiddenTags.length}
-          </button>
-          {isOpen && popoverPosition
-            ? createPortal(
-                <div
-                  className="tag-popover"
-                  onBlur={handleMouseLeave}
-                  onFocus={handlePopoverFocus}
-                  onKeyDown={handlePopoverKeyDown}
-                  onMouseEnter={handleMouseEnterAgain}
-                  onMouseLeave={handleMouseLeave}
-                  ref={popoverRef}
-                  style={{
-                    top: popoverPosition.top,
-                    left: popoverPosition.left,
-                  }}
-                >
-                  {hiddenTags.map((tag) => (
-                    <button
-                      className={tableTagClass}
-                      key={tag.id || tag.name}
-                      onClick={(event) => {
-                        event.stopPropagation();
-                        onApplyFilter(tag.name, { replace: event.shiftKey });
-                        setIsOpen(false);
-                      }}
-                      title={tag.name}
-                      type="button"
-                    >
-                      {tag.name}
-                    </button>
-                  ))}
-                </div>,
-                document.body,
-              )
-            : null}
-        </span>
-      ) : null}
-    </div>
-  );
-}
 
 // A slideshow URL that carries sort context owns the sort for the render it
 // opens on; a plain visit uses the collection's saved structure.
@@ -531,38 +118,6 @@ function valueToString(note, key) {
   return String(note[key] ?? "");
 }
 
-function escapeRegExp(value) {
-  return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-}
-
-// Marks the terms a row matched, so a result set explains itself instead of
-// leaving the collector to guess which field matched.
-function highlightTerms(text, terms) {
-  const raw = String(text ?? "");
-  const needles = [
-    ...new Set((terms ?? []).filter(Boolean).map((term) => String(term))),
-  ].sort((left, right) => right.length - left.length);
-
-  if (!needles.length) {
-    return raw;
-  }
-
-  const pattern = new RegExp(`(${needles.map(escapeRegExp).join("|")})`, "gi");
-  const parts = raw.split(pattern);
-
-  if (parts.length === 1) {
-    return raw;
-  }
-
-  return parts.map((part, index) =>
-    index % 2 === 1 ? <mark key={index}>{part}</mark> : part,
-  );
-}
-
-// How a note names itself outside the table. A denomination alone is not an
-// identity — a collection holds three notes called "1 Leu" — so the catalog
-// number leads and the row is disambiguated by the same fields the table
-// shows: company, grade, serial, date. Every destructive control reads this,
 // never `note.denomination`.
 function noteDisplayName(note) {
   const catalog = String(note?.catalog_number ?? "").trim();
@@ -593,60 +148,6 @@ function noteThumbPath(note) {
       ["back", "full"],
     ])?.path ?? null
   );
-}
-
-// ── Filter chips ───────────────────────────────────────────────────
-// One chip is one condition: a field, a value, and whether it is excluded.
-// Same field ORs, different fields AND (see filterNotesByConditions).
-
-const defaultFilterField = "catalog_number";
-
-const filterFieldLabels = {
-  all: "All fields",
-  catalog_number: "Catalog",
-  denomination: "Denomination",
-  issue_date: "Date",
-  grading_company: "Company",
-  grade: "Grade",
-  serial: "Serial",
-  tags: "Tags",
-};
-
-function filterFieldLabel(field) {
-  return filterFieldLabels[field] ?? "All fields";
-}
-
-let conditionSeq = 0;
-
-function makeCondition(field, value, negated = false) {
-  conditionSeq += 1;
-  return { id: `filter-${conditionSeq}`, field, value, negated };
-}
-
-function conditionIdentity(condition) {
-  return `${condition.field}:${condition.negated ? "!" : ""}${condition.value.toLowerCase()}`;
-}
-
-// One committed input may carry several values (`22, 19`) and a negation
-// (`!PMG`); each becomes its own chip so the row states exactly what it means.
-function conditionsFromInput(field, raw) {
-  const parsed = [];
-
-  for (const token of String(raw ?? "").split(",")) {
-    const trimmed = token.trim();
-    if (!trimmed) {
-      continue;
-    }
-
-    const negated = trimmed.startsWith("!");
-    const value = (negated ? trimmed.slice(1) : trimmed).trim();
-
-    if (value) {
-      parsed.push(makeCondition(field, value, negated));
-    }
-  }
-
-  return parsed;
 }
 
 function serializeConditions(conditions) {
@@ -1060,35 +561,6 @@ function dropNoteAndRenumber(noteList, removedId) {
   );
 }
 
-function versionedImagePath(path, version) {
-  if (!path) {
-    return null;
-  }
-
-  const separator = path.includes("?") ? "&" : "?";
-  return version ? `${path}${separator}v=${encodeURIComponent(version)}` : path;
-}
-
-function pickImage(note, type, variant = "full") {
-  const imagePath =
-    note.images.find(
-      (image) => image.type === type && image.variant === variant,
-    )?.localPath ?? null;
-
-  return versionedImagePath(imagePath, note.updated_at);
-}
-
-function pickFirstAvailableImage(note, slots) {
-  for (const [type, variant] of slots) {
-    const imagePath = pickImage(note, type, variant);
-    if (imagePath) {
-      return { path: imagePath, type, variant };
-    }
-  }
-
-  return null;
-}
-
 function parsePositiveInteger(value) {
   const parsedValue = Number.parseInt(String(value ?? ""), 10);
   return Number.isInteger(parsedValue) && parsedValue > 0 ? parsedValue : null;
@@ -1344,16 +816,16 @@ function NotesTable({
   const tableScreenRef = useRef(null);
   const tableShellRef = useRef(null);
   const tableScrollRef = useRef(null);
+  // The memoized rows receive one stable handlers object; its members call
+  // through this ref so they always read the current render's state without
+  // changing identity.
+  const rowHandlerImplRef = useRef(null);
   const [tableWidth, setTableWidth] = useState(null);
   const columnPanRef = useRef(null);
   const suppressColumnPanClickRef = useRef(false);
-  const vMetricsRef = useRef({ max: 0, range: 0, thumbHeight: 0 });
-  const vThumbDragRef = useRef(null);
   const editorOverlayRef = useRef(null);
   const focusedRowIdRef = useRef(null);
   const tableFocusAnchorRef = useRef(null);
-  const searchInputRef = useRef(null);
-  const tagSuggestionListRef = useRef(null);
   const currentRouteRef = useRef(null);
   const pendingRowFocusNoteIdRef = useRef(null);
   // Tab from a row enters the selection actions bar before the row's own
@@ -1469,16 +941,10 @@ function NotesTable({
   const [conditions, setConditions] = useState(() =>
     conditionsFromRoute(initialRouteRef.current),
   );
-  // Which field the next chip belongs to, and the text not yet committed.
-  // The draft is kept when a chip is edited or removed, so half-typed text is
-  // never lost to a chip action.
-  const [filterField, setFilterField] = useState(defaultFilterField);
-  const [filterDraft, setFilterDraft] = useState("");
-  const [tagSuggestionOpen, setTagSuggestionOpen] = useState(false);
-  const [tagSuggestionIndex, setTagSuggestionIndex] = useState(-1);
-  const [tagSuggestionPosition, setTagSuggestionPosition] = useState(null);
-  const [editingConditionId, setEditingConditionId] = useState(null);
-  const [conditionDraft, setConditionDraft] = useState("");
+  const hadConditionsRef = useRef(conditions.length > 0);
+  // The filter bar owns its draft and field; this ref is only the table's way
+  // to focus it (the `/` shortcut) or reset it (Reset view, collection switch).
+  const filterBarRef = useRef(null);
   // Selection is deliberately memory-only: restoring a stale bulk-delete
   // queue after a reload is worse than starting clean, and it leaves a bar
   // on screen with no row cursor to return to.
@@ -1518,14 +984,9 @@ function NotesTable({
   const [thumbPreviewState, setThumbPreviewState] = useState(null);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [columnFilterHeights, setColumnFilterHeights] = useState({});
-  const [vScroll, setVScroll] = useState({
-    bottom: 4,
-    thumbHeight: 0,
-    thumbTop: 0,
-    top: 0,
-    valueNow: 0,
-    visible: false,
-  });
+  // The scrollbar owns its metrics; the table only needs to know whether its
+  // gutter column is showing, which changes the column widths.
+  const [vScrollVisible, setVScrollVisible] = useState(false);
   const selectAllRef = useRef(null);
   const editorDirtyRef = useRef(false);
   const confirmOpenRef = useRef(false);
@@ -1608,76 +1069,6 @@ function NotesTable({
     );
   }, [notes]);
 
-  const tagMatches = useMemo(
-    () => rankTagSuggestions(tagNames, new Set(), filterDraft),
-    [filterDraft, tagNames],
-  );
-  const trimmedTagDraft = filterDraft.trim();
-  // The filter only suggests tags that some note already carries. Creating a
-  // tag belongs to the note editor, so the filter list has no create arm.
-  const tagListVisible =
-    filterField === tagsColumnKey &&
-    tagSuggestionOpen &&
-    Boolean(tagSuggestionPosition);
-
-  useEffect(() => {
-    if (filterField !== tagsColumnKey || !tagSuggestionOpen) {
-      setTagSuggestionPosition(null);
-      return undefined;
-    }
-
-    const updatePosition = () => {
-      const input = searchInputRef.current;
-
-      if (!input) {
-        return;
-      }
-
-      const bounds = input.getBoundingClientRect();
-      setTagSuggestionPosition({
-        top: bounds.bottom + 6,
-        left: bounds.left,
-        width: Math.max(bounds.width, 220),
-      });
-    };
-
-    updatePosition();
-    window.addEventListener("scroll", updatePosition, true);
-    window.addEventListener("resize", updatePosition);
-    return () => {
-      window.removeEventListener("scroll", updatePosition, true);
-      window.removeEventListener("resize", updatePosition);
-    };
-  }, [filterField, tagSuggestionOpen]);
-
-  useEffect(() => {
-    if (!tagListVisible) {
-      return undefined;
-    }
-
-    const closeOnOutsidePress = (event) => {
-      if (
-        searchInputRef.current?.contains(event.target) ||
-        tagSuggestionListRef.current?.contains(event.target)
-      ) {
-        return;
-      }
-
-      setTagSuggestionOpen(false);
-      setTagSuggestionIndex(-1);
-    };
-
-    document.addEventListener("mousedown", closeOnOutsidePress);
-    return () => document.removeEventListener("mousedown", closeOnOutsidePress);
-  }, [tagListVisible]);
-
-  useEffect(() => {
-    if (filterField !== tagsColumnKey) {
-      setTagSuggestionOpen(false);
-      setTagSuggestionIndex(-1);
-    }
-  }, [filterField]);
-
   const currentRoute = useMemo(
     () => parseTableHash(location.hash),
     [location.hash],
@@ -1693,8 +1084,18 @@ function NotesTable({
   // chips, and counts stay instant while the heavy row re-mount happens in
   // a background render. Everything that reads note *identity* (selection,
   // nav, slideshow) keeps using the urgent list.
-  const deferredOrderedNotes = useDeferredValue(orderedNotes);
-  const rowsPending = deferredOrderedNotes !== orderedNotes;
+  // The painted row list and the marks that explain it lag one step behind the
+  // filter state, together: input, chips and counts stay instant while the
+  // heavy row re-mount happens in a background render. Deferring them as one
+  // value keeps a commit to a single repaint of the new row set.
+  const paintedView = useMemo(
+    () => ({ conditions, notes: orderedNotes }),
+    [conditions, orderedNotes],
+  );
+  const deferredView = useDeferredValue(paintedView);
+  const deferredOrderedNotes = deferredView.notes;
+  const deferredConditions = deferredView.conditions;
+  const rowsPending = deferredView !== paintedView;
   const slideshowRouteActive = currentRoute.kind === "slideshow";
   const creatingNote = isCreateRoute(currentRoute);
   const editingNoteId = isEditNoteRoute(currentRoute)
@@ -1950,10 +1351,19 @@ function NotesTable({
     }
 
     setConditions([]);
-    setFilterDraft("");
-    setEditingConditionId(null);
-    setFilterField(defaultFilterField);
+    filterBarRef.current?.reset();
   }, [collectionId]);
+
+  useEffect(() => {
+    // Clearing the filters brings the whole table back: return the columns to
+    // their start edge so the collector sees the widest table, not the pan
+    // position that belonged to the filtered view.
+    if (hadConditionsRef.current && !conditions.length) {
+      resetColumnScroll();
+    }
+
+    hadConditionsRef.current = conditions.length > 0;
+  }, [conditions]);
 
   useEffect(() => {
     if (!slideshowRouteActive || !slideshowNotes.length) {
@@ -2143,24 +1553,6 @@ function NotesTable({
   }, [editorOverlayOpen]);
 
   const hasActiveFilters = conditions.length > 0;
-  // Chips grouped by field: same-field values OR, different fields AND.
-  const conditionGroups = useMemo(() => {
-    const groups = new Map();
-
-    for (const condition of conditions) {
-      if (!groups.has(condition.field)) {
-        groups.set(condition.field, []);
-      }
-      groups.get(condition.field).push(condition);
-    }
-
-    return Array.from(groups, ([field, items]) => ({ field, items }));
-  }, [conditions]);
-
-  const filterPlaceholder =
-    filterField === "all"
-      ? "Search every visible field…"
-      : `Filter ${filterFieldLabel(filterField).toLowerCase()}…`;
   // Permanent columns are always rendered; a hideable column is rendered only
   // while the collector's per-collection choice includes it.
   const visibleColumns = useMemo(
@@ -2180,9 +1572,9 @@ function NotesTable({
       tableColumnWidths(
         visibleColumns,
         Math.max(tableWidth ?? minTableWidth, minTableWidth),
-        vScroll.visible ? tableGutterWidth : 0,
+        vScrollVisible ? tableGutterWidth : 0,
       ),
-    [visibleColumns, tableWidth, vScroll.visible],
+    [visibleColumns, tableWidth, vScrollVisible],
   );
   // Pinned identity columns take a cumulative left offset over the visible
   // sticky columns only, so a hidden column never leaves a gap in the block.
@@ -2210,11 +1602,16 @@ function NotesTable({
     // Trailing empty gutter column shared by the header and every body row,
     // so row paint continues under the overlay scrollbar while row content
     // still stops before it.
-    (vScroll.visible ? 1 : 0);
+    (vScrollVisible ? 1 : 0);
   const isDefaultOrder =
     sortKey === defaultSortKey && sortDirection === "asc";
+  // Follow the painted view: flipping the drag handles off in the urgent
+  // render would repaint every old row before the filtered list lands.
   const canReorder =
-    showReorder && !hasActiveFilters && isDefaultOrder && !reorderLoading;
+    showReorder &&
+    !deferredConditions.length &&
+    isDefaultOrder &&
+    !reorderLoading;
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const allVisibleSelected = useMemo(
@@ -2248,6 +1645,89 @@ function NotesTable({
   const bottomSpacerHeight = virtualRows.length
     ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end
     : 0;
+
+  // Per-note derivations are built once for the whole visible list, not once
+  // per row per commit. Their identities only change when the notes or the
+  // filter change, so an unrelated re-render leaves every row's props alone.
+  const frontThumbByNoteId = useMemo(() => {
+    const map = new Map();
+
+    for (const note of deferredOrderedNotes) {
+      map.set(
+        note.id,
+        pickFirstAvailableImage(note, tableThumbnailSlots)?.path ?? null,
+      );
+    }
+
+    return map;
+  }, [deferredOrderedNotes]);
+
+  const marksByNoteId = useMemo(() => {
+    if (!deferredConditions.length) {
+      return null;
+    }
+
+    const map = new Map();
+
+    for (const note of deferredOrderedNotes) {
+      map.set(note.id, marksForNote(note, deferredConditions, searchColumns));
+    }
+
+    return map;
+  }, [deferredConditions, deferredOrderedNotes, searchColumns]);
+
+  const rowHandlers = useMemo(() => {
+    const invoke = (name) => (...args) =>
+      rowHandlerImplRef.current?.[name]?.(...args);
+
+    return {
+      onActionsRef: invoke("onActionsRef"),
+      onApplyTagFilter: invoke("onApplyTagFilter"),
+      onCopyNote: invoke("onCopyNote"),
+      onDeleteNote: invoke("onDeleteNote"),
+      onDragEnd: invoke("onDragEnd"),
+      onDragStart: invoke("onDragStart"),
+      onEditNote: invoke("onEditNote"),
+      onInsertNoteAfter: invoke("onInsertNoteAfter"),
+      onOpenNote: invoke("onOpenNote"),
+      onRowBlur: invoke("onRowBlur"),
+      onRowClick: invoke("onRowClick"),
+      onRowDragLeave: invoke("onRowDragLeave"),
+      onRowDragOver: invoke("onRowDragOver"),
+      onRowDrop: invoke("onRowDrop"),
+      onRowElement: invoke("onRowElement"),
+      onRowFocus: invoke("onRowFocus"),
+      onRowKeyDown: invoke("onRowKeyDown"),
+      onRowMouseDown: invoke("onRowMouseDown"),
+      onRowMouseUp: invoke("onRowMouseUp"),
+      onThumbElement: invoke("onThumbElement"),
+      onThumbEnter: invoke("onThumbEnter"),
+      onThumbLeave: invoke("onThumbLeave"),
+      onToggleSelection: invoke("onToggleSelection"),
+    };
+  }, []);
+
+  // The data columns need the space the table can occupy, not the table's own
+  // rendered width: once the columns are wide, a fixed-layout table refuses to
+  // shrink below their total. The scroller is independent of that content and
+  // keeps shrinking with the window.
+  useLayoutEffect(() => {
+    const scroller = tableScrollRef.current;
+
+    if (!scroller) {
+      return undefined;
+    }
+
+    const measure = () => {
+      const nextWidth = scroller.getBoundingClientRect().width;
+      setTableWidth((current) => (current === nextWidth ? current : nextWidth));
+    };
+
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, [loading, loadError]);
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -2344,241 +1824,6 @@ function NotesTable({
     // not be a dependency: including it would fire this on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderedNotes]);
-
-  // The vertical scrollbar is custom-drawn so its track spans only the rows
-  // area below the sticky header (a native scrollbar would always run the
-  // full height of the scroll container, header included). These metrics
-  // keep the custom thumb in sync with the table scroller.
-  const updateVScroll = useCallback(() => {
-    const scroller = tableScrollRef.current;
-
-    if (!scroller) {
-      return;
-    }
-
-    const max = scroller.scrollHeight - scroller.clientHeight;
-
-    if (max <= 1) {
-      vMetricsRef.current = { max: 0, range: 0, thumbHeight: 0 };
-      setVScroll((current) =>
-        current.visible ? { ...current, visible: false } : current,
-      );
-      return;
-    }
-
-    const headerHeight = scroller.querySelector("thead")?.offsetHeight ?? 0;
-    // Both native scrollbars are hidden, so the custom track runs to the
-    // bottom edge instead of stopping above a bar.
-    const top = headerHeight + 4;
-    const bottom = 4;
-    const trackHeight = Math.max(0, scroller.clientHeight - top - bottom);
-
-    if (trackHeight <= 40) {
-      vMetricsRef.current = { max: 0, range: 0, thumbHeight: 0 };
-      setVScroll((current) =>
-        current.visible ? { ...current, visible: false } : current,
-      );
-      return;
-    }
-
-    const thumbHeight = Math.max(
-      24,
-      Math.min(
-        trackHeight,
-        (scroller.clientHeight / scroller.scrollHeight) * trackHeight,
-      ),
-    );
-    const range = Math.max(1, trackHeight - thumbHeight);
-    const ratio = Math.min(1, Math.max(0, scroller.scrollTop / max));
-    vMetricsRef.current = { max, range, thumbHeight };
-
-    const next = {
-      bottom,
-      thumbHeight,
-      thumbTop: ratio * range,
-      top,
-      valueNow: Math.round(ratio * 100),
-      visible: true,
-    };
-
-    setVScroll((current) =>
-      current.visible === next.visible &&
-      current.top === next.top &&
-      current.bottom === next.bottom &&
-      current.thumbHeight === next.thumbHeight &&
-      current.thumbTop === next.thumbTop &&
-      current.valueNow === next.valueNow
-        ? current
-        : next,
-    );
-  }, []);
-
-  useEffect(() => {
-    const scroller = tableScrollRef.current;
-
-    if (!scroller) {
-      return undefined;
-    }
-
-    let frameId = 0;
-
-    function scheduleUpdate() {
-      cancelAnimationFrame(frameId);
-      frameId = requestAnimationFrame(updateVScroll);
-    }
-
-    updateVScroll();
-    scroller.addEventListener("scroll", scheduleUpdate, { passive: true });
-    window.addEventListener("resize", scheduleUpdate);
-
-    const observer = new ResizeObserver(scheduleUpdate);
-    observer.observe(scroller);
-
-    const header = scroller.querySelector("thead");
-
-    if (header) {
-      observer.observe(header);
-    }
-
-    return () => {
-      cancelAnimationFrame(frameId);
-      observer.disconnect();
-      scroller.removeEventListener("scroll", scheduleUpdate);
-      window.removeEventListener("resize", scheduleUpdate);
-    };
-  }, [loading, deferredOrderedNotes.length, updateVScroll]);
-
-  // The data columns need the space the table can occupy, not the table's own
-  // rendered width: once the columns are wide, a fixed-layout table refuses to
-  // shrink below their total. The scroller is independent of that content and
-  // keeps shrinking with the window.
-  useLayoutEffect(() => {
-    const scroller = tableScrollRef.current;
-
-    if (!scroller) {
-      return undefined;
-    }
-
-    const measure = () => {
-      const nextWidth = scroller.getBoundingClientRect().width;
-      setTableWidth((current) =>
-        current === nextWidth ? current : nextWidth,
-      );
-    };
-
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(scroller);
-    return () => observer.disconnect();
-  }, [loading, loadError]);
-
-  function handleVThumbPointerDown(event) {
-    event.preventDefault();
-    event.stopPropagation();
-
-    const scroller = tableScrollRef.current;
-
-    if (!scroller) {
-      return;
-    }
-
-    vThumbDragRef.current = {
-      startScrollTop: scroller.scrollTop,
-      startY: event.clientY,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-  }
-
-  function handleVThumbPointerMove(event) {
-    const drag = vThumbDragRef.current;
-    const scroller = tableScrollRef.current;
-    const metrics = vMetricsRef.current;
-
-    if (
-      !drag ||
-      !scroller ||
-      !metrics ||
-      metrics.max <= 0 ||
-      metrics.range <= 0
-    ) {
-      return;
-    }
-
-    scroller.scrollTop =
-      drag.startScrollTop +
-      ((event.clientY - drag.startY) * metrics.max) / metrics.range;
-  }
-
-  function handleVThumbPointerEnd() {
-    vThumbDragRef.current = null;
-  }
-
-  function handleVTrackPointerDown(event) {
-    if (event.target !== event.currentTarget) {
-      return;
-    }
-
-    const scroller = tableScrollRef.current;
-    const metrics = vMetricsRef.current;
-
-    if (!scroller || !metrics || metrics.max <= 0 || metrics.range <= 0) {
-      return;
-    }
-
-    const trackBounds = event.currentTarget.getBoundingClientRect();
-    const ratio = Math.min(
-      1,
-      Math.max(
-        0,
-        (event.clientY - trackBounds.top - metrics.thumbHeight / 2) /
-          metrics.range,
-      ),
-    );
-    scroller.scrollTop = ratio * metrics.max;
-  }
-
-  function handleVThumbKeyDown(event) {
-    const scroller = tableScrollRef.current;
-
-    if (!scroller) {
-      return;
-    }
-
-    if (event.key === "ArrowDown") {
-      event.preventDefault();
-      scroller.scrollTop += rowHeightEstimate;
-    } else if (event.key === "ArrowUp") {
-      event.preventDefault();
-      scroller.scrollTop -= rowHeightEstimate;
-    } else if (event.key === "PageDown") {
-      event.preventDefault();
-      // Stop the key from reaching the table's global handler, which would
-      // page a second time.
-      event.stopPropagation();
-      pageTable(1);
-    } else if (event.key === "PageUp") {
-      event.preventDefault();
-      // Stop the key from reaching the table's global handler, which would
-      // page a second time.
-      event.stopPropagation();
-      pageTable(-1);
-    } else if (event.key === "Home") {
-      event.preventDefault();
-      event.stopPropagation();
-
-      if (orderedNotes[0]) {
-        focusRowByNoteId(orderedNotes[0].id);
-      }
-    } else if (event.key === "End") {
-      event.preventDefault();
-      event.stopPropagation();
-      const lastNote = orderedNotes[orderedNotes.length - 1];
-
-      if (lastNote) {
-        focusRowByNoteId(lastNote.id);
-      }
-    }
-  }
 
   // Returns the table scroller when the columns actually overflow, so
   // panning is a no-op on a wide window just like the Viewer's table.
@@ -3171,7 +2416,7 @@ function NotesTable({
 
       if (event.key === "/" && !editable) {
         event.preventDefault();
-        searchInputRef.current?.focus();
+        filterBarRef.current?.focus();
         return;
       }
 
@@ -3420,12 +2665,29 @@ function NotesTable({
     showShortcutsHelp,
   ]);
 
+  function handleConditionsChange(next) {
+    setConditions(next);
+  }
+
+  function focusFirstRow() {
+    const first = orderedNotes[0];
+
+    if (first) {
+      focusRowByNoteId(first.id);
+    }
+  }
+
+  function focusLastRow() {
+    const last = orderedNotes[orderedNotes.length - 1];
+
+    if (last) {
+      focusRowByNoteId(last.id);
+    }
+  }
+
   function resetTableState() {
     setConditions([]);
-    setFilterDraft("");
-    setEditingConditionId(null);
-    setConditionDraft("");
-    setFilterField(defaultFilterField);
+    filterBarRef.current?.reset();
     // Columns are structure, not view state: Reset view restores the default
     // order but leaves the collector's column choice alone.
     const defaults = defaultTableState();
@@ -3439,184 +2701,14 @@ function NotesTable({
     }
   }
 
-  // Commit is explicit: Enter turns the field text into chips. Duplicates are
-  // ignored, so re-typing a value does not silently add a second OR arm.
-  function commitFilterDraft(raw = filterDraft) {
-    const parsed = conditionsFromInput(filterField, raw);
-
-    if (!parsed.length) {
-      return;
-    }
-
-    setConditions((current) => {
-      const seen = new Set(current.map(conditionIdentity));
-      return [
-        ...current,
-        ...parsed.filter((condition) => !seen.has(conditionIdentity(condition))),
-      ];
-    });
-    setFilterDraft("");
-    closeTagSuggestions();
-  }
-
-  function openTagSuggestions(index = -1) {
-    setTagSuggestionOpen(true);
-    setTagSuggestionIndex(index);
-  }
-
-  function closeTagSuggestions() {
-    setTagSuggestionOpen(false);
-    setTagSuggestionIndex(-1);
-  }
-
-  function scrollTagSuggestionIntoView(element) {
-    // jsdom has no scrollIntoView; the guard keeps highlight paint working
-    // there while a browser scrolls the option into view.
-    element?.scrollIntoView?.({ block: "nearest" });
-  }
-
-  // A suggestion fills the Tags chip directly. Unknown tags are not offered
-  // here: creating one is the note editor's job.
-  function pickTagSuggestion(tag) {
-    commitFilterDraft(tag);
-    requestAnimationFrame(() => searchInputRef.current?.focus());
-  }
-
-  function removeCondition(id) {
-    setConditions((current) =>
-      current.filter((condition) => condition.id !== id),
-    );
+  function clearAllFilters() {
+    setConditions([]);
   }
 
   function removeFieldConditions(field) {
     setConditions((current) =>
       current.filter((condition) => condition.field !== field),
     );
-  }
-
-  function clearAllFilters() {
-    setConditions([]);
-  }
-
-  function startConditionEdit(condition) {
-    setEditingConditionId(condition.id);
-    setConditionDraft(`${condition.negated ? "!" : ""}${condition.value}`);
-  }
-
-  function cancelConditionEdit() {
-    setEditingConditionId(null);
-    setConditionDraft("");
-  }
-
-  function commitConditionEdit() {
-    if (editingConditionId == null) {
-      return;
-    }
-
-    const id = editingConditionId;
-    const raw = conditionDraft.trim();
-    setEditingConditionId(null);
-    setConditionDraft("");
-
-    setConditions((current) => {
-      const negated = raw.startsWith("!");
-      const value = (negated ? raw.slice(1) : raw).trim();
-
-      if (!value) {
-        return current.filter((condition) => condition.id !== id);
-      }
-
-      return current.map((condition) =>
-        condition.id === id ? { ...condition, value, negated } : condition,
-      );
-    });
-  }
-
-  function handleSearchKeyDown(event) {
-    const tagsField = filterField === tagsColumnKey;
-
-    // The tags list opens on demand: typing opens it, and so does a plain
-    // Down. The other fields keep handing a plain Down to the first row.
-    if (
-      tagsField &&
-      !event.shiftKey &&
-      (event.key === "ArrowDown" || event.key === "ArrowUp")
-    ) {
-      event.preventDefault();
-
-      if (!tagSuggestionOpen) {
-        if (event.key === "ArrowDown") {
-          openTagSuggestions(tagMatches.length ? 0 : -1);
-        }
-        return;
-      }
-
-      if (!tagMatches.length) {
-        return;
-      }
-
-      setTagSuggestionIndex((current) => {
-        const step = event.key === "ArrowDown" ? 1 : -1;
-
-        if (current < 0) {
-          return event.key === "ArrowDown" ? 0 : tagMatches.length - 1;
-        }
-
-        return (current + step + tagMatches.length) % tagMatches.length;
-      });
-      return;
-    }
-
-    const tagListOpen =
-      tagsField && tagSuggestionOpen && tagMatches.length > 0;
-
-    if (
-      tagListOpen &&
-      event.key === "Enter" &&
-      tagSuggestionIndex >= 0 &&
-      tagMatches[tagSuggestionIndex]
-    ) {
-      event.preventDefault();
-      pickTagSuggestion(tagMatches[tagSuggestionIndex]);
-      return;
-    }
-
-    if (event.key === "Enter") {
-      event.preventDefault();
-      commitFilterDraft();
-      return;
-    }
-
-    if (tagListOpen && event.key === "Escape") {
-      event.preventDefault();
-      event.stopPropagation();
-      closeTagSuggestions();
-      return;
-    }
-
-    if (event.key === "ArrowDown" && !event.shiftKey) {
-      // Plain Down hands off to the first row; Shift+Down stays in the field.
-      event.preventDefault();
-
-      if (orderedNotes[0]) {
-        focusRowByNoteId(orderedNotes[0].id);
-      }
-      return;
-    }
-
-    if (event.key === "Escape") {
-      // Escape leaves the field without clearing the draft or reaching the
-      // table's row/anchor Escape handling. Like ArrowDown, it lands on the
-      // first row so the table has a visible cursor to continue from.
-      event.preventDefault();
-      event.stopPropagation();
-
-      if (orderedNotes[0]) {
-        focusRowByNoteId(orderedNotes[0].id);
-      } else {
-        event.currentTarget.blur();
-      }
-    }
   }
 
   function applyTagFilter(tagName, { replace = false } = {}) {
@@ -3676,12 +2768,9 @@ function NotesTable({
       return;
     }
 
-    // A hidden column must not keep hiding rows: drop its chips with it.
+    // A hidden column must not keep hiding rows: drop its chips with it. The
+    // filter bar notices the field left its options and falls back to default.
     removeFieldConditions(key);
-
-    if (filterField === key) {
-      setFilterField(defaultFilterField);
-    }
 
     let nextSortKey = sortKey;
     let nextSortDirection = sortDirection;
@@ -3918,7 +3007,7 @@ function NotesTable({
         rowElement: currentElement,
       })
     ) {
-      searchInputRef.current?.focus();
+      filterBarRef.current?.focus();
       clearRowCursor();
       return null;
     }
@@ -4788,289 +3877,7 @@ function NotesTable({
     return true;
   }
 
-  // Row cells are rendered from the column model, so column order and the
-  // set of columns live in one place. Each kind keeps its existing markup.
-  function renderReorderCell(column, note) {
-    return (
-      <td
-        {...stickyCellAttributes(column, cellClass(column))}
-        onClick={(event) => event.stopPropagation()}
-      >
-        {canReorder ? (
-          <button
-            aria-label={`Move ${note.denomination}`}
-            className="drag-handle"
-            draggable={canReorder}
-            tabIndex={-1}
-            onClick={(event) => event.stopPropagation()}
-            onDragEnd={clearDragState}
-            onDragStart={(event) => {
-              const row = rowElementMapRef.current.get(note.id);
-
-              clearDragPreview();
-              event.stopPropagation();
-              event.dataTransfer.effectAllowed = "move";
-              event.dataTransfer.setData("text/plain", String(note.id));
-
-              if (row) {
-                const preview = row.cloneNode(true);
-                preview.classList.add("table-drag-preview");
-                preview.style.width = `${row.getBoundingClientRect().width}px`;
-                document.body.appendChild(preview);
-                dragPreviewRef.current = preview;
-                event.dataTransfer.setDragImage(preview, 24, 24);
-              }
-
-              setDraggedNoteId(note.id);
-              setDropTarget({
-                noteId: note.id,
-                placement: "before",
-              });
-            }}
-            type="button"
-          >
-            <span className="drag-handle-dots" aria-hidden="true">
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
-              <span />
-            </span>
-          </button>
-        ) : null}
-      </td>
-    );
-  }
-
-  function renderSelectionCell(column, note) {
-    return (
-      <td
-        className={alignmentClass(column)}
-        onClick={(event) => event.stopPropagation()}
-        {...stickyCellAttributes(column, cellClass(column))}
-      >
-        <input
-          aria-label={`Select ${note.denomination}`}
-          checked={selectedIdSet.has(note.id)}
-          onChange={() => toggleNote(note.id)}
-          type="checkbox"
-        />
-      </td>
-    );
-  }
-
-  function renderOrderCell(column, note) {
-    return (
-      <td {...stickyCellAttributes(column, cellClass(column))}>
-        {note.display_order ?? "-"}
-      </td>
-    );
-  }
-
-  function renderThumbnailCell(column, note, frontThumb) {
-    return (
-      <td
-        {...stickyCellAttributes(column, cellClass(column))}
-      >
-        {frontThumb ? (
-          <span
-            className="table-thumb-wrap"
-            onBlur={(event) => {
-              if (!event.currentTarget.contains(event.relatedTarget)) {
-                hideThumbPreview(note.id);
-              }
-            }}
-            onFocus={() => showThumbPreview(note.id)}
-            onMouseEnter={() => showThumbPreview(note.id)}
-            onMouseLeave={() => hideThumbPreview(note.id)}
-            ref={(element) => {
-              if (element) {
-                thumbPreviewElementMapRef.current.set(note.id, element);
-              } else {
-                thumbPreviewElementMapRef.current.delete(note.id);
-              }
-            }}
-          >
-            <img
-              alt={`${note.denomination} front`}
-              className="table-thumb"
-              decoding="async"
-              loading="lazy"
-              src={frontThumb}
-            />
-            <span
-              className={`table-thumb-preview${
-                thumbPreviewState?.noteId === note.id ? " is-visible" : ""
-              }`}
-              style={{
-                "--table-thumb-preview-offset": `${
-                  thumbPreviewState?.noteId === note.id
-                    ? thumbPreviewState.offsetY
-                    : 0
-                }px`,
-              }}
-            >
-              {thumbPreviewState?.noteId === note.id ? (
-                <img alt="" src={frontThumb} />
-              ) : null}
-            </span>
-          </span>
-        ) : (
-          <span className="muted">-</span>
-        )}
-      </td>
-    );
-  }
-
-  function renderDataCell(column, note, marks) {
-    const rowMarks = marks ?? {};
-    if (column.isTags) {
-      return (
-        <td className={cellClass(column)}>
-          <TagsCell onApplyFilter={applyTagFilter} tags={note.tags} />
-        </td>
-      );
-    }
-
-    if (column.key === "grade") {
-      // Grade is the first attribute a collector compares across a row, and
-      // the one the catalogue is bought and sold on. It reads as a value, not
-      // as more body text: tabular figures so columns of grades line up, and
-      // a tint that separates the uncirculated band from the rest.
-      const gradeValue = String(note.grade ?? "").trim();
-
-      if (!gradeValue) {
-        return (
-          <td {...stickyCellAttributes(column, cellClass(column))}>
-            <span className="muted">-</span>
-          </td>
-        );
-      }
-
-      const numericGrade = parseGradeValue(gradeValue);
-      const tier =
-        numericGrade == null
-          ? "none"
-          : numericGrade >= 65
-            ? "unc"
-            : numericGrade >= 50
-              ? "choice"
-              : "circulated";
-
-      return (
-        <td {...stickyCellAttributes(column, cellClass(column))}>
-          <span className={`table-grade table-grade--${tier}`}>
-            {highlightTerms(gradeValue, rowMarks.grade)}
-          </span>
-        </td>
-      );
-    }
-
-    if (column.key === "denomination") {
-      // The denomination is the note's source link: collectors expect it to
-      // open the page the note came from, not the slideshow. The row itself
-      // and the row menu's Open item still reach the Note slideshow. A note
-      // without a source URL renders as plain text.
-      return (
-        <td className={cellClass(column)}>
-          {note.url ? (
-            <a
-              draggable={false}
-              href={note.url}
-              onClick={(event) => event.stopPropagation()}
-              rel="noreferrer"
-              target="_blank"
-            >
-              {highlightTerms(note.denomination, rowMarks.denomination)}
-            </a>
-          ) : (
-            highlightTerms(note.denomination, rowMarks.denomination)
-          )}
-        </td>
-      );
-    }
-
-    return (
-      <td {...stickyCellAttributes(column, cellClass(column))}>
-        {highlightTerms(note[column.key], rowMarks[column.key])}
-      </td>
-    );
-  }
-
-  function renderActionsCell(column, note) {
-    const noteLabel =
-      note.denomination || note.catalog_number || `note ${note.id}`;
-    const items = [
-      {
-        key: "open",
-        icon: "open",
-        label: "Open",
-        onSelect: () => openSlideshow(note.id),
-      },
-      {
-        key: "edit",
-        icon: "edit",
-        label: "Edit",
-        onSelect: () => openEditor(note.id),
-        shortcut: "e",
-      },
-      {
-        key: "copy",
-        icon: "copy",
-        label: "Copy details",
-        onSelect: () => void handleCopyNoteDetails(note),
-        shortcut: "c",
-      },
-      {
-        key: "insert",
-        icon: "insert",
-        label: "Insert note below",
-        onSelect: () => openCreateNoteAfter(note.id),
-        shortcut: "a",
-      },
-    ];
-
-    if (note.url) {
-      items.push({
-        key: "source",
-        icon: "source",
-        label: "Open source",
-        href: note.url,
-      });
-    }
-
-    items.push({
-      key: "delete",
-      icon: "delete",
-      label: "Delete",
-      onSelect: () => void handleDeleteNote(note.id),
-      danger: true,
-      separated: true,
-      shortcut: "d",
-    });
-
-    return (
-      <td className={cellClass(column)}>
-        <RowActionsMenu
-          items={items}
-          label={`Actions for ${noteLabel}`}
-          ref={(instance) => {
-            if (instance) {
-              rowActionsMenuMapRef.current.set(note.id, instance);
-            } else {
-              rowActionsMenuMapRef.current.delete(note.id);
-            }
-          }}
-          shortcut="o"
-        />
-      </td>
-    );
-  }
-
-  // Props shared by every pinned cell: the left offset accumulated from the
-  // visible sticky columns, the end marker on the right-most one, and any
-  // class the cell already needed.
+  // Header cells share the row cells' pinning contract.
   function stickyCellAttributes(column, baseClassName) {
     if (!column.sticky) {
       return baseClassName ? { className: baseClassName } : {};
@@ -5084,42 +3891,244 @@ function NotesTable({
       ]
         .filter(Boolean)
         .join(" "),
-      // Native sticky positions the cell at this offset in the shared
-      // horizontal scrollport.
       style: {
         "--table-sticky-left": `${stickyLeftByColumn[column.key] ?? 0}px`,
       },
     };
   }
 
-  function renderTableCell(column, note, frontThumb, marks) {
-    let cell = null;
-
-    switch (column.kind) {
-      case "reorder":
-        cell = renderReorderCell(column, note);
-        break;
-      case "selection":
-        cell = renderSelectionCell(column, note);
-        break;
-      case "order":
-        cell = renderOrderCell(column, note);
-        break;
-      case "thumbnail":
-        cell = renderThumbnailCell(column, note, frontThumb);
-        break;
-      case "data":
-        cell = renderDataCell(column, note, marks);
-        break;
-      case "actions":
-        cell = renderActionsCell(column, note);
-        break;
-      default:
-        break;
+  function registerRowElement(noteId, element) {
+    if (!element) {
+      rowElementMapRef.current.delete(noteId);
+      return;
     }
 
-    return cell ? <Fragment key={column.key}>{cell}</Fragment> : null;
+    rowElementMapRef.current.set(noteId, element);
+    rowVirtualizer.measureElement(element);
+
+    if (pendingRowCheckboxFocusNoteIdRef.current === noteId) {
+      pendingRowCheckboxFocusNoteIdRef.current = null;
+      focusRowControlInElement(element, noteId, 'input[type="checkbox"]');
+    } else if (pendingRowActionsFocusNoteIdRef.current === noteId) {
+      pendingRowActionsFocusNoteIdRef.current = null;
+      focusRowControlInElement(element, noteId, 'button[aria-haspopup="menu"]');
+    } else if (pendingRowFocusNoteIdRef.current === noteId) {
+      const armSelectionTab =
+        pendingRowKeyboardFocusArmRef.current === noteId;
+
+      pendingRowFocusNoteIdRef.current = null;
+      pendingRowKeyboardFocusArmRef.current = null;
+      focusRowControlInElement(element, noteId, null);
+
+      if (armSelectionTab) {
+        selectionTabArmedRef.current = true;
+      }
+    } else if (
+      focusedRowIdRef.current === noteId &&
+      document.activeElement === document.body
+    ) {
+      // The active row was scrolled out of the virtualized window (unmounting
+      // drops focus to <body> with no blur event) and has now remounted:
+      // reclaim focus without scrolling, since the user put it here.
+      element.focus({ preventScroll: true });
+    }
   }
+
+  function handleRowFocus(note) {
+    focusedRowIdRef.current = note.id;
+    lastRowFocusNoteIdRef.current = note.id;
+
+    if (mouseFocusSuppressRef.current) {
+      mouseFocusSuppressRef.current = false;
+    } else {
+      setActiveNoteId(note.id);
+    }
+  }
+
+  function handleRowBlur(note, event) {
+    // The selection bar belongs to the row's tab cycle, so moving focus into
+    // it keeps the cursor (and the bar's exit target) alive.
+    const toBulkBar =
+      event.relatedTarget instanceof Element &&
+      event.relatedTarget.closest(".table-bulk-bar");
+    // Opening the sidebar with "b" keeps the row cursor lit, so the page still
+    // shows where the keyboard was while the rail is open.
+    const toSidebar =
+      event.relatedTarget instanceof Element &&
+      Boolean(event.relatedTarget.closest("#app-sidebar"));
+
+    if (
+      !toBulkBar &&
+      !toSidebar &&
+      !event.currentTarget.contains(event.relatedTarget)
+    ) {
+      focusedRowIdRef.current =
+        focusedRowIdRef.current === note.id ? null : focusedRowIdRef.current;
+      setActiveNoteId((current) =>
+        current === note.id ? null : current,
+      );
+    }
+  }
+
+  function handleRowClick(note, event) {
+    // Controls inside the row (the checkbox, drag handle, links and the
+    // actions button) handle their own activation. A click that reaches the
+    // row itself, or one of its plain cells, opens the note.
+    if (event.target.closest("a, button, input, select, textarea")) {
+      return;
+    }
+
+    openSlideshow(note.id);
+  }
+
+  function handleRowKeyDown(note, event) {
+    // Space toggles the row's selection, like the checkbox it shares a row
+    // with. On the denomination link it would otherwise scroll the table, and
+    // on the actions button it would open the menu. The checkbox already
+    // toggles itself, and other controls such as tag chips keep their own
+    // Space activation.
+    if (event.key === " ") {
+      if (
+        event.target instanceof HTMLInputElement &&
+        event.target.type === "checkbox"
+      ) {
+        return;
+      }
+
+      const isRow = event.target === event.currentTarget;
+      const isSourceLink = event.target instanceof HTMLAnchorElement;
+      const isActionsButton =
+        event.target instanceof Element &&
+        event.target.closest('[aria-haspopup="menu"]');
+
+      if (!isRow && !isSourceLink && !isActionsButton) {
+        return;
+      }
+
+      event.preventDefault();
+      toggleNote(note.id);
+      return;
+    }
+
+    // Enter on a control inside the row (the denomination link, the actions
+    // button) activates that control. Only the row itself opens the
+    // slideshow here; a row checkbox is handled by the table's window
+    // handler.
+    if (event.target !== event.currentTarget) {
+      return;
+    }
+
+    if (event.key === "Enter") {
+      event.preventDefault();
+      openSlideshow(note.id);
+    }
+  }
+
+  function handleRowDragStart(note, event) {
+    const row = rowElementMapRef.current.get(note.id);
+
+    clearDragPreview();
+    event.stopPropagation();
+    event.dataTransfer.effectAllowed = "move";
+    event.dataTransfer.setData("text/plain", String(note.id));
+
+    if (row) {
+      const preview = row.cloneNode(true);
+      preview.classList.add("table-drag-preview");
+      preview.style.width = `${row.getBoundingClientRect().width}px`;
+      document.body.appendChild(preview);
+      dragPreviewRef.current = preview;
+      event.dataTransfer.setDragImage(preview, 24, 24);
+    }
+
+    setDraggedNoteId(note.id);
+    setDropTarget({ noteId: note.id, placement: "before" });
+  }
+
+  function handleRowDragLeave(note, event) {
+    // The drop placeholder is a sibling row inserted into this same tbody, so
+    // moving the pointer onto it (or onto a neighbouring row) must not clear
+    // the target. Clearing it would unmount the placeholder, drop the pointer
+    // back on this row, and re-insert the placeholder — a loop that makes the
+    // rows flicker. Only a move that leaves the body entirely clears it.
+    const body = event.currentTarget.closest("tbody");
+
+    if (event.relatedTarget && body?.contains(event.relatedTarget)) {
+      return;
+    }
+
+    setDropTarget((current) =>
+      current?.noteId === note.id ? null : current,
+    );
+  }
+
+  function handleRowDragOver(note, event) {
+    if (!canReorder || draggedNoteId === null) {
+      return;
+    }
+
+    event.preventDefault();
+    updateDropTarget(note.id, event);
+  }
+
+  function handleRowDrop(note, event) {
+    event.preventDefault();
+    const nextPlacement =
+      dropTarget?.noteId === note.id
+        ? dropTarget.placement
+        : event.clientY <
+            event.currentTarget.getBoundingClientRect().top +
+              event.currentTarget.getBoundingClientRect().height / 2
+          ? "before"
+          : "after";
+    void handleReorder(note.id, nextPlacement);
+  }
+
+  rowHandlerImplRef.current = {
+    onActionsRef(noteId, instance) {
+      if (instance) {
+        rowActionsMenuMapRef.current.set(noteId, instance);
+      } else {
+        rowActionsMenuMapRef.current.delete(noteId);
+      }
+    },
+    onApplyTagFilter: applyTagFilter,
+    onCopyNote(note) {
+      void handleCopyNoteDetails(note);
+    },
+    onDeleteNote(noteId) {
+      void handleDeleteNote(noteId);
+    },
+    onDragEnd: clearDragState,
+    onDragStart: handleRowDragStart,
+    onEditNote: openEditor,
+    onInsertNoteAfter: openCreateNoteAfter,
+    onOpenNote: openSlideshow,
+    onRowBlur: handleRowBlur,
+    onRowClick: handleRowClick,
+    onRowDragLeave: handleRowDragLeave,
+    onRowDragOver: handleRowDragOver,
+    onRowDrop: handleRowDrop,
+    onRowElement: registerRowElement,
+    onRowFocus: handleRowFocus,
+    onRowKeyDown: handleRowKeyDown,
+    onRowMouseDown() {
+      mouseFocusSuppressRef.current = true;
+    },
+    onRowMouseUp() {
+      mouseFocusSuppressRef.current = false;
+    },
+    onThumbElement(noteId, element) {
+      if (element) {
+        thumbPreviewElementMapRef.current.set(noteId, element);
+      } else {
+        thumbPreviewElementMapRef.current.delete(noteId);
+      }
+    },
+    onThumbEnter: showThumbPreview,
+    onThumbLeave: hideThumbPreview,
+    onToggleSelection: toggleNote,
+  };
 
   return (
     <section className="screen-stack" ref={tableScreenRef}>
@@ -5433,246 +4442,15 @@ function NotesTable({
         {!loading && !loadError ? (
           <>
             <div className="toolbar-row toolbar-row--table-controls">
-              <div className="table-search table-search--scoped">
-                <svg
-                  aria-hidden="true"
-                  className="table-search-icon"
-                  fill="none"
-                  focusable="false"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeWidth="1.9"
-                  viewBox="0 0 24 24"
-                >
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m20 20-3.5-3.5" />
-                </svg>
-                <FilterFieldMenu
-                  onChange={(field) => {
-                    setFilterField(field);
-                    searchInputRef.current?.focus();
-                  }}
-                  options={[
-                    { key: "all", label: filterFieldLabel("all") },
-                    ...searchColumns.map((column) => ({
-                      key: column.key,
-                      label: filterFieldLabel(column.key),
-                    })),
-                  ]}
-                  value={filterField}
-                />
-                <span aria-hidden="true" className="table-search-divider" />
-                <input
-                  aria-autocomplete={
-                    filterField === tagsColumnKey ? "list" : undefined
-                  }
-                  aria-controls={
-                    tagListVisible ? "table-filter-tag-suggestions" : undefined
-                  }
-                  aria-expanded={
-                    filterField === tagsColumnKey
-                      ? tagListVisible
-                      : undefined
-                  }
-                  aria-label={`Filter ${filterFieldLabel(filterField)}`}
-                  autoComplete="off"
-                  className="table-search-input"
-                  onBlur={
-                    filterField === tagsColumnKey
-                      ? () => closeTagSuggestions()
-                      : undefined
-                  }
-                  onChange={(event) => {
-                    setFilterDraft(event.target.value);
-
-                    if (filterField === tagsColumnKey) {
-                      openTagSuggestions();
-                    }
-                  }}
-                  onKeyDown={handleSearchKeyDown}
-                  placeholder={filterPlaceholder}
-                  ref={searchInputRef}
-                  type="search"
-                  value={filterDraft}
-                />
-                {filterField === tagsColumnKey ? (
-                  // The list opens on demand: this chevron sits before the
-                  // shortcut and says "press Down to see the suggestions".
-                  <button
-                    aria-controls={
-                      tagListVisible
-                        ? "table-filter-tag-suggestions"
-                        : undefined
-                    }
-                    aria-expanded={tagListVisible}
-                    aria-haspopup="listbox"
-                    aria-label="Show tag suggestions"
-                    className={`table-filter-tags-toggle${tagListVisible ? " is-open" : ""}`}
-                    onClick={() => {
-                      if (tagSuggestionOpen) {
-                        closeTagSuggestions();
-                      } else {
-                        openTagSuggestions();
-                      }
-                      searchInputRef.current?.focus();
-                    }}
-                    onMouseDown={(event) => event.preventDefault()}
-                    tabIndex={-1}
-                    type="button"
-                  >
-                    <svg
-                      aria-hidden="true"
-                      fill="none"
-                      focusable="false"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2.4"
-                      viewBox="0 0 24 24"
-                    >
-                      <path d="m6 9 6 6 6-6" />
-                    </svg>
-                  </button>
-                ) : null}
-                {filterDraft.trim() ? (
-                  <span aria-hidden="true" className="table-filter-enter">
-                    ⏎ add
-                  </span>
-                ) : (
-                  <kbd className="table-search-hint">/</kbd>
-                )}
-              </div>
-              {tagListVisible
-                ? createPortal(
-                    <div
-                      aria-label="Tag suggestions"
-                      className="tags-filter-dropdown"
-                      id="table-filter-tag-suggestions"
-                      ref={tagSuggestionListRef}
-                      role="listbox"
-                      style={{
-                        top: tagSuggestionPosition.top,
-                        left: tagSuggestionPosition.left,
-                        width: tagSuggestionPosition.width,
-                      }}
-                    >
-                      {tagMatches.map((tag, index) => (
-                        <button
-                          aria-selected={index === tagSuggestionIndex}
-                          className={`tags-filter-option${index === tagSuggestionIndex ? " is-highlighted" : ""}`}
-                          key={tag}
-                          onClick={() => pickTagSuggestion(tag)}
-                          onMouseDown={(event) => event.preventDefault()}
-                          onMouseEnter={() =>
-                            setTagSuggestionIndex(index)
-                          }
-                          ref={
-                            index === tagSuggestionIndex
-                              ? scrollTagSuggestionIntoView
-                              : undefined
-                          }
-                          role="option"
-                          type="button"
-                        >
-                          <HighlightMatch text={tag} query={trimmedTagDraft} />
-                        </button>
-                      ))}
-                      {!tagMatches.length ? (
-                        <div
-                          className="muted"
-                          style={{ padding: "6px 8px", fontSize: "0.82rem" }}
-                        >
-                          No matching tags.
-                        </div>
-                      ) : null}
-                    </div>,
-                    document.body,
-                  )
-                : null}
-              <div className="table-filter-chips">
-                {conditionGroups.length ? (
-                  <>
-                    {conditionGroups.map(({ field, items }, groupIndex) => (
-                      <Fragment key={field}>
-                        {groupIndex > 0 ? (
-                          <span className="table-filter-and">and</span>
-                        ) : null}
-                        <span className="table-filter-facet">
-                          <span className="table-filter-facet-label">
-                            {filterFieldLabel(field)}
-                          </span>
-                          {items.map((condition, index) => (
-                            <Fragment key={condition.id}>
-                              {index > 0 ? (
-                                <span className="table-filter-or">or</span>
-                              ) : null}
-                              <span
-                                className={`table-filter-chip${condition.negated ? " table-filter-chip--negated" : ""}`}
-                              >
-                                {editingConditionId === condition.id ? (
-                                  <input
-                                    aria-label={`Edit ${filterFieldLabel(field)} filter`}
-                                    autoFocus
-                                    className="table-filter-chip-input"
-                                    onBlur={commitConditionEdit}
-                                    onChange={(event) =>
-                                      setConditionDraft(event.target.value)
-                                    }
-                                    onFocus={(event) =>
-                                      event.currentTarget.select()
-                                    }
-                                    onKeyDown={(event) => {
-                                      if (event.key === "Enter") {
-                                        event.preventDefault();
-                                        commitConditionEdit();
-                                      } else if (event.key === "Escape") {
-                                        event.preventDefault();
-                                        cancelConditionEdit();
-                                      }
-                                    }}
-                                    value={conditionDraft}
-                                  />
-                                ) : (
-                                  <>
-                                    <button
-                                      aria-label={`Edit ${filterFieldLabel(field)} filter ${condition.value}`}
-                                      className="table-filter-chip-value"
-                                      onClick={() => startConditionEdit(condition)}
-                                      title="Edit value"
-                                      type="button"
-                                    >
-                                      {condition.negated ? "!" : ""}
-                                      {condition.value}
-                                    </button>
-                                    <ChipRemoveButton
-                                      label={`Remove ${filterFieldLabel(field)} ${condition.negated ? "not " : ""}${condition.value}`}
-                                      onClick={() => removeCondition(condition.id)}
-                                    />
-                                  </>
-                                )}
-                              </span>
-                            </Fragment>
-                          ))}
-                        </span>
-                      </Fragment>
-                    ))}
-                    <button
-                      className="table-filter-clear-all"
-                      onClick={clearAllFilters}
-                      type="button"
-                    >
-                      Clear all
-                    </button>
-                  </>
-                ) : (
-                  <span className="table-filter-chips-empty">
-                    {
-                      "No filters yet — pick a field, type, press ⏎. Same field ORs, different fields AND."
-                    }
-                  </span>
-                )}
-              </div>
-
+              <TableFilterBar
+                conditions={conditions}
+                hasRows={deferredOrderedNotes.length > 0}
+                onConditionsChange={handleConditionsChange}
+                onFirstRow={focusFirstRow}
+                ref={filterBarRef}
+                searchColumns={searchColumns}
+                tagNames={tagNames}
+              />
               <ColumnPicker
                 columns={hideableColumns}
                 disabledColumnKey={lastVisibleDataColumnKey}
@@ -5727,7 +4505,7 @@ function NotesTable({
                           }}
                         />
                       ))}
-                      {vScroll.visible ? (
+                      {vScrollVisible ? (
                         <col style={{ width: `${tableGutterWidth}px` }} />
                       ) : null}
                     </colgroup>
@@ -5849,7 +4627,7 @@ function NotesTable({
                             </th>
                           );
                         })}
-                        {vScroll.visible ? (
+                        {vScrollVisible ? (
                           <th
                             aria-hidden="true"
                             className="table-gutter-cell"
@@ -5932,297 +4710,36 @@ function NotesTable({
                       ) : null}
                       {virtualRows.map((virtualRow) => {
                         const note = deferredOrderedNotes[virtualRow.index];
-                        const displayImage = pickFirstAvailableImage(note, [
-                          ["front", "thumbnail"],
-                          ["front", "full"],
-                          ["back", "thumbnail"],
-                          ["back", "full"],
-                        ]);
-                        const frontThumb = displayImage?.path ?? null;
-                        const showPlaceholderBefore =
-                          dropTarget?.noteId === note.id &&
-                          dropTarget.placement === "before";
-                        const showPlaceholderAfter =
-                          dropTarget?.noteId === note.id &&
-                          dropTarget.placement === "after";
-                        const rowMarks = hasActiveFilters
-                          ? marksForNote(note, conditions, searchColumns)
-                          : null;
 
                         return (
-                          <Fragment key={note.id}>
-                            {showPlaceholderBefore ? (
-                              <tr
-                                className="table-drop-placeholder-row"
-                                aria-hidden="true"
-                              >
-                                <td
-                                  className="table-drop-placeholder-cell"
-                                  colSpan={totalColumnCount}
-                                >
-                                  <span className="table-drop-placeholder-line" />
-                                </td>
-                              </tr>
-                            ) : null}
-                            <tr
-                              className={`table-row-link${virtualRow.index % 2 === 1 ? " table-row-link--zebra" : ""}${draggedNoteId === note.id ? " table-row-link--dragging" : ""}${selectedIdSet.has(note.id) ? " table-row-link--selected" : ""}${activeNoteId === note.id ? " table-row-link--active" : ""}`}
-                              data-index={virtualRow.index}
-                              key={note.id}
-                              ref={(element) => {
-                                if (element) {
-                                  rowElementMapRef.current.set(
-                                    note.id,
-                                    element,
-                                  );
-                                  rowVirtualizer.measureElement(element);
-
-                                  if (
-                                    pendingRowCheckboxFocusNoteIdRef.current ===
-                                    note.id
-                                  ) {
-                                    pendingRowCheckboxFocusNoteIdRef.current =
-                                      null;
-                                    focusRowControlInElement(
-                                      element,
-                                      note.id,
-                                      'input[type="checkbox"]',
-                                    );
-                                  } else if (
-                                    pendingRowActionsFocusNoteIdRef.current ===
-                                    note.id
-                                  ) {
-                                    pendingRowActionsFocusNoteIdRef.current =
-                                      null;
-                                    focusRowControlInElement(
-                                      element,
-                                      note.id,
-                                      'button[aria-haspopup="menu"]',
-                                    );
-                                  } else if (
-                                    pendingRowFocusNoteIdRef.current === note.id
-                                  ) {
-                                    const armSelectionTab =
-                                      pendingRowKeyboardFocusArmRef.current ===
-                                      note.id;
-
-                                    pendingRowFocusNoteIdRef.current = null;
-                                    pendingRowKeyboardFocusArmRef.current =
-                                      null;
-                                    focusRowControlInElement(
-                                      element,
-                                      note.id,
-                                      null,
-                                    );
-
-                                    if (armSelectionTab) {
-                                      selectionTabArmedRef.current = true;
-                                    }
-                                  } else if (
-                                    focusedRowIdRef.current === note.id &&
-                                    document.activeElement === document.body
-                                  ) {
-                                    // The active row was scrolled out of the
-                                    // virtualized window (unmounting drops
-                                    // focus to <body> with no blur event) and
-                                    // has now remounted: reclaim focus without
-                                    // scrolling, since the user put it here.
-                                    element.focus({ preventScroll: true });
-                                  }
-                                } else {
-                                  rowElementMapRef.current.delete(note.id);
-                                }
-                              }}
-                              onMouseDown={() => {
-                                mouseFocusSuppressRef.current = true;
-                              }}
-                              onMouseUp={() => {
-                                mouseFocusSuppressRef.current = false;
-                              }}
-                              onFocus={() => {
-                                focusedRowIdRef.current = note.id;
-                                lastRowFocusNoteIdRef.current = note.id;
-
-                                if (mouseFocusSuppressRef.current) {
-                                  mouseFocusSuppressRef.current = false;
-                                } else {
-                                  setActiveNoteId(note.id);
-                                }
-                              }}
-                              onBlur={(event) => {
-                                // The selection bar belongs to the row's tab
-                                // cycle, so moving focus into it keeps the
-                                // cursor (and the bar's exit target) alive.
-                                const toBulkBar =
-                                  event.relatedTarget instanceof Element &&
-                                  event.relatedTarget.closest(
-                                    ".table-bulk-bar",
-                                  );
-                                // Opening the sidebar with "b" keeps the row
-                                // cursor lit, so the page still shows where
-                                // the keyboard was while the rail is open.
-                                const toSidebar =
-                                  event.relatedTarget instanceof Element &&
-                                  Boolean(
-                                    event.relatedTarget.closest("#app-sidebar"),
-                                  );
-
-                                if (
-                                  !toBulkBar &&
-                                  !toSidebar &&
-                                  !event.currentTarget.contains(
-                                    event.relatedTarget,
-                                  )
-                                ) {
-                                  focusedRowIdRef.current =
-                                    focusedRowIdRef.current === note.id
-                                      ? null
-                                      : focusedRowIdRef.current;
-                                  setActiveNoteId((current) =>
-                                    current === note.id ? null : current,
-                                  );
-                                }
-                              }}
-                              onDragLeave={(event) => {
-                                // The drop placeholder is a sibling row
-                                // inserted into this same tbody, so moving
-                                // the pointer onto it (or onto a neighbouring
-                                // row) must not clear the target. Clearing it
-                                // would unmount the placeholder, drop the
-                                // pointer back on this row, and re-insert the
-                                // placeholder — a loop that makes the rows
-                                // flicker. Only a move that leaves the body
-                                // entirely clears the target.
-                                const body =
-                                  event.currentTarget.closest("tbody");
-
-                                if (
-                                  event.relatedTarget &&
-                                  body?.contains(event.relatedTarget)
-                                ) {
-                                  return;
-                                }
-
-                                setDropTarget((current) =>
-                                  current?.noteId === note.id ? null : current,
-                                );
-                              }}
-                              onDragOver={(event) => {
-                                if (!canReorder || draggedNoteId === null) {
-                                  return;
-                                }
-
-                                event.preventDefault();
-                                updateDropTarget(note.id, event);
-                              }}
-                              onDrop={(event) => {
-                                event.preventDefault();
-                                const nextPlacement =
-                                  dropTarget?.noteId === note.id
-                                    ? dropTarget.placement
-                                    : event.clientY <
-                                        event.currentTarget.getBoundingClientRect()
-                                          .top +
-                                          event.currentTarget.getBoundingClientRect()
-                                            .height /
-                                            2
-                                      ? "before"
-                                      : "after";
-                                void handleReorder(note.id, nextPlacement);
-                              }}
-                              onClick={(event) => {
-                                // Controls inside the row (the checkbox, drag
-                                // handle, links and the actions button) handle
-                                // their own activation. A click that reaches
-                                // the row itself, or one of its plain cells,
-                                // opens the note.
-                                if (
-                                  event.target.closest(
-                                    "a, button, input, select, textarea",
-                                  )
-                                ) {
-                                  return;
-                                }
-
-                                openSlideshow(note.id);
-                              }}
-                              onKeyDown={(event) => {
-                                // Space toggles the row's selection, like the
-                                // checkbox it shares a row with. On the
-                                // denomination link it would otherwise scroll
-                                // the table, and on the actions button it
-                                // would open the menu. The checkbox already
-                                // toggles itself, and other controls such as
-                                // tag chips keep their own Space activation.
-                                if (event.key === " ") {
-                                  if (
-                                    event.target instanceof HTMLInputElement &&
-                                    event.target.type === "checkbox"
-                                  ) {
-                                    return;
-                                  }
-
-                                  const isRow =
-                                    event.target === event.currentTarget;
-                                  const isSourceLink =
-                                    event.target instanceof HTMLAnchorElement;
-                                  const isActionsButton =
-                                    event.target instanceof Element &&
-                                    event.target.closest('[aria-haspopup="menu"]');
-
-                                  if (!isRow && !isSourceLink && !isActionsButton) {
-                                    return;
-                                  }
-
-                                  event.preventDefault();
-                                  toggleNote(note.id);
-                                  return;
-                                }
-
-                                // Enter on a control inside the row (the
-                                // denomination link, the actions button)
-                                // activates that control. Only the row itself
-                                // opens the slideshow here; a row checkbox is
-                                // handled by the table's window handler.
-                                if (event.target !== event.currentTarget) {
-                                  return;
-                                }
-
-                                if (event.key === "Enter") {
-                                  event.preventDefault();
-                                  openSlideshow(note.id);
-                                }
-                              }}
-                              tabIndex={0}
-                            >
-                              {visibleColumns.map((column) =>
-                                renderTableCell(
-                                  column,
-                                  note,
-                                  frontThumb,
-                                  rowMarks,
-                                ),
-                              )}
-                              {vScroll.visible ? (
-                                <td
-                                  aria-hidden="true"
-                                  className="table-gutter-cell"
-                                />
-                              ) : null}
-                            </tr>
-                            {showPlaceholderAfter ? (
-                              <tr
-                                className="table-drop-placeholder-row"
-                                aria-hidden="true"
-                              >
-                                <td
-                                  className="table-drop-placeholder-cell"
-                                  colSpan={totalColumnCount}
-                                >
-                                  <span className="table-drop-placeholder-line" />
-                                </td>
-                              </tr>
-                            ) : null}
-                          </Fragment>
+                          <NoteRow
+                            canReorder={canReorder}
+                            columns={visibleColumns}
+                            dropPlacement={
+                              dropTarget?.noteId === note.id
+                                ? dropTarget.placement
+                                : null
+                            }
+                            frontThumb={frontThumbByNoteId.get(note.id) ?? null}
+                            handlers={rowHandlers}
+                            index={virtualRow.index}
+                            isActive={activeNoteId === note.id}
+                            isDragging={draggedNoteId === note.id}
+                            isSelected={selectedIdSet.has(note.id)}
+                            key={note.id}
+                            lastStickyColumnKey={lastStickyColumnKey}
+                            marks={marksByNoteId?.get(note.id) ?? null}
+                            note={note}
+                            previewOffsetY={
+                              thumbPreviewState?.noteId === note.id
+                                ? thumbPreviewState.offsetY
+                                : 0
+                            }
+                            previewVisible={thumbPreviewState?.noteId === note.id}
+                            showGutter={vScrollVisible}
+                            stickyLeftByColumn={stickyLeftByColumn}
+                            totalColumnCount={totalColumnCount}
+                          />
                         );
                       })}
                       {bottomSpacerHeight ? (
@@ -6237,33 +4754,16 @@ function NotesTable({
                   </table>
                 </div>
               </div>
-              {vScroll.visible ? (
-                <div
-                  className="table-vtrack"
-                  onPointerDown={handleVTrackPointerDown}
-                  style={{ bottom: vScroll.bottom, top: vScroll.top }}
-                >
-                  <button
-                    aria-label="Scroll notes table vertically"
-                    aria-orientation="vertical"
-                    aria-valuemax={100}
-                    aria-valuemin={0}
-                    aria-valuenow={vScroll.valueNow}
-                    className="table-vthumb"
-                    onKeyDown={handleVThumbKeyDown}
-                    onPointerCancel={handleVThumbPointerEnd}
-                    onPointerDown={handleVThumbPointerDown}
-                    onPointerMove={handleVThumbPointerMove}
-                    onPointerUp={handleVThumbPointerEnd}
-                    role="scrollbar"
-                    style={{
-                      height: vScroll.thumbHeight,
-                      transform: `translateY(${vScroll.thumbTop}px)`,
-                    }}
-                    type="button"
-                  />
-                </div>
-              ) : null}
+              <TableScrollbar
+                loading={loading}
+                onFirstRow={focusFirstRow}
+                onLastRow={focusLastRow}
+                onPage={pageTable}
+                onVisibleChange={setVScrollVisible}
+                rowCount={deferredOrderedNotes.length}
+                rowHeight={rowHeightEstimate}
+                scrollRef={tableScrollRef}
+              />
               </div>
               {selectedIds.length ? (
                 <div
