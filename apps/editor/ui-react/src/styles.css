@@ -3094,6 +3094,16 @@ td.table-col-id {
   display: block;
 }
 
+/* One portal-hosted preview serves the whole table, so it is positioned
+   against the viewport from the hovered thumbnail's rect rather than from a
+   hidden bubble inside every row. */
+.table-thumb-preview--floating {
+  position: fixed;
+  left: auto;
+  top: auto;
+  transform: none;
+}
+
 .table-thumb-preview img {
   display: block;
   width: 210px;

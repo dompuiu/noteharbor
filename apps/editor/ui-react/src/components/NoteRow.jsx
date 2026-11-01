@@ -1,7 +1,7 @@
 import { Fragment, memo, useCallback } from "react";
 import { TagsCell } from "./TagsCell.jsx";
 import { RowActionsMenu } from "./RowActionsMenu.jsx";
-import { cellClass, highlightTerms } from "../lib/tableCells.jsx";
+import { highlightTerms } from "../lib/tableCells.jsx";
 import { parseGradeValue } from "../lib/tableColumns.js";
 
 // One note row. The memo boundary lives here: props are plain values plus one
@@ -11,19 +11,14 @@ export const NoteRow = memo(function NoteRow({
   canReorder,
   columns,
   dropPlacement,
-  frontThumb,
   handlers,
   index,
   isActive,
   isDragging,
   isSelected,
-  lastStickyColumnKey,
-  marks,
+  model,
   note,
-  previewOffsetY,
-  previewVisible,
   showGutter,
-  stickyLeftByColumn,
   totalColumnCount,
 }) {
   const zebra = index % 2 === 1;
@@ -41,34 +36,16 @@ export const NoteRow = memo(function NoteRow({
     [handlers, note.id],
   );
 
-  // Props shared by every pinned cell: the left offset accumulated from the
-  // visible sticky columns, the end marker on the right-most one, and any
-  // class the cell already needed.
-  function stickyCellAttributes(column, baseClassName) {
-    if (!column.sticky) {
-      return baseClassName ? { className: baseClassName } : {};
-    }
-
-    return {
-      className: [
-        baseClassName,
-        "table-sticky-cell",
-        column.key === lastStickyColumnKey ? "table-sticky-end" : null,
-      ]
-        .filter(Boolean)
-        .join(" "),
-      // Native sticky positions the cell at this offset in the shared
-      // horizontal scrollport.
-      style: {
-        "--table-sticky-left": `${stickyLeftByColumn[column.key] ?? 0}px`,
-      },
-    };
+  // The row model already carries every cell's class, pinned offset and
+  // derived content; the row only spreads it onto the <td>.
+  function cellAttributes(column) {
+    return model.cells.get(column.key) ?? {};
   }
 
   function renderReorderCell(column) {
     return (
       <td
-        {...stickyCellAttributes(column, cellClass(column))}
+        {...cellAttributes(column)}
         onClick={(event) => event.stopPropagation()}
       >
         {canReorder ? (
@@ -100,7 +77,7 @@ export const NoteRow = memo(function NoteRow({
     return (
       <td
         onClick={(event) => event.stopPropagation()}
-        {...stickyCellAttributes(column, cellClass(column))}
+        {...cellAttributes(column)}
       >
         <input
           aria-label={`Select ${note.denomination}`}
@@ -114,7 +91,7 @@ export const NoteRow = memo(function NoteRow({
 
   function renderOrderCell(column) {
     return (
-      <td {...stickyCellAttributes(column, cellClass(column))}>
+      <td {...cellAttributes(column)}>
         {note.display_order ?? "-"}
       </td>
     );
@@ -122,8 +99,8 @@ export const NoteRow = memo(function NoteRow({
 
   function renderThumbnailCell(column) {
     return (
-      <td {...stickyCellAttributes(column, cellClass(column))}>
-        {frontThumb ? (
+      <td {...cellAttributes(column)}>
+        {model.frontThumb ? (
           <span
             className="table-thumb-wrap"
             onBlur={(event) => {
@@ -141,18 +118,8 @@ export const NoteRow = memo(function NoteRow({
               className="table-thumb"
               decoding="async"
               loading="lazy"
-              src={frontThumb}
+              src={model.frontThumb}
             />
-            <span
-              className={`table-thumb-preview${previewVisible ? " is-visible" : ""}`}
-              style={{
-                "--table-thumb-preview-offset": `${
-                  previewVisible ? previewOffsetY : 0
-                }px`,
-              }}
-            >
-              {previewVisible ? <img alt="" src={frontThumb} /> : null}
-            </span>
           </span>
         ) : (
           <span className="muted">-</span>
@@ -162,13 +129,14 @@ export const NoteRow = memo(function NoteRow({
   }
 
   function renderDataCell(column) {
-    const rowMarks = marks ?? {};
+    const rowMarks = model.marks;
 
     if (column.isTags) {
       return (
-        <td className={cellClass(column)}>
+        <td {...cellAttributes(column)}>
           <TagsCell
             onApplyFilter={handlers.onApplyTagFilter}
+            tagPlan={model.tagPlan}
             tags={note.tags}
           />
         </td>
@@ -184,7 +152,7 @@ export const NoteRow = memo(function NoteRow({
 
       if (!gradeValue) {
         return (
-          <td {...stickyCellAttributes(column, cellClass(column))}>
+          <td {...cellAttributes(column)}>
             <span className="muted">-</span>
           </td>
         );
@@ -201,7 +169,7 @@ export const NoteRow = memo(function NoteRow({
               : "circulated";
 
       return (
-        <td {...stickyCellAttributes(column, cellClass(column))}>
+        <td {...cellAttributes(column)}>
           <span className={`table-grade table-grade--${tier}`}>
             {highlightTerms(gradeValue, rowMarks.grade)}
           </span>
@@ -215,7 +183,7 @@ export const NoteRow = memo(function NoteRow({
       // and the row menu's Open item still reach the Note slideshow. A note
       // without a source URL renders as plain text.
       return (
-        <td className={cellClass(column)}>
+        <td {...cellAttributes(column)}>
           {note.url ? (
             <a
               draggable={false}
@@ -234,7 +202,7 @@ export const NoteRow = memo(function NoteRow({
     }
 
     return (
-      <td {...stickyCellAttributes(column, cellClass(column))}>
+      <td {...cellAttributes(column)}>
         {highlightTerms(note[column.key], rowMarks[column.key])}
       </td>
     );
@@ -293,7 +261,7 @@ export const NoteRow = memo(function NoteRow({
     });
 
     return (
-      <td className={cellClass(column)}>
+      <td {...cellAttributes(column)}>
         <RowActionsMenu
           items={items}
           label={`Actions for ${noteLabel}`}

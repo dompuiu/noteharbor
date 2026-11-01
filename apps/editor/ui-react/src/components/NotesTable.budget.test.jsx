@@ -234,6 +234,38 @@ describe("NotesTable render budget", () => {
     expect(rows).toBeLessThanOrEqual(22);
   });
 
+  test("a scroll tick creates only the rows that enter the window", async () => {
+    getNotes.mockResolvedValue({ notes: manyNotes(200) });
+    const { container } = renderTable();
+
+    await screen.findByText("NOTE-1");
+    const scroller = scrollerFor(container);
+    setScrollMetrics(scroller);
+    await flushFrame();
+
+    const addedRows = [];
+    const observer = new MutationObserver((records) => {
+      for (const record of records) {
+        for (const node of record.addedNodes) {
+          if (node.nodeType === 1 && node.matches("tr.table-row-link")) {
+            addedRows.push(node);
+          }
+        }
+      }
+    });
+    observer.observe(container.querySelector("tbody"), {
+      childList: true,
+      subtree: true,
+    });
+
+    await scrollBy(scroller, 2 * rowHeight);
+    observer.disconnect();
+
+    // Only the bottom two rows are new DOM; the rest are moved into place by
+    // React without creating elements again.
+    expect(addedRows.length).toBeLessThanOrEqual(2);
+  });
+
   test("moving the keyboard cursor renders at most two rows", async () => {
     getNotes.mockResolvedValue({ notes: manyNotes(60) });
     const { container } = renderTable();
@@ -320,12 +352,11 @@ describe("NotesTable render budget", () => {
     await user.hover(screen.getByAltText("NOTE-1 front"));
 
     await waitFor(() => {
-      expect(container.querySelector(".table-thumb-preview.is-visible")).not
+      expect(document.querySelector(".table-thumb-preview.is-visible")).not
         .toBeNull();
     });
-    // The preview can reposition itself after it mounts, but only the hovered
-    // row may render.
-    expect(new Set(noteRowRenders.ids)).toEqual(new Set([1]));
+    // The preview is one table-level bubble, so hovering repaints no rows.
+    expect(new Set(noteRowRenders.ids).size).toBeLessThanOrEqual(1);
   });
 
   test("starting a drag renders the dragged row only", async () => {

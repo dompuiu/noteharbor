@@ -7,6 +7,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { CATALOG_ROUTES } from "../lib/routes.js";
@@ -58,6 +59,7 @@ import {
   tagsColumnKey,
   validSortKeys,
 } from "../lib/tableColumns.js";
+import { buildNoteRowModel } from "../lib/noteRowModel.js";
 import {
   cellClass,
   pickFirstAvailableImage,
@@ -140,14 +142,7 @@ function noteIdentityDetails(note) {
 }
 
 function noteThumbPath(note) {
-  return (
-    pickFirstAvailableImage(note, [
-      ["front", "thumbnail"],
-      ["front", "full"],
-      ["back", "thumbnail"],
-      ["back", "full"],
-    ])?.path ?? null
-  );
+  return pickFirstAvailableImage(note, tableThumbnailSlots)?.path ?? null;
 }
 
 function serializeConditions(conditions) {
@@ -1650,35 +1645,39 @@ function NotesTable({
     ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end
     : 0;
 
-  // Per-note derivations are built once for the whole visible list, not once
-  // per row per commit. Their identities only change when the notes or the
-  // filter change, so an unrelated re-render leaves every row's props alone.
-  const frontThumbByNoteId = useMemo(() => {
+  // Per-note row models are built once for the whole painted list, not once
+  // per row per commit. Their identities only change when the notes, the
+  // column geometry or the filter change, so an unrelated re-render leaves
+  // every row's props alone.
+  const rowModelsByNoteId = useMemo(() => {
     const map = new Map();
 
     for (const note of deferredOrderedNotes) {
       map.set(
         note.id,
-        pickFirstAvailableImage(note, tableThumbnailSlots)?.path ?? null,
+        buildNoteRowModel({
+          columnWidths,
+          columns: visibleColumns,
+          lastStickyColumnKey,
+          marks: deferredConditions.length
+            ? marksForNote(note, deferredConditions, searchColumns)
+            : null,
+          note,
+          stickyLeftByColumn,
+        }),
       );
     }
 
     return map;
-  }, [deferredOrderedNotes]);
-
-  const marksByNoteId = useMemo(() => {
-    if (!deferredConditions.length) {
-      return null;
-    }
-
-    const map = new Map();
-
-    for (const note of deferredOrderedNotes) {
-      map.set(note.id, marksForNote(note, deferredConditions, searchColumns));
-    }
-
-    return map;
-  }, [deferredConditions, deferredOrderedNotes, searchColumns]);
+  }, [
+    columnWidths,
+    deferredConditions,
+    deferredOrderedNotes,
+    lastStickyColumnKey,
+    searchColumns,
+    stickyLeftByColumn,
+    visibleColumns,
+  ]);
 
   const rowHandlers = useMemo(() => {
     const invoke = (name) => (...args) =>
@@ -2023,9 +2022,10 @@ function NotesTable({
       return undefined;
     }
 
-    // The preview hangs beside the thumbnail, inside its cell. It is 138px
-    // tall against a 46px row, so it is nudged up or down to stay inside the
-    // rows area instead of running under the header or past the last row.
+    // The preview hangs beside the thumbnail. It is 138px tall against a 46px
+    // row, so it is nudged up or down to stay inside the rows area instead of
+    // running under the header or past the last row. It is one portal-hosted
+    // bubble for the whole table, not a hidden node in every row.
     function updateThumbPreviewPosition() {
       const thumbElement = thumbPreviewElementMapRef.current.get(
         thumbPreviewState.noteId,
@@ -2042,18 +2042,21 @@ function NotesTable({
         scroller.querySelector("thead")?.getBoundingClientRect().bottom ??
         scrollerBounds.top;
       const previewHeight = 138;
+      const previewWidth = 226;
       const desiredTop =
         thumbBounds.top + thumbBounds.height / 2 - previewHeight / 2;
       const minTop = Math.max(scrollerBounds.top + 8, headerBottom + 8);
       const maxTop = scrollerBounds.bottom - previewHeight - 8;
-      const clampedTop = Math.min(Math.max(desiredTop, minTop), maxTop);
-      const offsetY = Math.round(clampedTop - desiredTop);
+      const top = Math.round(Math.min(Math.max(desiredTop, minTop), maxTop));
+      const left = Math.round(
+        Math.min(thumbBounds.right + 12, window.innerWidth - previewWidth - 8),
+      );
 
       setThumbPreviewState((current) =>
         current && current.noteId === thumbPreviewState.noteId
-          ? current.offsetY === offsetY
+          ? current.top === top && current.left === left
             ? current
-            : { ...current, offsetY }
+            : { ...current, top, left }
           : current,
       );
     }
@@ -2739,7 +2742,7 @@ function NotesTable({
   }
 
   function showThumbPreview(noteId) {
-    setThumbPreviewState({ noteId, offsetY: 0 });
+    setThumbPreviewState({ noteId, top: null, left: null });
   }
 
   function hideThumbPreview(noteId) {
@@ -4141,6 +4144,24 @@ function NotesTable({
 
       {confirmDialog}
 
+      {thumbPreviewState?.top != null
+        ? createPortal(
+            <span
+              className="table-thumb-preview table-thumb-preview--floating is-visible"
+              style={{
+                left: thumbPreviewState.left,
+                top: thumbPreviewState.top,
+              }}
+            >
+              <img
+                alt=""
+                src={rowModelsByNoteId.get(thumbPreviewState.noteId)?.frontThumb}
+              />
+            </span>,
+            document.body,
+          )
+        : null}
+
       {slideshowRouteActive && slideshowNotes.length && slideshowIndex >= 0 ? (
         <Slideshow
           currentIndex={slideshowIndex}
@@ -4723,24 +4744,15 @@ function NotesTable({
                                 ? dropTarget.placement
                                 : null
                             }
-                            frontThumb={frontThumbByNoteId.get(note.id) ?? null}
                             handlers={rowHandlers}
                             index={virtualRow.index}
                             isActive={activeNoteId === note.id}
                             isDragging={draggedNoteId === note.id}
                             isSelected={selectedIdSet.has(note.id)}
                             key={note.id}
-                            lastStickyColumnKey={lastStickyColumnKey}
-                            marks={marksByNoteId?.get(note.id) ?? null}
+                            model={rowModelsByNoteId.get(note.id)}
                             note={note}
-                            previewOffsetY={
-                              thumbPreviewState?.noteId === note.id
-                                ? thumbPreviewState.offsetY
-                                : 0
-                            }
-                            previewVisible={thumbPreviewState?.noteId === note.id}
                             showGutter={vScrollVisible}
-                            stickyLeftByColumn={stickyLeftByColumn}
                             totalColumnCount={totalColumnCount}
                           />
                         );

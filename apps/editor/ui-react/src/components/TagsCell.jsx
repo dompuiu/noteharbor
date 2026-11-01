@@ -2,96 +2,6 @@ import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 
 const tableTagClass = "tag table-tag";
-const tagChipHorizontalPadding = 16;
-const tagMoreChipHorizontalPadding = 14;
-const tagListGap = 5;
-const tagChipMeasureSafetyMargin = 2;
-const tagsPopoverWidth = 280;
-const tagsPopoverMaxHeight = 320;
-const tagsPopoverOpenDelay = 300;
-const tagsPopoverCloseDelay = 150;
-
-let tagTextMeasureContext = null;
-
-function getTagTextMeasureContext() {
-  if (tagTextMeasureContext || typeof document === "undefined") {
-    return tagTextMeasureContext;
-  }
-
-  const probe = document.createElement("button");
-  probe.className = tableTagClass;
-  probe.style.position = "absolute";
-  probe.style.visibility = "hidden";
-  probe.style.pointerEvents = "none";
-  probe.textContent = "x";
-  document.body.appendChild(probe);
-  const computed = window.getComputedStyle(probe);
-  const canvas = document.createElement("canvas");
-  const context = canvas.getContext("2d");
-  context.font = `${computed.fontStyle} ${computed.fontWeight} ${computed.fontSize} ${computed.fontFamily}`;
-  document.body.removeChild(probe);
-
-  tagTextMeasureContext = context;
-  return tagTextMeasureContext;
-}
-
-function measureTagChipWidth(
-  text,
-  horizontalPadding = tagChipHorizontalPadding,
-) {
-  const context = getTagTextMeasureContext();
-
-  if (!context) {
-    return text.length * 8 + horizontalPadding;
-  }
-
-  return (
-    Math.ceil(context.measureText(text).width) +
-    horizontalPadding +
-    tagChipMeasureSafetyMargin
-  );
-}
-
-function computeVisibleTagPlan(tags, availableWidth) {
-  if (!tags.length) {
-    return { visibleTags: [], hiddenTags: [] };
-  }
-
-  const chipWidths = tags.map((tag) => measureTagChipWidth(tag.name));
-  const fullWidth = chipWidths.reduce(
-    (sum, width, index) => sum + width + (index > 0 ? tagListGap : 0),
-    0,
-  );
-
-  if (fullWidth <= availableWidth) {
-    return { visibleTags: tags, hiddenTags: [] };
-  }
-
-  for (
-    let visibleCount = tags.length - 1;
-    visibleCount >= 0;
-    visibleCount -= 1
-  ) {
-    const hiddenCount = tags.length - visibleCount;
-    let width = measureTagChipWidth(
-      `+${hiddenCount}`,
-      tagMoreChipHorizontalPadding,
-    );
-
-    for (let i = 0; i < visibleCount; i += 1) {
-      width += chipWidths[i] + tagListGap;
-    }
-
-    // At visibleCount 0 we always accept, so the "+N" counter is never
-    // itself pushed out of view with no indicator left behind.
-    if (width <= availableWidth || visibleCount === 0) {
-      return {
-        visibleTags: tags.slice(0, visibleCount),
-        hiddenTags: tags.slice(visibleCount),
-      };
-    }
-  }
-}
 
 // Anchors the popover under `bounds` (the trigger's rect), flipping above it
 // when there isn't room below, given the popover's (real or estimated) height.
@@ -104,37 +14,15 @@ function computePopoverTop(bounds, height) {
     : Math.max(8, bounds.top - height - 6);
 }
 
-export function TagsCell({ onApplyFilter, tags }) {
+export function TagsCell({ onApplyFilter, tagPlan, tags }) {
   const containerRef = useRef(null);
   const triggerRef = useRef(null);
   const popoverRef = useRef(null);
   const openTimeoutRef = useRef(null);
   const closeTimeoutRef = useRef(null);
-  const [availableWidth, setAvailableWidth] = useState(null);
   const [isOpen, setIsOpen] = useState(false);
   const [popoverPosition, setPopoverPosition] = useState(null);
   const popoverHeightRef = useRef(null);
-
-  useLayoutEffect(() => {
-    const element = containerRef.current;
-
-    if (!element) {
-      return undefined;
-    }
-
-    setAvailableWidth(element.clientWidth);
-
-    const observer = new ResizeObserver((entries) => {
-      const entry = entries[0];
-
-      if (entry) {
-        setAvailableWidth(entry.contentRect.width);
-      }
-    });
-
-    observer.observe(element);
-    return () => observer.disconnect();
-  }, []);
 
   useEffect(() => {
     if (!isOpen) {
@@ -311,11 +199,10 @@ export function TagsCell({ onApplyFilter, tags }) {
     }
   }
 
-  const { visibleTags, hiddenTags } = !tags.length
-    ? { visibleTags: [], hiddenTags: [] }
-    : availableWidth == null
-      ? { visibleTags: tags, hiddenTags: [] }
-      : computeVisibleTagPlan(tags, availableWidth);
+  const { visibleTags, hiddenTags } = tagPlan ?? {
+    visibleTags: tags,
+    hiddenTags: [],
+  };
 
   return (
     <div className="tag-list tag-list-clip" ref={containerRef}>
