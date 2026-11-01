@@ -1,5 +1,5 @@
 import { MemoryRouter } from "react-router-dom";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
@@ -124,10 +124,39 @@ async function flushFrame() {
   });
 }
 
+// The move's own renders include a deferred list commit that trails the one
+// that drops the note. Wait until the table has stopped committing before
+// measuring what the toast's dismissal does.
+async function settleTable() {
+  let previous = -1;
+
+  while (previous !== virtualizerStats.renders) {
+    previous = virtualizerStats.renders;
+    await flushFrame();
+  }
+}
+
 let notesDb;
+
+// The toast clears itself on a four-second timer. Rather than wait it out,
+// the test captures that one timeout and fires it: the assertion is about the
+// dismissal path, not about wall-clock time. Every other timer passes through.
+const realSetTimeout = globalThis.setTimeout;
+const dismissTimers = [];
+vi.spyOn(globalThis, "setTimeout").mockImplementation(
+  (callback, delay, ...args) => {
+    if (delay === 4000) {
+      dismissTimers.push(callback);
+      return 0;
+    }
+
+    return realSetTimeout(callback, delay, ...args);
+  },
+);
 
 beforeEach(() => {
   vi.clearAllMocks();
+  dismissTimers.length = 0;
   window.localStorage.clear();
   virtualizerStats.renders = 0;
   resetNoteRowRenders();
@@ -186,18 +215,19 @@ describe("moving a note to another collection", () => {
     const toast = await screen.findByRole("status");
     expect(toast).toHaveTextContent("Moved to Other.");
 
+    await settleTable();
+
     // Dismissal is the toast's own timer, so the table must not commit and no
     // note row may render for it.
     resetNoteRowRenders();
     virtualizerStats.renders = 0;
 
-    await waitFor(
-      () => {
-        expect(screen.queryByRole("status")).not.toBeInTheDocument();
-      },
-      { timeout: 5000 },
-    );
+    expect(dismissTimers).toHaveLength(1);
+    act(() => {
+      dismissTimers[0]();
+    });
 
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
     expect(noteRowRenderCount()).toBe(0);
     expect(virtualizerStats.renders).toBe(0);
   });
