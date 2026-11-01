@@ -1449,6 +1449,54 @@ describe("Escape clears the selection before the row cursor", () => {
     expect(anchor).toHaveFocus();
   });
 
+  test("Escape after clicking above the table clears the selection", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+    const row = (await screen.findByText("AAAA")).closest("tr");
+    await screen.findByText("BBBB");
+
+    await user.click(checkbox("AAAA"));
+    expect(selectionBar()).toBeInTheDocument();
+
+    // Clicking the page chrome above the table leaves focus on <body>, not
+    // in the table. Escape must still clear the selection from there.
+    await user.click(screen.getByRole("heading", { name: "Test" }));
+    expect(document.body).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+
+    expect(selectionBar()).not.toBeInTheDocument();
+    expect(checkbox("AAAA")).not.toBeChecked();
+    expect(container.querySelector(".table-focus-anchor")).toHaveFocus();
+
+    // The pointer's last row is remembered, so the keyboard resumes there.
+    await user.keyboard("{ArrowDown}");
+
+    expect(row).toHaveFocus();
+    expect(row).toHaveClass("table-row-link--active");
+  });
+
+  test("Escape from a control above the table clears the selection", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+    await screen.findByText("AAAA");
+
+    await user.click(checkbox("AAAA"));
+    expect(selectionBar()).toBeInTheDocument();
+
+    const filtersToggle = await screen.findByRole("button", {
+      name: "Filters",
+    });
+    filtersToggle.focus();
+
+    await user.keyboard("{Escape}");
+
+    expect(selectionBar()).not.toBeInTheDocument();
+    expect(checkbox("AAAA")).not.toBeChecked();
+    expect(filtersToggle).toHaveFocus();
+    expect(container.querySelector(".table-focus-anchor")).not.toHaveFocus();
+  });
+
   test("Escape in the search field keeps the selection", async () => {
     const user = userEvent.setup();
     renderTable();

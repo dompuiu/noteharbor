@@ -22,7 +22,10 @@ import {
   copyTextToClipboard,
   formatNoteAsTsvRow,
 } from "../lib/noteClipboard.js";
-import { isEditableElement } from "../lib/editableElement.js";
+import {
+  isEditableElement,
+  MODAL_SURFACE_SELECTOR,
+} from "../lib/editableElement.js";
 import { isEmptyLibrary } from "../lib/libraryState.js";
 import {
   shouldHandOffToFilters,
@@ -1148,6 +1151,7 @@ function NotesTable({
   const rowActionsMenuMapRef = useRef(new Map());
   const thumbPreviewElementMapRef = useRef(new Map());
   const dragPreviewRef = useRef(null);
+  const tableScreenRef = useRef(null);
   const tableShellRef = useRef(null);
   const tableScrollRef = useRef(null);
   const [tableWidth, setTableWidth] = useState(null);
@@ -2672,6 +2676,29 @@ function NotesTable({
       }
     }
 
+    function isPageBackgroundTarget(target) {
+      // A click on non-focusable chrome leaves the document's active
+      // element on <body> / <html>.
+      return target === document.body || target === document.documentElement;
+    }
+
+    function isScreenChromeTarget(target) {
+      // Escape above the table must still reach the table's state. The page
+      // background counts, and so does the screen's own chrome (title row,
+      // toolbar, footer) outside the table card. Controls inside the card
+      // keep their own keys, and modal surfaces own every key.
+      if (isPageBackgroundTarget(target)) {
+        return true;
+      }
+
+      return (
+        target instanceof Element &&
+        Boolean(tableScreenRef.current?.contains(target)) &&
+        !tableShellRef.current?.contains(target) &&
+        !target.closest(MODAL_SURFACE_SELECTOR)
+      );
+    }
+
     function handleRowNavigation(event) {
       // After Escape dropped a mouse-only selection to the anchor, the
       // first arrow press paints the row the pointer last touched rather
@@ -2757,8 +2784,9 @@ function NotesTable({
       // on screen drops the selection and leaves focus (and the cursor)
       // alone, so a second Escape is what sends the cursor to the anchor.
       // Only surfaces that belong to the table's selection respond: rows,
-      // the selection bar, the header's select-all checkbox, and the
-      // anchor. Text fields keep their own Escape.
+      // the selection bar, the header's select-all checkbox, the anchor,
+      // and the screen chrome above the table. Text fields keep their own
+      // Escape.
       if (
         event.key !== "Escape" ||
         !selectedIdsRef.current.length ||
@@ -2766,6 +2794,8 @@ function NotesTable({
       ) {
         return false;
       }
+
+      const pageBackgroundFocused = isPageBackgroundTarget(event.target);
 
       // A text field inside a row still owns its own Escape.
       const isCheckbox =
@@ -2780,8 +2810,9 @@ function NotesTable({
       const inRow = Boolean(event.target.closest("tr.table-row-link"));
       const isSelectAll = event.target === selectAllRef.current;
       const onAnchor = event.target === tableFocusAnchorRef.current;
+      const onScreenChrome = isScreenChromeTarget(event.target);
 
-      if (!inBulkBar && !inRow && !isSelectAll && !onAnchor) {
+      if (!inBulkBar && !inRow && !isSelectAll && !onAnchor && !onScreenChrome) {
         return false;
       }
 
@@ -2822,13 +2853,18 @@ function NotesTable({
 
       if (mouseOnlyResumeId != null && !isSelectAll) {
         escapeResumeNoteIdRef.current = mouseOnlyResumeId;
+      }
 
-        if (inRow) {
-          // No painted cursor to keep, so drop the focus ring too: a
-          // keyboard Escape would otherwise make the mouse-focused
-          // checkbox focus-visible and repaint the row.
-          focusTableAnchor();
-        }
+      if (pageBackgroundFocused) {
+        // A click above the table dropped focus to <body>. Land on the
+        // anchor so the next Escape can clear filters and the remembered
+        // mouse row is still there for the arrow keys.
+        focusTableAnchor();
+      } else if (inRow && mouseOnlyResumeId != null) {
+        // No painted cursor to keep, so drop the focus ring too: a
+        // keyboard Escape would otherwise make the mouse-focused
+        // checkbox focus-visible and repaint the row.
+        focusTableAnchor();
       }
 
       return true;
@@ -2982,17 +3018,28 @@ function NotesTable({
         return;
       }
 
+      const onAnchor = event.target === tableFocusAnchorRef.current;
+      const pageBackgroundFocused = isPageBackgroundTarget(event.target);
+
       if (
         event.key === "Escape" &&
-        event.target === tableFocusAnchorRef.current
+        (onAnchor || isScreenChromeTarget(event.target))
       ) {
         // Deselected-row state (see above): one more Escape clears the
-        // filters, if any are set. Focus stays on the anchor.
+        // filters, if any are set. Focus stays where the press came from,
+        // except on the page background, where it lands on the anchor.
         if (hasActiveFilters) {
           event.preventDefault();
           setFilters({});
+
+          if (pageBackgroundFocused) {
+            focusTableAnchor();
+          }
         }
-        return;
+
+        if (onAnchor || hasActiveFilters) {
+          return;
+        }
       }
 
       const focusedRowElement = focusedRowIdRef.current
@@ -4627,7 +4674,7 @@ function NotesTable({
   }
 
   return (
-    <section className="screen-stack">
+    <section className="screen-stack" ref={tableScreenRef}>
       {showShortcutsHelp ? (
         <KeyboardShortcutsHelp onClose={() => setShowShortcutsHelp(false)} />
       ) : null}

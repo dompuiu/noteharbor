@@ -54,4 +54,8 @@ function ownsPrintableShortcut(element) {
   return element.isContentEditable;
 }
 
-export { isEditableElement, ownsPrintableShortcut };
+export {
+  isEditableElement,
+  MODAL_SURFACE_SELECTOR,
+  ownsPrintableShortcut,
+};

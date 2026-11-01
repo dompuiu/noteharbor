@@ -296,6 +296,44 @@ describe("NotesTable filters", () => {
     await screen.findByText("BBBB");
   });
 
+  test("Escape after clicking above the table clears the filters", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = await openFilters();
+
+    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
+    expect(screen.getByText("Company: PMG")).toBeInTheDocument();
+
+    // Clicking the page chrome above the table leaves focus on <body>.
+    await user.click(screen.getByRole("heading", { name: "Test" }));
+    expect(document.body).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByText("Company: PMG")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /active\)/ }),
+    ).not.toBeInTheDocument();
+    await screen.findByText("BBBB");
+  });
+
+  test("Escape on a header sort control keeps the filters", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = await openFilters();
+
+    await user.type(await screen.findByLabelText("Filter Company"), "PMG");
+
+    const sort = screen.getByRole("button", { name: "DENOMINATION" });
+    sort.focus();
+    await user.keyboard("{Escape}");
+
+    expect(sort).toHaveFocus();
+    expect(screen.getByText("Company: PMG")).toBeInTheDocument();
+  });
+
   test("the filter inputs tab in column order", async () => {
     renderTable();
 
