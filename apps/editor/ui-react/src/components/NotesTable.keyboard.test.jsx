@@ -1336,6 +1336,62 @@ describe("Escape clears the selection before the row cursor", () => {
     });
   });
 
+  test("a mouse-only selection drops focus on Escape and the next Down repaints the last row", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+    const rowA = (await screen.findByText("AAAA")).closest("tr");
+    const rowB = (await screen.findByText("BBBB")).closest("tr");
+
+    // Pointer selection focuses the checkbox but paints no row cursor.
+    await user.click(checkbox("AAAA"));
+    await user.click(checkbox("BBBB"));
+    expect(selectionBar()).toBeInTheDocument();
+    expect(rowA).not.toHaveClass("table-row-link--active");
+    expect(rowB).not.toHaveClass("table-row-link--active");
+
+    await user.keyboard("{Escape}");
+
+    expect(selectionBar()).not.toBeInTheDocument();
+    expect(container.querySelector(".table-focus-anchor")).toHaveFocus();
+    expect(rowA).not.toHaveClass("table-row-link--active");
+    expect(rowB).not.toHaveClass("table-row-link--active");
+
+    await user.keyboard("{ArrowDown}");
+
+    expect(rowB).toHaveFocus();
+    expect(rowB).toHaveClass("table-row-link--active");
+    expect(rowA).not.toHaveClass("table-row-link--active");
+  });
+
+  test("Escape in the bar after a mouse-only selection resumes on the last row", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+    await screen.findByText("AAAA");
+    const rowB = (await screen.findByText("BBBB")).closest("tr");
+
+    await user.click(checkbox("AAAA"));
+    await user.click(checkbox("BBBB"));
+
+    const bar = await screen.findByRole("region", {
+      name: "Selection actions",
+    });
+    await user.tab();
+    expect(
+      within(bar).getByRole("button", { name: "Delete" }),
+    ).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+
+    expect(selectionBar()).not.toBeInTheDocument();
+    expect(container.querySelector(".table-focus-anchor")).toHaveFocus();
+    expect(rowB).not.toHaveClass("table-row-link--active");
+
+    await user.keyboard("{ArrowDown}");
+
+    expect(rowB).toHaveFocus();
+    expect(rowB).toHaveClass("table-row-link--active");
+  });
+
   test("Escape on the table anchor clears the selection", async () => {
     const user = userEvent.setup();
     const { container } = renderTable();

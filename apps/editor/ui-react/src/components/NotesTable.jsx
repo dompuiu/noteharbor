@@ -1180,6 +1180,11 @@ function NotesTable({
   const prevHasSelectionRef = useRef(false);
   const pendingRowKeyboardFocusArmRef = useRef(null);
   const bulkBarRef = useRef(null);
+  // A mouse-made selection leaves focus on a checkbox but paints no row
+  // cursor. Escape drops that focus to the anchor, and this remembers the
+  // row the next arrow press should paint so navigation resumes where the
+  // pointer left off instead of jumping to the first row.
+  const escapeResumeNoteIdRef = useRef(null);
   const focusRestoreNoteIdRef = useRef(null);
   // The row the keyboard cursor last landed on, kept apart from
   // `focusedRowIdRef` because it has to outlive focus leaving the table:
@@ -2618,6 +2623,11 @@ function NotesTable({
       selectionTabArmedRef.current = false;
       pendingRowKeyboardFocusArmRef.current = null;
 
+      if (event.target !== tableFocusAnchorRef.current) {
+        // Any other focus target ends the "resume after Escape" intent.
+        escapeResumeNoteIdRef.current = null;
+      }
+
       if (event.target.closest("tr.table-row-link")) {
         return;
       }
@@ -2659,6 +2669,26 @@ function NotesTable({
     }
 
     function handleRowNavigation(event) {
+      // After Escape dropped a mouse-only selection to the anchor, the
+      // first arrow press paints the row the pointer last touched rather
+      // than walking from the top of the table.
+      const resumeId = escapeResumeNoteIdRef.current;
+
+      if (
+        resumeId != null &&
+        document.activeElement === tableFocusAnchorRef.current &&
+        !event.shiftKey &&
+        (event.key === "ArrowDown" ||
+          event.key === "ArrowUp" ||
+          event.key === "j" ||
+          event.key === "k")
+      ) {
+        escapeResumeNoteIdRef.current = null;
+        event.preventDefault();
+        focusRowByNoteId(resumeId);
+        return true;
+      }
+
       if (!event.shiftKey && (event.key === "ArrowDown" || event.key === "j")) {
         event.preventDefault();
         armSelectionTabForRowMove(moveRowFocus(1));
@@ -2751,28 +2781,50 @@ function NotesTable({
         return false;
       }
 
+      // A mouse-made selection has no painted row cursor, but the last
+      // clicked checkbox still holds focus. Remember that row so the next
+      // arrow press can paint it once the user is back on the keyboard.
+      const mouseOnlyResumeId =
+        activeNoteId == null
+          ? selectedIdsRef.current[selectedIdsRef.current.length - 1] ?? null
+          : null;
+
       event.preventDefault();
       clearSelection();
 
-      if (!inBulkBar) {
+      if (inBulkBar) {
+        // The bar unmounts with the selection, so hand focus back before it
+        // goes. With a live row cursor (the painted highlight, not just the
+        // focus memory a mouse click leaves) the cursor survives and the
+        // next Escape drops it; without one (select-all, then Tab) the
+        // anchor is the only sensible place left.
+        const cursorId =
+          activeNoteId != null &&
+          orderedNotes.some((note) => note.id === activeNoteId)
+            ? activeNoteId
+            : null;
+
+        if (cursorId != null) {
+          focusRowByNoteId(cursorId);
+        } else {
+          if (mouseOnlyResumeId != null) {
+            escapeResumeNoteIdRef.current = mouseOnlyResumeId;
+          }
+          focusTableAnchor();
+        }
+
         return true;
       }
 
-      // The bar unmounts with the selection, so hand focus back before it
-      // goes. With a live row cursor (the painted highlight, not just the
-      // focus memory a mouse click leaves) the cursor survives and the
-      // next Escape drops it; without one (select-all, then Tab) the
-      // anchor is the only sensible place left.
-      const cursorId =
-        activeNoteId != null &&
-        orderedNotes.some((note) => note.id === activeNoteId)
-          ? activeNoteId
-          : null;
+      if (mouseOnlyResumeId != null && !isSelectAll) {
+        escapeResumeNoteIdRef.current = mouseOnlyResumeId;
 
-      if (cursorId != null) {
-        focusRowByNoteId(cursorId);
-      } else {
-        focusTableAnchor();
+        if (inRow) {
+          // No painted cursor to keep, so drop the focus ring too: a
+          // keyboard Escape would otherwise make the mouse-focused
+          // checkbox focus-visible and repaint the row.
+          focusTableAnchor();
+        }
       }
 
       return true;
@@ -2781,6 +2833,17 @@ function NotesTable({
     function handleGlobalKeyDown(event) {
       if (showShortcutsHelp || confirmOpenRef.current) {
         return;
+      }
+
+      // Only an arrow press may consume the post-Escape resume intent;
+      // anything else means the user moved on.
+      if (
+        event.key !== "ArrowDown" &&
+        event.key !== "ArrowUp" &&
+        event.key !== "j" &&
+        event.key !== "k"
+      ) {
+        escapeResumeNoteIdRef.current = null;
       }
 
       // A checkbox is a form control but has no caret or text of its own, so
