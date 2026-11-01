@@ -4127,23 +4127,27 @@ function NotesTable({
     const items = [
       {
         key: "open",
+        icon: "open",
         label: "Open",
         onSelect: () => openSlideshow(note.id),
       },
       {
         key: "edit",
+        icon: "edit",
         label: "Edit",
         onSelect: () => openEditor(note.id),
         shortcut: "e",
       },
       {
         key: "copy",
+        icon: "copy",
         label: "Copy details",
         onSelect: () => void handleCopyNoteDetails(note),
         shortcut: "c",
       },
       {
         key: "insert",
+        icon: "insert",
         label: "Insert note below",
         onSelect: () => openCreateNoteAfter(note.id),
         shortcut: "a",
@@ -4153,6 +4157,7 @@ function NotesTable({
     if (note.url) {
       items.push({
         key: "source",
+        icon: "source",
         label: "Open source",
         href: note.url,
       });
@@ -4160,6 +4165,7 @@ function NotesTable({
 
     items.push({
       key: "delete",
+      icon: "delete",
       label: "Delete",
       onSelect: () => void handleDeleteNote(note.id),
       danger: true,

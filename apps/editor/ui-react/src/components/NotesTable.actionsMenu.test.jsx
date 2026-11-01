@@ -198,6 +198,24 @@ describe("Row actions menu", () => {
     expect(currentHash()).not.toContain("slideshow");
   });
 
+  test("pairs each action with a decorative icon", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    const menu = await openMenu(user, "AAAA");
+
+    const icons = within(menu)
+      .getAllByRole("menuitem")
+      .map((item) => item.querySelector("svg.row-actions-menu-icon"));
+
+    expect(icons).toHaveLength(6);
+    for (const icon of icons) {
+      expect(icon).not.toBeNull();
+      expect(icon).toHaveAttribute("aria-hidden", "true");
+    }
+    // Each action gets its own glyph rather than a repeated placeholder.
+    expect(new Set(icons.map((icon) => icon.innerHTML)).size).toBe(6);
+  });
+
   test("Open opens the note slideshow", async () => {
     const user = userEvent.setup();
     renderTable();
