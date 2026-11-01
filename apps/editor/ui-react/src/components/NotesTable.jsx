@@ -5119,12 +5119,42 @@ function NotesTable({
                                 openSlideshow(note.id);
                               }}
                               onKeyDown={(event) => {
-                                // Only the row itself acts on keys. Tab can
-                                // move focus onto a control inside the row
-                                // (checkbox, denomination link, action
-                                // buttons), and those must activate
-                                // themselves instead of the row swallowing
-                                // Enter/Space as it bubbles up.
+                                // Space toggles the row's selection, like the
+                                // checkbox it shares a row with. On the
+                                // denomination link it would otherwise scroll
+                                // the table, and on the actions button it
+                                // would open the menu. The checkbox already
+                                // toggles itself, and other controls such as
+                                // tag chips keep their own Space activation.
+                                if (event.key === " ") {
+                                  if (
+                                    event.target instanceof HTMLInputElement &&
+                                    event.target.type === "checkbox"
+                                  ) {
+                                    return;
+                                  }
+
+                                  const isRow =
+                                    event.target === event.currentTarget;
+                                  const isSourceLink =
+                                    event.target instanceof HTMLAnchorElement;
+                                  const isActionsButton =
+                                    event.target instanceof Element &&
+                                    event.target.closest('[aria-haspopup="menu"]');
+
+                                  if (!isRow && !isSourceLink && !isActionsButton) {
+                                    return;
+                                  }
+
+                                  event.preventDefault();
+                                  toggleNote(note.id);
+                                  return;
+                                }
+
+                                // Enter on a control inside the row (the
+                                // denomination link, the actions button)
+                                // activates that control. Only the row itself
+                                // opens the slideshow on Enter.
                                 if (event.target !== event.currentTarget) {
                                   return;
                                 }
@@ -5132,15 +5162,6 @@ function NotesTable({
                                 if (event.key === "Enter") {
                                   event.preventDefault();
                                   openSlideshow(note.id);
-                                  return;
-                                }
-
-                                // Space toggles the row's selection, like the
-                                // checkbox it shares a row with, rather than
-                                // opening the note as Enter does.
-                                if (event.key === " ") {
-                                  event.preventDefault();
-                                  toggleNote(note.id);
                                 }
                               }}
                               tabIndex={0}

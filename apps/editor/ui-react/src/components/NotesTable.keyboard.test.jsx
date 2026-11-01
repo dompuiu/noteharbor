@@ -179,6 +179,55 @@ describe("NotesTable keyboard focus inside a row", () => {
     expect(currentHash()).not.toContain("slideshow");
   });
 
+  test("Space on the denomination link toggles selection instead of scrolling", async () => {
+    renderTable();
+    const user = userEvent.setup();
+    const row = await findRow();
+    const checkbox = screen.getByRole("checkbox", {
+      name: /select ZZTEST/i,
+    });
+    const link = screen.getByRole("link", { name: "ZZTEST" });
+
+    row.focus();
+    link.focus();
+    expect(link).toHaveFocus();
+
+    // Space's browser default scrolls the table when focus is on a link.
+    expect(fireEvent.keyDown(link, { key: " " })).toBe(false);
+
+    expect(checkbox).toBeChecked();
+    expect(currentHash()).not.toContain("slideshow");
+
+    await user.keyboard(" ");
+
+    expect(checkbox).not.toBeChecked();
+  });
+
+  test("Space on the actions button toggles selection instead of opening its menu", async () => {
+    renderTable();
+    const user = userEvent.setup();
+    const row = await findRow();
+    const checkbox = screen.getByRole("checkbox", {
+      name: /select ZZTEST/i,
+    });
+    const actionsButton = screen.getByRole("button", {
+      name: "Actions for ZZTEST",
+    });
+
+    row.focus();
+    actionsButton.focus();
+    expect(actionsButton).toHaveFocus();
+
+    await user.keyboard(" ");
+
+    expect(checkbox).toBeChecked();
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+
+    await user.keyboard(" ");
+
+    expect(checkbox).not.toBeChecked();
+  });
+
   test("ArrowDown from a focused row checkbox moves focus to the next row", async () => {
     getNotes.mockResolvedValue({
       notes: [notePayload(1, "AAAA"), notePayload(2, "BBBB")],
