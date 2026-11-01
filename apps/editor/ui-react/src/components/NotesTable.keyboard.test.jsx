@@ -1208,6 +1208,7 @@ describe("Selection actions tab cycle", () => {
 
     await user.tab();
     expect(deleteButton).toHaveFocus();
+    expect(secondRow).toHaveClass("table-row-link--active");
 
     // After the bar, focus returns to the row the cursor now sits on.
     const clearButton = within(bar).getByRole("button", {

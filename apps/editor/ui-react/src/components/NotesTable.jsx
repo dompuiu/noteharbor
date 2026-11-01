@@ -1179,6 +1179,9 @@ function NotesTable({
   // can read it without re-subscribing on every toggle.
   const selectionTabArmedRef = useRef(false);
   const selectedIdsRef = useRef([]);
+  const userSelectionChangeRef = useRef(false);
+  const prevHasSelectionRef = useRef(false);
+  const pendingRowKeyboardFocusArmRef = useRef(null);
   const bulkBarRef = useRef(null);
   const focusRestoreNoteIdRef = useRef(null);
   // The row the keyboard cursor last landed on, kept apart from
@@ -1281,11 +1284,23 @@ function NotesTable({
     () => initialTableStateRef.current?.selectedIds ?? [],
   );
   useEffect(() => {
-    // Every selection change while the bar is visible re-arms the next Tab
-    // (a checkbox click, Space on a row, select-all, or a row being
-    // unticked). Clearing the selection removes the bar and disarms.
+    // Arming is deliberately tied to user actions: the bar appearing and a
+    // checkbox/select-all toggle. A background refresh that prunes deleted
+    // rows must not make an unrelated Tab jump backwards to the bar.
     selectedIdsRef.current = selectedIds;
-    selectionTabArmedRef.current = selectedIds.length > 0;
+    const hasSelection = selectedIds.length > 0;
+
+    if (!hasSelection) {
+      selectionTabArmedRef.current = false;
+    } else if (
+      userSelectionChangeRef.current ||
+      !prevHasSelectionRef.current
+    ) {
+      selectionTabArmedRef.current = true;
+    }
+
+    userSelectionChangeRef.current = false;
+    prevHasSelectionRef.current = hasSelection;
   }, [selectedIds]);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
@@ -1651,9 +1666,15 @@ function NotesTable({
   }, [collectionId, loadingCollections]);
 
   useEffect(() => {
-    setSelectedIds((current) =>
-      current.filter((id) => notes.some((note) => note.id === id)),
-    );
+    setSelectedIds((current) => {
+      const next = current.filter((id) =>
+        notes.some((note) => note.id === id),
+      );
+
+      // Keep the same array when nothing was pruned: a refetch must not look
+      // like a user selection change (and must not re-render the table).
+      return next.length === current.length ? current : next;
+    });
   }, [notes]);
 
   // Filters reset only when the viewed collection actually changes. Route
@@ -2597,6 +2618,7 @@ function NotesTable({
       // Any focus move that is not one of the arming actions (a selection
       // change or a keyboard row move) cancels a pending Tab-to-bar jump.
       selectionTabArmedRef.current = false;
+      pendingRowKeyboardFocusArmRef.current = null;
 
       if (event.target.closest("tr.table-row-link")) {
         return;
@@ -2621,33 +2643,41 @@ function NotesTable({
     // checkbox inside it holds focus: arrows/j/k move the cursor, Page and
     // Home/End jump, and a held Shift rests where it is. Returns whether the
     // key was one of them.
-    function armSelectionTabForRowMove() {
+    function armSelectionTabForRowMove(noteId) {
       // With a selection on screen, moving the row cursor makes the bar the
-      // next Tab stop again.
-      if (selectedIdsRef.current.length) {
+      // next Tab stop again. A virtualized target only receives focus once
+      // it mounts, so its arming waits for the row ref callback.
+      if (noteId == null || !selectedIdsRef.current.length) {
+        return;
+      }
+
+      const element = rowElementMapRef.current.get(noteId);
+
+      if (element && document.activeElement === element) {
         selectionTabArmedRef.current = true;
+      } else {
+        pendingRowKeyboardFocusArmRef.current = noteId;
       }
     }
 
     function handleRowNavigation(event) {
       if (!event.shiftKey && (event.key === "ArrowDown" || event.key === "j")) {
         event.preventDefault();
-        moveRowFocus(1);
-        armSelectionTabForRowMove();
+        armSelectionTabForRowMove(moveRowFocus(1));
         return true;
       }
 
       if (!event.shiftKey && (event.key === "ArrowUp" || event.key === "k")) {
         event.preventDefault();
-        moveRowFocus(-1);
-        armSelectionTabForRowMove();
+        armSelectionTabForRowMove(moveRowFocus(-1));
         return true;
       }
 
       if (event.key === "PageDown" || event.key === "PageUp") {
         event.preventDefault();
-        pageTable(event.key === "PageDown" ? 1 : -1);
-        armSelectionTabForRowMove();
+        armSelectionTabForRowMove(
+          pageTable(event.key === "PageDown" ? 1 : -1),
+        );
         return true;
       }
 
@@ -2660,7 +2690,7 @@ function NotesTable({
 
         if (note) {
           focusRowByNoteId(note.id);
-          armSelectionTabForRowMove();
+          armSelectionTabForRowMove(note.id);
         }
         return true;
       }
@@ -2763,6 +2793,8 @@ function NotesTable({
         event.key === "Tab" &&
         !event.shiftKey &&
         tableKeysActive &&
+        event.target instanceof Node &&
+        tableShellRef.current?.contains(event.target) &&
         selectionTabArmedRef.current &&
         selectedIdsRef.current.length > 0
       ) {
@@ -3199,17 +3231,26 @@ function NotesTable({
     });
   }
 
+  // Focus a mounted row's control and make that row the cursor. A null
+  // selector focuses the row element itself.
+  function focusRowControlInElement(element, noteId, selector) {
+    const control = selector ? element.querySelector(selector) : element;
+
+    (control ?? element).focus({ preventScroll: true });
+    focusedRowIdRef.current = noteId;
+    setActiveNoteId(noteId);
+    ensureRowVisible(element);
+  }
+
   // The row a bar exit returns to: the live keyboard cursor when it still
   // exists, otherwise the row selected most recently (the end of the
   // selection array, which is also the checkbox the user touched last).
   function bulkBarExitNoteId() {
-    const activeId = focusedRowIdRef.current;
-
     if (
-      activeId != null &&
-      orderedNotes.some((note) => note.id === activeId)
+      activeNoteId != null &&
+      orderedNotes.some((note) => note.id === activeNoteId)
     ) {
-      return activeId;
+      return activeNoteId;
     }
 
     const ids = selectedIdsRef.current;
@@ -3299,7 +3340,7 @@ function NotesTable({
 
   function moveRowFocus(offset) {
     if (!orderedNotes.length) {
-      return;
+      return null;
     }
 
     const currentIndex = orderedNotes.findIndex(
@@ -3320,7 +3361,7 @@ function NotesTable({
       focusRememberedFilter()
     ) {
       clearRowCursor();
-      return;
+      return null;
     }
 
     const baseIndex = currentIndex >= 0 ? currentIndex : offset > 0 ? -1 : 0;
@@ -3328,8 +3369,10 @@ function NotesTable({
       Math.max(baseIndex + offset, 0),
       orderedNotes.length - 1,
     );
+    const targetId = orderedNotes[nextIndex].id;
 
-    focusRowByNoteId(orderedNotes[nextIndex].id);
+    focusRowByNoteId(targetId);
+    return targetId;
   }
 
   function handleFilterArrowDown(event) {
@@ -3385,7 +3428,7 @@ function NotesTable({
     const scroller = tableScrollRef.current;
 
     if (!scroller || !orderedNotes.length) {
-      return;
+      return null;
     }
 
     const headerHeight = scroller.querySelector("thead")?.offsetHeight ?? 0;
@@ -3420,6 +3463,8 @@ function NotesTable({
     if (target) {
       focusRowByNoteId(target.id, { pinToTop: true });
     }
+
+    return target?.id ?? null;
   }
 
   function openEditor(noteId) {
@@ -3705,6 +3750,7 @@ function NotesTable({
   }
 
   function toggleNote(noteId) {
+    userSelectionChangeRef.current = true;
     setSelectedIds((current) =>
       current.includes(noteId)
         ? current.filter((id) => id !== noteId)
@@ -3713,6 +3759,8 @@ function NotesTable({
   }
 
   function toggleAllVisible() {
+    userSelectionChangeRef.current = true;
+
     if (allVisibleSelected) {
       const visibleIds = new Set(orderedNotes.map((note) => note.id));
       setSelectedIds((current) => current.filter((id) => !visibleIds.has(id)));
@@ -5224,38 +5272,41 @@ function NotesTable({
                                   ) {
                                     pendingRowCheckboxFocusNoteIdRef.current =
                                       null;
-                                    const checkbox = element.querySelector(
+                                    focusRowControlInElement(
+                                      element,
+                                      note.id,
                                       'input[type="checkbox"]',
                                     );
-                                    (checkbox ?? element).focus({
-                                      preventScroll: true,
-                                    });
-                                    focusedRowIdRef.current = note.id;
-                                    setActiveNoteId(note.id);
-                                    ensureRowVisible(element);
                                   } else if (
                                     pendingRowActionsFocusNoteIdRef.current ===
                                     note.id
                                   ) {
                                     pendingRowActionsFocusNoteIdRef.current =
                                       null;
-                                    const actionsButton = element.querySelector(
+                                    focusRowControlInElement(
+                                      element,
+                                      note.id,
                                       'button[aria-haspopup="menu"]',
                                     );
-                                    (actionsButton ?? element).focus({
-                                      preventScroll: true,
-                                    });
-                                    focusedRowIdRef.current = note.id;
-                                    setActiveNoteId(note.id);
-                                    ensureRowVisible(element);
                                   } else if (
                                     pendingRowFocusNoteIdRef.current === note.id
                                   ) {
+                                    const armSelectionTab =
+                                      pendingRowKeyboardFocusArmRef.current ===
+                                      note.id;
+
                                     pendingRowFocusNoteIdRef.current = null;
-                                    element.focus({ preventScroll: true });
-                                    focusedRowIdRef.current = note.id;
-                                    setActiveNoteId(note.id);
-                                    ensureRowVisible(element);
+                                    pendingRowKeyboardFocusArmRef.current =
+                                      null;
+                                    focusRowControlInElement(
+                                      element,
+                                      note.id,
+                                      null,
+                                    );
+
+                                    if (armSelectionTab) {
+                                      selectionTabArmedRef.current = true;
+                                    }
                                   } else if (
                                     focusedRowIdRef.current === note.id &&
                                     document.activeElement === document.body
