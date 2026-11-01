@@ -61,6 +61,7 @@ import {
   tagsColumnKey,
   validSortKeys,
 } from "../lib/tableColumns.js";
+import { ChipRemoveButton } from "./ChipRemoveButton.jsx";
 import { ColumnPicker } from "./ColumnPicker.jsx";
 import { FilterFieldMenu } from "./FilterFieldMenu.jsx";
 import { HighlightMatch, rankTagSuggestions } from "./TagsField.jsx";
@@ -5643,23 +5644,10 @@ function NotesTable({
                                       {condition.negated ? "!" : ""}
                                       {condition.value}
                                     </button>
-                                    <button
-                                      aria-label={`Remove ${filterFieldLabel(field)} ${condition.negated ? "not " : ""}${condition.value}`}
-                                      className="table-filter-chip-remove"
+                                    <ChipRemoveButton
+                                      label={`Remove ${filterFieldLabel(field)} ${condition.negated ? "not " : ""}${condition.value}`}
                                       onClick={() => removeCondition(condition.id)}
-                                      type="button"
-                                    >
-                                      <svg
-                                        aria-hidden="true"
-                                        fill="none"
-                                        stroke="currentColor"
-                                        strokeLinecap="round"
-                                        strokeWidth="1.6"
-                                        viewBox="0 0 12 12"
-                                      >
-                                        <path d="m2.5 2.5 7 7M9.5 2.5l-7 7" />
-                                      </svg>
-                                    </button>
+                                    />
                                   </>
                                 )}
                               </span>

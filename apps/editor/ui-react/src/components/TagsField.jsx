@@ -9,6 +9,7 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { ChipRemoveButton } from "./ChipRemoveButton.jsx";
 
 const normalizeTag = (value) =>
   String(value ?? "")
@@ -333,25 +334,26 @@ export const TagsField = forwardRef(function TagsField(
         <div className="tags-filter-chips-scroll">
           {value.length ? (
             value.map((tag) => (
-              <button
-                aria-label={`Remove ${tag}`}
-                className="tags-filter-chip"
-                key={tag}
-                onClick={() => removeTag(tag)}
-                type="button"
-              >
-                {tag} <span aria-hidden="true">×</span>
-              </button>
+              // Same chip as the table filter's, but the value is not an
+              // in-place editor here: the drawn cross is the only control.
+              <span className="tags-filter-chip table-filter-chip" key={tag}>
+                <span className="table-filter-chip-value">{tag}</span>
+                <ChipRemoveButton
+                  label={`Remove ${tag}`}
+                  onClick={() => removeTag(tag)}
+                  title={`Remove ${tag}`}
+                />
+              </span>
             ))
           ) : (
             <span className="muted" style={{ fontSize: "0.78rem" }}>
               {emptyText}
             </span>
           )}
-          {value.length >= 2 ? (
+          {value.length ? (
             <button
               aria-label="Clear all tags"
-              className="tags-filter-clear-all"
+              className="table-filter-clear-all"
               onClick={() => {
                 onChange([]);
                 requestAnimationFrame(focusInput);

@@ -204,7 +204,7 @@ function TagSuggestionCloud({ limit = 16, onSelect, query = "", selected = [], v
     <div className="suggestion-cloud">
       {items.map((tag) => (
         <button
-          className="tag suggestion-tag"
+          className="suggestion-tag table-filter-chip"
           key={tag}
           onClick={() => onSelect(tag)}
           type="button"
@@ -1963,4 +1963,4 @@ function NoteEditForm({
   );
 }
 
-export { NoteEditForm };
+export { NoteEditForm, TagSuggestionCloud };

@@ -356,13 +356,65 @@ describe("table styles", () => {
     expect(chips[1]).toMatch(/min-width:\s*0/);
   });
 
-  // The Clear all affordance sits inside the tags filter; hovering it should
-  // stay in the warm accent family rather than snapping to near-black text.
+  // The editor's tag row and the filter row share one Clear all, so the hover
+  // stays in the warm accent family and no second, drifting rule exists.
   test("clear-all hover stays in the accent family", () => {
-    const rule = styles.match(/\.tags-filter-clear-all:hover\s*\{([^}]*)\}/);
+    const rule = styles.match(/\.table-filter-clear-all:hover\s*\{([^}]*)\}/);
     expect(rule).not.toBeNull();
     expect(rule[1]).toMatch(/color:\s*var\(--accent-strong\)/);
     expect(rule[1]).not.toMatch(/var\(--text\)/);
+    expect(styles).not.toMatch(/\.tags-filter-clear-all\s*\{/);
+  });
+
+  // The note editor's tag chips reuse the filter chip metrics rather than
+  // carrying a second set that can drift. Only the value's cursor and weight
+  // differ, because it is not an in-place editor inside `.field-block`.
+  test("the editor's tag chips defer to the filter chip rules", () => {
+    expect(styles).not.toMatch(/\.tags-filter-chip\s*\{/);
+    const value = styles.match(
+      /\.tags-filter-chip\s+\.table-filter-chip-value\s*\{([^}]*)\}/,
+    );
+    expect(value).not.toBeNull();
+    expect(value[1]).toMatch(/cursor:\s*default/);
+    expect(value[1]).toMatch(/font-weight:\s*600/);
+  });
+
+  // The chip is what the user acts on, so keyboard focus rings all of it
+  // rather than the small cross inside it.
+  test("keyboard focus rings the whole tag chip", () => {
+    const ring = styles.match(
+      /\.tags-filter-chip:has\(\.table-filter-chip-remove:focus-visible\)\s*\{([^}]*)\}/,
+    );
+    expect(ring).not.toBeNull();
+    expect(ring[1]).toMatch(/border-color:\s*var\(--accent\)/);
+    expect(ring[1]).toMatch(/outline:\s*2px solid var\(--accent-soft\)/);
+
+    const cross = styles.match(
+      /\.tags-filter-chip \.table-filter-chip-remove:is\(:focus-visible\)\s*\{([^}]*)\}/,
+    );
+    expect(cross).not.toBeNull();
+    expect(cross[1]).toMatch(/outline:\s*none/);
+  });
+
+  // Suggestions below the editor's tags field are the same chip as the ones
+  // above it: the button carries `.table-filter-chip` for the surface, and
+  // this rule only adds the padding the chip's inner value would supply.
+  test("tag suggestions use the filter chip surface", () => {
+    const chip = styles.match(/\.table-filter-chip\s*\{([^}]*)\}/);
+    expect(chip).not.toBeNull();
+    expect(chip[1]).toMatch(/height:\s*24px/);
+    expect(chip[1]).toMatch(/border-radius:\s*7px/);
+    expect(chip[1]).toMatch(/background:\s*var\(--accent-soft\)/);
+    expect(chip[1]).toMatch(/color:\s*var\(--accent-strong\)/);
+
+    const button = styles.match(/^\.suggestion-tag\s*\{([^}]*)\}/m);
+    expect(button).not.toBeNull();
+    expect(button[1]).toMatch(/padding:\s*0\s+8px/);
+    expect(button[1]).toMatch(/font-size:\s*0\.75rem/);
+    expect(button[1]).toMatch(/font-weight:\s*600/);
+    expect(button[1]).toMatch(/cursor:\s*pointer/);
+    // No second surface of its own: the `.tag` pill must not repaint it.
+    expect(styles).not.toMatch(/\.tag\.suggestion-tag\s*\{/);
   });
 
   // A filter that gains a value must keep the same surface as an empty one:

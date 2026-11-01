@@ -3550,30 +3550,28 @@ th[aria-sort="descending"] .sort-chevron {
   padding: 3px 6px;
 }
 
-.tags-filter-chip {
-  border: 0;
-  border-radius: var(--radius-pill);
-  padding: 2px 10px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-  font-size: 0.76rem;
+/* The chips themselves reuse the table filter's `.table-filter-chip` rules so
+   the editor's tag row and the filter row never drift apart. This class only
+   marks the combobox as filled (see the `:has` rule above), and the Clear all
+   button reuses `.table-filter-clear-all` for the same reason. */
+.tags-filter-chip .table-filter-chip-value {
+  /* The filter's value is click-to-edit; the note editor's is plain text. */
+  cursor: default;
+  /* `.field-block span` sets 700; the chip's own weight must win. */
   font-weight: 600;
-  white-space: nowrap;
 }
 
-.tags-filter-clear-all {
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 0.72rem;
-  text-decoration: underline;
-  white-space: nowrap;
-  padding: 2px 8px;
+/* The whole chip carries keyboard focus, not the 17px cross inside it: the
+   value is not editable in place, so the chip is the thing being acted on.
+   The ring waits for `:focus-visible` so a mouse click does not leave one. */
+.tags-filter-chip:has(.table-filter-chip-remove:focus-visible) {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 0;
 }
 
-.tags-filter-clear-all:hover {
-  color: var(--accent-strong);
+.tags-filter-chip .table-filter-chip-remove:is(:focus-visible) {
+  outline: none;
 }
 
 /* Scoped under the combobox (0,2,0) so the borderless inline input wins over
@@ -4722,11 +4720,20 @@ button.tag {
 .suggestion-cloud {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: 4px;
   margin-top: 12px;
 }
 
-.suggestion-tag,
+/* A suggestion is a clickable chip, so it borrows the filter chip's surface
+   via `.table-filter-chip` in the markup; it needs the same type size as the
+   chip's value and the inner padding the container normally gets from it. */
+.suggestion-tag {
+  padding: 0 8px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
 .removable-tag {
   border: 1px solid var(--border-soft);
 }
