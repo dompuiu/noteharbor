@@ -380,20 +380,21 @@ describe("table styles", () => {
   });
 
   // The chip is what the user acts on, so keyboard focus rings all of it
-  // rather than the small cross inside it.
+  // rather than the small control inside it — in the table filter and the
+  // note editor alike.
   test("keyboard focus rings the whole tag chip", () => {
     const ring = styles.match(
-      /\.tags-filter-chip:has\(\.table-filter-chip-remove:focus-visible\)\s*\{([^}]*)\}/,
+      /\.table-filter-chip:has\(:focus-visible\)\s*\{([^}]*)\}/,
     );
     expect(ring).not.toBeNull();
     expect(ring[1]).toMatch(/border-color:\s*var\(--accent\)/);
-    expect(ring[1]).toMatch(/outline:\s*2px solid var\(--accent-soft\)/);
+    expect(ring[1]).toMatch(/outline:\s*2px solid var\(--accent\)/);
 
-    const cross = styles.match(
-      /\.tags-filter-chip \.table-filter-chip-remove:is\(:focus-visible\)\s*\{([^}]*)\}/,
+    const inner = styles.match(
+      /\.table-filter-chip \.table-filter-chip-value:focus-visible,[^{]*\{([^}]*)\}/,
     );
-    expect(cross).not.toBeNull();
-    expect(cross[1]).toMatch(/outline:\s*none/);
+    expect(inner).not.toBeNull();
+    expect(inner[1]).toMatch(/outline:\s*none/);
   });
 
   // Suggestions below the editor's tags field are the same chip as the ones
@@ -508,7 +509,8 @@ describe("table styles", () => {
   });
 
   // Tabbing to a chip's remove cross should light it up exactly like a mouse
-  // hover: same red fill, with a ring so the focused target is still clear.
+  // hover: same red fill. The chip's own ring marks the focus, so the cross
+  // must not draw a second, hairline outline inside it.
   test("keyboard focus on a chip cross matches its hover state", () => {
     const fill = styles.match(
       /\.table-filter-chip-remove:hover,\s*\.table-filter-chip-remove:focus-visible\s*\{([^}]*)\}/,
@@ -517,26 +519,20 @@ describe("table styles", () => {
     expect(fill[1]).toMatch(/background:\s*var\(--danger\)/);
     expect(fill[1]).toMatch(/color:\s*var\(--accent-ink\)/);
 
-    const ring = styles.match(
-      /\.table-filter-chip-remove:focus-visible\s*\{\s*outline:\s*1px solid var\(--danger\)/,
+    expect(styles).toMatch(
+      /\.table-filter-chip \.table-filter-chip-remove:focus-visible\s*\{\s*outline:\s*none/,
     );
-    expect(ring).not.toBeNull();
   });
 
-  // The value slice is its own focus target in the table filter. Ring just
-  // that slice, with the chip's rounded left corners.
-  test("the chip value focuses with a hairline rounded left edge", () => {
+  // The value slice is its own focus target in the table filter, but the ring
+  // belongs to the whole chip: a slice-sized hairline was too easy to miss.
+  test("the chip value rings the whole chip, not a hairline slice", () => {
     const value = styles.match(/^\.table-filter-chip-value\s*\{([^}]*)\}/m);
     expect(value).not.toBeNull();
     expect(value[1]).toMatch(/height:\s*22px/);
     expect(value[1]).toMatch(/border-radius:\s*6px 0 0 6px/);
 
-    const ring = styles.match(
-      /\.table-filter-chip-value:focus-visible\s*\{([^}]*)\}/,
-    );
-    expect(ring).not.toBeNull();
-    expect(ring[1]).toMatch(/outline:\s*1px solid currentColor/);
-    expect(ring[1]).toMatch(/outline-offset:\s*-1px/);
+    expect(styles).not.toMatch(/\.table-filter-chip-value:focus-visible\s*\{/);
   });
 
   // Tag suggestions float on their own surface, and the create arm is split
