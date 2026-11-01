@@ -240,7 +240,7 @@ describe("NotesTable filter chips", () => {
     expect(screen.getByText("CCCC")).toBeInTheDocument();
   });
 
-  test("the Tags field opens a ranked suggestion list", async () => {
+  test("the Tags field opens its list only on typing or Down", async () => {
     getNotes.mockResolvedValue({
       notes: [
         note(1, {
@@ -261,12 +261,25 @@ describe("NotesTable filter chips", () => {
 
     await chooseField(user, "Tags");
 
+    // Picking the field only lands the caret in it: the list waits for an
+    // explicit open (typing or Down) rather than popping over the table.
+    expect(filterInput("Tags")).toHaveFocus();
+    expect(
+      screen.queryByRole("listbox", { name: "Tag suggestions" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Show tag suggestions" }),
+    ).toBeInTheDocument();
+
+    await user.keyboard("{ArrowDown}");
+
     const list = await screen.findByRole("listbox", {
       name: "Tag suggestions",
     });
     expect(
       within(list).getByRole("option", { name: "2 digits" }),
     ).toBeInTheDocument();
+    expect(filterInput("Tags")).toHaveFocus();
 
     await user.type(filterInput("Tags"), "2");
 
@@ -276,9 +289,10 @@ describe("NotesTable filter chips", () => {
     expect(
       within(list).getByRole("option", { name: "BNR: 298b" }),
     ).toBeInTheDocument();
+    // Creating a tag belongs to the note editor, not the table filter.
     expect(
-      within(list).getByRole("option", { name: /Create “2”/ }),
-    ).toBeInTheDocument();
+      within(list).queryByRole("option", { name: /Create/ }),
+    ).toBeNull();
   });
 
   test("picking a tag suggestion commits its chip", async () => {
@@ -298,6 +312,7 @@ describe("NotesTable filter chips", () => {
     await screen.findByText("AAAA");
     await chooseField(user, "Tags");
 
+    await user.keyboard("{ArrowDown}");
     const list = await screen.findByRole("listbox", {
       name: "Tag suggestions",
     });
@@ -314,7 +329,7 @@ describe("NotesTable filter chips", () => {
     ).toBeNull();
   });
 
-  test("a brand-new tag is offered as a create row", async () => {
+  test("an unknown tag has no create row but still commits on Enter", async () => {
     getNotes.mockResolvedValue({
       notes: [
         note(1, {
@@ -332,12 +347,15 @@ describe("NotesTable filter chips", () => {
     await chooseField(user, "Tags");
     await user.type(filterInput("Tags"), "never seen");
 
-    const list = await screen.findByRole("listbox", {
-      name: "Tag suggestions",
-    });
-    await user.click(
-      within(list).getByRole("option", { name: /Create “never seen”/ }),
-    );
+    expect(
+      screen.getByRole("listbox", { name: "Tag suggestions" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("No matching tags."),
+    ).toBeInTheDocument();
+    expect(screen.queryByRole("option", { name: /Create/ })).toBeNull();
+
+    await user.keyboard("{Enter}");
 
     expect(
       await screen.findByRole("button", {
@@ -633,5 +651,102 @@ describe("NotesTable filter chips", () => {
     expect(
       screen.queryByRole("button", { name: /^Edit Company/ }),
     ).toBeNull();
+  });
+});
+
+// The chips are the filter field's own continuation: Tab reaches them before
+// it reaches the toolbar's view controls, and Shift+Tab walks back the same
+// way. Only the DOM order decides this, so the assertions are plain tabs.
+describe("NotesTable filter bar tab order", () => {
+  function columnsButton() {
+    return screen.getByRole("button", { name: "Columns" });
+  }
+
+  test("Tab leaves the field for the Columns control when no chip exists", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await user.click(filterInput("Catalog"));
+    expect(filterInput("Catalog")).toHaveFocus();
+
+    await user.tab();
+
+    expect(columnsButton()).toHaveFocus();
+  });
+
+  test("Tab walks the chips before the Columns and Reset view controls", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Company", "PMG");
+    await commitChip(user, "Serial", "SER-3");
+
+    const firstValue = screen.getByRole("button", {
+      name: "Edit Company filter PMG",
+    });
+    const firstRemove = screen.getByRole("button", {
+      name: "Remove Company PMG",
+    });
+    const secondValue = screen.getByRole("button", {
+      name: "Edit Serial filter SER-3",
+    });
+    const secondRemove = screen.getByRole("button", {
+      name: "Remove Serial SER-3",
+    });
+    const clearAll = screen.getByRole("button", { name: "Clear all" });
+    const resetView = screen.getByRole("button", { name: "Reset view" });
+
+    await user.click(filterInput("Serial"));
+    await user.tab();
+    expect(firstValue).toHaveFocus();
+
+    await user.tab();
+    expect(firstRemove).toHaveFocus();
+
+    await user.tab();
+    expect(secondValue).toHaveFocus();
+
+    await user.tab();
+    expect(secondRemove).toHaveFocus();
+
+    await user.tab();
+    expect(clearAll).toHaveFocus();
+
+    await user.tab();
+    expect(columnsButton()).toHaveFocus();
+
+    await user.tab();
+    expect(resetView).toHaveFocus();
+  });
+
+  test("Shift+Tab walks the chips back to the filter field", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Company", "PMG");
+
+    const clearAll = screen.getByRole("button", { name: "Clear all" });
+    const firstValue = screen.getByRole("button", {
+      name: "Edit Company filter PMG",
+    });
+    const firstRemove = screen.getByRole("button", {
+      name: "Remove Company PMG",
+    });
+
+    columnsButton().focus();
+    await user.tab({ shift: true });
+    expect(clearAll).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(firstRemove).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(firstValue).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(filterInput("Company")).toHaveFocus();
   });
 });

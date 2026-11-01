@@ -31,7 +31,7 @@ const shortcutGroups = [
       { keys: ["c"], description: "Copy the focused note's details" },
       { keys: ["o"], description: "Open the focused note's actions menu" },
       { keys: ["a"], description: "Add a new note (after the focused row when one is focused, otherwise at the end)" },
-      { keys: ["↓"], description: "Jump from a filter field to the first row" },
+      { keys: ["↓"], description: "Jump from a filter field to the first row (Tags opens its suggestions first)" },
       { keys: ["Esc"], description: "Filters → first row → deselect → clear filters" },
     ],
   },

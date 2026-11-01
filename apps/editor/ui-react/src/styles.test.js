@@ -338,6 +338,24 @@ describe("table styles", () => {
     expect(placeholder[1]).toMatch(/color:\s*var\(--text-hint\)/);
   });
 
+  // The chip row closes the toolbar: it keeps its own line under the controls
+  // while sitting before them in the DOM, so Tab reaches the chips first. The
+  // row hands its bottom margin to the chips so the table does not move.
+  test("the chip row keeps its own line under the controls", () => {
+    const row = styles.match(/\.toolbar-row--table-controls\s*\{([^}]*)\}/);
+    expect(row).not.toBeNull();
+    expect(row[1]).toMatch(/row-gap:\s*10px/);
+    expect(row[1]).toMatch(/margin-bottom:\s*0/);
+
+    const chips = styles.match(
+      /\.toolbar-row--table-controls\s*>\s*\.table-filter-chips\s*\{([^}]*)\}/,
+    );
+    expect(chips).not.toBeNull();
+    expect(chips[1]).toMatch(/order:\s*1/);
+    expect(chips[1]).toMatch(/flex:\s*1 0 100%/);
+    expect(chips[1]).toMatch(/min-width:\s*0/);
+  });
+
   // The Clear all affordance sits inside the tags filter; hovering it should
   // stay in the warm accent family rather than snapping to near-black text.
   test("clear-all hover stays in the accent family", () => {
@@ -458,6 +476,29 @@ describe("table styles", () => {
     expect(rule[1]).toMatch(
       /border-top:\s*1px dashed var\(--border-control\)/,
     );
+  });
+
+  // A long tag list must not fall back to the platform's chunky bar: the
+  // dropdown draws a slim rounded thumb, and Firefox gets the thin variant.
+  test("tag suggestion lists scroll with a slim custom bar", () => {
+    const dropdown = styles.match(/\.tags-filter-dropdown\s*\{([^}]*)\}/);
+    expect(dropdown).not.toBeNull();
+    expect(dropdown[1]).toMatch(/scrollbar-width:\s*thin/);
+    expect(dropdown[1]).toMatch(/scrollbar-color:/);
+
+    const bar = styles.match(
+      /\.tags-filter-dropdown::-webkit-scrollbar\s*\{([^}]*)\}/,
+    );
+    expect(bar).not.toBeNull();
+    expect(bar[1]).toMatch(/width:\s*8px/);
+
+    const thumb = styles.match(
+      /\.tags-filter-dropdown::-webkit-scrollbar-thumb\s*\{([^}]*)\}/,
+    );
+    expect(thumb).not.toBeNull();
+    expect(thumb[1]).toMatch(/border-radius:\s*var\(--radius-pill\)/);
+    expect(thumb[1]).toMatch(/background:\s*var\(--border-control\)/);
+    expect(thumb[1]).toMatch(/background-clip:\s*padding-box/);
   });
 
   // A matched substring is marked in place: the row explains itself without

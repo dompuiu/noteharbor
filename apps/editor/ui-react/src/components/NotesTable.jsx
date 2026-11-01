@@ -1612,19 +1612,12 @@ function NotesTable({
     [filterDraft, tagNames],
   );
   const trimmedTagDraft = filterDraft.trim();
-  const tagCreateVisible =
-    Boolean(trimmedTagDraft) &&
-    !tagNames.some(
-      (name) => name.toLowerCase() === trimmedTagDraft.toLowerCase(),
-    );
-  const tagNavList = tagCreateVisible
-    ? [...tagMatches, `__create:${trimmedTagDraft}`]
-    : tagMatches;
+  // The filter only suggests tags that some note already carries. Creating a
+  // tag belongs to the note editor, so the filter list has no create arm.
   const tagListVisible =
     filterField === tagsColumnKey &&
     tagSuggestionOpen &&
-    Boolean(tagSuggestionPosition) &&
-    tagNavList.length > 0;
+    Boolean(tagSuggestionPosition);
 
   useEffect(() => {
     if (filterField !== tagsColumnKey || !tagSuggestionOpen) {
@@ -3465,6 +3458,11 @@ function NotesTable({
     closeTagSuggestions();
   }
 
+  function openTagSuggestions(index = -1) {
+    setTagSuggestionOpen(true);
+    setTagSuggestionIndex(index);
+  }
+
   function closeTagSuggestions() {
     setTagSuggestionOpen(false);
     setTagSuggestionIndex(-1);
@@ -3476,13 +3474,10 @@ function NotesTable({
     element?.scrollIntoView?.({ block: "nearest" });
   }
 
-  // A suggestion fills the Tags chip directly; the create row commits the
-  // typed text even though no note carries it yet.
-  function pickTagSuggestion(entry) {
-    const value = entry.startsWith("__create:")
-      ? entry.slice("__create:".length)
-      : entry;
-    commitFilterDraft(value);
+  // A suggestion fills the Tags chip directly. Unknown tags are not offered
+  // here: creating one is the note editor's job.
+  function pickTagSuggestion(tag) {
+    commitFilterDraft(tag);
     requestAnimationFrame(() => searchInputRef.current?.focus());
   }
 
@@ -3537,36 +3532,51 @@ function NotesTable({
   }
 
   function handleSearchKeyDown(event) {
-    const tagListOpen =
-      filterField === tagsColumnKey &&
-      tagSuggestionOpen &&
-      tagNavList.length > 0;
+    const tagsField = filterField === tagsColumnKey;
 
+    // The tags list opens on demand: typing opens it, and so does a plain
+    // Down. The other fields keep handing a plain Down to the first row.
     if (
-      tagListOpen &&
+      tagsField &&
+      !event.shiftKey &&
       (event.key === "ArrowDown" || event.key === "ArrowUp")
     ) {
       event.preventDefault();
+
+      if (!tagSuggestionOpen) {
+        if (event.key === "ArrowDown") {
+          openTagSuggestions(tagMatches.length ? 0 : -1);
+        }
+        return;
+      }
+
+      if (!tagMatches.length) {
+        return;
+      }
+
       setTagSuggestionIndex((current) => {
         const step = event.key === "ArrowDown" ? 1 : -1;
 
         if (current < 0) {
-          return event.key === "ArrowDown" ? 0 : tagNavList.length - 1;
+          return event.key === "ArrowDown" ? 0 : tagMatches.length - 1;
         }
 
-        return (current + step + tagNavList.length) % tagNavList.length;
+        return (current + step + tagMatches.length) % tagMatches.length;
       });
       return;
     }
+
+    const tagListOpen =
+      tagsField && tagSuggestionOpen && tagMatches.length > 0;
 
     if (
       tagListOpen &&
       event.key === "Enter" &&
       tagSuggestionIndex >= 0 &&
-      tagNavList[tagSuggestionIndex]
+      tagMatches[tagSuggestionIndex]
     ) {
       event.preventDefault();
-      pickTagSuggestion(tagNavList[tagSuggestionIndex]);
+      pickTagSuggestion(tagMatches[tagSuggestionIndex]);
       return;
     }
 
@@ -5439,13 +5449,6 @@ function NotesTable({
                 <FilterFieldMenu
                   onChange={(field) => {
                     setFilterField(field);
-
-                    if (field === tagsColumnKey) {
-                      // The input's onFocus handler still closes over the old
-                      // field, so open the list when the pick changes it.
-                      setTagSuggestionOpen(true);
-                    }
-
                     searchInputRef.current?.focus();
                   }}
                   options={[
@@ -5482,21 +5485,54 @@ function NotesTable({
                     setFilterDraft(event.target.value);
 
                     if (filterField === tagsColumnKey) {
-                      setTagSuggestionOpen(true);
-                      setTagSuggestionIndex(-1);
+                      openTagSuggestions();
                     }
                   }}
-                  onFocus={
-                    filterField === tagsColumnKey
-                      ? () => setTagSuggestionOpen(true)
-                      : undefined
-                  }
                   onKeyDown={handleSearchKeyDown}
                   placeholder={filterPlaceholder}
                   ref={searchInputRef}
                   type="search"
                   value={filterDraft}
                 />
+                {filterField === tagsColumnKey ? (
+                  // The list opens on demand: this chevron sits before the
+                  // shortcut and says "press Down to see the suggestions".
+                  <button
+                    aria-controls={
+                      tagListVisible
+                        ? "table-filter-tag-suggestions"
+                        : undefined
+                    }
+                    aria-expanded={tagListVisible}
+                    aria-haspopup="listbox"
+                    aria-label="Show tag suggestions"
+                    className={`table-filter-tags-toggle${tagListVisible ? " is-open" : ""}`}
+                    onClick={() => {
+                      if (tagSuggestionOpen) {
+                        closeTagSuggestions();
+                      } else {
+                        openTagSuggestions();
+                      }
+                      searchInputRef.current?.focus();
+                    }}
+                    onMouseDown={(event) => event.preventDefault()}
+                    tabIndex={-1}
+                    type="button"
+                  >
+                    <svg
+                      aria-hidden="true"
+                      fill="none"
+                      focusable="false"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2.4"
+                      viewBox="0 0 24 24"
+                    >
+                      <path d="m6 9 6 6 6-6" />
+                    </svg>
+                  </button>
+                ) : null}
                 {filterDraft.trim() ? (
                   <span aria-hidden="true" className="table-filter-enter">
                     ⏎ add
@@ -5540,34 +5576,115 @@ function NotesTable({
                           <HighlightMatch text={tag} query={trimmedTagDraft} />
                         </button>
                       ))}
-                      {tagCreateVisible ? (
-                        <button
-                          aria-selected={
-                            tagSuggestionIndex === tagMatches.length
-                          }
-                          className={`tags-filter-option tags-filter-option--create${tagSuggestionIndex === tagMatches.length ? " is-highlighted" : ""}`}
-                          onClick={() =>
-                            pickTagSuggestion(`__create:${trimmedTagDraft}`)
-                          }
-                          onMouseDown={(event) => event.preventDefault()}
-                          onMouseEnter={() =>
-                            setTagSuggestionIndex(tagMatches.length)
-                          }
-                          ref={
-                            tagSuggestionIndex === tagMatches.length
-                              ? scrollTagSuggestionIntoView
-                              : undefined
-                          }
-                          role="option"
-                          type="button"
+                      {!tagMatches.length ? (
+                        <div
+                          className="muted"
+                          style={{ padding: "6px 8px", fontSize: "0.82rem" }}
                         >
-                          + Create “{trimmedTagDraft}”
-                        </button>
+                          No matching tags.
+                        </div>
                       ) : null}
                     </div>,
                     document.body,
                   )
                 : null}
+              <div className="table-filter-chips">
+                {conditionGroups.length ? (
+                  <>
+                    {conditionGroups.map(({ field, items }, groupIndex) => (
+                      <Fragment key={field}>
+                        {groupIndex > 0 ? (
+                          <span className="table-filter-and">and</span>
+                        ) : null}
+                        <span className="table-filter-facet">
+                          <span className="table-filter-facet-label">
+                            {filterFieldLabel(field)}
+                          </span>
+                          {items.map((condition, index) => (
+                            <Fragment key={condition.id}>
+                              {index > 0 ? (
+                                <span className="table-filter-or">or</span>
+                              ) : null}
+                              <span
+                                className={`table-filter-chip${condition.negated ? " table-filter-chip--negated" : ""}`}
+                              >
+                                {editingConditionId === condition.id ? (
+                                  <input
+                                    aria-label={`Edit ${filterFieldLabel(field)} filter`}
+                                    autoFocus
+                                    className="table-filter-chip-input"
+                                    onBlur={commitConditionEdit}
+                                    onChange={(event) =>
+                                      setConditionDraft(event.target.value)
+                                    }
+                                    onFocus={(event) =>
+                                      event.currentTarget.select()
+                                    }
+                                    onKeyDown={(event) => {
+                                      if (event.key === "Enter") {
+                                        event.preventDefault();
+                                        commitConditionEdit();
+                                      } else if (event.key === "Escape") {
+                                        event.preventDefault();
+                                        cancelConditionEdit();
+                                      }
+                                    }}
+                                    value={conditionDraft}
+                                  />
+                                ) : (
+                                  <>
+                                    <button
+                                      aria-label={`Edit ${filterFieldLabel(field)} filter ${condition.value}`}
+                                      className="table-filter-chip-value"
+                                      onClick={() => startConditionEdit(condition)}
+                                      title="Edit value"
+                                      type="button"
+                                    >
+                                      {condition.negated ? "!" : ""}
+                                      {condition.value}
+                                    </button>
+                                    <button
+                                      aria-label={`Remove ${filterFieldLabel(field)} ${condition.negated ? "not " : ""}${condition.value}`}
+                                      className="table-filter-chip-remove"
+                                      onClick={() => removeCondition(condition.id)}
+                                      type="button"
+                                    >
+                                      <svg
+                                        aria-hidden="true"
+                                        fill="none"
+                                        stroke="currentColor"
+                                        strokeLinecap="round"
+                                        strokeWidth="1.6"
+                                        viewBox="0 0 12 12"
+                                      >
+                                        <path d="m2.5 2.5 7 7M9.5 2.5l-7 7" />
+                                      </svg>
+                                    </button>
+                                  </>
+                                )}
+                              </span>
+                            </Fragment>
+                          ))}
+                        </span>
+                      </Fragment>
+                    ))}
+                    <button
+                      className="table-filter-clear-all"
+                      onClick={clearAllFilters}
+                      type="button"
+                    >
+                      Clear all
+                    </button>
+                  </>
+                ) : (
+                  <span className="table-filter-chips-empty">
+                    {
+                      "No filters yet — pick a field, type, press ⏎. Same field ORs, different fields AND."
+                    }
+                  </span>
+                )}
+              </div>
+
               <ColumnPicker
                 columns={hideableColumns}
                 disabledColumnKey={lastVisibleDataColumnKey}
@@ -5585,103 +5702,6 @@ function NotesTable({
                   </button>
                 ) : null}
               </div>
-            </div>
-
-            <div className="table-filter-chips">
-              {conditionGroups.length ? (
-                <>
-                  {conditionGroups.map(({ field, items }, groupIndex) => (
-                    <Fragment key={field}>
-                      {groupIndex > 0 ? (
-                        <span className="table-filter-and">and</span>
-                      ) : null}
-                      <span className="table-filter-facet">
-                        <span className="table-filter-facet-label">
-                          {filterFieldLabel(field)}
-                        </span>
-                        {items.map((condition, index) => (
-                          <Fragment key={condition.id}>
-                            {index > 0 ? (
-                              <span className="table-filter-or">or</span>
-                            ) : null}
-                            <span
-                              className={`table-filter-chip${condition.negated ? " table-filter-chip--negated" : ""}`}
-                            >
-                              {editingConditionId === condition.id ? (
-                                <input
-                                  aria-label={`Edit ${filterFieldLabel(field)} filter`}
-                                  autoFocus
-                                  className="table-filter-chip-input"
-                                  onBlur={commitConditionEdit}
-                                  onChange={(event) =>
-                                    setConditionDraft(event.target.value)
-                                  }
-                                  onFocus={(event) =>
-                                    event.currentTarget.select()
-                                  }
-                                  onKeyDown={(event) => {
-                                    if (event.key === "Enter") {
-                                      event.preventDefault();
-                                      commitConditionEdit();
-                                    } else if (event.key === "Escape") {
-                                      event.preventDefault();
-                                      cancelConditionEdit();
-                                    }
-                                  }}
-                                  value={conditionDraft}
-                                />
-                              ) : (
-                                <>
-                                  <button
-                                    aria-label={`Edit ${filterFieldLabel(field)} filter ${condition.value}`}
-                                    className="table-filter-chip-value"
-                                    onClick={() => startConditionEdit(condition)}
-                                    title="Edit value"
-                                    type="button"
-                                  >
-                                    {condition.negated ? "!" : ""}
-                                    {condition.value}
-                                  </button>
-                                  <button
-                                    aria-label={`Remove ${filterFieldLabel(field)} ${condition.negated ? "not " : ""}${condition.value}`}
-                                    className="table-filter-chip-remove"
-                                    onClick={() => removeCondition(condition.id)}
-                                    type="button"
-                                  >
-                                    <svg
-                                      aria-hidden="true"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeLinecap="round"
-                                      strokeWidth="1.6"
-                                      viewBox="0 0 12 12"
-                                    >
-                                      <path d="m2.5 2.5 7 7M9.5 2.5l-7 7" />
-                                    </svg>
-                                  </button>
-                                </>
-                              )}
-                            </span>
-                          </Fragment>
-                        ))}
-                      </span>
-                    </Fragment>
-                  ))}
-                  <button
-                    className="table-filter-clear-all"
-                    onClick={clearAllFilters}
-                    type="button"
-                  >
-                    Clear all
-                  </button>
-                </>
-              ) : (
-                <span className="table-filter-chips-empty">
-                  {
-                    "No filters yet — pick a field, type, press ⏎. Same field ORs, different fields AND."
-                  }
-                </span>
-              )}
             </div>
 
             <div
