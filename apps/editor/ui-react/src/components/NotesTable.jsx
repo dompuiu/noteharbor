@@ -74,6 +74,8 @@ import { NoCollectionsPrompt } from "./NoCollectionsPrompt.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 import { TableFilterBar } from "./TableFilterBar.jsx";
 import { TableRows } from "./TableRows.jsx";
+import { TableBulkBar } from "./TableBulkBar.jsx";
+import { TableMoveToast } from "./TableMoveToast.jsx";
 import { TableScrollbar } from "./TableScrollbar.jsx";
 
 export function HomeHero() {
@@ -967,10 +969,10 @@ function NotesTable({
   }, [selectedIds]);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
-  const [moveToast, setMoveToast] = useState("");
-  const moveToastTimerRef = useRef(null);
+  // The move toast owns its message and timer; the table only tells it when to
+  // show one.
+  const moveToastRef = useRef(null);
   const [loading, setLoading] = useState(true);
-  const [bulkLoading, setBulkLoading] = useState(false);
   const [reorderLoading, setReorderLoading] = useState(false);
   const [slideshowNotes, setSlideshowNotes] = useState([]);
   const [activeNoteId, setActiveNoteId] = useState(null);
@@ -993,14 +995,6 @@ function NotesTable({
   confirmOpenRef.current = confirmOpen;
   const handleEditorDirtyChange = useCallback((dirty) => {
     editorDirtyRef.current = dirty;
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (moveToastTimerRef.current) {
-        clearTimeout(moveToastTimerRef.current);
-      }
-    };
   }, []);
 
   // A not-yet-saved collection has no view to rename: its header is the
@@ -2957,41 +2951,6 @@ function NotesTable({
     );
   }
 
-  function handleBulkBarKeyDown(event) {
-    if (event.key !== "Tab") {
-      return;
-    }
-
-    const items = Array.from(
-      bulkBarRef.current?.querySelectorAll("button:not([disabled])") ?? [],
-    );
-
-    if (!items.length) {
-      return;
-    }
-
-    const atFirst = document.activeElement === items[0];
-    const atLast = document.activeElement === items[items.length - 1];
-
-    // The bar sits between a row and its controls in the tab cycle:
-    // forward from Clear lands on the row's checkbox, backward from Delete
-    // lands on the row's actions menu button.
-    if (event.shiftKey && atFirst) {
-      event.preventDefault();
-      event.stopPropagation();
-      selectionTabArmedRef.current = false;
-      focusRowActionsButtonByNoteId(bulkBarExitNoteId());
-      return;
-    }
-
-    if (!event.shiftKey && atLast) {
-      event.preventDefault();
-      event.stopPropagation();
-      selectionTabArmedRef.current = false;
-      focusRowCheckboxByNoteId(bulkBarExitNoteId());
-    }
-  }
-
   function moveRowFocus(offset) {
     if (!orderedNotes.length) {
       return null;
@@ -3277,16 +3236,6 @@ function NotesTable({
     );
   }
 
-  function showMoveToast(message) {
-    setMoveToast(message);
-
-    if (moveToastTimerRef.current) {
-      clearTimeout(moveToastTimerRef.current);
-    }
-
-    moveToastTimerRef.current = setTimeout(() => setMoveToast(""), 4000);
-  }
-
   function handleSaveEditedNote(
     updatedNote,
     reorderedNotes,
@@ -3307,7 +3256,7 @@ function NotesTable({
       setSlideshowNotes((current) =>
         dropNoteAndRenumber(current, updatedNote.id),
       );
-      showMoveToast(`Moved to ${movedToCollection.name}.`);
+      moveToastRef.current?.show(`Moved to ${movedToCollection.name}.`);
     } else if (reorderedNotes) {
       setNotes(reorderedNotes);
       setSlideshowNotes((current) => {
@@ -3491,7 +3440,7 @@ function NotesTable({
   }
 
   async function handleBulkDelete() {
-    if (!selectedIds.length || bulkLoading) {
+    if (!selectedIds.length) {
       return;
     }
 
@@ -3537,11 +3486,6 @@ function NotesTable({
         return;
       }
 
-      // The button reports progress only once work has started: it used to be
-      // set before the dialog opened, so the pill behind an unanswered
-      // "Delete 4 selected notes?" already read "Working…".
-      setBulkLoading(true);
-
       // Land the cursor where the selection started: the row that takes
       // the topmost deleted slot, or the new last row when the selection
       // ran to the end.
@@ -3558,8 +3502,6 @@ function NotesTable({
       // next list change to pick up.
       deferredRowFocusNoteIdRef.current = null;
       setActionError(actionError.message);
-    } finally {
-      setBulkLoading(false);
     }
   }
 
@@ -4396,11 +4338,7 @@ function NotesTable({
         ) : null}
         {loadError ? <p className="error-text">{loadError}</p> : null}
         {actionError ? <p className="error-text">{actionError}</p> : null}
-        {moveToast ? (
-          <div className="scrape-toast scrape-toast--success" role="status">
-            {moveToast}
-          </div>
-        ) : null}
+        <TableMoveToast toastRef={moveToastRef} />
 
         {!loading && !loadError ? (
           <>
@@ -4634,52 +4572,20 @@ function NotesTable({
               />
               </div>
               {selectedIds.length ? (
-                <div
-                  aria-label="Selection actions"
-                  className="table-bulk-bar"
-                  onKeyDown={handleBulkBarKeyDown}
-                  ref={bulkBarRef}
-                  role="region"
-                >
-                  <span className="table-bulk-bar-count">
-                    {selectedIds.length} selected
-                  </span>
-                  <span
-                    aria-hidden="true"
-                    className="table-bulk-bar-separator"
-                  />
-                  <button
-                    className="table-bulk-bar-delete"
-                    disabled={bulkLoading}
-                    onClick={handleBulkDelete}
-                    type="button"
-                  >
-                    {bulkLoading ? "Working..." : "Delete"}
-                  </button>
-                  <button
-                    aria-label="Clear selection"
-                    className="table-bulk-bar-clear"
-                    onClick={clearSelection}
-                    title="Clear selection"
-                    type="button"
-                  >
-                    <svg
-                      aria-hidden="true"
-                      focusable="false"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      width="13"
-                    >
-                      <path
-                        d="M6 6l12 12M18 6L6 18"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeWidth="2"
-                      />
-                    </svg>
-                  </button>
-                </div>
+                <TableBulkBar
+                  barRef={bulkBarRef}
+                  onClear={clearSelection}
+                  onDelete={handleBulkDelete}
+                  onLeaveBackward={() => {
+                    selectionTabArmedRef.current = false;
+                    focusRowActionsButtonByNoteId(bulkBarExitNoteId());
+                  }}
+                  onLeaveForward={() => {
+                    selectionTabArmedRef.current = false;
+                    focusRowCheckboxByNoteId(bulkBarExitNoteId());
+                  }}
+                  selectedCount={selectedIds.length}
+                />
               ) : null}
             </div>
             <div className="table-footer-hint">
