@@ -165,6 +165,13 @@ describe("a delete confirmation names the note", () => {
       within(dialog).getByText("Delete 3 selected notes?"),
     ).toBeInTheDocument();
 
+    // The bar's pill reports progress only once the work starts, so an
+    // unanswered confirmation must not read as if the delete already ran.
+    const bulkDelete = container.querySelector(".table-bulk-bar-delete");
+    expect(bulkDelete).toBeEnabled();
+    expect(bulkDelete).toHaveTextContent("Delete");
+    expect(screen.queryByRole("button", { name: "Working..." })).toBeNull();
+
     const listed = Array.from(dialog.querySelectorAll("li")).map((item) =>
       item.textContent,
     );

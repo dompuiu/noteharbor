@@ -1,7 +1,14 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { tableTagClass } from "../lib/tagChipPlan.js";
 
-const tableTagClass = "tag table-tag";
+// The popover's size and its hover delays. They size the box the position
+// maths works against and pace opening so a pointer passing over the chip
+// does not flash a tag list.
+const tagsPopoverWidth = 280;
+const tagsPopoverMaxHeight = 320;
+const tagsPopoverOpenDelay = 300;
+const tagsPopoverCloseDelay = 150;
 
 // Anchors the popover under `bounds` (the trigger's rect), flipping above it
 // when there isn't room below, given the popover's (real or estimated) height.

@@ -7,6 +7,27 @@ import { parseGradeValue } from "../lib/tableColumns.js";
 // One note row. The memo boundary lives here: props are plain values plus one
 // stable `handlers` object, so moving the cursor, ticking a checkbox or
 // hovering a thumbnail re-renders only the rows whose props changed.
+//
+// The contract, and what must stay true of it:
+//
+// - `note`: the server object itself. Its identity is stable until a refetch,
+//   so a parent commit cannot make a row render by rebuilding a copy of it.
+// - `index`: the note's position in the filtered list. Zebra parity reads it,
+//   and it only changes when the list does.
+// - `isSelected`, `isActive`, `isDragging`, `dropPlacement`: the four row-level
+//   facts the table owns.
+// - `model`: everything derived from the note and the table geometry — filter
+//   marks, each cell's class and pinned offset, the thumbnail, the tags plan.
+//   It is bundled because all of it is rebuilt together when the note, the
+//   columns or the filter change, and a row must never recompute any of it.
+// - `columns`, `showGutter`, `totalColumnCount`, `canReorder`: the table's
+//   structure at this commit.
+// - `handlers`: one object with a stable identity; every member reads live
+//   state through a ref instead of closing over it.
+//
+// Nothing here may become a fresh object, array or function per parent render:
+// a new `columns` array or an inline handler re-renders every row, which is the
+// cost this boundary exists to avoid.
 export const NoteRow = memo(function NoteRow({
   canReorder,
   columns,

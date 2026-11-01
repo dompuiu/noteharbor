@@ -822,7 +822,6 @@ describe("table styles", () => {
     const cell = styles.match(/\.table-sticky-cell\s*\{([^}]*)\}/);
     expect(cell[1]).not.toMatch(/outline:/);
     expect(cell[1]).not.toMatch(/overflow:\s*hidden/);
-
   });
 
   // The handle fills its whole cell in every defined state. Focusing a row
@@ -1104,7 +1103,6 @@ describe("table styles", () => {
     expect(styles).toMatch(
       /th\[aria-sort="descending"\]\s+\.sort-chevron\s*\{[^}]*transform:\s*rotate\(180deg\)/,
     );
-
   });
 });
 

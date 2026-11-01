@@ -62,8 +62,8 @@ import {
 import { buildNoteRowModel } from "../lib/noteRowModel.js";
 import {
   cellClass,
-  pickFirstAvailableImage,
-  tableThumbnailSlots,
+  noteThumbnailPath,
+  stickyCellAttributes,
 } from "../lib/tableCells.jsx";
 import { conditionsFromInput, makeCondition } from "../lib/tableFilters.js";
 import { ColumnPicker } from "./ColumnPicker.jsx";
@@ -74,6 +74,8 @@ import { NoCollectionsPrompt } from "./NoCollectionsPrompt.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 import { TableFilterBar } from "./TableFilterBar.jsx";
 import { TableRows } from "./TableRows.jsx";
+import { TableBulkBar } from "./TableBulkBar.jsx";
+import { TableMoveToast } from "./TableMoveToast.jsx";
 import { TableScrollbar } from "./TableScrollbar.jsx";
 
 export function HomeHero() {
@@ -139,10 +141,6 @@ function noteIdentityDetails(note) {
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)
     .join(" · ");
-}
-
-function noteThumbPath(note) {
-  return pickFirstAvailableImage(note, tableThumbnailSlots)?.path ?? null;
 }
 
 function serializeConditions(conditions) {
@@ -807,8 +805,9 @@ function NotesTable({
   const rowElementMapRef = useRef(new Map());
   const rowActionsMenuMapRef = useRef(new Map());
   const thumbPreviewElementMapRef = useRef(new Map());
-  // Drag feedback lives in the rows (see TableRows.jsx); this mirror is what
-  // the shell's edge auto-scroll reads while a note is in the air.
+  // Drag feedback lives in the rows (see TableRows.jsx), which are its only
+  // writer; this ref mirrors it synchronously so the shell's edge auto-scroll
+  // can ask whether a note is in the air without a table render.
   const dragStateRef = useRef({ draggedNoteId: null, dropTarget: null });
   const tableScreenRef = useRef(null);
   const tableShellRef = useRef(null);
@@ -967,10 +966,10 @@ function NotesTable({
   }, [selectedIds]);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
-  const [moveToast, setMoveToast] = useState("");
-  const moveToastTimerRef = useRef(null);
+  // The move toast owns its message and timer; the table only tells it when to
+  // show one.
+  const moveToastRef = useRef(null);
   const [loading, setLoading] = useState(true);
-  const [bulkLoading, setBulkLoading] = useState(false);
   const [reorderLoading, setReorderLoading] = useState(false);
   const [slideshowNotes, setSlideshowNotes] = useState([]);
   const [activeNoteId, setActiveNoteId] = useState(null);
@@ -993,14 +992,6 @@ function NotesTable({
   confirmOpenRef.current = confirmOpen;
   const handleEditorDirtyChange = useCallback((dirty) => {
     editorDirtyRef.current = dirty;
-  }, []);
-
-  useEffect(() => {
-    return () => {
-      if (moveToastTimerRef.current) {
-        clearTimeout(moveToastTimerRef.current);
-      }
-    };
   }, []);
 
   // A not-yet-saved collection has no view to rename: its header is the
@@ -2957,41 +2948,6 @@ function NotesTable({
     );
   }
 
-  function handleBulkBarKeyDown(event) {
-    if (event.key !== "Tab") {
-      return;
-    }
-
-    const items = Array.from(
-      bulkBarRef.current?.querySelectorAll("button:not([disabled])") ?? [],
-    );
-
-    if (!items.length) {
-      return;
-    }
-
-    const atFirst = document.activeElement === items[0];
-    const atLast = document.activeElement === items[items.length - 1];
-
-    // The bar sits between a row and its controls in the tab cycle:
-    // forward from Clear lands on the row's checkbox, backward from Delete
-    // lands on the row's actions menu button.
-    if (event.shiftKey && atFirst) {
-      event.preventDefault();
-      event.stopPropagation();
-      selectionTabArmedRef.current = false;
-      focusRowActionsButtonByNoteId(bulkBarExitNoteId());
-      return;
-    }
-
-    if (!event.shiftKey && atLast) {
-      event.preventDefault();
-      event.stopPropagation();
-      selectionTabArmedRef.current = false;
-      focusRowCheckboxByNoteId(bulkBarExitNoteId());
-    }
-  }
-
   function moveRowFocus(offset) {
     if (!orderedNotes.length) {
       return null;
@@ -3068,12 +3024,9 @@ function NotesTable({
     }
 
     const headerHeight = scroller.querySelector("thead")?.offsetHeight ?? 0;
-    const measuredRowHeight =
-      scroller.querySelector("tbody tr.table-row-link")?.offsetHeight ??
-      rowHeightEstimate;
     const pageSize = Math.max(
       1,
-      Math.floor((scroller.clientHeight - headerHeight) / measuredRowHeight),
+      Math.floor((scroller.clientHeight - headerHeight) / rowHeightEstimate),
     );
     const currentIndex = orderedNotes.findIndex(
       (note) => note.id === focusedRowIdRef.current,
@@ -3277,16 +3230,6 @@ function NotesTable({
     );
   }
 
-  function showMoveToast(message) {
-    setMoveToast(message);
-
-    if (moveToastTimerRef.current) {
-      clearTimeout(moveToastTimerRef.current);
-    }
-
-    moveToastTimerRef.current = setTimeout(() => setMoveToast(""), 4000);
-  }
-
   function handleSaveEditedNote(
     updatedNote,
     reorderedNotes,
@@ -3307,7 +3250,7 @@ function NotesTable({
       setSlideshowNotes((current) =>
         dropNoteAndRenumber(current, updatedNote.id),
       );
-      showMoveToast(`Moved to ${movedToCollection.name}.`);
+      moveToastRef.current?.show(`Moved to ${movedToCollection.name}.`);
     } else if (reorderedNotes) {
       setNotes(reorderedNotes);
       setSlideshowNotes((current) => {
@@ -3490,8 +3433,8 @@ function NotesTable({
     }
   }
 
-  async function handleBulkDelete() {
-    if (!selectedIds.length || bulkLoading) {
+  async function handleBulkDelete(reportWorkStarted) {
+    if (!selectedIds.length) {
       return;
     }
 
@@ -3537,10 +3480,8 @@ function NotesTable({
         return;
       }
 
-      // The button reports progress only once work has started: it used to be
-      // set before the dialog opened, so the pill behind an unanswered
-      // "Delete 4 selected notes?" already read "Working…".
-      setBulkLoading(true);
+      // From here the rows are going away, so the bar may say it is working.
+      reportWorkStarted?.();
 
       // Land the cursor where the selection started: the row that takes
       // the topmost deleted slot, or the new last row when the selection
@@ -3558,8 +3499,6 @@ function NotesTable({
       // next list change to pick up.
       deferredRowFocusNoteIdRef.current = null;
       setActionError(actionError.message);
-    } finally {
-      setBulkLoading(false);
     }
   }
 
@@ -3568,7 +3507,10 @@ function NotesTable({
       notes.find((entry) => entry.id === noteId) ??
       slideshowNotes.find((entry) => entry.id === noteId) ??
       null;
-    const thumbnail = note ? noteThumbPath(note) : null;
+    // The row model carries this for every note in the painted list, but a
+    // delete opened from the slideshow can name a note a filter has hidden
+    // from the table, so the confirmation asks the shared derivation.
+    const thumbnail = note ? noteThumbnailPath(note) : null;
     const details = note ? noteIdentityDetails(note) : "";
     const confirmed = await requestConfirmation({
       title: `Delete ${note ? noteDisplayName(note) : `note ${noteId}`}?`,
@@ -3850,24 +3792,14 @@ function NotesTable({
     return true;
   }
 
-  // Header cells share the row cells' pinning contract.
-  function stickyCellAttributes(column, baseClassName) {
-    if (!column.sticky) {
-      return baseClassName ? { className: baseClassName } : {};
-    }
-
-    return {
-      className: [
-        baseClassName,
-        "table-sticky-cell",
-        column.key === lastStickyColumnKey ? "table-sticky-end" : null,
-      ]
-        .filter(Boolean)
-        .join(" "),
-      style: {
-        "--table-sticky-left": `${stickyLeftByColumn[column.key] ?? 0}px`,
-      },
-    };
+  // Header cells share the row cells' pinning contract. The pinning data is
+  // the table's, so the header binds it here and the composition itself lives
+  // with the rest of the cell classes.
+  function tableCellAttributes(column) {
+    return stickyCellAttributes(column, cellClass(column), {
+      lastStickyColumnKey,
+      stickyLeftByColumn,
+    });
   }
 
   function registerRowElement(noteId, element) {
@@ -4396,11 +4328,7 @@ function NotesTable({
         ) : null}
         {loadError ? <p className="error-text">{loadError}</p> : null}
         {actionError ? <p className="error-text">{actionError}</p> : null}
-        {moveToast ? (
-          <div className="scrape-toast scrape-toast--success" role="status">
-            {moveToast}
-          </div>
-        ) : null}
+        <TableMoveToast toastRef={moveToastRef} />
 
         {!loading && !loadError ? (
           <>
@@ -4480,10 +4408,7 @@ function NotesTable({
                               <th
                                 key={column.key}
                                 scope="col"
-                                {...stickyCellAttributes(
-                                  column,
-                                  cellClass(column),
-                                )}
+                                {...tableCellAttributes(column)}
                               />
                             );
                           }
@@ -4493,10 +4418,7 @@ function NotesTable({
                               <th
                                 key={column.key}
                                 scope="col"
-                                {...stickyCellAttributes(
-                                  column,
-                                  cellClass(column),
-                                )}
+                                {...tableCellAttributes(column)}
                               >
                                 <input
                                   aria-label="Select all visible rows"
@@ -4517,19 +4439,10 @@ function NotesTable({
 
                             return (
                               <th
-                                className={[
-                                  alignmentClass(column),
-                                  column.isTags ? "tags-column" : null,
-                                ]
-                                  .filter(Boolean)
-                                  .join(" ")}
                                 aria-label={isActions ? column.label : undefined}
                                 key={column.key}
                                 scope="col"
-                                {...stickyCellAttributes(
-                                  column,
-                                  cellClass(column),
-                                )}
+                                {...tableCellAttributes(column)}
                               >
                                 {isActions ? null : column.label}
                               </th>
@@ -4537,7 +4450,6 @@ function NotesTable({
                           }
 
                           const isSorted = sortKey === column.key;
-                          const className = cellClass(column);
 
                           return (
                             <th
@@ -4548,19 +4460,9 @@ function NotesTable({
                                     : "descending"
                                   : "none"
                               }
-                              className={className}
                               key={column.key}
                               scope="col"
-                              {...stickyCellAttributes(
-                                column,
-                                column.isTags ? "tags-column" : undefined,
-                              )}
-                              key={column.key}
-                              scope="col"
-                              {...stickyCellAttributes(
-                                column,
-                                column.isTags ? "tags-column" : undefined,
-                              )}
+                              {...tableCellAttributes(column)}
                             >
                               <button
                                 className={`sort-button${isSorted ? " sort-button--active" : ""}`}
@@ -4634,52 +4536,20 @@ function NotesTable({
               />
               </div>
               {selectedIds.length ? (
-                <div
-                  aria-label="Selection actions"
-                  className="table-bulk-bar"
-                  onKeyDown={handleBulkBarKeyDown}
-                  ref={bulkBarRef}
-                  role="region"
-                >
-                  <span className="table-bulk-bar-count">
-                    {selectedIds.length} selected
-                  </span>
-                  <span
-                    aria-hidden="true"
-                    className="table-bulk-bar-separator"
-                  />
-                  <button
-                    className="table-bulk-bar-delete"
-                    disabled={bulkLoading}
-                    onClick={handleBulkDelete}
-                    type="button"
-                  >
-                    {bulkLoading ? "Working..." : "Delete"}
-                  </button>
-                  <button
-                    aria-label="Clear selection"
-                    className="table-bulk-bar-clear"
-                    onClick={clearSelection}
-                    title="Clear selection"
-                    type="button"
-                  >
-                    <svg
-                      aria-hidden="true"
-                      focusable="false"
-                      height="13"
-                      viewBox="0 0 24 24"
-                      width="13"
-                    >
-                      <path
-                        d="M6 6l12 12M18 6L6 18"
-                        fill="none"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeWidth="2"
-                      />
-                    </svg>
-                  </button>
-                </div>
+                <TableBulkBar
+                  barRef={bulkBarRef}
+                  onClear={clearSelection}
+                  onDelete={handleBulkDelete}
+                  onLeaveBackward={() => {
+                    selectionTabArmedRef.current = false;
+                    focusRowActionsButtonByNoteId(bulkBarExitNoteId());
+                  }}
+                  onLeaveForward={() => {
+                    selectionTabArmedRef.current = false;
+                    focusRowCheckboxByNoteId(bulkBarExitNoteId());
+                  }}
+                  selectedCount={selectedIds.length}
+                />
               ) : null}
             </div>
             <div className="table-footer-hint">
