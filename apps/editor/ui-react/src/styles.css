@@ -2883,9 +2883,9 @@ td:is(
 
 /* Body density: 13.5px text in a 46px row. Vertical padding stays at 0: the
    30px row menu button plus 8px top and bottom would otherwise floor the row
-   at 47px, and the prototype's compact rows have none. The virtualizer's
-   estimate matches (rowHeightEstimate), and real measurements still win once
-   rows mount. */
+   at 47px, and the prototype's compact rows have none. This height is exact:
+   the virtualizer's estimate (rowHeightEstimate) matches it and rows are never
+   measured after mount. */
 tbody td {
   /* 46px keeps the table as dense as it was; the 32px front image still sits
      in it with 7px above and below. */

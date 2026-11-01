@@ -3023,12 +3023,9 @@ function NotesTable({
     }
 
     const headerHeight = scroller.querySelector("thead")?.offsetHeight ?? 0;
-    const measuredRowHeight =
-      scroller.querySelector("tbody tr.table-row-link")?.offsetHeight ??
-      rowHeightEstimate;
     const pageSize = Math.max(
       1,
-      Math.floor((scroller.clientHeight - headerHeight) / measuredRowHeight),
+      Math.floor((scroller.clientHeight - headerHeight) / rowHeightEstimate),
     );
     const currentIndex = orderedNotes.findIndex(
       (note) => note.id === focusedRowIdRef.current,
