@@ -116,11 +116,53 @@ async function scrollBy(scroller, offset) {
   await flushFrame();
 }
 
+function pointerEvent(type, props) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.assign(event, props);
+  return event;
+}
+
+function dragEvent(type, props) {
+  const event = new Event(type, { bubbles: true, cancelable: true });
+  Object.assign(event, props);
+  return event;
+}
+
+function makeDataTransfer() {
+  return {
+    effectAllowed: "",
+    setData: vi.fn(),
+    setDragImage: vi.fn(),
+    getData: vi.fn(() => ""),
+  };
+}
+
+// jsdom has no real horizontal overflow, so the pan helpers are told the
+// scroller is 1600 wide inside a 1000 viewport.
+function armHorizontalOverflow(scroller) {
+  Object.defineProperty(scroller, "scrollWidth", {
+    configurable: true,
+    value: 1600,
+  });
+  Object.defineProperty(scroller, "clientWidth", {
+    configurable: true,
+    value: 1000,
+  });
+  scroller.scrollLeft = 0;
+  return scroller;
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.clear();
   virtualizerStats.renders = 0;
   resetNoteRowRenders();
+  // A drag preview is a clone appended to the document body, outside React's
+  // tree, so it outlives the table that made it. Drop any before the next
+  // render so queries only ever see the mounted table.
+  document
+    .querySelectorAll(".table-drag-preview")
+    .forEach((preview) => preview.remove());
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
     width: 1000,
@@ -214,6 +256,81 @@ describe("NotesTable render budget", () => {
       "tbody tr.table-row-link",
     ).length;
     expect(noteRowRenderCount()).toBeLessThanOrEqual(visibleRows);
+  });
+
+  test("panning the columns renders no note rows and no table commit", async () => {
+    getNotes.mockResolvedValue({ notes: manyNotes(60) });
+    const { container } = renderTable();
+
+    await screen.findByText("NOTE-1");
+    const scroller = armHorizontalOverflow(scrollerFor(container));
+    setScrollMetrics(scroller);
+    await flushFrame();
+
+    const panSurface = screen.getByText("NOTE-1");
+    resetNoteRowRenders();
+    virtualizerStats.renders = 0;
+
+    await act(async () => {
+      panSurface.dispatchEvent(
+        pointerEvent("pointerdown", {
+          button: 0,
+          clientX: 900,
+          clientY: 300,
+          pointerId: 7,
+          pointerType: "mouse",
+        }),
+      );
+      panSurface.dispatchEvent(
+        pointerEvent("pointermove", {
+          button: -1,
+          clientX: 800,
+          clientY: 300,
+          pointerId: 7,
+          pointerType: "mouse",
+        }),
+      );
+    });
+
+    expect(scroller.scrollLeft).toBe(100);
+    // The shadow and the grabbing cursor are painted on the scroller itself,
+    // so the pan paints no row and does not commit the table body.
+    expect(scroller.classList.contains("is-panning")).toBe(true);
+    expect(scroller.classList.contains("is-scrolled-x")).toBe(true);
+    expect(noteRowRenderCount()).toBe(0);
+    expect(virtualizerStats.renders).toBe(0);
+
+    // Dragging back to the start edge clears the shadow with the same path.
+    await act(async () => {
+      panSurface.dispatchEvent(
+        pointerEvent("pointermove", {
+          button: -1,
+          clientX: 900,
+          clientY: 300,
+          pointerId: 7,
+          pointerType: "mouse",
+        }),
+      );
+    });
+
+    expect(scroller.scrollLeft).toBe(0);
+    expect(scroller.classList.contains("is-scrolled-x")).toBe(false);
+
+    await act(async () => {
+      panSurface.dispatchEvent(
+        pointerEvent("pointerup", {
+          button: 0,
+          clientX: 900,
+          clientY: 300,
+          pointerId: 7,
+          pointerType: "mouse",
+        }),
+      );
+    });
+
+    expect(scroller.classList.contains("is-panning")).toBe(false);
+    expect(noteRowRenderCount()).toBe(0);
+    expect(virtualizerStats.renders).toBe(0);
   });
 
   test("fixed row height keeps the rendered window near 22 rows", async () => {
@@ -383,6 +500,82 @@ describe("NotesTable render budget", () => {
     });
 
     expect(noteRowRenderCount()).toBeLessThanOrEqual(2);
+  });
+
+  test("dragging a note repaints only the rows that change", async () => {
+    getNotes.mockResolvedValue({ notes: manyNotes(60) });
+    const { container } = renderTable();
+
+    await screen.findByText("NOTE-1");
+    setScrollMetrics(scrollerFor(container));
+    await flushFrame();
+
+    const targetRow = container.querySelector('tbody tr[data-index="4"]');
+    expect(targetRow).not.toBeNull();
+    const dataTransfer = makeDataTransfer();
+
+    resetNoteRowRenders();
+    virtualizerStats.renders = 0;
+
+    await act(async () => {
+      // Scoped to the table so a drag preview clone cannot be picked up.
+      container
+        .querySelector('[aria-label="Move NOTE-1"]')
+        .dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+    });
+
+    // Lifting the note paints its own placeholder and nothing else.
+    expect(new Set(noteRowRenders.ids).size).toBeLessThanOrEqual(1);
+    expect(virtualizerStats.renders).toBe(0);
+
+    resetNoteRowRenders();
+
+    await act(async () => {
+      targetRow.dispatchEvent(
+        dragEvent("dragover", { clientY: 400, dataTransfer }),
+      );
+    });
+
+    // Hovering a drop target repaints exactly two rows: the dragged row, which
+    // gives up its own placeholder, and the row that takes it. The rest of the
+    // table body does not commit.
+    expect(new Set(noteRowRenders.ids)).toEqual(new Set([1, 5]));
+    expect(virtualizerStats.renders).toBe(0);
+    expect(
+      container.querySelectorAll(".table-drop-placeholder-row").length,
+    ).toBe(1);
+
+    resetNoteRowRenders();
+
+    await act(async () => {
+      targetRow.dispatchEvent(
+        dragEvent("dragleave", {
+          clientY: 400,
+          dataTransfer,
+          relatedTarget: container.querySelector(".table-drop-placeholder-row"),
+        }),
+      );
+    });
+
+    // Leaving the row for its own placeholder must not remove it, and must
+    // not repaint anything.
+    expect(
+      container.querySelectorAll(".table-drop-placeholder-row").length,
+    ).toBe(1);
+    expect(noteRowRenderCount()).toBe(0);
+
+    // Cancelling the drag clears the placeholder and the preview clone.
+    await act(async () => {
+      targetRow.dispatchEvent(dragEvent("dragleave", { dataTransfer }));
+    });
+    const handle = container.querySelector('[aria-label="Move NOTE-1"]');
+    await act(async () => {
+      handle.dispatchEvent(dragEvent("dragend", { dataTransfer }));
+    });
+
+    expect(
+      container.querySelectorAll(".table-drop-placeholder-row").length,
+    ).toBe(0);
   });
 
   test("zebra parity follows the row's list position while scrolling", async () => {
