@@ -4674,7 +4674,7 @@ function NotesTable({
         </section>
       ) : null}
 
-      <div className="panel" inert={editorOverlayOpen}>
+      <div className="screen-body" inert={editorOverlayOpen}>
         <div className="panel-heading panel-heading--compact">
           <div className="panel-heading-copy">
             {isCollectionEditing ? (
@@ -4809,7 +4809,7 @@ function NotesTable({
               </form>
             ) : (
               <div className="collection-title-row">
-                <h2>{collection?.name ?? "Notes"}</h2>
+                <h1>{collection?.name ?? "Notes"}</h1>
               </div>
             )}
             {isCollectionEditing && collectionEditDialog ? collectionEditDialog : null}
@@ -5112,6 +5112,11 @@ function NotesTable({
                           }
 
                           if (!column.sortable) {
+                            // The actions column carries no visible label: the
+                            // three-dot button explains itself. Keep the name
+                            // for assistive tech so the column is not anonymous.
+                            const isActions = column.kind === "actions";
+
                             return (
                               <th
                                 className={[
@@ -5120,6 +5125,7 @@ function NotesTable({
                                 ]
                                   .filter(Boolean)
                                   .join(" ")}
+                                aria-label={isActions ? column.label : undefined}
                                 key={column.key}
                                 scope="col"
                                 {...stickyCellAttributes(
@@ -5127,7 +5133,7 @@ function NotesTable({
                                   cellClass(column),
                                 )}
                               >
-                                {column.label.toUpperCase()}
+                                {isActions ? null : column.label.toUpperCase()}
                               </th>
                             );
                           }

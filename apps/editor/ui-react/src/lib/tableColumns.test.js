@@ -157,12 +157,10 @@ describe("table column model", () => {
     expect(getTableColumn("thumbnail")).toMatchObject({ width: 58 });
   });
 
-  // The ACTIONS header is the longest control label (~62-67px at the
-  // header's 0.76rem/800/0.08em, depending on the fallback font), plus the
-  // compact 8px of cell padding. Any narrower and the shell clips the last
-  // letter against the scrollbar gutter.
-  test("sizes the actions column for its header label", () => {
-    expect(getTableColumn("actions").width).toBeGreaterThanOrEqual(76);
+  // The actions header has no visible label, so the column only has to fit
+  // the 30px row menu button plus the compact 8px of cell padding.
+  test("sizes the actions column for the row menu button", () => {
+    expect(getTableColumn("actions").width).toBe(54);
   });
 
   test("gives every data column a positive flex weight", () => {
@@ -201,7 +199,7 @@ describe("table column model", () => {
 describe("tableColumnWidths", () => {
   test("keeps control columns exact and scales data columns by weight", () => {
     const widths = tableColumnWidths(tableColumns, 1600, 14);
-    const available = 1600 - 14 - (24 + 44 + 48 + 58 + 80);
+    const available = 1600 - 14 - (24 + 44 + 48 + 58 + 54);
     const weightTotal = 116 + 200 + 96 + 96 + 96 + 132 + 180;
 
     expect(widths).toMatchObject({
@@ -209,7 +207,7 @@ describe("tableColumnWidths", () => {
       selection: 44,
       id: 48,
       thumbnail: 58,
-      actions: 80,
+      actions: 54,
     });
     expect(widths.catalog_number).toBeCloseTo(
       (available * 116) / weightTotal,

@@ -1963,10 +1963,10 @@ input[type="radio"] {
   min-height: 120px;
 }
 
-/* The bottom-of-section `+ New category` tile spans the panel width with a
+/* The bottom-of-section `+ New category` tile spans the body width with a
    shorter profile than the in-grid tiles. */
 .showcase-category-section + .showcase-tile--create,
-.showcase-screen--edit > .panel > .showcase-tile--create {
+.showcase-screen--edit > .screen-body > .showcase-tile--create {
   min-height: 72px;
 }
 
@@ -2218,6 +2218,7 @@ input[type="radio"] {
 .hero-card h1,
 .panel h1,
 .panel h2,
+.screen-body h1,
 .slide-card h1 {
   font-family: inherit;
   font-weight: 700;
@@ -2468,10 +2469,21 @@ input[type="radio"] {
   overflow: hidden;
 }
 
+/* The Table and Showcase screens drop the card: their heading, toolbar and
+   content sit on the page, and only the table itself is a surface. The body
+   keeps the layout duties the panel used to carry. */
+.screen-stack > .screen-body {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
 /* The showcase canvas grows with its grids (categories render expanded), so
-   its panel scrolls vertically instead of cropping content taller than the
-   viewport. The higher specificity keeps this above the generic panel rule. */
-.screen-stack.showcase-screen > .panel {
+   its body scrolls vertically instead of cropping content taller than the
+   viewport. The higher specificity keeps this above the generic body rule. */
+.screen-stack.showcase-screen > .screen-body {
   overflow-y: auto;
   overflow-x: hidden;
 }
@@ -2507,8 +2519,11 @@ input[type="radio"] {
   gap: 8px;
 }
 
-.collection-title-row h2 {
+.collection-title-row h1 {
   margin: 0;
+  /* The collection name was an h2, so keep its 1.5rem size now that the
+     screen's single h1 carries it. */
+  font-size: 1.5rem;
 }
 
 .collection-rename-form {
@@ -2808,7 +2823,9 @@ td {
    the selection checkbox are the row's controls rather than fields, and a rule
    between them would separate a control from itself. Catalog number's right
    edge is also left to the pinned block's own divider (see
-   .table-sticky-end::after), which would otherwise double the hairline.
+   .table-sticky-end::after), which would otherwise double the hairline. Tags
+   is the last data column and the actions cell is a control, so nothing is
+   drawn between them either.
 
    Painting the rule as a border keeps it out of the flex maths — a
    fixed-layout table folds cell borders into the column width, so the
@@ -2821,8 +2838,7 @@ th:is(
   .table-col-issue_date,
   .table-col-grading_company,
   .table-col-grade,
-  .table-col-serial,
-  .table-col-tags
+  .table-col-serial
 ),
 td:is(
   .table-col-selection,
@@ -2832,8 +2848,7 @@ td:is(
   .table-col-issue_date,
   .table-col-grading_company,
   .table-col-grade,
-  .table-col-serial,
-  .table-col-tags
+  .table-col-serial
 ) {
   border-right: 1px solid var(--border-soft);
 }
@@ -2907,9 +2922,8 @@ tbody td {
   padding-right: 4px;
 }
 
-/* Compact like the other control columns, and kept on one line: the model
-   sizes this column for the ACTIONS label, but a larger user font would
-   otherwise wrap the word and make the header row taller. */
+/* Compact like the other control columns, and kept on one line: the cell
+   holds only the three-dot menu button. */
 .table-actions-cell {
   padding-left: 4px;
   padding-right: 4px;
@@ -3837,9 +3851,9 @@ td.drag-cell {
   opacity: 0.38;
 }
 
-/* The row's one action: a three-dot button that stays out of the data until
-   the pointer or keyboard arrives. It is portalled menu's anchor, so the rule
-   below keys off the row rather than the button itself. */
+/* The row's one action: a three-dot button that stays visible in every row,
+   so the menu is discoverable without hovering. It is the portalled menu's
+   anchor. */
 .row-menu-btn {
   display: inline-grid;
   place-items: center;
@@ -3851,9 +3865,7 @@ td.drag-cell {
   background: transparent;
   color: var(--text-muted);
   cursor: pointer;
-  opacity: 0;
   transition:
-    opacity 0.12s ease,
     background 0.12s ease,
     border-color 0.12s ease;
 }
@@ -3863,25 +3875,11 @@ td.drag-cell {
   height: 16px;
 }
 
-.table-row-link:hover .row-menu-btn,
-.table-row-link:focus-within .row-menu-btn,
-.row-menu-btn.is-open {
-  opacity: 1;
-}
-
 .row-menu-btn:hover,
 .row-menu-btn.is-open {
   border-color: var(--border-control);
   background: var(--surface);
   color: var(--text);
-}
-
-/* Where hover does not exist (touch), the reveal never fires, so the button
-   is always visible instead of undiscoverable. */
-@media (hover: none) {
-  .row-menu-btn {
-    opacity: 1;
-  }
 }
 
 /* The menu floats above the table in a portal, positioned from the button's

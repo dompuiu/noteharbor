@@ -739,6 +739,13 @@ describe("Home and End in the slideshow and image preview", () => {
     });
   }
 
+  // The table keeps its own h1 behind the full-screen slideshow, so scope the
+  // heading query to the overlay rather than matching either document title.
+  function slideshowHeading() {
+    const slideshow = document.querySelector(".slideshow-screen");
+    return within(slideshow).getByRole("heading", { level: 1 });
+  }
+
   test("End moves the slideshow to the last note and Home back to the first", async () => {
     const user = userEvent.setup();
     await openSlideshowOnFirstNote(user);
@@ -748,14 +755,14 @@ describe("Home and End in the slideshow and image preview", () => {
     await waitFor(() => {
       expect(currentHash()).toContain("slideshow/3");
     });
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("CCCC");
+    expect(slideshowHeading()).toHaveTextContent("CCCC");
 
     await user.keyboard("{Home}");
 
     await waitFor(() => {
       expect(currentHash()).toContain("slideshow/1");
     });
-    expect(screen.getByRole("heading", { level: 1 })).toHaveTextContent("AAAA");
+    expect(slideshowHeading()).toHaveTextContent("AAAA");
   });
 
   test("End and Home move the image preview to the last and first page", async () => {

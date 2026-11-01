@@ -361,26 +361,15 @@ describe("table styles", () => {
     expect(menu[1]).toMatch(/z-index:\s*\d+/);
   });
 
-  // The row action button is intentionally invisible until the pointer or
-  // keyboard arrives. jsdom cannot resolve :hover, so the reveal is pinned
-  // here as a static contract over the stylesheet.
-  test("row actions stay hidden until the row is hovered or focused", () => {
+  // The row action button is always visible: hiding it until hover made the
+  // menu undiscoverable at rest. jsdom cannot resolve :hover, so the contract
+  // is pinned here as a static check over the stylesheet.
+  test("row actions stay visible without hover", () => {
     const base = styles.match(/\.row-menu-btn\s*\{([^}]*)\}/);
     expect(base).not.toBeNull();
-    expect(base[1]).toMatch(/opacity:\s*0/);
-    expect(styles).toMatch(
-      /\.table-row-link:hover \.row-menu-btn[^{]*\{[^}]*opacity:\s*1/,
-    );
-    expect(styles).toMatch(
-      /\.table-row-link:focus-within \.row-menu-btn[^{]*\{[^}]*opacity:\s*1/,
-    );
-    expect(styles).toMatch(/\.row-menu-btn\.is-open\s*\{[^}]*opacity:\s*1/);
-  });
-
-  test("touch devices always show the row actions button", () => {
-    const media = styles.match(/@media \(hover: none\)\s*\{([\s\S]*?)\n\}/);
-    expect(media).not.toBeNull();
-    expect(media[1]).toMatch(/\.row-menu-btn\s*\{[^}]*opacity:\s*1/);
+    expect(base[1]).not.toMatch(/opacity:\s*0/);
+    expect(styles).not.toMatch(/\.table-row-link:hover \.row-menu-btn/);
+    expect(styles).toMatch(/\.row-menu-btn:hover,[^{]*\{[^}]*background:/);
   });
 
   // The pinning metadata only works if the declared widths are the rendered
@@ -434,8 +423,8 @@ describe("table styles", () => {
     expect(actions).not.toBeNull();
     expect(actions[1]).toMatch(/padding-left:\s*4px/);
     expect(actions[1]).toMatch(/padding-right:\s*4px/);
-    // The ACTIONS label is a word, so it must stay on one line instead of
-    // wrapping into a taller header row.
+    // The cell holds a single control, so it stays on one line instead of
+    // wrapping into a taller row.
     expect(actions[1]).toMatch(/white-space:\s*nowrap/);
   });
 
@@ -647,7 +636,6 @@ describe("table styles", () => {
       "grading_company",
       "grade",
       "serial",
-      "tags",
     ]) {
       expect(rules[0]).toMatch(new RegExp(`\\.table-col-${key}\\b`));
     }
@@ -655,6 +643,9 @@ describe("table styles", () => {
     expect(rules[0]).not.toMatch(/\.table-col-reorder\b/);
     // Catalog number's right edge is the pinned block's own divider.
     expect(rules[0]).not.toMatch(/\.table-col-catalog_number/);
+    // Tags is the last data column; the actions cell is a control, so no
+    // hairline separates them.
+    expect(rules[0]).not.toMatch(/\.table-col-tags\b/);
     expect(rules[1]).toMatch(/border-right:\s*1px solid var\(--border-soft\)/);
   });
 
@@ -1092,7 +1083,7 @@ describe("slideshow overlay styles", () => {
 
   test("the showcase panel scrolls vertically instead of cropping", () => {
     const panel = styles.match(
-      /\.screen-stack\.showcase-screen > \.panel\s*\{([^}]*)\}/,
+      /\.screen-stack\.showcase-screen > \.screen-body\s*\{([^}]*)\}/,
     );
     expect(panel).not.toBeNull();
     expect(panel[1]).toMatch(/overflow-y:\s*auto/);

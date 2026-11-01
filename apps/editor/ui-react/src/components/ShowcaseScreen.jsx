@@ -1521,7 +1521,7 @@ function ShowcaseScreen({ mode }) {
       className={`screen-stack showcase-screen showcase-screen--${editMode ? "edit" : "view"}`}
       ref={sectionRef}
     >
-      <div className="panel">
+      <div className="screen-body">
         <div className="panel-heading">
           <div className="panel-heading-copy">
             {editMode ? (

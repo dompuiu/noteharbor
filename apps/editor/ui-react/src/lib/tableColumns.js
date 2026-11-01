@@ -173,14 +173,13 @@ export const tableColumns = [
   }),
   {
     key: "actions",
+    // The header renders no visible label (the three-dot button explains
+    // itself); the string is only the column's accessible name.
     label: "ACTIONS",
     kind: "actions",
-    // Wide enough for the ACTIONS header (roughly 62-67px depending on the
-    // fallback font) with 4px of compact padding each side (see
-    // .table-actions-cell), so the label never overflows into the scrollbar
-    // gutter where the shell's overflow clips it. The 30px row menu button
-    // sits inside with room.
-    width: 80,
+    // The 30px row menu button plus 4px of compact padding each side, with a
+    // little breathing room so it does not touch the tags column.
+    width: 54,
     align: "center",
     sortable: false,
     sticky: false,
