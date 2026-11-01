@@ -6,6 +6,39 @@ import { useLocation } from "react-router-dom";
 const menuOffset = 6;
 const viewportMargin = 12;
 
+// Breathing room the reveal leaves between the anchor and the scrollport edge.
+// The table floats its scrollbar over the right-hand 10px, so a minimal
+// `inline: "nearest"` reveal would leave the actions button half covered.
+const revealMargin = 32;
+
+// `scrollIntoView` is only guaranteed to bring the anchor flush with the
+// scrollport, which the table's floating scrollbar then covers. Pan any
+// horizontal scroller further until the anchor keeps `revealMargin` on the
+// side it landed closest to (clamped by the scroller's own scroll range).
+function addRevealMargin(anchor, ancestors) {
+  const anchorBox = anchor.getBoundingClientRect();
+
+  for (const node of ancestors) {
+    if (node.scrollWidth <= node.clientWidth) {
+      continue;
+    }
+
+    const box = node.getBoundingClientRect();
+    const shortfallRight = anchorBox.right + revealMargin - box.right;
+
+    if (shortfallRight > 0) {
+      node.scrollLeft += shortfallRight;
+      continue;
+    }
+
+    const shortfallLeft = box.left + revealMargin - anchorBox.left;
+
+    if (shortfallLeft > 0) {
+      node.scrollLeft -= shortfallLeft;
+    }
+  }
+}
+
 // Scrolls an off-screen anchor into view and returns the scroll targets that
 // actually moved. Their scroll events arrive after this call, so while the
 // menu opens they record the reveal rather than the collector panning away
@@ -24,6 +57,7 @@ function moveAnchorIntoView(anchor) {
 
   const before = ancestors.map((node) => [node.scrollLeft, node.scrollTop]);
   anchor.scrollIntoView({ block: "nearest", inline: "nearest" });
+  addRevealMargin(anchor, ancestors);
 
   ancestors.forEach((node, index) => {
     if (

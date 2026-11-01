@@ -439,6 +439,52 @@ describe("Row actions menu", () => {
     expect(reveal).toHaveBeenCalledTimes(1);
   });
 
+  test("the reveal leaves space between the button and the table's edge", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("BBBB");
+
+    const button = actionsButton("BBBB");
+    const scroller = button.closest(".table-scroll-x");
+    const scrollerBox = {
+      bottom: 600,
+      height: 600,
+      left: 0,
+      right: 400,
+      top: 0,
+      width: 400,
+      x: 0,
+      y: 0,
+    };
+    Object.defineProperty(scroller, "clientWidth", {
+      configurable: true,
+      value: 400,
+    });
+    Object.defineProperty(scroller, "scrollWidth", {
+      configurable: true,
+      value: 1200,
+    });
+    scroller.getBoundingClientRect = () => ({ ...scrollerBox });
+    // A minimal reveal leaves the button flush with the scrollport's edge.
+    button.getBoundingClientRect = () => ({
+      ...scrollerBox,
+      left: 370,
+      right: 400,
+      width: 30,
+      x: 370,
+    });
+    button.scrollIntoView = vi.fn(() => {
+      scroller.scrollLeft = 800;
+    });
+
+    screen.getByText("BBBB").closest("tr").focus();
+    await user.keyboard("o");
+    await screen.findByRole("menu", { name: "Actions for BBBB" });
+
+    // The extra 32px keeps the button clear of the floating scrollbar.
+    expect(scroller.scrollLeft).toBe(832);
+  });
+
   test("the reveal's own scroll does not close the menu it just opened", async () => {
     const user = userEvent.setup();
     renderTable();
