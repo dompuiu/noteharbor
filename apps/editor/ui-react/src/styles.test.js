@@ -279,6 +279,33 @@ describe("table styles", () => {
     );
   });
 
+  // The filter row and the toolbar search read as one control band: the
+  // text filter matches the search field's 36px, and the tags combobox does
+  // too once its border is counted.
+  test("column filters match the search field's height", () => {
+    const search = styles.match(/\.table-search-input\s*\{([^}]*)\}/);
+    expect(search).not.toBeNull();
+    expect(search[1]).toMatch(/height:\s*36px/);
+
+    const filter = styles.match(/\.filter-input\s*\{([^}]*)\}/);
+    expect(filter).not.toBeNull();
+    expect(filter[1]).toMatch(/min-height:\s*36px/);
+    expect(filter[1]).toMatch(/padding:\s*0\s+10px/);
+    expect(filter[1]).toMatch(/line-height:\s*normal/);
+
+    const tags = styles.match(/\.tags-filter-chips-scroll\s*\{([^}]*)\}/);
+    expect(tags).not.toBeNull();
+    expect(tags[1]).toMatch(/min-height:\s*34px/);
+
+    // The borderless input inside the tags combobox must not inherit the
+    // outer filter's 36px min-height, or the combobox would grow past 36px.
+    const tagsInput = styles.match(
+      /\.tags-filter-combobox \.tags-filter-input\s*\{([^}]*)\}/,
+    );
+    expect(tagsInput).not.toBeNull();
+    expect(tagsInput[1]).toMatch(/min-height:\s*0/);
+  });
+
   // The Clear all affordance sits inside the tags filter; hovering it should
   // stay in the warm accent family rather than snapping to near-black text.
   test("clear-all hover stays in the accent family", () => {

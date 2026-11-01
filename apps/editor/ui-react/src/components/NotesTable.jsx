@@ -1344,7 +1344,7 @@ function NotesTable({
   const { focusFilter, focusRememberedFilter, getFilterRef, rememberFilter } =
     useFilterFocusMemory(filterColumnKeys);
   const filterRowHeight = Object.keys(columnFilterHeights).length
-    ? Math.max(32, ...Object.values(columnFilterHeights))
+    ? Math.max(36, ...Object.values(columnFilterHeights))
     : null;
   const allTagNames = useMemo(() => {
     const seen = new Map();

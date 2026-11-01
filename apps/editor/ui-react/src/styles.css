@@ -3301,7 +3301,11 @@ th[aria-sort="descending"] .sort-chevron {
 
 .filter-input {
   height: 100%;
-  min-height: 32px;
+  /* Same control metrics as the toolbar search field: 36px tall, no vertical
+     padding, and normal line-height so the text sits like the search text. */
+  min-height: 36px;
+  padding: 0 10px;
+  line-height: normal;
   text-align: center;
 }
 
@@ -3333,7 +3337,8 @@ th[aria-sort="descending"] .sort-chevron {
   align-items: center;
   align-content: flex-start;
   gap: 4px;
-  min-height: 32px;
+  /* 34px plus the combobox border matches the 36px search field. */
+  min-height: 34px;
   max-height: 64px;
   overflow-y: auto;
   scrollbar-width: thin;
@@ -3373,7 +3378,11 @@ th[aria-sort="descending"] .sort-chevron {
   flex: 1 1 60px;
   width: auto;
   min-width: 60px;
+  /* The inner input is borderless and sits inside the combobox chrome, so it
+     must not inherit the outer filter's 36px min-height. Letting it size to
+     its text keeps the whole combobox at the search field's 36px. */
   height: auto;
+  min-height: 0;
   border: 0;
   background: transparent;
   padding: 3px 2px;
