@@ -904,6 +904,7 @@ function parsePositiveInteger(value) {
 
 function emptyTableRoute() {
   return {
+    afterId: null,
     beforeId: null,
     kind: "table",
     noteId: null,
@@ -999,6 +1000,7 @@ function parseTableHash(hash) {
   if (segments[0] === "new") {
     return {
       ...emptyTableRoute(),
+      afterId: parsePositiveInteger(params.get("after")),
       beforeId: parsePositiveInteger(params.get("before")),
       kind: "create",
     };
@@ -1053,7 +1055,9 @@ function buildTableHash(route) {
   if (route.kind === "create") {
     const params = new URLSearchParams();
 
-    if (route.beforeId) {
+    if (route.afterId) {
+      params.set("after", String(route.afterId));
+    } else if (route.beforeId) {
       params.set("before", String(route.beforeId));
     }
 
@@ -1402,16 +1406,31 @@ function NotesTable({
   // slideshow behind it must not be reachable, so a stray Tab cannot click
   // "Edit note", the toolbar, or a row and discard unsaved work silently.
   const editorOverlayOpen = Boolean(editingNoteId || creatingNote);
-  const createPositionReferenceId = creatingNote
-    ? currentRoute.beforeId &&
-      notes.some((note) => note.id === currentRoute.beforeId)
+  const createAfterId =
+    creatingNote &&
+    currentRoute.afterId &&
+    notes.some((note) => note.id === currentRoute.afterId)
+      ? currentRoute.afterId
+      : null;
+  const createBeforeId =
+    creatingNote &&
+    currentRoute.beforeId &&
+    notes.some((note) => note.id === currentRoute.beforeId)
       ? currentRoute.beforeId
-      : currentRoute.overlayCreate &&
-          slideshowNotes.some((note) => note.id === currentRoute.noteId)
-        ? currentRoute.noteId
-        : null
-    : null;
-  const createPositionMode = createPositionReferenceId ? "before" : "end";
+      : null;
+  const createOverlayReferenceId =
+    creatingNote &&
+    currentRoute.overlayCreate &&
+    slideshowNotes.some((note) => note.id === currentRoute.noteId)
+      ? currentRoute.noteId
+      : null;
+  const createPositionReferenceId =
+    createAfterId ?? createBeforeId ?? createOverlayReferenceId;
+  const createPositionMode = createAfterId
+    ? "after"
+    : createPositionReferenceId
+      ? "before"
+      : "end";
   const slideshowIndex = slideshowRouteActive
     ? slideshowNotes.findIndex((note) => note.id === currentRoute.noteId)
     : -1;
@@ -1425,9 +1444,9 @@ function NotesTable({
   const editingNoteIndex = editingNoteId
     ? editorList.findIndex((note) => note.id === editingNoteId)
     : -1;
-  // Where the incoming Note will sit: before the reference Note, or at the
-  // end of the list. The arrows and typed jumps move relative to that slot,
-  // wrapping around the ends exactly as edit mode does.
+  // Where the incoming Note will sit: before or after the reference Note, or
+  // at the end of the list. The arrows and typed jumps move relative to that
+  // slot, wrapping around the ends exactly as edit mode does.
   const createSlotIndex = creatingNote
     ? (() => {
         if (createPositionReferenceId == null) {
@@ -1437,7 +1456,14 @@ function NotesTable({
         const referenceIndex = editorList.findIndex(
           (note) => note.id === createPositionReferenceId,
         );
-        return referenceIndex < 0 ? editorList.length : referenceIndex;
+
+        if (referenceIndex < 0) {
+          return editorList.length;
+        }
+
+        return createPositionMode === "after"
+          ? referenceIndex + 1
+          : referenceIndex;
       })()
     : -1;
   // The note at `index` in the editor's list, wrapping around the ends (only
@@ -1663,9 +1689,12 @@ function NotesTable({
     }
 
     if (currentRoute.kind === "create") {
+      const createReferenceId =
+        currentRoute.afterId ?? currentRoute.beforeId;
+
       if (
-        currentRoute.beforeId &&
-        !notes.some((note) => note.id === currentRoute.beforeId)
+        createReferenceId &&
+        !notes.some((note) => note.id === createReferenceId)
       ) {
         navigateToTableRoute({ kind: "create" }, { replace: true });
       }
@@ -2742,16 +2771,17 @@ function NotesTable({
         document.activeElement === focusedRowElement;
       // Focusing any control inside a row bubbles focus to the row, so the
       // row cursor can still be "on" a row while a nested button holds focus.
-      // `contains` keeps "a" inserting before that row instead of treating it
+      // `contains` keeps `a` inserting after that row instead of treating it
       // as no row at all.
       const focusWithinFocusedRow =
         Boolean(focusedRowElement) &&
         focusedRowElement.contains(document.activeElement);
 
-      // "a" opens the create form: before the focused row when the cursor is
+      // "a" opens the create form after the focused row when the cursor is
       // on (or inside) one, otherwise it falls back to the toolbar's Add
       // action so the shortcut still works from an empty focus state or right
-      // after the row cursor was cleared.
+      // after the row cursor was cleared. This matches the row menu's
+      // "Insert note below" item, which advertises the same shortcut.
       if (event.key === "a") {
         // An empty library has no collection to create a note in. The toolbar
         // button is disabled; the shortcut has to match it. A not-yet-saved
@@ -2763,7 +2793,7 @@ function NotesTable({
         event.preventDefault();
 
         if (focusWithinFocusedRow) {
-          openCreateNoteBefore(focusedRowIdRef.current);
+          openCreateNoteAfter(focusedRowIdRef.current);
         } else {
           openCreateNote();
         }
@@ -3223,19 +3253,17 @@ function NotesTable({
     navigateToTableRoute({ kind: "create", beforeId: referenceNoteId });
   }
 
-  // The create route only positions a new note ahead of a reference note, so
-  // "insert below" positions the form ahead of the next note in the view. The
-  // last row has no next note and inserts at the end.
-  function openCreateNoteAfter(noteId) {
-    const index = orderedNotes.findIndex((note) => note.id === noteId);
-    const nextNote = index >= 0 ? orderedNotes[index + 1] : null;
-
-    if (nextNote) {
-      openCreateNoteBefore(nextNote.id);
+  // The create route carries the exact placement the user picked: "after" for
+  // Insert note below (and the `a` shortcut), "before" for Add before. The
+  // Position selector in the Note editor shows that same relationship rather
+  // than translating it into a different reference note.
+  function openCreateNoteAfter(referenceNoteId) {
+    if (isNewCollection) {
       return;
     }
 
-    openCreateNote();
+    setActionError("");
+    navigateToTableRoute({ kind: "create", afterId: referenceNoteId });
   }
 
   function openCreateNoteOverSlideshow(referenceNoteId) {
@@ -4118,6 +4146,7 @@ function NotesTable({
         key: "insert",
         label: "Insert note below",
         onSelect: () => openCreateNoteAfter(note.id),
+        shortcut: "a",
       },
     ];
 

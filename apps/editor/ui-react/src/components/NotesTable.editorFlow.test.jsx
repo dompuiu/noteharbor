@@ -101,6 +101,15 @@ async function rowFor(denomination) {
   return cell.closest("tr");
 }
 
+function expectCreateAfter(mode, denomination) {
+  expect(
+    screen.getByRole("combobox", { name: "Position in collection" }),
+  ).toHaveValue(mode);
+  expect(
+    document.querySelector(".position-picker-item.is-selected"),
+  ).toHaveTextContent(denomination);
+}
+
 function toolbarAddButton() {
   return screen.getByRole("button", { name: "Add note" });
 }
@@ -1001,7 +1010,7 @@ describe("The a shortcut in the Table", () => {
     expect(await screen.findByLabelText("Denomination")).toBeInTheDocument();
   });
 
-  test("with a row focused it inserts before that row", async () => {
+  test("with a row focused it inserts after that row", async () => {
     const user = userEvent.setup();
     renderTable();
     const row = await rowFor("BBBB");
@@ -1010,11 +1019,12 @@ describe("The a shortcut in the Table", () => {
     await user.keyboard("a");
 
     await waitFor(() => {
-      expect(currentHash()).toContain("before=2");
+      expect(currentHash()).toContain("after=2");
     });
+    expectCreateAfter("after", "BBBB");
   });
 
-  test("with focus inside a row's control it still inserts before that row", async () => {
+  test("with focus inside a row's control it still inserts after that row", async () => {
     const user = userEvent.setup();
     renderTable();
     await screen.findByText("BBBB");
@@ -1024,8 +1034,9 @@ describe("The a shortcut in the Table", () => {
     await user.keyboard("a");
 
     await waitFor(() => {
-      expect(currentHash()).toContain("before=2");
+      expect(currentHash()).toContain("after=2");
     });
+    expectCreateAfter("after", "BBBB");
   });
 });
 
@@ -1042,11 +1053,9 @@ describe("Shortcut tooltips", () => {
     expect(
       screen.getByRole("menuitem", { name: "Copy details" }),
     ).toHaveAttribute("data-shortcut", "c");
-    // Insert note below has no shortcut tooltip: `a` still inserts ahead of
-    // the focused row, so advertising it on a "below" item would lie.
     expect(
       screen.getByRole("menuitem", { name: "Insert note below" }),
-    ).not.toHaveAttribute("data-shortcut");
+    ).toHaveAttribute("data-shortcut", "a");
     expect(screen.getByRole("menuitem", { name: "Edit" })).toHaveAttribute(
       "data-shortcut",
       "e",

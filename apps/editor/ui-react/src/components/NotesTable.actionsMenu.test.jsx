@@ -104,6 +104,15 @@ async function openMenu(user, denomination) {
   });
 }
 
+function expectCreateAfter(mode, denomination) {
+  expect(
+    screen.getByRole("combobox", { name: "Position in collection" }),
+  ).toHaveValue(mode);
+  expect(
+    document.querySelector(".position-picker-item.is-selected"),
+  ).toHaveTextContent(denomination);
+}
+
 beforeEach(() => {
   window.localStorage.clear();
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
@@ -249,11 +258,12 @@ describe("Row actions menu", () => {
     );
 
     await waitFor(() => {
-      expect(currentHash()).toContain("before=2");
+      expect(currentHash()).toContain("after=1");
     });
+    expectCreateAfter("after", "AAAA");
   });
 
-  test("Insert note below on the last row creates at the end", async () => {
+  test("Insert note below on the last row inserts after it", async () => {
     const user = userEvent.setup();
     renderTable();
     const menu = await openMenu(user, "CCCC");
@@ -263,9 +273,9 @@ describe("Row actions menu", () => {
     );
 
     await waitFor(() => {
-      expect(currentHash()).toContain("#new");
+      expect(currentHash()).toContain("after=3");
     });
-    expect(currentHash()).not.toContain("before=");
+    expectCreateAfter("after", "CCCC");
   });
 
   test("Delete still asks for confirmation before removing the note", async () => {

@@ -1898,6 +1898,7 @@ function NoteEditForm({
             <div className="field-block full-span">
               <span>Position in collection</span>
               <select
+                aria-label="Position in collection"
                 className="select-input"
                 onChange={(event) => {
                   setPositionMode(event.target.value);
