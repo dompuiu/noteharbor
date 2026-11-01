@@ -5180,6 +5180,7 @@ function NotesTable({
       <div className="screen-body" inert={editorOverlayOpen}>
         <div className="panel-heading panel-heading--compact">
           <div className="panel-heading-copy">
+            <p className="eyebrow collection-eyebrow">Catalog</p>
             {isCollectionEditing ? (
               <form
                 className="collection-rename-form"

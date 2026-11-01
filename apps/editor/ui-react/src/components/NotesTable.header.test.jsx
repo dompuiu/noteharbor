@@ -127,6 +127,21 @@ describe("NotesTable header controls", () => {
     );
   });
 
+  test("heads the collection title with the Catalog eyebrow", async () => {
+    const { container } = renderTable();
+
+    await screen.findByRole("button", { name: "Add note" });
+
+    const eyebrow = container.querySelector(".collection-eyebrow");
+    expect(eyebrow).toHaveTextContent("Catalog");
+
+    const title = screen.getByRole("heading", { name: "Test" });
+    expect(
+      eyebrow.compareDocumentPosition(title) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
   test("shows the collection title with no rename control", async () => {
     renderTable();
 

@@ -1246,3 +1246,30 @@ describe("slideshow overlay styles", () => {
     expect(lock[2]).toMatch(/overflow-x:\s*hidden/);
   });
 });
+
+// The collection screen's head copies the prototype's page head: a 10px caps
+// eyebrow over a 21px title, so the collection name reads as the page title
+// rather than a panel heading.
+describe("catalog header", () => {
+  // The descendant selector is the point: a bare `.collection-eyebrow` ties
+  // with the shared `.eyebrow` rule and loses the size, weight and tone to it.
+  test("the Catalog eyebrow uses the prototype's caption size and tone", () => {
+    const eyebrow = styles.match(
+      /\.panel-heading-copy \.collection-eyebrow\s*\{([^}]*)\}/,
+    );
+    expect(eyebrow).not.toBeNull();
+    expect(eyebrow[1]).toMatch(/font-size:\s*0\.625rem/);
+    expect(eyebrow[1]).toMatch(/font-weight:\s*600/);
+    expect(eyebrow[1]).toMatch(/letter-spacing:\s*0\.09em/);
+    expect(eyebrow[1]).toMatch(/text-transform:\s*uppercase/);
+    expect(eyebrow[1]).toMatch(/color:\s*var\(--text-hint\)/);
+  });
+
+  test("the collection title sits at the prototype's 21px", () => {
+    const title = styles.match(/\.collection-title-row h1\s*\{([^}]*)\}/);
+    expect(title).not.toBeNull();
+    expect(title[1]).toMatch(/font-size:\s*1\.3125rem/);
+    expect(title[1]).toMatch(/font-weight:\s*650/);
+    expect(title[1]).toMatch(/letter-spacing:\s*-0\.01em/);
+  });
+});

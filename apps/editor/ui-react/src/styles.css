@@ -2526,9 +2526,11 @@ input[type="radio"] {
 
 .collection-title-row h1 {
   margin: 0;
-  /* The collection name was an h2, so keep its 1.5rem size now that the
-     screen's single h1 carries it. */
-  font-size: 1.5rem;
+  /* 21px, the prototype's page-head size, rather than the 1.5rem panel
+     heading the collection name carried as an h2. */
+  font-size: 1.3125rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
 }
 
 .collection-rename-form {
@@ -2562,6 +2564,18 @@ input[type="radio"] {
 
 .panel-heading-copy .eyebrow {
   margin-bottom: 0;
+}
+
+/* The collection head follows the prototype's page head: the Catalog eyebrow
+   is a 10px caption in the prototype's lighter hint tone, and the name is the
+   page title at 21px/650. Two classes so the refinement outranks the shared
+   `.eyebrow` rule whatever order they land in. */
+.panel-heading-copy .collection-eyebrow {
+  font-size: 0.625rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-hint);
 }
 
 .table-shell mark {
