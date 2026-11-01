@@ -2,11 +2,11 @@
 
 ### Issue tracker
 
-Issues live as local markdown files under `.scratch/`. See `docs/agents/issue-tracker.md`.
+Issues live on the local `tsk` board in the `noteharbor` project; specs stay markdown under `.scratch/`. See `docs/agents/issue-tracker.md`.
 
 ### Triage labels
 
-Default triage labels (`needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`). See `docs/agents/triage-labels.md`.
+Triage roles map to tsk statuses (`open`, `blocked`, `ready`, `done`+archived) and category threads (`bug`, `enhancement`). See `docs/agents/triage-labels.md`.
 
 ### Domain docs
 
