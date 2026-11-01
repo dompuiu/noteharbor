@@ -1,7 +1,8 @@
 import {
   cellClass,
-  pickFirstAvailableImage,
-  tableThumbnailSlots,
+  noteThumbnailPath,
+  stickyCellClass,
+  stickyCellStyle,
 } from "./tableCells.jsx";
 import { tagsColumnKey } from "./tableColumns.js";
 import { computeVisibleTagPlan } from "./tagChipPlan.js";
@@ -23,24 +24,16 @@ export function buildNoteRowModel({
   // Body cells carry 12px of horizontal padding on each side; the tags plan
   // measures the content box those paddings leave.
   const tagsAvailableWidth = Math.max(0, tagsWidth - 24);
+  // No observer of its own: the tags column width is part of the table's
+  // geometry, and the table watches that with one ResizeObserver on the
+  // scroller. A width change lands in `columnWidths`, which is why the model
+  // is rebuilt at that width and never at any other.
 
   for (const column of columns) {
     const baseClassName = cellClass(column);
     cells.set(column.key, {
-      className: column.sticky
-        ? [
-            baseClassName,
-            "table-sticky-cell",
-            column.key === lastStickyColumnKey ? "table-sticky-end" : null,
-          ]
-            .filter(Boolean)
-            .join(" ")
-        : baseClassName,
-      style: column.sticky
-        ? {
-            "--table-sticky-left": `${stickyLeftByColumn[column.key] ?? 0}px`,
-          }
-        : undefined,
+      className: stickyCellClass(column, baseClassName, lastStickyColumnKey),
+      style: stickyCellStyle(column, stickyLeftByColumn),
     });
   }
 
@@ -48,7 +41,7 @@ export function buildNoteRowModel({
 
   return {
     cells,
-    frontThumb: pickFirstAvailableImage(note, tableThumbnailSlots)?.path ?? null,
+    frontThumb: noteThumbnailPath(note),
     marks: marks ?? {},
     tagPlan: tagsColumn
       ? computeVisibleTagPlan(note.tags, tagsAvailableWidth)

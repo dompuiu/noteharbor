@@ -26,6 +26,51 @@ export function escapeRegExp(value) {
   return String(value).replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
+// A pinned column keeps its identity block in place while the columns scrolled
+// under it carry the shadow that marks the end of that block. The row model
+// needs the class alone, a header needs the class and the offset together, and
+// both read the same pinning data, so the composition lives in one place.
+export function stickyCellClass(column, baseClassName, lastStickyColumnKey) {
+  if (!column.sticky) {
+    return baseClassName;
+  }
+
+  return [
+    baseClassName,
+    "table-sticky-cell",
+    column.key === lastStickyColumnKey ? "table-sticky-end" : null,
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+export function stickyCellStyle(column, stickyLeftByColumn) {
+  if (!column.sticky) {
+    return undefined;
+  }
+
+  return {
+    "--table-sticky-left": `${stickyLeftByColumn[column.key] ?? 0}px`,
+  };
+}
+
+export function stickyCellAttributes(
+  column,
+  baseClassName,
+  { lastStickyColumnKey, stickyLeftByColumn },
+) {
+  const className = stickyCellClass(column, baseClassName, lastStickyColumnKey);
+
+  if (!column.sticky) {
+    return baseClassName ? { className } : {};
+  }
+
+  return {
+    className,
+    style: stickyCellStyle(column, stickyLeftByColumn),
+  };
+}
+
 const highlightPatternCacheLimit = 200;
 // A filter query is one set of terms, and every visible row marks it in every
 // cell that matched. Compiling the expression per cell is the expensive part,
@@ -123,3 +168,11 @@ export const tableThumbnailSlots = [
   ["back", "thumbnail"],
   ["back", "full"],
 ];
+
+// The one derivation of a note's table picture. The row model carries it for
+// every note in the painted list; the screens that can talk about a note
+// outside that list (a delete confirmation opened from the slideshow) ask for
+// it directly instead of keeping a second copy of the preference order.
+export function noteThumbnailPath(note) {
+  return pickFirstAvailableImage(note, tableThumbnailSlots)?.path ?? null;
+}

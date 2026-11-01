@@ -62,8 +62,8 @@ import {
 import { buildNoteRowModel } from "../lib/noteRowModel.js";
 import {
   cellClass,
-  pickFirstAvailableImage,
-  tableThumbnailSlots,
+  noteThumbnailPath,
+  stickyCellAttributes,
 } from "../lib/tableCells.jsx";
 import { conditionsFromInput, makeCondition } from "../lib/tableFilters.js";
 import { ColumnPicker } from "./ColumnPicker.jsx";
@@ -141,10 +141,6 @@ function noteIdentityDetails(note) {
     .map((part) => String(part ?? "").trim())
     .filter(Boolean)
     .join(" · ");
-}
-
-function noteThumbPath(note) {
-  return pickFirstAvailableImage(note, tableThumbnailSlots)?.path ?? null;
 }
 
 function serializeConditions(conditions) {
@@ -3510,7 +3506,10 @@ function NotesTable({
       notes.find((entry) => entry.id === noteId) ??
       slideshowNotes.find((entry) => entry.id === noteId) ??
       null;
-    const thumbnail = note ? noteThumbPath(note) : null;
+    // The row model carries this for every note in the painted list, but a
+    // delete opened from the slideshow can name a note a filter has hidden
+    // from the table, so the confirmation asks the shared derivation.
+    const thumbnail = note ? noteThumbnailPath(note) : null;
     const details = note ? noteIdentityDetails(note) : "";
     const confirmed = await requestConfirmation({
       title: `Delete ${note ? noteDisplayName(note) : `note ${noteId}`}?`,
@@ -3792,24 +3791,14 @@ function NotesTable({
     return true;
   }
 
-  // Header cells share the row cells' pinning contract.
-  function stickyCellAttributes(column, baseClassName) {
-    if (!column.sticky) {
-      return baseClassName ? { className: baseClassName } : {};
-    }
-
-    return {
-      className: [
-        baseClassName,
-        "table-sticky-cell",
-        column.key === lastStickyColumnKey ? "table-sticky-end" : null,
-      ]
-        .filter(Boolean)
-        .join(" "),
-      style: {
-        "--table-sticky-left": `${stickyLeftByColumn[column.key] ?? 0}px`,
-      },
-    };
+  // Header cells share the row cells' pinning contract. The pinning data is
+  // the table's, so the header binds it here and the composition itself lives
+  // with the rest of the cell classes.
+  function tableCellAttributes(column) {
+    return stickyCellAttributes(column, cellClass(column), {
+      lastStickyColumnKey,
+      stickyLeftByColumn,
+    });
   }
 
   function registerRowElement(noteId, element) {
@@ -4418,10 +4407,7 @@ function NotesTable({
                               <th
                                 key={column.key}
                                 scope="col"
-                                {...stickyCellAttributes(
-                                  column,
-                                  cellClass(column),
-                                )}
+                                {...tableCellAttributes(column)}
                               />
                             );
                           }
@@ -4431,10 +4417,7 @@ function NotesTable({
                               <th
                                 key={column.key}
                                 scope="col"
-                                {...stickyCellAttributes(
-                                  column,
-                                  cellClass(column),
-                                )}
+                                {...tableCellAttributes(column)}
                               >
                                 <input
                                   aria-label="Select all visible rows"
@@ -4464,10 +4447,7 @@ function NotesTable({
                                 aria-label={isActions ? column.label : undefined}
                                 key={column.key}
                                 scope="col"
-                                {...stickyCellAttributes(
-                                  column,
-                                  cellClass(column),
-                                )}
+                                {...tableCellAttributes(column)}
                               >
                                 {isActions ? null : column.label}
                               </th>
@@ -4475,7 +4455,6 @@ function NotesTable({
                           }
 
                           const isSorted = sortKey === column.key;
-                          const className = cellClass(column);
 
                           return (
                             <th
@@ -4489,16 +4468,7 @@ function NotesTable({
                               className={className}
                               key={column.key}
                               scope="col"
-                              {...stickyCellAttributes(
-                                column,
-                                column.isTags ? "tags-column" : undefined,
-                              )}
-                              key={column.key}
-                              scope="col"
-                              {...stickyCellAttributes(
-                                column,
-                                column.isTags ? "tags-column" : undefined,
-                              )}
+                              {...tableCellAttributes(column)}
                             >
                               <button
                                 className={`sort-button${isSorted ? " sort-button--active" : ""}`}
