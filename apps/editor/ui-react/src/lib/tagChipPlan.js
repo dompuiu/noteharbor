@@ -1,4 +1,7 @@
-const tableTagClass = "tag table-tag";
+// The class every tag chip wears. The chip plan below measures text with a
+// probe wearing it, so the component that renders chips and the plan that
+// sizes them have to agree on it — it lives here, next to the measurement.
+export const tableTagClass = "tag table-tag";
 const tagChipHorizontalPadding = 16;
 const tagMoreChipHorizontalPadding = 14;
 const tagListGap = 5;

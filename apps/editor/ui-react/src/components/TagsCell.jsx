@@ -1,7 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { createPortal } from "react-dom";
-
-const tableTagClass = "tag table-tag";
+import { tableTagClass } from "../lib/tagChipPlan.js";
 
 // The popover's size and its hover delays. They size the box the position
 // maths works against and pace opening so a pointer passing over the chip
