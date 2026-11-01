@@ -948,15 +948,32 @@ describe("table styles", () => {
     );
   });
 
-  test("table tags follow the prototype's compact tinted pill", () => {
-    const chip = styles.match(/\.table-tag\s*\{([^}]*)\}/);
-    expect(chip).not.toBeNull();
-    expect(chip[1]).toMatch(/padding:\s*2px\s+8px/);
-    expect(chip[1]).toMatch(/border:\s*0/);
-    expect(chip[1]).toMatch(/background:\s*var\(--accent-soft\)/);
-    expect(chip[1]).toMatch(/color:\s*var\(--accent-strong\)/);
-    expect(chip[1]).toMatch(/font-size:\s*0\.72rem/);
+  // The tags column reads as the same chip as the filter field above the
+  // table: one radius, one border and one tint family, minus the cross the
+  // table has no room for. Comparing the two rules keeps them from drifting.
+  test("table tags match the filter chip's shape, border and colour", () => {
+    const filterChip = styles.match(/\.table-filter-chip\s*\{([^}]*)\}/);
+    const tag = styles.match(/\.table-tag\s*\{([^}]*)\}/);
+    expect(filterChip).not.toBeNull();
+    expect(tag).not.toBeNull();
 
+    for (const prop of [
+      /border:\s*1px solid rgba\(150,\s*98,\s*47,\s*0\.18\)/,
+      /border-radius:\s*7px/,
+      /background:\s*var\(--accent-soft\)/,
+      /color:\s*var\(--accent-strong\)/,
+    ]) {
+      expect(filterChip[1]).toMatch(prop);
+      expect(tag[1]).toMatch(prop);
+    }
+
+    // The table tag is the whole chip: compact padding, no removable cross.
+    expect(tag[1]).toMatch(/padding:\s*2px\s+8px/);
+    expect(tag[1]).toMatch(/font-size:\s*0\.72rem/);
+    expect(tag[1]).not.toMatch(/padding:\s*0\s+1px\s+0\s+0/);
+
+    // The overflow affordance stays a dashed, muted ghost so it reads as a
+    // control rather than a real tag.
     const more = styles.match(/\.table-tag\.table-tag--more\s*\{([^}]*)\}/);
     expect(more).not.toBeNull();
     expect(more[1]).toMatch(/border:\s*1px\s+dashed\s+var\(--border-control\)/);
