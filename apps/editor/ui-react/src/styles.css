@@ -4038,13 +4038,25 @@ th[aria-sort="descending"] .sort-chevron {
 }
 
 .table-filter-chip-value {
+  display: inline-flex;
+  align-items: center;
+  height: 22px;
   padding: 0 3px 0 6px;
   border: 0;
+  border-radius: 6px 0 0 6px;
   background: transparent;
   color: var(--accent-strong);
   font-size: 0.75rem;
   font-weight: 600;
   cursor: text;
+}
+
+/* The value is a button in the table filter, so keyboard focus lands on it.
+   The ring hugs that slice of the chip: a hairline with the chip's rounded
+   left corners, square where it meets the cross. */
+.table-filter-chip-value:focus-visible {
+  outline: 1px solid currentColor;
+  outline-offset: -1px;
 }
 
 .table-filter-chip--negated .table-filter-chip-value {

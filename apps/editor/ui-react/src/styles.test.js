@@ -523,6 +523,22 @@ describe("table styles", () => {
     expect(ring).not.toBeNull();
   });
 
+  // The value slice is its own focus target in the table filter. Ring just
+  // that slice, with the chip's rounded left corners.
+  test("the chip value focuses with a hairline rounded left edge", () => {
+    const value = styles.match(/^\.table-filter-chip-value\s*\{([^}]*)\}/m);
+    expect(value).not.toBeNull();
+    expect(value[1]).toMatch(/height:\s*22px/);
+    expect(value[1]).toMatch(/border-radius:\s*6px 0 0 6px/);
+
+    const ring = styles.match(
+      /\.table-filter-chip-value:focus-visible\s*\{([^}]*)\}/,
+    );
+    expect(ring).not.toBeNull();
+    expect(ring[1]).toMatch(/outline:\s*1px solid currentColor/);
+    expect(ring[1]).toMatch(/outline-offset:\s*-1px/);
+  });
+
   // Tag suggestions float on their own surface, and the create arm is split
   // off by a dashed rule.
   test("tag suggestions keep the floating list look", () => {
