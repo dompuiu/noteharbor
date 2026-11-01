@@ -1038,6 +1038,38 @@ describe("The a shortcut in the Table", () => {
     });
     expectCreateAfter("after", "BBBB");
   });
+
+  test("with a row's checkbox focused it still inserts after that row", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("BBBB");
+
+    screen.getByRole("checkbox", { name: "Select BBBB" }).focus();
+
+    await user.keyboard("a");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("after=2");
+    });
+    expectCreateAfter("after", "BBBB");
+  });
+});
+
+describe("Table shortcuts from a row checkbox", () => {
+  test("e opens the focused note's editor", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await screen.findByText("BBBB");
+
+    screen.getByRole("checkbox", { name: "Select BBBB" }).focus();
+
+    await user.keyboard("e");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("edit/2");
+    });
+    expect(await screen.findByLabelText("Denomination")).toBeInTheDocument();
+  });
 });
 
 describe("Shortcut tooltips", () => {

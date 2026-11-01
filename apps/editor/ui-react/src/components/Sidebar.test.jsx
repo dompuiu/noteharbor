@@ -563,6 +563,27 @@ describe("Sidebar keyboard cursor", () => {
     shell.remove();
   });
 
+  test("`b` opens the rail when a table row checkbox has focus", async () => {
+    const user = userEvent.setup();
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    // A row checkbox holds no text, so "b" must still open the rail even
+    // though the control sits inside the table.
+    const shell = document.createElement("div");
+    shell.className = "table-shell";
+    shell.innerHTML =
+      '<table><tbody><tr class="table-row-link"><td><input type="checkbox" aria-label="Select note"></td></tr></tbody></table>';
+    document.body.append(shell);
+    const checkbox = shell.querySelector("input");
+    checkbox.focus();
+
+    await user.keyboard("{b}");
+
+    expect(container.querySelector(".sidebar-link--cursor")).not.toBeNull();
+    expect(document.activeElement).toHaveTextContent("Default");
+    shell.remove();
+  });
+
   test("`b` opens the rail when focus rests on the table's empty-row anchor", async () => {
     const user = userEvent.setup();
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));

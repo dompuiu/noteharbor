@@ -473,8 +473,17 @@ function Sidebar({ pageFocusRef }) {
         // cursor, sits beside the <table>, so that empty-row state still reads
         // as "nothing focused" and "b" opens the rail.
         const active = document.activeElement;
+        // A checkbox holds no text, so "b" would otherwise have nothing to
+        // type into: it opens the rail when the checkbox sits inside a table.
+        // Dialogs still own their keys.
+        const activeIsTableCheckbox =
+          active instanceof HTMLInputElement &&
+          active.type === "checkbox" &&
+          Boolean(active.closest("table")) &&
+          !active.closest("[role='dialog']");
         const ownsKeyboard =
           active instanceof HTMLElement &&
+          !activeIsTableCheckbox &&
           active.closest(
             "input, textarea, select, [contenteditable], button, a, table, [role='dialog']",
           );

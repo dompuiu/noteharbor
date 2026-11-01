@@ -2695,7 +2695,15 @@ function NotesTable({
         return;
       }
 
-      const editable = isEditableElement(event.target);
+      // A checkbox is a form control but has no caret or text of its own, so
+      // it must not swallow the table's single-key shortcuts. Scope this to
+      // checkboxes inside the table: checkboxes in dialogs and other screens
+      // keep their existing behaviour.
+      const tableCheckboxFocused =
+        event.target instanceof HTMLInputElement &&
+        event.target.type === "checkbox" &&
+        Boolean(event.target.closest("table"));
+      const editable = !tableCheckboxFocused && isEditableElement(event.target);
       const tableKeysActive = !slideshowRouteActive && !editorOverlayOpen;
 
       // The sidebar owns its keys while it holds focus. Bail before any of the
@@ -2774,32 +2782,29 @@ function NotesTable({
         }
       }
 
+      if (
+        event.key === "Escape" &&
+        (editable || tableCheckboxFocused) &&
+        event.target instanceof Element &&
+        event.target.closest("thead")
+      ) {
+        event.preventDefault();
+        // Leave the filter (or the select-all checkbox) and land straight on
+        // the first row (Esc behaves like ArrowDown here). With no rows to
+        // land on, fall back to the focus anchor so a further Escape can
+        // still clear the filters.
+        if (orderedNotes[0]) {
+          focusRowByNoteId(orderedNotes[0].id);
+        } else {
+          focusTableAnchor();
+          clearRowCursor();
+        }
+        return;
+      }
+
       if (editable) {
-        // A row's checkbox is a form control, but it has no caret or text to
-        // edit: the row-navigation keys must still walk the table instead of
-        // being swallowed here. Other keys keep the control's own behaviour.
-        const isRowCheckbox =
-          event.target instanceof HTMLInputElement &&
-          event.target.type === "checkbox" &&
-          event.target.closest("tbody tr.table-row-link");
-
-        if (isRowCheckbox && handleRowNavigation(event)) {
-          return;
-        }
-
-        if (event.key === "Escape" && event.target.closest("thead")) {
-          event.preventDefault();
-          // Leave the filter and land straight on the first row (Esc
-          // behaves like ArrowDown here). With no rows to land on, fall
-          // back to the focus anchor so a further Escape can still clear
-          // the filters.
-          if (orderedNotes[0]) {
-            focusRowByNoteId(orderedNotes[0].id);
-          } else {
-            focusTableAnchor();
-            clearRowCursor();
-          }
-        }
+        // Text fields keep their own keys: caret movement, dropdowns and
+        // native editing must win over the table's single-key shortcuts.
         return;
       }
 
@@ -2832,16 +2837,24 @@ function NotesTable({
       const focusedRowElement = focusedRowIdRef.current
         ? rowElementMapRef.current.get(focusedRowIdRef.current)
         : null;
-      const rowHasFocus =
+      const activeElement = document.activeElement;
+      // A row checkbox is a nested control with no text of its own. Treat it
+      // like the row for the single-key shortcuts, while Space keeps toggling
+      // the selection and the arrow keys keep walking the table.
+      const rowCheckboxFocused =
+        tableCheckboxFocused &&
         Boolean(focusedRowElement) &&
-        document.activeElement === focusedRowElement;
+        focusedRowElement.contains(activeElement);
       // Focusing any control inside a row bubbles focus to the row, so the
       // row cursor can still be "on" a row while a nested button holds focus.
       // `contains` keeps `a` inserting after that row instead of treating it
       // as no row at all.
       const focusWithinFocusedRow =
         Boolean(focusedRowElement) &&
-        focusedRowElement.contains(document.activeElement);
+        focusedRowElement.contains(activeElement);
+      const rowHasFocus =
+        Boolean(focusedRowElement) &&
+        (activeElement === focusedRowElement || rowCheckboxFocused);
 
       // "a" opens the create form after the focused row when the cursor is
       // on (or inside) one, otherwise it falls back to the toolbar's Add
@@ -2919,6 +2932,14 @@ function NotesTable({
       );
 
       if (!focusedNote) {
+        return;
+      }
+
+      // Enter on a row checkbox opens the note, matching Enter on the row
+      // itself. The checkbox's own Space keeps toggling the selection.
+      if (rowCheckboxFocused && event.key === "Enter") {
+        event.preventDefault();
+        openSlideshow(focusedNote.id);
         return;
       }
 
@@ -5390,7 +5411,8 @@ function NotesTable({
                                 // Enter on a control inside the row (the
                                 // denomination link, the actions button)
                                 // activates that control. Only the row itself
-                                // opens the slideshow on Enter.
+                                // opens the slideshow here; a row checkbox is
+                                // handled by the table's window handler.
                                 if (event.target !== event.currentTarget) {
                                   return;
                                 }

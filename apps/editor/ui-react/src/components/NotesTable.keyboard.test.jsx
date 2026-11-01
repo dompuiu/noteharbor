@@ -394,6 +394,69 @@ describe("NotesTable keyboard focus inside a row", () => {
   });
 });
 
+describe("Table shortcuts while a row checkbox has focus", () => {
+  async function focusRowCheckbox() {
+    const checkbox = await screen.findByRole("checkbox", {
+      name: /select BBBB/i,
+    });
+    checkbox.focus();
+    expect(checkbox).toHaveFocus();
+    return checkbox;
+  }
+
+  beforeEach(() => {
+    getNotes.mockResolvedValue({ notes: threeNotes });
+  });
+
+  test("/ focuses the search field", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await focusRowCheckbox();
+
+    await user.keyboard("/");
+
+    expect(
+      screen.getByRole("searchbox", { name: "Search notes" }),
+    ).toHaveFocus();
+  });
+
+  test("o opens the focused row's actions menu", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await focusRowCheckbox();
+
+    await user.keyboard("o");
+
+    expect(
+      await screen.findByRole("menu", { name: "Actions for BBBB" }),
+    ).toBeInTheDocument();
+  });
+
+  test("? opens the keyboard shortcut help", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await focusRowCheckbox();
+
+    await user.keyboard("?");
+
+    expect(
+      await screen.findByRole("dialog", { name: "Keyboard shortcuts" }),
+    ).toBeInTheDocument();
+  });
+
+  test("Enter opens the focused note", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await focusRowCheckbox();
+
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/2");
+    });
+  });
+});
+
 describe("Active row highlight", () => {
   async function openSlideshowOnFirstRow(user) {
     getNotes.mockResolvedValue({
