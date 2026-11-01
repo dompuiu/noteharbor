@@ -204,7 +204,7 @@ describe("NotesTable header emphasis", () => {
   test("sort button labels keep sentence case for assistive tech", async () => {
     const { container } = renderTable();
 
-    await screen.findByLabelText("Move AAAA");
+    await screen.findByLabelText("Reorder AAAA");
 
     const labels = Array.from(
       container.querySelectorAll("thead tr:first-child .sort-button"),

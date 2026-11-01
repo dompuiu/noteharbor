@@ -353,7 +353,7 @@ describe("NotesTable chrome", () => {
     );
     const { container } = renderTable();
 
-    const handle = await screen.findByLabelText("Move AAAA");
+    const handle = await screen.findByLabelText("Reorder AAAA");
     const targetRow = rowFor(container, "CCCC");
     const dataTransfer = makeDataTransfer();
 

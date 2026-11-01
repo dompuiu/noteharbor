@@ -97,7 +97,7 @@ describe("NotesTable zebra striping", () => {
   test("odd visual positions carry the zebra class, even positions do not", async () => {
     const { container } = renderTable();
 
-    await screen.findByLabelText("Move AAAA");
+    await screen.findByLabelText("Reorder AAAA");
 
     const rows = rowsInOrder(container);
     expect(rows).toHaveLength(3);
@@ -110,7 +110,7 @@ describe("NotesTable zebra striping", () => {
     const { container } = renderTable();
     const user = userEvent.setup();
 
-    await screen.findByLabelText("Move AAAA");
+    await screen.findByLabelText("Reorder AAAA");
 
     // Two clicks on Denomination: first selects the column (asc), second
     // flips to desc, reversing the visual order to CCCC, BBBB, AAAA.
@@ -138,7 +138,7 @@ describe("NotesTable zebra striping", () => {
   test("spacer, empty, and drop-placeholder rows are never striped", async () => {
     const { container } = renderTable();
 
-    await screen.findByLabelText("Move AAAA");
+    await screen.findByLabelText("Reorder AAAA");
 
     const nonDataRows = Array.from(
       container.querySelectorAll(

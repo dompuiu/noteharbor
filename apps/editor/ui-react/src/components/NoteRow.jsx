@@ -58,7 +58,7 @@ export const NoteRow = memo(function NoteRow({
       >
         {canReorder ? (
           <button
-            aria-label={`Move ${note.denomination}`}
+            aria-label={`Reorder ${note.denomination}`}
             className="drag-handle"
             draggable={canReorder}
             tabIndex={-1}

@@ -754,7 +754,7 @@ function NamedRecordsTable({
                     {canReorder ? (
                       <td className="named-records-drag-cell">
                         <button
-                          aria-label={`Move ${record.name}`}
+                          aria-label={`Reorder ${record.name}`}
                           className="drag-handle"
                           draggable
                           tabIndex={-1}

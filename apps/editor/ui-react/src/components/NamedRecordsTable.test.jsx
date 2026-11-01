@@ -505,13 +505,13 @@ describe("NamedRecordsTable reordering", () => {
   test("no drag handles appear when the caller does not accept reorders", () => {
     renderTable();
 
-    expect(screen.queryByLabelText("Move Alpha")).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Reorder Alpha")).not.toBeInTheDocument();
   });
 
   test("the drag handle shows the banknote table's six dots", () => {
     render(<Harness onReorder={vi.fn()} />);
 
-    const handle = screen.getByLabelText("Move Alpha");
+    const handle = screen.getByLabelText("Reorder Alpha");
     expect(handle.querySelectorAll(".drag-handle-dots span")).toHaveLength(6);
   });
 
@@ -532,7 +532,7 @@ describe("NamedRecordsTable reordering", () => {
     const onReorder = vi.fn().mockResolvedValue(undefined);
     const { container } = render(<Harness onReorder={onReorder} />);
 
-    const handle = screen.getByLabelText("Move Alpha");
+    const handle = screen.getByLabelText("Reorder Alpha");
     const targetRow = rowFor("Gamma");
     const dataTransfer = makeDataTransfer();
 
@@ -573,7 +573,7 @@ describe("NamedRecordsTable reordering", () => {
     const onReorder = vi.fn().mockResolvedValue(undefined);
     render(<Harness onReorder={onReorder} />);
 
-    const handle = screen.getByLabelText("Move Beta");
+    const handle = screen.getByLabelText("Reorder Beta");
     const targetRow = rowFor("Gamma");
     const dataTransfer = makeDataTransfer();
 
@@ -600,7 +600,7 @@ describe("NamedRecordsTable reordering", () => {
     const onReorder = vi.fn().mockResolvedValue(undefined);
     const { container } = render(<Harness onReorder={onReorder} />);
 
-    const handle = screen.getByLabelText("Move Alpha");
+    const handle = screen.getByLabelText("Reorder Alpha");
     const targetRow = rowFor("Gamma");
     const dataTransfer = makeDataTransfer();
 

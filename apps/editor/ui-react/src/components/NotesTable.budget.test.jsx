@@ -506,7 +506,7 @@ describe("NotesTable render budget", () => {
     Object.assign(event, { dataTransfer });
 
     await act(async () => {
-      screen.getByLabelText("Move NOTE-1").dispatchEvent(event);
+      screen.getByLabelText("Reorder NOTE-1").dispatchEvent(event);
     });
 
     expect(noteRowRenderCount()).toBeLessThanOrEqual(2);
@@ -530,7 +530,7 @@ describe("NotesTable render budget", () => {
     await act(async () => {
       // Scoped to the table so a drag preview clone cannot be picked up.
       container
-        .querySelector('[aria-label="Move NOTE-1"]')
+        .querySelector('[aria-label="Reorder NOTE-1"]')
         .dispatchEvent(dragEvent("dragstart", { dataTransfer }));
     });
 
@@ -578,7 +578,7 @@ describe("NotesTable render budget", () => {
     await act(async () => {
       targetRow.dispatchEvent(dragEvent("dragleave", { dataTransfer }));
     });
-    const handle = container.querySelector('[aria-label="Move NOTE-1"]');
+    const handle = container.querySelector('[aria-label="Reorder NOTE-1"]');
     await act(async () => {
       handle.dispatchEvent(dragEvent("dragend", { dataTransfer }));
     });

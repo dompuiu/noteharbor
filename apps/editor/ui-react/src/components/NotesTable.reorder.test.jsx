@@ -114,7 +114,7 @@ describe("NotesTable row reordering", () => {
     const user = userEvent.setup();
     const { container } = renderTable();
 
-    await screen.findByLabelText("Move AAAA");
+    await screen.findByLabelText("Reorder AAAA");
     const row = rowFor(container, "AAAA");
     act(() => row.focus());
     await user.tab();
@@ -128,7 +128,7 @@ describe("NotesTable row reordering", () => {
   test("hovering the gap between rows keeps the drop placeholder steady", async () => {
     const { container } = renderTable();
 
-    const handle = await screen.findByLabelText("Move AAAA");
+    const handle = await screen.findByLabelText("Reorder AAAA");
     const targetRow = rowFor(container, "CCCC");
     expect(targetRow).toBeTruthy();
 
@@ -184,7 +184,7 @@ describe("NotesTable row reordering", () => {
     reorderNotes.mockRejectedValue(new Error("Order could not be saved"));
     const { container } = renderTable();
 
-    const handle = await screen.findByLabelText("Move AAAA");
+    const handle = await screen.findByLabelText("Reorder AAAA");
     const targetRow = rowFor(container, "CCCC");
     expect(targetRow).toBeTruthy();
 
@@ -226,7 +226,7 @@ describe("NotesTable row reordering", () => {
     });
     const { container } = renderTable();
 
-    const handle = await screen.findByLabelText("Move AAAA");
+    const handle = await screen.findByLabelText("Reorder AAAA");
     const targetRow = rowFor(container, "CCCC");
     expect(targetRow).toBeTruthy();
 

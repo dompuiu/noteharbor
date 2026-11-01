@@ -168,7 +168,7 @@ describe("NotesTable pinned identity columns", () => {
     renderTable();
     await screen.findByText("Fr. 2300");
 
-    const reorder = screen.getByLabelText("Move $1").closest("td");
+    const reorder = screen.getByLabelText("Reorder $1").closest("td");
     const selection = screen.getByLabelText("Select $1").closest("td");
     const order = screen.getByRole("cell", { name: "1" }).closest("td");
     const thumbnail = screen.getByAltText("$1 front").closest("td");

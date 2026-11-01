@@ -849,6 +849,82 @@ describe("table styles", () => {
     );
   });
 
+  // The grab is the one direct-manipulation moment in the table, so it gets
+  // its own mark: pressing the handle takes the grip to the accent instead of
+  // leaving it on the resting tone.
+  test("pressing the handle marks the grip", () => {
+    const active = styles.match(/\.drag-handle:active\s*\{([^}]*)\}/);
+    expect(active).not.toBeNull();
+    expect(active[1]).toMatch(/cursor:\s*grabbing/);
+
+    const dots = styles.match(/\.drag-handle:active \.drag-handle-dots\s*\{([^}]*)\}/);
+    expect(dots).not.toBeNull();
+    expect(dots[1]).toMatch(/color:\s*var\(--accent-strong\)/);
+  });
+
+  // The lift sets the row to a third opacity; without a transition the row
+  // blinks out of the list instead of fading. The transition has to sit where
+  // nothing later overrides it, which is why the collections table carries it
+  // on the base row rule and the table row carries it on its dragging rule
+  // (the plain row has no transition, so pruning a stripe stays instant).
+  test("a lifted row fades rather than blinking", () => {
+    const table = styles.match(/\.table-row-link--dragging\s*\{([^}]*)\}/);
+    expect(table).not.toBeNull();
+    expect(table[1]).toMatch(/opacity:\s*0\.38/);
+    expect(table[1]).toMatch(/transition:\s*opacity 0\.12s ease/);
+
+    const named = styles.match(/^\.named-record-row\s*\{([^}]*)\}/m);
+    expect(named).not.toBeNull();
+    expect(named[1]).toMatch(/opacity 0\.12s ease/);
+
+    const namedDragging = styles.match(/\.named-record-row--dragging\s*\{([^}]*)\}/);
+    expect(namedDragging).not.toBeNull();
+    expect(namedDragging[1]).toMatch(/opacity:\s*0\.38/);
+  });
+
+  // The grip is the same control in both tables, so it is the same size in
+  // both: one 24px column, expressed once per table and kept equal here.
+  test("both tables give the reorder rail the same 24px column", () => {
+    const table = styles.match(/\.drag-cell\s*\{([^}]*)\}/);
+    expect(table).not.toBeNull();
+    for (const property of ["width", "min-width", "max-width"]) {
+      expect(table[1]).toMatch(new RegExp(`${property}:\\s*24px`));
+    }
+
+    const named = styles.match(/\.named-records-table td\.named-records-drag-cell\s*\{([^}]*)\}/);
+    expect(named).not.toBeNull();
+    for (const property of ["width", "min-width", "max-width"]) {
+      expect(named[1]).toMatch(new RegExp(`${property}:\\s*24px`));
+    }
+    expect(named[1]).not.toMatch(/26px/);
+  });
+
+  // Decoration, not state: under a reduced-motion preference the grip's tone
+  // and the dragged row's fade land in a single frame.
+  test("the new table motion respects reduced-motion", () => {
+    const reduce = styles.match(
+      /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/,
+    );
+    expect(reduce).not.toBeNull();
+    for (const selector of [
+      ".drag-handle",
+      ".drag-handle-dots",
+      ".table-row-link--dragging",
+      ".named-record-row",
+    ]) {
+      expect(reduce[1]).toContain(selector);
+    }
+    expect(reduce[1]).toMatch(/transition:\s*none/);
+  });
+
+  // The insertion line is the row's edge, not a dash floating in the middle of
+  // the handle: no side margin, so it starts where the row starts.
+  test("the drop marker starts at the row edge", () => {
+    const line = styles.match(/\.table-drop-placeholder-line\s*\{([^}]*)\}/);
+    expect(line).not.toBeNull();
+    expect(line[1]).toMatch(/margin:\s*0;/);
+  });
+
   // The handle's opaque fill hides the drag cell's own inset shadow, so the
   // cell's share of the row ring has to be painted above the handle.
   test("the drag cell repaints the row ring above the handle", () => {

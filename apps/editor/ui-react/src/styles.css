@@ -13,6 +13,10 @@
   --surface: #fffaf1;
   --surface-2: #faf4e8;
   --surface-3: #efe5d2;
+  /* One step below the header band: the handle's own hover on the reorder
+     rail. Its own token rather than a scrollbar's, so a bar re-tone never
+     moves a control and a control re-tone never moves a bar. */
+  --surface-4: #e5d8c0;
   --border: rgba(120, 86, 50, 0.2);
   --border-soft: rgba(120, 86, 50, 0.12);
   --border-control: rgba(120, 86, 50, 0.32);
@@ -2204,6 +2208,15 @@ input[type="radio"] {
   .showcase-card-face {
     transition: none;
   }
+
+  /* The grip's tone and the dragged row's fade are decoration, not state
+     changes: drop the interpolation and let both land in one frame. */
+  .drag-handle,
+  .drag-handle-dots,
+  .table-row-link--dragging,
+  .named-record-row {
+    transition: none;
+  }
 }
 
 .site-header {
@@ -4297,6 +4310,18 @@ td.drag-cell {
   position: sticky;
 }
 
+/* The reorder rail. The drag cell is a full-height band one step darker than
+   the row and continuous with the header cell above it, so the grab target
+   reads as a column of its own rather than a button dropped into the row. The
+   handle fills that band and keeps its square, full-bleed shape in every
+   state: a control that changes size or corner as the pointer crosses a row
+   makes the rows look like they shift under the cursor.
+
+   The grip itself carries the interaction. It rests faint — a table can show a
+   hundred of these down its left edge, so the glyph is a mark, not a badge —
+   warms one tone with its row, and takes the accent only under the pointer.
+   The rail behind it never changes in a row state, so hovering a row cannot
+   read as a handle already grabbed. */
 .drag-handle {
   display: inline-flex;
   align-items: center;
@@ -4305,46 +4330,70 @@ td.drag-cell {
   inset: 0;
   border: 0;
   border-radius: 0;
-  background: var(--surface-3);
-  color: var(--text-muted);
+  background-color: var(--surface-3);
+  color: var(--text-faint);
   cursor: grab;
   padding: 0;
-  transition:
-    background 0.15s ease,
-    color 0.15s ease;
+  transition: background-color 0.12s ease;
 }
 
-.drag-handle:hover:not(:disabled),
-.drag-handle:focus-visible:not(:disabled) {
-  background: var(--scroll-track);
+:is(
+    .table-row-link:hover,
+    .table-row-link:focus-visible,
+    .table-row-link:has(:focus-visible),
+    .table-row-link--active,
+    .named-record-row:hover,
+    .named-record-row:focus-visible,
+    .named-record-row:has(:focus-visible),
+    .named-record-row--focused
+  )
+  .drag-handle-dots {
+  color: var(--text-muted);
+}
+
+.drag-handle:hover {
+  background-color: var(--surface-4);
+}
+
+.drag-handle:hover .drag-handle-dots {
   color: var(--text);
 }
 
-.drag-handle:active:not(:disabled) {
+/* The one state that marks the grab itself: the pointer has hold of the
+   handle, so the grip takes the accent while the rail and dots' resting size
+   stay put. Never a focus state — the button is programmatically reachable
+   only (`tabIndex={-1}`), so there is no `:focus-visible` rule to keep. */
+.drag-handle:active {
   cursor: grabbing;
 }
 
-.drag-handle:disabled {
-  cursor: not-allowed;
-  opacity: 0.45;
+.drag-handle:active .drag-handle-dots {
+  color: var(--accent-strong);
 }
 
+/* Six 3px dots on an even 3px rhythm: gaps as wide as the dots, so the grip
+   reads as a grid of separate marks instead of a dotted block, and narrow
+   enough to sit quietly in the 24px rail. */
 .drag-handle-dots {
   display: grid;
-  grid-template-columns: repeat(2, 4px);
-  gap: 2px 4px;
+  grid-template-columns: repeat(2, 3px);
+  gap: 3px;
+  transition: color 0.12s ease;
 }
 
 .drag-handle-dots span {
-  width: 4px;
-  height: 4px;
+  width: 3px;
+  height: 3px;
   border-radius: 999px;
   background: currentColor;
-  opacity: 0.9;
 }
 
+/* A dragged row lifts by fading. The transition is the settle: the row
+   arrives at 0.38 instead of blinking there, so the grab reads as the row
+   leaving the list rather than the list losing a row. */
 .table-row-link--dragging {
   opacity: 0.38;
+  transition: opacity 0.12s ease;
 }
 
 /* The row's one action: a three-dot button that stays visible in every row,
@@ -4463,10 +4512,13 @@ td.drag-cell {
   background: var(--accent-soft);
 }
 
+/* The line runs the width of the row, from the row's own left edge, so the
+   gap reads as an insertion point rather than a dash floating in the middle
+   of the reorder rail. */
 .table-drop-placeholder-line {
   display: block;
   height: 10px;
-  margin: 0 14px;
+  margin: 0;
   border-top: 3px dashed var(--accent);
 }
 
@@ -6024,16 +6076,21 @@ kbd {
   font-variant-numeric: tabular-nums;
 }
 
+/* The reorder rail is the same 24px control in both tables: the grip is one
+   component, so it must not stretch 2px wider in the collections table. */
 .named-records-table th.named-records-drag-cell,
 .named-records-table td.named-records-drag-cell {
   position: relative;
-  width: 26px;
-  min-width: 26px;
-  max-width: 26px;
+  width: 24px;
+  min-width: 24px;
+  max-width: 24px;
   padding: 0;
   overflow: hidden;
 }
 
+/* The collections table lifts the same way. The transition lives on the base
+   row rule rather than here: both rules have equal specificity, and the base
+   one is declared later, so a transition set here would never run. */
 .named-record-row--dragging {
   opacity: 0.38;
 }
@@ -6057,8 +6114,12 @@ kbd {
   justify-content: flex-end;
 }
 
+/* Opacity is part of the row's own transition, so publishing the drag lift in
+   `.named-record-row--dragging` actually fades instead of blinking. */
 .named-record-row {
-  transition: background 0.15s ease;
+  transition:
+    background 0.15s ease,
+    opacity 0.12s ease;
 }
 
 .named-record-row:hover > td,
@@ -6104,10 +6165,10 @@ kbd {
    the drag cell's own inset shadow, this pseudo-element paints the cell's share
    of the row ring above it — the top and bottom lines plus the left edge — so
    the row highlight reads as one continuous band.
-   The background stays the untouched grey fill: the handle is a grab target,
-   and giving it the accent on hover made it look already grabbed. Only the
-   pointer directly over the handle itself lights it up (the base
-   `.drag-handle:hover` rule below). */
+   The rail keeps its resting fill here: the handle is a grab target, and
+   filling it with the accent made it look already grabbed. Row state reaches
+   the grip instead — the dots warm one tone — and only the pointer directly
+   over the handle lights the rail itself (see `.drag-handle:hover`). */
 .named-record-row:focus-visible > td.named-records-drag-cell::before,
 .named-record-row:has(:focus-visible) > td.named-records-drag-cell::before,
 .named-record-row--focused > td.named-records-drag-cell::before {
