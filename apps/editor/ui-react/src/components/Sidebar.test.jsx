@@ -543,11 +543,13 @@ describe("Sidebar keyboard cursor", () => {
     outside.remove();
   });
 
-  test("`b` does nothing while a table row has focus", async () => {
+  test("`b` opens the rail while a table row has focus", async () => {
     const user = userEvent.setup();
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
 
-    // The notes table's rows are focusable <tr>s inside the table shell.
+    // The notes table's rows are focusable <tr>s inside the table shell. The
+    // row is the keyboard cursor, not a control that consumes text, so "b"
+    // must reach the rail exactly as it does with no row focused.
     const shell = document.createElement("div");
     shell.className = "table-shell";
     shell.innerHTML =
@@ -558,8 +560,29 @@ describe("Sidebar keyboard cursor", () => {
 
     await user.keyboard("{b}");
 
+    expect(container.querySelector(".sidebar-link--cursor")).not.toBeNull();
+    expect(document.activeElement).toHaveTextContent("Default");
+    shell.remove();
+  });
+
+  test("`b` does nothing while a control inside a table row has focus", async () => {
+    const user = userEvent.setup();
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    // A button inside a focused row still owns Space/Enter, so "b" must not
+    // yank focus out of it.
+    const shell = document.createElement("div");
+    shell.className = "table-shell";
+    shell.innerHTML =
+      '<table><tbody><tr class="table-row-link" tabindex="0"><td><button type="button">Actions</button></td></tr></tbody></table>';
+    document.body.append(shell);
+    const button = shell.querySelector("button");
+    button.focus();
+
+    await user.keyboard("{b}");
+
     expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
-    expect(document.activeElement).toBe(row);
+    expect(document.activeElement).toBe(button);
     shell.remove();
   });
 

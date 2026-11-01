@@ -22,10 +22,10 @@ import {
 // actions stage a draft row and open its edit canvas; nothing POSTs until
 // Save, and Cancel or leaving the route discards the draft.
 //
-// Keyboard model (matches the tables): with nothing focused, "b" opens the
-// rail and puts the cursor on the current option. ↑/↓ and j/k move the cursor
-// through every stop in DOM order — each group's Reorder toggle, each row
-// link/action, and the enabled Move up/down buttons while that group is in
+// Keyboard model (matches the tables): with nothing focused — or with a note
+// row focused — "b" opens the rail and puts the cursor on the current option.
+// ↑/↓ and j/k move the cursor through every stop in DOM order — each group's
+// Reorder toggle, each row link/action, and the enabled Move up/down buttons while that group is in
 // reorder mode; Home/End jump; Enter/Space activates the stop (toggles
 // reorder, moves the row, or follows the option); Escape returns focus to the
 // page and collapses the rail. Tab cycles the stops like ↓, and Shift+Tab
@@ -467,23 +467,35 @@ function Sidebar({ pageFocusRef }) {
       if (!inSidebar) {
         // "b" opens the rail unless something else owns the keyboard. The
         // tables keep their own keys, so bail when focus sits in an editable
-        // field, on a table row, or on any other focusable control. "Inside a
-        // table" is matched via the <table> itself: the shell's inert
-        // `.table-focus-anchor`, where focus rests after Escape clears a row
-        // cursor, sits beside the <table>, so that empty-row state still reads
-        // as "nothing focused" and "b" opens the rail.
+        // field or on a focusable control. "Inside a table" is matched via the
+        // <table> itself: the shell's inert `.table-focus-anchor`, where focus
+        // rests after Escape clears a row cursor, sits beside the <table>, so
+        // that empty-row state still reads as "nothing focused" and "b" opens
+        // the rail.
         const active = document.activeElement;
+        const insideTableOutsideDialog =
+          active instanceof HTMLElement &&
+          Boolean(active.closest("table")) &&
+          !active.closest("[role='dialog']");
         // A checkbox holds no text, so "b" would otherwise have nothing to
         // type into: it opens the rail when the checkbox sits inside a table.
         // Dialogs still own their keys.
         const activeIsTableCheckbox =
+          insideTableOutsideDialog &&
           active instanceof HTMLInputElement &&
-          active.type === "checkbox" &&
-          Boolean(active.closest("table")) &&
-          !active.closest("[role='dialog']");
+          active.type === "checkbox";
+        // A focused row is the table's keyboard cursor, not a control with a
+        // caret or an activation key. "b" must reach the rail whether the
+        // cursor sits on a row or the table is empty. Controls nested inside
+        // the row (buttons, links, fields) still own the keyboard.
+        const activeIsTableRow =
+          insideTableOutsideDialog &&
+          active.tagName === "TR" &&
+          active.hasAttribute("tabindex");
         const ownsKeyboard =
           active instanceof HTMLElement &&
           !activeIsTableCheckbox &&
+          !activeIsTableRow &&
           active.closest(
             "input, textarea, select, [contenteditable], button, a, table, [role='dialog']",
           );
