@@ -3542,12 +3542,14 @@ th[aria-sort="descending"] .sort-chevron {
   align-items: center;
   align-content: flex-start;
   gap: 4px;
-  /* 34px plus the combobox border matches the 36px search field. */
+  /* 34px plus the combobox border matches the 36px search field. The 5px
+     padding leaves room for the chip's 2px focus ring and its 2px gap, so
+     `overflow-y` cannot shave the outer edge. */
   min-height: 34px;
   max-height: 64px;
   overflow-y: auto;
   scrollbar-width: thin;
-  padding: 3px 6px;
+  padding: 5px 8px;
 }
 
 /* The chips themselves reuse the table filter's `.table-filter-chip` rules so
@@ -4024,19 +4026,17 @@ th[aria-sort="descending"] .sort-chevron {
   color: var(--danger);
 }
 
-/* Keyboard focus rings the whole chip wherever it lands inside: on the value
-   in the table filter or on the remove cross in either field. It wears the
-   app's normal 2px accent ring — the chip's own accent-soft fill would swallow
-   a matching tint — and the inner control draws no ring of its own.
-   `:focus-visible` keeps a mouse click from leaving a ring behind. */
-.table-filter-chip:has(:focus-visible) {
-  border-color: var(--accent);
+/* The tags field has no in-place editor — only the remove cross is focusable —
+   so keyboard focus rings the whole chip. It wears the app's normal 2px accent
+   ring with a clear gap, leaving the chip's own light border in place, exactly
+   the way a focused tag reads in the table. `:focus-visible` keeps a mouse
+   click from leaving a ring behind. */
+.tags-filter-chip:has(:focus-visible) {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
+  outline-offset: 2px;
 }
 
-.table-filter-chip .table-filter-chip-value:focus-visible,
-.table-filter-chip .table-filter-chip-remove:focus-visible {
+.tags-filter-chip .table-filter-chip-remove:focus-visible {
   outline: none;
 }
 
@@ -4052,6 +4052,15 @@ th[aria-sort="descending"] .sort-chevron {
   font-size: 0.75rem;
   font-weight: 600;
   cursor: text;
+}
+
+/* The value is its own target in the table filter, so it rings just its slice
+   — rounded on the left, square where it meets the cross — rather than the
+   whole chip. 2px, not the old hairline, and inset so it stays inside the
+   24px chip. `currentColor` keeps the negated (danger) chips red. */
+.table-filter-chip-value:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: -2px;
 }
 
 .table-filter-chip--negated .table-filter-chip-value {
@@ -4099,6 +4108,14 @@ th[aria-sort="descending"] .sort-chevron {
 .table-filter-chip-remove:focus-visible {
   background: var(--danger);
   color: var(--accent-ink);
+}
+
+/* The cross is the value's neighbour, not part of it, so it rings its own 17px
+   target in danger red. The 1px offset keeps a sliver of chip between the red
+   fill and the red ring so the two do not merge. */
+.table-filter-chip-remove:focus-visible {
+  outline: 2px solid var(--danger);
+  outline-offset: 1px;
 }
 
 /* The Columns control and its picker. The menu is portalled into <body> and
