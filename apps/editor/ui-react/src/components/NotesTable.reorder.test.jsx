@@ -180,6 +180,45 @@ describe("NotesTable row reordering", () => {
     });
   });
 
+  test("a failed reorder restores the old order and says why", async () => {
+    reorderNotes.mockRejectedValue(new Error("Order could not be saved"));
+    const { container } = renderTable();
+
+    const handle = await screen.findByLabelText("Move AAAA");
+    const targetRow = rowFor(container, "CCCC");
+    expect(targetRow).toBeTruthy();
+
+    const dataTransfer = makeDataTransfer();
+
+    await act(async () => {
+      handle.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+    });
+    await act(async () => {
+      targetRow.dispatchEvent(
+        dragEvent("dragover", { clientY: 400, dataTransfer }),
+      );
+    });
+    await act(async () => {
+      targetRow.dispatchEvent(
+        dragEvent("drop", { clientY: 400, dataTransfer }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Order could not be saved")).toBeInTheDocument();
+    });
+
+    // The optimistic order is rolled back, so the collector never keeps a
+    // position the server rejected.
+    const rows = Array.from(
+      container.querySelectorAll("tbody tr.table-row-link"),
+    ).map((row) => row.textContent);
+
+    expect(rows[0]).toContain("AAAA");
+    expect(rows[1]).toContain("BBBB");
+    expect(rows[2]).toContain("CCCC");
+  });
+
   test("dropping a row moves the keyboard cursor to its new place", async () => {
     // The server echoes the reordered notes back; the rows stay mounted.
     reorderNotes.mockResolvedValue({

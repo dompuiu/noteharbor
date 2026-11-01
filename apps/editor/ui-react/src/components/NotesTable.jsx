@@ -71,9 +71,9 @@ import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { NoCollectionsPrompt } from "./NoCollectionsPrompt.jsx";
-import { NoteRow } from "./NoteRow.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 import { TableFilterBar } from "./TableFilterBar.jsx";
+import { TableRows } from "./TableRows.jsx";
 import { TableScrollbar } from "./TableScrollbar.jsx";
 
 export function HomeHero() {
@@ -807,7 +807,9 @@ function NotesTable({
   const rowElementMapRef = useRef(new Map());
   const rowActionsMenuMapRef = useRef(new Map());
   const thumbPreviewElementMapRef = useRef(new Map());
-  const dragPreviewRef = useRef(null);
+  // Drag feedback lives in the rows (see TableRows.jsx); this mirror is what
+  // the shell's edge auto-scroll reads while a note is in the air.
+  const dragStateRef = useRef({ draggedNoteId: null, dropTarget: null });
   const tableScreenRef = useRef(null);
   const tableShellRef = useRef(null);
   const tableScrollRef = useRef(null);
@@ -972,10 +974,6 @@ function NotesTable({
   const [reorderLoading, setReorderLoading] = useState(false);
   const [slideshowNotes, setSlideshowNotes] = useState([]);
   const [activeNoteId, setActiveNoteId] = useState(null);
-  const [draggedNoteId, setDraggedNoteId] = useState(null);
-  const [dropTarget, setDropTarget] = useState(null);
-  const [columnsDragging, setColumnsDragging] = useState(false);
-  const [columnsScrolled, setColumnsScrolled] = useState(false);
   const [thumbPreviewState, setThumbPreviewState] = useState(null);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [columnFilterHeights, setColumnFilterHeights] = useState({});
@@ -1683,21 +1681,17 @@ function NotesTable({
     const invoke = (name) => (...args) =>
       rowHandlerImplRef.current?.[name]?.(...args);
 
+    // Drag-and-drop feedback is added by TableRows.jsx, which owns it.
     return {
       onActionsRef: invoke("onActionsRef"),
       onApplyTagFilter: invoke("onApplyTagFilter"),
       onCopyNote: invoke("onCopyNote"),
       onDeleteNote: invoke("onDeleteNote"),
-      onDragEnd: invoke("onDragEnd"),
-      onDragStart: invoke("onDragStart"),
       onEditNote: invoke("onEditNote"),
       onInsertNoteAfter: invoke("onInsertNoteAfter"),
       onOpenNote: invoke("onOpenNote"),
       onRowBlur: invoke("onRowBlur"),
       onRowClick: invoke("onRowClick"),
-      onRowDragLeave: invoke("onRowDragLeave"),
-      onRowDragOver: invoke("onRowDragOver"),
-      onRowDrop: invoke("onRowDrop"),
       onRowElement: invoke("onRowElement"),
       onRowFocus: invoke("onRowFocus"),
       onRowKeyDown: invoke("onRowKeyDown"),
@@ -1854,16 +1848,21 @@ function NotesTable({
     syncColumnScroll(scroller);
   }
 
-  // The pinned block's edge shadow is scroll state, not hover state: it only
-  // applies once the columns have moved underneath. Kept in sync from the
-  // scroller's scroll event and from every programmatic pan, because jsdom's
-  // direct scrollLeft writes never dispatch a scroll event.
+  // The pinned block's edge shadow and the pan's grabbing cursor are painted on
+  // the scroller itself (see .is-scrolled-x and .is-panning in styles.css).
+  // They are pure scroll and gesture state, so writing the class directly keeps
+  // a pan from rebuilding the note rows or the header. The class is also kept
+  // in sync from the scroller's scroll event, because a scroll can arrive from
+  // a wheel, a trackpad or a keyboard pan without passing through here.
   //
   // The pinned cells themselves need no scroll offset: .table-scroll-x is the
   // scrollport for both axes, so native sticky keeps them fixed while the
-  // columns pan (see .table-sticky-cell in styles.css).
+  // columns pan.
   function syncColumnScroll(scroller = tableScrollRef.current) {
-    setColumnsScrolled(isColumnPanShadowVisible(scroller?.scrollLeft ?? 0));
+    scroller?.classList.toggle(
+      "is-scrolled-x",
+      isColumnPanShadowVisible(scroller.scrollLeft ?? 0),
+    );
   }
 
   function panColumnsBy(delta) {
@@ -1954,7 +1953,7 @@ function NotesTable({
       }
 
       pan.active = true;
-      setColumnsDragging(true);
+      scroller.classList.add("is-panning");
 
       if (typeof scroller.setPointerCapture === "function") {
         scroller.setPointerCapture(event.pointerId);
@@ -1998,7 +1997,7 @@ function NotesTable({
     // pointer to the scroller so the row's mouseup may never run. Reset
     // here so a stale press flag cannot suppress a later keyboard paint.
     mouseFocusSuppressRef.current = false;
-    setColumnsDragging(false);
+    tableScrollRef.current?.classList.remove("is-panning");
   }
 
   function handleColumnPanClickCapture(event) {
@@ -3413,24 +3412,11 @@ function NotesTable({
     setSelectedIds([]);
   }
 
-  function clearDragPreview() {
-    if (dragPreviewRef.current) {
-      dragPreviewRef.current.remove();
-      dragPreviewRef.current = null;
-    }
-  }
-
-  function clearDragState() {
-    clearDragPreview();
-    setDraggedNoteId(null);
-    setDropTarget(null);
-  }
-
   function autoScrollTableShell(event) {
     const shell = tableShellRef.current;
     const scroller = tableScrollRef.current;
 
-    if (!shell || !scroller || draggedNoteId === null) {
+    if (!shell || !scroller || dragStateRef.current.draggedNoteId === null) {
       return;
     }
 
@@ -3447,27 +3433,10 @@ function NotesTable({
     }
   }
 
-  function updateDropTarget(noteId, event) {
-    const row = rowElementMapRef.current.get(noteId);
-
-    if (!row) {
-      return;
-    }
-
-    const bounds = row.getBoundingClientRect();
-    const placement =
-      event.clientY < bounds.top + bounds.height / 2 ? "before" : "after";
-
-    setDropTarget((current) =>
-      current?.noteId === noteId && current?.placement === placement
-        ? current
-        : { noteId, placement },
-    );
-  }
-
-  async function handleReorder(targetNoteId, placement) {
+  // The rows hand the drag back here once the drop lands; they own the
+  // placeholder and the preview, so all that is left is the reorder itself.
+  async function handleReorder(draggedNoteId, targetNoteId, placement) {
     if (!canReorder || draggedNoteId === null) {
-      clearDragState();
       return;
     }
 
@@ -3475,7 +3444,6 @@ function NotesTable({
     const targetIndex = notes.findIndex((note) => note.id === targetNoteId);
 
     if (startIndex < 0 || targetIndex < 0) {
-      clearDragState();
       return;
     }
 
@@ -3485,7 +3453,6 @@ function NotesTable({
       (placement === "before" && startIndex === targetIndex) ||
       (placement === "after" && startIndex === targetIndex + 1)
     ) {
-      clearDragState();
       return;
     }
 
@@ -3504,7 +3471,6 @@ function NotesTable({
     setActionError("");
     setNotes(reorderedNotes);
     setReorderLoading(true);
-    clearDragState();
     // Land the keyboard cursor on the moved row in its new place. The row
     // keeps its key, so React moves the same DOM node and focus follows it
     // there.
@@ -4030,65 +3996,43 @@ function NotesTable({
     }
   }
 
-  function handleRowDragStart(note, event) {
-    const row = rowElementMapRef.current.get(note.id);
-
-    clearDragPreview();
-    event.stopPropagation();
-    event.dataTransfer.effectAllowed = "move";
-    event.dataTransfer.setData("text/plain", String(note.id));
-
-    if (row) {
-      const preview = row.cloneNode(true);
-      preview.classList.add("table-drag-preview");
-      preview.style.width = `${row.getBoundingClientRect().width}px`;
-      document.body.appendChild(preview);
-      dragPreviewRef.current = preview;
-      event.dataTransfer.setDragImage(preview, 24, 24);
-    }
-
-    setDraggedNoteId(note.id);
-    setDropTarget({ noteId: note.id, placement: "before" });
-  }
-
-  function handleRowDragLeave(note, event) {
-    // The drop placeholder is a sibling row inserted into this same tbody, so
-    // moving the pointer onto it (or onto a neighbouring row) must not clear
-    // the target. Clearing it would unmount the placeholder, drop the pointer
-    // back on this row, and re-insert the placeholder — a loop that makes the
-    // rows flicker. Only a move that leaves the body entirely clears it.
-    const body = event.currentTarget.closest("tbody");
-
-    if (event.relatedTarget && body?.contains(event.relatedTarget)) {
-      return;
-    }
-
-    setDropTarget((current) =>
-      current?.noteId === note.id ? null : current,
-    );
-  }
-
-  function handleRowDragOver(note, event) {
-    if (!canReorder || draggedNoteId === null) {
-      return;
-    }
-
-    event.preventDefault();
-    updateDropTarget(note.id, event);
-  }
-
-  function handleRowDrop(note, event) {
-    event.preventDefault();
-    const nextPlacement =
-      dropTarget?.noteId === note.id
-        ? dropTarget.placement
-        : event.clientY <
-            event.currentTarget.getBoundingClientRect().top +
-              event.currentTarget.getBoundingClientRect().height / 2
-          ? "before"
-          : "after";
-    void handleReorder(note.id, nextPlacement);
-  }
+  // The empty view is the one body row the screen still owns: it is not a note
+  // and it only exists while the list is empty.
+  const emptyTableRow = !orderedNotes.length ? (
+    <tr className="table-empty-row">
+      <td className="table-empty-cell" colSpan={totalColumnCount}>
+        {noCollections ? (
+          <NoCollectionsPrompt />
+        ) : notes.length ? (
+          // A filter that matches nothing is the most travelled error path in
+          // the screen: say the view is empty, not the collection, and put a
+          // recovery next to it.
+          <div className="table-empty-state">
+            <p className="table-empty-title">
+              No notes match the active filters.
+            </p>
+            <div className="table-empty-actions">
+              {hasActiveFilters ? (
+                <button
+                  className="button"
+                  onClick={clearAllFilters}
+                  type="button"
+                >
+                  Clear filters
+                </button>
+              ) : null}
+            </div>
+            <p className="table-empty-hint">
+              A chip filters one field. Same field values are ORed; different
+              fields are ANDed.
+            </p>
+          </div>
+        ) : (
+          "No notes are stored yet in this collection."
+        )}
+      </td>
+    </tr>
+  ) : null;
 
   rowHandlerImplRef.current = {
     onActionsRef(noteId, instance) {
@@ -4105,16 +4049,11 @@ function NotesTable({
     onDeleteNote(noteId) {
       void handleDeleteNote(noteId);
     },
-    onDragEnd: clearDragState,
-    onDragStart: handleRowDragStart,
     onEditNote: openEditor,
     onInsertNoteAfter: openCreateNoteAfter,
     onOpenNote: openSlideshow,
     onRowBlur: handleRowBlur,
     onRowClick: handleRowClick,
-    onRowDragLeave: handleRowDragLeave,
-    onRowDragOver: handleRowDragOver,
-    onRowDrop: handleRowDrop,
     onRowElement: registerRowElement,
     onRowFocus: handleRowFocus,
     onRowKeyDown: handleRowKeyDown,
@@ -4507,7 +4446,7 @@ function NotesTable({
               />
               <div className="table-viewport">
               <div
-                className={`table-scroll-x${columnsDragging ? " is-panning" : ""}${columnsScrolled ? " is-scrolled-x" : ""}`}
+                className="table-scroll-x"
                 onClickCapture={handleColumnPanClickCapture}
                 onLostPointerCapture={handleColumnPanPointerEnd}
                 onMouseDown={handleColumnPanMouseDown}
@@ -4660,112 +4599,26 @@ function NotesTable({
                         ) : null}
                       </tr>
                     </thead>
-                    <tbody
-                      onDragOver={(event) => {
-                        if (!canReorder || draggedNoteId === null) {
-                          return;
-                        }
-
-                        event.preventDefault();
-                      }}
-                      onDrop={(event) => {
-                        if (
-                          event.defaultPrevented ||
-                          !canReorder ||
-                          draggedNoteId === null ||
-                          !dropTarget
-                        ) {
-                          return;
-                        }
-
-                        event.preventDefault();
-                        void handleReorder(
-                          dropTarget.noteId,
-                          dropTarget.placement,
-                        );
-                      }}
-                    >
-                      {topSpacerHeight ? (
-                        <tr aria-hidden="true" className="table-spacer-row">
-                          <td
-                            colSpan={totalColumnCount}
-                            style={{ height: topSpacerHeight }}
-                          />
-                        </tr>
-                      ) : null}
-                      {!orderedNotes.length ? (
-                        <tr className="table-empty-row">
-                          <td
-                            className="table-empty-cell"
-                            colSpan={totalColumnCount}
-                          >
-                            {noCollections ? (
-                              <NoCollectionsPrompt />
-                            ) : notes.length ? (
-                              // A filter that matches nothing is the most
-                              // travelled error path in the screen: say the
-                              // view is empty, not the collection, and put a
-                              // recovery next to it.
-                              <div className="table-empty-state">
-                                <p className="table-empty-title">
-                                  No notes match the active filters.
-                                </p>
-                                <div className="table-empty-actions">
-                                  {hasActiveFilters ? (
-                                    <button
-                                      className="button"
-                                      onClick={clearAllFilters}
-                                      type="button"
-                                    >
-                                      Clear filters
-                                    </button>
-                                  ) : null}
-                                </div>
-                                <p className="table-empty-hint">
-                                  A chip filters one field. Same field values
-                                  are ORed; different fields are ANDed.
-                                </p>
-                              </div>
-                            ) : (
-                              "No notes are stored yet in this collection."
-                            )}
-                          </td>
-                        </tr>
-                      ) : null}
-                      {virtualRows.map((virtualRow) => {
-                        const note = deferredOrderedNotes[virtualRow.index];
-
-                        return (
-                          <NoteRow
-                            canReorder={canReorder}
-                            columns={visibleColumns}
-                            dropPlacement={
-                              dropTarget?.noteId === note.id
-                                ? dropTarget.placement
-                                : null
-                            }
-                            handlers={rowHandlers}
-                            index={virtualRow.index}
-                            isActive={activeNoteId === note.id}
-                            isDragging={draggedNoteId === note.id}
-                            isSelected={selectedIdSet.has(note.id)}
-                            key={note.id}
-                            model={rowModelsByNoteId.get(note.id)}
-                            note={note}
-                            showGutter={vScrollVisible}
-                            totalColumnCount={totalColumnCount}
-                          />
-                        );
-                      })}
-                      {bottomSpacerHeight ? (
-                        <tr aria-hidden="true" className="table-spacer-row">
-                          <td
-                            colSpan={totalColumnCount}
-                            style={{ height: bottomSpacerHeight }}
-                          />
-                        </tr>
-                      ) : null}
-                    </tbody>
+                    <TableRows
+                      activeNoteId={activeNoteId}
+                      canReorder={canReorder}
+                      columns={visibleColumns}
+                      dragStateRef={dragStateRef}
+                      emptyContent={emptyTableRow}
+                      handlers={rowHandlers}
+                      notes={deferredOrderedNotes}
+                      onReorder={handleReorder}
+                      rowElementFor={(noteId) =>
+                        rowElementMapRef.current.get(noteId)
+                      }
+                      rowModelsByNoteId={rowModelsByNoteId}
+                      selectedIdSet={selectedIdSet}
+                      showGutter={vScrollVisible}
+                      topSpacerHeight={topSpacerHeight}
+                      bottomSpacerHeight={bottomSpacerHeight}
+                      totalColumnCount={totalColumnCount}
+                      virtualRows={virtualRows}
+                    />
                   </table>
                 </div>
               </div>
