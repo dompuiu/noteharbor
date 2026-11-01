@@ -4,6 +4,18 @@ import { CATALOG_ROUTES, DEFAULT_DESTINATION, NEW_COLLECTION_ID } from "../lib/r
 import { useCollections } from "../lib/collections.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 import { NotesTable } from "./NotesTable.jsx";
+import { TablePerfBoundary } from "./TablePerfBoundary.jsx";
+
+// The table is the expensive part of this screen, so the opt-in dev readout
+// wraps it here rather than inside NotesTable. With the flag off the boundary
+// hands the table through untouched.
+function TableWithPerfReadout(props) {
+  return (
+    <TablePerfBoundary>
+      <NotesTable {...props} />
+    </TablePerfBoundary>
+  );
+}
 
 // One collection, rendered in one of two modes sharing one container.
 // View mode shows the title with rename plus Add note; edit mode swaps the
@@ -240,7 +252,7 @@ function CollectionScreen({ mode }) {
   if (isNew) {
     return (
       <section className="screen-stack showcase-screen collection-screen collection-screen--edit">
-        <NotesTable
+        <TableWithPerfReadout
           collection={null}
           collectionId={null}
           collections={collections}
@@ -289,7 +301,7 @@ function CollectionScreen({ mode }) {
 
     return (
       <section className="screen-stack showcase-screen collection-screen collection-screen--view">
-        <NotesTable
+        <TableWithPerfReadout
           collection={collection}
           collectionId={collectionId}
           collections={collections}
@@ -325,7 +337,7 @@ function CollectionScreen({ mode }) {
 
   return (
     <section className="screen-stack showcase-screen collection-screen collection-screen--edit">
-      <NotesTable
+      <TableWithPerfReadout
         collection={collection}
         collectionId={collectionId}
         collections={collections}
