@@ -466,7 +466,7 @@ describe("table styles", () => {
     expect(fill[1]).toMatch(/color:\s*var\(--accent-ink\)/);
 
     const ring = styles.match(
-      /\.table-filter-chip-remove:focus-visible\s*\{\s*outline:\s*2px solid var\(--danger\)/,
+      /\.table-filter-chip-remove:focus-visible\s*\{\s*outline:\s*1px solid var\(--danger\)/,
     );
     expect(ring).not.toBeNull();
   });

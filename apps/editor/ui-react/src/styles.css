@@ -4096,10 +4096,10 @@ th[aria-sort="descending"] .sort-chevron {
   color: var(--accent-ink);
 }
 
-/* The keyboard focus ring matches the hover fill, so tabbing to the cross
-   shows the same red target a mouse hover does. */
+/* A hairline ring, like the editor's tag chips, keeps the red target clear
+   without swelling the 17px button. */
 .table-filter-chip-remove:focus-visible {
-  outline: 2px solid var(--danger);
+  outline: 1px solid var(--danger);
   outline-offset: 1px;
 }
 
