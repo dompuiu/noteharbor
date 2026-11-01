@@ -805,8 +805,9 @@ function NotesTable({
   const rowElementMapRef = useRef(new Map());
   const rowActionsMenuMapRef = useRef(new Map());
   const thumbPreviewElementMapRef = useRef(new Map());
-  // Drag feedback lives in the rows (see TableRows.jsx); this mirror is what
-  // the shell's edge auto-scroll reads while a note is in the air.
+  // Drag feedback lives in the rows (see TableRows.jsx), which are its only
+  // writer; this ref mirrors it synchronously so the shell's edge auto-scroll
+  // can ask whether a note is in the air without a table render.
   const dragStateRef = useRef({ draggedNoteId: null, dropTarget: null });
   const tableScreenRef = useRef(null);
   const tableShellRef = useRef(null);

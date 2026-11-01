@@ -7,9 +7,12 @@ import { NoteRow } from "./NoteRow.jsx";
 // Reorder feedback is row state: lifting a note and moving it over another row
 // repaints those rows, not the table body. Keeping it here, below the header,
 // the column widths and the virtualizer, is what stops a drag from rebuilding
-// the whole table on every dragover. The shell's edge auto-scroll still needs
-// to know a drag is running, so the state is mirrored into the ref the screen
-// hands down.
+// the whole table on every dragover. This component is the only writer of that
+// state; the ref the screen hands down is a synchronous mirror of it, because
+// the shell's edge auto-scroll has to know a drag is running without the table
+// re-rendering. The shell listener stays on the shell: it is the only place
+// that sees a drag over the sticky header, which is exactly where a drag pauses
+// to scroll up.
 export function TableRows({
   activeNoteId,
   canReorder,
