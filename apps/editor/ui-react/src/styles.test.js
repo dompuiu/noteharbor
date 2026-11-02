@@ -967,6 +967,32 @@ describe("table styles", () => {
     expect(tags[1]).not.toMatch(/(?:^|[^a-z-])(?:max-)?width:/i);
   });
 
+  // The chip plan fills the column exactly, so the chips sit flush against
+  // this box and a bare clip shaves their focus ring off. The list must reserve
+  // the ring's reach (outline width plus offset) as padding and cancel it with
+  // an equal negative margin so the chips keep their planned width.
+  test("the tags list reserves room for the chip focus ring", () => {
+    const ring = styles.match(/^:focus-visible\s*\{([^}]*)\}/m);
+    const list = styles.match(/\.tag-list-clip\s*\{([^}]*)\}/);
+    const cell = styles.match(/tbody td\s*\{([^}]*)\}/);
+    expect(ring).not.toBeNull();
+    expect(list).not.toBeNull();
+    expect(cell).not.toBeNull();
+
+    const outline = Number(ring[1].match(/outline:\s*(\d+)px/)?.[1]);
+    const offset = Number(ring[1].match(/outline-offset:\s*(\d+)px/)?.[1]);
+    const padding = Number(list[1].match(/padding:\s*(\d+)px/)?.[1]);
+    const margin = Number(list[1].match(/margin:\s*-(\d+)px/)?.[1]);
+    const cellPadding = Number(cell[1].match(/padding:\s*0\s+(\d+)px/)?.[1]);
+
+    expect(padding).toBeGreaterThanOrEqual(outline + offset);
+    // The negative margin cancels the padding, so no chip width is stolen.
+    expect(margin).toBe(padding);
+    // The ring still lands inside the cell, which is what clips the row.
+    expect(cellPadding).toBeGreaterThanOrEqual(outline + offset);
+    expect(list[1]).toMatch(/overflow:\s*hidden/);
+  });
+
   test("the compact control columns use a few pixels of horizontal padding", () => {
     const order = styles.match(/\.table-order-cell\s*\{([^}]*)\}/);
     expect(order).not.toBeNull();

@@ -5184,10 +5184,18 @@ td.drag-cell {
   flex-wrap: wrap;
 }
 
+/* The chip plan fits the visible chips to this box, so they sit flush against
+   its edge. A plain clip would cut off the focus ring they paint outside
+   themselves (the outline plus its 2px offset). Reserve a little more than the
+   ring's reach as padding, then pull the box back out by the same margin: the
+   chips keep the width the plan gave them and the ring paints in the cell's
+   own padding. */
 .tag-list-clip {
   flex-wrap: nowrap;
   gap: 5px;
   overflow: hidden;
+  padding: 6px;
+  margin: -6px;
   min-width: 0;
 }
 
