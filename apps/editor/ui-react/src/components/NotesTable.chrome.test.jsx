@@ -171,6 +171,27 @@ describe("NotesTable chrome", () => {
     expect(within(hint).getByText("?")).toBeInTheDocument();
   });
 
+  test("the footer stops offering the arrow keys when nothing matched", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await chooseFilterField(user, "All fields");
+    await user.type(
+      await screen.findByRole("searchbox", { name: "Filter All fields" }),
+      "zzzz{Enter}",
+    );
+
+    await screen.findByText("No notes match the active filters.");
+    const keys = container.querySelector(".table-footer-keys");
+    expect(keys).not.toBeNull();
+    // No rows means no arrow targets, so the hint keeps the one key that can
+    // still do something.
+    expect(keys.textContent).not.toContain("to browse");
+    expect(keys.textContent).toContain("shortcuts");
+    expect(within(keys).getByText("?")).toBeInTheDocument();
+  });
+
   test("the footer shows the view summary before the reorder hint", async () => {
     const { container } = renderTable();
 

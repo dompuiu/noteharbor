@@ -335,8 +335,9 @@ describe("table styles", () => {
   });
 
   // The scoped filter field is table chrome now, so it sits on the same 36px
-  // band as the column filters instead of the old 40px toolbar bar. Its flex
-  // basis gives it the rail's lead position without crowding the chips.
+  // band as the column filters instead of the old 40px toolbar bar. It is a
+  // fixed 400px: the rail's primary control, so neither the hint's length nor
+  // the trailing cluster decides its width.
   test("the scoped field matches the column filters' height and flex basis", () => {
     const search = styles.match(/^\.table-search-input\s*\{([^}]*)\}/m);
     expect(search).not.toBeNull();
@@ -344,7 +345,8 @@ describe("table styles", () => {
 
     const scoped = styles.match(/^\.table-search--scoped\s*\{([^}]*)\}/m);
     expect(scoped).not.toBeNull();
-    expect(scoped[1]).toMatch(/flex:\s*0 1 400px/);
+    expect(scoped[1]).toMatch(/flex:\s*0 0 400px/);
+    expect(scoped[1]).toMatch(/width:\s*min\(400px,\s*100%\)/);
     expect(scoped[1]).toMatch(/min-width:\s*240px/);
     expect(scoped[1]).toMatch(/height:\s*36px/);
 
@@ -367,14 +369,16 @@ describe("table styles", () => {
     expect(tagsInput[1]).toMatch(/min-height:\s*0/);
   });
 
-  // The idle hint row is gone, so the placeholder carries the prototype's
-  // lighter tone on the table's own chrome.
-  test("the filter input placeholder matches the prototype's tone", () => {
+  // The placeholder takes the same AA tone as every other quiet field. The
+  // prototype's lighter hint tone measured 2.34:1 on this ground.
+  test("the filter input placeholder uses the AA-safe tone", () => {
     const placeholder = styles.match(
-      /\.table-search--scoped \.table-search-input::placeholder\s*\{([^}]*)\}/,
+      /^\.table-search-input::placeholder\s*\{([^}]*)\}/m,
     );
     expect(placeholder).not.toBeNull();
-    expect(placeholder[1]).toMatch(/color:\s*var\(--text-hint\)/);
+    expect(placeholder[1]).toMatch(/color:\s*var\(--text-faint\)/);
+    expect(styles).not.toMatch(/\.table-search--scoped \.table-search-input::placeholder/);
+    expect(styles).not.toMatch(/--text-hint/);
     expect(styles).not.toMatch(/\.table-filter-chips-empty/);
   });
 
@@ -388,17 +392,26 @@ describe("table styles", () => {
     expect(hint).not.toBeNull();
     expect(hint[1]).toMatch(/flex:\s*1 1 240px/);
     expect(hint[1]).toMatch(/min-width:\s*0/);
+    // The 24px row is the chip line's own height, so the first chip replaces
+    // the sentence without moving the table.
+    expect(hint[1]).toMatch(/min-height:\s*24px/);
     // The only sentence that explains the model has to read as text, not as
-    // texture: --text-hint is 2.22:1 on the rail, --text-faint is 4.96:1.
+    // texture: --text-faint is 4.96:1 on the rail.
     expect(hint[1]).toMatch(/color:\s*var\(--text-faint\)/);
     expect(hint[1]).toMatch(/font-size:\s*0\.75rem/);
 
-    // The connectors say what the chips mean, so they carry the same tone.
-    for (const name of ["table-filter-or", "table-filter-and"]) {
-      const rule = styles.match(new RegExp(`^\\.${name}\\s*\\{([^}]*)\\}`, "m"));
-      expect(rule).not.toBeNull();
-      expect(rule[1]).toMatch(/color:\s*var\(--text-faint\)/);
-    }
+    // Both connectors are one role: the word that joins two chips, 11px/600 in
+    // sentence case at the muted tone. Only their side padding differs.
+    const connectors = styles.match(
+      /^\.table-filter-or,\s*\.table-filter-and\s*\{([^}]*)\}/m,
+    );
+    expect(connectors).not.toBeNull();
+    expect(connectors[1]).toMatch(/color:\s*var\(--text-muted\)/);
+    expect(connectors[1]).toMatch(/font-size:\s*0\.6875rem/);
+    expect(connectors[1]).toMatch(/font-weight:\s*600/);
+    expect(connectors[1]).toMatch(/letter-spacing:\s*0\.06em/);
+    expect(connectors[1]).not.toMatch(/font-style:\s*italic/);
+    expect(connectors[1]).not.toMatch(/text-transform:\s*uppercase/);
   });
 
   // The filters describe only the table, so they are the card's own rail: the
@@ -476,7 +489,7 @@ describe("table styles", () => {
     // line, and `order` follows the visual stack while the DOM keeps chips
     // before Add note / Reset view / Columns for the keyboard.
     const chips = narrow.match(
-      /\.table-filter-chips\s*\{([^}]*)\}/,
+      /\.table-filter-chips,\s*\.table-filter-hint\s*\{([^}]*)\}/,
     );
     expect(chips).not.toBeNull();
     expect(chips[1]).toMatch(/order:\s*2/);
@@ -493,6 +506,29 @@ describe("table styles", () => {
     const queryAt = styles.indexOf("@container table-shell");
     expect(queryAt).toBeGreaterThan(styles.indexOf(".table-rail-actions {"));
     expect(queryAt).toBeGreaterThan(styles.indexOf(".table-filter-chips {"));
+  });
+
+  // The idle hint is longer than the gap left beside the field once the
+  // trailing cluster needs its row, so it takes the chips' row too. One narrow
+  // shape in both states: the hint's length never decides the field's width,
+  // the cluster never floats alone, and the rail changes height only at the
+  // breakpoint.
+  test("the idle hint shares the narrow rail's second row", () => {
+    const narrow = atRule(styles, "@container table-shell (max-width: 1120px)");
+    expect(narrow).not.toBeNull();
+    expect(narrow).toMatch(
+      /\.table-filter-chips,\s*\.table-filter-hint\s*\{[^}]*order:\s*2/,
+    );
+    expect(narrow).toMatch(/\.table-rail-actions\s*\{[^}]*order:\s*1/);
+
+    // The field is the primary control, so it holds its width: a shrinking
+    // basis let the hint's length set it (400 at 1180, 372 at 1100).
+    const field = styles.match(/^\.table-search--scoped\s*\{([^}]*)\}/m);
+    expect(field).not.toBeNull();
+    expect(field[1]).toMatch(/flex:\s*0 0 400px/);
+
+    // One breakpoint, not two: the second query re-introduced the instability.
+    expect(styles).not.toMatch(/@container table-shell \(max-width: 900px\)/);
   });
 
   // A connector names the chip that follows it, so prefix and chip wrap as one
@@ -522,7 +558,9 @@ describe("table styles", () => {
   // An empty view is a message, not a missing page: the table stretches to the
   // scrollport so the message centres in the rows region. The class is set from
   // the rendered row counts, so a deferred frame that still holds stale rows
-  // never stretches them.
+  // never stretches them. The cell spans the table's 1200px floor, which can be
+  // wider than the card, so the frame pins to the visible scrollport instead of
+  // centring somewhere past the card's right edge.
   test("the empty state centres in the rows region", () => {
     expect(styles).toMatch(
       /\.table-scroll-content\.is-empty-view\s*\{\s*height:\s*100%/,
@@ -534,6 +572,15 @@ describe("table styles", () => {
     const cell = styles.match(/^\.table-empty-cell\s*\{([^}]*)\}/m);
     expect(cell).not.toBeNull();
     expect(cell[1]).toMatch(/vertical-align:\s*middle/);
+    // The frame owns the inline insets now, so the cell must not add its own.
+    expect(cell[1]).toMatch(/padding:\s*32px 0/);
+
+    const frame = styles.match(/^\.table-empty-frame\s*\{([^}]*)\}/m);
+    expect(frame).not.toBeNull();
+    expect(frame[1]).toMatch(/position:\s*sticky/);
+    expect(frame[1]).toMatch(/left:\s*0/);
+    expect(frame[1]).toMatch(/width:\s*min\(100%,\s*100cqw\)/);
+    expect(frame[1]).toMatch(/padding:\s*0 16px/);
   });
 
   // The editor's tag row and the filter row share one Clear all, so the hover
@@ -680,10 +727,16 @@ describe("table styles", () => {
     expect(label[1]).toMatch(/font-size:\s*0\.75rem/);
     expect(label[1]).toMatch(/font-weight:\s*650/);
 
-    const and = styles.match(/\.table-filter-and\s*\{([^}]*)\}/);
+    // The two connectors share one rule; only their side padding differs.
+    const and = styles.match(
+      /(?<!\.table-filter-or,\n)\.table-filter-and \{([^}]*)\}/,
+    );
     expect(and).not.toBeNull();
-    expect(and[1]).toMatch(/font-size:\s*0\.6875rem/);
-    expect(and[1]).toMatch(/padding:\s*0\s+6px/);
+    expect(and[1]).toMatch(/padding:\s*0\s+8px/);
+
+    const or = styles.match(/\.table-filter-or \{([^}]*)\}/);
+    expect(or).not.toBeNull();
+    expect(or[1]).toMatch(/padding:\s*0\s+3px/);
 
     const clear = styles.match(/\.table-filter-clear-all\s*\{([^}]*)\}/);
     expect(clear).not.toBeNull();
@@ -1686,7 +1739,8 @@ describe("catalog header", () => {
     expect(eyebrow[1]).toMatch(/font-weight:\s*600/);
     expect(eyebrow[1]).toMatch(/letter-spacing:\s*0\.09em/);
     expect(eyebrow[1]).toMatch(/text-transform:\s*uppercase/);
-    expect(eyebrow[1]).toMatch(/color:\s*var\(--text-hint\)/);
+    // The prototype's lighter tone measured 2.07:1 on the page ground.
+    expect(eyebrow[1]).toMatch(/color:\s*var\(--text-faint\)/);
   });
 
   test("the collection title sits at the prototype's 21px", () => {

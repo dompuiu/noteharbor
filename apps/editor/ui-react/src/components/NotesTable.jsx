@@ -1179,8 +1179,6 @@ function NotesTable({
       : null,
   ].filter(Boolean);
 
-  const showSelection = true;
-  const showReorder = true;
   // An empty library is not an outage; a failed load keeps its inline
   // `collectionsError` instead.
   const noCollections = isEmptyLibrary({
@@ -1749,8 +1747,7 @@ function NotesTable({
   // render would repaint every old row before the filtered list lands. This is
   // the view fact behind the grips: does the current view have a manual order
   // to show at all?
-  const reorderRail =
-    showReorder && !deferredConditions.length && isDefaultOrder;
+  const reorderRail = !deferredConditions.length && isDefaultOrder;
   // A save in flight only stops the grips from taking a drop; it must not
   // unmount them, or every reorder would blank the whole reorder rail for the
   // length of the round trip.
@@ -1763,11 +1760,9 @@ function NotesTable({
     ? null
     : reorderRail
       ? "Drag the handle to reorder"
-      : !showReorder
-        ? null
-        : deferredConditions.length
-          ? "Clear filters to reorder"
-          : `Sort by ${getTableColumn(defaultSortKey)?.label ?? "#"} ascending to reorder`;
+      : deferredConditions.length
+        ? "Clear filters to reorder"
+        : `Sort by ${getTableColumn(defaultSortKey)?.label ?? "#"} ascending to reorder`;
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const allVisibleSelected = useMemo(
@@ -2890,9 +2885,7 @@ function NotesTable({
       sortKey: defaults.sortKey,
       sortDirection: defaults.sortDirection,
     }));
-    if (showSelection) {
-      setSelectedIds([]);
-    }
+    setSelectedIds([]);
   }
 
   function clearAllFilters() {
@@ -4141,35 +4134,41 @@ function NotesTable({
   const emptyTableRow = !orderedNotes.length ? (
     <tr className="table-empty-row">
       <td className="table-empty-cell" colSpan={totalColumnCount}>
-        {noCollections ? (
-          <NoCollectionsPrompt />
-        ) : notes.length ? (
-          // A filter that matches nothing is the most travelled error path in
-          // the screen: say the view is empty, not the collection, and put a
-          // recovery next to it.
-          <div className="table-empty-state">
-            <p className="table-empty-title">
-              No notes match the active filters.
-            </p>
-            <div className="table-empty-actions">
-              {hasActiveFilters ? (
-                <button
-                  className="button"
-                  onClick={clearAllFilters}
-                  type="button"
-                >
-                  Clear filters
-                </button>
-              ) : null}
+        {/* The cell spans the whole table, which can be wider than the card
+            when the columns overflow. The frame is pinned to the visible
+            scrollport so the message centres in what the reader can see, not
+            in the off-screen width of the table. */}
+        <div className="table-empty-frame">
+          {noCollections ? (
+            <NoCollectionsPrompt />
+          ) : notes.length ? (
+            // A filter that matches nothing is the most travelled error path in
+            // the screen: say the view is empty, not the collection, and put a
+            // recovery next to it.
+            <div className="table-empty-state">
+              <p className="table-empty-title">
+                No notes match the active filters.
+              </p>
+              <div className="table-empty-actions">
+                {hasActiveFilters ? (
+                  <button
+                    className="button"
+                    onClick={clearAllFilters}
+                    type="button"
+                  >
+                    Clear filters
+                  </button>
+                ) : null}
+              </div>
+              <p className="table-empty-hint">
+                A chip filters one field. Same field values are ORed; different
+                fields are ANDed.
+              </p>
             </div>
-            <p className="table-empty-hint">
-              A chip filters one field. Same field values are ORed; different
-              fields are ANDed.
-            </p>
-          </div>
-        ) : (
-          "No notes are stored yet in this collection."
-        )}
+          ) : (
+            "No notes are stored yet in this collection."
+          )}
+        </div>
       </td>
     </tr>
   ) : null;
@@ -4897,7 +4896,7 @@ function NotesTable({
                 Showing {deferredOrderedNotes.length} of {notes.length} notes ·
                 sorted by {getTableColumn(sortKey)?.label ?? "#"}{" "}
                 {sortDirection === "asc" ? "ascending" : "descending"}
-                {showSelection && selectedIds.length
+                {selectedIds.length
                   ? ` · ${selectedIds.length} selected`
                   : ""}
               </span>
@@ -4909,7 +4908,14 @@ function NotesTable({
                 ) : null}
                 <span className="table-footer-keys">
                   {reorderHint ? `${reorderHint} · ` : null}
-                  <kbd>&uarr;</kbd> <kbd>&darr;</kbd> to browse ·{" "}
+                  {/* With no rows there is nothing for the arrows to walk, so
+                      the hint stops offering them and keeps the one key that
+                      still does something. */}
+                  {deferredOrderedNotes.length ? (
+                    <>
+                      <kbd>&uarr;</kbd> <kbd>&darr;</kbd> to browse ·{" "}
+                    </>
+                  ) : null}
                   <kbd>?</kbd> shortcuts
                 </span>
               </span>

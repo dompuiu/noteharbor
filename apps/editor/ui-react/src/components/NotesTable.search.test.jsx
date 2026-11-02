@@ -341,6 +341,11 @@ describe("NotesTable search", () => {
     const emptyCell = screen
       .getByText("No notes match the active filters.")
       .closest(".table-empty-cell");
+    // The message lives in the frame that pins to the visible scrollport, not
+    // directly in the cell that spans the table's off-screen width.
+    expect(
+      emptyCell.querySelector(":scope > .table-empty-frame"),
+    ).not.toBeNull();
     await user.click(
       within(emptyCell).getByRole("button", { name: "Clear filters" }),
     );

@@ -26,8 +26,6 @@
      header and 2.3:1 on placeholders. */
   --text-muted: #6f5c40;
   --text-faint: #7a6749;
-  /* Prototype's lighter hint tone, used inside the table filter bar only. */
-  --text-hint: #b5a488;
   --accent: #96622f;
   --accent-strong: #71461f;
   --accent-soft: rgba(150, 98, 47, 0.12);
@@ -2710,15 +2708,16 @@ input[type="radio"] {
 }
 
 /* The collection head follows the prototype's page head: the Catalog eyebrow
-   is a 10px caption in the prototype's lighter hint tone, and the name is the
-   page title at 21px/650. Two classes so the refinement outranks the shared
-   `.eyebrow` rule whatever order they land in. */
+   is a 10px caption, and the name is the page title at 21px/650. Two classes
+   so the refinement outranks the shared `.eyebrow` rule whatever order they
+   land in. The caption takes the faint tone — the prototype's lighter one
+   measured 2.07:1 on the page ground. */
 .panel-heading-copy .collection-eyebrow {
   font-size: 0.625rem;
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: var(--text-hint);
+  color: var(--text-faint);
 }
 
 .table-shell mark {
@@ -3065,12 +3064,28 @@ tbody td {
 
 /* Centred by the stretched table above; 32px keeps the message clear of the
    header when the card is shorter than the viewport and the stretch cannot
-   give it room. */
+   give it room. The cell spans the table's full width, so it cannot centre the
+   message itself: see the frame below. */
 .table-empty-cell {
-  padding: 32px 16px;
+  padding: 32px 0;
   color: var(--text-muted);
   text-align: center;
   vertical-align: middle;
+}
+
+/* The table keeps its 1200px floor while the card can be narrower, so a cell
+   that spans it centres the message somewhere past the card's right edge.
+   This frame is the width the reader can actually see (`100cqw` against the
+   table's own query container) and sticks to the scrollport's left edge, so
+   the message stays centred in view and keeps its place while the table is
+   panned. The plain percentage is the fallback for browsers without container
+   query units. */
+.table-empty-frame {
+  position: sticky;
+  left: 0;
+  width: 100%;
+  width: min(100%, 100cqw);
+  padding: 0 16px;
 }
 
 /* A query that matches nothing is the table's most travelled error path, so
@@ -3937,10 +3952,13 @@ th[aria-sort="descending"] .sort-chevron {
 /* One filter bar: the field button lives inside the field, the value input
    next to it, and Enter turns the text into a chip. Same field ORs, different
    fields AND, so the rail states the whole filter. The field leads the rail
-   at the column header's weight (36px) and yields before it crowds the chips;
-   its min-width is what a value still needs to stay readable. */
+   at the column header's weight (36px) and holds a fixed 400px: it is the
+   rail's primary control, so the hint sentence's length must not decide its
+   width. Below the narrow query the hint leaves the first line instead, which
+   is what keeps the field 400px at every width; its min-width is what a value
+   still needs to stay readable if a future container is narrower than this. */
 .table-search--scoped {
-  flex: 0 1 400px;
+  flex: 0 0 400px;
   width: min(400px, 100%);
   min-width: 240px;
   display: flex;
@@ -4146,13 +4164,6 @@ th[aria-sort="descending"] .sort-chevron {
   color: var(--text-faint);
 }
 
-/* The prototype's placeholder tone: lighter than --text-faint so the hint
-   sits behind the field button instead of competing with it. Scoped to the
-   filter bar, leaving the AA-safe token in place everywhere else. */
-.table-search--scoped .table-search-input::placeholder {
-  color: var(--text-hint);
-}
-
 .table-search-input:focus {
   border-color: var(--accent);
   outline: 2px solid var(--accent-soft);
@@ -4177,10 +4188,15 @@ th[aria-sort="descending"] .sort-chevron {
    without reserving a separate line. Active chips teach nothing here; the
    empty-match state still spells out OR/AND when it matters. This is the only
    place the model is explained, so it uses the readable faint tone (4.96:1 on
-   the rail) rather than the hint tone the field's placeholder can afford. */
+   the rail) rather than the hint tone the field's placeholder can afford. The
+   24px row is the chip line's own height, so committing the first chip swaps
+   one row for another instead of moving the table. */
 .table-filter-hint {
+  display: flex;
+  align-items: center;
   flex: 1 1 240px;
   min-width: 0;
+  min-height: 24px;
   margin: 0;
   color: var(--text-faint);
   font-size: 0.75rem;
@@ -4203,7 +4219,7 @@ th[aria-sort="descending"] .sort-chevron {
 
 /* One chip plus the prefix that names it: the field label for a field's first
    chip, "or" after it, and "and" ahead of a new field. The prefix travels with
-   the chip, so a wrapped line may start with "AND Company PM" or "or 29" but
+   the chip, so a wrapped line may start with "and Company PM" or "or 29" but
    never ends on a bare connector, and a long run of ORed values wraps between
    chips instead of running under the rail's trailing controls. The 24px row
    keeps a wrapped chip line at the 24px chip plus the block's 8px row-gap. */
@@ -4224,23 +4240,24 @@ th[aria-sort="descending"] .sort-chevron {
   white-space: nowrap;
 }
 
-.table-filter-or {
-  color: var(--text-faint);
+/* Both connectors are one role: the word that joins two chips, 11px/600 in
+   sentence case at the muted tone, one size below the 12px value it introduces
+   and one weight above it. Only the side padding differs — `and` opens a new
+   field and needs the wider break, `or` continues the run it sits in. */
+.table-filter-or,
+.table-filter-and {
+  color: var(--text-muted);
   font-size: 0.6875rem;
-  font-style: italic;
-  padding: 0 1px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
 }
 
-/* The connectors carry the chip grammar, so they sit one weight above the
-   chip line's text: 11px like `or`, in the readable faint tone (4.96:1) rather
-   than the hint tone that would turn "and" into texture. */
+.table-filter-or {
+  padding: 0 3px;
+}
+
 .table-filter-and {
-  color: var(--text-faint);
-  font-size: 0.6875rem;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  padding: 0 6px;
+  padding: 0 8px;
 }
 
 .table-filter-chip {
@@ -4448,16 +4465,21 @@ th[aria-sort="descending"] .sort-chevron {
    look. Below it the chips would keep shrinking beside the field and the
    actions, and the same set of filters would wrap into a different — and
    differently ragged — shape at every width, so they take a row of their own
-   instead: field and actions first, chips underneath at full width.
+   instead: field and actions first, chips underneath at full width. The idle
+   hint takes that same row for the same reason: it is shorter than a chip row
+   but long enough to push the trailing cluster onto a line of its own, which
+   would leave the field's width and the rail's height depending on the filter
+   state. One narrow shape for both states, so the rail only changes height at
+   the breakpoint — and the field keeps its 400px whatever the hint says.
    `order` moves the two only visually; the DOM keeps the chips before
-   Add note / Reset view / Columns, so Tab still walks them in that order. The
-   idle hint is untouched, so an unfiltered rail stays one row tall. */
+   Add note / Reset view / Columns, so Tab still walks them in that order. */
 @container table-shell (max-width: 1120px) {
   .table-rail-actions {
     order: 1;
   }
 
-  .table-filter-chips {
+  .table-filter-chips,
+  .table-filter-hint {
     order: 2;
     flex: 1 1 100%;
   }
