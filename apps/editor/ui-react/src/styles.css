@@ -3274,6 +3274,14 @@ tbody td {
   padding-right: 6px;
 }
 
+/* A thumbnail is an image, not prose: the 56px image is 1px wider than the
+   55px the 68px column leaves after its 12px padding and 1px rule, so the
+   body cells' ellipsis has nothing to truncate and would paint a lone dot at
+   the cell's edge. Nothing here can ellipsise, so the cell clips cleanly. */
+.table-row-link > .table-thumb-cell {
+  text-overflow: clip;
+}
+
 /* Compact like the other control columns, and kept on one line: the cell
    holds only the three-dot menu button. */
 .table-actions-cell {

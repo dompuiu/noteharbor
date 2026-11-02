@@ -600,6 +600,17 @@ describe("table styles", () => {
     expect(emptyCell[1]).not.toMatch(/text-overflow/);
   });
 
+  // The thumbnail cell holds an image, never a value the body ellipsis could
+  // truncate. The 56px image overflows the 55px content box by a pixel, and
+  // Chrome would paint the ellipsis as a lone dot against the cell's edge.
+  test("the thumbnail cell clips without a truncation ellipsis", () => {
+    const thumb = styles.match(
+      /^\.table-row-link > \.table-thumb-cell\s*\{([^}]*)\}/m,
+    );
+    expect(thumb).not.toBeNull();
+    expect(thumb[1]).toMatch(/text-overflow:\s*clip/);
+  });
+
   // A filter value pasted from a grading page can be longer than the rail. The
   // unit caps itself at the chip line, the chip gives way, and the value ends
   // in an ellipsis so its remove cross stays on the card.
