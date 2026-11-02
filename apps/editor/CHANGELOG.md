@@ -2,6 +2,35 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [2.8.0] - 2026-11-02
+
+### Added
+
+- Table screen: a `Columns` picker shows and hides fields, and the column set plus sort order are remembered per collection.
+- Table screen: free-text search across the collection, carried into the slideshow link alongside the active filters.
+- Table screen: active column filters collapse into removable chips with a count badge.
+- Table screen: one row actions menu with icons (`o`) replaces the inline edit and delete controls, and a floating selection bar takes over bulk delete.
+- Table screen: rename the collection in place and delete it from the header menu.
+- Table screen: rows respond to the keyboard (`Space` selects, `b` opens the sidebar, `Escape` clears).
+
+### Changed
+
+- Table screen: the filter field, filter chips, `Add note`, `Reset view` and `Columns` move into a rail inside the table card; the page head keeps only the title and collection menu.
+- Table screen: identity columns stay pinned while the data columns pan, with hairline dividers and one header band.
+- Table screen: rows are 45px, so the last visible note is no longer cropped.
+- Table screen: rows keep a single tint across zebra, hover, selection and pinned cells; long values clip instead of wrapping.
+- Table screen: tag chips in the table, filter rail and note editor share one shape and focus treatment.
+- Table screen: scrolling and filtering no longer re-render the whole body; the row is the memo boundary and pan and drag state stays out of it.
+- Desktop: a failed server connection shows a compact centred card that says the notes are unaffected.
+
+### Fixed
+
+- Table screen: a failed notes request keeps the table's footprint and offers `Try again` instead of leaving a bare error line.
+- Table screen: missing thumbnails and failed image loads fall back quietly instead of showing a broken glyph and spilling alt text.
+- Table screen: loading, empty and filter-cleared states keep the card's shape and name what the reader is seeing.
+- Table screen: drag reordering no longer starts a text selection, keeps the insertion rail painted through a save, and stays out of autoscroll while over the filter rail.
+- Table screen: tag chip and sort-header focus rings stay inside their cells; the collection rename field no longer pushes the table down.
+
 ## [2.7.5] - 2026-10-28
 
 ### Fixed
