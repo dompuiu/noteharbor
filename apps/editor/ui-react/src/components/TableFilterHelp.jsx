@@ -26,7 +26,10 @@ export function TableFilterHelp() {
   }
 
   function handleKeyDown(event) {
-    if (event.key !== "Escape") {
+    // The trigger only owns Escape while the note is open. With it closed,
+    // leaving the event alone lets the table's chrome rule clear a
+    // selection or filter, as it does for the other rail controls.
+    if (!open || event.key !== "Escape") {
       return;
     }
 

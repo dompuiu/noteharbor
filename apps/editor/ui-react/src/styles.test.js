@@ -310,7 +310,7 @@ describe("table styles", () => {
   // The scoped filter field is table chrome now, so it sits on the same 36px
   // band as the column filters instead of the old 40px toolbar bar. Its flex
   // basis gives it the rail's lead position without crowding the chips.
-  test("column filters match the search field's height", () => {
+  test("the scoped field matches the column filters' height and flex basis", () => {
     const search = styles.match(/^\.table-search-input\s*\{([^}]*)\}/m);
     expect(search).not.toBeNull();
     expect(search[1]).toMatch(/height:\s*36px/);

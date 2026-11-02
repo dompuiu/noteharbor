@@ -10,7 +10,8 @@ The collection table's filter field, chips, column picker and `Reset view` sit i
 
 ## Consequences
 
-- The card keeps its `flex: 1 1 auto` height, so the rail's 48px (plus ~28px per wrapped chip line) comes out of the rows region.
-- `.table-shell` is now a three-part surface: the rail, the scrollport below it, and the bulk bar floating over the rows.
+- The card keeps its `flex: 1 1 auto` height, so the rail's 48px (plus ~32px per wrapped chip line) comes out of the rows region.
+- `.table-shell` now holds more than the table: the focus anchor, the rail, the scrollport and the floating bulk bar. The footer hint stays outside it, below the card.
 - The rail is ordinary flow content: no sticky positioning and no scroll listeners, because being a sibling of the scroller is enough to keep it visible and still while columns pan.
 - Drag autoscroll measures the scrollport's top edge rather than the shell's, so dragging across the rail does not scroll the rows.
+- The rail is part of the table's keyboard contract, not a separate key scope. `isScreenChromeTarget` treats focus inside `.table-rail` as table chrome, so Escape on `Columns`, `Reset view`, a chip or the `?` trigger still clears the selection or filters, and the arrow keys still walk the rows. This preserves the behaviour those controls had in the toolbar band above the card.

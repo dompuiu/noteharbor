@@ -700,6 +700,25 @@ describe("NotesTable filter help", () => {
     expect(helpTrigger()).toHaveFocus();
   });
 
+  test("Escape on the closed trigger still reaches the table's filters", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Company", "PMG");
+
+    // The trigger is rail chrome: with the note closed it must not swallow
+    // Escape before the table can clear the filter the rail is showing.
+    helpTrigger().focus();
+    await user.keyboard("{Escape}");
+
+    expect(
+      screen.queryByRole("button", { name: /^Edit Company/ }),
+    ).toBeNull();
+    expect(await screen.findByText("BBBB")).toBeInTheDocument();
+    expect(helpTrigger()).toHaveFocus();
+  });
+
   test("a click outside the note closes it", async () => {
     renderTable();
     const user = userEvent.setup();

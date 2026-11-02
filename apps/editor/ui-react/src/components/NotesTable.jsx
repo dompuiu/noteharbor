@@ -23,6 +23,7 @@ import {
 import {
   isEditableElement,
   MODAL_SURFACE_SELECTOR,
+  TABLE_RAIL_SELECTOR,
 } from "../lib/editableElement.js";
 import { collectionDeleteConfirmation } from "../lib/collectionActions.js";
 import { isEmptyLibrary } from "../lib/libraryState.js";
@@ -2337,7 +2338,7 @@ function NotesTable({
         target instanceof Element &&
         Boolean(tableScreenRef.current?.contains(target)) &&
         (!tableShellRef.current?.contains(target) ||
-          Boolean(target.closest(".table-rail"))) &&
+          Boolean(target.closest(TABLE_RAIL_SELECTOR))) &&
         !target.closest(MODAL_SURFACE_SELECTOR)
       );
     }
@@ -4834,46 +4835,46 @@ function NotesTable({
                   rowHeight={rowHeightEstimate}
                   scrollRef={tableScrollRef}
                 />
-                </div>
-                {selectedIds.length ? (
-                  <TableBulkBar
-                    barRef={bulkBarRef}
-                    onClear={clearSelection}
-                    onDelete={handleBulkDelete}
-                    onLeaveBackward={() => {
-                      selectionTabArmedRef.current = false;
-                      focusRowActionsButtonByNoteId(bulkBarExitNoteId());
-                    }}
-                    onLeaveForward={() => {
-                      selectionTabArmedRef.current = false;
-                      focusRowCheckboxByNoteId(bulkBarExitNoteId());
-                    }}
-                    selectedCount={selectedIds.length}
-                  />
-                ) : null}
               </div>
-              <div className="table-footer-hint">
-                <span className="table-footer-summary">
-                  Showing {deferredOrderedNotes.length} of {notes.length} notes ·
-                  sorted by {getTableColumn(sortKey)?.label ?? "#"}{" "}
-                  {sortDirection === "asc" ? "ascending" : "descending"}
-                  {showSelection && selectedIds.length
-                    ? ` · ${selectedIds.length} selected`
-                    : ""}
-                </span>
-                <span className="table-footer-right">
-                  {reorderLoading ? (
-                    <span className="table-footer-status">
-                      Saving manual order...
-                    </span>
-                  ) : null}
-                  <span className="table-footer-keys">
-                    {reorderHint ? `${reorderHint} · ` : null}
-                    <kbd>&uarr;</kbd> <kbd>&darr;</kbd> to browse ·{" "}
-                    <kbd>?</kbd> shortcuts
+              {selectedIds.length ? (
+                <TableBulkBar
+                  barRef={bulkBarRef}
+                  onClear={clearSelection}
+                  onDelete={handleBulkDelete}
+                  onLeaveBackward={() => {
+                    selectionTabArmedRef.current = false;
+                    focusRowActionsButtonByNoteId(bulkBarExitNoteId());
+                  }}
+                  onLeaveForward={() => {
+                    selectionTabArmedRef.current = false;
+                    focusRowCheckboxByNoteId(bulkBarExitNoteId());
+                  }}
+                  selectedCount={selectedIds.length}
+                />
+              ) : null}
+            </div>
+            <div className="table-footer-hint">
+              <span className="table-footer-summary">
+                Showing {deferredOrderedNotes.length} of {notes.length} notes ·
+                sorted by {getTableColumn(sortKey)?.label ?? "#"}{" "}
+                {sortDirection === "asc" ? "ascending" : "descending"}
+                {showSelection && selectedIds.length
+                  ? ` · ${selectedIds.length} selected`
+                  : ""}
+              </span>
+              <span className="table-footer-right">
+                {reorderLoading ? (
+                  <span className="table-footer-status">
+                    Saving manual order...
                   </span>
+                ) : null}
+                <span className="table-footer-keys">
+                  {reorderHint ? `${reorderHint} · ` : null}
+                  <kbd>&uarr;</kbd> <kbd>&darr;</kbd> to browse ·{" "}
+                  <kbd>?</kbd> shortcuts
                 </span>
-              </div>
+              </span>
+            </div>
           </>
         ) : null}
       </div>

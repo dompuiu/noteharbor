@@ -31,6 +31,10 @@ const NON_TEXT_INPUT_TYPES = new Set([
 const MODAL_SURFACE_SELECTOR =
   "[role='dialog'], [role='alertdialog'], .edit-note-overlay, .slideshow-screen--overlay";
 
+// The table's filter rail holds view controls rather than row content, so the
+// table's Escape and arrow keys keep working while focus is on it.
+const TABLE_RAIL_SELECTOR = ".table-rail";
+
 // Whether the focused element should keep a printable shortcut such as "b"
 // for itself: text entry needs the letter for typing, and a modal surface
 // owns every key until it closes.
@@ -58,4 +62,5 @@ export {
   isEditableElement,
   MODAL_SURFACE_SELECTOR,
   ownsPrintableShortcut,
+  TABLE_RAIL_SELECTOR,
 };
