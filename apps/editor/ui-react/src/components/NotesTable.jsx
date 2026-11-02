@@ -3557,15 +3557,20 @@ function NotesTable({
       return;
     }
 
-    const bounds = shell.getBoundingClientRect();
+    // The rail at the card's top is chrome, not rows: scroll from the
+    // scrollport's own edge so a drag across the filters leaves the table
+    // still. The bottom edge stays on the shell because the bulk bar floats
+    // over the scrollport there.
+    const top = scroller.getBoundingClientRect().top;
+    const bottom = shell.getBoundingClientRect().bottom;
     const threshold = 56;
     const maxStep = 24;
 
-    if (event.clientY < bounds.top + threshold) {
-      const ratio = (bounds.top + threshold - event.clientY) / threshold;
+    if (event.clientY >= top && event.clientY < top + threshold) {
+      const ratio = (top + threshold - event.clientY) / threshold;
       scroller.scrollTop -= Math.ceil(maxStep * Math.min(1, ratio));
-    } else if (event.clientY > bounds.bottom - threshold) {
-      const ratio = (event.clientY - (bounds.bottom - threshold)) / threshold;
+    } else if (event.clientY > bottom - threshold) {
+      const ratio = (event.clientY - (bottom - threshold)) / threshold;
       scroller.scrollTop += Math.ceil(maxStep * Math.min(1, ratio));
     }
   }

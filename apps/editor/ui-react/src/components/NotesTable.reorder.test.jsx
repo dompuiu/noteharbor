@@ -69,6 +69,20 @@ function makeDataTransfer() {
   };
 }
 
+function bounds(top, bottom) {
+  return {
+    width: 1000,
+    height: bottom - top,
+    top,
+    bottom,
+    left: 0,
+    right: 1000,
+    x: 0,
+    y: top,
+    toJSON: () => ({}),
+  };
+}
+
 function renderTable() {
   return render(
     <MemoryRouter>
@@ -177,6 +191,54 @@ describe("NotesTable row reordering", () => {
 
     await waitFor(() => {
       expect(reorderNotes).toHaveBeenCalledWith([2, 3, 1], 1);
+    });
+  });
+
+  test("a drag over the filter rail leaves the rows where they are", async () => {
+    const { container } = renderTable();
+
+    const handle = await screen.findByLabelText("Reorder AAAA");
+    const shell = container.querySelector(".table-shell");
+    const scroller = container.querySelector(".table-scroll-x");
+
+    // The rail is 48px tall, so the scrollport starts that far below the
+    // card's top edge. This is the geometry that used to make the rail a
+    // scroll hot zone.
+    HTMLElement.prototype.getBoundingClientRect.mockImplementation(
+      function boundsFor() {
+        if (this === shell) {
+          return bounds(100, 700);
+        }
+        if (this === scroller) {
+          return bounds(148, 700);
+        }
+        return bounds(0, 43);
+      },
+    );
+
+    scroller.scrollTop = 100;
+    const dataTransfer = makeDataTransfer();
+
+    await act(async () => {
+      handle.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+    });
+
+    // The pointer is in the rail's band: inside the old top hot zone but
+    // above the rows, so nothing should move.
+    await act(async () => {
+      shell.dispatchEvent(dragEvent("dragover", { clientY: 120, dataTransfer }));
+    });
+    expect(scroller.scrollTop).toBe(100);
+
+    // A drag just inside the scrollport's own top edge still scrolls.
+    await act(async () => {
+      shell.dispatchEvent(dragEvent("dragover", { clientY: 160, dataTransfer }));
+    });
+    expect(scroller.scrollTop).toBeLessThan(100);
+
+    // Cancel the drag so the preview clone does not outlive the test.
+    await act(async () => {
+      handle.dispatchEvent(dragEvent("dragend", { dataTransfer }));
     });
   });
 

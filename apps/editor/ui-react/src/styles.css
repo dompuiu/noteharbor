@@ -2488,8 +2488,9 @@ input[type="radio"] {
 }
 
 /* The Table and Showcase screens drop the card: their heading, toolbar and
-   content sit on the page, and only the table itself is a surface. The body
-   keeps the layout duties the panel used to carry. */
+   content sit on the page, and only the table's own surface — its filter rail
+   and the rows under it — is a card. The body keeps the layout duties the
+   panel used to carry. */
 .screen-stack > .screen-body {
   flex: 1 1 auto;
   display: flex;
