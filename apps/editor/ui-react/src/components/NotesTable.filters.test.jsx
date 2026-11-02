@@ -739,6 +739,9 @@ describe("NotesTable filter rail", () => {
     expect(
       within(rail()).getByRole("button", { name: "Columns" }),
     ).toBeInTheDocument();
+    expect(
+      within(rail()).getByRole("button", { name: "Add note" }),
+    ).toBeInTheDocument();
     // The old band above the card is gone, not merely emptied.
     expect(document.querySelector(".toolbar-row--table-controls")).toBeNull();
   });
@@ -760,14 +763,18 @@ describe("NotesTable filter rail", () => {
 });
 
 // The chips are the filter field's own continuation: Tab reaches them before
-// it reaches the rail's view controls, and Shift+Tab walks back the same
+// it reaches the rail's trailing cluster, and Shift+Tab walks back the same
 // way. Only the DOM order decides this, so the assertions are plain tabs.
 describe("NotesTable filter bar tab order", () => {
+  function addNoteButton() {
+    return screen.getByRole("button", { name: "Add note" });
+  }
+
   function columnsButton() {
     return screen.getByRole("button", { name: "Columns" });
   }
 
-  test("Tab leaves the field for Columns when no chip exists", async () => {
+  test("Tab leaves the field for Add note when no chip exists", async () => {
     renderTable();
     const user = userEvent.setup();
 
@@ -775,13 +782,13 @@ describe("NotesTable filter bar tab order", () => {
     await user.click(filterInput("Catalog"));
     expect(filterInput("Catalog")).toHaveFocus();
 
-    // The idle hint is prose, not a stop on the way to the view controls.
+    // The idle hint is prose, not a stop on the way to the rail controls.
     await user.tab();
 
-    expect(columnsButton()).toHaveFocus();
+    expect(addNoteButton()).toHaveFocus();
   });
 
-  test("Tab walks the chips before the Reset view and Columns controls", async () => {
+  test("Tab walks the chips before Add note, Reset view and Columns", async () => {
     renderTable();
     const user = userEvent.setup();
 
@@ -821,6 +828,9 @@ describe("NotesTable filter bar tab order", () => {
     expect(clearAll).toHaveFocus();
 
     await user.tab();
+    expect(addNoteButton()).toHaveFocus();
+
+    await user.tab();
     expect(resetView).toHaveFocus();
 
     await user.tab();
@@ -845,6 +855,9 @@ describe("NotesTable filter bar tab order", () => {
     columnsButton().focus();
     await user.tab({ shift: true });
     expect(screen.getByRole("button", { name: "Reset view" })).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(addNoteButton()).toHaveFocus();
 
     await user.tab({ shift: true });
     expect(clearAll).toHaveFocus();

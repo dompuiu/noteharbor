@@ -108,7 +108,7 @@ async function rowFor(denomination) {
   return cell.closest("tr");
 }
 
-function toolbarAddButton() {
+function railAddButton() {
   return screen.getByRole("button", { name: "Add note" });
 }
 
@@ -271,7 +271,7 @@ describe("The note editor hands the cursor back", () => {
     renderTable();
     await screen.findByText("AAAA");
 
-    await user.click(toolbarAddButton());
+    await user.click(railAddButton());
     await waitFor(() => {
       expect(editorSubmitButton()).toBeTruthy();
     });
@@ -294,7 +294,7 @@ describe("The note editor hands the cursor back", () => {
     });
     expect(row).toHaveFocus();
 
-    await user.click(toolbarAddButton());
+    await user.click(railAddButton());
     await user.click(await screen.findByRole("button", { name: "Close" }));
 
     await waitFor(() => {
@@ -308,7 +308,7 @@ describe("The note editor hands the cursor back", () => {
     renderTable();
     await screen.findByText("AAAA");
 
-    await user.click(toolbarAddButton());
+    await user.click(railAddButton());
     await user.click(await screen.findByRole("button", { name: "Close" }));
 
     const firstRow = await rowFor("AAAA");
@@ -326,7 +326,7 @@ describe("The note editor hands the cursor back", () => {
       expect(container.querySelectorAll("tr.table-row-link")).toHaveLength(0);
     });
 
-    await user.click(toolbarAddButton());
+    await user.click(railAddButton());
     await user.click(await screen.findByRole("button", { name: "Close" }));
 
     const anchor = container.querySelector(".table-focus-anchor");

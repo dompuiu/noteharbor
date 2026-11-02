@@ -3874,8 +3874,8 @@ th[aria-sort="descending"] .sort-chevron {
   background: var(--surface-2);
 }
 
-/* The rail's trailing cluster keeps Columns and Reset view on the right edge
-   however many lines the field and chips take. */
+/* The rail's trailing cluster keeps Add note, Reset view and Columns on the
+   right edge however many lines the field and chips take. */
 .table-rail-actions {
   display: flex;
   align-items: center;
@@ -3884,10 +3884,24 @@ th[aria-sort="descending"] .sort-chevron {
   margin-left: auto;
 }
 
-/* Reset sits to the left of Columns, so the pair grows leftwards: Columns
-   keeps the card's right edge whether or not the view is dirty, and no empty
-   slot has to reserve room for a control that may not exist. The icon pairs it
-   with Columns' own icon at the same 6px gap. */
+/* The primary action leads the cluster. Its hover badge is the shared
+   `data-shortcut` tooltip, but it opens downward: the rail sits inside
+   `.table-shell { overflow: hidden }`, so a badge painted above the button
+   would be cropped. */
+.table-add-note {
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.table-add-note[data-shortcut]::after {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+
+/* Add note leads, Reset sits before Columns, so the pair grows leftwards:
+   Columns keeps the card's right edge whether or not the view is dirty, and no
+   empty slot has to reserve room for a control that may not exist. The icon
+   pairs it with Columns' own icon at the same 6px gap. */
 .table-reset-view {
   gap: 6px;
 }

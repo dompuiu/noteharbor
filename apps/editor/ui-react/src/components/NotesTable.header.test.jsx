@@ -96,15 +96,30 @@ beforeEach(() => {
 });
 
 describe("NotesTable header controls", () => {
-  test("keeps Add note above the table without a collection selector", async () => {
+  test("keeps Add note in the table rail without a collection selector", async () => {
     renderTable();
 
-    await screen.findByRole("button", { name: "Add note" });
+    const addNote = await screen.findByRole("button", { name: "Add note" });
+    const rail = document.querySelector(".table-rail");
 
+    expect(screen.queryByLabelText("Active collection")).not.toBeInTheDocument();
+    expect(rail).toContainElement(addNote);
+    expect(document.querySelector(".panel-heading")).not.toContainElement(
+      addNote,
+    );
+    expect(addNote).toHaveAttribute("data-shortcut", "a");
+    expect(addNote.querySelector("kbd")).toBeNull();
+  });
+
+  test("keeps Add note out of the rail while the collection is edited", async () => {
+    renderTable({ isCollectionEditing: true, collectionEditName: "Test" });
+
+    await screen.findByRole("button", { name: "Delete collection" });
+
+    expect(document.querySelector(".table-rail")).not.toBeNull();
     expect(
-      screen.queryByLabelText("Active collection"),
+      screen.queryByRole("button", { name: "Add note" }),
     ).not.toBeInTheDocument();
-    expect(screen.getByRole("button", { name: "Add note" })).toBeInTheDocument();
   });
 
   test("no longer shows the Import / Export link", async () => {

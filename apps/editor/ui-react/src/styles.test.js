@@ -375,9 +375,10 @@ describe("table styles", () => {
   });
 
   // The filters describe only the table, so they are the card's own rail: the
-  // field leads, the chips take the middle and wrap there, and Columns/Reset
-  // keep the right edge. Rail padding stays above the field's 3px focus glow,
-  // which `.table-shell { overflow: hidden }` would otherwise crop.
+  // field leads, the chips take the middle and wrap there, and the trailing
+  // Add note / Reset / Columns cluster keeps the right edge. Rail padding stays
+  // above the field's 3px focus glow, which `.table-shell { overflow: hidden }`
+  // would otherwise crop.
   test("the filter bar rides in the table card's rail", () => {
     const rail = styles.match(/^\.table-rail\s*\{([^}]*)\}/m);
     expect(rail).not.toBeNull();
@@ -398,6 +399,22 @@ describe("table styles", () => {
     expect(actions[1]).toMatch(/flex:\s*0 0 auto/);
     expect(actions[1]).toMatch(/margin-left:\s*auto/);
 
+    // The primary action leads the cluster, so it is reached before the view
+    // controls while Columns still owns the card's right edge.
+    const addNote = styles.match(/^\.table-add-note\s*\{([^}]*)\}/m);
+    expect(addNote).not.toBeNull();
+    expect(addNote[1]).toMatch(/gap:\s*6px/);
+    expect(addNote[1]).toMatch(/white-space:\s*nowrap/);
+
+    // The shared hover badge opens downward here: the rail is inside the
+    // shell's overflow clip, so the default badge above the button would vanish.
+    const addNoteBadge = styles.match(
+      /\.table-add-note\[data-shortcut\]::after\s*\{([^}]*)\}/,
+    );
+    expect(addNoteBadge).not.toBeNull();
+    expect(addNoteBadge[1]).toMatch(/top:\s*calc\(100% \+ 8px\)/);
+    expect(addNoteBadge[1]).toMatch(/bottom:\s*auto/);
+
     // The chips grow into the middle of the rail and wrap inside it. Nothing
     // reserves their old 30px line: the rail's own height is the card's edge.
     // The 8px row-gap keeps a wrapped line at 24 + 8 = 32px.
@@ -413,9 +430,10 @@ describe("table styles", () => {
     expect(styles).not.toMatch(/\.toolbar-row--table-controls/);
   });
 
-  // Reset sits before Columns and no slot reserves its space, so Columns keeps
-  // the card's right edge whether or not the view is dirty, and the rail never
-  // shows a hole for a control that is not there.
+  // Add note leads the cluster, then Reset sits before Columns and no slot
+  // reserves its space, so Columns keeps the card's right edge whether or not
+  // the view is dirty, and the rail never shows a hole for a control that is
+  // not there.
   test("the rail reserves no slot for the reset control", () => {
     expect(styles).not.toMatch(/\.table-reset-slot/);
 

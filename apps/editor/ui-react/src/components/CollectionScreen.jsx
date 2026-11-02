@@ -19,8 +19,8 @@ function TableWithPerfReadout(props) {
 }
 
 // One collection, rendered in one of two modes sharing one container.
-// View mode shows the title with rename plus Add note; edit mode swaps the
-// title for a text field and Add note / Shortcuts for Delete / Cancel / Save.
+// View mode shows the title with rename; Add note rides in the table rail.
+// Edit mode swaps the title for a text field and Delete / Cancel / Save.
 // The notes table stays visible in both.
 function CollectionScreen({ mode }) {
   const { id } = useParams();
@@ -339,7 +339,7 @@ function CollectionScreen({ mode }) {
   }
 
   // Edit mode is the normal table container with the title as a text
-  // field and Add note / Shortcuts replaced by Delete / Cancel / Save.
+  // field and Delete / Cancel / Save replacing the view's title controls.
   // There is no second panel: one container, same table below.
   if (invalidId || missingCollection) {
     return (

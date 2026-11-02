@@ -110,13 +110,13 @@ function expectCreateAfter(mode, denomination) {
   ).toHaveTextContent(denomination);
 }
 
-function toolbarAddButton() {
+function railAddButton() {
   return screen.getByRole("button", { name: "Add note" });
 }
 
 function slideshowAddButton() {
-  // The toolbar and the slideshow top bar both read "Add note"; the toolbar
-  // button has no title, so the slideshow's own tooltip distinguishes it.
+  // The rail and the slideshow top bar both read "Add note"; the rail button
+  // has no title, so the slideshow's own tooltip distinguishes it.
   return screen.getByTitle(/Add note/);
 }
 
@@ -191,7 +191,7 @@ describe("The counter in create mode", () => {
     renderTable();
     await screen.findByText("AAAA");
 
-    await user.click(toolbarAddButton());
+    await user.click(railAddButton());
 
     expect(await screen.findByText("? / 3")).toBeInTheDocument();
     expect(screen.queryByText("1 / 3")).not.toBeInTheDocument();
@@ -202,7 +202,7 @@ describe("The counter in create mode", () => {
     renderTable();
     await screen.findByText("AAAA");
 
-    await user.click(toolbarAddButton());
+    await user.click(railAddButton());
     await screen.findByLabelText("Denomination");
 
     await user.click(screen.getByRole("button", { name: "Edit next note" }));
@@ -217,7 +217,7 @@ describe("The counter in create mode", () => {
     renderTable();
     await screen.findByText("AAAA");
 
-    await user.click(toolbarAddButton());
+    await user.click(railAddButton());
     await screen.findByLabelText("Denomination");
 
     await user.click(
@@ -241,7 +241,7 @@ describe("The counter in create mode", () => {
     await waitFor(() => {
       expect(screen.queryByRole("button", { name: "Add note" })).toBeTruthy();
     });
-    await user.click(toolbarAddButton());
+    await user.click(railAddButton());
 
     expect(await screen.findByText("? / 0")).toBeInTheDocument();
     expect(
@@ -559,7 +559,7 @@ describe("Leaving a changed Note editor", () => {
     renderTable();
     await screen.findByText("AAAA");
 
-    await user.click(toolbarAddButton());
+    await user.click(railAddButton());
     await user.type(await screen.findByLabelText("Denomination"), "NEW");
     await user.click(screen.getByRole("button", { name: "Edit next note" }));
 
@@ -676,7 +676,7 @@ describe("Two save actions", () => {
     renderTable();
     await screen.findByText("AAAA");
 
-    await user.click(toolbarAddButton());
+    await user.click(railAddButton());
     await user.type(await screen.findByLabelText("Denomination"), "NEW");
     await user.click(screen.getByRole("button", { name: "Add" }));
 
@@ -691,7 +691,7 @@ describe("Two save actions", () => {
     renderTable();
     await screen.findByText("AAAA");
 
-    await user.click(toolbarAddButton());
+    await user.click(railAddButton());
     await user.type(await screen.findByLabelText("Denomination"), "NEW");
     await user.click(screen.getByRole("button", { name: "Add & close" }));
 
@@ -1096,7 +1096,7 @@ describe("Shortcut tooltips", () => {
       "data-shortcut",
       "d",
     );
-    expect(toolbarAddButton()).toHaveAttribute("data-shortcut", "a");
+    expect(railAddButton()).toHaveAttribute("data-shortcut", "a");
   });
 });
 

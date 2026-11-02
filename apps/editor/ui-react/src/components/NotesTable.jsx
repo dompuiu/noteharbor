@@ -2726,13 +2726,13 @@ function NotesTable({
         (activeElement === focusedRowElement || rowCheckboxFocused);
 
       // "a" opens the create form after the focused row when the cursor is
-      // on (or inside) one, otherwise it falls back to the toolbar's Add
+      // on (or inside) one, otherwise it falls back to the rail's Add note
       // action so the shortcut still works from an empty focus state or right
       // after the row cursor was cleared. This matches the row menu's
       // "Insert note below" item, which advertises the same shortcut.
       if (event.key === "a") {
-        // An empty library has no collection to create a note in. The toolbar
-        // button is disabled; the shortcut has to match it. A not-yet-saved
+        // An empty library has no collection to create a note in. The Add
+        // note button is disabled; the shortcut has to match it. A not-yet-saved
         // collection has no id to create a note in either.
         if (noCollections || isNewCollection) {
           return;
@@ -4559,68 +4559,53 @@ function NotesTable({
               </p>
             ) : null}
           </div>
-          <div className="inline-actions">
-            {isCollectionEditing ? (
-              <>
-                <button
-                  className="button button-danger"
-                  disabled={deletingCollectionEdit}
-                  onClick={onDeleteCollectionEdit}
-                  type="button"
-                >
-                  Delete collection
-                </button>
-                <button
-                  className="button"
-                  disabled={savingCollectionEdit}
-                  onClick={onCancelCollectionEdit}
-                  type="button"
-                >
-                  Cancel
-                </button>
-                <button
-                  className="button button-primary"
-                  disabled={!canSaveCollectionEdit || savingCollectionEdit || loadingCollections}
-                  onClick={onSaveCollectionEdit}
-                  type="button"
-                >
-                  {savingCollectionEdit ? "Saving…" : "Save"}
-                </button>
-              </>
-            ) : showingNewCollectionForm ? (
-              <>
-                <button
-                  className="button"
-                  disabled={savingNewCollection}
-                  onClick={onCancelNewCollection}
-                  type="button"
-                >
-                  Cancel
-                </button>
-                <button
-                  className="button button-primary"
-                  disabled={savingNewCollection}
-                  onClick={() => onSaveNewCollection?.()}
-                  type="button"
-                >
-                  {savingNewCollection ? "Saving…" : "Save"}
-                </button>
-              </>
-            ) : (
-              <>
-            <button
-              aria-label="Add note"
-              className="icon-link button-primary"
-              data-shortcut="a"
-              disabled={noCollections || isNewCollection}
-              onClick={openCreateNote}
-              type="button"
-            >
-              Add note
-            </button>
-              </>
-            )}
-          </div>
+          {isCollectionEditing ? (
+            <div className="inline-actions">
+              <button
+                className="button button-danger"
+                disabled={deletingCollectionEdit}
+                onClick={onDeleteCollectionEdit}
+                type="button"
+              >
+                Delete collection
+              </button>
+              <button
+                className="button"
+                disabled={savingCollectionEdit}
+                onClick={onCancelCollectionEdit}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="button button-primary"
+                disabled={!canSaveCollectionEdit || savingCollectionEdit || loadingCollections}
+                onClick={onSaveCollectionEdit}
+                type="button"
+              >
+                {savingCollectionEdit ? "Saving…" : "Save"}
+              </button>
+            </div>
+          ) : showingNewCollectionForm ? (
+            <div className="inline-actions">
+              <button
+                className="button"
+                disabled={savingNewCollection}
+                onClick={onCancelNewCollection}
+                type="button"
+              >
+                Cancel
+              </button>
+              <button
+                className="button button-primary"
+                disabled={savingNewCollection}
+                onClick={() => onSaveNewCollection?.()}
+                type="button"
+              >
+                {savingNewCollection ? "Saving…" : "Save"}
+              </button>
+            </div>
+          ) : null}
         </div>
 
         {loadingCollections ? <p>Loading collections...</p> : null}
@@ -4660,10 +4645,37 @@ function NotesTable({
                   tagNames={tagNames}
                 />
                 <div className="table-rail-actions">
-                  {/* Reset sits before Columns so the pair grows leftwards:
-                      Columns keeps the card's right edge whether or not the
-                      view is dirty, and no empty slot has to reserve space for
-                      a control that is not there. */}
+                  {/* Add note leads the trailing cluster so the primary action
+                      is reached before the view controls. Reset then sits
+                      before Columns: the pair grows leftwards, Columns keeps
+                      the card's right edge whether or not the view is dirty,
+                      and no empty slot reserves space for a control that is
+                      not there. */}
+                  {!isCollectionEditing && !showingNewCollectionForm ? (
+                    <button
+                      aria-label="Add note"
+                      className="button button-primary table-add-note"
+                      data-shortcut="a"
+                      disabled={noCollections || isNewCollection}
+                      onClick={openCreateNote}
+                      type="button"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        fill="none"
+                        focusable="false"
+                        height="15"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeWidth="2"
+                        viewBox="0 0 24 24"
+                        width="15"
+                      >
+                        <path d="M12 5v14M5 12h14" />
+                      </svg>
+                      Add note
+                    </button>
+                  ) : null}
                   {canResetView ? (
                     <button
                       className="button table-reset-view"
