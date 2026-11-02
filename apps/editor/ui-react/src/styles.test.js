@@ -848,6 +848,16 @@ describe("table styles", () => {
     );
   });
 
+  // A drag begins with a press. Without this the press can start a text
+  // selection across the row before the browser claims the gesture, which
+  // paints a blue smear over the grip the user is holding.
+  test("the handle never starts a text selection", () => {
+    const base = styles.match(/^\.drag-handle\s*\{([^}]*)\}/m);
+    expect(base).not.toBeNull();
+    expect(base[1]).toMatch(/user-select:\s*none/);
+    expect(base[1]).toMatch(/-webkit-user-select:\s*none/);
+  });
+
   // The grab is the one direct-manipulation moment in the table, so it gets
   // its own mark: pressing the handle takes the grip to the accent instead of
   // leaving it on the resting tone.

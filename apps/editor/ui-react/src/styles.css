@@ -4420,6 +4420,10 @@ td.drag-cell {
   color: var(--text-faint);
   cursor: grab;
   padding: 0;
+  /* A drag started with a slow click can otherwise flash a text selection
+     across the row before the browser claims the gesture. */
+  user-select: none;
+  -webkit-user-select: none;
   transition: background-color 0.12s ease;
 }
 
