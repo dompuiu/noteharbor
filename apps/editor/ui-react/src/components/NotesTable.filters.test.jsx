@@ -96,6 +96,10 @@ function filterInput(label) {
   return screen.getByLabelText(`Filter ${label}`);
 }
 
+function helpTrigger() {
+  return screen.getByRole("button", { name: "How filters combine" });
+}
+
 // Choose the field, type the value and commit it with Enter.
 async function commitChip(user, label, value) {
   await chooseField(user, label);
@@ -135,11 +139,9 @@ describe("NotesTable filter chips", () => {
       screen.getByRole("searchbox", { name: "Filter Catalog" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Clear all" })).toBeNull();
-    expect(
-      screen.getByText(
-        "No filters yet — pick a field, type, press ⏎. Same field ORs, different fields AND.",
-      ),
-    ).toBeInTheDocument();
+    // No chips, and no reserved line for them: the hint moved into the ? note.
+    expect(document.querySelector(".table-filter-chips")).toBeNull();
+    expect(screen.queryByText(/^No filters yet/)).toBeNull();
   });
 
   test("the field menu marks the current field and focuses the input after a pick", async () => {
@@ -654,6 +656,64 @@ describe("NotesTable filter chips", () => {
   });
 });
 
+// The OR/AND rule no longer occupies a 30px row: it hides behind the rail's
+// ? trigger, whose note exists in the DOM only while it is open.
+describe("NotesTable filter help", () => {
+  const helpText =
+    "No filters yet — pick a field, type, press ⏎. Same field ORs, different fields AND.";
+
+  test("the ? trigger opens the rule note and toggles it closed", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    // The accessible name is the whole affordance; the trigger is unlabeled
+    // visually on purpose.
+    expect(helpTrigger()).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText(helpText)).toBeNull();
+
+    await user.click(helpTrigger());
+
+    expect(helpTrigger()).toHaveAttribute("aria-expanded", "true");
+    expect(screen.getByText(helpText)).toBeInTheDocument();
+
+    await user.click(helpTrigger());
+
+    expect(helpTrigger()).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByText(helpText)).toBeNull();
+  });
+
+  test("Escape closes the note and returns focus to the trigger", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await user.click(helpTrigger());
+
+    expect(
+      screen.getByRole("dialog", { name: "How filters combine" }),
+    ).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByText(helpText)).toBeNull();
+    expect(helpTrigger()).toHaveFocus();
+  });
+
+  test("a click outside the note closes it", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await user.click(helpTrigger());
+    expect(screen.getByText(helpText)).toBeInTheDocument();
+
+    await user.click(document.body);
+
+    expect(screen.queryByText(helpText)).toBeNull();
+  });
+});
+
 // The filters describe only the table, so they live on the card instead of a
 // toolbar band above it: inside `.table-shell` and ahead of the scrollport, so
 // they never pan with the columns and never scroll away with the rows.
@@ -713,13 +773,17 @@ describe("NotesTable filter bar tab order", () => {
     return screen.getByRole("button", { name: "Columns" });
   }
 
-  test("Tab leaves the field for the Columns control when no chip exists", async () => {
+  test("Tab leaves the field for the help trigger when no chip exists", async () => {
     renderTable();
     const user = userEvent.setup();
 
     await screen.findByText("AAAA");
     await user.click(filterInput("Catalog"));
     expect(filterInput("Catalog")).toHaveFocus();
+
+    await user.tab();
+
+    expect(helpTrigger()).toHaveFocus();
 
     await user.tab();
 
@@ -766,6 +830,9 @@ describe("NotesTable filter bar tab order", () => {
     expect(clearAll).toHaveFocus();
 
     await user.tab();
+    expect(helpTrigger()).toHaveFocus();
+
+    await user.tab();
     expect(columnsButton()).toHaveFocus();
 
     await user.tab();
@@ -788,6 +855,9 @@ describe("NotesTable filter bar tab order", () => {
     });
 
     columnsButton().focus();
+    await user.tab({ shift: true });
+    expect(helpTrigger()).toHaveFocus();
+
     await user.tab({ shift: true });
     expect(clearAll).toHaveFocus();
 

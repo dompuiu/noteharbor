@@ -340,19 +340,32 @@ describe("table styles", () => {
     expect(tagsInput[1]).toMatch(/min-height:\s*0/);
   });
 
-  // The idle hint under the field and the input placeholder share the
-  // prototype's lighter tone and 12px scale.
-  test("the filter bar hint matches the prototype's tone", () => {
-    const hint = styles.match(/\.table-filter-chips-empty\s*\{([^}]*)\}/);
-    expect(hint).not.toBeNull();
-    expect(hint[1]).toMatch(/color:\s*var\(--text-hint\)/);
-    expect(hint[1]).toMatch(/font-size:\s*0\.75rem/);
-
+  // The idle hint row is gone, so the placeholder carries the prototype's
+  // lighter tone on the table's own chrome.
+  test("the filter input placeholder matches the prototype's tone", () => {
     const placeholder = styles.match(
       /\.table-search--scoped \.table-search-input::placeholder\s*\{([^}]*)\}/,
     );
     expect(placeholder).not.toBeNull();
     expect(placeholder[1]).toMatch(/color:\s*var\(--text-hint\)/);
+    expect(styles).not.toMatch(/\.table-filter-chips-empty/);
+  });
+
+  // The ? trigger is a quiet 20px ghost in the rail, and its note reuses the
+  // field menu's frame but wraps as prose instead of a compact list.
+  test("the filter help note wraps as prose over the menu frame", () => {
+    const trigger = styles.match(/^\.table-filter-help\s*\{([^}]*)\}/m);
+    expect(trigger).not.toBeNull();
+    expect(trigger[1]).toMatch(/width:\s*20px/);
+    expect(trigger[1]).toMatch(/height:\s*20px/);
+    expect(trigger[1]).toMatch(/background:\s*none/);
+
+    const note = styles.match(/^\.table-filter-menu--note\s*\{([^}]*)\}/m);
+    expect(note).not.toBeNull();
+    expect(note[1]).toMatch(/max-width:\s*280px/);
+    expect(note[1]).toMatch(/font-size:\s*0\.75rem/);
+    expect(note[1]).toMatch(/line-height:\s*1\.5/);
+    expect(note[1]).toMatch(/white-space:\s*normal/);
   });
 
   // The filters describe only the table, so they are the card's own rail: the
