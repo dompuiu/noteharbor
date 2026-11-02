@@ -116,7 +116,7 @@ describe("NotesTable new collection draft", () => {
     expect(screen.getByRole("button", { name: "#" })).toBeInTheDocument();
     expect(screen.getByText("Front")).toBeInTheDocument();
     expect(
-      screen.getByText(/No notes are stored yet/),
+      screen.getByText(/No notes in this collection yet/),
     ).toBeInTheDocument();
     // The draft has no Add note: the actions mirror the collection edit
     // view, without Delete since there is nothing saved yet.

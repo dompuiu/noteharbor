@@ -150,7 +150,7 @@ export const NoteRow = memo(function NoteRow({
 
     return (
       <td {...cellAttributes(column)} title={orderTitle}>
-        {note.display_order ?? "-"}
+        {note.display_order ?? <span className="muted">-</span>}
       </td>
     );
   }
@@ -193,6 +193,10 @@ export const NoteRow = memo(function NoteRow({
     // grow the row past the virtualizer's fixed height. The title carries the
     // whole value to a pointer; an empty field gets no tooltip.
     const title = String(note[column.key] ?? "").trim() || undefined;
+    // An empty field reads as the same muted dash the tags, grade and
+    // thumbnail cells use, so one absence never looks like two different
+    // things across a row.
+    const empty = !String(note[column.key] ?? "").trim();
 
     if (column.isTags) {
       return (
@@ -247,7 +251,9 @@ export const NoteRow = memo(function NoteRow({
       // without a source URL renders as plain text.
       return (
         <td {...cellAttributes(column)} title={title}>
-          {note.url ? (
+          {empty ? (
+            <span className="muted">-</span>
+          ) : note.url ? (
             <a
               draggable={false}
               href={note.url}
@@ -266,7 +272,11 @@ export const NoteRow = memo(function NoteRow({
 
     return (
       <td {...cellAttributes(column)} title={title}>
-        {highlightTerms(note[column.key], rowMarks[column.key])}
+        {empty ? (
+          <span className="muted">-</span>
+        ) : (
+          highlightTerms(note[column.key], rowMarks[column.key])
+        )}
       </td>
     );
   }

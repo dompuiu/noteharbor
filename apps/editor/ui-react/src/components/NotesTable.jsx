@@ -10,7 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { useLocation, useNavigate } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   deleteNote,
   getNotes,
@@ -27,6 +27,7 @@ import {
 } from "../lib/editableElement.js";
 import { collectionDeleteConfirmation } from "../lib/collectionActions.js";
 import { isEmptyLibrary } from "../lib/libraryState.js";
+import { CATALOG_ROUTES } from "../lib/routes.js";
 import {
   clearLegacyTableState,
   defaultTableState,
@@ -987,6 +988,9 @@ function NotesTable({
   // The scrollbar owns its metrics; the table only needs to know whether its
   // gutter column is showing, which changes the column widths.
   const [vScrollVisible, setVScrollVisible] = useState(false);
+  // The horizontal scrollbar is hidden (the Flutter table does the same), so
+  // the footer offers the arrow keys whenever the columns really overflow.
+  const [columnPanAvailable, setColumnPanAvailable] = useState(false);
   const selectAllRef = useRef(null);
   const editorDirtyRef = useRef(false);
   const confirmOpenRef = useRef(false);
@@ -1891,6 +1895,24 @@ function NotesTable({
     observer.observe(scroller);
     return () => observer.disconnect();
   }, [loading, loadError]);
+
+  // The scroller's content width is the sum of the rendered <col> widths, so
+  // the table only needs re-checking when those widths change (a resize, a
+  // column toggle, or the scrollbar's gutter) or when the scroller remounts
+  // with the rows. Same overflow test as columnScroller(), so the footer only
+  // offers the arrows when pressing them would actually move the table.
+  useLayoutEffect(() => {
+    const scroller = tableScrollRef.current;
+
+    if (!scroller) {
+      return;
+    }
+
+    const overflows = scroller.scrollWidth > scroller.clientWidth + 1;
+    setColumnPanAvailable((current) =>
+      current === overflows ? current : overflows,
+    );
+  }, [columnWidths, loading, loadError, vScrollVisible]);
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -4195,7 +4217,32 @@ function NotesTable({
               </p>
             </div>
           ) : (
-            "No notes are stored yet in this collection."
+            // An empty collection is a first-run moment, not a failed query:
+            // it names itself, offers both ways a note can arrive, and says
+            // where the new note will land. The filtered-empty state above
+            // explains the filter model instead, so the two never read alike.
+            <div className="table-empty-state">
+              <p className="table-empty-title">
+                No notes in this collection yet.
+              </p>
+              {!isCollectionEditing && !showingNewCollectionForm ? (
+                <div className="table-empty-actions">
+                  <button
+                    className="button button-primary"
+                    onClick={openCreateNote}
+                    type="button"
+                  >
+                    Add the first note
+                  </button>
+                  <Link className="button" to={CATALOG_ROUTES.importExport}>
+                    Import / Export
+                  </Link>
+                </div>
+              ) : null}
+              <p className="table-empty-hint">
+                A new note lands at the end of the collection's order.
+              </p>
+            </div>
           )}
         </div>
       </td>
@@ -4637,8 +4684,20 @@ function NotesTable({
           ) : null}
         </div>
 
-        {loadingCollections ? <p>Loading collections...</p> : null}
-        {loading ? <p role="status">Loading notes...</p> : null}
+        {/* The table's shape holds while the rows are on their way: the card
+            stays on screen with the status where the rows will be, so a
+            collection switch never collapses the screen and rebuilds it a
+            moment later. */}
+        {loading || loadingCollections ? (
+          <div className="table-shell table-loading">
+            <div className="table-loading-body" role="status">
+              <p className="table-loading-title">Loading notes…</p>
+              <p className="table-loading-detail">
+                Reading the notes stored on this device.
+              </p>
+            </div>
+          </div>
+        ) : null}
         {collectionsError ? (
           <p className="error-text" role="alert">
             {collectionsError}
@@ -4980,16 +5039,31 @@ function NotesTable({
                   </span>
                 ) : null}
                 <span className="table-footer-keys">
-                  {reorderHint ? `${reorderHint} · ` : null}
+                  {/* Each instruction is one segment: they share a line while
+                      there is room and stack instead of clipping when the
+                      window is narrow. */}
+                  {reorderHint ? (
+                    <span className="table-footer-segment">{reorderHint}</span>
+                  ) : null}
                   {/* With no rows there is nothing for the arrows to walk, so
                       the hint stops offering them and keeps the one key that
                       still does something. */}
                   {deferredOrderedNotes.length ? (
-                    <>
-                      <kbd>&uarr;</kbd> <kbd>&darr;</kbd> to browse ·{" "}
-                    </>
+                    <span className="table-footer-segment">
+                      <kbd>&uarr;</kbd> <kbd>&darr;</kbd> to browse
+                    </span>
                   ) : null}
-                  <kbd>?</kbd> shortcuts
+                  {/* The horizontal scrollbar is hidden, so the columns that
+                      sit off-screen are reachable only by dragging or by the
+                      arrow keys. The hint appears exactly when that is true. */}
+                  {columnPanAvailable ? (
+                    <span className="table-footer-segment">
+                      <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to pan
+                    </span>
+                  ) : null}
+                  <span className="table-footer-segment">
+                    <kbd>?</kbd> shortcuts
+                  </span>
                 </span>
               </span>
             </div>

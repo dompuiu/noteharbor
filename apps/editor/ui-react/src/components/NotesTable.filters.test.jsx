@@ -138,11 +138,9 @@ describe("NotesTable filter chips", () => {
     // No chips, and no reserved line for them: the idle hint sits in their
     // slot, beside the field it explains.
     expect(document.querySelector(".table-filter-chips")).toBeNull();
-    expect(
-      screen.getByText(
-        "Pick a field, type, press ⏎. Same field ORs, different fields AND.",
-      ),
-    ).toBeInTheDocument();
+    expect(document.querySelector(".table-filter-hint")).toHaveTextContent(
+      "Pick a field, type, press ⏎. Same field ORs, different fields AND.",
+    );
   });
 
   test("the field menu marks the current field and focuses the input after a pick", async () => {
@@ -708,16 +706,23 @@ describe("NotesTable filter hint", () => {
   const hintText =
     "Pick a field, type, press ⏎. Same field ORs, different fields AND.";
 
+  function filterHint() {
+    return document.querySelector(".table-filter-hint");
+  }
+
   test("the idle rail states the rule beside the field", async () => {
     renderTable();
 
     await screen.findByText("AAAA");
 
-    const hint = screen.getByText(hintText);
+    const hint = filterHint();
     const rail = document.querySelector(".table-rail");
 
+    expect(hint).toHaveTextContent(hintText);
     expect(rail).toContainElement(hint);
     expect(hint).toHaveClass("table-filter-hint");
+    // The key it names is a keycap, not a glyph in the sentence.
+    expect(hint.querySelector("kbd")).toHaveTextContent("⏎");
     // The hint replaced the ? trigger rather than joining it.
     expect(
       screen.queryByRole("button", { name: "How filters combine" }),
@@ -731,8 +736,7 @@ describe("NotesTable filter hint", () => {
     await screen.findByText("AAAA");
     await commitChip(user, "Company", "PMG");
 
-    expect(screen.queryByText(hintText)).toBeNull();
-    expect(document.querySelector(".table-filter-hint")).toBeNull();
+    expect(filterHint()).toBeNull();
     expect(
       screen.getByRole("button", { name: "Edit Company filter PMG" }),
     ).toBeInTheDocument();
@@ -746,7 +750,7 @@ describe("NotesTable filter hint", () => {
     await commitChip(user, "Company", "PMG");
     await user.click(screen.getByRole("button", { name: "Clear all" }));
 
-    expect(await screen.findByText(hintText)).toBeInTheDocument();
+    await waitFor(() => expect(filterHint()).toHaveTextContent(hintText));
   });
 });
 

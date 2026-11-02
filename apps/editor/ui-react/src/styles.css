@@ -3190,6 +3190,38 @@ tbody td {
   font-size: 0.82rem;
 }
 
+/* The same footprint while the rows are still coming: the card is on screen
+   from the first frame of a load, so switching collections never collapses the
+   screen to a line of text and then rebuilds it. The status is a named line
+   plus the one reassurance that matters on a local-first product. */
+.table-loading {
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+}
+
+.table-loading-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  max-width: 52ch;
+  text-align: center;
+}
+
+.table-loading-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.table-loading-detail {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
 /* The empty-library prompt reuses the shared dashed empty-state box, so the
    collections home, the note editor, and the table's empty cell all read as
    one pattern. The box owns the centering; the copy stays readable at panel
@@ -4204,6 +4236,9 @@ th[aria-sort="descending"] .sort-chevron {
 }
 
 .table-filter-enter {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   flex: none;
   color: var(--accent-strong);
   font-size: 0.6875rem;
@@ -4295,6 +4330,24 @@ th[aria-sort="descending"] .sort-chevron {
   margin: 0;
   color: var(--text-faint);
   font-size: 0.75rem;
+}
+
+/* A key named inside the sentence wears the same keycap as the field's own
+   hint, so "press ⏎" reads as a key and not as a glyph that happens to be in
+   the sentence. */
+.table-filter-hint kbd {
+  min-width: 0;
+  height: auto;
+  /* Tight on the right so the sentence's full stop stays attached to the key
+     it follows, as it would to a word. */
+  margin: 0 1px 0 3px;
+  padding: 2px 5px;
+  border-bottom-width: 2px;
+  border-radius: 5px;
+  box-shadow: none;
+  color: var(--text-muted);
+  font-size: 0.6875rem;
+  font-weight: 650;
 }
 
 /* Active filters share the rail with the field as removable chips, so a
@@ -4616,9 +4669,10 @@ th[aria-sort="descending"] .sort-chevron {
 .table-footer-hint {
   display: flex;
   flex: 0 0 auto;
+  flex-wrap: wrap;
   align-items: center;
   justify-content: space-between;
-  gap: 16px;
+  gap: 2px 16px;
   margin: 8px 0 0;
   padding: 0;
   color: var(--text-muted);
@@ -4631,7 +4685,10 @@ th[aria-sort="descending"] .sort-chevron {
 }
 
 .table-footer-summary {
-  flex: 1 1 auto;
+  /* A zero basis keeps the count from forcing the hint block onto its own
+     line: it shrinks first and only the hints themselves wrap when even they
+     cannot fit. */
+  flex: 1 1 0;
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -4646,16 +4703,34 @@ th[aria-sort="descending"] .sort-chevron {
   flex: 0 0 auto;
   align-items: center;
   gap: 16px;
+  max-width: 100%;
+  min-width: 0;
   margin-left: auto;
 }
 
-.table-footer-status,
-.table-footer-keys {
+.table-footer-status {
   white-space: nowrap;
 }
 
+/* The instructions are separate segments so a narrow window stacks them
+   instead of clipping the last one; the separator rides on the segment, not
+   the text, so the hint's own copy stays free of punctuation. */
 .table-footer-keys {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+  max-width: 100%;
   text-align: right;
+}
+
+.table-footer-segment {
+  white-space: nowrap;
+}
+
+.table-footer-segment:not(:last-child)::after {
+  content: "·";
+  margin: 0 0.4em;
 }
 
 .drag-cell {

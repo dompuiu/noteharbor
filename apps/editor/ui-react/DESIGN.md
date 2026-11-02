@@ -221,7 +221,10 @@ Rounded and soft-edged, at four deliberate steps: 8px for small chips and inline
 - **Header:** Header Sand band (`--surface-3`), 40px tall, 12px padding, 0.625rem/650 uppercase labels at 0.075em tracking in Umber; the sorted column alone switches to Deep Brass and reveals its chevron.
 - **Body type:** 13.5px data cells in Walnut Ink. Catalog # and Denomination at 600; the serial as Code (13px/500, 0.045em tracking, Umber); the display order in Faded Umber because it is position rather than content; Grade as a 13px/600 pill tinted by band.
 - **Rows:** zebra at 5% brass; hover at 12%; selected at 14% with a brass edge and a checked box carrying the state. Text truncates, never wraps.
+- **Empty values:** a muted dash, the same in every cell that can be empty (display order, front image, grade, serial, tags), so one absence never reads as two different things across a row.
+- **Empty view:** the message sits where the rows would be, as a named title, its recovery, and one hint line. A filter that matches nothing explains the OR/AND model and offers Clear filters; an empty collection offers Add the first note and Import / Export, and says where a new note lands.
 - **Pinned cells:** the checkbox and thumbnail columns stay pinned; the checkbox focus halo is a 21px rounded square behind a clipped native control.
+- **Horizontal pan:** the horizontal scrollbar is hidden, mirroring the Viewer, so off-screen columns are reached by dragging the table or pressing Left/Right. When the columns actually overflow, the footer says so with the same keycap pair (`←` `→` to pan) and drops the line when they fit.
 - **Selection:** text selected inside the card takes a 24% brass wash instead of the platform blue, so copying a serial reads as marked paper.
 
 ### Chips & Tags
@@ -238,6 +241,9 @@ Rounded and soft-edged, at four deliberate steps: 8px for small chips and inline
 
 ### Load-Error Card
 - **Style:** replaces the table in place at the table's height, inside the same card shell. A 700-weight title, a muted detail line, a reassurance line, and a single primary Try again button; only the copy block is a live region so the button is not announced twice.
+
+### Loading Card
+- **Style:** the same card shell at the same height while the notes are on their way, so a collection switch never collapses the screen and rebuilds it. A 650-weight "Loading notes…" title and one muted detail line, as a polite status; no spinner and no skeleton bars.
 
 ## Do's and Don'ts
 

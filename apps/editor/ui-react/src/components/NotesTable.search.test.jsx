@@ -335,7 +335,7 @@ describe("NotesTable search", () => {
       await screen.findByText("No notes match the active filters."),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText("No notes are stored yet in this collection."),
+      screen.queryByText("No notes in this collection yet."),
     ).not.toBeInTheDocument();
 
     const emptyCell = screen
@@ -356,10 +356,20 @@ describe("NotesTable search", () => {
     getNotes.mockResolvedValue({ notes: [] });
     renderTable();
 
-    await screen.findByText("No notes are stored yet in this collection.");
+    const emptyCell = (
+      await screen.findByText("No notes in this collection yet.")
+    ).closest(".table-empty-cell");
     expect(
       screen.queryByText("No notes match the active filters."),
     ).not.toBeInTheDocument();
+    // Both ways a note can arrive are next to the sentence that says there are
+    // none: adding one here, or bringing a list in through Import / Export.
+    expect(
+      within(emptyCell).getByRole("button", { name: "Add the first note" }),
+    ).toBeInTheDocument();
+    expect(
+      within(emptyCell).getByRole("link", { name: "Import / Export" }),
+    ).toHaveAttribute("href", "/catalog/import-export");
   });
 
   test("switching collections clears the chips and a reload does not restore them", async () => {

@@ -424,8 +424,10 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
           </button>
         ) : null}
         {filterDraft.trim() ? (
+          // The commit hint keeps the keycap the idle field shows, so the one
+          // key that adds a chip never changes costume as you type.
           <span aria-hidden="true" className="table-filter-enter">
-            ⏎ add
+            <kbd className="table-search-hint">⏎</kbd> add
           </span>
         ) : (
           <kbd className="table-search-hint">/</kbd>
@@ -478,7 +480,10 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
         : null}
       {conditionGroups.length ? null : (
         <p className="table-filter-hint">
-          Pick a field, type, press ⏎. Same field ORs, different fields AND.
+          <span>
+            Pick a field, type, press <kbd>⏎</kbd>. Same field ORs, different
+            fields AND.
+          </span>
         </p>
       )}
       {conditionGroups.length ? (

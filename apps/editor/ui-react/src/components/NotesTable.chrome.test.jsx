@@ -166,9 +166,14 @@ describe("NotesTable chrome", () => {
 
     const hint = screen.getByText(/Drag the handle to reorder/);
     expect(hint).toHaveTextContent("Drag the handle to reorder");
-    expect(hint).toHaveTextContent("to browse");
-    expect(hint).toHaveTextContent("shortcuts");
-    expect(within(hint).getByText("?")).toBeInTheDocument();
+
+    // The hint is a list of segments sharing one band: each instruction keeps
+    // its own node so a narrow window can stack them without clipping.
+    const keys = hint.closest(".table-footer-keys");
+    expect(keys).not.toBeNull();
+    expect(keys).toHaveTextContent("to browse");
+    expect(keys).toHaveTextContent("shortcuts");
+    expect(within(keys).getByText("?")).toBeInTheDocument();
   });
 
   test("the footer stops offering the arrow keys when nothing matched", async () => {
@@ -514,5 +519,54 @@ describe("NotesTable chrome", () => {
       ).not.toBeInTheDocument();
     });
     expect(screen.getByText(/Drag the handle to reorder/)).toBeInTheDocument();
+  });
+
+  test("the card holds its footprint while the notes load", async () => {
+    let resolveNotes;
+    getNotes.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          resolveNotes = resolve;
+        }),
+    );
+    renderTable();
+
+    // The table's own shape is on screen from the first frame: a bare status
+    // line would collapse the screen and then rebuild it a moment later.
+    const card = document.querySelector(".table-shell.table-loading");
+    expect(card).not.toBeNull();
+    expect(within(card).getByRole("status")).toHaveTextContent(
+      "Loading notes…",
+    );
+    // Nothing that belongs to a loaded table is painted yet.
+    expect(document.querySelector(".table-rail")).toBeNull();
+    expect(document.querySelector(".table-footer-hint")).toBeNull();
+
+    await act(async () => {
+      resolveNotes({ notes: collectionNotes });
+    });
+
+    expect(await screen.findByText("AAAA")).toBeInTheDocument();
+    expect(document.querySelector(".table-loading")).toBeNull();
+    expect(document.querySelector(".table-shell")).not.toBeNull();
+  });
+
+  test("an empty field reads as the same muted dash everywhere in the row", async () => {
+    getNotes.mockResolvedValue({
+      notes: [note(1, { denomination: "AAAA", serial: "", tags: [] })],
+    });
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+
+    const row = rowFor(container, "AAAA");
+
+    // Serial, grade and tags are all absent on this note, and all three read
+    // the same way instead of leaving a hole beside a dash.
+    for (const key of ["serial", "grade", "tags"]) {
+      const cell = row.querySelector(`td.table-col-${key}`);
+      expect(cell).toHaveTextContent("-");
+      expect(cell.querySelector(".muted")).not.toBeNull();
+    }
   });
 });

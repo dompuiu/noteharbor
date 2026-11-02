@@ -194,6 +194,79 @@ describe("NotesTable column keyboard panning", () => {
     expect(scroller.scrollLeft).toBe(0);
   });
 
+  test("the footer offers the arrow keys only while the columns overflow", async () => {
+    // The real observer is replaced by a capturing one so the test can fire the
+    // table's re-measure itself: jsdom reports no layout, and the pan hint is
+    // driven by the same measurement the pan gesture reads.
+    const observers = [];
+
+    vi.stubGlobal(
+      "ResizeObserver",
+      class {
+        constructor(callback) {
+          observers.push(callback);
+        }
+        observe() {}
+        unobserve() {}
+        disconnect() {}
+      },
+    );
+
+    const { container } = renderTable();
+    await screen.findByText("ZZTEST");
+
+    const keys = () => container.querySelector(".table-footer-keys");
+    expect(keys()).not.toBeNull();
+    expect(keys().textContent).not.toContain("to pan");
+
+    const scroller = armHorizontalOverflow(container);
+
+    // A narrower window makes the table re-measure, which re-checks whether the
+    // columns still overflow.
+    HTMLElement.prototype.getBoundingClientRect.mockReturnValue({
+      width: 900,
+      height: 600,
+      top: 0,
+      left: 0,
+      right: 900,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    await act(async () => {
+      observers.forEach((callback) => callback());
+    });
+
+    expect(keys().textContent).toContain("to pan");
+
+    // Once the columns fit, the hint stops offering a gesture that would do
+    // nothing.
+    Object.defineProperty(scroller, "scrollWidth", {
+      configurable: true,
+      value: 900,
+    });
+
+    HTMLElement.prototype.getBoundingClientRect.mockReturnValue({
+      width: 950,
+      height: 600,
+      top: 0,
+      left: 0,
+      right: 950,
+      bottom: 600,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    });
+
+    await act(async () => {
+      observers.forEach((callback) => callback());
+    });
+
+    expect(keys().textContent).not.toContain("to pan");
+  });
+
   test("column keys are left for the platform when the columns fit the window", async () => {
     renderTable();
     await screen.findByText("ZZTEST");
