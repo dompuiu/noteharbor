@@ -76,7 +76,6 @@ import { NoCollectionsPrompt } from "./NoCollectionsPrompt.jsx";
 import { RowActionsMenu } from "./RowActionsMenu.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 import { TableFilterBar } from "./TableFilterBar.jsx";
-import { TableFilterHelp } from "./TableFilterHelp.jsx";
 import { TableRows } from "./TableRows.jsx";
 import { TableBulkBar } from "./TableBulkBar.jsx";
 import { TableMoveToast } from "./TableMoveToast.jsx";
@@ -4652,7 +4651,6 @@ function NotesTable({
                   tagNames={tagNames}
                 />
                 <div className="table-rail-actions">
-                  <TableFilterHelp />
                   <ColumnPicker
                     columns={hideableColumns}
                     disabledColumnKey={lastVisibleDataColumnKey}

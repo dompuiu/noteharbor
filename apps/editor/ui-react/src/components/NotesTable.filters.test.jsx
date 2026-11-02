@@ -96,10 +96,6 @@ function filterInput(label) {
   return screen.getByLabelText(`Filter ${label}`);
 }
 
-function helpTrigger() {
-  return screen.getByRole("button", { name: "How filters combine" });
-}
-
 // Choose the field, type the value and commit it with Enter.
 async function commitChip(user, label, value) {
   await chooseField(user, label);
@@ -139,9 +135,14 @@ describe("NotesTable filter chips", () => {
       screen.getByRole("searchbox", { name: "Filter Catalog" }),
     ).toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Clear all" })).toBeNull();
-    // No chips, and no reserved line for them: the hint moved into the ? note.
+    // No chips, and no reserved line for them: the idle hint sits in their
+    // slot, beside the field it explains.
     expect(document.querySelector(".table-filter-chips")).toBeNull();
-    expect(screen.queryByText(/^No filters yet/)).toBeNull();
+    expect(
+      screen.getByText(
+        "Pick a field, type, press ⏎. Same field ORs, different fields AND.",
+      ),
+    ).toBeInTheDocument();
   });
 
   test("the field menu marks the current field and focuses the input after a pick", async () => {
@@ -180,7 +181,8 @@ describe("NotesTable filter chips", () => {
     expect(
       screen.getByRole("button", { name: "Remove Company PMG" }),
     ).toBeInTheDocument();
-    expect(screen.queryByText(/^No filters yet/)).toBeNull();
+    // The first chip replaces the idle hint.
+    expect(screen.queryByText(/^Pick a field/)).toBeNull();
     expect(filterInput("Company")).toHaveValue("");
     await waitFor(() => {
       expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
@@ -656,80 +658,53 @@ describe("NotesTable filter chips", () => {
   });
 });
 
-// The OR/AND rule no longer occupies a 30px row: it hides behind the rail's
-// ? trigger, whose note exists in the DOM only while it is open.
-describe("NotesTable filter help", () => {
-  const helpText =
-    "No filters yet — pick a field, type, press ⏎. Same field ORs, different fields AND.";
+// The field/Enter model and the OR/AND rule ride inline in the rail while it
+// has no chips, next to the field they explain. A popover parked at the far
+// edge of the rail put them a table's width away and kept saying "No filters
+// yet" over an active filter.
+describe("NotesTable filter hint", () => {
+  const hintText =
+    "Pick a field, type, press ⏎. Same field ORs, different fields AND.";
 
-  test("the ? trigger opens the rule note and toggles it closed", async () => {
+  test("the idle rail states the rule beside the field", async () => {
     renderTable();
-    const user = userEvent.setup();
 
     await screen.findByText("AAAA");
-    // The accessible name is the whole affordance; the trigger is unlabeled
-    // visually on purpose.
-    expect(helpTrigger()).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText(helpText)).toBeNull();
 
-    await user.click(helpTrigger());
+    const hint = screen.getByText(hintText);
+    const rail = document.querySelector(".table-rail");
 
-    expect(helpTrigger()).toHaveAttribute("aria-expanded", "true");
-    expect(screen.getByText(helpText)).toBeInTheDocument();
-
-    await user.click(helpTrigger());
-
-    expect(helpTrigger()).toHaveAttribute("aria-expanded", "false");
-    expect(screen.queryByText(helpText)).toBeNull();
-  });
-
-  test("Escape closes the note and returns focus to the trigger", async () => {
-    renderTable();
-    const user = userEvent.setup();
-
-    await screen.findByText("AAAA");
-    await user.click(helpTrigger());
-
+    expect(rail).toContainElement(hint);
+    expect(hint).toHaveClass("table-filter-hint");
+    // The hint replaced the ? trigger rather than joining it.
     expect(
-      screen.getByRole("dialog", { name: "How filters combine" }),
-    ).toHaveFocus();
-
-    await user.keyboard("{Escape}");
-
-    expect(screen.queryByText(helpText)).toBeNull();
-    expect(helpTrigger()).toHaveFocus();
+      screen.queryByRole("button", { name: "How filters combine" }),
+    ).toBeNull();
   });
 
-  test("Escape on the closed trigger still reaches the table's filters", async () => {
+  test("the first chip replaces the hint", async () => {
     renderTable();
     const user = userEvent.setup();
 
     await screen.findByText("AAAA");
     await commitChip(user, "Company", "PMG");
 
-    // The trigger is rail chrome: with the note closed it must not swallow
-    // Escape before the table can clear the filter the rail is showing.
-    helpTrigger().focus();
-    await user.keyboard("{Escape}");
-
+    expect(screen.queryByText(hintText)).toBeNull();
+    expect(document.querySelector(".table-filter-hint")).toBeNull();
     expect(
-      screen.queryByRole("button", { name: /^Edit Company/ }),
-    ).toBeNull();
-    expect(await screen.findByText("BBBB")).toBeInTheDocument();
-    expect(helpTrigger()).toHaveFocus();
+      screen.getByRole("button", { name: "Edit Company filter PMG" }),
+    ).toBeInTheDocument();
   });
 
-  test("a click outside the note closes it", async () => {
+  test("clearing every chip brings the hint back", async () => {
     renderTable();
     const user = userEvent.setup();
 
     await screen.findByText("AAAA");
-    await user.click(helpTrigger());
-    expect(screen.getByText(helpText)).toBeInTheDocument();
+    await commitChip(user, "Company", "PMG");
+    await user.click(screen.getByRole("button", { name: "Clear all" }));
 
-    await user.click(document.body);
-
-    expect(screen.queryByText(helpText)).toBeNull();
+    expect(await screen.findByText(hintText)).toBeInTheDocument();
   });
 });
 
@@ -792,7 +767,7 @@ describe("NotesTable filter bar tab order", () => {
     return screen.getByRole("button", { name: "Columns" });
   }
 
-  test("Tab leaves the field for the help trigger when no chip exists", async () => {
+  test("Tab leaves the field for Columns when no chip exists", async () => {
     renderTable();
     const user = userEvent.setup();
 
@@ -800,10 +775,7 @@ describe("NotesTable filter bar tab order", () => {
     await user.click(filterInput("Catalog"));
     expect(filterInput("Catalog")).toHaveFocus();
 
-    await user.tab();
-
-    expect(helpTrigger()).toHaveFocus();
-
+    // The idle hint is prose, not a stop on the way to the view controls.
     await user.tab();
 
     expect(columnsButton()).toHaveFocus();
@@ -849,9 +821,6 @@ describe("NotesTable filter bar tab order", () => {
     expect(clearAll).toHaveFocus();
 
     await user.tab();
-    expect(helpTrigger()).toHaveFocus();
-
-    await user.tab();
     expect(columnsButton()).toHaveFocus();
 
     await user.tab();
@@ -874,9 +843,6 @@ describe("NotesTable filter bar tab order", () => {
     });
 
     columnsButton().focus();
-    await user.tab({ shift: true });
-    expect(helpTrigger()).toHaveFocus();
-
     await user.tab({ shift: true });
     expect(clearAll).toHaveFocus();
 

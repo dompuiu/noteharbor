@@ -476,6 +476,11 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
             document.body,
           )
         : null}
+      {conditionGroups.length ? null : (
+        <p className="table-filter-hint">
+          Pick a field, type, press ⏎. Same field ORs, different fields AND.
+        </p>
+      )}
       {conditionGroups.length ? (
         <div className="table-filter-chips">
           {conditionGroups.map(({ field, items }, groupIndex) => (

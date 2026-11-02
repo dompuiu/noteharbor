@@ -351,21 +351,18 @@ describe("table styles", () => {
     expect(styles).not.toMatch(/\.table-filter-chips-empty/);
   });
 
-  // The ? trigger is a quiet 20px ghost in the rail, and its note reuses the
-  // field menu's frame but wraps as prose instead of a compact list.
-  test("the filter help note wraps as prose over the menu frame", () => {
-    const trigger = styles.match(/^\.table-filter-help\s*\{([^}]*)\}/m);
-    expect(trigger).not.toBeNull();
-    expect(trigger[1]).toMatch(/width:\s*20px/);
-    expect(trigger[1]).toMatch(/height:\s*20px/);
-    expect(trigger[1]).toMatch(/background:\s*none/);
+  // The idle rule is prose in the rail, in the chips' own slot: no trigger to
+  // lose track of on the far edge and no popover frame to reuse.
+  test("the idle filter hint rides in the chips' slot", () => {
+    expect(styles).not.toMatch(/\.table-filter-help/);
+    expect(styles).not.toMatch(/\.table-filter-menu--note/);
 
-    const note = styles.match(/^\.table-filter-menu--note\s*\{([^}]*)\}/m);
-    expect(note).not.toBeNull();
-    expect(note[1]).toMatch(/max-width:\s*280px/);
-    expect(note[1]).toMatch(/font-size:\s*0\.75rem/);
-    expect(note[1]).toMatch(/line-height:\s*1\.5/);
-    expect(note[1]).toMatch(/white-space:\s*normal/);
+    const hint = styles.match(/^\.table-filter-hint\s*\{([^}]*)\}/m);
+    expect(hint).not.toBeNull();
+    expect(hint[1]).toMatch(/flex:\s*1 1 240px/);
+    expect(hint[1]).toMatch(/min-width:\s*0/);
+    expect(hint[1]).toMatch(/color:\s*var\(--text-hint\)/);
+    expect(hint[1]).toMatch(/font-size:\s*0\.75rem/);
   });
 
   // The filters describe only the table, so they are the card's own rail: the

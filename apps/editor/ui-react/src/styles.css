@@ -3867,38 +3867,6 @@ th[aria-sort="descending"] .sort-chevron {
   margin-left: auto;
 }
 
-/* The rail's `?` trigger: a 20px ghost, not a pill, so it sits beside
-   Columns without adding visual weight. It carries only the OR/AND note. */
-.table-filter-help {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: 999px;
-  background: none;
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  font-weight: 700;
-  line-height: 1;
-  cursor: pointer;
-}
-
-.table-filter-help:hover,
-.table-filter-help:focus-visible,
-.table-filter-help[aria-expanded="true"] {
-  background: var(--accent-soft);
-  color: var(--accent-strong);
-}
-
-.table-filter-help:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 1px;
-}
-
 /* The Reset view slot keeps its width while the control is hidden, so a
    non-default view does not shift the toolbar when the button appears. */
 .table-reset-slot {
@@ -4046,17 +4014,6 @@ th[aria-sort="descending"] .sort-chevron {
   font-weight: 600;
 }
 
-/* The OR/AND note is prose, not a menu list: it wraps at 280px and keeps
-   body line-height instead of the compact option metrics above. */
-.table-filter-menu--note {
-  max-width: 280px;
-  padding: 10px 12px;
-  color: var(--text-muted);
-  font-size: 0.75rem;
-  line-height: 1.5;
-  white-space: normal;
-}
-
 .table-search-divider {
   flex: none;
   width: 1px;
@@ -4175,6 +4132,18 @@ th[aria-sort="descending"] .sort-chevron {
   right: 9px;
   pointer-events: none;
   color: var(--text-muted);
+}
+
+/* The idle rail states the field/Enter model in the chips' own slot: the
+   sentence sits beside the field it explains, and the first chip replaces it
+   without reserving a separate line. Active chips teach nothing here; the
+   empty-match state still spells out OR/AND when it matters. */
+.table-filter-hint {
+  flex: 1 1 240px;
+  min-width: 0;
+  margin: 0;
+  color: var(--text-hint);
+  font-size: 0.75rem;
 }
 
 /* Active filters share the rail with the field as removable chips, so a
