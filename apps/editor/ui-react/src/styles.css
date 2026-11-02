@@ -2680,6 +2680,29 @@ input[type="radio"] {
   gap: 6px;
 }
 
+/* The rename form stands where the collection title stood, so it takes the
+   title's own line box: 1.3125rem at the inherited 1.5 line-height. The shared
+   showcase field is 18px with 8px of vertical padding, which made the form
+   taller than the heading and shoved the table down on every edit. Matching
+   the line box and filling it keeps the header — and the table below — still. */
+.panel-heading-copy .collection-rename-form {
+  height: 1.5em;
+  font-size: 1.3125rem;
+}
+
+.panel-heading-copy .collection-rename-form .showcase-name-field {
+  height: 100%;
+  /* The title button overhangs by 4px and pads 4px back, so its glyphs start
+     at the content edge. The field's 1px border and 4px padding would push
+     the name 5px right on edit; the negative margin cancels both. */
+  margin-left: -5px;
+  padding: 0 4px;
+  font-size: inherit;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  line-height: 1.5;
+}
+
 .panel-heading-copy p {
   margin: 0;
 }

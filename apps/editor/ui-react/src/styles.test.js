@@ -1846,6 +1846,30 @@ describe("catalog header", () => {
     expect(title[1]).toMatch(/letter-spacing:\s*-0\.01em/);
   });
 
+  // Editing in place must not move the table: the form replaces the title in
+  // the same grid cell, so it takes the title's 1.5 line box (21px × 1.5) and
+  // the field fills it. The shared showcase field's 18px type and 8px of
+  // vertical padding used to make the form taller than the heading.
+  test("the inline rename form keeps the title's line box", () => {
+    const form = styles.match(
+      /\.panel-heading-copy \.collection-rename-form\s*\{([^}]*)\}/,
+    );
+    expect(form).not.toBeNull();
+    expect(form[1]).toMatch(/height:\s*1\.5em/);
+    expect(form[1]).toMatch(/font-size:\s*1\.3125rem/);
+
+    const field = styles.match(
+      /\.panel-heading-copy \.collection-rename-form \.showcase-name-field\s*\{([^}]*)\}/,
+    );
+    expect(field).not.toBeNull();
+    expect(field[1]).toMatch(/height:\s*100%/);
+    expect(field[1]).toMatch(/margin-left:\s*-5px/);
+    expect(field[1]).toMatch(/padding:\s*0\s+4px/);
+    expect(field[1]).toMatch(/font-size:\s*inherit/);
+    expect(field[1]).toMatch(/font-weight:\s*650/);
+    expect(field[1]).toMatch(/letter-spacing:\s*-0\.01em/);
+  });
+
   // The rename control overhangs the content edge by 4px and every focus ring
   // is painted 3px outside the box. The screen clips at the content edge, so
   // the ring was cut off on the left. The screen and its wrappers hand that
