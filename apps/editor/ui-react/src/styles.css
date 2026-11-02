@@ -2506,10 +2506,96 @@ input[type="radio"] {
   overflow-x: hidden;
 }
 
-/* The connection notice is a short message in a full-height panel, so centre
-   it rather than leaving it stranded at the top. */
-.connection-error .panel {
-  justify-content: center;
+/* ── Connection notice ──────────────────────────────────────────────
+   The failure replaces the page, so it reads as one small card held in the
+   middle of the workspace. A full-height panel left the message floating in
+   a slab of empty card, which read as "still loading" rather than "failed". */
+.connection-error {
+  display: grid;
+  place-items: center;
+  padding: 24px 0;
+  overflow-y: auto;
+}
+
+.connection-error > .panel {
+  flex: 0 0 auto;
+  width: min(100%, 480px);
+  overflow: visible;
+  padding: 32px 36px 30px;
+  box-shadow: var(--shadow-md);
+}
+
+.connection-error-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0 0 14px;
+  font-size: 0.6875rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--danger);
+}
+
+.connection-error-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--danger);
+  box-shadow: 0 0 0 3px var(--danger-bg);
+}
+
+.connection-error-message {
+  display: grid;
+  gap: 10px;
+}
+
+.connection-error h1 {
+  margin: 0;
+  font-size: 1.5rem;
+  font-weight: 650;
+  line-height: 1.22;
+  letter-spacing: -0.012em;
+  text-wrap: balance;
+  /* Focused on mount so assistive tech lands on the message. The alert
+     announces it and a heading is not operable, so no ring is painted over
+     the text: the default 2px outline reads as an input box around it. */
+  outline: none;
+}
+
+.connection-error-message p {
+  margin: 0;
+  max-width: 44ch;
+  font-size: 0.9375rem;
+  line-height: 1.55;
+  text-wrap: pretty;
+}
+
+.connection-error-reassurance {
+  margin: 20px 0 0;
+  padding-top: 16px;
+  border-top: 1px solid var(--border-soft);
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text-muted);
+}
+
+.connection-error-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 22px;
+}
+
+.connection-error-actions .button {
+  min-width: 108px;
+  min-height: 38px;
+  font-size: 0.875rem;
+}
+
+.connection-error-progress {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
 }
 
 .panel-heading {
