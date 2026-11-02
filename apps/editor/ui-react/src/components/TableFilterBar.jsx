@@ -483,68 +483,71 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
       )}
       {conditionGroups.length ? (
         <div className="table-filter-chips">
-          {conditionGroups.map(({ field, items }, groupIndex) => (
-            <Fragment key={field}>
-              {groupIndex > 0 ? (
-                <span className="table-filter-and">and</span>
-              ) : null}
-              <span className="table-filter-facet">
-                <span className="table-filter-facet-label">
-                  {filterFieldLabel(field)}
+          {conditionGroups.map(({ field, items }, groupIndex) =>
+            items.map((condition, index) => (
+              // One chip plus the prefix that names it: the connector and the
+              // field label travel with their chip, so a wrapped line may
+              // start with "AND Company PM" or "or 29" but never ends on a
+              // bare connector. Because the chip is the wrapping unit, a long
+              // run of ORed values wraps inside the block instead of running
+              // under the rail's trailing controls.
+              <span className="table-filter-unit" key={condition.id}>
+                {groupIndex > 0 && index === 0 ? (
+                  <span className="table-filter-and">and</span>
+                ) : null}
+                {index > 0 ? (
+                  <span className="table-filter-or">or</span>
+                ) : (
+                  <span className="table-filter-facet-label">
+                    {filterFieldLabel(field)}
+                  </span>
+                )}
+                <span
+                  className={`table-filter-chip${condition.negated ? " table-filter-chip--negated" : ""}`}
+                >
+                  {editingConditionId === condition.id ? (
+                    <input
+                      aria-label={`Edit ${filterFieldLabel(field)} filter`}
+                      autoFocus
+                      className="table-filter-chip-input"
+                      onBlur={commitConditionEdit}
+                      onChange={(event) =>
+                        setConditionDraft(event.target.value)
+                      }
+                      onFocus={(event) => event.currentTarget.select()}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter") {
+                          event.preventDefault();
+                          commitConditionEdit();
+                        } else if (event.key === "Escape") {
+                          event.preventDefault();
+                          cancelConditionEdit();
+                        }
+                      }}
+                      value={conditionDraft}
+                    />
+                  ) : (
+                    <>
+                      <button
+                        aria-label={`Edit ${filterFieldLabel(field)} filter ${condition.value}`}
+                        className="table-filter-chip-value"
+                        onClick={() => startConditionEdit(condition)}
+                        title="Edit value"
+                        type="button"
+                      >
+                        {condition.negated ? "!" : ""}
+                        {condition.value}
+                      </button>
+                      <ChipRemoveButton
+                        label={`Remove ${filterFieldLabel(field)} ${condition.negated ? "not " : ""}${condition.value}`}
+                        onClick={() => removeCondition(condition.id)}
+                      />
+                    </>
+                  )}
                 </span>
-                {items.map((condition, index) => (
-                  <Fragment key={condition.id}>
-                    {index > 0 ? (
-                      <span className="table-filter-or">or</span>
-                    ) : null}
-                    <span
-                      className={`table-filter-chip${condition.negated ? " table-filter-chip--negated" : ""}`}
-                    >
-                      {editingConditionId === condition.id ? (
-                        <input
-                          aria-label={`Edit ${filterFieldLabel(field)} filter`}
-                          autoFocus
-                          className="table-filter-chip-input"
-                          onBlur={commitConditionEdit}
-                          onChange={(event) =>
-                            setConditionDraft(event.target.value)
-                          }
-                          onFocus={(event) => event.currentTarget.select()}
-                          onKeyDown={(event) => {
-                            if (event.key === "Enter") {
-                              event.preventDefault();
-                              commitConditionEdit();
-                            } else if (event.key === "Escape") {
-                              event.preventDefault();
-                              cancelConditionEdit();
-                            }
-                          }}
-                          value={conditionDraft}
-                        />
-                      ) : (
-                        <>
-                          <button
-                            aria-label={`Edit ${filterFieldLabel(field)} filter ${condition.value}`}
-                            className="table-filter-chip-value"
-                            onClick={() => startConditionEdit(condition)}
-                            title="Edit value"
-                            type="button"
-                          >
-                            {condition.negated ? "!" : ""}
-                            {condition.value}
-                          </button>
-                          <ChipRemoveButton
-                            label={`Remove ${filterFieldLabel(field)} ${condition.negated ? "not " : ""}${condition.value}`}
-                            onClick={() => removeCondition(condition.id)}
-                          />
-                        </>
-                      )}
-                    </span>
-                  </Fragment>
-                ))}
               </span>
-            </Fragment>
-          ))}
+            )),
+          )}
           <button
             className="table-filter-clear-all"
             onClick={clearAllFilters}

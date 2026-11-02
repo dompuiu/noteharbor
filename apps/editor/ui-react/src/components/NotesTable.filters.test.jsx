@@ -244,6 +244,48 @@ describe("NotesTable filter chips", () => {
     expect(screen.getByText("CCCC")).toBeInTheDocument();
   });
 
+  // The chip line wraps between units, so the connector and the field label
+  // have to travel with the chip they introduce: a wrapped line may begin with
+  // "AND Company PM" but the previous line never ends on a bare "and". One chip
+  // per unit is also what lets a long ORed run wrap between chips rather than
+  // overflow past the chip block.
+  test("a connector and a label are welded to their chip", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Company", "PMG");
+    await commitChip(user, "Company", "PCGS");
+    await commitChip(user, "Serial", "SER-3");
+
+    const chips = document.querySelector(".table-filter-chips");
+    expect(chips).not.toBeNull();
+
+    // Three chips, three wrapping units: the OR run and the ANDed field each
+    // break between chips.
+    const units = chips.querySelectorAll(".table-filter-unit");
+    expect(units).toHaveLength(3);
+    expect(chips.querySelector(":scope > .table-filter-and")).toBeNull();
+    expect(chips.querySelector(":scope > .table-filter-or")).toBeNull();
+
+    // The second value of a field leads with "or", the first with its label,
+    // and the next field leads with "and" plus its label.
+    const [first, second, third] = units;
+    expect(first.querySelector(".table-filter-facet-label")).toHaveTextContent(
+      "Company",
+    );
+    expect(first.querySelector(".table-filter-or")).toBeNull();
+    expect(first.querySelector(".table-filter-and")).toBeNull();
+    expect(second.querySelector(".table-filter-or")).not.toBeNull();
+    expect(second.querySelector(".table-filter-chip-value")).toHaveTextContent(
+      "PCGS",
+    );
+    expect(third.querySelector(".table-filter-and")).not.toBeNull();
+    expect(third.querySelector(".table-filter-facet-label")).toHaveTextContent(
+      "Serial",
+    );
+  });
+
   test("the Tags field opens its list only on typing or Down", async () => {
     getNotes.mockResolvedValue({
       notes: [

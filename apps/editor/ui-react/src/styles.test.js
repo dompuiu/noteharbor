@@ -7,6 +7,33 @@ import { describe, expect, test } from "vitest";
 // assertion.
 const styles = readFileSync(join(process.cwd(), "src", "styles.css"), "utf8");
 
+// Returns the whole at-rule body (nested rules included) that starts at
+// `header`, so a container query's contents can be asserted without trusting
+// where the file happens to end it.
+function atRule(source, header) {
+  const start = source.indexOf(header);
+
+  if (start < 0) {
+    return null;
+  }
+
+  let depth = 0;
+
+  for (let index = source.indexOf("{", start); index < source.length; index += 1) {
+    if (source[index] === "{") {
+      depth += 1;
+    } else if (source[index] === "}") {
+      depth -= 1;
+
+      if (depth === 0) {
+        return source.slice(start, index + 1);
+      }
+    }
+  }
+
+  return null;
+}
+
 describe("table styles", () => {
   test("defines the zebra row tint token", () => {
     expect(styles).toMatch(/--row-zebra:\s*rgba\(150,\s*98,\s*47,\s*0\.05\)/);
@@ -420,6 +447,7 @@ describe("table styles", () => {
     // The 8px row-gap keeps a wrapped line at 24 + 8 = 32px.
     const chips = styles.match(/^\.table-filter-chips\s*\{([^}]*)\}/m);
     expect(chips).not.toBeNull();
+    expect(chips[1]).toMatch(/flex-wrap:\s*wrap/);
     expect(chips[1]).toMatch(/flex:\s*1 1 240px/);
     expect(chips[1]).toMatch(/gap:\s*8px 4px/);
     expect(chips[1]).toMatch(/min-width:\s*0/);
@@ -428,6 +456,55 @@ describe("table styles", () => {
 
     // The old toolbar band left with the filter bar that used it.
     expect(styles).not.toMatch(/\.toolbar-row--table-controls/);
+  });
+
+  // A cramped rail stops negotiating: the field and the trailing controls take
+  // the first row and the chips get a row of their own, so the same six filters
+  // read the same at every width below the breakpoint instead of flowing into a
+  // different shape at each one. The query sits on the card, not the viewport,
+  // because the collapsed sidebar and the page padding are part of the budget.
+  test("a narrow card stacks the chips under the field", () => {
+    const shell = styles.match(/^\.table-shell\s*\{([^}]*)\}/m);
+    expect(shell).not.toBeNull();
+    expect(shell[1]).toMatch(/container-type:\s*inline-size/);
+    expect(shell[1]).toMatch(/container-name:\s*table-shell/);
+
+    const narrow = atRule(styles, "@container table-shell (max-width: 1120px)");
+    expect(narrow).not.toBeNull();
+
+    // The chips stop competing with the field: 100% basis forces their own
+    // line, and `order` follows the visual stack while the DOM keeps chips
+    // before Add note / Reset view / Columns for the keyboard.
+    const chips = narrow.match(
+      /\.table-filter-chips\s*\{([^}]*)\}/,
+    );
+    expect(chips).not.toBeNull();
+    expect(chips[1]).toMatch(/order:\s*2/);
+    expect(chips[1]).toMatch(/flex:\s*1 1 100%/);
+
+    const actions = narrow.match(
+      /\.table-rail-actions\s*\{([^}]*)\}/,
+    );
+    expect(actions).not.toBeNull();
+    expect(actions[1]).toMatch(/order:\s*1/);
+
+    // The query can only win by source order: both selectors are a single
+    // class, so the block has to sit after the rules it overrides.
+    const queryAt = styles.indexOf("@container table-shell");
+    expect(queryAt).toBeGreaterThan(styles.indexOf(".table-rail-actions {"));
+    expect(queryAt).toBeGreaterThan(styles.indexOf(".table-filter-chips {"));
+  });
+
+  // A connector names the chip that follows it, so prefix and chip wrap as one
+  // unit: a line may start with "AND Company PM" but never ends on a bare
+  // "and". One chip per unit is also what lets a long run of ORed values wrap
+  // between chips instead of overflowing under the rail's controls.
+  test("a connector travels with its chip", () => {
+    const unit = styles.match(/^\.table-filter-unit\s*\{([^}]*)\}/m);
+    expect(unit).not.toBeNull();
+    expect(unit[1]).toMatch(/display:\s*inline-flex/);
+    expect(unit[1]).toMatch(/align-items:\s*center/);
+    expect(unit[1]).toMatch(/flex:\s*0 0 auto/);
   });
 
   // Add note leads the cluster, then Reset sits before Columns and no slot
@@ -585,14 +662,14 @@ describe("table styles", () => {
     expect(negated[1]).toMatch(/var\(--danger\)/);
   });
 
-  // The chip row's metrics: a 24px facet around the 24px value chip, 12px
+  // The chip row's metrics: a 24px unit around the 24px value chip, 12px
   // labels and an 11px "and" separator. A wrapped chip line is therefore the
   // 24px row plus the chips' 8px row-gap, matching the ADR's 32px.
   test("the chip row's metrics", () => {
-    const facet = styles.match(/\.table-filter-facet\s*\{([^}]*)\}/);
-    expect(facet).not.toBeNull();
-    expect(facet[1]).toMatch(/height:\s*24px/);
-    expect(facet[1]).toMatch(/padding:\s*0\s+4px\s+0\s+2px/);
+    const unit = styles.match(/\.table-filter-unit\s*\{([^}]*)\}/);
+    expect(unit).not.toBeNull();
+    expect(unit[1]).toMatch(/height:\s*24px/);
+    expect(unit[1]).toMatch(/gap:\s*5px/);
 
     const chip = styles.match(/\.table-filter-chip\s*\{([^}]*)\}/);
     expect(chip).not.toBeNull();
