@@ -59,7 +59,7 @@ function PathnameProbe() {
   return <output data-testid="pathname">{pathname}</output>;
 }
 
-function renderTable() {
+function renderTable(overrides = {}) {
   return render(
     <MemoryRouter initialEntries={["/catalog/collections/1/view"]}>
       <PathnameProbe />
@@ -69,6 +69,7 @@ function renderTable() {
         collections={[{ id: 1, is_default: 1, name: "Test" }]}
         collectionsError=""
         loadingCollections={false}
+        {...overrides}
       />
     </MemoryRouter>,
   );
@@ -116,15 +117,14 @@ describe("NotesTable header controls", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("shows an Edit link to the collection edit route", async () => {
+  test("no longer links to the collection edit route", async () => {
     renderTable();
 
     await screen.findByRole("button", { name: "Add note" });
 
-    expect(screen.getByRole("link", { name: "Edit Test collection" })).toHaveAttribute(
-      "href",
-      "/catalog/collections/1/edit",
-    );
+    expect(
+      screen.queryByRole("link", { name: "Edit Test collection" }),
+    ).not.toBeInTheDocument();
   });
 
   test("heads the collection title with the Catalog eyebrow", async () => {
@@ -142,23 +142,23 @@ describe("NotesTable header controls", () => {
     ).toBeTruthy();
   });
 
-  test("shows the collection title with no rename control", async () => {
-    renderTable();
+  test("shows the collection title as its rename control", async () => {
+    renderTable({ onRenameCollection: vi.fn() });
 
     await screen.findByRole("button", { name: "Add note" });
 
-    expect(screen.getByRole("heading", { name: "Test" })).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: /Test/ })).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Rename Test collection" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Rename collection: Test" }),
+    ).toBeInTheDocument();
     expect(
       screen.queryByRole("textbox", { name: "Collection name" }),
     ).not.toBeInTheDocument();
   });
 
-  test("pressing e enters the collection edit mode", async () => {
+  test("pressing e opens an inline rename without leaving the view", async () => {
     const user = userEvent.setup();
-    renderTable();
+    renderTable({ onRenameCollection: vi.fn() });
 
     await screen.findByRole("button", { name: "Add note" });
     expect(screen.getByTestId("pathname")).toHaveTextContent(
@@ -168,8 +168,11 @@ describe("NotesTable header controls", () => {
     await user.keyboard("e");
 
     expect(screen.getByTestId("pathname")).toHaveTextContent(
-      "/catalog/collections/1/edit",
+      "/catalog/collections/1/view",
     );
+    expect(
+      screen.getByRole("textbox", { name: "Collection name" }),
+    ).toBeInTheDocument();
   });
 
   test("pressing Escape in edit mode without row focus cancels the edit", async () => {
@@ -183,7 +186,6 @@ describe("NotesTable header controls", () => {
           collections={[{ id: 1, is_default: 1, name: "Test" }]}
           collectionsError=""
           loadingCollections={false}
-          showEditCollectionAction={false}
           isCollectionEditing
           collectionEditName="Test"
           onCancelCollectionEdit={onCancelCollectionEdit}

@@ -26,7 +26,7 @@ const shortcutGroups = [
       },
       { keys: ["Enter"], description: "Open the focused note" },
       { keys: ["Space"], description: "Select / deselect the focused note" },
-      { keys: ["e"], description: "Edit the focused note (or the collection when no row is focused)" },
+      { keys: ["e"], description: "Edit the focused note (or rename the collection when no row is focused)" },
       { keys: ["d"], description: "Delete the focused note" },
       { keys: ["c"], description: "Copy the focused note's details" },
       { keys: ["o"], description: "Open the focused note's actions menu" },

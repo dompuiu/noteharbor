@@ -34,6 +34,8 @@ vi.mock("./NotesTable.jsx", () => ({
     savingCollectionEdit,
     deletingCollectionEdit,
     canSaveCollectionEdit,
+    onRenameCollection,
+    onDeleteCollection,
   }) =>
     isNewCollection ? (
       <div data-testid="notes-table" data-new-collection="true">
@@ -122,6 +124,12 @@ vi.mock("./NotesTable.jsx", () => ({
         data-testid="notes-table"
       >
         Banknotes table
+        <button onClick={() => onRenameCollection?.("Renamed")} type="button">
+          Mock rename
+        </button>
+        <button onClick={() => onDeleteCollection?.()} type="button">
+          Mock delete
+        </button>
       </div>
     ),
 }));
@@ -222,6 +230,52 @@ describe("CollectionScreen view mode", () => {
     expect(
       screen.getByRole("button", { name: "Delete collection" }),
     ).toBeInTheDocument();
+  });
+
+  test("renames the route collection from the table's inline control", async () => {
+    const user = userEvent.setup();
+    const context = collectionsContext();
+    useCollections.mockReturnValue(context);
+
+    renderView(2);
+    await user.click(screen.getByRole("button", { name: "Mock rename" }));
+
+    expect(context.renameCollection).toHaveBeenCalledWith(2, "Renamed");
+  });
+
+  test("deletes the route collection and lands on the next one", async () => {
+    const user = userEvent.setup();
+    const context = collectionsContext();
+    context.deleteCollection.mockResolvedValue({ nextCollectionId: 1 });
+    useCollections.mockReturnValue(context);
+
+    renderView(2);
+    await user.click(screen.getByRole("button", { name: "Mock delete" }));
+
+    await waitFor(() =>
+      expect(context.deleteCollection).toHaveBeenCalledWith(2),
+    );
+    await waitFor(() =>
+      expect(screen.getByTestId("pathname")).toHaveTextContent(
+        "/catalog/collections/1/view",
+      ),
+    );
+  });
+
+  test("deleting the last collection goes back to the collections home", async () => {
+    const user = userEvent.setup();
+    const context = collectionsContext();
+    context.deleteCollection.mockResolvedValue({ nextCollectionId: null });
+    useCollections.mockReturnValue(context);
+
+    renderView(2);
+    await user.click(screen.getByRole("button", { name: "Mock delete" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("pathname")).toHaveTextContent(
+        "/catalog/collections",
+      ),
+    );
   });
 
   test("an unknown collection shows the not-found state", () => {

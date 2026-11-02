@@ -2,6 +2,7 @@ import {
   useCallback,
   useDeferredValue,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -9,8 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { Link, useLocation, useNavigate } from "react-router-dom";
-import { CATALOG_ROUTES } from "../lib/routes.js";
+import { useLocation, useNavigate } from "react-router-dom";
 import {
   deleteNote,
   getNotes,
@@ -24,6 +24,7 @@ import {
   isEditableElement,
   MODAL_SURFACE_SELECTOR,
 } from "../lib/editableElement.js";
+import { collectionDeleteConfirmation } from "../lib/collectionActions.js";
 import { isEmptyLibrary } from "../lib/libraryState.js";
 import {
   clearLegacyTableState,
@@ -71,6 +72,7 @@ import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { NoCollectionsPrompt } from "./NoCollectionsPrompt.jsx";
+import { RowActionsMenu } from "./RowActionsMenu.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 import { TableFilterBar } from "./TableFilterBar.jsx";
 import { TableRows } from "./TableRows.jsx";
@@ -781,7 +783,8 @@ function NotesTable({
   onCancelNewCollection = null,
   savingNewCollection = false,
   newCollectionError = "",
-  showEditCollectionAction = true,
+  onRenameCollection = null,
+  onDeleteCollection = null,
   isCollectionEditing = false,
   collectionEditName = "",
   onCollectionEditNameChange = null,
@@ -984,6 +987,16 @@ function NotesTable({
   const confirmOpenRef = useRef(false);
   const closeEditorRef = useRef(null);
   const collectionNameFieldRef = useRef(null);
+  // Inline collection rename in the view header. Edit mode keeps its own
+  // draft and form props; this state is only ever used from the view route.
+  const [renamingCollection, setRenamingCollection] = useState(false);
+  const [collectionRenameDraft, setCollectionRenameDraft] = useState("");
+  const [collectionActionError, setCollectionActionError] = useState("");
+  const [savingCollectionRename, setSavingCollectionRename] = useState(false);
+  const collectionRenameFieldRef = useRef(null);
+  const collectionTitleButtonRef = useRef(null);
+  const collectionRenameErrorId = useId();
+  const wasRenamingCollectionRef = useRef(false);
   const {
     confirm: requestConfirmation,
     dialog: confirmDialog,
@@ -1022,6 +1035,148 @@ function NotesTable({
       onCancelNewCollection?.();
     }
   }
+
+  // Inline rename lands the cursor in the title field, selected, so the name
+  // can be retyped at once. `e` from the table opens this same state.
+  useEffect(() => {
+    if (!renamingCollection) {
+      return;
+    }
+
+    const field = collectionRenameFieldRef.current;
+
+    if (field) {
+      field.focus();
+      field.select?.();
+    }
+  }, [renamingCollection]);
+
+  // Closing the field hands focus back to the title: saving, cancelling and a
+  // dismissed confirm all unmount the control that had focus.
+  useEffect(() => {
+    if (wasRenamingCollectionRef.current && !renamingCollection) {
+      collectionTitleButtonRef.current?.focus();
+    }
+
+    wasRenamingCollectionRef.current = renamingCollection;
+  }, [renamingCollection]);
+
+  // A collection switch abandons an open rename: its draft belongs to the
+  // collection that was on screen.
+  useEffect(() => {
+    setRenamingCollection(false);
+    setCollectionRenameDraft("");
+    setCollectionActionError("");
+  }, [collectionId]);
+
+  function startCollectionRename() {
+    if (!collection || !onRenameCollection) {
+      return;
+    }
+
+    setRenamingCollection(true);
+    setCollectionRenameDraft(collection.name);
+    setCollectionActionError("");
+  }
+
+  function cancelCollectionRename() {
+    if (savingCollectionRename) {
+      return;
+    }
+
+    setRenamingCollection(false);
+    setCollectionRenameDraft("");
+    setCollectionActionError("");
+  }
+
+  async function submitCollectionRename(event) {
+    event.preventDefault();
+
+    if (!collection || !onRenameCollection || savingCollectionRename) {
+      return;
+    }
+
+    const trimmed = collectionRenameDraft.trim();
+
+    if (!trimmed) {
+      setCollectionActionError("A collection name is required.");
+      return;
+    }
+
+    if (trimmed === collection.name) {
+      cancelCollectionRename();
+      return;
+    }
+
+    setSavingCollectionRename(true);
+    setCollectionActionError("");
+
+    try {
+      await onRenameCollection(trimmed);
+      setRenamingCollection(false);
+      setCollectionRenameDraft("");
+    } catch (error) {
+      setCollectionActionError(
+        error?.message || "Could not rename the collection.",
+      );
+    } finally {
+      setSavingCollectionRename(false);
+    }
+  }
+
+  function handleCollectionRenameKeyDown(event) {
+    if (event.key === "Escape") {
+      event.preventDefault();
+      event.stopPropagation();
+      cancelCollectionRename();
+    }
+  }
+
+  async function handleDeleteCollectionAction() {
+    if (!collection || !onDeleteCollection) {
+      return;
+    }
+
+    setCollectionActionError("");
+
+    const confirmed = await requestConfirmation(
+      collectionDeleteConfirmation(collection.name),
+    );
+
+    if (!confirmed) {
+      collectionTitleButtonRef.current?.focus();
+      return;
+    }
+
+    try {
+      await onDeleteCollection();
+    } catch (error) {
+      setCollectionActionError(
+        error?.message || "Could not delete the collection.",
+      );
+    }
+  }
+
+  const collectionActionItems = [
+    onRenameCollection
+      ? {
+          key: "rename",
+          label: "Rename",
+          icon: "edit",
+          onSelect: startCollectionRename,
+        }
+      : null,
+    onDeleteCollection
+      ? {
+          key: "delete",
+          label: "Delete collection…",
+          icon: "delete",
+          danger: true,
+          separated: Boolean(onRenameCollection),
+          onSelect: handleDeleteCollectionAction,
+        }
+      : null,
+  ].filter(Boolean);
 
   const showSelection = true;
   const showReorder = true;
@@ -2430,6 +2585,21 @@ function NotesTable({
         return;
       }
 
+      // Esc closes an inline rename even after focus moved out of its field.
+      // The field itself handles the press while focused, before this runs.
+      // Mid-save, the request wins: the name is already on its way.
+      if (event.key === "Escape" && renamingCollection) {
+        if (savingCollectionRename) {
+          return;
+        }
+
+        event.preventDefault();
+        setRenamingCollection(false);
+        setCollectionRenameDraft("");
+        setCollectionActionError("");
+        return;
+      }
+
       if (handleSelectionEscape(event)) {
         return;
       }
@@ -2611,10 +2781,14 @@ function NotesTable({
           collection &&
           Number.isInteger(collectionId) &&
           !isNewCollection &&
-          !isCollectionEditing
+          !isCollectionEditing &&
+          !renamingCollection &&
+          onRenameCollection
         ) {
           event.preventDefault();
-          navigate(CATALOG_ROUTES.collectionEdit(collectionId));
+          setRenamingCollection(true);
+          setCollectionRenameDraft(collection.name);
+          setCollectionActionError("");
         }
         return;
       }
@@ -2669,8 +2843,11 @@ function NotesTable({
     navigate,
     noCollections,
     onCancelCollectionEdit,
+    onRenameCollection,
     orderedNotes,
+    renamingCollection,
     rowVirtualizer,
+    savingCollectionRename,
     slideshowRouteActive,
     showShortcutsHelp,
   ]);
@@ -4239,9 +4416,106 @@ function NotesTable({
                   </svg>
                 </button>
               </form>
+            ) : renamingCollection ? (
+              <form
+                className="collection-rename-form"
+                onSubmit={submitCollectionRename}
+              >
+                <input
+                  aria-describedby={
+                    collectionActionError ? collectionRenameErrorId : undefined
+                  }
+                  aria-invalid={
+                    collectionActionError ? true : undefined
+                  }
+                  aria-label="Collection name"
+                  className="showcase-name-field"
+                  disabled={savingCollectionRename}
+                  onChange={(event) => {
+                    setCollectionRenameDraft(event.target.value);
+                    setCollectionActionError("");
+                  }}
+                  onKeyDown={handleCollectionRenameKeyDown}
+                  ref={collectionRenameFieldRef}
+                  value={collectionRenameDraft}
+                />
+                <button
+                  aria-label="Save name"
+                  className="showcase-node-save"
+                  disabled={savingCollectionRename}
+                  title="Save name (Enter)"
+                  type="submit"
+                >
+                  <svg
+                    aria-hidden="true"
+                    focusable="false"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    width="13"
+                  >
+                    <path
+                      d="M4 12.5l5 5L20 6.5"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      strokeWidth="2.5"
+                    />
+                  </svg>
+                </button>
+                <button
+                  aria-label="Cancel rename"
+                  className="showcase-node-cancel"
+                  disabled={savingCollectionRename}
+                  onClick={cancelCollectionRename}
+                  title="Cancel rename (Esc)"
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    focusable="false"
+                    height="13"
+                    viewBox="0 0 24 24"
+                    width="13"
+                  >
+                    <path
+                      d="M6 6l12 12M18 6L6 18"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeLinecap="round"
+                      strokeWidth="2"
+                    />
+                  </svg>
+                </button>
+              </form>
             ) : (
               <div className="collection-title-row">
-                <h1>{collection?.name ?? "Notes"}</h1>
+                {collection && onRenameCollection && !isNewCollection ? (
+                  // The heading keeps the plain collection name; the button
+                  // inside it owns the rename action and its fuller label.
+                  <h1 aria-label={collection.name}>
+                    <button
+                      aria-label={`Rename collection: ${collection.name}`}
+                      className="collection-title-button"
+                      onClick={startCollectionRename}
+                      ref={collectionTitleButtonRef}
+                      title="Rename collection (e)"
+                      type="button"
+                    >
+                      {collection.name}
+                    </button>
+                  </h1>
+                ) : (
+                  <h1>{collection?.name ?? "Notes"}</h1>
+                )}
+                {collection &&
+                !isNewCollection &&
+                (onRenameCollection || onDeleteCollection) ? (
+                  <RowActionsMenu
+                    items={collectionActionItems}
+                    label="Collection actions"
+                  />
+                ) : null}
               </div>
             )}
             {isCollectionEditing && collectionEditDialog ? collectionEditDialog : null}
@@ -4257,6 +4531,14 @@ function NotesTable({
                   {collectionEditError}
                 </p>
               ) : null
+            ) : collectionActionError ? (
+              <p
+                className="error-text"
+                id={collectionRenameErrorId}
+                role="alert"
+              >
+                {collectionActionError}
+              </p>
             ) : null}
           </div>
           <div className="inline-actions">
@@ -4308,17 +4590,6 @@ function NotesTable({
               </>
             ) : (
               <>
-            {collection && Number.isInteger(collectionId) && !isNewCollection && showEditCollectionAction ? (
-              <Link
-                aria-label={`Edit ${collection.name} collection`}
-                className="icon-link"
-                data-shortcut="e"
-                title="Edit collection (e)"
-                to={CATALOG_ROUTES.collectionEdit(collectionId)}
-              >
-                Edit
-              </Link>
-            ) : null}
             <button
               aria-label="Add note"
               className="icon-link button-primary"

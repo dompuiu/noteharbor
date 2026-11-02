@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
+import { collectionDeleteConfirmation } from "../lib/collectionActions.js";
 import { CATALOG_ROUTES, DEFAULT_DESTINATION, NEW_COLLECTION_ID } from "../lib/routes.js";
 import { useCollections } from "../lib/collections.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
@@ -212,16 +213,39 @@ function CollectionScreen({ mode }) {
     navigate(CATALOG_ROUTES.collection(collectionId));
   }
 
+  // View mode edits the collection in place: the table's header owns the
+  // rename field and its menu owns the delete confirmation, so these just
+  // apply the change and let a failure surface back in that header.
+  async function handleInlineRename(name) {
+    if (!collection) {
+      throw new Error("That collection no longer exists.");
+    }
+
+    await renameCollection(collection.id, name);
+  }
+
+  async function handleInlineDelete() {
+    if (!collection) {
+      throw new Error("That collection no longer exists.");
+    }
+
+    const { nextCollectionId } = await deleteCollection(collection.id);
+
+    navigate(
+      nextCollectionId != null
+        ? CATALOG_ROUTES.collection(nextCollectionId)
+        : DEFAULT_DESTINATION,
+    );
+  }
+
   async function handleDelete() {
     if (!collection || deleting) {
       return;
     }
 
-    const confirmed = await confirm({
-      body: "This removes the collection and all of its notes. This cannot be undone.",
-      confirmLabel: "Delete",
-      title: `Delete "${collection.name}"?`,
-    });
+    const confirmed = await confirm(
+      collectionDeleteConfirmation(collection.name),
+    );
 
     if (!confirmed) {
       return;
@@ -307,6 +331,8 @@ function CollectionScreen({ mode }) {
           collections={collections}
           collectionsError={collectionsError}
           loadingCollections={loadingCollections}
+          onDeleteCollection={handleInlineDelete}
+          onRenameCollection={handleInlineRename}
         />
       </section>
     );
@@ -343,7 +369,6 @@ function CollectionScreen({ mode }) {
         collections={collections}
         collectionsError={collectionsError}
         loadingCollections={loadingCollections}
-        showEditCollectionAction={false}
         isCollectionEditing
         collectionEditName={nameDraft}
         onCollectionEditNameChange={(value) => {
