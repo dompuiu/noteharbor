@@ -1,8 +1,20 @@
-import { Fragment, memo, useCallback } from "react";
+import { Fragment, memo, useCallback, useState } from "react";
 import { TagsCell } from "./TagsCell.jsx";
 import { RowActionsMenu } from "./RowActionsMenu.jsx";
 import { highlightTerms } from "../lib/tableCells.jsx";
 import { parseGradeValue } from "../lib/tableColumns.js";
+
+// A row's spoken identity. The denomination is the name a collector uses, but
+// a note scraped without one is still a note: the catalog number or the id
+// keeps every control from reading "Select " or "Reorder " with nothing after
+// it.
+function noteRowLabel(note) {
+  return (
+    String(note.denomination ?? "").trim() ||
+    String(note.catalog_number ?? "").trim() ||
+    `note ${note.id}`
+  );
+}
 
 // One note row. The memo boundary lives here: props are plain values plus one
 // stable `handlers` object, so moving the cursor, ticking a checkbox or
@@ -55,6 +67,16 @@ export const NoteRow = memo(function NoteRow({
   }
 
   const zebra = index % 2 === 1;
+  const noteLabel = noteRowLabel(note);
+
+  // An image file can be missing — an archive moved between machines, a scrape
+  // whose file never landed — and a broken-image glyph with alt text spilling
+  // out of a 56px box is worse than the dash every other empty cell shows.
+  // Remembering the failed source instead of a boolean lets a refetched note
+  // (whose image path carries a new version) try again.
+  const [failedThumbSrc, setFailedThumbSrc] = useState(null);
+  const thumbFailed =
+    failedThumbSrc != null && failedThumbSrc === model.frontThumb;
 
   const rowRef = useCallback(
     (element) => handlers.onRowElement(note.id, element),
@@ -83,7 +105,7 @@ export const NoteRow = memo(function NoteRow({
       >
         {reorderRail ? (
           <button
-            aria-label={`Reorder ${note.denomination}`}
+            aria-label={`Reorder ${noteLabel}`}
             className="drag-handle"
             draggable={canReorder}
             tabIndex={-1}
@@ -113,7 +135,7 @@ export const NoteRow = memo(function NoteRow({
         {...cellAttributes(column)}
       >
         <input
-          aria-label={`Select ${note.denomination}`}
+          aria-label={`Select ${noteLabel}`}
           checked={isSelected}
           onChange={() => handlers.onToggleSelection(note.id)}
           type="checkbox"
@@ -123,8 +145,11 @@ export const NoteRow = memo(function NoteRow({
   }
 
   function renderOrderCell(column) {
+    const orderTitle =
+      note.display_order == null ? undefined : String(note.display_order);
+
     return (
-      <td {...cellAttributes(column)}>
+      <td {...cellAttributes(column)} title={orderTitle}>
         {note.display_order ?? "-"}
       </td>
     );
@@ -133,7 +158,7 @@ export const NoteRow = memo(function NoteRow({
   function renderThumbnailCell(column) {
     return (
       <td {...cellAttributes(column)}>
-        {model.frontThumb ? (
+        {model.frontThumb && !thumbFailed ? (
           <span
             className="table-thumb-wrap"
             onBlur={(event) => {
@@ -147,10 +172,11 @@ export const NoteRow = memo(function NoteRow({
             ref={thumbWrapRef}
           >
             <img
-              alt={`${note.denomination} front`}
+              alt={`${noteLabel} front`}
               className="table-thumb"
               decoding="async"
               loading="lazy"
+              onError={() => setFailedThumbSrc(model.frontThumb)}
               src={model.frontThumb}
             />
           </span>
@@ -163,6 +189,10 @@ export const NoteRow = memo(function NoteRow({
 
   function renderDataCell(column) {
     const rowMarks = model.marks;
+    // The cell clips to one line (see the stylesheet), so a long value cannot
+    // grow the row past the virtualizer's fixed height. The title carries the
+    // whole value to a pointer; an empty field gets no tooltip.
+    const title = String(note[column.key] ?? "").trim() || undefined;
 
     if (column.isTags) {
       return (
@@ -202,7 +232,7 @@ export const NoteRow = memo(function NoteRow({
               : "circulated";
 
       return (
-        <td {...cellAttributes(column)}>
+        <td {...cellAttributes(column)} title={gradeValue}>
           <span className={`table-grade table-grade--${tier}`}>
             {highlightTerms(gradeValue, rowMarks.grade)}
           </span>
@@ -216,7 +246,7 @@ export const NoteRow = memo(function NoteRow({
       // and the row menu's Open item still reach the Note slideshow. A note
       // without a source URL renders as plain text.
       return (
-        <td {...cellAttributes(column)}>
+        <td {...cellAttributes(column)} title={title}>
           {note.url ? (
             <a
               draggable={false}
@@ -235,15 +265,13 @@ export const NoteRow = memo(function NoteRow({
     }
 
     return (
-      <td {...cellAttributes(column)}>
+      <td {...cellAttributes(column)} title={title}>
         {highlightTerms(note[column.key], rowMarks[column.key])}
       </td>
     );
   }
 
   function renderActionsCell(column) {
-    const noteLabel =
-      note.denomination || note.catalog_number || `note ${note.id}`;
     const items = [
       {
         key: "open",

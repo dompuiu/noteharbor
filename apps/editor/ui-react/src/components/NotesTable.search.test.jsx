@@ -408,7 +408,7 @@ describe("NotesTable search", () => {
     expect(screen.queryByRole("button", { name: /^Edit / })).toBeNull();
     expect(filterFieldButton()).toHaveTextContent("Catalog");
     expect(
-      screen.getByText("Showing 1 of 1 notes · sorted by # ascending"),
+      screen.getByText("Showing 1 of 1 note · sorted by # ascending"),
     ).toBeInTheDocument();
 
     unmount();

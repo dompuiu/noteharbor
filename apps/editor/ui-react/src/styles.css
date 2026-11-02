@@ -3058,6 +3058,18 @@ tbody td {
   font-size: 13.5px;
 }
 
+/* Every body cell holds one line. A pasted 200-character denomination or an
+   unbroken serial must not wrap: the virtualizer places rows at a fixed 46px
+   estimate and never measures them, so one wrapped value pushes its row past
+   its own slot and shifts every row below it. The cell clips with an ellipsis
+   instead, and the full value stays reachable from the cell's title and the
+   editor. The empty row is not a `.table-row-link` and keeps its wrapping. */
+.table-row-link > td {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .table-empty-row td {
   border-bottom: 0;
 }
@@ -3118,6 +3130,45 @@ tbody td {
   margin: 0;
   font-size: 0.82rem;
   color: var(--text-muted);
+}
+
+/* A failed load keeps the table's footprint: the card is still on screen, its
+   message sits where the rows would be, and the one control that retries is
+   next to the sentence that explains the failure. */
+.table-load-error {
+  align-items: center;
+  justify-content: center;
+  padding: 32px 16px;
+}
+
+.table-load-error-body {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  max-width: 52ch;
+  text-align: center;
+}
+
+.table-load-error-title {
+  margin: 0;
+  color: var(--text);
+  font-size: 1rem;
+  font-weight: 650;
+}
+
+.table-load-error-detail {
+  margin: 6px 0 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+  /* A server message can carry a path or a URL with no break opportunity. */
+  overflow-wrap: anywhere;
+}
+
+.table-load-error-note {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
 }
 
 /* The empty-library prompt reuses the shared dashed empty-state box, so the
@@ -4229,6 +4280,10 @@ th[aria-sort="descending"] .sort-chevron {
   gap: 5px;
   height: 24px;
   flex: 0 0 auto;
+  /* A pasted 300-character filter value must stay inside the rail: the unit
+     caps itself at the chip line and lets the chip below it shrink. */
+  max-width: 100%;
+  min-width: 0;
 }
 
 .table-filter-facet-label {
@@ -4271,6 +4326,11 @@ th[aria-sort="descending"] .sort-chevron {
   background: var(--accent-soft);
   color: var(--accent-strong);
   white-space: nowrap;
+  /* The chip is the part that gives way when the unit hits the rail's edge;
+     the connector and the field label keep their size. */
+  flex: 0 1 auto;
+  min-width: 0;
+  max-width: 100%;
 }
 
 .table-filter-chip--negated {
@@ -4294,8 +4354,13 @@ th[aria-sort="descending"] .sort-chevron {
 }
 
 .table-filter-chip-value {
-  display: inline-flex;
-  align-items: center;
+  /* A block box (not a flex row) so `text-overflow` can clip the value: a
+     pasted filter longer than the rail ends in an ellipsis instead of running
+     under Columns with its remove cross off the card. The 22px line keeps the
+     text centred in the 22px box the chip's padding leaves. */
+  display: inline-block;
+  min-width: 0;
+  max-width: 100%;
   height: 22px;
   padding: 0 3px 0 6px;
   border: 0;
@@ -4304,6 +4369,10 @@ th[aria-sort="descending"] .sort-chevron {
   color: var(--accent-strong);
   font-size: 0.75rem;
   font-weight: 600;
+  line-height: 22px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   cursor: text;
 }
 
@@ -4346,6 +4415,8 @@ th[aria-sort="descending"] .sort-chevron {
   justify-content: center;
   width: 17px;
   height: 17px;
+  /* The cross never gives way to a long value: it is the chip's only exit. */
+  flex: 0 0 auto;
   padding: 0;
   border: 0;
   border-radius: 5px;
@@ -5096,6 +5167,8 @@ button.tag {
 .error-text {
   color: var(--danger);
   font-weight: 500;
+  /* A server message can carry a path or URL with no break opportunity. */
+  overflow-wrap: anywhere;
 }
 
 .warning-text {

@@ -528,11 +528,14 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
                     />
                   ) : (
                     <>
+                      {/* The chip clips a long value, so its tooltip carries
+                          the whole of it — and still says the chip is a
+                          control, which a bare value does not. */}
                       <button
                         aria-label={`Edit ${filterFieldLabel(field)} filter ${condition.value}`}
                         className="table-filter-chip-value"
                         onClick={() => startConditionEdit(condition)}
-                        title="Edit value"
+                        title={`Edit ${filterFieldLabel(field)} filter: ${condition.value}`}
                         type="button"
                       >
                         {condition.negated ? "!" : ""}

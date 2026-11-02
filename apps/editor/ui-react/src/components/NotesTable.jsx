@@ -974,6 +974,10 @@ function NotesTable({
   // show one.
   const moveToastRef = useRef(null);
   const [loading, setLoading] = useState(true);
+  // Bumped by the load-error panel's Try again. It is the effect's only
+  // manual trigger: collection switches and the first mount change the other
+  // dependencies.
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [reorderLoading, setReorderLoading] = useState(false);
   const [slideshowNotes, setSlideshowNotes] = useState([]);
   const [activeNoteId, setActiveNoteId] = useState(null);
@@ -1462,7 +1466,11 @@ function NotesTable({
     return () => {
       active = false;
     };
-  }, [collectionId, loadingCollections]);
+  }, [collectionId, loadingCollections, loadAttempt]);
+
+  function retryNotesLoad() {
+    setLoadAttempt((attempt) => attempt + 1);
+  }
 
   useEffect(() => {
     setSelectedIds((current) => {
@@ -2167,6 +2175,21 @@ function NotesTable({
     event.preventDefault();
     event.stopPropagation();
   }
+
+  // A window switch mid-pan never delivers pointerup to the scroller, and the
+  // capture can outlive the gesture. End the pan on blur so the grabbing
+  // cursor and the suppressed text selection cannot stick. The handler only
+  // touches refs, so the first render's copy stays correct.
+  useEffect(() => {
+    function endPanOnBlur() {
+      if (columnPanRef.current) {
+        handleColumnPanPointerEnd();
+      }
+    }
+
+    window.addEventListener("blur", endPanOnBlur);
+    return () => window.removeEventListener("blur", endPanOnBlur);
+  }, []);
 
   useEffect(() => {
     if (!thumbPreviewState) {
@@ -3719,6 +3742,12 @@ function NotesTable({
             <img
               alt=""
               className="confirm-note-thumb"
+              // The note's picture is a convenience in a confirmation; a
+              // missing file should leave the identity text alone rather than
+              // a broken-image glyph.
+              onError={(event) => {
+                event.currentTarget.hidden = true;
+              }}
               src={thumbnail}
             />
           ) : null}
@@ -4233,6 +4262,7 @@ function NotesTable({
             >
               <img
                 alt=""
+                onError={() => setThumbPreviewState(null)}
                 src={rowModelsByNoteId.get(thumbPreviewState.noteId)?.frontThumb}
               />
             </span>,
@@ -4608,13 +4638,46 @@ function NotesTable({
         </div>
 
         {loadingCollections ? <p>Loading collections...</p> : null}
-        {loading ? <p>Loading notes...</p> : null}
+        {loading ? <p role="status">Loading notes...</p> : null}
         {collectionsError ? (
-          <p className="error-text">{collectionsError}</p>
+          <p className="error-text" role="alert">
+            {collectionsError}
+          </p>
         ) : null}
-        {loadError ? <p className="error-text">{loadError}</p> : null}
-        {actionError ? <p className="error-text">{actionError}</p> : null}
+        {actionError ? (
+          <p className="error-text" role="alert">
+            {actionError}
+          </p>
+        ) : null}
         <TableMoveToast toastRef={moveToastRef} />
+
+        {loadError ? (
+          // A failed load replaces the table with a card the height of the
+          // table it stands in for: the screen keeps its shape, the failure
+          // names itself, and the recovery is one button away instead of a
+          // reload. The live region wraps the copy only, so Try again is not
+          // announced as part of the alert.
+          <div className="table-shell table-load-error">
+            <div className="table-load-error-body">
+              <div className="table-load-error-copy" role="alert">
+                <h2 className="table-load-error-title">
+                  Couldn't load this collection's notes.
+                </h2>
+                <p className="table-load-error-detail">{loadError}</p>
+              </div>
+              <p className="table-load-error-note">
+                Your notes stay on this device and aren't affected.
+              </p>
+              <button
+                className="button button-primary"
+                onClick={retryNotesLoad}
+                type="button"
+              >
+                Try again
+              </button>
+            </div>
+          </div>
+        ) : null}
 
         {!loading && !loadError ? (
           <>
@@ -4892,9 +4955,19 @@ function NotesTable({
               ) : null}
             </div>
             <div className="table-footer-hint">
-              <span className="table-footer-summary">
-                Showing {deferredOrderedNotes.length} of {notes.length} notes ·
-                sorted by {getTableColumn(sortKey)?.label ?? "#"}{" "}
+              {/* The count is the table's answer to every filter keystroke,
+                  so it is a polite live region: a screen reader hears the
+                  result set change without the table itself being
+                  re-announced. It is not `role="status"` so the move toast
+                  stays the one status landmark on the screen. */}
+              <span
+                aria-atomic="true"
+                aria-live="polite"
+                className="table-footer-summary"
+              >
+                Showing {deferredOrderedNotes.length} of {notes.length}{" "}
+                {notes.length === 1 ? "note" : "notes"} · sorted by{" "}
+                {getTableColumn(sortKey)?.label ?? "#"}{" "}
                 {sortDirection === "asc" ? "ascending" : "descending"}
                 {selectedIds.length
                   ? ` · ${selectedIds.length} selected`

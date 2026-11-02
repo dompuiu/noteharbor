@@ -310,4 +310,63 @@ describe("NotesTable column panning", () => {
     });
     expect(firstRow).not.toHaveClass("table-row-link--active");
   });
+
+  // A window switch mid-pan never delivers pointerup to the scroller, and the
+  // capture can outlive the gesture. Blur ends the pan so the grabbing cursor
+  // does not stick, and the next gesture starts clean.
+  test("switching windows mid-pan ends the pan", async () => {
+    const { container } = renderTable();
+    const cell = await screen.findByText("ZZTEST");
+    const scroller = armHorizontalOverflow(container);
+
+    cell.dispatchEvent(
+      pointerEvent("pointerdown", {
+        button: 0,
+        clientX: 900,
+        clientY: 300,
+        pointerId: 7,
+        pointerType: "mouse",
+      }),
+    );
+    cell.dispatchEvent(
+      pointerEvent("pointermove", {
+        button: -1,
+        clientX: 800,
+        clientY: 300,
+        pointerId: 7,
+        pointerType: "mouse",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(scroller).toHaveClass("is-panning");
+    });
+
+    fireEvent.blur(window);
+
+    expect(scroller).not.toHaveClass("is-panning");
+
+    cell.dispatchEvent(
+      pointerEvent("pointerdown", {
+        button: 0,
+        clientX: 900,
+        clientY: 300,
+        pointerId: 8,
+        pointerType: "mouse",
+      }),
+    );
+    cell.dispatchEvent(
+      pointerEvent("pointermove", {
+        button: -1,
+        clientX: 850,
+        clientY: 300,
+        pointerId: 8,
+        pointerType: "mouse",
+      }),
+    );
+
+    await waitFor(() => {
+      expect(scroller.scrollLeft).toBe(150);
+    });
+  });
 });

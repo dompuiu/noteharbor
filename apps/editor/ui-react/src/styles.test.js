@@ -583,6 +583,59 @@ describe("table styles", () => {
     expect(frame[1]).toMatch(/padding:\s*0 16px/);
   });
 
+  // A body cell is one line. The virtualizer places rows at a fixed 46px and
+  // never measures them, so a pasted 200-character denomination would wrap its
+  // row past its own slot and shift every row below it. The cell clips with an
+  // ellipsis instead; the full value travels in the cell's title.
+  test("body cells clip a long value to one line", () => {
+    const cells = styles.match(/^\.table-row-link > td\s*\{([^}]*)\}/m);
+    expect(cells).not.toBeNull();
+    expect(cells[1]).toMatch(/overflow:\s*hidden/);
+    expect(cells[1]).toMatch(/text-overflow:\s*ellipsis/);
+    expect(cells[1]).toMatch(/white-space:\s*nowrap/);
+
+    // The empty view's cell wraps its message and must not inherit the clip.
+    const emptyCell = styles.match(/^\.table-empty-cell\s*\{([^}]*)\}/m);
+    expect(emptyCell).not.toBeNull();
+    expect(emptyCell[1]).not.toMatch(/text-overflow/);
+  });
+
+  // A filter value pasted from a grading page can be longer than the rail. The
+  // unit caps itself at the chip line, the chip gives way, and the value ends
+  // in an ellipsis so its remove cross stays on the card.
+  test("a long filter value clips inside its chip", () => {
+    const unit = styles.match(/^\.table-filter-unit\s*\{([^}]*)\}/m);
+    expect(unit).not.toBeNull();
+    expect(unit[1]).toMatch(/max-width:\s*100%/);
+
+    const chip = styles.match(/^\.table-filter-chip\s*\{([^}]*)\}/m);
+    expect(chip).not.toBeNull();
+    expect(chip[1]).toMatch(/flex:\s*0 1 auto/);
+    expect(chip[1]).toMatch(/min-width:\s*0/);
+
+    const value = styles.match(/^\.table-filter-chip-value\s*\{([^}]*)\}/m);
+    expect(value).not.toBeNull();
+    expect(value[1]).toMatch(/overflow:\s*hidden/);
+    expect(value[1]).toMatch(/text-overflow:\s*ellipsis/);
+    expect(value[1]).toMatch(/white-space:\s*nowrap/);
+
+    const remove = styles.match(/^\.table-filter-chip-remove\s*\{([^}]*)\}/m);
+    expect(remove).not.toBeNull();
+    expect(remove[1]).toMatch(/flex:\s*0 0 auto/);
+  });
+
+  // A failed load keeps the table's footprint instead of leaving the page as a
+  // single red line, and its message can carry an unbroken server path.
+  test("the load-error panel keeps the card and wraps its detail", () => {
+    const panel = styles.match(/^\.table-load-error\s*\{([^}]*)\}/m);
+    expect(panel).not.toBeNull();
+    expect(panel[1]).toMatch(/justify-content:\s*center/);
+
+    const detail = styles.match(/^\.table-load-error-detail\s*\{([^}]*)\}/m);
+    expect(detail).not.toBeNull();
+    expect(detail[1]).toMatch(/overflow-wrap:\s*anywhere/);
+  });
+
   // The editor's tag row and the filter row share one Clear all, so the hover
   // stays in the warm accent family and no second, drifting rule exists.
   test("clear-all hover stays in the accent family", () => {
