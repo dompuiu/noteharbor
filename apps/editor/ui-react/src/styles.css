@@ -2708,12 +2708,12 @@ input[type="radio"] {
 }
 
 /* The collection head follows the prototype's page head: the Catalog eyebrow
-   is a 10px caption, and the name is the page title at 21px/650. Two classes
+   is an 11px caption, and the name is the page title at 21px/650. Two classes
    so the refinement outranks the shared `.eyebrow` rule whatever order they
    land in. The caption takes the faint tone — the prototype's lighter one
    measured 2.07:1 on the page ground. */
 .panel-heading-copy .collection-eyebrow {
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
@@ -3691,7 +3691,7 @@ thead tr:first-child th {
   border-bottom-color: var(--border);
 }
 
-/* The Table screen's labels follow the prototype: wide-tracked caps at 10px
+/* The Table screen's labels follow the prototype: wide-tracked caps at 11px
    on the darker surface-3 band, in a fixed 40px row, so the header reads as a
    caption over the rows. The tone is the palette's umber rather than the
    prototype's #8a755a: at this size a label is small text, and #8a755a
@@ -3708,7 +3708,7 @@ thead tr:first-child th {
   height: 40px;
   padding: 0 12px;
   background: var(--surface-3);
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
   font-weight: 650;
   letter-spacing: 0.075em;
   text-transform: uppercase;
@@ -4167,7 +4167,7 @@ th[aria-sort="descending"] .sort-chevron {
   margin: 0;
   padding: 7px 9px 5px;
   color: var(--text-muted);
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
   font-weight: 650;
   letter-spacing: 0.075em;
   text-transform: uppercase;
@@ -4237,7 +4237,7 @@ th[aria-sort="descending"] .sort-chevron {
      keeps the system sans and borrows its cap look from the frame and the
      tracking instead of from a second typeface. */
   font-family: inherit;
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
   font-weight: 600;
   letter-spacing: 0.04em;
   line-height: 1;
@@ -4582,7 +4582,7 @@ th[aria-sort="descending"] .sort-chevron {
 .table-columns-menu-heading {
   margin: 2px 8px 6px;
   color: var(--text-muted);
-  font-size: 0.625rem;
+  font-size: 0.6875rem;
   font-weight: 650;
   letter-spacing: 0.075em;
   text-transform: uppercase;

@@ -49,7 +49,7 @@ typography:
     lineHeight: 1.5
   label:
     fontFamily: "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Inter, \"Helvetica Neue\", Arial, sans-serif"
-    fontSize: "0.625rem"
+    fontSize: "0.6875rem"
     fontWeight: 650
     letterSpacing: "0.075em"
   wordmark:
@@ -168,7 +168,7 @@ A warm parchment-and-brass palette with four muted status hues, all low-chroma s
 - **Data** (400, 13.5px): Table cell values, the dense step of Body. Every cell carries `tabular-nums`, and weight, not size, separates the row's roles — Catalog # and Denomination at 600, the rest at 400.
 - **Code** (500, 13px, 0.045em tracking): Serial numbers and other identifier strings in the Table, one step under Data so a long code never out-shouts the row's name.
 - **Control** (600, 0.84rem/1.2): Buttons, links, and tabs.
-- **Label** (650, 0.625rem, 0.075em tracking, uppercase): Table and menu headers, in Umber so 10px caps clear 4.5:1 on the header band. Group labels sit at 9.5px/800 with 0.14em tracking.
+- **Label** (650, 0.6875rem, 0.075em tracking, uppercase): Table and menu headers, in Umber so 11px caps clear 4.5:1 on the header band. Group labels sit at 9.5px/800 with 0.14em tracking.
 - **Meta** (400, 0.75rem/1.5, `tabular-nums`): The Table's footer summary and status lines, one step under the rail's 12px hint.
 - **Micro** (600–800, 11–13.5px): Version footers, counters, and the wordmark.
 
@@ -218,7 +218,7 @@ Rounded and soft-edged, at four deliberate steps: 8px for small chips and inline
 
 ### Table
 - **Container:** a Shell Cream card with a 10px radius and 1px structural border, filling the viewport.
-- **Header:** Header Sand band (`--surface-3`), 40px tall, 12px padding, 0.625rem/650 uppercase labels at 0.075em tracking in Umber; the sorted column alone switches to Deep Brass and reveals its chevron.
+- **Header:** Header Sand band (`--surface-3`), 40px tall, 12px padding, 0.6875rem/650 uppercase labels at 0.075em tracking in Umber; the sorted column alone switches to Deep Brass and reveals its chevron.
 - **Body type:** 13.5px data cells in Walnut Ink. Catalog # and Denomination at 600; the serial as Code (13px/500, 0.045em tracking, Umber); the display order in Faded Umber because it is position rather than content; Grade as a 13px/600 pill tinted by band.
 - **Rows:** zebra at 5% brass; hover at 12%; selected at 14% with a brass edge and a checked box carrying the state. Text truncates, never wraps.
 - **Empty values:** a muted dash, the same in every cell that can be empty (display order, front image, grade, serial, tags), so one absence never reads as two different things across a row.

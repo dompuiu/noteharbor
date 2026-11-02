@@ -734,10 +734,10 @@ describe("table styles", () => {
     const head = styles.match(/\.table-shell thead th\s*\{([^}]*)\}/);
     expect(head).not.toBeNull();
     expect(head[1]).toMatch(/font-weight:\s*650/);
-    expect(head[1]).toMatch(/font-size:\s*0\.625rem/);
+    expect(head[1]).toMatch(/font-size:\s*0\.6875rem/);
     expect(head[1]).toMatch(/letter-spacing:\s*0\.075em/);
     expect(head[1]).toMatch(/text-transform:\s*uppercase/);
-    // 10px caps are small text, so the caption has to clear 4.5:1 on the
+    // 11px caps are small text, so the caption has to clear 4.5:1 on the
     // header band: the umber token does, the prototype's #8a755a did not.
     expect(head[1]).toMatch(/color:\s*var\(--text-muted\)/);
   });
@@ -1793,7 +1793,7 @@ describe("slideshow overlay styles", () => {
   });
 });
 
-// The collection screen's head copies the prototype's page head: a 10px caps
+// The collection screen's head copies the prototype's page head: an 11px caps
 // eyebrow over a 21px title, so the collection name reads as the page title
 // rather than a panel heading.
 describe("catalog header", () => {
@@ -1804,7 +1804,7 @@ describe("catalog header", () => {
       /\.panel-heading-copy \.collection-eyebrow\s*\{([^}]*)\}/,
     );
     expect(eyebrow).not.toBeNull();
-    expect(eyebrow[1]).toMatch(/font-size:\s*0\.625rem/);
+    expect(eyebrow[1]).toMatch(/font-size:\s*0\.6875rem/);
     expect(eyebrow[1]).toMatch(/font-weight:\s*600/);
     expect(eyebrow[1]).toMatch(/letter-spacing:\s*0\.09em/);
     expect(eyebrow[1]).toMatch(/text-transform:\s*uppercase/);
