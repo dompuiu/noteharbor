@@ -211,6 +211,47 @@ describe("NotesTable chrome", () => {
     );
   });
 
+  // A filtered or re-sorted view has no manual order to show, so the grips are
+  // gone. The footer must say what is in the way instead of pointing at
+  // handles that are not on screen.
+  test("the footer names the blocker when the grips are hidden", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = userEvent.setup();
+
+    await chooseFilterField(user, "Denomination");
+    await user.type(
+      screen.getByRole("searchbox", { name: "Filter Denomination" }),
+      "AAAA{Enter}",
+    );
+
+    expect(
+      await screen.findByText(/Clear filters to reorder/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Drag the handle to reorder/),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Reorder AAAA")).not.toBeInTheDocument();
+  });
+
+  test("the footer names the sort when the grips are hidden", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = userEvent.setup();
+
+    await user.click(screen.getByRole("button", { name: "Company" }));
+
+    expect(
+      await screen.findByText(/Sort by # ascending to reorder/),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByText(/Drag the handle to reorder/),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByLabelText("Reorder AAAA")).not.toBeInTheDocument();
+  });
+
   test("the shortcuts dialog still lists the full set", async () => {
     renderTable();
 
@@ -374,6 +415,15 @@ describe("NotesTable chrome", () => {
     expect(
       await screen.findByText("Saving manual order..."),
     ).toBeInTheDocument();
+
+    // The rail stays painted for the length of the save: the grips are still
+    // on screen, they have only stopped accepting a drop. Unmounting them here
+    // would blank the reorder rail on every reorder.
+    const handles = container.querySelectorAll(".drag-handle");
+    expect(handles).toHaveLength(3);
+    handles.forEach((grip) => {
+      expect(grip).toHaveAttribute("draggable", "false");
+    });
 
     await act(async () => {
       resolveSave({ notes: collectionNotes });

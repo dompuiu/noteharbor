@@ -22,6 +22,7 @@ export function TableRows({
   handlers,
   notes,
   onReorder,
+  reorderRail,
   rowElementFor,
   rowModelsByNoteId,
   selectedIdSet,
@@ -242,6 +243,7 @@ export function TableRows({
             key={note.id}
             model={rowModelsByNoteId.get(note.id)}
             note={note}
+            reorderRail={reorderRail}
             showGutter={showGutter}
             totalColumnCount={totalColumnCount}
           />

@@ -1590,12 +1590,25 @@ function NotesTable({
   const isDefaultOrder =
     sortKey === defaultSortKey && sortDirection === "asc";
   // Follow the painted view: flipping the drag handles off in the urgent
-  // render would repaint every old row before the filtered list lands.
-  const canReorder =
-    showReorder &&
-    !deferredConditions.length &&
-    isDefaultOrder &&
-    !reorderLoading;
+  // render would repaint every old row before the filtered list lands. This is
+  // the view fact behind the grips: does the current view have a manual order
+  // to show at all?
+  const reorderRail =
+    showReorder && !deferredConditions.length && isDefaultOrder;
+  // A save in flight only stops the grips from taking a drop; it must not
+  // unmount them, or every reorder would blank the whole reorder rail for the
+  // length of the round trip.
+  const canReorder = reorderRail && !reorderLoading;
+  // The footer names the reorder action only while the grips are on screen.
+  // When the view has no manual order to show, it names what is in the way
+  // instead of pointing at handles that are not there.
+  const reorderHint = reorderRail
+    ? "Drag the handle to reorder"
+    : !showReorder
+      ? null
+      : deferredConditions.length
+        ? "Clear filters to reorder"
+        : `Sort by ${getTableColumn(defaultSortKey)?.label ?? "#"} ascending to reorder`;
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const allVisibleSelected = useMemo(
@@ -4510,6 +4523,7 @@ function NotesTable({
                       handlers={rowHandlers}
                       notes={deferredOrderedNotes}
                       onReorder={handleReorder}
+                      reorderRail={reorderRail}
                       rowElementFor={(noteId) =>
                         rowElementMapRef.current.get(noteId)
                       }
@@ -4568,8 +4582,9 @@ function NotesTable({
                   </span>
                 ) : null}
                 <span className="table-footer-keys">
-                  Drag the handle to reorder · <kbd>&uarr;</kbd>{" "}
-                  <kbd>&darr;</kbd> to browse · <kbd>?</kbd> shortcuts
+                  {reorderHint ? `${reorderHint} · ` : null}
+                  <kbd>&uarr;</kbd> <kbd>&darr;</kbd> to browse ·{" "}
+                  <kbd>?</kbd> shortcuts
                 </span>
               </span>
             </div>

@@ -22,6 +22,9 @@ import { parseGradeValue } from "../lib/tableColumns.js";
 //   columns or the filter change, and a row must never recompute any of it.
 // - `columns`, `showGutter`, `totalColumnCount`, `canReorder`: the table's
 //   structure at this commit.
+// - `reorderRail`: whether this view paints the reorder rail at all. It stays
+//   true while an order save is in flight, so the rail never blanks mid-save;
+//   `canReorder` is what gates the drop, not the paint.
 // - `handlers`: one object with a stable identity; every member reads live
 //   state through a ref instead of closing over it.
 //
@@ -39,6 +42,7 @@ export const NoteRow = memo(function NoteRow({
   isSelected,
   model,
   note,
+  reorderRail,
   showGutter,
   totalColumnCount,
 }) {
@@ -77,7 +81,7 @@ export const NoteRow = memo(function NoteRow({
         {...cellAttributes(column)}
         onClick={(event) => event.stopPropagation()}
       >
-        {canReorder ? (
+        {reorderRail ? (
           <button
             aria-label={`Reorder ${note.denomination}`}
             className="drag-handle"
