@@ -24,11 +24,11 @@ function windowBounds(scroller, count, rowHeight, overscan, viewportHeight) {
 // Usage:
 //   vi.mock("@tanstack/react-virtual", async () => {
 //     const { makeWindowedVirtualizer } = await import("../test/windowedVirtualizer.js");
-//     return { useVirtualizer: makeWindowedVirtualizer({ rowHeight: 46 }) };
+//     return { useVirtualizer: makeWindowedVirtualizer({ rowHeight: 45 }) };
 //   });
 export function makeWindowedVirtualizer({
   viewportHeight = 600,
-  rowHeight: fixedRowHeight = 46,
+  rowHeight: fixedRowHeight = 45,
   overscan: fixedOverscan = 5,
 } = {}) {
   return function useWindowedVirtualizer({

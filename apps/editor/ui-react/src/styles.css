@@ -3083,21 +3083,20 @@ td:is(
   border-right: 1px solid var(--border-soft);
 }
 
-/* Body density: 13.5px text in a 46px row. Vertical padding stays at 0: the
+/* Body density: 13.5px text in a 45px row. Vertical padding stays at 0: the
    30px row menu button plus 8px top and bottom would otherwise floor the row
    at 47px, and the prototype's compact rows have none. This height is exact:
    the virtualizer's estimate (rowHeightEstimate) matches it and rows are never
    measured after mount. */
 tbody td {
-  /* 46px keeps the table as dense as it was; the 32px front image still sits
-     in it with 7px above and below. */
-  height: 46px;
+  /* 45px still leaves room for the 32px front image. */
+  height: 45px;
   padding: 0 12px;
   font-size: 13.5px;
 }
 
 /* Every body cell holds one line. A pasted 200-character denomination or an
-   unbroken serial must not wrap: the virtualizer places rows at a fixed 46px
+   unbroken serial must not wrap: the virtualizer places rows at a fixed 45px
    estimate and never measures them, so one wrapped value pushes its row past
    its own slot and shifts every row below it. The cell clips with an ellipsis
    instead, and the full value stays reachable from the cell's title and the
@@ -4709,7 +4708,7 @@ th[aria-sort="descending"] .sort-chevron {
   color: var(--text-muted);
   /* Meta chrome sits one step under the rail's 12px hint text: it reports on
      the table rather than acting on it, and leaving the footer at 12px keeps
-     the 46px rows the screen's only large type. */
+     the 45px rows the screen's only large type. */
   font-size: 0.75rem;
   line-height: 1.5;
   white-space: nowrap;
@@ -4972,7 +4971,7 @@ td.drag-cell {
 }
 
 /* The drop placeholder is a gap marker, not a row: it must stay as thin as its
-   dashed line. `tbody td` sizes every body cell at 46px (a floor for table
+   dashed line. `tbody td` sizes every body cell at 45px (a floor for table
    cells), which would otherwise turn the placeholder into a full row and push
    the dragged row down a slot the moment a drag starts. */
 .table-drop-placeholder-row td {

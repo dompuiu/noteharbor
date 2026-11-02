@@ -583,7 +583,7 @@ describe("table styles", () => {
     expect(frame[1]).toMatch(/padding:\s*0 16px/);
   });
 
-  // A body cell is one line. The virtualizer places rows at a fixed 46px and
+  // A body cell is one line. The virtualizer places rows at a fixed 45px and
   // never measures them, so a pasted 200-character denomination would wrap its
   // row past its own slot and shift every row below it. The cell clips with an
   // ellipsis instead; the full value travels in the cell's title.
@@ -1328,10 +1328,10 @@ describe("table styles", () => {
     expect(rules[1]).toMatch(/border-right:\s*1px solid var\(--border-soft\)/);
   });
 
-  test("body rows are 46px at 13.5px text", () => {
+  test("body rows are 45px at 13.5px text", () => {
     const bodyCells = styles.match(/tbody td\s*\{([^}]*)\}/);
     expect(bodyCells).not.toBeNull();
-    expect(bodyCells[1]).toMatch(/height:\s*46px/);
+    expect(bodyCells[1]).toMatch(/height:\s*45px/);
     expect(bodyCells[1]).toMatch(/padding:\s*0\s+12px/);
     expect(bodyCells[1]).toMatch(/font-size:\s*13\.5px/);
   });

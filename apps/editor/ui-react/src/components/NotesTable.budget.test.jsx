@@ -21,7 +21,7 @@ vi.mock("@tanstack/react-virtual", async () => {
   );
 
   return {
-    useVirtualizer: makeWindowedVirtualizer({ rowHeight: 46, overscan: 5 }),
+    useVirtualizer: makeWindowedVirtualizer({ rowHeight: 45, overscan: 5 }),
   };
 });
 
@@ -46,7 +46,7 @@ class FakeResizeObserver {
   disconnect() {}
 }
 
-const rowHeight = 46;
+const rowHeight = 45;
 const viewportHeight = 600;
 
 function note(id, overrides = {}) {

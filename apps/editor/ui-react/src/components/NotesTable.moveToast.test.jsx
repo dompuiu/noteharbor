@@ -18,7 +18,7 @@ vi.mock("@tanstack/react-virtual", async () => {
   );
 
   return {
-    useVirtualizer: makeWindowedVirtualizer({ rowHeight: 46, overscan: 5 }),
+    useVirtualizer: makeWindowedVirtualizer({ rowHeight: 45, overscan: 5 }),
   };
 });
 

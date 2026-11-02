@@ -86,7 +86,7 @@ export function HomeHero() {
   return null;
 }
 
-const rowHeightEstimate = 46;
+const rowHeightEstimate = 45;
 // Mirrors the table's CSS min-width and the trailing scrollbar-gutter column.
 const minTableWidth = 1200;
 const tableGutterWidth = 14;
@@ -2224,7 +2224,7 @@ function NotesTable({
       return undefined;
     }
 
-    // The preview hangs beside the thumbnail. It is 138px tall against a 46px
+    // The preview hangs beside the thumbnail. It is 138px tall against a 45px
     // row, so it is nudged up or down to stay inside the rows area instead of
     // running under the header or past the last row. It is one portal-hosted
     // bubble for the whole table, not a hidden node in every row.
