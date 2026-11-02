@@ -361,8 +361,17 @@ describe("table styles", () => {
     expect(hint).not.toBeNull();
     expect(hint[1]).toMatch(/flex:\s*1 1 240px/);
     expect(hint[1]).toMatch(/min-width:\s*0/);
-    expect(hint[1]).toMatch(/color:\s*var\(--text-hint\)/);
+    // The only sentence that explains the model has to read as text, not as
+    // texture: --text-hint is 2.22:1 on the rail, --text-faint is 4.96:1.
+    expect(hint[1]).toMatch(/color:\s*var\(--text-faint\)/);
     expect(hint[1]).toMatch(/font-size:\s*0\.75rem/);
+
+    // The connectors say what the chips mean, so they carry the same tone.
+    for (const name of ["table-filter-or", "table-filter-and"]) {
+      const rule = styles.match(new RegExp(`^\\.${name}\\s*\\{([^}]*)\\}`, "m"));
+      expect(rule).not.toBeNull();
+      expect(rule[1]).toMatch(/color:\s*var\(--text-faint\)/);
+    }
   });
 
   // The filters describe only the table, so they are the card's own rail: the
@@ -391,9 +400,11 @@ describe("table styles", () => {
 
     // The chips grow into the middle of the rail and wrap inside it. Nothing
     // reserves their old 30px line: the rail's own height is the card's edge.
+    // The 8px row-gap keeps a wrapped line at 24 + 8 = 32px.
     const chips = styles.match(/^\.table-filter-chips\s*\{([^}]*)\}/m);
     expect(chips).not.toBeNull();
     expect(chips[1]).toMatch(/flex:\s*1 1 240px/);
+    expect(chips[1]).toMatch(/gap:\s*8px 4px/);
     expect(chips[1]).toMatch(/min-width:\s*0/);
     expect(chips[1]).toMatch(/margin:\s*0/);
     expect(chips[1]).not.toMatch(/min-height/);
@@ -402,12 +413,32 @@ describe("table styles", () => {
     expect(styles).not.toMatch(/\.toolbar-row--table-controls/);
   });
 
-  // Reset view keeps its slot while the control is hidden, so a non-default
-  // view never shifts the Columns button beside it.
-  test("the reset slot keeps its width while the button is hidden", () => {
-    const slot = styles.match(/^\.table-reset-slot\s*\{([^}]*)\}/m);
-    expect(slot).not.toBeNull();
-    expect(slot[1]).toMatch(/min-width:\s*7rem/);
+  // Reset sits before Columns and no slot reserves its space, so Columns keeps
+  // the card's right edge whether or not the view is dirty, and the rail never
+  // shows a hole for a control that is not there.
+  test("the rail reserves no slot for the reset control", () => {
+    expect(styles).not.toMatch(/\.table-reset-slot/);
+
+    const reset = styles.match(/^\.table-reset-view\s*\{([^}]*)\}/m);
+    expect(reset).not.toBeNull();
+    expect(reset[1]).toMatch(/gap:\s*6px/);
+  });
+
+  // An empty view is a message, not a missing page: the table stretches to the
+  // scrollport so the message centres in the rows region. The class is set from
+  // the rendered row counts, so a deferred frame that still holds stale rows
+  // never stretches them.
+  test("the empty state centres in the rows region", () => {
+    expect(styles).toMatch(
+      /\.table-scroll-content\.is-empty-view\s*\{\s*height:\s*100%/,
+    );
+    expect(styles).toMatch(
+      /\.table-scroll-content\.is-empty-view\s*>\s*table\s*\{[^}]*height:\s*100%/,
+    );
+
+    const cell = styles.match(/^\.table-empty-cell\s*\{([^}]*)\}/m);
+    expect(cell).not.toBeNull();
+    expect(cell[1]).toMatch(/vertical-align:\s*middle/);
   });
 
   // The editor's tag row and the filter row share one Clear all, so the hover
@@ -536,12 +567,13 @@ describe("table styles", () => {
     expect(negated[1]).toMatch(/var\(--danger\)/);
   });
 
-  // The chip row follows the prototype's metrics: a 28px facet, a 24px value
-  // chip, 12px labels and a 9px "and" separator.
-  test("filter chips match the prototype's metrics", () => {
+  // The chip row's metrics: a 24px facet around the 24px value chip, 12px
+  // labels and an 11px "and" separator. A wrapped chip line is therefore the
+  // 24px row plus the chips' 8px row-gap, matching the ADR's 32px.
+  test("the chip row's metrics", () => {
     const facet = styles.match(/\.table-filter-facet\s*\{([^}]*)\}/);
     expect(facet).not.toBeNull();
-    expect(facet[1]).toMatch(/height:\s*28px/);
+    expect(facet[1]).toMatch(/height:\s*24px/);
     expect(facet[1]).toMatch(/padding:\s*0\s+4px\s+0\s+2px/);
 
     const chip = styles.match(/\.table-filter-chip\s*\{([^}]*)\}/);
@@ -555,7 +587,7 @@ describe("table styles", () => {
 
     const and = styles.match(/\.table-filter-and\s*\{([^}]*)\}/);
     expect(and).not.toBeNull();
-    expect(and[1]).toMatch(/font-size:\s*0\.5625rem/);
+    expect(and[1]).toMatch(/font-size:\s*0\.6875rem/);
     expect(and[1]).toMatch(/padding:\s*0\s+6px/);
 
     const clear = styles.match(/\.table-filter-clear-all\s*\{([^}]*)\}/);

@@ -85,8 +85,22 @@ describe("NotesTable with no collections", () => {
     ).toHaveAttribute("href", CATALOG_ROUTES.collectionEdit(NEW_COLLECTION_ID));
   });
 
-  test("shows no collection selector and disables Add note", async () => {
+  // Nothing stored means nothing to reorder, so the footer drops the hint
+  // instead of pointing at handles that are not on screen.
+  test("the footer names no reorder instruction with an empty library", async () => {
     renderEmptyLibrary();
+
+    await screen.findByText(/No collections yet/);
+
+    expect(
+      screen.queryByText(/Drag the handle to reorder/),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText(/ascending to reorder/),
+    ).not.toBeInTheDocument();
+  });
+
+  test("shows no collection selector and disables Add note", async () => {    renderEmptyLibrary();
 
     await screen.findByText(/No collections yet/);
 

@@ -235,6 +235,64 @@ describe("NotesTable chrome", () => {
     expect(screen.queryByLabelText("Reorder AAAA")).not.toBeInTheDocument();
   });
 
+  // Reset sits to the left of Columns so the pair grows leftwards: Columns
+  // keeps the card's right edge, and no empty slot has to hold a space for a
+  // control that may not exist.
+  test("Reset view sits before Columns in the rail", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = userEvent.setup();
+
+    await chooseFilterField(user, "Denomination");
+    await user.type(
+      screen.getByRole("searchbox", { name: "Filter Denomination" }),
+      "AAAA{Enter}",
+    );
+
+    const reset = await screen.findByRole("button", { name: "Reset view" });
+    const columns = screen.getByRole("button", { name: "Columns" });
+
+    expect(
+      reset.compareDocumentPosition(columns) & Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+    // It pairs with Columns' icon rather than reading as plain text, and the
+    // tooltip states what it leaves alone.
+    expect(reset.querySelector("svg")).not.toBeNull();
+    expect(reset).toHaveAttribute(
+      "title",
+      "Clears filters, sort and selection — keeps your columns",
+    );
+  });
+
+  // A filtered view with nothing left has no reorder to point at, so the
+  // footer must drop the blocker instead of instructing a no-op.
+  test("the footer drops the reorder blocker when no row is left", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+    const user = userEvent.setup();
+
+    await chooseFilterField(user, "Denomination");
+    await user.type(
+      screen.getByRole("searchbox", { name: "Filter Denomination" }),
+      "ZZZZ{Enter}",
+    );
+
+    await screen.findByText("No notes match the active filters.");
+    expect(
+      screen.queryByText(/Clear filters to reorder/),
+    ).not.toBeInTheDocument();
+
+    // The table stretches to centre the message only once both the urgent and
+    // deferred row lists are empty, so stale deferred rows are never stretched.
+    await waitFor(() =>
+      expect(document.querySelector(".table-scroll-content")).toHaveClass(
+        "is-empty-view",
+      ),
+    );
+  });
+
   test("the footer names the sort when the grips are hidden", async () => {
     renderTable();
 

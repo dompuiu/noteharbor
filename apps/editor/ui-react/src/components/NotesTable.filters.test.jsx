@@ -781,7 +781,7 @@ describe("NotesTable filter bar tab order", () => {
     expect(columnsButton()).toHaveFocus();
   });
 
-  test("Tab walks the chips before the Columns and Reset view controls", async () => {
+  test("Tab walks the chips before the Reset view and Columns controls", async () => {
     renderTable();
     const user = userEvent.setup();
 
@@ -821,10 +821,10 @@ describe("NotesTable filter bar tab order", () => {
     expect(clearAll).toHaveFocus();
 
     await user.tab();
-    expect(columnsButton()).toHaveFocus();
+    expect(resetView).toHaveFocus();
 
     await user.tab();
-    expect(resetView).toHaveFocus();
+    expect(columnsButton()).toHaveFocus();
   });
 
   test("Shift+Tab walks the chips back to the filter field", async () => {
@@ -843,6 +843,9 @@ describe("NotesTable filter bar tab order", () => {
     });
 
     columnsButton().focus();
+    await user.tab({ shift: true });
+    expect(screen.getByRole("button", { name: "Reset view" })).toHaveFocus();
+
     await user.tab({ shift: true });
     expect(clearAll).toHaveFocus();
 

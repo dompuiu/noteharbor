@@ -1757,14 +1757,17 @@ function NotesTable({
   const canReorder = reorderRail && !reorderLoading;
   // The footer names the reorder action only while the grips are on screen.
   // When the view has no manual order to show, it names what is in the way
-  // instead of pointing at handles that are not there.
-  const reorderHint = reorderRail
-    ? "Drag the handle to reorder"
-    : !showReorder
-      ? null
-      : deferredConditions.length
-        ? "Clear filters to reorder"
-        : `Sort by ${getTableColumn(defaultSortKey)?.label ?? "#"} ascending to reorder`;
+  // instead of pointing at handles that are not there. An empty view has
+  // nothing to reorder, so it names nothing at all, whatever the sort.
+  const reorderHint = !deferredOrderedNotes.length
+    ? null
+    : reorderRail
+      ? "Drag the handle to reorder"
+      : !showReorder
+        ? null
+        : deferredConditions.length
+          ? "Clear filters to reorder"
+          : `Sort by ${getTableColumn(defaultSortKey)?.label ?? "#"} ascending to reorder`;
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
   const allVisibleSelected = useMemo(
@@ -4127,6 +4130,12 @@ function NotesTable({
     }
   }
 
+  // Rows render from the deferred list while the empty row keys off the urgent
+  // one, so for the frame after a filter empties the view both can be on
+  // screen. Stretch the table only once both are empty, or that frame would
+  // stretch stale rows to the scrollport's height.
+  const emptyViewSettled = !orderedNotes.length && !deferredOrderedNotes.length;
+
   // The empty view is the one body row the screen still owns: it is not a note
   // and it only exists while the list is empty.
   const emptyTableRow = !orderedNotes.length ? (
@@ -4651,23 +4660,41 @@ function NotesTable({
                   tagNames={tagNames}
                 />
                 <div className="table-rail-actions">
+                  {/* Reset sits before Columns so the pair grows leftwards:
+                      Columns keeps the card's right edge whether or not the
+                      view is dirty, and no empty slot has to reserve space for
+                      a control that is not there. */}
+                  {canResetView ? (
+                    <button
+                      className="button table-reset-view"
+                      onClick={resetTableState}
+                      title="Clears filters, sort and selection — keeps your columns"
+                      type="button"
+                    >
+                      <svg
+                        aria-hidden="true"
+                        fill="none"
+                        focusable="false"
+                        height="15"
+                        stroke="currentColor"
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        strokeWidth="1.8"
+                        viewBox="0 0 24 24"
+                        width="15"
+                      >
+                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
+                        <path d="M3 3v5h5" />
+                      </svg>
+                      Reset view
+                    </button>
+                  ) : null}
                   <ColumnPicker
                     columns={hideableColumns}
                     disabledColumnKey={lastVisibleDataColumnKey}
                     onToggle={toggleColumnVisibility}
                     visibleColumnKeys={visibleColumnKeys}
                   />
-                  <div className="table-reset-slot">
-                    {canResetView ? (
-                      <button
-                        className="button"
-                        onClick={resetTableState}
-                        type="button"
-                      >
-                        Reset view
-                      </button>
-                    ) : null}
-                  </div>
                 </div>
               </div>
               <div className="table-viewport">
@@ -4683,7 +4710,9 @@ function NotesTable({
                   onScroll={() => syncColumnScroll()}
                   ref={tableScrollRef}
                 >
-                  <div className="table-scroll-content">
+                  <div
+                    className={`table-scroll-content${emptyViewSettled ? " is-empty-view" : ""}`}
+                  >
                     <table aria-busy={rowsPending || undefined}>
                       <colgroup>
                         {visibleColumns.map((column) => (

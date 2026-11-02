@@ -2879,6 +2879,19 @@ input[type="radio"] {
   min-width: 100%;
 }
 
+/* An empty view is a message, not a missing page: while the table has no rows
+   at all, it takes the scrollport's height so the cell can centre the message
+   in the rows region instead of leaving a tall void under the header. The
+   class comes from the rendered row counts, not the empty row, so the frame
+   where a deferred list still holds stale rows is never stretched. */
+.table-scroll-content.is-empty-view {
+  height: 100%;
+}
+
+.table-scroll-content.is-empty-view > table {
+  height: 100%;
+}
+
 /* Trailing empty column that reserves the scrollbar gutter inside the table
    itself. The header and filter rows need genuine header cells so the header
    background, the white divider between the two header rows, and the bottom
@@ -3041,10 +3054,14 @@ tbody td {
   border-bottom: 0;
 }
 
+/* Centred by the stretched table above; 32px keeps the message clear of the
+   header when the card is shorter than the viewport and the stretch cannot
+   give it room. */
 .table-empty-cell {
-  padding: 56px 16px;
+  padding: 32px 16px;
   color: var(--text-muted);
   text-align: center;
+  vertical-align: middle;
 }
 
 /* A query that matches nothing is the table's most travelled error path, so
@@ -3867,14 +3884,12 @@ th[aria-sort="descending"] .sort-chevron {
   margin-left: auto;
 }
 
-/* The Reset view slot keeps its width while the control is hidden, so a
-   non-default view does not shift the toolbar when the button appears. */
-.table-reset-slot {
-  display: inline-flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex: 0 0 auto;
-  min-width: 7rem;
+/* Reset sits to the left of Columns, so the pair grows leftwards: Columns
+   keeps the card's right edge whether or not the view is dirty, and no empty
+   slot has to reserve room for a control that may not exist. The icon pairs it
+   with Columns' own icon at the same 6px gap. */
+.table-reset-view {
+  gap: 6px;
 }
 
 /* The search field is the rail's primary control: one query across every
@@ -4137,34 +4152,39 @@ th[aria-sort="descending"] .sort-chevron {
 /* The idle rail states the field/Enter model in the chips' own slot: the
    sentence sits beside the field it explains, and the first chip replaces it
    without reserving a separate line. Active chips teach nothing here; the
-   empty-match state still spells out OR/AND when it matters. */
+   empty-match state still spells out OR/AND when it matters. This is the only
+   place the model is explained, so it uses the readable faint tone (4.96:1 on
+   the rail) rather than the hint tone the field's placeholder can afford. */
 .table-filter-hint {
   flex: 1 1 240px;
   min-width: 0;
   margin: 0;
-  color: var(--text-hint);
+  color: var(--text-faint);
   font-size: 0.75rem;
 }
 
 /* Active filters share the rail with the field as removable chips, so a
    filtered view is visible without opening a row. They take the middle of the
    rail and wrap there; nothing reserves a line for them, so the first chip
-   only grows the card's own chrome. */
+   only grows the card's own chrome. The 8px row-gap gives a wrapped chip line
+   the same rhythm as the rail's own rows (24px chip + 8px = 32px). */
 .table-filter-chips {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
-  gap: 4px;
+  gap: 8px 4px;
   flex: 1 1 240px;
   min-width: 0;
   margin: 0;
 }
 
+/* The facet hugs the 24px value chips it labels, so a wrapped chip line is the
+   24px row plus the chips' 8px row-gap. */
 .table-filter-facet {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  height: 28px;
+  height: 24px;
   padding: 0 4px 0 2px;
 }
 
@@ -4178,15 +4198,18 @@ th[aria-sort="descending"] .sort-chevron {
 }
 
 .table-filter-or {
-  color: var(--text-hint);
+  color: var(--text-faint);
   font-size: 0.6875rem;
   font-style: italic;
   padding: 0 1px;
 }
 
+/* The connectors carry the chip grammar, so they sit one weight above the
+   chip line's text: 11px like `or`, in the readable faint tone (4.96:1) rather
+   than the hint tone that would turn "and" into texture. */
 .table-filter-and {
-  color: var(--text-hint);
-  font-size: 0.5625rem;
+  color: var(--text-faint);
+  font-size: 0.6875rem;
   font-weight: 700;
   letter-spacing: 0.08em;
   text-transform: uppercase;
