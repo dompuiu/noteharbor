@@ -307,17 +307,19 @@ describe("table styles", () => {
     );
   });
 
-  // The toolbar search keeps the prototype's taller 40px bar; the column
-  // filters below stay on their own 36px band.
+  // The scoped filter field is table chrome now, so it sits on the same 36px
+  // band as the column filters instead of the old 40px toolbar bar. Its flex
+  // basis gives it the rail's lead position without crowding the chips.
   test("column filters match the search field's height", () => {
     const search = styles.match(/^\.table-search-input\s*\{([^}]*)\}/m);
     expect(search).not.toBeNull();
     expect(search[1]).toMatch(/height:\s*36px/);
 
-    // The scoped field matches the prototype's 40px bar.
-    const scoped = styles.match(/\.table-search--scoped\s*\{([^}]*)\}/);
+    const scoped = styles.match(/^\.table-search--scoped\s*\{([^}]*)\}/m);
     expect(scoped).not.toBeNull();
-    expect(scoped[1]).toMatch(/height:\s*40px/);
+    expect(scoped[1]).toMatch(/flex:\s*0 1 400px/);
+    expect(scoped[1]).toMatch(/min-width:\s*240px/);
+    expect(scoped[1]).toMatch(/height:\s*36px/);
 
     const filter = styles.match(/\.filter-input\s*\{([^}]*)\}/);
     expect(filter).not.toBeNull();
@@ -353,22 +355,49 @@ describe("table styles", () => {
     expect(placeholder[1]).toMatch(/color:\s*var\(--text-hint\)/);
   });
 
-  // The chip row closes the toolbar: it keeps its own line under the controls
-  // while sitting before them in the DOM, so Tab reaches the chips first. The
-  // row hands its bottom margin to the chips so the table does not move.
-  test("the chip row keeps its own line under the controls", () => {
-    const row = styles.match(/\.toolbar-row--table-controls\s*\{([^}]*)\}/);
-    expect(row).not.toBeNull();
-    expect(row[1]).toMatch(/row-gap:\s*10px/);
-    expect(row[1]).toMatch(/margin-bottom:\s*0/);
+  // The filters describe only the table, so they are the card's own rail: the
+  // field leads, the chips take the middle and wrap there, and Columns/Reset
+  // keep the right edge. Rail padding stays above the field's 3px focus glow,
+  // which `.table-shell { overflow: hidden }` would otherwise crop.
+  test("the filter bar rides in the table card's rail", () => {
+    const rail = styles.match(/^\.table-rail\s*\{([^}]*)\}/m);
+    expect(rail).not.toBeNull();
+    expect(rail[1]).toMatch(/display:\s*flex/);
+    expect(rail[1]).toMatch(/flex-wrap:\s*wrap/);
+    expect(rail[1]).toMatch(/align-items:\s*center/);
+    expect(rail[1]).toMatch(/gap:\s*8px 12px/);
+    expect(rail[1]).toMatch(/padding:\s*6px 10px/);
+    expect(rail[1]).toMatch(/flex:\s*0 0 auto/);
+    expect(rail[1]).toMatch(/border-bottom:\s*1px solid var\(--border\)/);
+    expect(rail[1]).toMatch(/background:\s*var\(--surface-2\)/);
+    expect(rail[1]).not.toMatch(/overflow:\s*hidden/);
 
-    const chips = styles.match(
-      /\.toolbar-row--table-controls\s*>\s*\.table-filter-chips\s*\{([^}]*)\}/,
-    );
+    const actions = styles.match(/^\.table-rail-actions\s*\{([^}]*)\}/m);
+    expect(actions).not.toBeNull();
+    expect(actions[1]).toMatch(/display:\s*flex/);
+    expect(actions[1]).toMatch(/gap:\s*8px/);
+    expect(actions[1]).toMatch(/flex:\s*0 0 auto/);
+    expect(actions[1]).toMatch(/margin-left:\s*auto/);
+
+    // The chips grow into the middle of the rail and wrap inside it. Nothing
+    // reserves their old 30px line: the rail's own height is the card's edge.
+    const chips = styles.match(/^\.table-filter-chips\s*\{([^}]*)\}/m);
     expect(chips).not.toBeNull();
-    expect(chips[1]).toMatch(/order:\s*1/);
-    expect(chips[1]).toMatch(/flex:\s*1 0 100%/);
+    expect(chips[1]).toMatch(/flex:\s*1 1 240px/);
     expect(chips[1]).toMatch(/min-width:\s*0/);
+    expect(chips[1]).toMatch(/margin:\s*0/);
+    expect(chips[1]).not.toMatch(/min-height/);
+
+    // The old toolbar band left with the filter bar that used it.
+    expect(styles).not.toMatch(/\.toolbar-row--table-controls/);
+  });
+
+  // Reset view keeps its slot while the control is hidden, so a non-default
+  // view never shifts the Columns button beside it.
+  test("the reset slot keeps its width while the button is hidden", () => {
+    const slot = styles.match(/^\.table-reset-slot\s*\{([^}]*)\}/m);
+    expect(slot).not.toBeNull();
+    expect(slot[1]).toMatch(/min-width:\s*7rem/);
   });
 
   // The editor's tag row and the filter row share one Clear all, so the hover

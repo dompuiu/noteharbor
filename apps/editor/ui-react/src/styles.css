@@ -3840,6 +3840,32 @@ th[aria-sort="descending"] .sort-chevron {
   min-width: 88px;
 }
 
+/* The filters belong to the table, not to a band above it: the rail is the
+   card's own chrome, sitting inside the shell above the scrollport so it
+   neither pans with the columns nor scrolls away with the rows. It wraps
+   internally instead of competing for the head's width. The 6px padding also
+   keeps the field's 3px focus glow clear of the shell's `overflow: hidden`. */
+.table-rail {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  padding: 6px 10px;
+  flex: 0 0 auto;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+}
+
+/* The rail's trailing cluster keeps Columns and Reset view on the right edge
+   however many lines the field and chips take. */
+.table-rail-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 0 0 auto;
+  margin-left: auto;
+}
+
 /* The Reset view slot keeps its width while the control is hidden, so a
    non-default view does not shift the toolbar when the button appears. */
 .table-reset-slot {
@@ -3850,24 +3876,7 @@ th[aria-sort="descending"] .sort-chevron {
   min-width: 7rem;
 }
 
-.toolbar-row--table-controls {
-  align-items: center;
-  /* The chip row closes this toolbar now, so its own margin carries the space
-     below the controls; the row gap spaces the controls from the chips. */
-  row-gap: 10px;
-  margin-bottom: 0;
-}
-
-/* The chips continue the filter field, so they sit right after it in the DOM
-   and Tab reaches them before the view controls. `order` draws them on their
-   own line under those controls, where the active filters belong. */
-.toolbar-row--table-controls > .table-filter-chips {
-  order: 1;
-  flex: 1 0 100%;
-  min-width: 0;
-}
-
-/* The search field is the toolbar's primary control: one query across every
+/* The search field is the rail's primary control: one query across every
    data column, with the shortcut hint (or the clear control) inside it. */
 .table-search {
   position: relative;
@@ -3888,14 +3897,17 @@ th[aria-sort="descending"] .sort-chevron {
 
 /* One filter bar: the field button lives inside the field, the value input
    next to it, and Enter turns the text into a chip. Same field ORs, different
-   fields AND, so the chips row states the whole filter. */
+   fields AND, so the rail states the whole filter. The field leads the rail
+   at the column header's weight (36px) and yields before it crowds the chips;
+   its min-width is what a value still needs to stay readable. */
 .table-search--scoped {
-  flex: 0 1 460px;
-  width: min(460px, 100%);
+  flex: 0 1 400px;
+  width: min(400px, 100%);
+  min-width: 240px;
   display: flex;
   align-items: center;
   gap: 8px;
-  height: 40px;
+  height: 36px;
   padding: 0 8px 0 11px;
   border: 1px solid var(--border-control);
   border-radius: var(--radius-md);
@@ -4121,19 +4133,22 @@ th[aria-sort="descending"] .sort-chevron {
   color: var(--text-muted);
 }
 
-/* Active filters sit under the toolbar controls as removable chips, so a
-   filtered view is visible without opening the row. */
+/* Active filters share the rail with the field as removable chips, so a
+   filtered view is visible without opening a row. They take the middle of the
+   rail and wrap there; nothing reserves a line for them, so the first chip
+   only grows the card's own chrome. */
 .table-filter-chips {
   display: flex;
   flex-wrap: wrap;
   align-items: center;
   gap: 4px;
-  margin: 0 0 4px;
-  min-height: 30px;
+  flex: 1 1 240px;
+  min-width: 0;
+  margin: 0;
 }
 
-/* The empty row keeps the table from jumping when the first chip lands, and
-   states the field/Enter model before the user has tried it. */
+/* The idle hint shares the chips' slot until the first chip lands, and states
+   the field/Enter model before the user has tried it. */
 .table-filter-chips-empty {
   color: var(--text-hint);
   font-size: 0.75rem;

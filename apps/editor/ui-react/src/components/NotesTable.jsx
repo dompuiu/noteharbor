@@ -2325,7 +2325,9 @@ function NotesTable({
       // Escape above the table must still reach the table's state. The page
       // background counts, and so does the screen's own chrome (title row,
       // toolbar, footer) outside the table card. Controls inside the card
-      // keep their own keys, and modal surfaces own every key.
+      // keep their own keys, and modal surfaces own every key. The rail is
+      // chrome too: it holds the view controls, not row content, so Escape
+      // there keeps reaching the table even though it lives on the card.
       if (isPageBackgroundTarget(target)) {
         return true;
       }
@@ -2333,7 +2335,8 @@ function NotesTable({
       return (
         target instanceof Element &&
         Boolean(tableScreenRef.current?.contains(target)) &&
-        !tableShellRef.current?.contains(target) &&
+        (!tableShellRef.current?.contains(target) ||
+          Boolean(target.closest(".table-rail"))) &&
         !target.closest(MODAL_SURFACE_SELECTOR)
       );
     }
@@ -4616,35 +4619,6 @@ function NotesTable({
 
         {!loading && !loadError ? (
           <>
-            <div className="toolbar-row toolbar-row--table-controls">
-              <TableFilterBar
-                conditions={conditions}
-                hasRows={deferredOrderedNotes.length > 0}
-                onConditionsChange={handleConditionsChange}
-                onFirstRow={focusFirstRow}
-                ref={filterBarRef}
-                searchColumns={searchColumns}
-                tagNames={tagNames}
-              />
-              <ColumnPicker
-                columns={hideableColumns}
-                disabledColumnKey={lastVisibleDataColumnKey}
-                onToggle={toggleColumnVisibility}
-                visibleColumnKeys={visibleColumnKeys}
-              />
-              <div className="table-reset-slot">
-                {canResetView ? (
-                  <button
-                    className="button"
-                    onClick={resetTableState}
-                    type="button"
-                  >
-                    Reset view
-                  </button>
-                ) : null}
-              </div>
-            </div>
-
             <div
               className="table-shell"
               onDragOver={autoScrollTableShell}
@@ -4656,209 +4630,243 @@ function NotesTable({
                 ref={tableFocusAnchorRef}
                 tabIndex={-1}
               />
-              <div className="table-viewport">
-              <div
-                className="table-scroll-x"
-                onClickCapture={handleColumnPanClickCapture}
-                onLostPointerCapture={handleColumnPanPointerEnd}
-                onMouseDown={handleColumnPanMouseDown}
-                onPointerCancel={handleColumnPanPointerEnd}
-                onPointerDown={handleColumnPanPointerDown}
-                onPointerMove={handleColumnPanPointerMove}
-                onPointerUp={handleColumnPanPointerEnd}
-                onScroll={() => syncColumnScroll()}
-                ref={tableScrollRef}
-              >
-                <div className="table-scroll-content">
-                  <table aria-busy={rowsPending || undefined}>
-                    <colgroup>
-                      {visibleColumns.map((column) => (
-                        <col
-                          key={column.key}
-                          style={{
-                            width: `${columnWidths[column.key] ?? column.width ?? 0}px`,
-                          }}
-                        />
-                      ))}
-                      {vScrollVisible ? (
-                        <col style={{ width: `${tableGutterWidth}px` }} />
-                      ) : null}
-                    </colgroup>
-                    <thead>
-                      <tr>
-                        {visibleColumns.map((column) => {
-                          if (column.kind === "reorder") {
-                            return (
-                              <th
-                                key={column.key}
-                                scope="col"
-                                {...tableCellAttributes(column)}
-                              />
-                            );
-                          }
-
-                          if (column.kind === "selection") {
-                            return (
-                              <th
-                                key={column.key}
-                                scope="col"
-                                {...tableCellAttributes(column)}
-                              >
-                                <input
-                                  aria-label="Select all visible rows"
-                                  checked={allVisibleSelected}
-                                  onChange={toggleAllVisible}
-                                  ref={selectAllRef}
-                                  type="checkbox"
-                                />
-                              </th>
-                            );
-                          }
-
-                          if (!column.sortable) {
-                            // The actions column carries no visible label: the
-                            // three-dot button explains itself. Keep the name
-                            // for assistive tech so the column is not anonymous.
-                            const isActions = column.kind === "actions";
-
-                            return (
-                              <th
-                                aria-label={isActions ? column.label : undefined}
-                                key={column.key}
-                                scope="col"
-                                {...tableCellAttributes(column)}
-                              >
-                                {isActions ? null : column.label}
-                              </th>
-                            );
-                          }
-
-                          const isSorted = sortKey === column.key;
-
-                          return (
-                            <th
-                              aria-sort={
-                                isSorted
-                                  ? sortDirection === "asc"
-                                    ? "ascending"
-                                    : "descending"
-                                  : "none"
-                              }
-                              key={column.key}
-                              scope="col"
-                              {...tableCellAttributes(column)}
-                            >
-                              <button
-                                className={`sort-button${isSorted ? " sort-button--active" : ""}`}
-                                onClick={() => toggleSort(column.key)}
-                                type="button"
-                              >
-                                {column.label}
-                                {/* Drawn on every sortable header: the
-                                    stylesheet keeps it hidden until hover and
-                                    lets the sorted column keep it visible. */}
-                                <svg
-                                  aria-hidden="true"
-                                  className="sort-chevron"
-                                  focusable="false"
-                                  viewBox="0 0 24 24"
-                                >
-                                  <path
-                                    d="m6 15 6-6 6 6"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeLinecap="round"
-                                    strokeLinejoin="round"
-                                    strokeWidth="2.4"
-                                  />
-                                </svg>
-                              </button>
-                            </th>
-                          );
-                        })}
-                        {vScrollVisible ? (
-                          <th
-                            aria-hidden="true"
-                            className="table-gutter-cell"
-                            scope="col"
-                          />
-                        ) : null}
-                      </tr>
-                    </thead>
-                    <TableRows
-                      activeNoteId={activeNoteId}
-                      canReorder={canReorder}
-                      columns={visibleColumns}
-                      dragStateRef={dragStateRef}
-                      emptyContent={emptyTableRow}
-                      handlers={rowHandlers}
-                      notes={deferredOrderedNotes}
-                      onReorder={handleReorder}
-                      reorderRail={reorderRail}
-                      rowElementFor={(noteId) =>
-                        rowElementMapRef.current.get(noteId)
-                      }
-                      rowModelsByNoteId={rowModelsByNoteId}
-                      selectedIdSet={selectedIdSet}
-                      showGutter={vScrollVisible}
-                      topSpacerHeight={topSpacerHeight}
-                      bottomSpacerHeight={bottomSpacerHeight}
-                      totalColumnCount={totalColumnCount}
-                      virtualRows={virtualRows}
-                    />
-                  </table>
+              {/* The filters describe only this table, so they are the card's
+                  own rail rather than a band above it. The rail sits outside
+                  `.table-scroll-x`, so it never pans with the columns and never
+                  scrolls away with the rows. */}
+              <div className="table-rail">
+                <TableFilterBar
+                  conditions={conditions}
+                  hasRows={deferredOrderedNotes.length > 0}
+                  onConditionsChange={handleConditionsChange}
+                  onFirstRow={focusFirstRow}
+                  ref={filterBarRef}
+                  searchColumns={searchColumns}
+                  tagNames={tagNames}
+                />
+                <div className="table-rail-actions">
+                  <ColumnPicker
+                    columns={hideableColumns}
+                    disabledColumnKey={lastVisibleDataColumnKey}
+                    onToggle={toggleColumnVisibility}
+                    visibleColumnKeys={visibleColumnKeys}
+                  />
+                  <div className="table-reset-slot">
+                    {canResetView ? (
+                      <button
+                        className="button"
+                        onClick={resetTableState}
+                        type="button"
+                      >
+                        Reset view
+                      </button>
+                    ) : null}
+                  </div>
                 </div>
               </div>
-              <TableScrollbar
-                loading={loading}
-                onFirstRow={focusFirstRow}
-                onLastRow={focusLastRow}
-                onPage={pageTable}
-                onVisibleChange={setVScrollVisible}
-                rowCount={deferredOrderedNotes.length}
-                rowHeight={rowHeightEstimate}
-                scrollRef={tableScrollRef}
-              />
-              </div>
-              {selectedIds.length ? (
-                <TableBulkBar
-                  barRef={bulkBarRef}
-                  onClear={clearSelection}
-                  onDelete={handleBulkDelete}
-                  onLeaveBackward={() => {
-                    selectionTabArmedRef.current = false;
-                    focusRowActionsButtonByNoteId(bulkBarExitNoteId());
-                  }}
-                  onLeaveForward={() => {
-                    selectionTabArmedRef.current = false;
-                    focusRowCheckboxByNoteId(bulkBarExitNoteId());
-                  }}
-                  selectedCount={selectedIds.length}
+              <div className="table-viewport">
+                <div
+                  className="table-scroll-x"
+                  onClickCapture={handleColumnPanClickCapture}
+                  onLostPointerCapture={handleColumnPanPointerEnd}
+                  onMouseDown={handleColumnPanMouseDown}
+                  onPointerCancel={handleColumnPanPointerEnd}
+                  onPointerDown={handleColumnPanPointerDown}
+                  onPointerMove={handleColumnPanPointerMove}
+                  onPointerUp={handleColumnPanPointerEnd}
+                  onScroll={() => syncColumnScroll()}
+                  ref={tableScrollRef}
+                >
+                  <div className="table-scroll-content">
+                    <table aria-busy={rowsPending || undefined}>
+                      <colgroup>
+                        {visibleColumns.map((column) => (
+                          <col
+                            key={column.key}
+                            style={{
+                              width: `${columnWidths[column.key] ?? column.width ?? 0}px`,
+                            }}
+                          />
+                        ))}
+                        {vScrollVisible ? (
+                          <col style={{ width: `${tableGutterWidth}px` }} />
+                        ) : null}
+                      </colgroup>
+                      <thead>
+                        <tr>
+                          {visibleColumns.map((column) => {
+                            if (column.kind === "reorder") {
+                              return (
+                                <th
+                                  key={column.key}
+                                  scope="col"
+                                  {...tableCellAttributes(column)}
+                                />
+                              );
+                            }
+
+                            if (column.kind === "selection") {
+                              return (
+                                <th
+                                  key={column.key}
+                                  scope="col"
+                                  {...tableCellAttributes(column)}
+                                >
+                                  <input
+                                    aria-label="Select all visible rows"
+                                    checked={allVisibleSelected}
+                                    onChange={toggleAllVisible}
+                                    ref={selectAllRef}
+                                    type="checkbox"
+                                  />
+                                </th>
+                              );
+                            }
+
+                            if (!column.sortable) {
+                              // The actions column carries no visible label: the
+                              // three-dot button explains itself. Keep the name
+                              // for assistive tech so the column is not anonymous.
+                              const isActions = column.kind === "actions";
+
+                              return (
+                                <th
+                                  aria-label={isActions ? column.label : undefined}
+                                  key={column.key}
+                                  scope="col"
+                                  {...tableCellAttributes(column)}
+                                >
+                                  {isActions ? null : column.label}
+                                </th>
+                              );
+                            }
+
+                            const isSorted = sortKey === column.key;
+
+                            return (
+                              <th
+                                aria-sort={
+                                  isSorted
+                                    ? sortDirection === "asc"
+                                      ? "ascending"
+                                      : "descending"
+                                    : "none"
+                                }
+                                key={column.key}
+                                scope="col"
+                                {...tableCellAttributes(column)}
+                              >
+                                <button
+                                  className={`sort-button${isSorted ? " sort-button--active" : ""}`}
+                                  onClick={() => toggleSort(column.key)}
+                                  type="button"
+                                >
+                                  {column.label}
+                                  {/* Drawn on every sortable header: the
+                                      stylesheet keeps it hidden until hover and
+                                      lets the sorted column keep it visible. */}
+                                  <svg
+                                    aria-hidden="true"
+                                    className="sort-chevron"
+                                    focusable="false"
+                                    viewBox="0 0 24 24"
+                                  >
+                                    <path
+                                      d="m6 15 6-6 6 6"
+                                      fill="none"
+                                      stroke="currentColor"
+                                      strokeLinecap="round"
+                                      strokeLinejoin="round"
+                                      strokeWidth="2.4"
+                                    />
+                                  </svg>
+                                </button>
+                              </th>
+                            );
+                          })}
+                          {vScrollVisible ? (
+                            <th
+                              aria-hidden="true"
+                              className="table-gutter-cell"
+                              scope="col"
+                            />
+                          ) : null}
+                        </tr>
+                      </thead>
+                      <TableRows
+                        activeNoteId={activeNoteId}
+                        canReorder={canReorder}
+                        columns={visibleColumns}
+                        dragStateRef={dragStateRef}
+                        emptyContent={emptyTableRow}
+                        handlers={rowHandlers}
+                        notes={deferredOrderedNotes}
+                        onReorder={handleReorder}
+                        reorderRail={reorderRail}
+                        rowElementFor={(noteId) =>
+                          rowElementMapRef.current.get(noteId)
+                        }
+                        rowModelsByNoteId={rowModelsByNoteId}
+                        selectedIdSet={selectedIdSet}
+                        showGutter={vScrollVisible}
+                        topSpacerHeight={topSpacerHeight}
+                        bottomSpacerHeight={bottomSpacerHeight}
+                        totalColumnCount={totalColumnCount}
+                        virtualRows={virtualRows}
+                      />
+                    </table>
+                  </div>
+                </div>
+                <TableScrollbar
+                  loading={loading}
+                  onFirstRow={focusFirstRow}
+                  onLastRow={focusLastRow}
+                  onPage={pageTable}
+                  onVisibleChange={setVScrollVisible}
+                  rowCount={deferredOrderedNotes.length}
+                  rowHeight={rowHeightEstimate}
+                  scrollRef={tableScrollRef}
                 />
-              ) : null}
-            </div>
-            <div className="table-footer-hint">
-              <span className="table-footer-summary">
-                Showing {deferredOrderedNotes.length} of {notes.length} notes ·
-                sorted by {getTableColumn(sortKey)?.label ?? "#"}{" "}
-                {sortDirection === "asc" ? "ascending" : "descending"}
-                {showSelection && selectedIds.length
-                  ? ` · ${selectedIds.length} selected`
-                  : ""}
-              </span>
-              <span className="table-footer-right">
-                {reorderLoading ? (
-                  <span className="table-footer-status">
-                    Saving manual order...
-                  </span>
+                </div>
+                {selectedIds.length ? (
+                  <TableBulkBar
+                    barRef={bulkBarRef}
+                    onClear={clearSelection}
+                    onDelete={handleBulkDelete}
+                    onLeaveBackward={() => {
+                      selectionTabArmedRef.current = false;
+                      focusRowActionsButtonByNoteId(bulkBarExitNoteId());
+                    }}
+                    onLeaveForward={() => {
+                      selectionTabArmedRef.current = false;
+                      focusRowCheckboxByNoteId(bulkBarExitNoteId());
+                    }}
+                    selectedCount={selectedIds.length}
+                  />
                 ) : null}
-                <span className="table-footer-keys">
-                  {reorderHint ? `${reorderHint} · ` : null}
-                  <kbd>&uarr;</kbd> <kbd>&darr;</kbd> to browse ·{" "}
-                  <kbd>?</kbd> shortcuts
+              </div>
+              <div className="table-footer-hint">
+                <span className="table-footer-summary">
+                  Showing {deferredOrderedNotes.length} of {notes.length} notes ·
+                  sorted by {getTableColumn(sortKey)?.label ?? "#"}{" "}
+                  {sortDirection === "asc" ? "ascending" : "descending"}
+                  {showSelection && selectedIds.length
+                    ? ` · ${selectedIds.length} selected`
+                    : ""}
                 </span>
-              </span>
-            </div>
+                <span className="table-footer-right">
+                  {reorderLoading ? (
+                    <span className="table-footer-status">
+                      Saving manual order...
+                    </span>
+                  ) : null}
+                  <span className="table-footer-keys">
+                    {reorderHint ? `${reorderHint} · ` : null}
+                    <kbd>&uarr;</kbd> <kbd>&darr;</kbd> to browse ·{" "}
+                    <kbd>?</kbd> shortcuts
+                  </span>
+                </span>
+              </div>
           </>
         ) : null}
       </div>

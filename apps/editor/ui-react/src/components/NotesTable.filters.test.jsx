@@ -654,8 +654,59 @@ describe("NotesTable filter chips", () => {
   });
 });
 
+// The filters describe only the table, so they live on the card instead of a
+// toolbar band above it: inside `.table-shell` and ahead of the scrollport, so
+// they never pan with the columns and never scroll away with the rows.
+describe("NotesTable filter rail", () => {
+  function shell() {
+    return document.querySelector(".table-shell");
+  }
+
+  function rail() {
+    return shell().querySelector(".table-rail");
+  }
+
+  test("the filter bar is the card's rail, above the rows", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+
+    const children = Array.from(shell().children);
+    const viewportIndex = children.findIndex((child) =>
+      child.classList.contains("table-viewport"),
+    );
+
+    expect(children[0]).toHaveClass("table-focus-anchor");
+    expect(children.indexOf(rail())).toBeGreaterThan(0);
+    expect(children.indexOf(rail())).toBeLessThan(viewportIndex);
+    expect(
+      within(rail()).getByRole("searchbox", { name: "Filter Catalog" }),
+    ).toBeInTheDocument();
+    expect(
+      within(rail()).getByRole("button", { name: "Columns" }),
+    ).toBeInTheDocument();
+    // The old band above the card is gone, not merely emptied.
+    expect(document.querySelector(".toolbar-row--table-controls")).toBeNull();
+  });
+
+  test("a committed filter adds its chips to the rail", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Company", "PMG");
+
+    expect(
+      within(rail()).getByRole("button", { name: "Edit Company filter PMG" }),
+    ).toBeInTheDocument();
+    expect(rail()).toContainElement(
+      document.querySelector(".table-filter-chips"),
+    );
+  });
+});
+
 // The chips are the filter field's own continuation: Tab reaches them before
-// it reaches the toolbar's view controls, and Shift+Tab walks back the same
+// it reaches the rail's view controls, and Shift+Tab walks back the same
 // way. Only the DOM order decides this, so the assertions are plain tabs.
 describe("NotesTable filter bar tab order", () => {
   function columnsButton() {
