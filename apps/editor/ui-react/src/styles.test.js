@@ -726,7 +726,9 @@ describe("table styles", () => {
     expect(head[1]).toMatch(/font-size:\s*0\.625rem/);
     expect(head[1]).toMatch(/letter-spacing:\s*0\.075em/);
     expect(head[1]).toMatch(/text-transform:\s*uppercase/);
-    expect(head[1]).toMatch(/color:\s*#8a755a/);
+    // 10px caps are small text, so the caption has to clear 4.5:1 on the
+    // header band: the umber token does, the prototype's #8a755a did not.
+    expect(head[1]).toMatch(/color:\s*var\(--text-muted\)/);
   });
 
   // A single-class align-* rule is weaker than `.table-shell thead th`, so an
@@ -1319,7 +1321,7 @@ describe("table styles", () => {
     );
   });
 
-  test("catalog and denomination read as strong text, serial gets tracking", () => {
+  test("catalog and denomination read as strong text, serial as a code", () => {
     expect(styles).toMatch(
       /td\.table-col-catalog_number\s*\{[^}]*font-weight:\s*600/,
     );
@@ -1329,11 +1331,14 @@ describe("table styles", () => {
     expect(styles).toMatch(
       /td\.table-col-denomination a:hover,[\s\S]*?text-decoration:\s*underline/,
     );
+    // The serial is a code: a step under the body size, tracked, and muted,
+    // so the long strings do not out-shout the note's name.
     expect(styles).toMatch(
-      /td\.table-col-serial\s*\{[^}]*letter-spacing:\s*0\.03em;[^}]*color:\s*#4a3a28/,
+      /td\.table-col-serial\s*\{[^}]*font-size:\s*13px;[^}]*font-weight:\s*500;[^}]*letter-spacing:\s*0\.045em;[^}]*color:\s*var\(--text-muted\)/,
     );
+    // The row number is position, not content: one tone below the fields.
     expect(styles).toMatch(
-      /td\.table-col-id\s*\{[^}]*color:\s*var\(--text-muted\)/,
+      /td\.table-col-id\s*\{[^}]*color:\s*var\(--text-faint\)/,
     );
   });
 

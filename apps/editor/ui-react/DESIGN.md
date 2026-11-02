@@ -32,6 +32,21 @@ typography:
     fontSize: "0.875rem"
     fontWeight: 400
     lineHeight: 1.5
+  data:
+    fontFamily: "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Inter, \"Helvetica Neue\", Arial, sans-serif"
+    fontSize: "13.5px"
+    fontWeight: 400
+    lineHeight: 1.5
+  code:
+    fontFamily: "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Inter, \"Helvetica Neue\", Arial, sans-serif"
+    fontSize: "13px"
+    fontWeight: 500
+    letterSpacing: "0.045em"
+  meta:
+    fontFamily: "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Inter, \"Helvetica Neue\", Arial, sans-serif"
+    fontSize: "0.75rem"
+    fontWeight: 400
+    lineHeight: 1.5
   label:
     fontFamily: "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Inter, \"Helvetica Neue\", Arial, sans-serif"
     fontSize: "0.625rem"
@@ -149,9 +164,12 @@ A warm parchment-and-brass palette with four muted status hues, all low-chroma s
 ### Hierarchy
 - **Title** (700, 1.4rem/1.3): Screen titles such as a Showcase Category name.
 - **Panel heading** (700, ~1.05–1.15rem): Card and panel headings; the largest recurring text in the Table and Import screens.
-- **Body** (400, 0.86–0.9rem/1.5): Table cells, field values, and running copy.
+- **Body** (400, 0.86–0.9rem/1.5): Field values and running copy.
+- **Data** (400, 13.5px): Table cell values, the dense step of Body. Every cell carries `tabular-nums`, and weight, not size, separates the row's roles — Catalog # and Denomination at 600, the rest at 400.
+- **Code** (500, 13px, 0.045em tracking): Serial numbers and other identifier strings in the Table, one step under Data so a long code never out-shouts the row's name.
 - **Control** (600, 0.84rem/1.2): Buttons, links, and tabs.
-- **Label** (650, 0.625rem, 0.075em tracking, uppercase): Table headers. Group labels sit at 9.5px/800 with 0.14em tracking.
+- **Label** (650, 0.625rem, 0.075em tracking, uppercase): Table and menu headers, in Umber so 10px caps clear 4.5:1 on the header band. Group labels sit at 9.5px/800 with 0.14em tracking.
+- **Meta** (400, 0.75rem/1.5, `tabular-nums`): The Table's footer summary and status lines, one step under the rail's 12px hint.
 - **Micro** (600–800, 11–13.5px): Version footers, counters, and the wordmark.
 
 ### Named Rules
@@ -200,9 +218,11 @@ Rounded and soft-edged, at four deliberate steps: 8px for small chips and inline
 
 ### Table
 - **Container:** a Shell Cream card with a 10px radius and 1px structural border, filling the viewport.
-- **Header:** Header Sand band (`--surface-3`), 40px tall, 12px padding, 0.625rem/650 uppercase labels at 0.075em tracking in a muted brown; the sorted column alone switches to Deep Brass and reveals its chevron.
+- **Header:** Header Sand band (`--surface-3`), 40px tall, 12px padding, 0.625rem/650 uppercase labels at 0.075em tracking in Umber; the sorted column alone switches to Deep Brass and reveals its chevron.
+- **Body type:** 13.5px data cells in Walnut Ink. Catalog # and Denomination at 600; the serial as Code (13px/500, 0.045em tracking, Umber); the display order in Faded Umber because it is position rather than content; Grade as a 13px/600 pill tinted by band.
 - **Rows:** zebra at 5% brass; hover at 12%; selected at 14% with a brass edge and a checked box carrying the state. Text truncates, never wraps.
 - **Pinned cells:** the checkbox and thumbnail columns stay pinned; the checkbox focus halo is a 21px rounded square behind a clipped native control.
+- **Selection:** text selected inside the card takes a 24% brass wash instead of the platform blue, so copying a serial reads as marked paper.
 
 ### Chips & Tags
 - **Style:** pill or 8px-rounded, brass wash ground, Deep Brass text, no heavy border.

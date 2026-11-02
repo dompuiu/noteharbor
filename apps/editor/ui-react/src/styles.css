@@ -2750,6 +2750,16 @@ input[type="radio"] {
   container-name: table-shell;
 }
 
+/* Selecting a cell is a real task here — a serial or a catalog number gets
+   copied into a message or a grading-company search — and the platform's own
+   blue is the one cold surface left in the card. Tint the highlight from the
+   brass wash so a selection reads as marked paper, light enough that walnut
+   ink still clears 4.5:1 on top. */
+.table-shell ::selection {
+  background: rgba(150, 98, 47, 0.24);
+  color: var(--text);
+}
+
 /* The scroller and its overlay scrollbar share one positioned box, so the
    track stops at the rows area while the floating bulk bar overlays the
    bottom of this box. */
@@ -2785,8 +2795,11 @@ input[type="radio"] {
 }
 
 .table-bulk-bar-count {
-  font-size: 0.82rem;
+  font-size: 0.84rem;
   font-weight: 700;
+  /* The count changes with every tick, so its digits must not reflow the
+     pill's width as the selection grows. */
+  font-variant-numeric: tabular-nums;
 }
 
 .table-bulk-bar-separator {
@@ -2806,7 +2819,9 @@ input[type="radio"] {
   background: rgba(255, 250, 241, 0.1);
   color: inherit;
   font: inherit;
-  font-size: 0.8rem;
+  /* Same control size as the rail's buttons: the pill is a floating copy of
+     that cluster, so its actions must not read a size smaller. */
+  font-size: 0.84rem;
   font-weight: 600;
   cursor: pointer;
 }
@@ -3117,6 +3132,7 @@ tbody td {
   color: var(--text);
   font-size: 1rem;
   font-weight: 650;
+  text-wrap: balance;
 }
 
 .table-empty-actions {
@@ -3130,6 +3146,9 @@ tbody td {
   margin: 0;
   font-size: 0.82rem;
   color: var(--text-muted);
+  /* The OR/AND explanation is the only place the filter model is spelled
+     out, so its last line should not be stranded on a single word. */
+  text-wrap: pretty;
 }
 
 /* A failed load keeps the table's footprint: the card is still on screen, its
@@ -3232,9 +3251,9 @@ tbody td {
 }
 
 /* Data emphasis from the prototype: the two identity fields read as strong
-   text, the serial carries a little tracking, and the display order stays
-   muted like a row number. Scoped to body cells so the header keeps its own
-   type treatment. */
+   text, the serial reads as a code, and the display order stays muted like a
+   row number. Scoped to body cells so the header keeps its own type
+   treatment. */
 td.table-col-catalog_number {
   font-weight: 600;
 }
@@ -3252,9 +3271,18 @@ td.table-col-denomination a:focus-visible {
   text-underline-offset: 2px;
 }
 
+/* A serial is a code, not prose: one step under the row's body size, a touch
+   of tracking so digit runs read as a string rather than as a word, and the
+   muted tone. The alternative — body size at near-ink strength — made the
+   longest string in the row the second-darkest thing after the denomination,
+   so the eye landed on the right half of the table before it had read the
+   note's name. `13px` keeps the characters comfortably apart at this size;
+   it is the table's code role, not a second body size. */
 td.table-col-serial {
-  letter-spacing: 0.03em;
-  color: #4a3a28;
+  font-size: 13px;
+  font-weight: 500;
+  letter-spacing: 0.045em;
+  color: var(--text-muted);
 }
 
 /* Grade is the attribute a collector compares across a row, so it reads as a
@@ -3297,8 +3325,11 @@ td.table-col-serial {
   color: var(--text-muted);
 }
 
+/* The row number is position, not content: one tone below the fields it
+   orders, so the first thing the eye meets in the row is the catalog number
+   beside it, not a running count. It still clears 4.5:1 on the row grounds. */
 td.table-col-id {
-  color: var(--text-muted);
+  color: var(--text-faint);
 }
 
 .table-thumb-wrap {
@@ -3622,10 +3653,13 @@ thead tr:first-child th {
 
 /* The Table screen's labels follow the prototype: wide-tracked caps at 10px
    on the darker surface-3 band, in a fixed 40px row, so the header reads as a
-   caption over the rows. The label tone is the prototype's muted brown
-   (#8a755a), not the darker accessible `--text-muted`. No text-align here: the
-   column model's align-* classes own the header's alignment, the same as the
-   body cells. */
+   caption over the rows. The tone is the palette's umber rather than the
+   prototype's #8a755a: at this size a label is small text, and #8a755a
+   measures 3.5:1 on the band against the 4.5:1 the platform requires.
+   `--text-muted` is the nearest declared tone that clears it (5.1:1) and
+   still reads as a caption under the row ink. No text-align here: the column
+   model's align-* classes own the header's alignment, the same as the body
+   cells. */
 .table-shell thead {
   background: var(--surface-3);
 }
@@ -3638,7 +3672,7 @@ thead tr:first-child th {
   font-weight: 650;
   letter-spacing: 0.075em;
   text-transform: uppercase;
-  color: #8a755a;
+  color: var(--text-muted);
   white-space: nowrap;
 }
 
@@ -4075,7 +4109,9 @@ th[aria-sort="descending"] .sort-chevron {
 
 /* Portalled out of the field so the toolbar cannot clip it. Mirrors the
    prototype's field menu: small uppercase heading, 13px options and the
-   checked row filled with the accent wash. */
+   checked row filled with the accent wash. The heading is the table's own
+   column-label voice, so the two menus the rail opens cannot introduce a
+   third micro-caption. */
 .table-filter-menu {
   position: fixed;
   z-index: 40;
@@ -4090,10 +4126,10 @@ th[aria-sort="descending"] .sort-chevron {
 .table-filter-menu-heading {
   margin: 0;
   padding: 7px 9px 5px;
-  color: var(--text-faint);
-  font-size: 0.5625rem;
-  font-weight: 700;
-  letter-spacing: 0.09em;
+  color: var(--text-muted);
+  font-size: 0.625rem;
+  font-weight: 650;
+  letter-spacing: 0.075em;
   text-transform: uppercase;
 }
 
@@ -4157,9 +4193,13 @@ th[aria-sort="descending"] .sort-chevron {
   background: var(--surface-2);
   box-shadow: none;
   color: var(--text-muted);
-  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  /* A keycap is a key, not code: the editor has no mono family, so the hint
+     keeps the system sans and borrows its cap look from the frame and the
+     tracking instead of from a second typeface. */
+  font-family: inherit;
   font-size: 0.625rem;
-  font-weight: 500;
+  font-weight: 600;
+  letter-spacing: 0.04em;
   line-height: 1;
 }
 
@@ -4208,6 +4248,10 @@ th[aria-sort="descending"] .sort-chevron {
   border-radius: var(--radius-md);
   border: 1px solid var(--border-control);
   background: var(--surface);
+  /* A form control does not inherit `color`, so without this the rail's query
+     renders in the UA's pure black — the one cold dark in a paper world. */
+  color: var(--text);
+  caret-color: var(--accent);
   font-size: 0.86rem;
 }
 
@@ -4477,9 +4521,9 @@ th[aria-sort="descending"] .sort-chevron {
 .table-columns-menu-heading {
   margin: 2px 8px 6px;
   color: var(--text-muted);
-  font-size: 0.7rem;
-  font-weight: 800;
-  letter-spacing: 0.08em;
+  font-size: 0.625rem;
+  font-weight: 650;
+  letter-spacing: 0.075em;
   text-transform: uppercase;
 }
 
@@ -4578,7 +4622,10 @@ th[aria-sort="descending"] .sort-chevron {
   margin: 8px 0 0;
   padding: 0;
   color: var(--text-muted);
-  font-size: 0.78rem;
+  /* Meta chrome sits one step under the rail's 12px hint text: it reports on
+     the table rather than acting on it, and leaving the footer at 12px keeps
+     the 46px rows the screen's only large type. */
+  font-size: 0.75rem;
   line-height: 1.5;
   white-space: nowrap;
 }
@@ -4589,6 +4636,9 @@ th[aria-sort="descending"] .sort-chevron {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  /* The counts change on every keystroke in the filter field; tabular digits
+     keep the summary from shuffling its words as the result set narrows. */
+  font-variant-numeric: tabular-nums;
 }
 
 .table-footer-right {
