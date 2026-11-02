@@ -1,44 +1,21 @@
-import { Fragment, useEffect, useId } from "react";
-import { createPortal } from "react-dom";
-import { useAnchoredPopover } from "../lib/useAnchoredPopover.js";
+import { AnchoredPopover } from "./AnchoredPopover.jsx";
 
 // The field picker inside the table's filter bar. It reads as a small pill in
 // the field, but opens a menu instead of the native <select> so the arrow,
-// type scale and selected state match the rest of the toolbar.
+// type scale and selected state match the rest of the toolbar. The shared
+// popover shell owns Escape, dismissal and positioning; this file owns the
+// menu's roving focus.
 export function FilterFieldMenu({ onChange, options, value }) {
-  const { buttonRef, menuRef, open, position, setOpen } = useAnchoredPopover();
-  const menuId = useId();
   const current = options.find((option) => option.key === value);
 
-  useEffect(() => {
-    if (!open) {
-      return;
-    }
-
-    // Land keyboard focus on the checked field, so arrows move from the
-    // current choice rather than the top of the list.
-    const checked = menuRef.current?.querySelector(
-      '[role="menuitemradio"][aria-checked="true"]',
-    );
-    (checked ?? menuRef.current)?.focus();
-  }, [menuRef, open]);
-
-  function closeMenu({ returnFocus = false } = {}) {
-    setOpen(false);
-
-    if (returnFocus) {
-      buttonRef.current?.focus();
-    }
-  }
-
-  function fields() {
+  function choices(panel) {
     return Array.from(
-      menuRef.current?.querySelectorAll('[role="menuitemradio"]') ?? [],
+      panel?.querySelectorAll('[role="menuitemradio"]') ?? [],
     );
   }
 
-  function moveFocus(event, offset) {
-    const items = fields();
+  function moveFocus(event, panel, offset) {
+    const items = choices(panel);
 
     if (!items.length) {
       return;
@@ -51,29 +28,23 @@ export function FilterFieldMenu({ onChange, options, value }) {
     items[nextIndex].focus();
   }
 
-  function handleMenuKeyDown(event) {
+  function handleMenuKeyDown(event, panel) {
     switch (event.key) {
-      case "Escape":
-        event.preventDefault();
-        event.stopPropagation();
-        closeMenu({ returnFocus: true });
-        break;
       case "ArrowDown":
-        moveFocus(event, 1);
+        moveFocus(event, panel, 1);
         break;
       case "ArrowUp":
-        moveFocus(event, -1);
+        moveFocus(event, panel, -1);
         break;
-      case "Home": {
+      case "Home":
         event.preventDefault();
         event.stopPropagation();
-        fields()[0]?.focus();
+        choices(panel)[0]?.focus();
         break;
-      }
       case "End": {
         event.preventDefault();
         event.stopPropagation();
-        const items = fields();
+        const items = choices(panel);
         items[items.length - 1]?.focus();
         break;
       }
@@ -82,81 +53,62 @@ export function FilterFieldMenu({ onChange, options, value }) {
     }
   }
 
-  function handleMenuBlur(event) {
-    // Tabbing out of the menu closes it; focus moving between its options
-    // stays inside.
-    if (menuRef.current?.contains(event.relatedTarget)) {
-      return;
-    }
-
-    setOpen(false);
-  }
-
-  function choose(key) {
-    setOpen(false);
-    onChange(key);
-  }
-
   return (
-    <Fragment>
-      <button
-        aria-controls={open ? menuId : undefined}
-        aria-expanded={open}
-        aria-haspopup="menu"
-        aria-label={`Filter field: ${current?.label ?? "All fields"}`}
-        className={`table-filter-field${open ? " table-filter-field--open" : ""}`}
-        onClick={() => setOpen((currentOpen) => !currentOpen)}
-        ref={buttonRef}
-        type="button"
-      >
-        <span className="table-filter-field-label">
-          {current?.label ?? "All fields"}
-        </span>
-        <svg
-          aria-hidden="true"
-          fill="none"
-          focusable="false"
-          stroke="currentColor"
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          strokeWidth="2.4"
-          viewBox="0 0 24 24"
+    <AnchoredPopover
+      className="table-filter-menu"
+      // Land keyboard focus on the checked field, so arrows move from the
+      // current choice rather than the top of the list.
+      initialFocus={(panel) =>
+        panel.querySelector('[role="menuitemradio"][aria-checked="true"]')
+      }
+      panelLabel="Filter field"
+      onKeyDown={handleMenuKeyDown}
+      renderTrigger={({ open, triggerProps }) => (
+        <button
+          {...triggerProps}
+          aria-label={`Filter field: ${current?.label ?? "All fields"}`}
+          className={`table-filter-field${open ? " table-filter-field--open" : ""}`}
+          type="button"
         >
-          <path d="m6 9 6 6 6-6" />
-        </svg>
-      </button>
-      {open
-        ? createPortal(
-            <div
-              aria-label="Filter field"
-              className="table-filter-menu"
-              id={menuId}
-              onBlur={handleMenuBlur}
-              onKeyDown={handleMenuKeyDown}
-              ref={menuRef}
-              role="menu"
-              style={{
-                left: position?.left ?? 0,
-                top: position?.top ?? 0,
+          <span className="table-filter-field-label">
+            {current?.label ?? "All fields"}
+          </span>
+          <svg
+            aria-hidden="true"
+            fill="none"
+            focusable="false"
+            stroke="currentColor"
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth="2.4"
+            viewBox="0 0 24 24"
+          >
+            <path d="m6 9 6 6 6-6" />
+          </svg>
+        </button>
+      )}
+      role="menu"
+    >
+      {({ close }) => (
+        <>
+          <p className="table-filter-menu-heading">Filter field</p>
+          {options.map((option) => (
+            <button
+              aria-checked={option.key === value}
+              className="table-filter-menu-item"
+              key={option.key}
+              onClick={() => {
+                close();
+                onChange(option.key);
               }}
+              role="menuitemradio"
+              type="button"
             >
-              <p className="table-filter-menu-heading">Filter field</p>
-              {options.map((option) => (
-                <button
-                  aria-checked={option.key === value}
-                  className="table-filter-menu-item"
-                  key={option.key}
-                  onClick={() => choose(option.key)}
-                  role="menuitemradio"
-                  type="button"
-                >
-                  {option.label}
-                </button>
-              ))}
-            </div>,
-            document.body,
-          )
-        : null}
-    </Fragment>
+              {option.label}
+            </button>
+          ))}
+        </>
+      )}
+    </AnchoredPopover>
   );
 }
