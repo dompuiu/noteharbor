@@ -1530,4 +1530,17 @@ describe("catalog header", () => {
     expect(title[1]).toMatch(/font-weight:\s*650/);
     expect(title[1]).toMatch(/letter-spacing:\s*-0\.01em/);
   });
+
+  // The rename control overhangs the content edge by 4px and every focus ring
+  // is painted 3px outside the box. The screen clips at the content edge, so
+  // the ring was cut off on the left. The screen and its wrappers hand that
+  // band back instead, which keeps the layout where it was.
+  test("the page head leaves room for the title's focus ring", () => {
+    const clip = styles.match(
+      /\.collection-screen,\s*\.collection-screen > \.screen-stack,\s*\.collection-screen \.screen-body\s*\{([^}]*)\}/,
+    );
+    expect(clip).not.toBeNull();
+    expect(clip[1]).toMatch(/padding-inline:\s*8px/);
+    expect(clip[1]).toMatch(/margin-inline:\s*-8px/);
+  });
 });

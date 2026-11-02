@@ -2660,6 +2660,19 @@ input[type="radio"] {
   outline-offset: 1px;
 }
 
+/* The rename control overhangs the content edge by the 4px that keep the hover
+   pill off the glyphs, and every focus ring in the app is painted outside its
+   box, 3px further out. The page head sits on the clipped edge of the screen,
+   so both the overhang and the ring were cropped there. The screen, its stack
+   and its body each hand that band back to the page: the content box does not
+   move, only the edge the three of them clip at. */
+.collection-screen,
+.collection-screen > .screen-stack,
+.collection-screen .screen-body {
+  padding-inline: 8px;
+  margin-inline: -8px;
+}
+
 
 
 .collection-rename-form {
