@@ -12,6 +12,7 @@ pub mod ops;
 pub mod routes;
 pub mod scrape;
 pub mod showcases;
+pub mod write_gate;
 
 use std::{
     env,
@@ -20,12 +21,14 @@ use std::{
         Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
+    time::Duration,
 };
 
 use axum::{
     Json, Router,
     extract::{DefaultBodyLimit, State},
-    http::StatusCode,
+    http::{Method, StatusCode},
+    middleware::Next,
     response::IntoResponse,
     routing::get,
 };
@@ -34,10 +37,13 @@ use tower_http::{cors::CorsLayer, limit::RequestBodyLimitLayer};
 
 pub use db::DbPool;
 use ops::OperationState;
+use write_gate::WriteGate;
 
 pub const DEFAULT_HOST: &str = "127.0.0.1";
 /// Dev default: the Rust server listens on `:3002`.
 pub const DEFAULT_PORT: u16 = 3002;
+/// How long a mutating request waits for another Editor instance's write.
+pub const DEFAULT_WRITE_GATE_TIMEOUT: Duration = Duration::from_secs(5);
 /// `ROOT_DIR` depth: the crate manifest sits at `apps/editor/server-rust/`,
 /// so `../../..` lands on the repo root.
 pub const DEFAULT_WEB_DIST_DIR: &str = "apps/editor/ui-react/dist";
@@ -47,6 +53,9 @@ pub const DEFAULT_DATA_DIR: &str = "data";
 pub struct ServerConfig {
     pub host: String,
     pub port: u16,
+    /// `true` when `PORT` came from the environment. An explicit port never
+    /// falls back to an ephemeral one, so pinned tooling keeps failing loudly.
+    pub port_explicit: bool,
     pub web_dist_dir: PathBuf,
     pub serve_web_dist: bool,
     pub data_dir: PathBuf,
@@ -80,12 +89,13 @@ impl ServerConfig {
         let data_dir = env::var("NOTE_HARBOR_DATA_DIR")
             .map(PathBuf::from)
             .unwrap_or_else(|_| Self::default_data_dir());
+        let port = env::var("PORT")
+            .ok()
+            .and_then(|raw| raw.trim().parse().ok());
         Self {
             host: env::var("HOST").unwrap_or_else(|_| DEFAULT_HOST.to_owned()),
-            port: env::var("PORT")
-                .ok()
-                .and_then(|raw| raw.parse().ok())
-                .unwrap_or(DEFAULT_PORT),
+            port: port.unwrap_or(DEFAULT_PORT),
+            port_explicit: port.is_some(),
             serve_web_dist: Self::parse_bool(env::var("NOTE_HARBOR_SERVE_WEB_DIST").ok().as_deref()),
             web_dist_dir,
             data_dir,
@@ -94,6 +104,38 @@ impl ServerConfig {
 
     pub fn db_path(&self) -> PathBuf {
         db::default_db_path(&self.data_dir)
+    }
+
+    /// Waits for another Editor instance's write, then gives up. Zero or an
+    /// unparseable value keeps the default.
+    pub fn write_gate_timeout() -> Duration {
+        env::var("NOTE_HARBOR_WRITE_GATE_TIMEOUT_MS")
+            .ok()
+            .and_then(|raw| raw.trim().parse::<u64>().ok())
+            .filter(|millis| *millis > 0)
+            .map(Duration::from_millis)
+            .unwrap_or(DEFAULT_WRITE_GATE_TIMEOUT)
+    }
+}
+
+/// Binds the configured address. When `PORT` was not pinned and the default
+/// port belongs to another instance (a second worktree's dev server), falls
+/// back to an ephemeral port instead of refusing to start; callers learn the
+/// real port from the listener. The Tauri shell binds `PORT=0` itself and is
+/// unaffected.
+pub async fn bind_listener(config: &ServerConfig) -> Result<tokio::net::TcpListener, String> {
+    match tokio::net::TcpListener::bind((config.host.as_str(), config.port)).await {
+        Ok(listener) => Ok(listener),
+        Err(error) if error.kind() == std::io::ErrorKind::AddrInUse && !config.port_explicit => {
+            eprintln!(
+                "port {} is busy; binding an ephemeral port instead",
+                config.port
+            );
+            tokio::net::TcpListener::bind((config.host.as_str(), 0))
+                .await
+                .map_err(|error| format!("cannot bind server socket: {error}"))
+        }
+        Err(error) => Err(format!("cannot bind server socket: {error}")),
     }
 }
 
@@ -107,6 +149,10 @@ pub struct AppState {
     pub data_dir: PathBuf,
     pub pool: DbPool,
     pub ops: Arc<Mutex<OperationState>>,
+    /// Serializes mutating requests against other Editor instances sharing the
+    /// same data directory.
+    pub write_gate: WriteGate,
+    pub write_gate_timeout: Duration,
     /// Kill-switch ANDed with the real `SELECT 1` probe: the Tauri shell can
     /// fence the database during copy/swap, and tests flip it to cover both
     /// outcomes without breaking a real database.
@@ -115,11 +161,14 @@ pub struct AppState {
 
 impl AppState {
     pub fn new(static_root: Option<PathBuf>, data_dir: PathBuf, pool: DbPool) -> Self {
+        let write_gate = WriteGate::new(&data_dir);
         Self {
             static_root,
             data_dir,
             pool,
             ops: Arc::new(Mutex::new(OperationState::default())),
+            write_gate,
+            write_gate_timeout: ServerConfig::write_gate_timeout(),
             db_available: Arc::new(AtomicBool::new(true)),
         }
     }
@@ -267,6 +316,10 @@ pub const IMPORT_BODY_LIMIT: usize = archive::MAX_ARCHIVE_UPLOAD_BYTES as usize 
 /// still fires first for genuinely oversize files.
 pub const NOTES_BODY_LIMIT: usize = crate::notes::MAX_IMAGE_BYTES * 4 + 2 * 1024 * 1024;
 
+/// POST routes that only read: scraping drives a browser and can run for
+/// minutes, so it must not hold the write gate.
+const UNGATED_POST_ROUTES: &[&str] = &["/api/scrape/preview"];
+
 pub fn create_app(state: AppState) -> Router {
     // Limits are per-router: the import streams multi-gigabyte uploads to
     // disk and notes accept up to four 15 MB images, while everything else
@@ -298,7 +351,40 @@ pub fn create_app(state: AppState) -> Router {
         .merge(import)
         .fallback(fallback_handler)
         .layer(CorsLayer::permissive())
+        .layer(axum::middleware::from_fn_with_state(
+            state.clone(),
+            write_gate_layer,
+        ))
         .with_state(state)
+}
+
+/// Mutating requests take the cross-process write gate; reads never wait.
+async fn write_gate_layer(
+    State(state): State<AppState>,
+    request: axum::extract::Request,
+    next: Next,
+) -> axum::response::Response {
+    let gated = matches!(
+        *request.method(),
+        Method::POST | Method::PUT | Method::PATCH | Method::DELETE
+    ) && !UNGATED_POST_ROUTES.contains(&request.uri().path());
+    if !gated {
+        return next.run(request).await;
+    }
+    match state.write_gate.acquire(state.write_gate_timeout).await {
+        Ok(guard) => {
+            let response = next.run(request).await;
+            drop(guard);
+            response
+        }
+        Err(error) => {
+            eprintln!("write gate: {error}");
+            json_error(
+                StatusCode::CONFLICT,
+                "Another Note Harbor instance is writing to this data directory. Retry when it finishes.",
+            )
+        }
+    }
 }
 
 fn json_error(status: StatusCode, message: &str) -> axum::response::Response {
@@ -413,6 +499,7 @@ mod tests {
             ServerConfig {
                 host: DEFAULT_HOST.to_owned(),
                 port: DEFAULT_PORT,
+                port_explicit: false,
                 web_dist_dir: PathBuf::from("/x"),
                 serve_web_dist: false,
                 data_dir: dir.clone(),
@@ -515,5 +602,38 @@ mod tests {
             .into_response();
             assert_eq!(clamped.status(), StatusCode::INTERNAL_SERVER_ERROR);
         }
+    }
+
+    fn config_for_port(port: u16, port_explicit: bool) -> ServerConfig {
+        ServerConfig {
+            host: DEFAULT_HOST.to_owned(),
+            port,
+            port_explicit,
+            web_dist_dir: PathBuf::from("/x"),
+            serve_web_dist: false,
+            data_dir: PathBuf::from("/x"),
+        }
+    }
+
+    #[tokio::test]
+    async fn busy_default_port_falls_back_to_an_ephemeral_port() {
+        let occupied = std::net::TcpListener::bind((DEFAULT_HOST, 0)).expect("test port binds");
+        let port = occupied.local_addr().expect("test port reads").port();
+
+        let listener = bind_listener(&config_for_port(port, false))
+            .await
+            .expect("falls back instead of failing");
+        assert_ne!(listener.local_addr().unwrap().port(), port);
+    }
+
+    #[tokio::test]
+    async fn busy_explicit_port_fails_instead_of_falling_back() {
+        let occupied = std::net::TcpListener::bind((DEFAULT_HOST, 0)).expect("test port binds");
+        let port = occupied.local_addr().expect("test port reads").port();
+
+        let error = bind_listener(&config_for_port(port, true))
+            .await
+            .expect_err("an explicit PORT never moves");
+        assert!(error.contains("cannot bind server socket"), "{error}");
     }
 }

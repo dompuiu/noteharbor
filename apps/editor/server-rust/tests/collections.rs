@@ -18,7 +18,10 @@ use editor_server_rust::{
 
 fn test_state(db_path: &std::path::Path) -> AppState {
     let pool: DbPool = db::open_pool(db_path).expect("pool opens");
-    AppState::test(pool, std::path::PathBuf::from("/nonexistent-data"))
+    // The write gate keys its lock file off the data dir, so tests must not
+    // share one path.
+    let data_dir = db_path.parent().expect("db has a parent").to_path_buf();
+    AppState::test(pool, data_dir)
 }
 
 fn fresh_state() -> (tempfile::TempDir, AppState) {
@@ -342,4 +345,44 @@ async fn health_answers_through_a_real_pool() {
     let (status, body) = call(create_app(state), "GET", "/api/health", None).await;
     assert_eq!(status, StatusCode::OK);
     assert_eq!(body, json!({ "ok": true }));
+}
+
+#[tokio::test]
+async fn mutating_requests_wait_for_another_instances_write() {
+    use std::time::Duration;
+
+    use editor_server_rust::write_gate::WriteGate;
+
+    let (dir, mut state) = fresh_state();
+    state.write_gate_timeout = Duration::from_millis(50);
+
+    // A second Editor instance sharing the same data dir holds the gate.
+    let other = WriteGate::new(dir.path());
+    let held = other
+        .acquire(Duration::from_millis(50))
+        .await
+        .expect("other instance takes the gate");
+
+    let (status, body) = call(
+        create_app(state.clone()),
+        "POST",
+        "/api/collections",
+        Some(json!({ "name": "blocked" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CONFLICT, "{body}");
+
+    // Reads never wait.
+    let (status, _) = call(create_app(state.clone()), "GET", "/api/collections", None).await;
+    assert_eq!(status, StatusCode::OK);
+
+    drop(held);
+    let (status, _) = call(
+        create_app(state),
+        "POST",
+        "/api/collections",
+        Some(json!({ "name": "allowed" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::CREATED);
 }

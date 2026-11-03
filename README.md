@@ -32,7 +32,7 @@ Local data (SQLite DB + images) lives in `data/` by default; see [Environment va
 sh scripts/install-hooks.sh
 ```
 
-The primary checkout must already have `data/`. Only run one editor server at a time: they all write the same SQLite file.
+The primary checkout must already have `data/`. Several Editor instances may share it: mutating requests take a cross-process write gate, so writes serialize instead of colliding, while reads stay parallel. The gate is per machine — don't point instances on different computers at one synced folder.
 
 For current file-level structure, browse the repo directly rather than relying on a tree snapshot here.
 
@@ -61,8 +61,10 @@ pnpm dev
 
 This starts:
 
-- the Rust API at `http://127.0.0.1:3002`
-- the Vite app at `http://localhost:5173` (proxies `/api` to the Rust API)
+- the Rust API on `http://127.0.0.1:3002`, or on an ephemeral port when 3002 is already taken (the bound port is printed)
+- the Vite app on `http://localhost:5173` (or the next free port), proxying `/api` to the port the API actually bound
+
+`scripts/dev.mjs` reads the bound port from the server output and passes it to Vite, so parallel worktrees don't fight over ports. A mutating request that loses the cross-process write gate answers `409` until the other instance's write finishes.
 
 ### Use a Windows Chrome from WSL via CDP
 
@@ -180,8 +182,9 @@ Set these environment variables to override defaults.
 | Variable | Default | Description |
 |---|---|---|
 | `HOST` | `127.0.0.1` | API bind host |
-| `PORT` | `3002` | API bind port |
+| `PORT` | `3002` | API bind port; an explicitly set value fails instead of falling back when taken |
 | `NOTE_HARBOR_API_PORT` | `PORT` or `3002` | Vite dev `/api` proxy target port |
+| `NOTE_HARBOR_WRITE_GATE_TIMEOUT_MS` | `5000` | How long a mutating request waits for another Editor instance before answering `409` |
 | `NOTE_HARBOR_BROWSER_CDP_URL` | `http://localhost:9222` | CDP endpoint for the browser that already has the target page open |
 | `NOTE_HARBOR_DATA_DIR` | `data` | Root data directory containing `banknotes.db` and `images/` |
 | `NOTE_HARBOR_WEB_DIST_DIR` | `apps/editor/ui-react/dist` | Static web build served by the Rust server |

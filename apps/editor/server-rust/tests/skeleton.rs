@@ -25,6 +25,8 @@ fn live_state() -> (tempfile::TempDir, AppState) {
         data_dir: dir.path().to_path_buf(),
         pool,
         ops: Arc::new(Mutex::new(editor_server_rust::ops::OperationState::default())),
+        write_gate: editor_server_rust::write_gate::WriteGate::new(dir.path()),
+        write_gate_timeout: std::time::Duration::from_secs(5),
         db_available: Arc::new(AtomicBool::new(true)),
     };
     (dir, state)
@@ -144,6 +146,8 @@ async fn api_like_prefix_is_an_spa_route() {
         data_dir: dir.path().to_path_buf(),
         pool,
         ops: Arc::new(Mutex::new(editor_server_rust::ops::OperationState::default())),
+        write_gate: editor_server_rust::write_gate::WriteGate::new(dir.path()),
+        write_gate_timeout: std::time::Duration::from_secs(5),
         db_available: std::sync::Arc::new(std::sync::atomic::AtomicBool::new(true)),
     };
 
@@ -164,6 +168,8 @@ fn serving_state(dir: &tempfile::TempDir) -> (tempfile::TempDir, AppState) {
         data_dir: dir.path().to_path_buf(),
         pool,
         ops: Arc::new(Mutex::new(editor_server_rust::ops::OperationState::default())),
+        write_gate: editor_server_rust::write_gate::WriteGate::new(dir.path()),
+        write_gate_timeout: std::time::Duration::from_secs(5),
         db_available: Arc::new(AtomicBool::new(true)),
     };
     (pool_dir, state)

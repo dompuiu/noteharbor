@@ -26,9 +26,13 @@ async fn main() {
     let state = AppState::new(static_root, data_dir, pool);
     let app = create_app(state);
 
-    let listener = tokio::net::TcpListener::bind((config.host.as_str(), config.port))
-        .await
-        .expect("bind server socket");
+    let listener = match editor_server_rust::bind_listener(&config).await {
+        Ok(listener) => listener,
+        Err(error) => {
+            eprintln!("{error}");
+            std::process::exit(1);
+        }
+    };
     let active_port = listener
         .local_addr()
         .map(|addr| addr.port())
