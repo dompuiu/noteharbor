@@ -2,13 +2,14 @@
 //!
 //! Asserts the `tauri.conf.json` bundle surface: explicit `nsis` + `appimage`
 //! targets, `Utility` category, full icon set (no symlink placeholder),
-//! `data` + `web-dist` resources matching the runtime layouts in
-//! `paths.rs`, and per-user-or-machine NSIS installs
-//! (`oneClick: false` + `allowToChangeInstallationDirectory: true` parity).
+//! the `web-dist` resource matching the runtime layout in `paths.rs`, and
+//! per-user-or-machine NSIS installs (`oneClick: false` +
+//! `allowToChangeInstallationDirectory: true` parity).
 //!
-//! Source paths (`../../../../data`, `../../ui-react/dist`) are
-//! intentionally NOT asserted for existence: both are gitignored build
-//! inputs that only exist after a seed/dev build or `beforeBuildCommand`.
+//! `data` is deliberately NOT bundled (`8150d52`): the shell seeds the
+//! user's data dir on first run instead. The source path (`../../ui-react/dist`)
+//! is intentionally NOT asserted for existence: it is a gitignored build
+//! input that only exists after a seed/dev build or `beforeBuildCommand`.
 
 use std::path::PathBuf;
 
@@ -140,7 +141,7 @@ fn bundle_icons_are_committed_real_files() {
 }
 
 #[test]
-fn bundle_resources_map_to_data_and_web_dist() {
+fn bundle_resources_map_to_web_dist() {
     let resources = bundle(&load_config())
         .get("resources")
         .expect("bundle.resources is set")
@@ -149,12 +150,13 @@ fn bundle_resources_map_to_data_and_web_dist() {
         serde_json::from_value(resources).expect("bundle.resources is a source->target map");
     let targets: Vec<&str> = map.values().map(String::as_str).collect();
     assert!(
-        targets.contains(&"data"),
-        "resources must map a source to the \"data\" target (paths.rs data layout), got {targets:?}",
-    );
-    assert!(
         targets.contains(&"web-dist"),
         "resources must map the built UI to the \"web-dist\" target (paths.rs packaged layout), got {targets:?}",
+    );
+    assert!(
+        !targets.contains(&"data"),
+        "the installer must not embed the data dir (8150d52): the shell seeds the \
+         user's data dir on first run, got {targets:?}",
     );
 }
 
