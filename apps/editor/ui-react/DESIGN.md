@@ -1,68 +1,70 @@
 ---
 name: Note Harbor Editor
-description: Warm, paper-toned local collection software for banknote archives
+description: Red, ink, and white collection software for banknote archives
 colors:
-  harbor-paper: "#f3ecdf"
-  shell-cream: "#fffaf1"
-  sand-panel: "#faf4e8"
-  header-sand: "#efe5d2"
-  rail-handle: "#e5d8c0"
-  walnut-ink: "#2e2318"
-  umber: "#6f5c40"
-  faded-umber: "#7a6749"
-  harbor-brass: "#96622f"
-  deep-brass: "#71461f"
-  soft-brass: "#f6e7d2"
-  harbor-green: "#2f6b3c"
-  signal-red: "#a02a22"
-  amber-warning: "#8a5a00"
-  slate-info: "#40667c"
-  night-harbor: "#201913"
-  night-surface: "#2a2118"
-  warm-linen: "#f7ecdc"
-  brass-on-dark: "#e0aa62"
+  brand-red: "#e60000"
+  brand-red-deep: "#b80000"
+  ink: "#25282b"
+  body: "#5f6367"
+  body-faint: "#6e7276"
+  canvas: "#ffffff"
+  canvas-soft: "#f2f2f2"
+  canvas-mist: "#f7f7f7"
+  canvas-step: "#e6e6e6"
+  on-dark: "#ffffff"
+  danger: "#a30000"
+  success: "#157a3a"
+  warning: "#7a4f00"
+  info: "#29597a"
 typography:
+  display:
+    fontFamily: "Inter, Helvetica Neue, Helvetica, Arial, Noto Sans, sans-serif"
+    fontSize: "1.3125rem"
+    fontWeight: 800
+    lineHeight: 1.5
+    letterSpacing: "-0.01em"
   title:
-    fontFamily: "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Inter, \"Helvetica Neue\", Arial, sans-serif"
+    fontFamily: "Inter, Helvetica Neue, Helvetica, Arial, Noto Sans, sans-serif"
     fontSize: "1.4rem"
-    fontWeight: 700
+    fontWeight: 800
     lineHeight: 1.3
+    letterSpacing: "-0.01em"
   body:
-    fontFamily: "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Inter, \"Helvetica Neue\", Arial, sans-serif"
+    fontFamily: "Inter, Helvetica Neue, Helvetica, Arial, Noto Sans, sans-serif"
     fontSize: "0.875rem"
     fontWeight: 400
     lineHeight: 1.5
   data:
-    fontFamily: "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Inter, \"Helvetica Neue\", Arial, sans-serif"
+    fontFamily: "Inter, Helvetica Neue, Helvetica, Arial, Noto Sans, sans-serif"
     fontSize: "13.5px"
     fontWeight: 400
     lineHeight: 1.5
   code:
-    fontFamily: "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Inter, \"Helvetica Neue\", Arial, sans-serif"
+    fontFamily: "Inter, Helvetica Neue, Helvetica, Arial, Noto Sans, sans-serif"
     fontSize: "13px"
     fontWeight: 500
     letterSpacing: "0.045em"
   meta:
-    fontFamily: "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Inter, \"Helvetica Neue\", Arial, sans-serif"
+    fontFamily: "Inter, Helvetica Neue, Helvetica, Arial, Noto Sans, sans-serif"
     fontSize: "0.75rem"
     fontWeight: 400
     lineHeight: 1.5
   label:
-    fontFamily: "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Inter, \"Helvetica Neue\", Arial, sans-serif"
+    fontFamily: "Inter, Helvetica Neue, Helvetica, Arial, Noto Sans, sans-serif"
     fontSize: "0.6875rem"
-    fontWeight: 650
-    letterSpacing: "0.075em"
+    fontWeight: 700
+    letterSpacing: "0.08em"
   wordmark:
-    fontFamily: "-apple-system, BlinkMacSystemFont, \"Segoe UI\", Inter, \"Helvetica Neue\", Arial, sans-serif"
+    fontFamily: "Inter, Helvetica Neue, Helvetica, Arial, Noto Sans, sans-serif"
     fontSize: "13.5px"
     fontWeight: 800
     letterSpacing: "-0.01em"
 rounded:
   sm: "8px"
-  md: "10px"
-  lg: "16px"
-  xl: "20px"
-  pill: "999px"
+  md: "6px"
+  control: "10px"
+  card: "6px"
+  pill: "100px"
 spacing:
   xs: "4px"
   sm: "8px"
@@ -72,195 +74,212 @@ spacing:
   section: "32px"
 components:
   button-default:
-    backgroundColor: "{colors.shell-cream}"
-    textColor: "{colors.walnut-ink}"
-    rounded: "{rounded.md}"
-    padding: "6px 12px"
-    height: "34px"
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    borderColor: "{colors.ink}"
+    rounded: "{rounded.pill}"
+    padding: "6px 18px"
+    height: "36px"
   button-primary:
-    backgroundColor: "{colors.deep-brass}"
-    textColor: "{colors.shell-cream}"
-    rounded: "{rounded.md}"
-    padding: "6px 12px"
-    height: "34px"
+    backgroundColor: "{colors.brand-red}"
+    textColor: "{colors.on-dark}"
+    borderColor: "{colors.brand-red}"
+    rounded: "{rounded.pill}"
+    padding: "6px 18px"
+    height: "36px"
   button-danger:
-    backgroundColor: "{colors.signal-red}"
-    textColor: "{colors.shell-cream}"
-    rounded: "{rounded.md}"
-    padding: "6px 12px"
-    height: "34px"
+    backgroundColor: "{colors.danger}"
+    textColor: "{colors.on-dark}"
+    rounded: "{rounded.pill}"
+    padding: "6px 18px"
+    height: "36px"
   filter-input:
-    backgroundColor: "{colors.shell-cream}"
-    textColor: "{colors.walnut-ink}"
-    rounded: "{rounded.md}"
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    borderColor: "{colors.ink}"
+    rounded: "{rounded.control}"
     padding: "6px 10px"
     height: "34px"
   table-shell:
-    backgroundColor: "{colors.shell-cream}"
-    textColor: "{colors.walnut-ink}"
-    rounded: "{rounded.md}"
+    backgroundColor: "{colors.canvas}"
+    textColor: "{colors.ink}"
+    borderColor: "{colors.ink}"
+    rounded: "{rounded.card}"
     padding: "0"
+  nav-bar:
+    backgroundColor: "{colors.ink}"
+    textColor: "{colors.on-dark}"
+    rounded: "0"
+    padding: "0 12px"
+  badge-chip:
+    backgroundColor: "{colors.canvas-soft}"
+    textColor: "{colors.brand-red-deep}"
+    rounded: "7px"
+    padding: "2px 8px"
 ---
 
 # Design System: Note Harbor Editor
 
 ## Overview
 
-**Creative North Star: "The Curator's Desk"**
+**Creative North Star: "The Campaign Poster, Set to Work."**
 
-The Editor is a warm wooden desk under good light: cream paper, ink-brown text, and brass fittings. Every surface is tinted, never pure white, so a long cataloguing session reads as paper on a desk rather than a form on a screen. Color carries hierarchy sparingly — brass marks the active, the selected, and the primary action, and almost nothing else.
+The Editor takes a poster-scale brand language — red, near-black ink, white content bands, uppercase weight-800 display type, and pill controls — and turns it into a dense working surface for cataloguing banknotes. It is not a marketing page, so the poster voice appears where the app speaks to the user (screen titles, eyebrows, primary actions) and then gives way to white data bands, hairline grids, and quiet grey chrome.
 
-Structure is dense and quiet. The Table screen is the system's center of gravity: a single bordered card filling the viewport, a fixed 64px rail that expands on hover, compact 40px headers, and 12px cell padding tuned for scanning thousands of rows. Capture and Showcase screens reuse the same card, field, and button vocabulary at a lower density; nothing invents a second visual language.
+Three materials carry the whole system: **ink** (#25282b) as the navigation rail and dark overlay world, **white** (#ffffff) as the content and table surface, and **brand red** (#e60000) as the single accent. Red never becomes a background wash on the page; it marks the primary action, the active navigation edge, selection, focus, and the tags that need attention. Everything else is a neutral step on the white-to-grey ladder.
 
-The system has no logo-driven identity, no display face, and no decorative imagery. Personality comes from the warmth of the palette, the softness of the shadows, the rounded 8–20px geometry, and the precision of state changes. Restraint is the brief, not a limitation.
+Structure stays dense and quiet. The Table screen is the centre of gravity: one bordered white card filling the viewport, a fixed 64px ink rail that expands on hover, compact 40px headers, and 12px cell padding tuned for scanning hundreds of rows. Capture, Import, and Showcase screens reuse the same card, field, and pill vocabulary at a lower density.
 
 **Key Characteristics:**
-- Warm paper neutrals (#f3ecdf → #fffaf1 → #efe5d2), never cold grey or pure white.
-- One brass accent (#96622f / #71461f) used for state, selection, and primary action only.
-- A single system sans across every role; hierarchy from size, weight, and letter-spacing.
-- Dense, viewport-filling cards with 1px warm borders and soft, low-contrast shadows.
-- Rounded geometry: 8–10px controls, 16–20px panels, pill-shaped bars and counters.
+- One accent: `{colors.brand-red}` (#e60000). Filled pills for the primary action, outline pills for secondary actions, red text for links and active state.
+- Two-band polarity: ink navigation and overlay surfaces against white content. No warm greys, no pure black, no second accent hue.
+- Uppercase weight-800 display type with tight tracking for screen titles and eyebrows; sentence case for the calm secondary voice.
+- Pill geometry on every button and counter (100px), a 10px step on fields and selects, and a 7px rounded rectangle on filter chips and tags. Cards stay flat at 6px.
+- Flat at rest: cards carry no shadow; only floating chrome (menus, dialogs, the expanded rail) lifts.
 
 ## Colors
 
-A warm parchment-and-brass palette with four muted status hues, all low-chroma so data stays legible.
+### Brand & Accent
+- **Brand Red** (`{colors.brand-red}` — `#e60000`): The single accent. Primary button fill, active sidebar edge, focus ring, selected-row edge, tag chips, and the bulk-action bar. It clears 4.5:1 against white, so white button labels stay legible.
+- **Deep Red** (`{colors.brand-red-deep}` — `#b80000`): Red type on white — links, active filter values, sort labels, tag text, and the primary button's hover fill.
 
-### Primary
-- **Harbor Brass** (#96622f): The single accent. Focus rings, selected rows' edge, active sort labels, links, scrollbar hover, and the fill of the hover halo on checkboxes.
-- **Deep Brass** (#71461f): The action color. Primary buttons, the bulk action pill, and emphasized links; darker than Harbor Brass so cream text clears contrast.
-- **Soft Brass Wash** (rgba(150, 98, 47, 0.12)): Tinted grounds for hovered controls, active segments, and the selected-row field. The zebra stripe is the same hue at 0.05.
-- **Brass on Dark** (#e0aa62): The accent's only appearance in the slideshow and overlay world, where the paper palette inverts.
+### Surface
+- **Canvas** (`{colors.canvas}` — `#ffffff`): Cards, inputs, menus, and the table surface.
+- **Canvas Soft** (`{colors.canvas-soft}` — `#f2f2f2`): The application ground, table header band, and quiet panels.
+- **Canvas Mist** (`{colors.canvas-mist}` — `#f7f7f7`): The filter rail and secondary panel fills.
+- **Canvas Step** (`{colors.canvas-step}` — `#e6e6e6`): The deepest neutral step, used for the drag handle's hover.
+- **Ink** (`{colors.ink}` — `#25282b`): The left navigation rail, footer band, and overlay world. Doubles as the primary text colour.
 
-### Neutral
-- **Harbor Paper** (#f3ecdf): The app ground behind every card.
-- **Shell Cream** (#fffaf1): Card and control surfaces; the lightest ground in the paper world.
-- **Sand Panel** (#faf4e8): Secondary panels and striped sections.
-- **Header Sand** (#efe5d2): Table headers and the one-step-darker band that separates chrome from content.
-- **Rail Handle** (#e5d8c0): The deepest paper step, reserved for the reorder rail's hover.
-- **Walnut Ink** (#2e2318): Primary text.
-- **Umber** (#6f5c40): Secondary text, labels, and inactive navigation; measured to clear 4.5:1 on every paper ground.
-- **Faded Umber** (#7a6749): Tertiary text such as the pinned version and group labels.
-- **Night Harbor** (#201913): The overlay world's ground for slideshow and image popovers, with Warm Linen (#f7ecdc) as its text.
+### Text
+- **Ink** (`{colors.ink}` — `#25282b`): Headings, table cells, field values.
+- **Body** (`{colors.body}` — `#5f6367`): Secondary copy, labels, captions; clears 4.5:1 on every surface it sits on.
+- **Body Faint** (`{colors.body-faint}` — `#6e7276`): Tertiary metadata — row numbers, empty dashes, captions.
+- **On Dark** (`{colors.on-dark}` — `#ffffff`): Navigation labels, overlay content, and text on red.
 
-### Status
-- **Harbor Green** (#2f6b3c) on rgba(47, 107, 60, 0.1): Success and saved states.
-- **Signal Red** (#a02a22) on rgba(160, 42, 34, 0.08): Destructive actions and load errors.
-- **Amber Warning** (#8a5a00) on rgba(168, 132, 40, 0.12): Warnings and scrape conflicts.
-- **Slate Info** (#40667c) on rgba(64, 102, 124, 0.12): Informational callouts.
+### Semantic
+The brand has no separate semantic palette, but the Editor needs status. These three muted hues are the only exceptions to the red/ink/neutral rule, and each appears only inside a status chip or inline message:
+- **Danger** (`{colors.danger}` — `#a30000`) on `rgba(163, 0, 0, 0.08)`: destructive actions and load errors.
+- **Success** (`{colors.success}` — `#157a3a`) on `rgba(49, 162, 76, 0.12)`: saved / scraped states.
+- **Warning** (`{colors.warning}` — `#7a4f00`) on `rgba(247, 185, 40, 0.16)`: warnings and scrape conflicts.
+- **Info** (`{colors.info}` — `#29597a`) on `rgba(41, 89, 122, 0.12)`: informational callouts.
 
 ### Named Rules
-**The Warm Paper Rule.** No surface is pure white and no text is pure black. The lightest ground is Shell Cream (#fffaf1) and the darkest ink is Walnut Ink (#2e2318); a cold grey is always a bug.
+**The One Red Rule.** Red is state and action, never decoration. It covers at most about a tenth of any screen; its rarity is what makes the primary pill and the active edge read instantly.
 
-**The Brass Rarity Rule.** Brass covers at most about a tenth of any screen. Its rarity is what makes selection and the primary action read instantly.
+**The White Room Rule.** Content lives on white or on a grey step of the same neutral family. No warm cream, blue-grey, or second tinted neutral enters the page.
 
 ## Typography
 
 **Display Font:** none — the system uses no display face.
-**Body Font:** the native UI stack (`-apple-system, BlinkMacSystemFont, "Segoe UI", Inter, "Helvetica Neue", Arial, sans-serif`).
+**Body Font:** `Inter`, bundled as a local variable font at
+`public/fonts/InterVariable.ttf`, with `Helvetica Neue, Helvetica, Arial,
+"Noto Sans"` as the fallback chain. The same stack is used for data and labels.
 **Label/Mono Font:** the same stack, with `font-variant-numeric: tabular-nums` wherever numbers change in place.
 
-**Character:** One family, worked hard. The Editor borrows the operating system's own voice so it feels native on every desktop, then builds hierarchy from weight and case rather than from a second typeface. Table headers in particular become a texture: tiny, wide-tracked, uppercase.
+**Character:** A single sans worked hard. Inter is a close stand-in for the brand's display face and ships with the app, so the type never depends on what the host OS installs. Hierarchy is built from weight, size, case, and tracking, never from a second family.
 
 ### Hierarchy
-- **Title** (700, 1.4rem/1.3): Screen titles such as a Showcase Category name.
-- **Panel heading** (700, ~1.05–1.15rem): Card and panel headings; the largest recurring text in the Table and Import screens.
-- **Body** (400, 0.86–0.9rem/1.5): Field values and running copy.
-- **Data** (400, 13.5px): Table cell values, the dense step of Body. Every cell carries `tabular-nums`, and weight, not size, separates the row's roles — Catalog # and Denomination at 600, the rest at 400.
-- **Code** (500, 13px, 0.045em tracking): Serial numbers and other identifier strings in the Table, one step under Data so a long code never out-shouts the row's name.
-- **Control** (600, 0.84rem/1.2): Buttons, links, and tabs.
-- **Label** (650, 0.6875rem, 0.075em tracking, uppercase): Table and menu headers, in Umber so 11px caps clear 4.5:1 on the header band. Group labels sit at 9.5px/800 with 0.14em tracking.
-- **Meta** (400, 0.75rem/1.5, `tabular-nums`): The Table's footer summary and status lines, one step under the rail's 12px hint.
-- **Micro** (600–800, 11–13.5px): Version footers, counters, and the wordmark.
+- **Display** (800, 1.3125rem/1.5, `-0.01em`, uppercase): the collection / page title in the Table screen. The brand's billboard voice at the smallest size that still fits a dense header.
+- **Title** (800, 1.4rem/1.3, uppercase): Showcase Category titles and screen headings. Every top-level `h1` in a panel or screen body takes this voice.
+- **Panel heading** (700, ~1.05–1.15rem): card and panel headings that introduce a block rather than a screen.
+- **Body** (400, 0.86–0.9rem/1.5): field values and running copy.
+- **Data** (400, 13.5px): table cell values in a 45px row. Weight, not size, separates roles — Catalog # and Denomination at 600, the rest at 400.
+- **Code** (500, 13px, 0.045em tracking): serial numbers, one step under Data.
+- **Control** (600, 0.84rem/1.2): buttons, links, and tabs.
+- **Label** (700, 0.6875rem, 0.08em, uppercase): table and menu headers, in Body, so 11px caps clear 4.5:1 on the header band.
+- **Meta** (400, 0.75rem/1.5, tabular): the table's summary and status lines.
 
 ### Named Rules
-**The One Sans Rule.** Never introduce a display, serif, or mono family. Differences in weight, size, case, and tracking carry every distinction.
+**The Shout Then Speak Rule.** Screen titles and eyebrows shout — uppercase, weight 800, tight tracking. Supporting headings and running copy speak in sentence case. Never set body copy in the display voice.
 
-**The Tabular Rule.** Any number that can change in place — counters, positions, sizes — is set in `tabular-nums` so it never jitters.
+**The Tabular Rule.** Any number that changes in place — counters, positions, sizes — is set in `tabular-nums` so it never jitters.
 
 ## Layout
 
-A fixed, non-scrolling app shell: a left sidebar dock plus a main column that fills the remaining width and height. The dock is a 64px rail whose contents expand over the content to a max of 288px on hover or keyboard focus; it never becomes a drawer and never pushes the main column at narrow widths. Main padding is 16px vertical and 24px horizontal; screens stack with 24px gaps.
+A fixed, non-scrolling app shell: an ink left rail plus a main column that fills the remaining width and height. The dock is a 64px rail whose contents expand over the content to a max of 480px on hover or keyboard focus; it never becomes a drawer and never pushes the main column. Main padding is 16px vertical and 24px horizontal; screens stack with 24px gaps.
 
-The Table screen is one card that consumes the whole remaining area: a bordered `.table-shell`, a header band, a scrolling viewport, and a floating bulk-action pill. The card is itself the query container for its responsive behavior. Headers are 40px tall with 12px horizontal padding; rows are compact and zebra-striped at 5% brass. Long content truncates; the layout never wraps a row.
+The Table screen is one card that consumes the whole remaining area: a bordered `.table-shell`, a grey header band, a scrolling viewport, and a floating bulk-action pill. The card is its own query container. Headers are 40px tall with 12px horizontal padding; rows are 45px with 12px cell padding and a faint neutral zebra stripe. Long content truncates; the layout never wraps a row.
 
 Spacing follows a 4px base with 8/12/16/24/32 as the working steps. Density is deliberate: the Table is tight, Showcases and note editing get 16–32px breathing room, and marketing-style whitespace is never used inside the Editor.
 
 ## Elevation & Depth
 
-A hybrid, weighted toward tonal layering. Structure is carried by warm borders and stepped paper surfaces (Harbor Paper → Shell Cream → Sand Panel → Header Sand), and shadows only appear to signal interaction or floating chrome. Shadows are always warm brown-tinted rather than black, so elevation reads as lamp light, not as grey fog.
+Tonal layering, not shadow. Structure is carried by ink/white polarity and the white → `#f7f7f7` → `#f2f2f2` → `#e6e6e6` neutral steps. Cards are flat at rest. Shadows exist only for chrome that floats above the page.
 
 ### Shadow Vocabulary
-- **Ambient rest** (`0 1px 2px rgba(62, 44, 20, 0.07)`) — `--shadow-sm`: every button and control at rest.
-- **Lifted** (`0 8px 24px rgba(62, 44, 20, 0.12)`) — `--shadow-md`: hovered controls, menus, the bulk pill, and the expanded sidebar.
-- **Overlay** (`0 24px 48px rgba(62, 44, 20, 0.18)`) — `--shadow-lg`: dialogs, popovers, and the slideshow's floating controls.
+- **Ambient rest:** none. Cards, panels, and controls are flat.
+- **Lifted** (`0 12px 32px rgba(37, 40, 43, 0.16)`): menus, dropdowns, the expanded rail, and the bulk pill.
+- **Overlay** (`0 24px 64px rgba(37, 40, 43, 0.22)`): dialogs, the note editor panel, the slideshow panel, and other modals.
 
 ### Named Rules
-**The Flat-At-Rest Rule.** Cards are flat; only controls carry the ambient shadow. A larger shadow is earned by hover, openness, or floating above the page — never used as decoration.
+**The Flat-At-Rest Rule.** A flat card is the default. A shadow is earned by openness or floating above the page — never used as decoration.
 
 ## Shapes
 
-Rounded and soft-edged, at four deliberate steps: 8px for small chips and inline controls, 10px for buttons, inputs, and cards, 16px for panels and edit-mode sections, and 20px for the largest surfaces and popovers. Pill radii are reserved for three things: the bulk-action bar, counters and version badges, and segmented controls. Borders are 1px in warm translucent brown (0.2 alpha for structure, 0.32 for controls, 0.12 for internal dividers). The brand mark uses a 9px rounded square with a brass gradient; category markers are circles. No clipping, notches, or angled corners appear anywhere in the system.
+Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for fields and selects (`--radius-control`), 6px for cards, menus, and panels (`--radius-md`, `--radius-lg`, `--radius-xl` all resolve to the brand's 6px), and a true pill (100px) for buttons, counters, segmented controls, and the bulk-action bar. Tag and filter chips stay at the 7px rounded rectangle. Borders are 1px in translucent ink (0.1 alpha for internal dividers, 0.18 for structure, 0.32 for controls). The brand mark is a 6px red square; category markers are 20px circles. No clipping, notches, or angled corners appear anywhere in the system.
 
 ## Components
 
 ### Buttons
-- **Shape:** 10px radius, 34px minimum height, 6px×12px padding, 0.84rem/600 label.
-- **Default:** Shell Cream ground, 1px control border, Walnut Ink text, ambient shadow.
-- **Primary:** Deep Brass ground and border, Shell Cream text; the only filled button.
-- **Danger:** Signal Red ground with cream text; the soft variant uses a red wash, red text, and a 25%-alpha red border.
-- **Hover / Focus:** border shifts to Harbor Brass and the shadow lifts to `--shadow-md`. Focus is a 2px Harbor Brass outline at 2px offset. Transitions are 0.15s on background, border, and shadow.
+- **Shape:** pill (`100px`), 36px minimum height, 6px×18px padding, 0.84rem/600 label. No drop shadow at rest.
+- **Default:** white ground, 1px control border, ink text. Hover tints the ground with the red wash and turns the border red.
+- **Primary:** Brand Red ground and border with white text; the only filled button at rest. Hover deepens to `#b80000`.
+- **Danger:** deep red fill with white text; the soft variant uses a red wash, red text, and a red hairline.
+- **Focus:** a 2px red outline at 2px offset. Transitions are 0.15s on background, border, and colour.
 
 ### Inputs / Fields
-- **Style:** Shell Cream ground, 1px control border, 10px radius, 34px minimum height, 0.86rem text.
-- **Focus:** border becomes Harbor Brass with the standard 2px accent outline; no glow.
-- **Disabled / Error:** errors use Signal Red text and border; disabled controls keep their shape and drop to Faded Umber.
-- **Search and filters:** the same field at 34px, with brass tint on the active-filter state rather than a heavier border.
+- **Style:** white ground, 1px control border, 10px radius, 34px minimum height, 0.86rem text.
+- **Focus:** border becomes red with the standard 2px red hairline halo; no glow.
+- **Disabled / Error:** errors use the danger text and border; disabled controls keep their shape and drop to Body Faint.
+- **Search and filters:** the same field at 34–36px; the active-filter state adds a red border rather than a fill.
 
 ### Table
-- **Container:** a Shell Cream card with a 10px radius and 1px structural border, filling the viewport.
-- **Header:** Header Sand band (`--surface-3`), 40px tall, 12px padding, 0.6875rem/650 uppercase labels at 0.075em tracking in Umber; the sorted column alone switches to Deep Brass and reveals its chevron.
-- **Body type:** 13.5px data cells in Walnut Ink. Catalog # and Denomination at 600; the serial as Code (13px/500, 0.045em tracking, Umber); the display order in Faded Umber because it is position rather than content; Grade as a 13px/600 pill tinted by band.
-- **Rows:** zebra at 5% brass; hover at 12%; selected at 14% with a brass edge and a checked box carrying the state. Text truncates, never wraps.
-- **Empty values:** a muted dash, the same in every cell that can be empty (display order, front image, grade, serial, tags), so one absence never reads as two different things across a row.
-- **Empty view:** the message sits where the rows would be, as a named title, its recovery, and one hint line. A filter that matches nothing explains the OR/AND model and offers Clear filters; an empty collection offers Add the first note and Import / Export, and says where a new note lands.
-- **Pinned cells:** the checkbox and thumbnail columns stay pinned; the checkbox focus halo is a 21px rounded square behind a clipped native control.
-- **Horizontal pan:** the horizontal scrollbar is hidden, mirroring the Viewer, so off-screen columns are reached by dragging the table or pressing Left/Right. When the columns actually overflow, the footer says so with the same keycap pair (`←` `→` to pan) and drops the line when they fit.
-- **Selection:** text selected inside the card takes a 24% brass wash instead of the platform blue, so copying a serial reads as marked paper.
+- **Container:** a white card with a 6px radius, 1px structural border, filling the viewport.
+- **Header:** Canvas Soft band, 40px tall, 12px padding, 0.6875rem/800 uppercase labels at 0.075em tracking in Body; the sorted column alone switches to Deep Red and reveals its chevron.
+- **Body type:** 13.5px data cells in Ink. Catalog # and Denomination at 600; the serial as Code (13px/500, 0.045em tracking, Body); the display order in Body Faint. Grade is a 13px/600 pill tinted by band (success green, warning amber, neutral).
+- **Rows:** neutral zebra at 3.5% ink; hover at 7% red; selected at 9% red with a red edge and a checked box carrying the state. Text truncates, never wraps.
+- **Empty values:** a muted dash in every cell that can be empty, so one absence never reads as two different things across a row.
+- **Empty view:** the message sits where the rows would be, as a named title, its recovery, and one hint line.
+- **Pinned cells:** the checkbox and thumbnail columns stay pinned; the checkbox focus halo is a 21px red-tinted rounded square behind a clipped native control.
+- **Horizontal pan:** the horizontal scrollbar is hidden; when columns overflow, the footer names the `←` `→` pan pair.
+- **Selection:** text selected inside the card takes a 14% red wash instead of the platform blue.
 
 ### Chips & Tags
-- **Style:** pill or 8px-rounded, brass wash ground, Deep Brass text, no heavy border.
-- **State:** removable chips pair the label with an icon-only remove button; active filter chips match the selected-row tint.
+- **Style:** 7px rounded rectangle, red wash ground, Deep Red text, 1px red-tinted hairline.
+- **State:** removable chips pair the label with an icon-only remove button; active filter chips match the selected-row tint; the "more" chip is a dashed muted ghost.
 
 ### Sidebar Navigation
-- **Style:** a 64px rail on Shell Cream with a 1px right border; category labels are 9.5px/800 uppercase with 0.14em tracking and a 20px circular brass marker.
-- **Expansion:** width animates to `max(288px, max-content)` in 0.18s on a standard ease; the wordmark and link labels toggle display, so the marker never shifts.
-- **States:** links are Umber at 12.5px/600, hover to a Sand Panel ground, and the active destination takes a brass-wash pill.
+- **Style:** a 64px ink rail with white text and a 1px ink right border; category labels are 9.5px/800 uppercase with 0.14em tracking and a 20px neutral marker.
+- **Expansion:** width animates to `max(288px, max-content)` in 0.18s; the wordmark and link labels toggle display, so the marker never shifts. The expanded rail lifts with the floating shadow.
+- **States:** links are white at 72% opacity, hover to a white 8% wash, and the active destination takes a white 12% pill plus a 3px red left-edge bar. The `+ New` actions are light red.
+- **Brand mark:** the red square with the banknote glyph is the rail's only solid red element.
 
 ### Bulk Action Bar
-- **Style:** a pill floating 16px above the bottom of the table, Deep Brass ground, cream text, `--shadow-md`. It overlays the rows instead of reserving space, so showing it never reflows the table.
+- **Style:** a pill floating 16px above the bottom of the table, Brand Red ground, white text, floating shadow. It overlays the rows instead of reserving space, so showing it never reflows the table.
 
-### Load-Error Card
-- **Style:** replaces the table in place at the table's height, inside the same card shell. A 700-weight title, a muted detail line, a reassurance line, and a single primary Try again button; only the copy block is a live region so the button is not announced twice.
+### Load-Error / Loading Cards
+- **Style:** replace the table in place at the table's height, inside the same card shell. A 700-weight title, a muted detail line, a reassurance line, and one primary Try again pill; only the copy block is a live region so the button is not announced twice.
+- **Loading:** the same shell at the same height, a 650-weight "Loading notes…" title, and one muted detail line as a polite status; no spinner and no skeleton bars.
 
-### Loading Card
-- **Style:** the same card shell at the same height while the notes are on their way, so a collection switch never collapses the screen and rebuilds it. A 650-weight "Loading notes…" title and one muted detail line, as a polite status; no spinner and no skeleton bars.
+### Overlays
+- **Scrim:** ink at 50–88% opacity. The slideshow and image popover keep the deep ink surfaces with white text; the note editor uses a light grey scrim with a white panel.
+- **Panel:** 6px radius, 1px ink hairline, floating shadow. Slideshow tags use a red wash on dark with white text.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** keep every surface tinted with the paper ramp; Shell Cream is the ceiling of lightness.
-- **Do** use Harbor Brass / Deep Brass alone for state and action, and keep it under roughly 10% of the screen.
-- **Do** compact the Table (40px headers, 12px cell padding, truncation) and let Showcases be the looser surface.
-- **Do** express hierarchy with weight, size, case, and tracking inside the one system sans.
-- **Do** use the three warm shadows only for controls, raised chrome, and overlays.
-- **Do** reach for pill radii on bars, counters, and segmented controls — and only those.
+- **Do** reserve Brand Red for the primary pill, the active navigation edge, focus, selection, and the tag family.
+- **Do** set screen titles and eyebrows in uppercase weight 800 with tight tracking; that stencil contrast is the brand voice.
+- **Do** use pills for buttons and counters, 10px corners for fields and selects, 7px for chips, and 6px for cards and panels.
+- **Do** cycle the page: ink rail and overlays → white content → grey chrome. Polarity is the depth cue.
+- **Do** keep the Table compact (40px headers, 45px rows, 12px cell padding, truncation) and let Showcases be the looser surface.
 - **Do** write status feedback as a named title plus one detail line, with the recovery action adjacent.
 
 ### Don't:
-- **Don't** introduce pure white, pure black, or any cold grey; they break the desk metaphor.
-- **Don't** add a second accent hue, gradient text, or glassmorphism.
+- **Don't** introduce a second accent hue, a gradient, or glassmorphism.
+- **Don't** paint large red fills behind content; red is a marker, not a ground.
+- **Don't** use soft drop shadows on flat cards at rest.
 - **Don't** wrap table cells or soften row density to "breathe"; the Table is a scanning surface.
-- **Don't** add a second typeface, an icon font, or decorative imagery.
-- **Don't** place large decorative shadows on flat cards at rest.
+- **Don't** set body copy in uppercase or weight 800; the display voice is for titles only.
 - **Don't** turn the sidebar into a drawer or let it push the main column.
-- **Don't** use red for anything but destruction and failure, or green for anything but success.
+- **Don't** square off a button or a chip: buttons are pills and chips keep their 7px rectangle.

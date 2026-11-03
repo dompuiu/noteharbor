@@ -36,7 +36,9 @@ function atRule(source, header) {
 
 describe("table styles", () => {
   test("defines the zebra row tint token", () => {
-    expect(styles).toMatch(/--row-zebra:\s*rgba\(150,\s*98,\s*47,\s*0\.05\)/);
+    expect(styles).toMatch(
+      /--row-zebra:\s*rgba\(37,\s*40,\s*43,\s*0\.035\)/,
+    );
   });
 
   test("odd rows carry the zebra tint", () => {
@@ -45,15 +47,14 @@ describe("table styles", () => {
     );
   });
 
-  // Selected rows sit a shade darker than the hover wash (0.14 against 0.12),
-  // matching the prototype. The accent edge and the checkbox still carry the
-  // selection state.
+  // Selected rows sit a shade stronger than the hover wash (0.09 against
+  // 0.07). The accent edge and the checkbox still carry the selection state.
   test("the selected row tint is darker than the hover tint", () => {
     expect(styles).toMatch(
-      /--row-selected:\s*rgba\(150,\s*98,\s*47,\s*0\.14\)/,
+      /--row-selected:\s*rgba\(230,\s*0,\s*0,\s*0\.09\)/,
     );
     expect(styles).toMatch(
-      /--accent-soft:\s*rgba\(150,\s*98,\s*47,\s*0\.12\)/,
+      /--accent-soft:\s*rgba\(230,\s*0,\s*0,\s*0\.07\)/,
     );
   });
 
@@ -203,7 +204,7 @@ describe("table styles", () => {
     expect(halo).not.toBeNull();
     expect(halo[1]).toMatch(/position:\s*absolute/);
     expect(halo[1]).toMatch(
-      /background:\s*rgba\(150,\s*98,\s*47,\s*0\.28\)/,
+      /background:\s*rgba\(230,\s*0,\s*0,\s*0\.24\)/,
     );
     expect(halo[1]).toMatch(/pointer-events:\s*none/);
   });
@@ -733,9 +734,9 @@ describe("table styles", () => {
   test("label-row headers use wide-tracked caps", () => {
     const head = styles.match(/\.table-shell thead th\s*\{([^}]*)\}/);
     expect(head).not.toBeNull();
-    expect(head[1]).toMatch(/font-weight:\s*650/);
+    expect(head[1]).toMatch(/font-weight:\s*700/);
     expect(head[1]).toMatch(/font-size:\s*0\.6875rem/);
-    expect(head[1]).toMatch(/letter-spacing:\s*0\.075em/);
+    expect(head[1]).toMatch(/letter-spacing:\s*0\.08em/);
     expect(head[1]).toMatch(/text-transform:\s*uppercase/);
     // 11px caps are small text, so the caption has to clear 4.5:1 on the
     // header band: the umber token does, the prototype's #8a755a did not.
@@ -1389,7 +1390,7 @@ describe("table styles", () => {
     expect(tag).not.toBeNull();
 
     for (const prop of [
-      /border:\s*1px solid rgba\(150,\s*98,\s*47,\s*0\.18\)/,
+      /border:\s*1px solid var\(--accent-border\)/,
       /border-radius:\s*7px/,
       /background:\s*var\(--accent-soft\)/,
       /color:\s*var\(--accent-strong\)/,
@@ -1469,11 +1470,11 @@ describe("sidebar styles", () => {
 
   // The collapsed rail keeps each category's marker while the name drops away,
   // so the sections stay readable as categories rather than anonymous glyphs.
-  test("keeps the category marker visible and accent-tinted when collapsed", () => {
+  test("keeps the category marker visible on the dark rail when collapsed", () => {
     const marker = styles.match(/\.sidebar-group-ic\s*\{([^}]*)\}/);
     expect(marker).not.toBeNull();
-    expect(marker[1]).toMatch(/background:\s*var\(--accent-soft\)/);
-    expect(marker[1]).toMatch(/color:\s*var\(--accent-strong\)/);
+    expect(marker[1]).toMatch(/background:\s*rgba\(255,\s*255,\s*255,\s*0\.1\)/);
+    expect(marker[1]).toMatch(/color:\s*var\(--on-dark-text\)/);
     expect(marker[1]).toMatch(/border-radius:\s*50%/);
     // The name, not the marker, is what hides.
     expect(styles).not.toMatch(
@@ -1825,25 +1826,25 @@ describe("slideshow overlay styles", () => {
 describe("catalog header", () => {
   // The descendant selector is the point: a bare `.collection-eyebrow` ties
   // with the shared `.eyebrow` rule and loses the size, weight and tone to it.
-  test("the Catalog eyebrow uses the prototype's caption size and tone", () => {
+  test("the Catalog eyebrow uses the caption size and the brand label voice", () => {
     const eyebrow = styles.match(
       /\.panel-heading-copy \.collection-eyebrow\s*\{([^}]*)\}/,
     );
     expect(eyebrow).not.toBeNull();
     expect(eyebrow[1]).toMatch(/font-size:\s*0\.6875rem/);
-    expect(eyebrow[1]).toMatch(/font-weight:\s*600/);
+    expect(eyebrow[1]).toMatch(/font-weight:\s*800/);
     expect(eyebrow[1]).toMatch(/letter-spacing:\s*0\.09em/);
     expect(eyebrow[1]).toMatch(/text-transform:\s*uppercase/);
-    // The prototype's lighter tone measured 2.07:1 on the page ground.
     expect(eyebrow[1]).toMatch(/color:\s*var\(--text-faint\)/);
   });
 
-  test("the collection title sits at the prototype's 21px", () => {
+  test("the collection title wears the uppercase display voice at 21px", () => {
     const title = styles.match(/\.collection-title-row h1\s*\{([^}]*)\}/);
     expect(title).not.toBeNull();
     expect(title[1]).toMatch(/font-size:\s*1\.3125rem/);
-    expect(title[1]).toMatch(/font-weight:\s*650/);
+    expect(title[1]).toMatch(/font-weight:\s*800/);
     expect(title[1]).toMatch(/letter-spacing:\s*-0\.01em/);
+    expect(title[1]).toMatch(/text-transform:\s*uppercase/);
   });
 
   // Editing in place must not move the table: the form replaces the title in
@@ -1866,7 +1867,7 @@ describe("catalog header", () => {
     expect(field[1]).toMatch(/margin-left:\s*-5px/);
     expect(field[1]).toMatch(/padding:\s*0\s+4px/);
     expect(field[1]).toMatch(/font-size:\s*inherit/);
-    expect(field[1]).toMatch(/font-weight:\s*650/);
+    expect(field[1]).toMatch(/font-weight:\s*800/);
     expect(field[1]).toMatch(/letter-spacing:\s*-0\.01em/);
   });
 

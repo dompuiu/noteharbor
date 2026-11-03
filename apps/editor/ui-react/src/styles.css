@@ -1,69 +1,91 @@
+/* One local variable family across every role. Inter is a close stand-in for
+   the brand's display face and ships with the app, so the type does not depend
+   on what the host OS happens to install. */
+@font-face {
+  font-family: "Inter";
+  src: url("/fonts/InterVariable.ttf") format("truetype");
+  font-style: normal;
+  font-weight: 100 900;
+  font-display: swap;
+}
+
 :root {
   color-scheme: light;
   font-family:
-    -apple-system, BlinkMacSystemFont, "Segoe UI", "Inter", "Helvetica Neue",
-    Arial, sans-serif;
+    "Inter", "Helvetica Neue", Helvetica, Arial, "Noto Sans", sans-serif;
   line-height: 1.5;
   font-weight: 400;
   color: var(--text);
   background: var(--bg);
 
-  /* ── Warm professional theme tokens ─────────────────────────────── */
-  --bg: #f3ecdf;
-  --surface: #fffaf1;
-  --surface-2: #faf4e8;
-  --surface-3: #efe5d2;
+  /* ── Brand tokens ────────────────────────────────────────────────
+     Red + ink + neutrals only. Surfaces step from canvas white through
+     two grey bands; depth comes from polarity flips, not shadows. */
+  --bg: #f2f2f2;
+  --surface: #ffffff;
+  --surface-2: #f7f7f7;
+  --surface-3: #f2f2f2;
   /* One step below the header band: the handle's own hover on the reorder
      rail. Its own token rather than a scrollbar's, so a bar re-tone never
      moves a control and a control re-tone never moves a bar. */
-  --surface-4: #e5d8c0;
-  --border: rgba(120, 86, 50, 0.2);
-  --border-soft: rgba(120, 86, 50, 0.12);
-  --border-control: rgba(120, 86, 50, 0.32);
-  --text: #2e2318;
+  --surface-4: #e6e6e6;
+  --border: rgba(37, 40, 43, 0.18);
+  --border-soft: rgba(37, 40, 43, 0.1);
+  --border-control: rgba(37, 40, 43, 0.32);
+  --text: #25282b;
   /* Both secondary tones clear WCAG AA (4.5:1) on every ground they sit on,
-     including the header's `--surface-3`. The old pair measured 3.5:1 on the
-     header and 2.3:1 on placeholders. */
-  --text-muted: #6f5c40;
-  --text-faint: #7a6749;
-  --accent: #96622f;
-  --accent-strong: #71461f;
-  --accent-soft: rgba(150, 98, 47, 0.12);
-  --row-zebra: rgba(150, 98, 47, 0.05);
-  /* A selected row sits a shade darker than hover (0.14 against 0.12),
-     matching the prototype. The accent edge and the checked box carry
-     selection; the extra 0.02 keeps selected rows distinct while hovered. */
-  --row-selected: rgba(150, 98, 47, 0.14);
-  --accent-ink: #fffaf1;
-  --success: #2f6b3c;
-  --success-bg: rgba(47, 107, 60, 0.1);
-  --danger: #a02a22;
-  --danger-bg: rgba(160, 42, 34, 0.08);
-  --warning: #8a5a00;
-  --warning-bg: rgba(168, 132, 40, 0.12);
-  --info: #40667c;
-  --info-bg: rgba(64, 102, 124, 0.12);
+     including the header's `--surface-3`. */
+  --text-muted: #5f6367;
+  --text-faint: #6e7276;
+  --accent: #e60000;
+  /* Deep red for text and small labels on white: the brand red clears 4.5:1
+     as a filled surface, but a slightly darker step reads better as type. */
+  --accent-strong: #b80000;
+  --accent-soft: rgba(230, 0, 0, 0.07);
+  --accent-border: rgba(230, 0, 0, 0.28);
+  --row-zebra: rgba(37, 40, 43, 0.035);
+  /* A selected row sits a shade stronger than hover. The red edge and the
+     checked box carry selection; the extra tint keeps selected rows distinct
+     while hovered. */
+  --row-selected: rgba(230, 0, 0, 0.09);
+  --accent-ink: #ffffff;
+  --success: #157a3a;
+  --success-bg: rgba(49, 162, 76, 0.12);
+  --danger: #a30000;
+  --danger-bg: rgba(163, 0, 0, 0.08);
+  --warning: #7a4f00;
+  --warning-bg: rgba(247, 185, 40, 0.16);
+  --info: #29597a;
+  --info-bg: rgba(41, 89, 122, 0.12);
+  /* Controls keep the app's calibrated 10px step: buttons, fields, and
+     selects share it, so no one control reads rounder than its neighbour.
+     Small chrome sits one step under at 8px; cards stay flat at 6px. */
   --radius-sm: 8px;
-  --radius-md: 10px;
-  --radius-lg: 16px;
-  --radius-xl: 20px;
-  --radius-pill: 999px;
+  --radius-md: 6px;
+  --radius-control: 10px;
+  --radius-lg: 6px;
+  --radius-xl: 6px;
+  --radius-pill: 100px;
   --sidebar-rail-width: 64px;
   --sidebar-expanded-width: 288px;
-  --shadow-sm: 0 1px 2px rgba(62, 44, 20, 0.07);
-  --shadow-md: 0 8px 24px rgba(62, 44, 20, 0.12);
-  --shadow-lg: 0 24px 48px rgba(62, 44, 20, 0.18);
-  --scroll-track: #e7dbc4;
-  --scroll-thumb: #b99b6e;
-  --scroll-thumb-hover: #96622f;
-  --on-dark-text: #f7ecdc;
-  --on-dark-muted: rgba(245, 240, 232, 0.66);
-  --on-dark-border: rgba(245, 240, 232, 0.16);
-  --on-dark-bg: #201913;
-  --on-dark-bg-translucent: rgba(32, 25, 19, 0.94);
-  --on-dark-surface: #2a2118;
-  --on-dark-border-strong: #453823;
-  --on-dark-accent: #e0aa62;
+  /* The brand has no soft drop shadows: cards are flat and only floating
+     chrome (menus, dialogs) lifts off the page. */
+  --shadow-sm: none;
+  --shadow-md: 0 12px 32px rgba(37, 40, 43, 0.16);
+  --shadow-lg: 0 24px 64px rgba(37, 40, 43, 0.22);
+  --scroll-track: #ececec;
+  --scroll-thumb: #c4c4c4;
+  --scroll-thumb-hover: #8a8a8a;
+  --ink: #25282b;
+  --on-dark-text: #ffffff;
+  --on-dark-muted: rgba(255, 255, 255, 0.68);
+  --on-dark-border: rgba(255, 255, 255, 0.22);
+  --on-dark-bg: #25282b;
+  --on-dark-bg-translucent: rgba(37, 40, 43, 0.96);
+  --on-dark-surface: #313539;
+  --on-dark-border-strong: #4a4f54;
+  --on-dark-accent: #e60000;
+  --on-dark-link: #ff7a73;
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -160,7 +182,7 @@ input[type="radio"] {
   width: 21px;
   height: 21px;
   border-radius: 7px;
-  background: rgba(150, 98, 47, 0.28);
+  background: rgba(230, 0, 0, 0.24);
   content: "";
   pointer-events: none;
   transform: translate(-50%, -50%);
@@ -228,8 +250,9 @@ input[type="radio"] {
   width: var(--sidebar-rail-width);
   display: flex;
   flex-direction: column;
-  background: var(--surface);
-  border-right: 1px solid var(--border);
+  background: var(--ink);
+  color: var(--on-dark-text);
+  border-right: 1px solid var(--ink);
   /* The expanded width fits content (max(288px, max-content)), and keyword
      widths only transition with interpolation allowed. Without this the
      64px -> max-content change snaps instead of animating. */
@@ -249,7 +272,7 @@ input[type="radio"] {
   gap: 10px;
   height: 58px;
   padding: 0 12px;
-  border-bottom: 1px solid var(--border-soft);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .sidebar-brand {
@@ -263,14 +286,12 @@ input[type="radio"] {
   flex: 0 0 auto;
   width: 30px;
   height: 30px;
-  border-radius: 9px;
+  border-radius: var(--radius-md);
   display: grid;
   place-items: center;
-  color: var(--accent-ink);
-  background: linear-gradient(140deg, hsl(28 55% 50%), hsl(28 62% 32%));
-  box-shadow:
-    inset 0 0 0 1px rgba(255, 255, 255, 0.28),
-    var(--shadow-sm);
+  color: var(--on-dark-text);
+  background: var(--accent);
+  box-shadow: none;
 }
 
 .sidebar-mark svg {
@@ -303,14 +324,14 @@ input[type="radio"] {
 .sidebar-foot {
   flex: 0 0 auto;
   padding: 10px 8px 12px;
-  border-top: 1px solid var(--border-soft);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
   text-align: center;
 }
 
 .sidebar-version {
   font-size: 11px;
   font-weight: 600;
-  color: var(--text-faint);
+  color: rgba(255, 255, 255, 0.52);
   white-space: nowrap;
 }
 
@@ -323,7 +344,7 @@ input[type="radio"] {
 .sidebar-group + .sidebar-group {
   margin-top: 8px;
   padding-top: 10px;
-  border-top: 1px solid var(--border-soft);
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
 }
 
 .sidebar-group-label {
@@ -336,7 +357,7 @@ input[type="radio"] {
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: var(--text-faint);
+  color: rgba(255, 255, 255, 0.56);
 }
 
 /* The category marker. It is the group's own icon, not a destination: an
@@ -354,9 +375,9 @@ input[type="radio"] {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  color: var(--accent-strong);
-  background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1.5px rgba(150, 98, 47, 0.35);
+  color: var(--on-dark-text);
+  background: rgba(255, 255, 255, 0.1);
+  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.18);
 }
 
 .sidebar-group-ic svg {
@@ -377,7 +398,7 @@ input[type="radio"] {
   gap: 1px;
   margin-left: 20px;
   padding-left: 12px;
-  border-left: 1.5px solid var(--border);
+  border-left: 1.5px solid rgba(255, 255, 255, 0.18);
 }
 
 .sidebar-ic {
@@ -399,8 +420,8 @@ input[type="radio"] {
   gap: 11px;
   width: 100%;
   padding: 7px 9px;
-  border-radius: 8px;
-  color: var(--text-muted);
+  border-radius: var(--radius-sm);
+  color: rgba(255, 255, 255, 0.72);
   font-size: 12.5px;
   font-weight: 600;
   text-decoration: none;
@@ -417,8 +438,8 @@ input[type="radio"] {
 }
 
 .sidebar-link:hover {
-  background: var(--surface-3);
-  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--on-dark-text);
 }
 
 /* The `+ New showcase` row is an action, not a destination: it is a button
@@ -431,28 +452,32 @@ input[type="radio"] {
   font-weight: 600;
   text-align: left;
   cursor: pointer;
-  color: var(--accent-strong);
+  color: #ff8a84;
 }
 
 .sidebar-link--action:hover {
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: rgba(230, 0, 0, 0.16);
+  color: #ffb0ac;
 }
 
 .sidebar-link--active {
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--on-dark-text);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .sidebar-link--cursor {
-  background: var(--surface-3);
-  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--on-dark-text);
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
 .sidebar-link--active.sidebar-link--cursor {
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: rgba(255, 255, 255, 0.12);
+  color: var(--on-dark-text);
+  box-shadow:
+    inset 3px 0 0 var(--accent),
+    inset 0 0 0 1.5px var(--accent);
 }
 
 /* Showcase rows can be dragged to set their order. The hovered row shows a
@@ -490,10 +515,10 @@ input[type="radio"] {
   align-items: center;
   gap: 5px;
   padding: 3px 8px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  border-radius: var(--radius-pill);
   background: transparent;
-  color: var(--text-muted);
+  color: rgba(255, 255, 255, 0.66);
   font-size: 11px;
   font-weight: 700;
   line-height: 1.4;
@@ -504,13 +529,13 @@ input[type="radio"] {
 .sidebar-reorder-toggle:hover,
 .sidebar-reorder-toggle:focus-visible {
   border-color: var(--accent);
-  color: var(--accent-strong);
+  color: var(--on-dark-text);
 }
 
 .sidebar-reorder-toggle--active {
-  background: var(--accent-soft);
+  background: rgba(230, 0, 0, 0.2);
   border-color: var(--accent);
-  color: var(--accent-strong);
+  color: var(--on-dark-text);
 }
 
 .sidebar-reorder-toggle--cursor {
@@ -539,7 +564,7 @@ input[type="radio"] {
   gap: 6px;
   min-width: 0;
   width: 100%;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   cursor: grab;
 }
 
@@ -565,10 +590,10 @@ input[type="radio"] {
   width: 22px;
   height: 22px;
   padding: 0;
-  border: 1px solid var(--border-control);
+  border: 1px solid rgba(255, 255, 255, 0.24);
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--text-muted);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.66);
   font-size: 12px;
   line-height: 1;
   cursor: pointer;
@@ -577,7 +602,7 @@ input[type="radio"] {
 .sidebar-move-button:hover:not(:disabled),
 .sidebar-move-button:focus-visible:not(:disabled) {
   border-color: var(--accent);
-  color: var(--accent-strong);
+  color: var(--on-dark-text);
 }
 
 .sidebar-move-button:disabled {
@@ -587,7 +612,7 @@ input[type="radio"] {
 
 .sidebar-move-button--cursor {
   border-color: var(--accent);
-  color: var(--accent-strong);
+  color: var(--on-dark-text);
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
@@ -708,7 +733,7 @@ input[type="radio"] {
 .sidebar-dock:has(:focus-visible) .sidebar-group-links {
   margin-left: 20px;
   padding-left: 12px;
-  border-left: 1.5px solid var(--border);
+  border-left: 1.5px solid rgba(255, 255, 255, 0.18);
 }
 
 /* Keyboard-open: the cursor (not hover or focus visibility) holds the rail
@@ -755,7 +780,7 @@ input[type="radio"] {
 .sidebar-dock.sidebar-dock--open .sidebar-group-links {
   margin-left: 20px;
   padding-left: 12px;
-  border-left: 1.5px solid var(--border);
+  border-left: 1.5px solid rgba(255, 255, 255, 0.18);
 }
 
 /* Collapsed, the cursor's link is the one cleared among the icons; the bare
@@ -987,8 +1012,10 @@ input[type="radio"] {
 .showcase-category-title {
   margin: 0;
   font-size: 1.4rem;
-  font-weight: 700;
+  font-weight: 800;
+  letter-spacing: -0.01em;
   text-align: center;
+  text-transform: uppercase;
 }
 
 .showcase-category-focus {
@@ -1229,7 +1256,7 @@ input[type="radio"] {
 }
 
 .showcase-card-cover--empty {
-  background: linear-gradient(135deg, var(--surface-3), var(--surface));
+  background: var(--surface-3);
   border: 1px solid var(--border-soft);
 }
 
@@ -1639,7 +1666,7 @@ input[type="radio"] {
 
 /* The `+` tiles (edit mode only). The 2px dashed border and the
    accent label follow the authoring prototype's plus-tile; the tokens keep
-   the app's warm palette. The two `+` actions share one grid cell stacked
+   the app's brand palette. The two `+` actions share one grid cell stacked
    vertically (`.showcase-add-tiles`), so `+ Add notes` sits directly above
    `+ Add grouping` instead of beside it. */
 .showcase-tile {
@@ -1986,7 +2013,7 @@ input[type="radio"] {
   align-items: flex-start;
   justify-content: center;
   padding: 48px 16px;
-  background: rgba(28, 22, 16, 0.55);
+  background: rgba(37, 40, 43, 0.55);
 }
 
 .showcase-picker {
@@ -2130,7 +2157,7 @@ input[type="radio"] {
   transform: translateY(calc(-50% + var(--showcase-thumb-preview-offset)));
   display: none;
   padding: 8px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-md);
@@ -2242,9 +2269,22 @@ input[type="radio"] {
   margin: 0;
 }
 
+/* The brand display voice: uppercase, weight 800, tight tracking. It is
+   reserved for screen titles; section headings and dialog titles stay in the
+   calmer sentence-case voice so the page has one shout, not five. */
+.site-title,
+.hero-card h1,
+.panel h1,
+.screen-body h1,
+.slide-card h1 {
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+
 .site-title {
   font-size: clamp(1.5rem, 2.5vw, 1.9rem);
-  font-weight: 700;
+  font-weight: 800;
 }
 
 .site-title-link {
@@ -2262,18 +2302,18 @@ input[type="radio"] {
   border: 1px solid var(--border-control);
   background: var(--surface);
   color: inherit;
-  padding: 6px 12px;
-  min-height: 34px;
-  border-radius: var(--radius-md);
+  padding: 6px 18px;
+  min-height: 36px;
+  border-radius: var(--radius-control);
   font-size: 0.84rem;
   font-weight: 600;
   line-height: 1.2;
   text-decoration: none;
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
   transition:
     background 0.15s ease,
     border-color 0.15s ease,
-    box-shadow 0.15s ease;
+    color 0.15s ease;
 }
 
 .icon-link svg {
@@ -2305,8 +2345,8 @@ input[type="radio"] {
   height: 32px;
   padding: 0 10px;
   border-radius: 999px;
-  border: 1px solid rgba(68, 56, 41, 0.2);
-  background: rgba(255, 253, 249, 0.55);
+  border: 1px solid var(--border-control);
+  background: var(--surface-2);
   font-size: 0.78rem;
   font-variant-numeric: tabular-nums;
 }
@@ -2363,19 +2403,22 @@ input[type="radio"] {
 .button:hover,
 .icon-link:hover {
   border-color: var(--accent);
-  box-shadow: var(--shadow-md);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  box-shadow: none;
 }
 
 .icon-link--on-dark {
   border-color: var(--on-dark-border);
-  background: rgba(245, 240, 232, 0.08);
+  background: rgba(255, 255, 255, 0.1);
   color: var(--on-dark-text);
 }
 
 .icon-link--on-dark:hover,
 .icon-link--on-dark:focus-visible {
-  background: rgba(245, 240, 232, 0.14);
-  border-color: rgba(245, 240, 232, 0.32);
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: var(--on-dark-text);
 }
 
 .sort-button:hover {
@@ -2385,6 +2428,12 @@ input[type="radio"] {
 
 .nav-link.active,
 .button-primary {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: var(--accent-ink);
+}
+
+.button-primary:hover {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
   color: var(--accent-ink);
@@ -2396,10 +2445,21 @@ input[type="radio"] {
   color: var(--accent-ink);
 }
 
+.button-danger:hover {
+  background: #7d0000;
+  border-color: #7d0000;
+  color: var(--accent-ink);
+}
+
 .button-danger-soft {
   background: var(--danger-bg);
   color: var(--danger);
-  border-color: rgba(160, 42, 34, 0.25);
+  border-color: rgba(163, 0, 0, 0.3);
+}
+
+.button-danger-soft:hover {
+  background: rgba(163, 0, 0, 0.14);
+  color: var(--danger);
 }
 
 .screen-stack {
@@ -2429,7 +2489,7 @@ input[type="radio"] {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  box-shadow: none;
 }
 
 .hero-card {
@@ -2552,7 +2612,7 @@ input[type="radio"] {
 .connection-error h1 {
   margin: 0;
   font-size: 1.5rem;
-  font-weight: 650;
+  font-weight: 800;
   line-height: 1.22;
   letter-spacing: -0.012em;
   text-wrap: balance;
@@ -2624,11 +2684,12 @@ input[type="radio"] {
 
 .collection-title-row h1 {
   margin: 0;
-  /* 21px, the prototype's page-head size, rather than the 1.5rem panel
-     heading the collection name carried as an h2. */
+  /* Brand display voice at the page-head scale: uppercase, ultra-heavy,
+     tight tracking. The 21px size keeps the dense table header intact. */
   font-size: 1.3125rem;
-  font-weight: 650;
+  font-weight: 800;
   letter-spacing: -0.01em;
+  text-transform: uppercase;
 }
 
 /* The title is the rename control on the view screen: a button dressed as the
@@ -2698,7 +2759,7 @@ input[type="radio"] {
   margin-left: -5px;
   padding: 0 4px;
   font-size: inherit;
-  font-weight: 650;
+  font-weight: 800;
   letter-spacing: -0.01em;
   line-height: 1.5;
 }
@@ -2714,9 +2775,9 @@ input[type="radio"] {
 
 .eyebrow {
   text-transform: uppercase;
-  letter-spacing: 0.1em;
+  letter-spacing: 0.08em;
   font-size: 0.72rem;
-  font-weight: 700;
+  font-weight: 800;
   color: var(--text-muted);
   margin: 0 0 8px;
 }
@@ -2730,14 +2791,13 @@ input[type="radio"] {
   margin-bottom: 0;
 }
 
-/* The collection head follows the prototype's page head: the Catalog eyebrow
-   is an 11px caption, and the name is the page title at 21px/650. Two classes
-   so the refinement outranks the shared `.eyebrow` rule whatever order they
-   land in. The caption takes the faint tone — the prototype's lighter one
-   measured 2.07:1 on the page ground. */
+/* The collection head: an 11px caption eyebrow over the page title. Two
+   classes so the refinement outranks the shared `.eyebrow` rule whatever
+   order they land in. The caption takes the faint tone, which clears 4.5:1
+   on the page ground. */
 .panel-heading-copy .collection-eyebrow {
   font-size: 0.6875rem;
-  font-weight: 600;
+  font-weight: 800;
   letter-spacing: 0.09em;
   text-transform: uppercase;
   color: var(--text-faint);
@@ -2745,10 +2805,10 @@ input[type="radio"] {
 
 .table-shell mark {
   padding: 0 1px;
-  border-radius: 3px;
-  background: #f6d9a0;
-  box-shadow: 0 0 0 1px rgba(150, 98, 47, 0.26);
-  color: #5c3a12;
+  border-radius: 2px;
+  background: rgba(230, 0, 0, 0.12);
+  box-shadow: none;
+  color: inherit;
   font-weight: inherit;
 }
 
@@ -2776,10 +2836,9 @@ input[type="radio"] {
 /* Selecting a cell is a real task here — a serial or a catalog number gets
    copied into a message or a grading-company search — and the platform's own
    blue is the one cold surface left in the card. Tint the highlight from the
-   brass wash so a selection reads as marked paper, light enough that walnut
-   ink still clears 4.5:1 on top. */
+   brand red, light enough that ink still clears 4.5:1 on top. */
 .table-shell ::selection {
-  background: rgba(150, 98, 47, 0.24);
+  background: rgba(230, 0, 0, 0.14);
   color: var(--text);
 }
 
@@ -2811,7 +2870,7 @@ input[type="radio"] {
   max-width: calc(100% - 24px);
   padding: 6px 8px 6px 16px;
   border-radius: var(--radius-pill);
-  background: var(--accent-strong);
+  background: var(--accent);
   color: var(--accent-ink);
   box-shadow: var(--shadow-md);
   white-space: nowrap;
@@ -2829,7 +2888,7 @@ input[type="radio"] {
   flex: none;
   width: 1px;
   height: 20px;
-  background: rgba(255, 250, 241, 0.24);
+  background: rgba(255, 255, 255, 0.3);
 }
 
 .table-bulk-bar button {
@@ -2837,9 +2896,9 @@ input[type="radio"] {
   align-items: center;
   height: 30px;
   padding: 0 12px;
-  border: 1px solid rgba(255, 250, 241, 0.24);
+  border: 1px solid rgba(255, 255, 255, 0.3);
   border-radius: var(--radius-pill);
-  background: rgba(255, 250, 241, 0.1);
+  background: rgba(255, 255, 255, 0.12);
   color: inherit;
   font: inherit;
   /* Same control size as the rail's buttons: the pill is a floating copy of
@@ -2850,7 +2909,7 @@ input[type="radio"] {
 }
 
 .table-bulk-bar button:hover {
-  background: rgba(255, 250, 241, 0.2);
+  background: rgba(255, 255, 255, 0.22);
 }
 
 .table-bulk-bar button:focus-visible {
@@ -2865,12 +2924,12 @@ input[type="radio"] {
 
 .table-bulk-bar .table-bulk-bar-delete {
   border-color: transparent;
-  background: rgba(255, 250, 241, 0.94);
+  background: #ffffff;
   color: var(--danger);
 }
 
 .table-bulk-bar .table-bulk-bar-delete:hover {
-  background: #fffaf1;
+  background: #ffffff;
 }
 
 .table-bulk-bar .table-bulk-bar-clear {
@@ -3367,20 +3426,20 @@ td.table-col-serial {
 }
 
 .table-grade--unc {
-  color: #2f5b34;
-  background: rgba(47, 107, 60, 0.1);
-  box-shadow: inset 0 0 0 1px rgba(47, 107, 60, 0.24);
+  color: var(--success);
+  background: var(--success-bg);
+  box-shadow: inset 0 0 0 1px rgba(49, 162, 76, 0.24);
 }
 
 .table-grade--choice {
-  color: #6a4a1c;
-  background: rgba(168, 132, 40, 0.14);
-  box-shadow: inset 0 0 0 1px rgba(168, 132, 40, 0.3);
+  color: var(--warning);
+  background: var(--warning-bg);
+  box-shadow: inset 0 0 0 1px rgba(247, 185, 40, 0.3);
 }
 
 .table-grade--circulated {
   color: var(--text-muted);
-  background: rgba(111, 92, 64, 0.07);
+  background: var(--surface-2);
 }
 
 .table-grade--none {
@@ -3410,7 +3469,7 @@ td.table-col-id {
   transform: translateY(calc(-50% + var(--table-thumb-preview-offset)));
   display: none;
   padding: 8px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   border: 1px solid var(--border);
   box-shadow: var(--shadow-md);
@@ -3682,7 +3741,7 @@ thead .table-sticky-cell {
    mark. */
 .table-scroll-x.is-scrolled-x .table-sticky-end::after {
   background: var(--border);
-  box-shadow: 6px 0 10px -6px rgba(62, 44, 20, 0.35);
+  box-shadow: 6px 0 10px -6px rgba(37, 40, 43, 0.28);
 }
 
 thead {
@@ -3702,10 +3761,10 @@ thead {
 
 thead th {
   background: var(--surface-3);
-  font-size: 0.76rem;
-  font-weight: 800;
+  font-size: 0.6875rem;
+  font-weight: 700;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   color: var(--text-muted);
 }
 
@@ -3713,15 +3772,11 @@ thead tr:first-child th {
   border-bottom-color: var(--border);
 }
 
-/* The Table screen's labels follow the prototype: wide-tracked caps at 11px
-   on the darker surface-3 band, in a fixed 40px row, so the header reads as a
-   caption over the rows. The tone is the palette's umber rather than the
-   prototype's #8a755a: at this size a label is small text, and #8a755a
-   measures 3.5:1 on the band against the 4.5:1 the platform requires.
-   `--text-muted` is the nearest declared tone that clears it (5.1:1) and
-   still reads as a caption under the row ink. No text-align here: the column
-   model's align-* classes own the header's alignment, the same as the body
-   cells. */
+/* The Table screen's labels: wide-tracked caps at 11px on the grey surface-3
+   band, in a fixed 40px row, so the header reads as a caption over the rows.
+   `--text-muted` clears 4.5:1 on the band and still reads as a caption under
+   the row ink. No text-align here: the column model's align-* classes own the
+   header's alignment, the same as the body cells. */
 .table-shell thead {
   background: var(--surface-3);
 }
@@ -3731,8 +3786,8 @@ thead tr:first-child th {
   padding: 0 12px;
   background: var(--surface-3);
   font-size: 0.6875rem;
-  font-weight: 650;
-  letter-spacing: 0.075em;
+  font-weight: 700;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   color: var(--text-muted);
   white-space: nowrap;
@@ -3837,7 +3892,7 @@ th[aria-sort="descending"] .sort-chevron {
 .select-input {
   width: 100%;
   min-height: 34px;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   border: 1px solid var(--border-control);
   background: var(--surface);
   padding: 6px 10px;
@@ -4114,7 +4169,7 @@ th[aria-sort="descending"] .sort-chevron {
   height: 36px;
   padding: 0 8px 0 11px;
   border: 1px solid var(--border-control);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-control);
   background: var(--surface);
   box-shadow: var(--shadow-sm);
 }
@@ -4149,7 +4204,7 @@ th[aria-sort="descending"] .sort-chevron {
 
 .table-filter-field:hover,
 .table-filter-field--open {
-  background: #e7d9c2;
+  background: var(--surface-4);
 }
 
 .table-filter-field:focus-visible {
@@ -4180,7 +4235,7 @@ th[aria-sort="descending"] .sort-chevron {
   min-width: 200px;
   padding: 5px;
   border: 1px solid var(--border-control);
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   background: var(--surface);
   box-shadow: var(--shadow-md);
 }
@@ -4314,7 +4369,7 @@ th[aria-sort="descending"] .sort-chevron {
   border: 1px solid var(--border-control);
   background: var(--surface);
   /* A form control does not inherit `color`, so without this the rail's query
-     renders in the UA's pure black — the one cold dark in a paper world. */
+     renders in the UA's pure black — an off-palette dark in a white world. */
   color: var(--text);
   caret-color: var(--accent);
   font-size: 0.86rem;
@@ -4448,7 +4503,7 @@ th[aria-sort="descending"] .sort-chevron {
   gap: 1px;
   height: 24px;
   padding: 0 1px 0 0;
-  border: 1px solid rgba(150, 98, 47, 0.18);
+  border: 1px solid var(--accent-border);
   border-radius: 7px;
   background: var(--accent-soft);
   color: var(--accent-strong);
@@ -4461,8 +4516,8 @@ th[aria-sort="descending"] .sort-chevron {
 }
 
 .table-filter-chip--negated {
-  border-color: rgba(160, 42, 34, 0.22);
-  background: rgba(160, 42, 34, 0.09);
+  border-color: rgba(163, 0, 0, 0.3);
+  background: var(--danger-bg);
   color: var(--danger);
 }
 
@@ -4787,7 +4842,8 @@ td.drag-cell {
 
    The grip itself carries the interaction. It rests faint — a table can show a
    hundred of these down its left edge, so the glyph is a mark, not a badge —
-   warms one tone with its row, and takes the accent only under the pointer.
+   strengthens one tone with its row, and takes the accent only under the
+   pointer.
    The rail behind it never changes in a row state, so hovering a row cannot
    read as a handle already grabbed. */
 .drag-handle {
@@ -5161,9 +5217,9 @@ td.drag-cell {
   max-height: 180px;
   overflow: auto;
   padding: 8px;
-  border-radius: 12px;
+  border-radius: var(--radius-md);
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.58);
+  background: var(--surface);
   scrollbar-width: none;
   -ms-overflow-style: none;
 }
@@ -5276,12 +5332,12 @@ td.drag-cell {
   flex-shrink: 0;
 }
 
-/* Table tags mirror the filter chips: a rounded rectangle with the same warm
-   hairline and accent tint, minus the removable cross. The global `.tag`
-   stays as-is for the slideshow and showcase tooltips. */
+/* Table tags mirror the filter chips: the same hairline, rounded rectangle
+   and accent tint, minus the removable cross. The global `.tag` stays as-is
+   for the slideshow and showcase tooltips. */
 .table-tag {
   padding: 2px 8px;
-  border: 1px solid rgba(150, 98, 47, 0.18);
+  border: 1px solid var(--accent-border);
   border-radius: 7px;
   background: var(--accent-soft);
   color: var(--accent-strong);
@@ -5466,7 +5522,7 @@ button.tag {
   width: 100%;
   max-height: 190px;
   object-fit: contain;
-  border-radius: 10px;
+  border-radius: var(--radius-md);
 }
 
 .image-dropzone-empty {
@@ -5487,7 +5543,7 @@ button.tag {
   gap: 8px;
   align-items: center;
   font-size: 0.86rem;
-  color: #57534e;
+  color: var(--text-muted);
 }
 
 .image-generate-toggle--inline {
@@ -5614,8 +5670,8 @@ button.tag {
 
 .scrape-conflict-value-block {
   padding: 14px 16px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.72);
+  border-radius: var(--radius-md);
+  background: var(--surface);
   border: 1px solid var(--border-soft);
 }
 
@@ -5636,9 +5692,9 @@ button.tag {
   align-items: center;
   gap: 8px;
   padding: 10px 14px;
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   border: 1px solid var(--border);
-  background: rgba(255, 255, 255, 0.72);
+  background: var(--surface);
   cursor: pointer;
 }
 
@@ -5655,7 +5711,7 @@ button.tag {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(28, 22, 16, 0.55);
+  background: rgba(37, 40, 43, 0.55);
 }
 
 .confirm-dialog {
@@ -5765,16 +5821,16 @@ button.tag {
   border-radius: var(--radius-pill);
   font-size: 0.82rem;
   font-variant-numeric: tabular-nums;
-  background: rgba(245, 240, 232, 0.08);
+  background: rgba(255, 255, 255, 0.08);
   border: 1px solid var(--on-dark-border);
 }
 
 .slideshow-exit-button {
   border: 1px solid var(--on-dark-border);
-  background: rgba(245, 240, 232, 0.08);
+  background: rgba(255, 255, 255, 0.08);
   color: var(--on-dark-text);
-  padding: 6px 12px;
-  border-radius: var(--radius-md);
+  padding: 6px 16px;
+  border-radius: var(--radius-pill);
   font-size: 0.82rem;
   font-weight: 600;
   transition:
@@ -5784,8 +5840,8 @@ button.tag {
 
 .slideshow-exit-button:hover,
 .slideshow-exit-button:focus-visible {
-  background: rgba(245, 240, 232, 0.14);
-  border-color: rgba(245, 240, 232, 0.32);
+  background: rgba(255, 255, 255, 0.16);
+  border-color: rgba(255, 255, 255, 0.4);
 }
 
 .slideshow-layout {
@@ -5802,7 +5858,7 @@ button.tag {
   height: 56px;
   border-radius: 50%;
   border: 1px solid var(--on-dark-border);
-  background: rgba(245, 240, 232, 0.06);
+  background: rgba(255, 255, 255, 0.06);
   color: inherit;
   font-size: 1.6rem;
   position: sticky;
@@ -5813,7 +5869,7 @@ button.tag {
 }
 
 .arrow-button:hover:not(:disabled) {
-  background: rgba(245, 240, 232, 0.12);
+  background: rgba(255, 255, 255, 0.14);
 }
 
 .arrow-button:disabled {
@@ -5849,7 +5905,7 @@ button.tag {
 
 .slide-thumb-btn {
   position: relative;
-  background: rgba(247, 236, 220, 0.05);
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid var(--on-dark-border);
   border-radius: var(--radius-lg);
   padding: 10px;
@@ -5888,7 +5944,7 @@ button.tag {
   padding: 24px;
   border-radius: var(--radius-md);
   border: 1px dashed var(--on-dark-border);
-  background: rgba(247, 236, 220, 0.03);
+  background: rgba(255, 255, 255, 0.03);
   color: var(--on-dark-muted);
   text-align: center;
 }
@@ -5932,7 +5988,7 @@ button.tag {
   border-radius: var(--radius-lg);
   background: var(--on-dark-bg-translucent);
   border: 1px solid var(--on-dark-border);
-  box-shadow: 0 24px 48px rgba(20, 12, 4, 0.5);
+  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
   /* The popover is mounted standalone in the showcase (unlike the table
      slideshow, where the scrim owns the text colour), so the content owns
      the on-dark text colour itself: the arrows, counter, and note label
@@ -5999,7 +6055,7 @@ button.tag {
   padding: 32px;
   border: 1px dashed var(--on-dark-border);
   border-radius: var(--radius-lg);
-  background: rgba(247, 236, 220, 0.04);
+  background: rgba(255, 255, 255, 0.04);
   color: var(--on-dark-muted);
   text-align: center;
 }
@@ -6056,9 +6112,9 @@ button.tag {
 }
 
 .slideshow-screen .tag {
-  background: rgba(224, 170, 98, 0.16);
+  background: rgba(230, 0, 0, 0.2);
   color: var(--on-dark-text);
-  border: 1px solid rgba(224, 170, 98, 0.32);
+  border: 1px solid rgba(230, 0, 0, 0.5);
 }
 
 .detail-grid {
@@ -6073,7 +6129,7 @@ button.tag {
   padding: 16px;
   border: 1px solid var(--on-dark-border);
   border-radius: var(--radius-lg);
-  background: rgba(247, 236, 220, 0.04);
+  background: rgba(255, 255, 255, 0.04);
   width: 100%;
   max-width: 100%;
   justify-self: stretch;
@@ -6093,8 +6149,8 @@ button.tag {
 }
 
 .scraped-details-grid a {
-  color: var(--on-dark-accent);
-  text-decoration-color: rgba(224, 170, 98, 0.6);
+  color: var(--on-dark-link);
+  text-decoration-color: rgba(230, 0, 0, 0.7);
 }
 
 .scraped-details-grid a:hover,
@@ -6159,7 +6215,7 @@ button.tag {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(24, 18, 13, 0.5);
+  background: rgba(37, 40, 43, 0.5);
 }
 
 .import-progress-card {
@@ -6210,13 +6266,13 @@ button.tag {
 
 .scrape-toast--error {
   background: var(--danger-bg);
-  border: 1px solid rgba(160, 42, 34, 0.3);
+  border: 1px solid rgba(163, 0, 0, 0.3);
   color: var(--danger);
 }
 
 .scrape-toast--success {
   background: var(--success-bg);
-  border: 1px solid rgba(47, 107, 60, 0.3);
+  border: 1px solid rgba(49, 162, 76, 0.3);
   color: var(--success);
 }
 
@@ -6290,7 +6346,7 @@ kbd {
 
 .slideshow-screen kbd,
 .image-popover-content kbd {
-  background: rgba(245, 240, 232, 0.1);
+  background: rgba(255, 255, 255, 0.1);
   border-color: var(--on-dark-border);
   box-shadow: none;
   color: var(--on-dark-text);
@@ -6308,9 +6364,9 @@ kbd {
   left: 50%;
   transform: translateX(-50%) translateY(4px);
   padding: 4px 8px;
-  border-radius: 6px;
-  background: rgba(20, 14, 9, 0.92);
-  color: #fff5e9;
+  border-radius: var(--radius-md);
+  background: rgba(37, 40, 43, 0.94);
+  color: var(--on-dark-text);
   font-size: 0.72rem;
   font-weight: 700;
   white-space: nowrap;
@@ -6337,7 +6393,7 @@ kbd {
   display: grid;
   place-items: center;
   padding: 24px;
-  background: rgba(24, 18, 13, 0.5);
+  background: rgba(37, 40, 43, 0.5);
 }
 
 .shortcuts-panel {
@@ -6459,7 +6515,7 @@ kbd {
   width: 48px;
   height: 32px;
   flex-shrink: 0;
-  border-radius: 6px;
+  border-radius: var(--radius-md);
   overflow: hidden;
   background: var(--surface-3);
   display: flex;
@@ -6649,7 +6705,7 @@ kbd {
    the row highlight reads as one continuous band.
    The rail keeps its resting fill here: the handle is a grab target, and
    filling it with the accent made it look already grabbed. Row state reaches
-   the grip instead — the dots warm one tone — and only the pointer directly
+   the grip instead — the dots strengthen one tone — and only the pointer directly
    over the handle lights the rail itself (see `.drag-handle:hover`). */
 .named-record-row:focus-visible > td.named-records-drag-cell::before,
 .named-record-row:has(:focus-visible) > td.named-records-drag-cell::before,
