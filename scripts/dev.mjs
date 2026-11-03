@@ -33,17 +33,17 @@ function start(command, args, { env = {}, stdio = "inherit" } = {}) {
   return child;
 }
 
-function killTree(child) {
+function killTree(child, signal = "SIGTERM") {
   if (!child || child.exitCode !== null || child.signalCode !== null) return;
   if (isWindows) {
     spawn("taskkill", ["/pid", String(child.pid), "/T", "/F"], { stdio: "ignore" });
     return;
   }
   try {
-    process.kill(-child.pid, "SIGTERM");
+    process.kill(-child.pid, signal);
   } catch {
     try {
-      child.kill("SIGTERM");
+      child.kill(signal);
     } catch {
       // Already gone.
     }
@@ -54,9 +54,24 @@ function shutdown(code) {
   if (shuttingDown) return;
   shuttingDown = true;
   process.exitCode = code;
-  for (const child of children) killTree(child);
-  // Do not hang forever on a child that ignores SIGTERM.
-  setTimeout(() => process.exit(code), 2000).unref();
+  const pending = [...children];
+  for (const child of pending) killTree(child, "SIGTERM");
+
+  // Escalate and never leave orphans behind: a pane closing must not leave a
+  // detached server or Vite holding 3002/5173 for the next pane.
+  const forced = setTimeout(() => {
+    for (const child of pending) killTree(child, "SIGKILL");
+    process.exit(code);
+  }, 2000);
+  const poll = setInterval(() => {
+    const alive = pending.some(
+      (child) => child.exitCode === null && child.signalCode === null,
+    );
+    if (alive) return;
+    clearInterval(poll);
+    clearTimeout(forced);
+    process.exit(code);
+  }, 100);
 }
 
 const server = start("cargo", ["run", "-p", "editor_server_rust"], {
@@ -100,8 +115,11 @@ server.on("error", (error) => {
   shutdown(1);
 });
 
-for (const signal of ["SIGINT", "SIGTERM"]) {
-  process.on(signal, () => shutdown(signal === "SIGINT" ? 130 : 143));
+// A pane closing sends SIGHUP to the shell's process group; without a listener
+// Node would exit immediately and leave the detached children running.
+const signals = { SIGHUP: 129, SIGINT: 130, SIGQUIT: 131, SIGTERM: 143 };
+for (const [signal, code] of Object.entries(signals)) {
+  process.on(signal, () => shutdown(code));
 }
 
 process.on("exit", () => {
