@@ -4775,7 +4775,7 @@ function NotesTable({
                   {!isCollectionEditing && !showingNewCollectionForm ? (
                     <button
                       aria-label="Add note"
-                      className="button button-primary table-add-note"
+                      className="button table-add-note"
                       data-shortcut="a"
                       disabled={noCollections || isNewCollection}
                       onClick={openCreateNote}

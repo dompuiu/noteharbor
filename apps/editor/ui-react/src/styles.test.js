@@ -680,7 +680,7 @@ describe("table styles", () => {
     );
     expect(ring).not.toBeNull();
     expect(ring[1]).not.toMatch(/border-color:/);
-    expect(ring[1]).toMatch(/outline:\s*2px solid var\(--accent\)/);
+    expect(ring[1]).toMatch(/outline:\s*2px solid var\(--tag-text\)/);
     expect(ring[1]).toMatch(/outline-offset:\s*2px/);
 
     // The cross draws no ring of its own; the chip's ring marks the focus.
@@ -705,8 +705,8 @@ describe("table styles", () => {
     expect(chip).not.toBeNull();
     expect(chip[1]).toMatch(/height:\s*24px/);
     expect(chip[1]).toMatch(/border-radius:\s*7px/);
-    expect(chip[1]).toMatch(/background:\s*var\(--accent-soft\)/);
-    expect(chip[1]).toMatch(/color:\s*var\(--accent-strong\)/);
+    expect(chip[1]).toMatch(/background:\s*var\(--tag-bg\)/);
+    expect(chip[1]).toMatch(/color:\s*var\(--tag-text\)/);
 
     const button = styles.match(/^\.suggestion-tag\s*\{([^}]*)\}/m);
     expect(button).not.toBeNull();
@@ -758,14 +758,15 @@ describe("table styles", () => {
     expect(firstChild[1]).not.toMatch(/font-weight:/);
   });
 
-  // Filter chips stay legible at rest: the field label reads as a label, the
-  // value chip carries the accent wash, and a negation stays in the danger
-  // family. No new palette.
-  test("filter chips stay in the accent family", () => {
+  // Filter chips stay legible at rest: the field label reads as a label, every
+  // value chip carries the tag family whether it names a catalogue number or a
+  // tag, and a negation stays in the danger family.
+  test("filter chips wear the tag family", () => {
     const chip = styles.match(/\.table-filter-chip\s*\{([^}]*)\}/);
     expect(chip).not.toBeNull();
-    expect(chip[1]).toMatch(/background:\s*var\(--accent-soft\)/);
-    expect(chip[1]).toMatch(/color:\s*var\(--accent-strong\)/);
+    expect(chip[1]).toMatch(/background:\s*var\(--tag-bg\)/);
+    expect(chip[1]).toMatch(/color:\s*var\(--tag-text\)/);
+    expect(chip[1]).toMatch(/border:\s*1px solid var\(--tag-border\)/);
 
     const label = styles.match(/\.table-filter-facet-label\s*\{([^}]*)\}/);
     expect(label).not.toBeNull();
@@ -774,6 +775,11 @@ describe("table styles", () => {
     const negated = styles.match(/\.table-filter-chip--negated\s*\{([^}]*)\}/);
     expect(negated).not.toBeNull();
     expect(negated[1]).toMatch(/var\(--danger\)/);
+    // A negation has to outrank the tag family, or a `!tag` would lose its
+    // danger ground.
+    expect(styles.indexOf(".table-filter-chip {")).toBeLessThan(
+      styles.indexOf(".table-filter-chip--negated {"),
+    );
   });
 
   // The chip row's metrics: a 24px unit around the 24px value chip, 12px
@@ -810,7 +816,7 @@ describe("table styles", () => {
     expect(clear[1]).toMatch(/color:\s*var\(--accent\)/);
     expect(clear[1]).toMatch(/margin-left:\s*6px/);
 
-    // The remove cross is drawn, not typed, so it centres in its 17px hit box.
+    // The remove cross is drawn, not typed, so it centres in its 17px target.
     const cross = styles.match(/\.table-filter-chip-remove svg\s*\{([^}]*)\}/);
     expect(cross).not.toBeNull();
     expect(cross[1]).toMatch(/display:\s*block/);
@@ -818,25 +824,30 @@ describe("table styles", () => {
   });
 
   // Tabbing to a filter chip's remove cross should light it up exactly like a
-  // mouse hover: the same red fill. It is its own target, so it gets its own
-  // danger ring, separate from the value's ring beside it.
+  // mouse hover: the same round Ochre wash. It is its own target, so it gets
+  // its own ring, separate from the value's ring beside it.
   test("keyboard focus on a chip cross matches its hover state", () => {
+    const button = styles.match(/^\.table-filter-chip-remove\s*\{([^}]*)\}/m);
+    expect(button).not.toBeNull();
+    // A circle, not a rounded square: the wash follows the 17px exit.
+    expect(button[1]).toMatch(/border-radius:\s*var\(--radius-pill\)/);
+
     const fill = styles.match(
       /\.table-filter-chip-remove:hover,\s*\.table-filter-chip-remove:focus-visible\s*\{([^}]*)\}/,
     );
     expect(fill).not.toBeNull();
-    expect(fill[1]).toMatch(/background:\s*var\(--danger\)/);
-    expect(fill[1]).toMatch(/color:\s*var\(--accent-ink\)/);
+    expect(fill[1]).toMatch(/background:\s*rgba\(122, 79, 0, 0\.14\)/);
+    expect(fill[1]).toMatch(/color:\s*var\(--tag-text\)/);
 
     const ring = styles.match(
-      /\.table-filter-chip-remove:focus-visible\s*\{\s*outline:\s*2px solid var\(--danger\)/,
+      /\.table-filter-chip-remove:focus-visible\s*\{\s*outline:\s*2px solid var\(--tag-text\)/,
     );
     expect(ring).not.toBeNull();
   });
 
   // The value is what the filter chip is for, so editing it rings the whole
-  // chip: the same 2px accent outline, 2px off the border, that a focused tag
-  // in the table wears. The cross keeps its own danger ring.
+  // chip: a 2px Ochre outline, 2px off the border, that a focused tag in the
+  // table wears. The cross keeps its own ring of the same tone.
   test("editing a filter chip rings the whole chip", () => {
     const value = styles.match(/^\.table-filter-chip-value\s*\{([^}]*)\}/m);
     expect(value).not.toBeNull();
@@ -848,7 +859,7 @@ describe("table styles", () => {
     );
     expect(ring).not.toBeNull();
     expect(ring[0]).toMatch(/\.table-filter-chip-input:focus-visible/);
-    expect(ring[1]).toMatch(/outline:\s*2px solid var\(--accent\)/);
+    expect(ring[1]).toMatch(/outline:\s*2px solid var\(--tag-text\)/);
     expect(ring[1]).toMatch(/outline-offset:\s*2px/);
 
     // The slice itself draws no second, inset ring.
@@ -1380,24 +1391,28 @@ describe("table styles", () => {
     );
   });
 
-  // The tags column reads as the same chip as the filter field above the
-  // table: one radius, one border and one tint family, minus the cross the
-  // table has no room for. Comparing the two rules keeps them from drifting.
-  test("table tags match the filter chip's shape, border and colour", () => {
+  // The tags column and the filter field above the table keep one geometry —
+  // radius, hairline weight and compact metrics — and now one family: a value
+  // chip is Ochre whether it sits in a row or in the rail. Comparing the rules
+  // keeps the shapes from drifting. The values are opaque so a row's hover or
+  // selection tint never shows through a chip.
+  test("table tags and filter chips keep one geometry and one family", () => {
     const filterChip = styles.match(/\.table-filter-chip\s*\{([^}]*)\}/);
     const tag = styles.match(/\.table-tag\s*\{([^}]*)\}/);
     expect(filterChip).not.toBeNull();
     expect(tag).not.toBeNull();
 
     for (const prop of [
-      /border:\s*1px solid var\(--accent-border\)/,
+      /border:\s*1px solid var\(--tag-border\)/,
       /border-radius:\s*7px/,
-      /background:\s*var\(--accent-soft\)/,
-      /color:\s*var\(--accent-strong\)/,
+      /background:\s*var\(--tag-bg\)/,
+      /color:\s*var\(--tag-text\)/,
     ]) {
       expect(filterChip[1]).toMatch(prop);
       expect(tag[1]).toMatch(prop);
     }
+    // No alpha in the tag ground: the row tint must not bleed through.
+    expect(styles).toMatch(/--tag-bg:\s*#[0-9a-f]{6}/i);
 
     // The table tag is the whole chip: compact padding, no removable cross.
     expect(tag[1]).toMatch(/padding:\s*2px\s+8px/);
@@ -1408,9 +1423,31 @@ describe("table styles", () => {
     // control rather than a real tag.
     const more = styles.match(/\.table-tag\.table-tag--more\s*\{([^}]*)\}/);
     expect(more).not.toBeNull();
-    expect(more[1]).toMatch(/border:\s*1px\s+dashed\s+var\(--border-control\)/);
+    expect(more[1]).toMatch(/border:\s*1px\s+dashed\s+var\(--tag-border-hover\)/);
     expect(more[1]).toMatch(/background:\s*transparent/);
-    expect(more[1]).toMatch(/color:\s*var\(--text-muted\)/);
+    expect(more[1]).toMatch(/color:\s*var\(--tag-text-muted\)/);
+  });
+
+  // The chip is a value: its label and its cross carry the tag tones, while the
+  // actions around it — the focus ring, the cross's hover, "Clear all" — stay
+  // in the accent family.
+  test("filter chip labels carry the tag tones", () => {
+    const value = styles.match(/^\.table-filter-chip-value\s*\{([^}]*)\}/m);
+    expect(value).not.toBeNull();
+    expect(value[1]).toMatch(/color:\s*var\(--tag-text\)/);
+
+    const input = styles.match(/^\.table-filter-chip-input\s*\{([^}]*)\}/m);
+    expect(input).not.toBeNull();
+    expect(input[1]).toMatch(/color:\s*var\(--tag-text\)/);
+
+    const cross = styles.match(/^\.table-filter-chip-remove\s*\{([^}]*)\}/m);
+    expect(cross).not.toBeNull();
+    expect(cross[1]).toMatch(/color:\s*var\(--tag-text-muted\)/);
+
+    // The negation repaints the value, and its rule has to come after the base.
+    expect(styles.indexOf(".table-filter-chip--negated .table-filter-chip-value")).toBeGreaterThan(
+      styles.indexOf(".table-filter-chip-value {"),
+    );
   });
 
   test("the chevron appears on hover and marks the sorted direction", () => {

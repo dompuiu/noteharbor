@@ -17,6 +17,12 @@ colors:
   success: "#157a3a"
   warning: "#7a4f00"
   info: "#29597a"
+  tag-bg: "#fdf3da"
+  tag-bg-hover: "#fae6bd"
+  tag-border: "#af8134"
+  tag-border-hover: "#a8791f"
+  tag-text: "#7a4f00"
+  tag-text-muted: "#8a6a2c"
 typography:
   display:
     fontFamily: "Inter, Helvetica Neue, Helvetica, Arial, Noto Sans, sans-serif"
@@ -142,8 +148,8 @@ Structure stays dense and quiet. The Table screen is the centre of gravity: one 
 ## Colors
 
 ### Brand & Accent
-- **Brand Red** (`{colors.brand-red}` — `#e60000`): The single accent. Primary button fill, active sidebar edge, focus ring, selected-row edge, tag chips, and the bulk-action bar. It clears 4.5:1 against white, so white button labels stay legible.
-- **Deep Red** (`{colors.brand-red-deep}` — `#b80000`): Red type on white — links, active filter values, sort labels, tag text, and the primary button's hover fill.
+- **Brand Red** (`{colors.brand-red}` — `#e60000`): The single accent. Primary button fill, active sidebar edge, focus ring, selected-row edge, active filter chips, and the bulk-action bar. It clears 4.5:1 against white, so white button labels stay legible.
+- **Deep Red** (`{colors.brand-red-deep}` — `#b80000`): Red type on white — links, active filter values, sort labels, and the primary button's base fill.
 
 ### Surface
 - **Canvas** (`{colors.canvas}` — `#ffffff`): Cards, inputs, menus, and the table surface.
@@ -166,10 +172,18 @@ The brand has no separate semantic palette, but the Editor needs status. These t
 - **Warning** (`{colors.warning}` — `#7a4f00`) on `rgba(247, 185, 40, 0.16)`: warnings and scrape conflicts.
 - **Info** (`{colors.info}` — `#29597a`) on `rgba(41, 89, 122, 0.12)`: informational callouts.
 
+### Tags
+Tags are labels, not state, so they left the accent family for their own warm Ochre family. The values are opaque, never translucent: a chip sits inside rows and panels that repaint behind it on hover and selection, and a wash would turn muddy over that tint.
+- **Ochre** (`{colors.tag-text}` — `#7a4f00`) on `{colors.tag-bg}` (`#fdf3da`): every tag label — table cells, the overflow popover, the slideshow, showcase tooltips, and the note editor's suggestions.
+- **Hairline** (`{colors.tag-border}` — `#af8134`), hover at `{colors.tag-border-hover}` (`#a8791f`) on `{colors.tag-bg-hover}` (`#fae6bd`).
+- **Ghost** (`{colors.tag-text-muted}` — `#8a6a2c`): the dashed "+N more" control, which is an affordance rather than a tag.
+
 ### Named Rules
 **The One Red Rule.** Red is state and action, never decoration. It covers at most about a tenth of any screen; its rarity is what makes the primary pill and the active edge read instantly.
 
-**The White Room Rule.** Content lives on white or on a grey step of the same neutral family. No warm cream, blue-grey, or second tinted neutral enters the page.
+**The Tag Family Rule.** Ochre belongs to values: tag chips in the table, the overflow popover, the slideshow and showcase tooltips, the editor's Tags field, and every value chip in the filter rail — ground, hairline, label, hover, the round remove cross, and the ring the chip draws when focused. Red still owns what an action does outside a chip — the primary pill, row selection, the global focus ring, and `Clear all` — and a negated filter keeps the danger ground. Nothing else borrows ochre for a fill or a border.
+
+**The White Room Rule.** Content lives on white or on a grey step of the same neutral family. No warm cream, blue-grey, or second tinted neutral enters the page, with one sanctioned exception: the Ochre tag chips above.
 
 ## Typography
 
@@ -248,8 +262,8 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Selection:** text selected inside the card takes a 14% red wash instead of the platform blue.
 
 ### Chips & Tags
-- **Style:** 7px rounded rectangle, red wash ground, Deep Red text, 1px red-tinted hairline.
-- **State:** removable chips pair the label with an icon-only remove button; active filter chips match the selected-row tint; the "more" chip is a dashed muted ghost.
+- **Style:** 7px rounded rectangle, opaque Ochre ground (`#fdf3da`), Ochre text (`#7a4f00`), 1px hairline (`#af8134`); hover warms the ground and the hairline. The 22px chip keeps its size so the tag-width planner stays exact.
+- **State:** removable chips pair the label with a round, icon-only remove button that fills with Ochre on hover; filter chips carry the Ochre family too, whether the facet is a tag or a catalogue number, while a negated filter stays on the danger ground; the "more" chip is a dashed Ochre ghost.
 
 ### Sidebar Navigation
 - **Style:** a 64px Rail Slate rail with white text and a 1px hairline right border; category labels are 9.5px/800 uppercase with 0.14em tracking at 72% white, and a 20px marker ringed in an 18% white hairline.
@@ -266,12 +280,12 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 
 ### Overlays
 - **Scrim:** ink at 50–88% opacity. The slideshow and image popover keep the deep ink surfaces with white text; the note editor uses a light grey scrim with a white panel.
-- **Panel:** 6px radius, 1px ink hairline, floating shadow. Slideshow tags use a red wash on dark with white text.
+- **Panel:** 6px radius, 1px ink hairline, floating shadow. Slideshow tags use an Ochre wash on dark with white text.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** reserve Brand Red for the primary pill, the active navigation edge, focus, selection, and the tag family.
+- **Do** reserve Brand Red for the primary pill, the active navigation edge, focus, selection, and destructive actions; the tag family carries values, in rows and in the filter rail.
 - **Do** set screen titles and eyebrows in uppercase weight 800 with tight tracking; that stencil contrast is the brand voice.
 - **Do** use pills for buttons and counters, 10px corners for fields and selects, 7px for chips, and 6px for cards and panels.
 - **Do** cycle the page: slate rail → white content → ink only for overlays. Polarity is the depth cue.
@@ -279,7 +293,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Do** write status feedback as a named title plus one detail line, with the recovery action adjacent.
 
 ### Don't:
-- **Don't** introduce a second accent hue, a gradient, or glassmorphism.
+- **Don't** introduce a second accent hue, a gradient, or glassmorphism. The Ochre tag family is a label neutral, not a second accent: it never fills a button, a band, or a marker.
 - **Don't** paint large red fills behind content; red is a marker, not a ground.
 - **Don't** use soft drop shadows on flat cards at rest.
 - **Don't** wrap table cells or soften row density to "breathe"; the Table is a scanning surface.

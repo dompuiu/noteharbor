@@ -57,6 +57,20 @@
   --warning-bg: rgba(247, 185, 40, 0.16);
   --info: #29597a;
   --info-bg: rgba(41, 89, 122, 0.12);
+  /* ── Tag family ────────────────────────────────────────────────
+     Tags are labels, not state, so they carry their own warm family and
+     leave red to the action and selection voice. The values are opaque on
+     purpose: a chip sits inside rows and panels that repaint behind it on
+     hover and selection, and a translucent wash turns muddy over that tint.
+     The label clears 6:1 on the chip's own ground, and the hairline clears
+     3:1 against the white it sits on, so the chip's edge survives for
+     low-vision readers instead of dissolving into the page. */
+  --tag-bg: #fdf3da;
+  --tag-bg-hover: #fae6bd;
+  --tag-border: #af8134;
+  --tag-border-hover: #a8791f;
+  --tag-text: #7a4f00;
+  --tag-text-muted: #8a6a2c;
   /* Controls keep the app's calibrated 10px step: buttons, fields, and
      selects share it, so no one control reads rounder than its neighbour.
      Small chrome sits one step under at 8px; cards stay flat at 6px. */
@@ -4139,6 +4153,24 @@ th[aria-sort="descending"] .sort-chevron {
 .table-add-note {
   gap: 6px;
   white-space: nowrap;
+  background: var(--accent-strong);
+  border-color: var(--accent-strong);
+  color: var(--accent-ink);
+}
+
+/* Deep red, not brand red: at 36px beside the outline Reset and Columns
+   pills, #e60000's brightness reads as an alert. The deeper step keeps this
+   as the only filled control on the rail, and hover brightens toward the
+   brand red instead of darkening away from it. */
+.table-add-note:hover {
+  background: #cc0000;
+  border-color: #cc0000;
+  color: var(--accent-ink);
+}
+
+.table-add-note:active {
+  background: #990000;
+  border-color: #990000;
 }
 
 .table-add-note[data-shortcut]::after {
@@ -4525,16 +4557,26 @@ th[aria-sort="descending"] .sort-chevron {
   gap: 1px;
   height: 24px;
   padding: 0 1px 0 0;
-  border: 1px solid var(--accent-border);
+  border: 1px solid var(--tag-border);
   border-radius: 7px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: var(--tag-bg);
+  color: var(--tag-text);
   white-space: nowrap;
   /* The chip is the part that gives way when the unit hits the rail's edge;
      the connector and the field label keep their size. */
   flex: 0 1 auto;
   min-width: 0;
   max-width: 100%;
+}
+
+/* Filters wear the tag family too: a chip names a value, and a value reads in
+   Ochre whether it sits in a row or in the rail above it. The accent family
+   still owns what the action does — the focus ring and "Clear all" — and a
+   negation keeps the danger ground, which is why it is declared after this
+   block. */
+.table-filter-chip:not(.table-filter-chip--negated):hover {
+  border-color: var(--tag-border-hover);
+  background: var(--tag-bg-hover);
 }
 
 .table-filter-chip--negated {
@@ -4549,7 +4591,7 @@ th[aria-sort="descending"] .sort-chevron {
    the way a focused tag reads in the table. `:focus-visible` keeps a mouse
    click from leaving a ring behind. */
 .tags-filter-chip:has(:focus-visible) {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--tag-text);
   outline-offset: 2px;
 }
 
@@ -4570,7 +4612,7 @@ th[aria-sort="descending"] .sort-chevron {
   border: 0;
   border-radius: 6px 0 0 6px;
   background: transparent;
-  color: var(--accent-strong);
+  color: var(--tag-text);
   font-size: 0.75rem;
   font-weight: 600;
   line-height: 22px;
@@ -4581,12 +4623,13 @@ th[aria-sort="descending"] .sort-chevron {
 }
 
 /* The value is what the filter chip is for, so focusing it — or the input it
-   opens — rings the whole chip with the app's normal 2px accent outline, set
-   2px off the border so the chip's own light frame stays visible inside it,
-   just like a focused tag in the table. The remove cross keeps its own ring. */
+   opens — rings the whole chip, set 2px off the border so the chip's own light
+   frame stays visible inside it. The ring uses the chip's own Ochre rather than
+   the action red: the chip is a value, and red inside it would read as an
+   error. The remove cross keeps its own ring. */
 .table-filter-chip:has(.table-filter-chip-value:focus-visible),
 .table-filter-chip:has(.table-filter-chip-input:focus-visible) {
-  outline: 2px solid var(--accent);
+  outline: 2px solid var(--tag-text);
   outline-offset: 2px;
 }
 
@@ -4607,7 +4650,7 @@ th[aria-sort="descending"] .sort-chevron {
   border: 0;
   border-radius: 0;
   background: transparent;
-  color: var(--accent-strong);
+  color: var(--tag-text);
   font-size: 0.75rem;
   font-weight: 600;
   outline: none;
@@ -4617,20 +4660,23 @@ th[aria-sort="descending"] .sort-chevron {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  /* A round 17px target, inset from the chip's right frame: the cross is the
+     value's neighbour, not its end cap, so hovering it can round the exit
+     without touching the chip's own 7px rectangle. */
   width: 17px;
   height: 17px;
   /* The cross never gives way to a long value: it is the chip's only exit. */
   flex: 0 0 auto;
   padding: 0;
   border: 0;
-  border-radius: 5px;
+  border-radius: var(--radius-pill);
   background: transparent;
-  color: var(--text-muted);
+  color: var(--tag-text-muted);
   line-height: 1;
   cursor: pointer;
 }
 
-/* A drawn cross centres exactly in the 17px button; the × glyph sits on the
+/* A drawn cross centres exactly in the 17px target; the × glyph sits on the
    font's math axis and reads a hair off-centre. */
 .table-filter-chip-remove svg {
   display: block;
@@ -4638,17 +4684,22 @@ th[aria-sort="descending"] .sort-chevron {
   height: 8px;
 }
 
+/* The cross is the value's own exit, so hovering it never repaints the chip:
+   the chip keeps the one hover ground a pointer gets anywhere on it, and only
+   the cross takes a disc of its own. Two different chip grounds under one
+   pointer would read as two controls. The disc is 14% Ochre so it stays
+   visible on top of the warmed chip ground. */
 .table-filter-chip-remove:hover,
 .table-filter-chip-remove:focus-visible {
-  background: var(--danger);
-  color: var(--accent-ink);
+  background: rgba(122, 79, 0, 0.14);
+  color: var(--tag-text);
 }
 
-/* The cross is the value's neighbour, not part of it, so it rings its own 17px
-   target in danger red. The 1px offset keeps a sliver of chip between the red
-   fill and the red ring so the two do not merge. */
+/* The cross rings its own 17px target in the chip's Ochre. The 1px offset
+   keeps a sliver of chip between the wash and the ring so the two do not
+   merge. */
 .table-filter-chip-remove:focus-visible {
-  outline: 2px solid var(--danger);
+  outline: 2px solid var(--tag-text);
   outline-offset: 1px;
 }
 
@@ -5313,9 +5364,9 @@ td.drag-cell {
 
 .table-tag.table-tag--more {
   padding: 2px 6px;
-  border: 1px dashed var(--border-control);
+  border: 1px dashed var(--tag-border-hover);
   background: transparent;
-  color: var(--text-muted);
+  color: var(--tag-text-muted);
   font-weight: 700;
 }
 
@@ -5342,11 +5393,11 @@ td.drag-cell {
 }
 
 .tag {
-  border: 1px solid var(--border);
+  border: 1px solid var(--tag-border);
   border-radius: var(--radius-pill);
   padding: 3px 10px;
-  background: var(--surface-3);
-  color: var(--text);
+  background: var(--tag-bg);
+  color: var(--tag-text);
   font: inherit;
   font-size: 0.76rem;
   font-weight: 600;
@@ -5354,17 +5405,30 @@ td.drag-cell {
   flex-shrink: 0;
 }
 
-/* Table tags mirror the filter chips: the same hairline, rounded rectangle
-   and accent tint, minus the removable cross. The global `.tag` stays as-is
-   for the slideshow and showcase tooltips. */
+/* Table tags keep the filter chip's hairline and 7px rectangle, but wear the
+   tag family: a label is data, the filter chip above the table is state. */
 .table-tag {
   padding: 2px 8px;
-  border: 1px solid var(--accent-border);
+  border: 1px solid var(--tag-border);
   border-radius: 7px;
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: var(--tag-bg);
+  color: var(--tag-text);
   font-size: 0.72rem;
   font-weight: 600;
+}
+
+/* A clickable chip warms one step under the pointer. The rule stays off the
+   ghost "+N" control, which only darkens its own dashed outline. */
+button.tag:hover,
+.table-tag:not(.table-tag--more):hover {
+  background: var(--tag-bg-hover);
+  border-color: var(--tag-border-hover);
+  color: var(--tag-text);
+}
+
+.table-tag.table-tag--more:hover {
+  border-color: var(--tag-text-muted);
+  color: var(--tag-text);
 }
 
 button.tag {
@@ -5382,14 +5446,22 @@ button.tag {
   margin-top: 12px;
 }
 
-/* A suggestion is a clickable chip, so it borrows the filter chip's surface
+/* A suggestion is a clickable chip, so it borrows the filter chip's geometry
    via `.table-filter-chip` in the markup; it needs the same type size as the
-   chip's value and the inner padding the container normally gets from it. */
+   chip's value and the inner padding the container normally gets from it.
+   It wears the tag family, not the filter family: the chip offers a label to
+   add, it does not report a filter that is on. */
 .suggestion-tag {
   padding: 0 8px;
   font-size: 0.75rem;
   font-weight: 600;
   cursor: pointer;
+}
+
+.suggestion-tag:hover {
+  border-color: var(--tag-border-hover);
+  background: var(--tag-bg-hover);
+  color: var(--tag-text);
 }
 
 .removable-tag {
@@ -6134,9 +6206,9 @@ button.tag {
 }
 
 .slideshow-screen .tag {
-  background: rgba(230, 0, 0, 0.2);
+  background: rgba(247, 185, 40, 0.18);
   color: var(--on-dark-text);
-  border: 1px solid rgba(230, 0, 0, 0.5);
+  border: 1px solid rgba(247, 185, 40, 0.5);
 }
 
 .detail-grid {
