@@ -18,9 +18,9 @@ colors:
   warning: "#7a4f00"
   info: "#29597a"
   tag-bg: "#fdf3da"
-  tag-bg-hover: "#fae6bd"
+  tag-bg-hover: "#f6eab0"
   tag-border: "#af8134"
-  tag-border-hover: "#a8791f"
+  tag-border-hover: "#9c8418"
   tag-text: "#7a4f00"
   tag-text-muted: "#8a6a2c"
 typography:
@@ -175,7 +175,7 @@ The brand has no separate semantic palette, but the Editor needs status. These t
 ### Tags
 Tags are labels, not state, so they left the accent family for their own warm Ochre family. The values are opaque, never translucent: a chip sits inside rows and panels that repaint behind it on hover and selection, and a wash would turn muddy over that tint.
 - **Ochre** (`{colors.tag-text}` — `#7a4f00`) on `{colors.tag-bg}` (`#fdf3da`): every tag label — table cells, the overflow popover, the slideshow, showcase tooltips, and the note editor's suggestions.
-- **Hairline** (`{colors.tag-border}` — `#af8134`), hover at `{colors.tag-border-hover}` (`#a8791f`) on `{colors.tag-bg-hover}` (`#fae6bd`).
+- **Hairline** (`{colors.tag-border}` — `#af8134`), hover at `{colors.tag-border-hover}` (`#9c8418`) on `{colors.tag-bg-hover}` (`#f6eab0`).
 - **Ghost** (`{colors.tag-text-muted}` — `#8a6a2c`): the dashed "+N more" control, which is an affordance rather than a tag.
 
 ### Named Rules

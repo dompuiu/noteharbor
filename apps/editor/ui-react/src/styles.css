@@ -66,9 +66,9 @@
      3:1 against the white it sits on, so the chip's edge survives for
      low-vision readers instead of dissolving into the page. */
   --tag-bg: #fdf3da;
-  --tag-bg-hover: #fae6bd;
+  --tag-bg-hover: #f6eab0;
   --tag-border: #af8134;
-  --tag-border-hover: #a8791f;
+  --tag-border-hover: #9c8418;
   --tag-text: #7a4f00;
   --tag-text-muted: #8a6a2c;
   /* Controls keep the app's calibrated 10px step: buttons, fields, and
