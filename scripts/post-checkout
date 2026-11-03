@@ -1,0 +1,29 @@
+#!/bin/sh
+# Link the primary worktree's data dir into newly created Git worktrees.
+#
+# `data/` is gitignored, so a fresh worktree starts with an empty database.
+# Sharing the primary checkout's `data` keeps collections and images identical
+# across worktrees.
+#
+# Install once per clone:
+#   ln -sf ../../scripts/post-checkout .git/hooks/post-checkout
+
+# $3 == 1 means a branch checkout (including `git worktree add`); 0 is a file
+# checkout and must not trigger any work.
+[ "${3:-}" = "1" ] || exit 0
+
+root=$(git rev-parse --show-toplevel 2>/dev/null) || exit 0
+
+# Never touch a worktree that already has data (or a stale symlink).
+if [ -e "$root/data" ] || [ -L "$root/data" ]; then
+    exit 0
+fi
+
+# The primary worktree is the first entry in `git worktree list`.
+primary=$(git worktree list --porcelain | sed -n 's/^worktree //p' | head -n1)
+[ -n "$primary" ] || exit 0
+if [ ! -e "$primary/data" ] && [ ! -L "$primary/data" ]; then
+    exit 0
+fi
+
+ln -s "$primary/data" "$root/data"

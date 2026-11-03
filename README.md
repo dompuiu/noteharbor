@@ -26,6 +26,14 @@ This is a pnpm workspace with apps under `apps/`:
 
 Local data (SQLite DB + images) lives in `data/` by default; see [Environment variables](#environment-variables) to override the location.
 
+`data/` is gitignored, so new Git worktrees would otherwise start with an empty database. `pnpm install` installs a `post-checkout` hook (`scripts/install-hooks.sh`) that symlinks the primary checkout's `data/` into every new worktree. Run it manually with:
+
+```bash
+sh scripts/install-hooks.sh
+```
+
+The primary checkout must already have `data/`. Only run one editor server at a time: they all write the same SQLite file.
+
 For current file-level structure, browse the repo directly rather than relying on a tree snapshot here.
 
 ---

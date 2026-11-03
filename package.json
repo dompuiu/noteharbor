@@ -12,7 +12,8 @@
     "build:viewer:flutter:windows": "cd apps/viewer/flutter && flutter pub get && flutter build windows",
     "build:viewer:flutter:ios": "cd apps/viewer/flutter && flutter pub get && flutter build ios",
     "test:editor:ui-react": "pnpm --filter editor_ui_react test",
-    "layout": "tsps --layout layout.yml"
+    "layout": "tsps --layout layout.yml",
+    "prepare": "sh scripts/install-hooks.sh"
   },
   "devDependencies": {
     "concurrently": "^10.0.6",
