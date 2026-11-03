@@ -1432,6 +1432,22 @@ describe("table styles", () => {
 });
 
 describe("sidebar styles", () => {
+  // The rail is the shell's one dark band. Its colours live in a named
+  // token set so the treatment can be retoned in one place; the rules must
+  // never hardcode a wash or a surface of their own.
+  test("the rail reads its colours from the rail palette tokens", () => {
+    expect(styles).toMatch(/--rail-bg:\s*#2c3a45/);
+    const rail = styles.match(/\.sidebar\s*\{([^}]*)\}/);
+    expect(rail).not.toBeNull();
+    expect(rail[1]).toMatch(/background:\s*var\(--rail-bg\)/);
+    expect(rail[1]).toMatch(/color:\s*var\(--rail-fg\)/);
+    expect(rail[1]).toMatch(/border-right:\s*1px solid var\(--rail-line\)/);
+    const link = styles.match(/\.sidebar-link\s*\{([^}]*)\}/);
+    expect(link).not.toBeNull();
+    expect(link[1]).toMatch(/color:\s*var\(--rail-muted\)/);
+    expect(link[1]).not.toMatch(/rgba\(255/);
+  });
+
   test("defines the collapsed rail and expanded widths", () => {
     expect(styles).toMatch(/--sidebar-rail-width:\s*64px/);
     expect(styles).toMatch(/--sidebar-expanded-width:\s*288px/);
@@ -1470,11 +1486,11 @@ describe("sidebar styles", () => {
 
   // The collapsed rail keeps each category's marker while the name drops away,
   // so the sections stay readable as categories rather than anonymous glyphs.
-  test("keeps the category marker visible on the dark rail when collapsed", () => {
+  test("keeps the category marker visible on the quiet rail when collapsed", () => {
     const marker = styles.match(/\.sidebar-group-ic\s*\{([^}]*)\}/);
     expect(marker).not.toBeNull();
-    expect(marker[1]).toMatch(/background:\s*rgba\(255,\s*255,\s*255,\s*0\.1\)/);
-    expect(marker[1]).toMatch(/color:\s*var\(--on-dark-text\)/);
+    expect(marker[1]).toMatch(/background:\s*var\(--rail-marker\)/);
+    expect(marker[1]).toMatch(/color:\s*var\(--rail-muted\)/);
     expect(marker[1]).toMatch(/border-radius:\s*50%/);
     // The name, not the marker, is what hides.
     expect(styles).not.toMatch(

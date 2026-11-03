@@ -66,6 +66,28 @@
   --radius-lg: 6px;
   --radius-xl: 6px;
   --radius-pill: 100px;
+  /* ── Rail palette ──────────────────────────────────────────────
+     The rail is the one dark band in the shell: slate ink against the
+     white and grey content ladder. It holds the contrast the app reads
+     as structure, but sits off pure ink so the overlays stay the
+     darkest surface. Every rail colour is a token; retone the set, never
+     the individual rules. */
+  --rail-bg: #2c3a45;
+  --rail-fg: #ffffff;
+  --rail-muted: rgba(226, 236, 244, 0.72);
+  --rail-faint: rgba(226, 236, 244, 0.62);
+  --rail-line: rgba(226, 236, 244, 0.14);
+  --rail-wash: rgba(226, 236, 244, 0.08);
+  --rail-marker: rgba(226, 236, 244, 0.1);
+  --rail-marker-ring: rgba(226, 236, 244, 0.18);
+  --rail-active-bg: rgba(226, 236, 244, 0.13);
+  --rail-active-cursor-bg: rgba(226, 236, 244, 0.17);
+  --rail-cursor-bg: rgba(226, 236, 244, 0.08);
+  --rail-control-border: rgba(226, 236, 244, 0.26);
+  --rail-action: #ff8a84;
+  --rail-action-wash: rgba(230, 0, 0, 0.2);
+  --rail-action-hover: #ffb0ac;
+  --rail-accent-text: #ffffff;
   --sidebar-rail-width: 64px;
   --sidebar-expanded-width: 288px;
   /* The brand has no soft drop shadows: cards are flat and only floating
@@ -250,9 +272,9 @@ input[type="radio"] {
   width: var(--sidebar-rail-width);
   display: flex;
   flex-direction: column;
-  background: var(--ink);
-  color: var(--on-dark-text);
-  border-right: 1px solid var(--ink);
+  background: var(--rail-bg);
+  color: var(--rail-fg);
+  border-right: 1px solid var(--rail-line);
   /* The expanded width fits content (max(288px, max-content)), and keyword
      widths only transition with interpolation allowed. Without this the
      64px -> max-content change snaps instead of animating. */
@@ -272,7 +294,7 @@ input[type="radio"] {
   gap: 10px;
   height: 58px;
   padding: 0 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.12);
+  border-bottom: 1px solid var(--rail-line);
 }
 
 .sidebar-brand {
@@ -324,14 +346,14 @@ input[type="radio"] {
 .sidebar-foot {
   flex: 0 0 auto;
   padding: 10px 8px 12px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid var(--rail-line);
   text-align: center;
 }
 
 .sidebar-version {
   font-size: 11px;
   font-weight: 600;
-  color: rgba(255, 255, 255, 0.52);
+  color: var(--rail-faint);
   white-space: nowrap;
 }
 
@@ -344,7 +366,7 @@ input[type="radio"] {
 .sidebar-group + .sidebar-group {
   margin-top: 8px;
   padding-top: 10px;
-  border-top: 1px solid rgba(255, 255, 255, 0.12);
+  border-top: 1px solid var(--rail-line);
 }
 
 .sidebar-group-label {
@@ -357,7 +379,7 @@ input[type="radio"] {
   font-weight: 800;
   letter-spacing: 0.14em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.56);
+  color: var(--rail-muted);
 }
 
 /* The category marker. It is the group's own icon, not a destination: an
@@ -375,9 +397,9 @@ input[type="radio"] {
   border-radius: 50%;
   display: grid;
   place-items: center;
-  color: var(--on-dark-text);
-  background: rgba(255, 255, 255, 0.1);
-  box-shadow: inset 0 0 0 1.5px rgba(255, 255, 255, 0.18);
+  color: var(--rail-muted);
+  background: var(--rail-marker);
+  box-shadow: inset 0 0 0 1.5px var(--rail-marker-ring);
 }
 
 .sidebar-group-ic svg {
@@ -398,7 +420,7 @@ input[type="radio"] {
   gap: 1px;
   margin-left: 20px;
   padding-left: 12px;
-  border-left: 1.5px solid rgba(255, 255, 255, 0.18);
+  border-left: 1.5px solid var(--rail-line);
 }
 
 .sidebar-ic {
@@ -421,7 +443,7 @@ input[type="radio"] {
   width: 100%;
   padding: 7px 9px;
   border-radius: var(--radius-sm);
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--rail-muted);
   font-size: 12.5px;
   font-weight: 600;
   text-decoration: none;
@@ -438,8 +460,8 @@ input[type="radio"] {
 }
 
 .sidebar-link:hover {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--on-dark-text);
+  background: var(--rail-wash);
+  color: var(--rail-fg);
 }
 
 /* The `+ New showcase` row is an action, not a destination: it is a button
@@ -452,29 +474,29 @@ input[type="radio"] {
   font-weight: 600;
   text-align: left;
   cursor: pointer;
-  color: #ff8a84;
+  color: var(--rail-action);
 }
 
 .sidebar-link--action:hover {
-  background: rgba(230, 0, 0, 0.16);
-  color: #ffb0ac;
+  background: var(--rail-action-wash);
+  color: var(--rail-action-hover);
 }
 
 .sidebar-link--active {
-  background: rgba(255, 255, 255, 0.12);
-  color: var(--on-dark-text);
+  background: var(--rail-active-bg);
+  color: var(--rail-fg);
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .sidebar-link--cursor {
-  background: rgba(255, 255, 255, 0.08);
-  color: var(--on-dark-text);
+  background: var(--rail-cursor-bg);
+  color: var(--rail-fg);
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
 .sidebar-link--active.sidebar-link--cursor {
-  background: rgba(255, 255, 255, 0.12);
-  color: var(--on-dark-text);
+  background: var(--rail-active-cursor-bg);
+  color: var(--rail-fg);
   box-shadow:
     inset 3px 0 0 var(--accent),
     inset 0 0 0 1.5px var(--accent);
@@ -515,10 +537,10 @@ input[type="radio"] {
   align-items: center;
   gap: 5px;
   padding: 3px 8px;
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid var(--rail-control-border);
   border-radius: var(--radius-pill);
   background: transparent;
-  color: rgba(255, 255, 255, 0.66);
+  color: var(--rail-muted);
   font-size: 11px;
   font-weight: 700;
   line-height: 1.4;
@@ -529,13 +551,13 @@ input[type="radio"] {
 .sidebar-reorder-toggle:hover,
 .sidebar-reorder-toggle:focus-visible {
   border-color: var(--accent);
-  color: var(--on-dark-text);
+  color: var(--rail-fg);
 }
 
 .sidebar-reorder-toggle--active {
-  background: rgba(230, 0, 0, 0.2);
+  background: var(--rail-active-bg);
   border-color: var(--accent);
-  color: var(--on-dark-text);
+  color: var(--rail-accent-text);
 }
 
 .sidebar-reorder-toggle--cursor {
@@ -590,10 +612,10 @@ input[type="radio"] {
   width: 22px;
   height: 22px;
   padding: 0;
-  border: 1px solid rgba(255, 255, 255, 0.24);
+  border: 1px solid var(--rail-control-border);
   border-radius: var(--radius-sm);
   background: transparent;
-  color: rgba(255, 255, 255, 0.66);
+  color: var(--rail-muted);
   font-size: 12px;
   line-height: 1;
   cursor: pointer;
@@ -602,7 +624,7 @@ input[type="radio"] {
 .sidebar-move-button:hover:not(:disabled),
 .sidebar-move-button:focus-visible:not(:disabled) {
   border-color: var(--accent);
-  color: var(--on-dark-text);
+  color: var(--rail-fg);
 }
 
 .sidebar-move-button:disabled {
@@ -612,7 +634,7 @@ input[type="radio"] {
 
 .sidebar-move-button--cursor {
   border-color: var(--accent);
-  color: var(--on-dark-text);
+  color: var(--rail-fg);
   box-shadow: inset 0 0 0 1.5px var(--accent);
 }
 
@@ -674,7 +696,7 @@ input[type="radio"] {
 .sidebar-dock:has(:focus-visible) .sidebar {
   width: max(var(--sidebar-expanded-width), max-content);
   max-width: 480px;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-md);
 }
 
 .sidebar-dock:hover .sidebar-wordmark,
@@ -733,7 +755,7 @@ input[type="radio"] {
 .sidebar-dock:has(:focus-visible) .sidebar-group-links {
   margin-left: 20px;
   padding-left: 12px;
-  border-left: 1.5px solid rgba(255, 255, 255, 0.18);
+  border-left: 1.5px solid var(--rail-line);
 }
 
 /* Keyboard-open: the cursor (not hover or focus visibility) holds the rail
@@ -744,7 +766,7 @@ input[type="radio"] {
 .sidebar-dock.sidebar-dock--open .sidebar {
   width: max(var(--sidebar-expanded-width), max-content);
   max-width: 480px;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-md);
 }
 
 .sidebar-dock.sidebar-dock--open .sidebar-wordmark {
@@ -780,7 +802,7 @@ input[type="radio"] {
 .sidebar-dock.sidebar-dock--open .sidebar-group-links {
   margin-left: 20px;
   padding-left: 12px;
-  border-left: 1.5px solid rgba(255, 255, 255, 0.18);
+  border-left: 1.5px solid var(--rail-line);
 }
 
 /* Collapsed, the cursor's link is the one cleared among the icons; the bare
