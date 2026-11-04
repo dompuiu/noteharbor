@@ -41,6 +41,12 @@
   /* Deep red for text and small labels on white: the brand red clears 4.5:1
      as a filled surface, but a slightly darker step reads better as type. */
   --accent-strong: #b80000;
+  /* The primary pill's state ramp: it rests on the deep red, brightens one
+     step on hover and darkens one step while pressed. Brand red (#e60000) is
+     never a primary fill — it is the focus ring, the active nav edge and the
+     bulk bar. */
+  --accent-strong-hover: #cc0000;
+  --accent-strong-active: #990000;
   --accent-soft: rgba(230, 0, 0, 0.07);
   --accent-border: rgba(230, 0, 0, 0.28);
   --row-zebra: rgba(37, 40, 43, 0.035);
@@ -2462,16 +2468,31 @@ input[type="radio"] {
   box-shadow: none;
 }
 
-.nav-link.active,
-.button-primary {
+.nav-link.active {
   background: var(--accent);
   border-color: var(--accent);
   color: var(--accent-ink);
 }
 
-.button-primary:hover {
+/* Every primary action wears this one filled pill, at every state. Deep red
+   rather than brand red: #e60000's brightness reads as an alert on a working
+   surface, so the pill rests on a deeper step and brightens toward the brand
+   red on hover, darkening while pressed. */
+.button-primary {
   background: var(--accent-strong);
   border-color: var(--accent-strong);
+  color: var(--accent-ink);
+}
+
+.button-primary:hover {
+  background: var(--accent-strong-hover);
+  border-color: var(--accent-strong-hover);
+  color: var(--accent-ink);
+}
+
+.button-primary:active {
+  background: var(--accent-strong-active);
+  border-color: var(--accent-strong-active);
   color: var(--accent-ink);
 }
 
@@ -4146,44 +4167,19 @@ th[aria-sort="descending"] .sort-chevron {
   margin-left: auto;
 }
 
-/* The primary action leads the cluster. Its hover badge is the shared
-   `data-shortcut` tooltip, but it opens downward: the rail sits inside
-   `.table-shell { overflow: hidden }`, so a badge painted above the button
-   would be cropped. */
-.table-add-note {
+/* Every pill in the trailing cluster pairs its icon to its label at the same
+   6px and stays on one line. Add note leads the cluster, and its hover badge
+   is the shared `data-shortcut` tooltip, but it opens downward: the rail sits
+   inside `.table-shell { overflow: hidden }`, so a badge painted above the
+   button would be cropped. */
+.table-rail-actions .button {
   gap: 6px;
   white-space: nowrap;
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
-  color: var(--accent-ink);
 }
 
-/* Deep red, not brand red: at 36px beside the outline Reset and Columns
-   pills, #e60000's brightness reads as an alert. The deeper step keeps this
-   as the only filled control on the rail, and hover brightens toward the
-   brand red instead of darkening away from it. */
-.table-add-note:hover {
-  background: #cc0000;
-  border-color: #cc0000;
-  color: var(--accent-ink);
-}
-
-.table-add-note:active {
-  background: #990000;
-  border-color: #990000;
-}
-
-.table-add-note[data-shortcut]::after {
+.table-rail-actions [data-shortcut]::after {
   top: calc(100% + 8px);
   bottom: auto;
-}
-
-/* Add note leads, Reset sits before Columns, so the pair grows leftwards:
-   Columns keeps the card's right edge whether or not the view is dirty, and no
-   empty slot has to reserve room for a control that may not exist. The icon
-   pairs it with Columns' own icon at the same 6px gap. */
-.table-reset-view {
-  gap: 6px;
 }
 
 /* The search field is the rail's primary control: one query across every
@@ -4706,10 +4702,6 @@ th[aria-sort="descending"] .sort-chevron {
 /* The Columns control and its picker. The menu is portalled into <body> and
    positioned from the button, so the table's scroll containers cannot clip
    it. */
-.table-columns-toggle {
-  gap: 6px;
-}
-
 .table-columns-toggle--open {
   border-color: var(--accent);
   background: var(--accent-soft);

@@ -441,16 +441,19 @@ describe("table styles", () => {
     expect(actions[1]).toMatch(/margin-left:\s*auto/);
 
     // The primary action leads the cluster, so it is reached before the view
-    // controls while Columns still owns the card's right edge.
-    const addNote = styles.match(/^\.table-add-note\s*\{([^}]*)\}/m);
-    expect(addNote).not.toBeNull();
-    expect(addNote[1]).toMatch(/gap:\s*6px/);
-    expect(addNote[1]).toMatch(/white-space:\s*nowrap/);
+    // controls while Columns still owns the card's right edge. Every pill in
+    // the cluster shares one icon gap and one line.
+    const railButton = styles.match(
+      /^\.table-rail-actions \.button\s*\{([^}]*)\}/m,
+    );
+    expect(railButton).not.toBeNull();
+    expect(railButton[1]).toMatch(/gap:\s*6px/);
+    expect(railButton[1]).toMatch(/white-space:\s*nowrap/);
 
     // The shared hover badge opens downward here: the rail is inside the
     // shell's overflow clip, so the default badge above the button would vanish.
     const addNoteBadge = styles.match(
-      /\.table-add-note\[data-shortcut\]::after\s*\{([^}]*)\}/,
+      /\.table-rail-actions \[data-shortcut\]::after\s*\{([^}]*)\}/,
     );
     expect(addNoteBadge).not.toBeNull();
     expect(addNoteBadge[1]).toMatch(/top:\s*calc\(100% \+ 8px\)/);
@@ -551,9 +554,9 @@ describe("table styles", () => {
   test("the rail reserves no slot for the reset control", () => {
     expect(styles).not.toMatch(/\.table-reset-slot/);
 
-    const reset = styles.match(/^\.table-reset-view\s*\{([^}]*)\}/m);
-    expect(reset).not.toBeNull();
-    expect(reset[1]).toMatch(/gap:\s*6px/);
+    // Reset keeps no rule of its own: the cluster's shared gap carries its icon
+    // and nowrap keeps its label on one line.
+    expect(styles).not.toMatch(/^\.table-reset-view\s*\{/m);
   });
 
   // An empty view is a message, not a missing page: the table stretches to the
@@ -1935,5 +1938,59 @@ describe("catalog header", () => {
     expect(clip).not.toBeNull();
     expect(clip[1]).toMatch(/padding-inline:\s*8px/);
     expect(clip[1]).toMatch(/margin-inline:\s*-8px/);
+  });
+});
+
+// One primary treatment for the whole app: the deep red at rest, one step
+// brighter on hover, one darker while pressed. Add note used to carry this
+// ramp in a bespoke class; folding it into `.button-primary` is what keeps
+// every other primary call site on the same red.
+describe("primary buttons", () => {
+  test("the deep red ramp defines rest, hover and pressed steps", () => {
+    expect(styles).toMatch(/--accent-strong:\s*#b80000/);
+    expect(styles).toMatch(/--accent-strong-hover:\s*#cc0000/);
+    expect(styles).toMatch(/--accent-strong-active:\s*#990000/);
+
+    const rest = styles.match(/^\.button-primary\s*\{([^}]*)\}/m);
+    expect(rest).not.toBeNull();
+    expect(rest[1]).toMatch(/background:\s*var\(--accent-strong\)/);
+    expect(rest[1]).toMatch(/border-color:\s*var\(--accent-strong\)/);
+
+    const hover = styles.match(/^\.button-primary:hover\s*\{([^}]*)\}/m);
+    expect(hover).not.toBeNull();
+    expect(hover[1]).toMatch(/background:\s*var\(--accent-strong-hover\)/);
+    expect(hover[1]).toMatch(/border-color:\s*var\(--accent-strong-hover\)/);
+
+    const active = styles.match(/^\.button-primary:active\s*\{([^}]*)\}/m);
+    expect(active).not.toBeNull();
+    expect(active[1]).toMatch(/background:\s*var\(--accent-strong-active\)/);
+    expect(active[1]).toMatch(/border-color:\s*var\(--accent-strong-active\)/);
+
+    // No primary state may fall back to the brand red fill.
+    expect(rest[1]).not.toMatch(/var\(--accent\)/);
+  });
+
+  // Navigation keeps the brighter brand red edge; only the button fill moved
+  // to the deep red, so the two rules no longer share a selector list.
+  test("an active nav link keeps the brand red edge", () => {
+    const navActive = styles.match(/^\.nav-link\.active\s*\{([^}]*)\}/m);
+    expect(navActive).not.toBeNull();
+    expect(navActive[1]).toMatch(/background:\s*var\(--accent\)/);
+    expect(navActive[1]).toMatch(/border-color:\s*var\(--accent\)/);
+  });
+
+  // Add note is just another primary button now: no bespoke class survives in
+  // the CSS or in the markup.
+  test("Add note wears the shared primary class", () => {
+    expect(styles).not.toMatch(/\.table-add-note/);
+
+    const table = readFileSync(
+      join(process.cwd(), "src", "components", "NotesTable.jsx"),
+      "utf8",
+    );
+    expect(table).not.toMatch(/table-add-note/);
+    expect(table).toMatch(
+      /aria-label="Add note"[\s\S]{0,200}?className="button button-primary"/,
+    );
   });
 });

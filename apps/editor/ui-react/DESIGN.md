@@ -4,6 +4,8 @@ description: Red, ink, and white collection software for banknote archives
 colors:
   brand-red: "#e60000"
   brand-red-deep: "#b80000"
+  brand-red-deep-hover: "#cc0000"
+  brand-red-deep-active: "#990000"
   ink: "#25282b"
   rail: "#2c3a45"
   body: "#5f6367"
@@ -88,9 +90,9 @@ components:
     padding: "6px 18px"
     height: "36px"
   button-primary:
-    backgroundColor: "{colors.brand-red}"
+    backgroundColor: "{colors.brand-red-deep}"
     textColor: "{colors.on-dark}"
-    borderColor: "{colors.brand-red}"
+    borderColor: "{colors.brand-red-deep}"
     rounded: "{rounded.pill}"
     padding: "6px 18px"
     height: "36px"
@@ -139,7 +141,7 @@ Three materials carry the whole system: **slate ink** (#2c3a45) as the navigatio
 Structure stays dense and quiet. The Table screen is the centre of gravity: one bordered white card filling the viewport, a fixed 64px slate rail that expands on hover, compact 40px headers, and 12px cell padding tuned for scanning hundreds of rows. Capture, Import, and Showcase screens reuse the same card, field, and pill vocabulary at a lower density.
 
 **Key Characteristics:**
-- One accent: `{colors.brand-red}` (#e60000). Filled pills for the primary action, outline pills for secondary actions, red text for links and active state.
+- One accent: `{colors.brand-red}` (#e60000). Filled pills for the primary action in its deeper `{colors.brand-red-deep}` ramp, outline pills for secondary actions, red text for links and active state.
 - Settled chrome, loud content: the slate rail holds the same dark band the layout is built around, a step off pure ink so overlays stay the darkest surface. White bands and the red accent carry all the contrast. No warm greys, no pure black, no second accent hue.
 - Uppercase weight-800 display type with tight tracking for screen titles and eyebrows; sentence case for the calm secondary voice.
 - Pill geometry on every button and counter (100px), a 10px step on fields and selects, and a 7px rounded rectangle on filter chips and tags. Cards stay flat at 6px.
@@ -148,8 +150,8 @@ Structure stays dense and quiet. The Table screen is the centre of gravity: one 
 ## Colors
 
 ### Brand & Accent
-- **Brand Red** (`{colors.brand-red}` — `#e60000`): The single accent. Primary button fill, active sidebar edge, focus ring, selected-row edge, active filter chips, and the bulk-action bar. It clears 4.5:1 against white, so white button labels stay legible.
-- **Deep Red** (`{colors.brand-red-deep}` — `#b80000`): Red type on white — links, active filter values, sort labels, and the primary button's base fill.
+- **Brand Red** (`{colors.brand-red}` — `#e60000`): The single accent. Active sidebar edge, focus ring, selected-row edge, active filter chips, the brand mark, and the bulk-action bar. It clears 4.5:1 against white, so white labels stay legible.
+- **Deep Red** (`{colors.brand-red-deep}` — `#b80000`): Red type on white — links, active filter values, sort labels — and every primary button's fill at rest. It brightens to `{colors.brand-red-deep-hover}` (`#cc0000`) on hover and darkens to `{colors.brand-red-deep-active}` (`#990000`) while pressed.
 
 ### Surface
 - **Canvas** (`{colors.canvas}` — `#ffffff`): Cards, inputs, menus, and the table surface.
@@ -179,7 +181,7 @@ Tags are labels, not state, so they left the accent family for their own warm Oc
 - **Ghost** (`{colors.tag-text-muted}` — `#8a6a2c`): the dashed "+N more" control, which is an affordance rather than a tag.
 
 ### Named Rules
-**The One Red Rule.** Red is state and action, never decoration. It covers at most about a tenth of any screen; its rarity is what makes the primary pill and the active edge read instantly.
+**The One Red Rule.** Red is state and action, never decoration. It covers at most about a tenth of any screen; its rarity is what makes the deep-red primary pill and the active edge read instantly.
 
 **The Tag Family Rule.** Ochre belongs to values: tag chips in the table, the overflow popover, the slideshow and showcase tooltips, the editor's Tags field, and every value chip in the filter rail — ground, hairline, label, hover, the round remove cross, and the ring the chip draws when focused. Red still owns what an action does outside a chip — the primary pill, row selection, the global focus ring, and `Clear all` — and a negated filter keeps the danger ground. Nothing else borrows ochre for a fill or a border.
 
@@ -240,7 +242,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 ### Buttons
 - **Shape:** pill (`100px`), 36px minimum height, 6px×18px padding, 0.84rem/600 label. No drop shadow at rest.
 - **Default:** white ground, 1px control border, ink text. Hover tints the ground with the red wash and turns the border red.
-- **Primary:** Brand Red ground and border with white text; the only filled button at rest. Hover deepens to `#b80000`.
+- **Primary:** Deep Red ground and border with white text; the only filled button at rest. Brightens to `#cc0000` on hover and darkens to `#990000` while pressed.
 - **Danger:** deep red fill with white text; the soft variant uses a red wash, red text, and a red hairline.
 - **Focus:** a 2px red outline at 2px offset. Transitions are 0.15s on background, border, and colour.
 
@@ -285,7 +287,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 ## Do's and Don'ts
 
 ### Do:
-- **Do** reserve Brand Red for the primary pill, the active navigation edge, focus, selection, and destructive actions; the tag family carries values, in rows and in the filter rail.
+- **Do** give every primary pill the same Deep Red ramp (`#b80000` rest → `#cc0000` hover → `#990000` active), and reserve Brand Red for the active navigation edge, focus, selection, and the bulk bar; the tag family carries values, in rows and in the filter rail.
 - **Do** set screen titles and eyebrows in uppercase weight 800 with tight tracking; that stencil contrast is the brand voice.
 - **Do** use pills for buttons and counters, 10px corners for fields and selects, 7px for chips, and 6px for cards and panels.
 - **Do** cycle the page: slate rail → white content → ink only for overlays. Polarity is the depth cue.
