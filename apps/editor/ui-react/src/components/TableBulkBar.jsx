@@ -86,7 +86,6 @@ export function TableBulkBar({
       <span aria-hidden="true" className="table-bulk-bar-separator" />
       {canMove ? (
         <button
-          className="table-bulk-bar-move"
           disabled={working}
           onClick={onMove}
           type="button"

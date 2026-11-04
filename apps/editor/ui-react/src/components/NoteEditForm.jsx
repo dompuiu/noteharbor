@@ -24,7 +24,10 @@ import { normalizePastedImageFile } from "../lib/pastedImages.js";
 import { extractPmgDescriptionFields } from "../lib/pmgDescription.js";
 import { CATALOG_ROUTES } from "../lib/routes.js";
 import { NoteCounter } from "./NoteCounter.jsx";
-import { CollectionPositionFields } from "./CollectionPositionFields.jsx";
+import {
+  CollectionPositionFields,
+  needsPositionReference,
+} from "./CollectionPositionFields.jsx";
 import { TagsField } from "./TagsField.jsx";
 
 const SCRAPE_BROWSER_POLL_INTERVAL_MS = 500;
@@ -344,8 +347,7 @@ function NoteEditForm({
     ? "edit-note-overlay-content"
     : "screen-stack narrow-stack";
 
-  const positionNeedsReference =
-    positionMode === "before" || positionMode === "after";
+  const positionNeedsReference = needsPositionReference(positionMode);
   const positionInvalid =
     positionNeedsReference && positionReferenceId === null;
   const canNavigatePrevious = Boolean(previousNoteId) && !saving;
@@ -1131,6 +1133,25 @@ function NoteEditForm({
     return result.notes ?? null;
   }
 
+  // Landing in another collection: the default is to show it there, while the
+  // checkbox's opt-out reports the change here. The edit-move and
+  // create-into-another paths both end here, so the two cannot drift.
+  function landInCollection({ collection, collectionId, message, note }) {
+    if (showCollectionAfterSave) {
+      navigate(CATALOG_ROUTES.collection(collectionId), {
+        state: { highlightNoteId: note.id, toast: message },
+      });
+      return;
+    }
+
+    if (onSaveSuccess) {
+      onSaveSuccess(note, null, collection, saveIntentRef.current, message);
+      return;
+    }
+
+    navigate(CATALOG_ROUTES.collection(collectionId));
+  }
+
   async function handleSubmit(event) {
     event.preventDefault();
     setSaving(true);
@@ -1160,7 +1181,8 @@ function NoteEditForm({
         }
       });
 
-      const targetCollectionId = destinationCollectionId ?? selectedCollectionId;
+      const targetCollectionId =
+        destinationCollectionId ?? selectedCollectionId;
       const destinationDiffers = targetCollectionId !== selectedCollectionId;
       const destinationCollection =
         collections.find(
@@ -1179,35 +1201,13 @@ function NoteEditForm({
           destinationCollectionId,
           { mode: positionMode, referenceId: positionReferenceId },
         );
-        const movedToCollection = collections.find(
-          (collection) => collection.id === destinationCollectionId,
-        ) ?? null;
-        const toastMessage = `Moved to ${destinationName}.`;
 
-        // The default is to land on the destination and see the note there;
-        // staying is the deliberate opt-out in the checkbox.
-        if (showCollectionAfterSave) {
-          navigate(CATALOG_ROUTES.collection(destinationCollectionId), {
-            state: {
-              highlightNoteId: movedPayload.note.id,
-              toast: toastMessage,
-            },
-          });
-          return;
-        }
-
-        if (onSaveSuccess) {
-          onSaveSuccess(
-            movedPayload.note,
-            null,
-            movedToCollection,
-            intent,
-            toastMessage,
-          );
-          return;
-        }
-
-        navigate(CATALOG_ROUTES.collection(destinationCollectionId));
+        landInCollection({
+          collection: destinationCollection,
+          collectionId: destinationCollectionId,
+          message: `Moved to ${destinationName}.`,
+          note: movedPayload.note,
+        });
         return;
       }
 
@@ -1227,30 +1227,12 @@ function NoteEditForm({
       // into it, so the destination is either shown (default) or reported
       // with a toast while the table stays put.
       if (isCreateMode && destinationDiffers) {
-        const toastMessage = `Note added to ${destinationName}.`;
-
-        if (showCollectionAfterSave) {
-          navigate(CATALOG_ROUTES.collection(targetCollectionId), {
-            state: {
-              highlightNoteId: payload.note.id,
-              toast: toastMessage,
-            },
-          });
-          return;
-        }
-
-        if (onSaveSuccess) {
-          onSaveSuccess(
-            payload.note,
-            null,
-            destinationCollection,
-            intent,
-            toastMessage,
-          );
-          return;
-        }
-
-        navigate(CATALOG_ROUTES.collection(targetCollectionId));
+        landInCollection({
+          collection: destinationCollection,
+          collectionId: targetCollectionId,
+          message: `Note added to ${destinationName}.`,
+          note: payload.note,
+        });
         return;
       }
 

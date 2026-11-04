@@ -2,7 +2,10 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import * as api from "../lib/api.js";
 import { CATALOG_ROUTES } from "../lib/routes.js";
-import { CollectionPositionFields } from "./CollectionPositionFields.jsx";
+import {
+  CollectionPositionFields,
+  needsPositionReference,
+} from "./CollectionPositionFields.jsx";
 
 // The Table screen's one way of moving notes to another collection: the bulk
 // bar and a row's actions menu both open it. It always calls the scoped bulk
@@ -44,6 +47,8 @@ function MoveNotesDialog({
       (collection) => collection.id === destinationCollectionId,
     ) ?? null;
   const sameCollection = destinationCollectionId === currentCollectionId;
+  const positionInvalid =
+    needsPositionReference(positionMode) && positionReferenceId === null;
   const title =
     noteIds.length === 1 ? "Move note" : `Move ${noteIds.length} notes`;
 
@@ -60,7 +65,6 @@ function MoveNotesDialog({
       return;
     }
 
-    setTargetNotes([]);
     api.getNotes(destinationCollectionId)
       .then((payload) => {
         if (requestId !== targetRequestRef.current) {
@@ -207,7 +211,11 @@ function MoveNotesDialog({
           <CollectionPositionFields
             collections={collections}
             currentCollectionId={currentCollectionId}
-            emptyPositionMessage="This note will be the only one in the destination collection."
+            emptyPositionMessage={
+              noteIds.length === 1
+                ? "This note will be the only one in the destination collection."
+                : "These notes will be the only ones in the destination collection."
+            }
             onCollectionChange={handleCollectionChange}
             onPositionModeChange={(mode) => {
               setPositionMode(mode);
@@ -235,7 +243,7 @@ function MoveNotesDialog({
             </button>
             <button
               className="button button-primary"
-              disabled={saving}
+              disabled={saving || positionInvalid}
               type="submit"
             >
               {saving ? "Moving..." : "Move"}

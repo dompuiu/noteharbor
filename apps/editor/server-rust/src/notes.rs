@@ -12,12 +12,13 @@
 //!   (503/500). Collection-id validation (`400`/`404`) runs before payload
 //!   validation, and move checks run target → same → target-exists → mode →
 //!   reference in this order (so a bad mode against a missing target is 404).
-//! - The scoped bulk move (`POST /api/collections/:id/notes/move`) applies the
-//!   same validation order, then moves every `note_id` in one transaction: a
-//!   bad id, mode, reference or same-collection target rejects the whole
-//!   request and leaves both collections untouched.
-//! - Note ids are never 400: an unparsable id simply matches no row, so it
-//!   answers `404 { error: 'Note not found.' }`.
+//! - The scoped bulk move (`POST /api/collections/:id/notes/move`) checks the
+//!   destination in that same order, then validates `note_ids`, then moves
+//!   every id in one transaction: a bad id, mode, reference or same-collection
+//!   target rejects the whole request and leaves both collections untouched.
+//! - A single note's unparsable id is never 400: it matches no row and answers
+//!   `404 { error: 'Note not found.' }`. The bulk route is stricter: a
+//!   non-positive or unknown id answers 400 and moves nothing.
 //! - Multipart and JSON share one handler each for POST/PUT (Axum cannot
 //!   split one path+method by content type). Multipart text fields map to the
 //!   same sanitizer as JSON; repeated `tags` fields collect into an array
@@ -620,8 +621,8 @@ impl MoveMode {
 }
 
 /// The target collection's order with `moving_ids` spliced in at the requested
-/// slot. The group keeps the order it was given, so a bulk move preserves the
-/// selection's relative order as the collector saw it. An unknown reference
+/// Position. The group keeps the order it was given, so a bulk move preserves
+/// the selection's relative order as the collector saw it. An unknown reference
 /// falls back to appending, exactly like Node.
 fn insertion_order(
     target_ids: &[i64],
@@ -659,28 +660,6 @@ fn insertion_order(
         }
     }
     next_order
-}
-
-fn move_note_row(
-    conn: &mut Connection,
-    note_id: i64,
-    source_collection_id: i64,
-    target_collection_id: i64,
-    mode: MoveMode,
-    reference_id: Option<i64>,
-) -> Result<Note, DbError> {
-    let moved = move_notes_row(
-        conn,
-        &[note_id],
-        source_collection_id,
-        target_collection_id,
-        mode,
-        reference_id,
-    )?;
-    moved
-        .into_iter()
-        .next()
-        .ok_or_else(|| DbError::Failed("Note not found.".to_owned()))
 }
 
 /// Moves several notes into another collection in one transaction: the group
@@ -1432,6 +1411,59 @@ async fn reorder_notes_handler(
     }
 }
 
+/// The destination checks every move shares, in the documented order: target,
+/// same-collection, target existence, mode, reference. The two handlers differ
+/// only in the sentence they use when the target is the source.
+struct MoveTarget {
+    collection_id: i64,
+    mode: MoveMode,
+    reference_id: Option<i64>,
+}
+
+async fn read_move_target(
+    pool: &db::DbPool,
+    body: &Value,
+    source_collection_id: i64,
+    same_collection_message: &str,
+) -> Result<MoveTarget, Response> {
+    let Some(target_collection_id) = body
+        .get("target_collection_id")
+        .and_then(js_number)
+        .filter(|id| *id > 0)
+    else {
+        return Err(bad_request("A valid target collection ID is required."));
+    };
+    if target_collection_id == source_collection_id {
+        return Err(bad_request(same_collection_message));
+    }
+    let target_exists = db::with_conn(pool, move |conn| {
+        db::collection_exists(conn, target_collection_id)
+    })
+    .await;
+    match target_exists {
+        Ok(true) => {}
+        Ok(false) => return Err(not_found("Target collection not found.")),
+        Err(error) => return Err(db_failure(error)),
+    }
+
+    let Some(mode) = MoveMode::parse(body.get("position_mode")) else {
+        return Err(bad_request("A valid position mode is required."));
+    };
+    let reference_id = match body.get("position_reference_id") {
+        None | Some(Value::Null) => None,
+        Some(value) => js_number(value),
+    };
+    if matches!(mode, MoveMode::Before | MoveMode::After) && reference_id.is_none() {
+        return Err(bad_request("A reference note is required for this position."));
+    }
+
+    Ok(MoveTarget {
+        collection_id: target_collection_id,
+        mode,
+        reference_id,
+    })
+}
+
 async fn move_note_handler(
     State(state): State<AppState>,
     collection: Option<Path<Vec<String>>>,
@@ -1455,44 +1487,34 @@ async fn move_note_handler(
         return not_found("Note not found.");
     };
     let body = read_json_body(req).await;
-
-    let target = body.get("target_collection_id").and_then(js_number);
-    let Some(target_collection_id) = target else {
-        return bad_request("A valid target collection ID is required.");
+    let target = match read_move_target(
+        &state.pool,
+        &body,
+        collection_id,
+        "Note is already in this collection.",
+    )
+    .await
+    {
+        Ok(target) => target,
+        Err(response) => return response,
     };
-    if target_collection_id <= 0 {
-        return bad_request("A valid target collection ID is required.");
-    }
-    if target_collection_id == collection_id {
-        return bad_request("Note is already in this collection.");
-    }
-    let target_exists = db::with_conn(&state.pool, move |conn| {
-        db::collection_exists(conn, target_collection_id)
-    })
-    .await;
-    match target_exists {
-        Ok(true) => {}
-        Ok(false) => return not_found("Target collection not found."),
-        Err(error) => return db_failure(error),
-    }
-
-    let Some(mode) = MoveMode::parse(body.get("position_mode")) else {
-        return bad_request("A valid position mode is required.");
-    };
-    let reference_id = match body.get("position_reference_id") {
-        None | Some(Value::Null) => None,
-        Some(value) => js_number(value),
-    };
-    if matches!(mode, MoveMode::Before | MoveMode::After) && reference_id.is_none() {
-        return bad_request("A reference note is required for this position.");
-    }
 
     match db::with_conn(&state.pool, move |conn| {
-        move_note_row(conn, existing.id, collection_id, target_collection_id, mode, reference_id)
+        move_notes_row(
+            conn,
+            &[existing.id],
+            collection_id,
+            target.collection_id,
+            target.mode,
+            target.reference_id,
+        )
     })
     .await
     {
-        Ok(note) => ok(json!({ "note": note })),
+        Ok(mut notes) => match notes.pop() {
+            Some(note) => ok(json!({ "note": note })),
+            None => bad_request("Note not found."),
+        },
         Err(error) => db_failure(error),
     }
 }
@@ -1508,6 +1530,17 @@ async fn move_notes_handler(
         Err((status, message)) => return status_response(status, &message),
     };
     let body = read_json_body(req).await;
+    let target = match read_move_target(
+        &state.pool,
+        &body,
+        collection_id,
+        "Notes are already in this collection.",
+    )
+    .await
+    {
+        Ok(target) => target,
+        Err(response) => return response,
+    };
 
     let ids_message = "A valid list of note IDs is required.";
     let Some(raw_ids) = body.get("note_ids").and_then(Value::as_array) else {
@@ -1524,39 +1557,15 @@ async fn move_notes_handler(
         }
     }
 
-    let target = body.get("target_collection_id").and_then(js_number);
-    let Some(target_collection_id) = target else {
-        return bad_request("A valid target collection ID is required.");
-    };
-    if target_collection_id <= 0 {
-        return bad_request("A valid target collection ID is required.");
-    }
-    if target_collection_id == collection_id {
-        return bad_request("Notes are already in this collection.");
-    }
-    let target_exists = db::with_conn(&state.pool, move |conn| {
-        db::collection_exists(conn, target_collection_id)
-    })
-    .await;
-    match target_exists {
-        Ok(true) => {}
-        Ok(false) => return not_found("Target collection not found."),
-        Err(error) => return db_failure(error),
-    }
-
-    let Some(mode) = MoveMode::parse(body.get("position_mode")) else {
-        return bad_request("A valid position mode is required.");
-    };
-    let reference_id = match body.get("position_reference_id") {
-        None | Some(Value::Null) => None,
-        Some(value) => js_number(value),
-    };
-    if matches!(mode, MoveMode::Before | MoveMode::After) && reference_id.is_none() {
-        return bad_request("A reference note is required for this position.");
-    }
-
     match db::with_conn(&state.pool, move |conn| {
-        move_notes_row(conn, &note_ids, collection_id, target_collection_id, mode, reference_id)
+        move_notes_row(
+            conn,
+            &note_ids,
+            collection_id,
+            target.collection_id,
+            target.mode,
+            target.reference_id,
+        )
     })
     .await
     {

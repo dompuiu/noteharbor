@@ -907,30 +907,6 @@ function NotesTable({
   const location = useLocation();
   const navigate = useNavigate();
 
-  // A move or a create that switched collections lands here with a one-shot
-  // hand-off: the toast to show on this table, and the note to reveal. The
-  // route state is cleared at once so a refresh or a back-navigation does not
-  // replay it.
-  const handoffState = location.state;
-  useEffect(() => {
-    if (!handoffState) {
-      return;
-    }
-
-    if (handoffState.toast) {
-      moveToastRef.current?.show(handoffState.toast);
-    }
-
-    pendingHighlightNoteIdRef.current = handoffState.highlightNoteId ?? null;
-    navigate(`${location.pathname}${location.search}${location.hash}`, {
-      replace: true,
-      state: null,
-    });
-    // The state is consumed exactly once; the navigation itself is not a
-    // reason to run again.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [handoffState]);
-
   // Table structure — sort and visible columns — is one saved, per-collection
   // preference. Filters, search and selection are not: they are seeded from a
   // slideshow URL when it carries context and otherwise start empty.
@@ -1023,6 +999,40 @@ function NotesTable({
   // A hand-off from another table (a move or create that redirected here):
   // shown once the destination's notes load, then forgotten.
   const pendingHighlightNoteIdRef = useRef(null);
+
+  // A move or a create that switched collections lands here with a one-shot
+  // hand-off: the toast to show on this table, and the note to reveal. It also
+  // reopens the destination fresh: default sort, no filters, no search. The
+  // route state is cleared at once so a refresh or a back-navigation does not
+  // replay it.
+  const handoffState = location.state;
+  useEffect(() => {
+    if (!handoffState) {
+      return;
+    }
+
+    if (handoffState.toast) {
+      moveToastRef.current?.show(handoffState.toast);
+    }
+
+    pendingHighlightNoteIdRef.current = handoffState.highlightNoteId ?? null;
+
+    const defaults = defaultTableState();
+    setTableView((current) => ({
+      ...current,
+      sortKey: defaults.sortKey,
+      sortDirection: defaults.sortDirection,
+    }));
+
+    navigate(`${location.pathname}${location.search}${location.hash}`, {
+      replace: true,
+      state: null,
+    });
+    // The state is consumed exactly once; the navigation itself is not a
+    // reason to run again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handoffState]);
+
   const canMoveNotes =
     Array.isArray(collections) && collections.length > 1;
   const [loading, setLoading] = useState(true);

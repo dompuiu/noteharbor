@@ -2,7 +2,7 @@
 
 Moving notes between collections has two entry points — the Table screen's selection bar and a row's actions menu — but one write path: `POST /api/collections/:id/notes/move` with `{ note_ids, target_collection_id, position_mode, position_reference_id }`, answering `{ notes }`. A single-note move from the row menu is `note_ids: [id]` against the same endpoint. The older `POST /api/collections/:id/notes/:noteId/move` stays for the Note editor's edit-mode collection change, which moves exactly one note after the update.
 
-The bulk request is transactional and all-or-nothing: any unknown note id, invalid mode, missing reference, or a target equal to the source rejects the whole request with 400 and moves nothing. `note_ids` is taken in the order the Table screen shows it, so a multi-row move keeps the collector's relative order at the destination; the group is spliced in whole at the requested Position. The source collection closes its gaps and the destination renumbers, exactly as a single move does today. Each note's tags are re-attached to the destination collection's scope.
+The bulk request is transactional and all-or-nothing: any unknown note id, invalid mode, missing reference, or a target equal to the source rejects the whole request with 400 and moves nothing. `note_ids` is taken in the order the Table screen shows it, so a multi-row move keeps the collector's relative order at the destination; the group is spliced in whole at the requested Position. The source and destination both close their gaps and renumber 1..n. Each note's tags are re-attached to the destination collection's scope.
 
 ## Considered Options
 
@@ -12,9 +12,10 @@ The bulk request is transactional and all-or-nothing: any unknown note id, inval
 
 ## Consequences
 
-- Both entry points are hidden when the workspace has one collection; there is nowhere to move a note.
+- Both table entry points are hidden when the workspace has one collection; there is nowhere to move a note. The Note editor keeps its Collection field visible (create mode always shows it), because it also writes the note's home.
 - The dialog and the Note editor share `CollectionPositionFields` (collection, Position, and the "Show … after saving/moving" checkbox), so the two surfaces cannot drift.
-- Redirecting to the destination is the default in both surfaces: the destination table opens fresh, shows the moved or created note focused, and owns the toast (`Moved to X.`, `Moved N notes to X.`, `Note added to X.`). Clearing the checkbox is the opt-out; the source table then drops the rows, clears the selection, and shows the same toast.
+- Redirecting to the destination is the default in both surfaces: the destination table opens fresh (default sort, no filters or search), shows the moved or created note focused, and owns the toast (`Moved to X.`, `Moved N notes to X.`, `Note added to X.`). Clearing the checkbox is the opt-out; the source table then drops the rows, clears the selection, and shows the same toast.
 - Choosing the notes' current collection is a deliberate no-op: no request, no toast, no navigation, only the selection clears.
-- "Before/after" needs a reference note in the destination; an unknown reference appends, matching the single-note route.
-- `move_note_row` is now a one-element call into the bulk row helper, so the placement and tag re-attachment rules live in one place.
+- "Before/after" needs a reference note in the destination; an unknown reference appends, matching the single-note route. Both surfaces disable confirm/save until a reference is picked.
+- Position defaults to End in both surfaces. The editor previously opened "before the first note" when the destination had notes; that default changed deliberately.
+- The single-note move route is a one-element call into the bulk row helper, so placement and tag re-attachment rules live in one place.

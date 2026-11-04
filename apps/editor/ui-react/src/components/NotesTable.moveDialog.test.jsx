@@ -35,6 +35,7 @@ vi.mock("@tanstack/react-virtual", () => ({
 }));
 
 import { getNotes, moveNotes } from "../lib/api.js";
+import { defaultTableState } from "../lib/notesTableState.js";
 
 const collections = [
   { id: 1, is_default: 1, name: "Test" },
@@ -168,7 +169,7 @@ describe("moving notes from the table", () => {
 
   test("the row menu rules off Move to… and keeps Delete beside it", async () => {
     const user = userEvent.setup();
-    renderTable();
+    const { unmount } = renderTable();
 
     const menu = await openRowMenu(user, "AAAA");
     const items = within(menu).getAllByRole("menuitem");
@@ -183,6 +184,17 @@ describe("moving notes from the table", () => {
     expect(items[items.length - 1].previousElementSibling.textContent).toBe(
       "Move to…",
     );
+
+    unmount();
+
+    renderTable({ collectionList: [collections[0]] });
+    const singleMenu = await openRowMenu(user, "AAAA");
+    expect(
+      within(singleMenu).queryByRole("menuitem", { name: "Move to…" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(singleMenu).getByRole("menuitem", { name: "Delete" }),
+    ).toBeInTheDocument();
   });
 
   test("a bulk move keeps the table's order and redirects by default", async () => {
@@ -218,6 +230,33 @@ describe("moving notes from the table", () => {
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Moved 2 notes to Other.",
     );
+  });
+
+  test("a redirect reopens the table with the default sort", async () => {
+    const user = userEvent.setup();
+    // This harness keeps the same NotesTable props across the redirect, so the
+    // reset lands on the collection it is showing.
+    window.localStorage.setItem(
+      "noteharbor.notesTableState.1",
+      JSON.stringify({
+        sortKey: "denomination",
+        sortDirection: "desc",
+        visibleColumnKeys: [],
+      }),
+    );
+    renderTable();
+
+    const dialog = await openBulkMove(user);
+    await user.click(within(dialog).getByRole("button", { name: "Move" }));
+
+    await waitFor(() => {
+      expect(
+        JSON.parse(window.localStorage.getItem("noteharbor.notesTableState.1")),
+      ).toMatchObject({
+        sortKey: defaultTableState().sortKey,
+        sortDirection: defaultTableState().sortDirection,
+      });
+    });
   });
 
   test("a row menu move of one note sends a list of one", async () => {
@@ -262,6 +301,26 @@ describe("moving notes from the table", () => {
         { mode: "before", referenceId: 10 },
       );
     });
+  });
+
+  test("Before/After cannot be confirmed without a reference note", async () => {
+    const user = userEvent.setup();
+    renderTable();
+
+    const dialog = await openBulkMove(user);
+    await user.selectOptions(
+      within(dialog).getByRole("combobox", { name: "Position in collection" }),
+      "before",
+    );
+
+    expect(within(dialog).getByRole("button", { name: "Move" })).toBeDisabled();
+    expect(
+      within(dialog).getByText("Select a reference note from the list below."),
+    ).toBeInTheDocument();
+
+    const picker = await within(dialog).findByText("TARGET-1");
+    await user.click(picker.closest("button"));
+    expect(within(dialog).getByRole("button", { name: "Move" })).toBeEnabled();
   });
 
   test("choosing the same collection does nothing and clears the selection", async () => {

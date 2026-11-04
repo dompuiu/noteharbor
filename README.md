@@ -382,7 +382,7 @@ Body: {
   position_reference_id? // required for "before" / "after"
 }
 -> { notes: [NoteWithTags, ...] }
-// One transaction: a bad id or position moves nothing.
+// One transaction: a bad id or position moves nothing; each note once.
 // Scoped route only; `note_ids` keeps the caller's order.
 ```
 
@@ -569,7 +569,7 @@ Primary editor screen with:
 
 - filterable and sortable table view: a field picker plus a value field where Enter adds a chip (same field ORs, different fields AND), tag suggestions in the Tags field, matched text marked in the row, and a "+N" overflow popover for rows with many tags
 - thumbnail previews
-- bulk selection and delete
+- bulk selection, delete, and move to another collection (selection bar or a row's actions menu)
 - drag-and-drop manual reordering in the default view
 - inline create/edit overlay
 - slideshow launch by clicking a row

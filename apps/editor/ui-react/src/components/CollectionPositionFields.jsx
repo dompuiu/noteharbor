@@ -8,6 +8,10 @@ import { PositionPicker } from "./PositionPicker.jsx";
 //
 // The component owns no state: the caller decides when the surface opens (and
 // therefore when the checkbox's default returns).
+function needsPositionReference(mode) {
+  return mode === "before" || mode === "after";
+}
+
 function CollectionPositionFields({
   collections,
   currentCollectionId,
@@ -30,8 +34,7 @@ function CollectionPositionFields({
     null;
   const choosingDifferentCollection =
     selectedCollectionId !== currentCollectionId;
-  const positionNeedsReference =
-    positionMode === "before" || positionMode === "after";
+  const positionNeedsReference = needsPositionReference(positionMode);
 
   return (
     <>
@@ -102,4 +105,4 @@ function CollectionPositionFields({
   );
 }
 
-export { CollectionPositionFields };
+export { CollectionPositionFields, needsPositionReference };
