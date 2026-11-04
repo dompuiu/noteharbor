@@ -869,6 +869,12 @@ function NotesTable({
   // pointer left off instead of jumping to the first row.
   const escapeResumeNoteIdRef = useRef(null);
   const focusRestoreNoteIdRef = useRef(null);
+  // The row to hand the cursor back to once the Note editor closes. The
+  // request is held rather than focused on the spot: `closeEditor` runs while
+  // the overlay — and the inert table behind it — is still mounted, so a focus
+  // call there is refused and focus falls to <body> even though the cursor
+  // paints. A null noteId means the table anchor.
+  const editorCloseFocusRef = useRef(null);
   // The row the keyboard cursor last landed on, kept apart from
   // `focusedRowIdRef` because it has to outlive focus leaving the table:
   // opening the note editor moves focus into the overlay and drops the live
@@ -2059,6 +2065,7 @@ function NotesTable({
     deferredRowFocusNoteIdRef.current = null;
     deferredAnchorFocusRef.current = false;
     pendingSlideshowLandingRef.current = null;
+    editorCloseFocusRef.current = null;
     lastRowFocusNoteIdRef.current = null;
     clearRowCursor();
   }, [clearRowCursor, collectionId, conditions, sortDirection, sortKey]);
@@ -2408,6 +2415,32 @@ function NotesTable({
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slideshowRouteActive]);
+
+  useLayoutEffect(() => {
+    // The close hand-off waits for the commit that unmounts the overlay
+    // (and clears the table's `inert`): a focus call made while `closeEditor`
+    // is still running lands in the inert subtree and is refused, which would
+    // leave the painted cursor without real focus and swallow the next Space.
+    if (editorOverlayOpen || slideshowRouteActive) {
+      return;
+    }
+
+    const request = editorCloseFocusRef.current;
+
+    if (!request) {
+      return;
+    }
+
+    editorCloseFocusRef.current = null;
+
+    if (request.noteId == null) {
+      focusTableAnchor();
+    } else {
+      focusRowByNoteId(request.noteId);
+    }
+    // `focusRowByNoteId` reads the painted list of the render it runs in.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [editorOverlayOpen, slideshowRouteActive]);
 
   useEffect(() => {
     // Unmounting a focused row fires no blur event: the browser drops focus
@@ -3545,17 +3578,11 @@ function NotesTable({
       return;
     }
 
-    // The overlay is about to unmount, so the cursor has to be handed back
-    // before it does: the rows stay mounted behind the overlay, so the
-    // target row can be focused directly.
-    const focusNoteId = editorCloseFocusNoteId();
+    // The overlay is about to unmount, so the cursor has to be handed back:
+    // record the row now and let the overlay effect focus it once the table is
+    // no longer inert. Focusing here would be refused and leave <body> active.
+    editorCloseFocusRef.current = { noteId: editorCloseFocusNoteId() };
     navigateToTableRoute(emptyTableRoute(), { replace: true });
-
-    if (focusNoteId == null) {
-      focusTableAnchor();
-    } else {
-      focusRowByNoteId(focusNoteId);
-    }
   }
 
   closeEditorRef.current = closeEditor;
