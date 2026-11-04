@@ -51,10 +51,10 @@ describe("table styles", () => {
   // 0.07). The accent edge and the checkbox still carry the selection state.
   test("the selected row tint is darker than the hover tint", () => {
     expect(styles).toMatch(
-      /--row-selected:\s*rgba\(230,\s*0,\s*0,\s*0\.09\)/,
+      /--row-selected:\s*rgba\(184,\s*0,\s*0,\s*0\.09\)/,
     );
     expect(styles).toMatch(
-      /--accent-soft:\s*rgba\(230,\s*0,\s*0,\s*0\.07\)/,
+      /--accent-soft:\s*rgba\(184,\s*0,\s*0,\s*0\.07\)/,
     );
   });
 
@@ -204,7 +204,7 @@ describe("table styles", () => {
     expect(halo).not.toBeNull();
     expect(halo[1]).toMatch(/position:\s*absolute/);
     expect(halo[1]).toMatch(
-      /background:\s*rgba\(230,\s*0,\s*0,\s*0\.24\)/,
+      /background:\s*rgba\(184,\s*0,\s*0,\s*0\.24\)/,
     );
     expect(halo[1]).toMatch(/pointer-events:\s*none/);
   });
@@ -554,8 +554,8 @@ describe("table styles", () => {
   test("the rail reserves no slot for the reset control", () => {
     expect(styles).not.toMatch(/\.table-reset-slot/);
 
-    // Reset keeps no rule of its own: the cluster's shared gap carries its icon
-    // and nowrap keeps its label on one line.
+    // Reset carries no class or rule of its own: the cluster's shared gap
+    // carries its icon and nowrap keeps its label on one line.
     expect(styles).not.toMatch(/^\.table-reset-view\s*\{/m);
   });
 
@@ -1565,10 +1565,10 @@ describe("sidebar styles", () => {
 
   test("reorderable rows mark the drop edge like the links do", () => {
     expect(styles).toMatch(
-      /\.sidebar-row--drop-before\s*\{[^}]*box-shadow:\s*inset 0 2px 0 0 var\(--accent\)/,
+      /\.sidebar-row--drop-before\s*\{[^}]*box-shadow:\s*inset 0 2px 0 0 var\(--rail-accent\)/,
     );
     expect(styles).toMatch(
-      /\.sidebar-row--drop-after\s*\{[^}]*box-shadow:\s*inset 0 -2px 0 0 var\(--accent\)/,
+      /\.sidebar-row--drop-after\s*\{[^}]*box-shadow:\s*inset 0 -2px 0 0 var\(--rail-accent\)/,
     );
   });
 
@@ -1675,7 +1675,7 @@ describe("sidebar styles", () => {
 
   test("the cursor link is ringed so focus is visible", () => {
     expect(styles).toMatch(
-      /\.sidebar-link--cursor\s*\{[^}]*box-shadow:\s*inset 0 0 0 1\.5px var\(--accent\)/,
+      /\.sidebar-link--cursor\s*\{[^}]*box-shadow:\s*inset 0 0 0 1\.5px var\(--rail-accent\)/,
     );
   });
 
@@ -1691,10 +1691,10 @@ describe("sidebar styles", () => {
 
   test("the reorder toggle and move buttons ring the keyboard cursor", () => {
     expect(styles).toMatch(
-      /\.sidebar-reorder-toggle--cursor\s*\{[^}]*box-shadow:\s*inset 0 0 0 1\.5px var\(--accent\)/,
+      /\.sidebar-reorder-toggle--cursor\s*\{[^}]*box-shadow:\s*inset 0 0 0 1\.5px var\(--rail-accent\)/,
     );
     expect(styles).toMatch(
-      /\.sidebar-move-button--cursor\s*\{[^}]*box-shadow:\s*inset 0 0 0 1\.5px var\(--accent\)/,
+      /\.sidebar-move-button--cursor\s*\{[^}]*box-shadow:\s*inset 0 0 0 1\.5px var\(--rail-accent\)/,
     );
   });
 
@@ -1951,32 +1951,63 @@ describe("primary buttons", () => {
     expect(styles).toMatch(/--accent-strong-hover:\s*#cc0000/);
     expect(styles).toMatch(/--accent-strong-active:\s*#990000/);
 
-    const rest = styles.match(/^\.button-primary\s*\{([^}]*)\}/m);
-    expect(rest).not.toBeNull();
-    expect(rest[1]).toMatch(/background:\s*var\(--accent-strong\)/);
-    expect(rest[1]).toMatch(/border-color:\s*var\(--accent-strong\)/);
+    const states = {
+      "": "--accent-strong",
+      ":hover": "--accent-strong-hover",
+      ":active": "--accent-strong-active",
+    };
 
-    const hover = styles.match(/^\.button-primary:hover\s*\{([^}]*)\}/m);
-    expect(hover).not.toBeNull();
-    expect(hover[1]).toMatch(/background:\s*var\(--accent-strong-hover\)/);
-    expect(hover[1]).toMatch(/border-color:\s*var\(--accent-strong-hover\)/);
+    for (const [state, token] of Object.entries(states)) {
+      const rule = styles.match(
+        new RegExp(`^\\.button-primary${state}\\s*\\{([^}]*)\\}`, "m"),
+      );
+      expect(rule).not.toBeNull();
 
-    const active = styles.match(/^\.button-primary:active\s*\{([^}]*)\}/m);
-    expect(active).not.toBeNull();
-    expect(active[1]).toMatch(/background:\s*var\(--accent-strong-active\)/);
-    expect(active[1]).toMatch(/border-color:\s*var\(--accent-strong-active\)/);
-
-    // No primary state may fall back to the brand red fill.
-    expect(rest[1]).not.toMatch(/var\(--accent\)/);
+      const body = rule[1];
+      expect(body).toMatch(
+        new RegExp(`background:\\s*var\\(${token}\\)`),
+      );
+      expect(body).toMatch(
+        new RegExp(`border-color:\\s*var\\(${token}\\)`),
+      );
+      // No primary state may fall back to the brand red fill.
+      expect(body).not.toMatch(/var\(--accent\)/);
+      expect(body).not.toMatch(/#e60000/);
+    }
   });
 
-  // Navigation keeps the brighter brand red edge; only the button fill moved
-  // to the deep red, so the two rules no longer share a selector list.
-  test("an active nav link keeps the brand red edge", () => {
+  // Navigation moved with the app accent: the active edge is deep red too.
+  test("an active nav link wears the app accent", () => {
     const navActive = styles.match(/^\.nav-link\.active\s*\{([^}]*)\}/m);
     expect(navActive).not.toBeNull();
     expect(navActive[1]).toMatch(/background:\s*var\(--accent\)/);
     expect(navActive[1]).toMatch(/border-color:\s*var\(--accent\)/);
+  });
+
+  // Outside the rail, the accent itself is the deep red, so focus rings,
+  // selection, search and the bulk bar all match the primary pill.
+  test("the app accent is the deep red and the rail keeps brand red", () => {
+    expect(styles).toMatch(/--accent:\s*var\(--accent-strong\)/);
+    expect(styles).toMatch(/--rail-accent:\s*#e60000/);
+    expect(styles).toMatch(
+      /--rail-action-wash:\s*rgba\(230,\s*0,\s*0,\s*0\.2\)/,
+    );
+    // Brand red also survives on dark surfaces, where the deep red would go
+    // muddy against slate ink.
+    expect(styles).toMatch(/--on-dark-accent:\s*#e60000/);
+  });
+
+  // The rail's own rules read only the rail tokens, so retinting the app
+  // accent can never drag the sidebar along with it.
+  test("no sidebar rule borrows the app accent", () => {
+    const sidebarRules = [...styles.matchAll(/^\.sidebar[^{]*\{([^}]*)\}/gm)];
+    expect(sidebarRules.length).toBeGreaterThan(0);
+    for (const rule of sidebarRules) {
+      expect(rule[1]).not.toMatch(/var\(--accent\)/);
+    }
+    expect(styles).toMatch(
+      /\.sidebar-mark\s*\{[^}]*background:\s*var\(--rail-accent\)/,
+    );
   });
 
   // Add note is just another primary button now: no bespoke class survives in

@@ -4982,7 +4982,7 @@ function NotesTable({
                   ) : null}
                   {canResetView ? (
                     <button
-                      className="button table-reset-view"
+                      className="button"
                       onClick={resetTableState}
                       title="Clears filters, sort and selection — keeps your columns"
                       type="button"

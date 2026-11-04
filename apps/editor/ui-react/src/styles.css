@@ -37,23 +37,24 @@
      including the header's `--surface-3`. */
   --text-muted: #5f6367;
   --text-faint: #6e7276;
-  --accent: #e60000;
-  /* Deep red for text and small labels on white: the brand red clears 4.5:1
-     as a filled surface, but a slightly darker step reads better as type. */
+  /* The accent at rest, for filled pills and red type on white. The brand red
+     clears 4.5:1 as a filled surface, but a slightly darker step reads better
+     as type and as a large pill on a working surface. */
   --accent-strong: #b80000;
   /* The primary pill's state ramp: it rests on the deep red, brightens one
-     step on hover and darkens one step while pressed. Brand red (#e60000) is
-     never a primary fill — it is the focus ring, the active nav edge and the
-     bulk bar. */
+     step on hover and darkens one step while pressed. */
   --accent-strong-hover: #cc0000;
   --accent-strong-active: #990000;
-  --accent-soft: rgba(230, 0, 0, 0.07);
-  --accent-border: rgba(230, 0, 0, 0.28);
+  /* The app accent is that same deep red, so focus rings, selection, search
+     and the bulk bar all sit in the primary pill's family. Brand Red (#e60000)
+     now belongs to the rail and to dark surfaces only. */
+  --accent: var(--accent-strong);
+  --accent-soft: rgba(184, 0, 0, 0.07);
   --row-zebra: rgba(37, 40, 43, 0.035);
   /* A selected row sits a shade stronger than hover. The red edge and the
      checked box carry selection; the extra tint keeps selected rows distinct
      while hovered. */
-  --row-selected: rgba(230, 0, 0, 0.09);
+  --row-selected: rgba(184, 0, 0, 0.09);
   --accent-ink: #ffffff;
   --success: #157a3a;
   --success-bg: rgba(49, 162, 76, 0.12);
@@ -104,6 +105,9 @@
   --rail-active-cursor-bg: rgba(226, 236, 244, 0.17);
   --rail-cursor-bg: rgba(226, 236, 244, 0.08);
   --rail-control-border: rgba(226, 236, 244, 0.26);
+  /* The rail keeps the brighter brand red: its active edge, focus rings, drop
+     lines and brand mark sit on slate, where the deep accent would go muddy. */
+  --rail-accent: #e60000;
   --rail-action: #ff8a84;
   --rail-action-wash: rgba(230, 0, 0, 0.2);
   --rail-action-hover: #ffb0ac;
@@ -126,6 +130,8 @@
   --on-dark-bg-translucent: rgba(37, 40, 43, 0.96);
   --on-dark-surface: #313539;
   --on-dark-border-strong: #4a4f54;
+  /* Brand red survives on dark surfaces too: the deep accent loses its edge
+     against slate ink, and this is a hover border that has to be seen. */
   --on-dark-accent: #e60000;
   --on-dark-link: #ff7a73;
 
@@ -224,7 +230,7 @@ input[type="radio"] {
   width: 21px;
   height: 21px;
   border-radius: 7px;
-  background: rgba(230, 0, 0, 0.24);
+  background: rgba(184, 0, 0, 0.24);
   content: "";
   pointer-events: none;
   transform: translate(-50%, -50%);
@@ -332,7 +338,7 @@ input[type="radio"] {
   display: grid;
   place-items: center;
   color: var(--on-dark-text);
-  background: var(--accent);
+  background: var(--rail-accent);
   box-shadow: none;
 }
 
@@ -505,21 +511,21 @@ input[type="radio"] {
 .sidebar-link--active {
   background: var(--rail-active-bg);
   color: var(--rail-fg);
-  box-shadow: inset 3px 0 0 var(--accent);
+  box-shadow: inset 3px 0 0 var(--rail-accent);
 }
 
 .sidebar-link--cursor {
   background: var(--rail-cursor-bg);
   color: var(--rail-fg);
-  box-shadow: inset 0 0 0 1.5px var(--accent);
+  box-shadow: inset 0 0 0 1.5px var(--rail-accent);
 }
 
 .sidebar-link--active.sidebar-link--cursor {
   background: var(--rail-active-cursor-bg);
   color: var(--rail-fg);
   box-shadow:
-    inset 3px 0 0 var(--accent),
-    inset 0 0 0 1.5px var(--accent);
+    inset 3px 0 0 var(--rail-accent),
+    inset 0 0 0 1.5px var(--rail-accent);
 }
 
 /* Showcase rows can be dragged to set their order. The hovered row shows a
@@ -529,11 +535,11 @@ input[type="radio"] {
 }
 
 .sidebar-link--drop-before {
-  box-shadow: inset 0 2px 0 0 var(--accent);
+  box-shadow: inset 0 2px 0 0 var(--rail-accent);
 }
 
 .sidebar-link--drop-after {
-  box-shadow: inset 0 -2px 0 0 var(--accent);
+  box-shadow: inset 0 -2px 0 0 var(--rail-accent);
 }
 
 /* Reorder mode is opt-in per group. The group head holds the label and a
@@ -570,18 +576,18 @@ input[type="radio"] {
 
 .sidebar-reorder-toggle:hover,
 .sidebar-reorder-toggle:focus-visible {
-  border-color: var(--accent);
+  border-color: var(--rail-accent);
   color: var(--rail-fg);
 }
 
 .sidebar-reorder-toggle--active {
   background: var(--rail-active-bg);
-  border-color: var(--accent);
+  border-color: var(--rail-accent);
   color: var(--rail-accent-text);
 }
 
 .sidebar-reorder-toggle--cursor {
-  box-shadow: inset 0 0 0 1.5px var(--accent);
+  box-shadow: inset 0 0 0 1.5px var(--rail-accent);
 }
 
 .sidebar-reorder-toggle-ic {
@@ -643,7 +649,7 @@ input[type="radio"] {
 
 .sidebar-move-button:hover:not(:disabled),
 .sidebar-move-button:focus-visible:not(:disabled) {
-  border-color: var(--accent);
+  border-color: var(--rail-accent);
   color: var(--rail-fg);
 }
 
@@ -653,9 +659,9 @@ input[type="radio"] {
 }
 
 .sidebar-move-button--cursor {
-  border-color: var(--accent);
+  border-color: var(--rail-accent);
   color: var(--rail-fg);
-  box-shadow: inset 0 0 0 1.5px var(--accent);
+  box-shadow: inset 0 0 0 1.5px var(--rail-accent);
 }
 
 .sidebar-row--dragging {
@@ -663,11 +669,11 @@ input[type="radio"] {
 }
 
 .sidebar-row--drop-before {
-  box-shadow: inset 0 2px 0 0 var(--accent);
+  box-shadow: inset 0 2px 0 0 var(--rail-accent);
 }
 
 .sidebar-row--drop-after {
-  box-shadow: inset 0 -2px 0 0 var(--accent);
+  box-shadow: inset 0 -2px 0 0 var(--rail-accent);
 }
 
 /* The cursor stops already draw their own ring. Drop the global
@@ -2863,7 +2869,7 @@ input[type="radio"] {
 .table-shell mark {
   padding: 0 1px;
   border-radius: 2px;
-  background: rgba(230, 0, 0, 0.12);
+  background: rgba(184, 0, 0, 0.12);
   box-shadow: none;
   color: inherit;
   font-weight: inherit;
@@ -2893,9 +2899,9 @@ input[type="radio"] {
 /* Selecting a cell is a real task here — a serial or a catalog number gets
    copied into a message or a grading-company search — and the platform's own
    blue is the one cold surface left in the card. Tint the highlight from the
-   brand red, light enough that ink still clears 4.5:1 on top. */
+   deep red, light enough that ink still clears 4.5:1 on top. */
 .table-shell ::selection {
-  background: rgba(230, 0, 0, 0.14);
+  background: rgba(184, 0, 0, 0.14);
   color: var(--text);
 }
 
@@ -4699,9 +4705,9 @@ th[aria-sort="descending"] .sort-chevron {
   outline-offset: 1px;
 }
 
-/* The Columns control and its picker. The menu is portalled into <body> and
-   positioned from the button, so the table's scroll containers cannot clip
-   it. */
+/* The open Columns control wears the accent wash. Its picker menu is
+   portalled into <body> and positioned from the button, so the table's scroll
+   containers cannot clip it. */
 .table-columns-toggle--open {
   border-color: var(--accent);
   background: var(--accent-soft);
@@ -6272,7 +6278,7 @@ button.tag {
 
 .scraped-details-grid a {
   color: var(--on-dark-link);
-  text-decoration-color: rgba(230, 0, 0, 0.7);
+  text-decoration-color: rgba(184, 0, 0, 0.7);
 }
 
 .scraped-details-grid a:hover,

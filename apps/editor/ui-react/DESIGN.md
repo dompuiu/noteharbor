@@ -136,12 +136,12 @@ components:
 
 The Editor takes a poster-scale brand language — red, near-black ink, white content bands, uppercase weight-800 display type, and pill controls — and turns it into a dense working surface for cataloguing banknotes. It is not a marketing page, so the poster voice appears where the app speaks to the user (screen titles, eyebrows, primary actions) and then gives way to white data bands, hairline grids, and quiet grey chrome.
 
-Three materials carry the whole system: **slate ink** (#2c3a45) as the navigation rail, **ink** (#25282b) as the overlay world, **white** (#ffffff) as the content and table surface, and **brand red** (#e60000) as the single accent. Red never becomes a background wash on the page; it marks the primary action, the active navigation edge, selection, focus, and the tags that need attention. Everything else is a neutral step on the white-to-grey ladder.
+Three materials carry the whole system: **slate ink** (#2c3a45) as the navigation rail, **ink** (#25282b) as the overlay world, **white** (#ffffff) as the content and table surface, and **deep red** (#b80000) as the single accent. Red never becomes a background wash on the page; it marks the primary action, the active navigation edge, selection, focus, and the tags that need attention. The rail keeps the brighter **brand red** (#e60000), where the deep step would go muddy on slate. Everything else is a neutral step on the white-to-grey ladder.
 
 Structure stays dense and quiet. The Table screen is the centre of gravity: one bordered white card filling the viewport, a fixed 64px slate rail that expands on hover, compact 40px headers, and 12px cell padding tuned for scanning hundreds of rows. Capture, Import, and Showcase screens reuse the same card, field, and pill vocabulary at a lower density.
 
 **Key Characteristics:**
-- One accent: `{colors.brand-red}` (#e60000). Filled pills for the primary action in its deeper `{colors.brand-red-deep}` ramp, outline pills for secondary actions, red text for links and active state.
+- One accent: `{colors.brand-red-deep}` (#b80000). Filled pills, focus rings, selection, search and the bulk bar all wear it; the rail keeps the brighter `{colors.brand-red}`, and outline pills stay neutral. Red text for links and active state.
 - Settled chrome, loud content: the slate rail holds the same dark band the layout is built around, a step off pure ink so overlays stay the darkest surface. White bands and the red accent carry all the contrast. No warm greys, no pure black, no second accent hue.
 - Uppercase weight-800 display type with tight tracking for screen titles and eyebrows; sentence case for the calm secondary voice.
 - Pill geometry on every button and counter (100px), a 10px step on fields and selects, and a 7px rounded rectangle on filter chips and tags. Cards stay flat at 6px.
@@ -150,8 +150,8 @@ Structure stays dense and quiet. The Table screen is the centre of gravity: one 
 ## Colors
 
 ### Brand & Accent
-- **Brand Red** (`{colors.brand-red}` — `#e60000`): The single accent. Active sidebar edge, focus ring, selected-row edge, active filter chips, the brand mark, and the bulk-action bar. It clears 4.5:1 against white, so white labels stay legible.
-- **Deep Red** (`{colors.brand-red-deep}` — `#b80000`): Red type on white — links, active filter values, sort labels — and every primary button's fill at rest. It brightens to `{colors.brand-red-deep-hover}` (`#cc0000`) on hover and darkens to `{colors.brand-red-deep-active}` (`#990000`) while pressed.
+- **Brand Red** (`{colors.brand-red}` — `#e60000`): The rail's red, and the red on dark surfaces. It draws the sidebar's active edge, cursor rings and drop lines, fills the brand mark, and borders a hovered slide thumbnail. On slate the deep step loses its edge, so the rail keeps the brighter tone.
+- **Deep Red** (`{colors.brand-red-deep}` — `#b80000`): The app accent. Red type on white — links, active filter values, sort labels — and every primary button's fill at rest. It also paints the global focus ring, selected-row edges and tint, active filter chips, the search caret, drop lines, and the bulk-action bar. It brightens to `{colors.brand-red-deep-hover}` (`#cc0000`) on hover and darkens to `{colors.brand-red-deep-active}` (`#990000`) while pressed.
 
 ### Surface
 - **Canvas** (`{colors.canvas}` — `#ffffff`): Cards, inputs, menus, and the table surface.
@@ -243,7 +243,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Shape:** pill (`100px`), 36px minimum height, 6px×18px padding, 0.84rem/600 label. No drop shadow at rest.
 - **Default:** white ground, 1px control border, ink text. Hover tints the ground with the red wash and turns the border red.
 - **Primary:** Deep Red ground and border with white text; the only filled button at rest. Brightens to `#cc0000` on hover and darkens to `#990000` while pressed.
-- **Danger:** deep red fill with white text; the soft variant uses a red wash, red text, and a red hairline.
+- **Danger:** `#a30000` fill with white text; the soft variant uses a red wash, red text, and a red hairline.
 - **Focus:** a 2px red outline at 2px offset. Transitions are 0.15s on background, border, and colour.
 
 ### Inputs / Fields
@@ -274,7 +274,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Brand mark:** the red square with the banknote glyph is the rail's only solid red element.
 
 ### Bulk Action Bar
-- **Style:** a pill floating 16px above the bottom of the table, Brand Red ground, white text, floating shadow. It overlays the rows instead of reserving space, so showing it never reflows the table.
+- **Style:** a pill floating 16px above the bottom of the table, Deep Red ground, white text, floating shadow. It overlays the rows instead of reserving space, so showing it never reflows the table.
 
 ### Load-Error / Loading Cards
 - **Style:** replace the table in place at the table's height, inside the same card shell. A 700-weight title, a muted detail line, a reassurance line, and one primary Try again pill; only the copy block is a live region so the button is not announced twice.
@@ -287,7 +287,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 ## Do's and Don'ts
 
 ### Do:
-- **Do** give every primary pill the same Deep Red ramp (`#b80000` rest → `#cc0000` hover → `#990000` active), and reserve Brand Red for the active navigation edge, focus, selection, and the bulk bar; the tag family carries values, in rows and in the filter rail.
+- **Do** give every primary pill the same Deep Red ramp (`#b80000` rest → `#cc0000` hover → `#990000` active), and keep the app's focus rings, selection, search and bulk bar in that same deep red; Brand Red is the rail's and the dark surfaces' alone. The tag family carries values, in rows and in the filter rail.
 - **Do** set screen titles and eyebrows in uppercase weight 800 with tight tracking; that stencil contrast is the brand voice.
 - **Do** use pills for buttons and counters, 10px corners for fields and selects, 7px for chips, and 6px for cards and panels.
 - **Do** cycle the page: slate rail → white content → ink only for overlays. Polarity is the depth cue.
