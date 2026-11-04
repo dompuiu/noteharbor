@@ -650,6 +650,139 @@ describe("Leaving a changed Note editor", () => {
   });
 });
 
+describe("Focus returning to the Table when the Note editor closes", () => {
+  // jsdom cannot enforce `inert`, so the regression is a timing one: record
+  // whether the row was still inside the inert subtree when the app asked for
+  // focus. A request made from `closeEditor` itself sees the overlay mounted
+  // and the table inert; a request deferred until the overlay is gone sees
+  // `null`.
+  function trackRowFocus(row) {
+    const inertAncestors = [];
+    const nativeFocus = row.focus.bind(row);
+
+    row.focus = (options) => {
+      inertAncestors.push(row.closest("[inert]"));
+      nativeFocus(options);
+    };
+
+    return inertAncestors;
+  }
+
+  function expectRealFocus(calls) {
+    expect(calls.length).toBeGreaterThan(0);
+    for (const inertAncestor of calls) {
+      expect(inertAncestor).toBeNull();
+    }
+  }
+
+  test("Close only focuses the row once the table is no longer inert", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    const row = await rowFor("BBBB");
+    row.focus();
+    await openEditorOn(user, "BBBB");
+    const focusCalls = trackRowFocus(row);
+
+    await user.click(screen.getByRole("button", { name: "Close" }));
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Denomination")).not.toBeInTheDocument();
+    });
+    expectRealFocus(focusCalls);
+    expect(row).toHaveFocus();
+  });
+
+  test("Escape only focuses the row once the table is no longer inert", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    const row = await rowFor("BBBB");
+    row.focus();
+    const field = await openEditorOn(user, "BBBB");
+    const focusCalls = trackRowFocus(row);
+
+    act(() => {
+      field.blur();
+    });
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Denomination")).not.toBeInTheDocument();
+    });
+    expectRealFocus(focusCalls);
+    expect(row).toHaveFocus();
+  });
+
+  test("Space selects the returned row without an arrow press first", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    const row = await rowFor("BBBB");
+    row.focus();
+    const field = await openEditorOn(user, "BBBB");
+
+    act(() => {
+      field.blur();
+    });
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Denomination")).not.toBeInTheDocument();
+    });
+    expect(row).toHaveFocus();
+
+    await user.keyboard(" ");
+
+    expect(
+      screen.getByRole("checkbox", { name: "Select BBBB" }),
+    ).toBeChecked();
+    expect(
+      screen.getByRole("region", { name: "Selection actions" }),
+    ).toHaveTextContent("1 selected");
+  });
+
+  test("discarding a changed Note lands focus on a row, never <body>", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    const row = await rowFor("BBBB");
+    row.focus();
+    const field = await openEditorOn(user, "BBBB");
+    await user.type(field, "!");
+
+    act(() => {
+      field.blur();
+    });
+    await user.keyboard("{Escape}");
+
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Discard" }));
+
+    await waitFor(() => {
+      expect(screen.queryByLabelText("Denomination")).not.toBeInTheDocument();
+    });
+    expect(document.activeElement).not.toBe(document.body);
+    expect(document.activeElement?.closest("tr")).not.toBeNull();
+  });
+
+  test("an editor opened over the slideshow still returns to the slideshow", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await openSlideshowOn(user, "AAAA");
+    await user.click(screen.getByRole("button", { name: "Edit note" }));
+    const field = await screen.findByLabelText("Denomination");
+
+    act(() => {
+      field.blur();
+    });
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1");
+    });
+    expect(currentHash()).not.toContain("overlay");
+    expect(screen.getByTitle("Previous note (←)").closest("[inert]")).toBeNull();
+    expect(document.activeElement?.closest("tr")).toBeNull();
+  });
+});
+
 describe("The counter's editable number in the editor", () => {
   test("arrows move the caret instead of changing notes", async () => {
     const user = userEvent.setup();
