@@ -4387,6 +4387,18 @@ th[aria-sort="descending"] .sort-chevron {
   white-space: nowrap;
 }
 
+/* A refused commit swaps this note into the `⏎ add` slot, so the rail keeps
+   the hint's height and the table below it does not move. */
+.table-filter-note {
+  display: inline-flex;
+  align-items: center;
+  flex: none;
+  color: var(--warning);
+  font-size: 0.6875rem;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
 /* The tags list opens on demand, so the field ends with a chevron pointing
    down: press Down (or click it) to see the suggestions. */
 .table-filter-tags-toggle {
