@@ -1,5 +1,12 @@
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
@@ -347,6 +354,32 @@ describe("Row actions menu", () => {
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
     expect(actionsButton("AAAA")).toHaveFocus();
     expect(actionsButton("AAAA")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  test("Escape on the actions button closes an open menu", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await openMenu(user, "AAAA");
+
+    // Moving focus back to the button keeps the menu open (see the next
+    // test); Escape there must close it, as it does for the other two menus.
+    actionsButton("AAAA").focus();
+    await user.keyboard("{Escape}");
+
+    expect(screen.queryByRole("menu")).not.toBeInTheDocument();
+    expect(actionsButton("AAAA")).toHaveFocus();
+    expect(actionsButton("AAAA")).toHaveAttribute("aria-expanded", "false");
+  });
+
+  test("focus moving from the menu back to its button leaves the menu open", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    const menu = await openMenu(user, "AAAA");
+
+    fireEvent.focusOut(menu, { relatedTarget: actionsButton("AAAA") });
+
+    expect(screen.getByRole("menu", { name: "Actions for AAAA" })).toBe(menu);
+    expect(actionsButton("AAAA")).toHaveAttribute("aria-expanded", "true");
   });
 
   test("arrow keys move between menu items and Enter activates one", async () => {
