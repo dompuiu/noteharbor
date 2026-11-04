@@ -169,6 +169,34 @@ describe("NotesTable filter chips", () => {
     ).toHaveFocus();
   });
 
+  test("arrow keys walk the field menu and Home/End jump to the ends", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await user.click(filterFieldButton());
+
+    const menu = screen.getByRole("menu", { name: "Filter field" });
+    const choices = within(menu).getAllByRole("menuitemradio");
+    const checked = choices.find(
+      (choice) => choice.getAttribute("aria-checked") === "true",
+    );
+    expect(checked).toHaveFocus();
+
+    const checkedIndex = choices.indexOf(checked);
+    await user.keyboard("{ArrowDown}");
+    expect(choices[(checkedIndex + 1) % choices.length]).toHaveFocus();
+
+    await user.keyboard("{ArrowUp}");
+    expect(checked).toHaveFocus();
+
+    await user.keyboard("{End}");
+    expect(choices[choices.length - 1]).toHaveFocus();
+
+    await user.keyboard("{Home}");
+    expect(choices[0]).toHaveFocus();
+  });
+
   test("Enter commits a chip and filters the rows", async () => {
     renderTable();
     const user = userEvent.setup();

@@ -1,4 +1,5 @@
 import {
+  act,
   fireEvent,
   render,
   screen,
@@ -6,31 +7,52 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { MemoryRouter } from "react-router-dom";
-import { describe, expect, test, vi } from "vitest";
+import { createRef } from "react";
+import { MemoryRouter, useNavigate } from "react-router-dom";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { AnchoredPopover } from "./AnchoredPopover.jsx";
 
+function RouteChanger() {
+  const navigate = useNavigate();
+
+  return (
+    <button onClick={() => navigate("/elsewhere")} type="button">
+      Change route
+    </button>
+  );
+}
+
 function Harness({
+  align,
   children,
+  closeOnRouteChange,
   initialFocus,
   onKeyDown,
   onOuterKeyDown,
+  popoverRef,
+  revealOnOpen,
   role = "dialog",
+  routeChanger = false,
 }) {
   return (
     <MemoryRouter>
       <div onKeyDown={onOuterKeyDown}>
         <button type="button">Outside</button>
+        {routeChanger ? <RouteChanger /> : null}
         <AnchoredPopover
+          align={align}
           className="test-panel"
+          closeOnRouteChange={closeOnRouteChange}
           initialFocus={initialFocus}
           onKeyDown={onKeyDown}
           panelLabel="Test panel"
+          ref={popoverRef}
           renderTrigger={({ open, triggerProps }) => (
-            <button {...triggerProps} type="button">
+            <button {...triggerProps} className="test-trigger" type="button">
               {open ? "Opened" : "Open"}
             </button>
           )}
+          revealOnOpen={revealOnOpen}
           role={role}
         >
           {children ?? (
@@ -43,6 +65,51 @@ function Harness({
       </div>
     </MemoryRouter>
   );
+}
+
+afterEach(() => {
+  vi.restoreAllMocks();
+});
+
+function rect({ bottom, height, left, right, top, width }) {
+  return {
+    bottom,
+    height,
+    left,
+    right,
+    top,
+    width,
+    x: left,
+    y: top,
+    toJSON: () => ({}),
+  };
+}
+
+const anchorBox = rect({
+  bottom: 60,
+  height: 40,
+  left: 220,
+  right: 320,
+  top: 20,
+  width: 100,
+});
+const panelBox = rect({
+  bottom: 100,
+  height: 100,
+  left: 0,
+  right: 160,
+  top: 0,
+  width: 160,
+});
+
+// jsdom lays nothing out, so the positioning tests hand the trigger and panel
+// their own viewport boxes.
+function mockRects(anchor, panel) {
+  return vi
+    .spyOn(HTMLElement.prototype, "getBoundingClientRect")
+    .mockImplementation(function () {
+      return this.classList.contains("test-panel") ? panel : anchor;
+    });
 }
 
 function trigger() {
@@ -255,6 +322,69 @@ describe("AnchoredPopover", () => {
 
     await user.click(trigger());
     window.dispatchEvent(new Event("resize"));
+    await waitFor(() => expect(panel()).toBeNull());
+  });
+
+  test("aligns the panel's left edge with the trigger's by default", async () => {
+    const user = userEvent.setup();
+    mockRects(anchorBox, panelBox);
+    render(<Harness />);
+
+    await user.click(trigger());
+
+    expect(panel()).toHaveStyle({ left: "220px" });
+  });
+
+  test("aligns the panel's right edge with the trigger's", async () => {
+    const user = userEvent.setup();
+    mockRects(anchorBox, panelBox);
+    render(<Harness align="end" />);
+
+    await user.click(trigger());
+
+    // The trigger's right edge is 320; the 160-wide panel starts at 160.
+    expect(panel()).toHaveStyle({ left: "160px", top: "66px" });
+  });
+
+  test("closes when focus leaves the trigger with the panel open", async () => {
+    const user = userEvent.setup();
+    render(<Harness />);
+
+    await user.click(trigger());
+    fireEvent.focusOut(trigger(), {
+      relatedTarget: screen.getByRole("button", { name: "Outside" }),
+    });
+
+    expect(panel()).toBeNull();
+  });
+
+  test("opens from the ref and reveals the trigger first", async () => {
+    const user = userEvent.setup();
+    const popoverRef = createRef();
+    render(<Harness popoverRef={popoverRef} revealOnOpen />);
+    const reveal = vi.fn();
+    trigger().scrollIntoView = reveal;
+
+    act(() => popoverRef.current.open());
+
+    expect(panel()).toBeInTheDocument();
+    expect(trigger()).toHaveAttribute("aria-expanded", "true");
+    expect(reveal).toHaveBeenCalledTimes(1);
+
+    // A second click still closes what the ref opened.
+    await user.click(trigger());
+    expect(panel()).toBeNull();
+  });
+
+  test("closes when navigation leaves the screen", async () => {
+    const user = userEvent.setup();
+    render(<Harness closeOnRouteChange routeChanger />);
+
+    await user.click(trigger());
+    expect(panel()).toBeInTheDocument();
+
+    fireEvent.click(screen.getByRole("button", { name: "Change route" }));
+
     await waitFor(() => expect(panel()).toBeNull());
   });
 });

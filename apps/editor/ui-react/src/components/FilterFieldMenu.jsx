@@ -1,57 +1,13 @@
+import { handleMenuNavigation } from "../lib/menuNavigation.js";
 import { AnchoredPopover } from "./AnchoredPopover.jsx";
 
 // The field picker inside the table's filter bar. It reads as a small pill in
 // the field, but opens a menu instead of the native <select> so the arrow,
 // type scale and selected state match the rest of the toolbar. The shared
-// popover shell owns Escape, dismissal and positioning; this file owns the
-// menu's roving focus.
+// popover shell owns Escape, dismissal and positioning, and menuNavigation
+// owns the roving focus; this file picks which items the traversal walks.
 export function FilterFieldMenu({ onChange, options, value }) {
   const current = options.find((option) => option.key === value);
-
-  function choices(panel) {
-    return Array.from(
-      panel?.querySelectorAll('[role="menuitemradio"]') ?? [],
-    );
-  }
-
-  function moveFocus(event, panel, offset) {
-    const items = choices(panel);
-
-    if (!items.length) {
-      return;
-    }
-
-    event.preventDefault();
-    event.stopPropagation();
-    const currentIndex = items.indexOf(document.activeElement);
-    const nextIndex = (currentIndex + offset + items.length) % items.length;
-    items[nextIndex].focus();
-  }
-
-  function handleMenuKeyDown(event, panel) {
-    switch (event.key) {
-      case "ArrowDown":
-        moveFocus(event, panel, 1);
-        break;
-      case "ArrowUp":
-        moveFocus(event, panel, -1);
-        break;
-      case "Home":
-        event.preventDefault();
-        event.stopPropagation();
-        choices(panel)[0]?.focus();
-        break;
-      case "End": {
-        event.preventDefault();
-        event.stopPropagation();
-        const items = choices(panel);
-        items[items.length - 1]?.focus();
-        break;
-      }
-      default:
-        break;
-    }
-  }
 
   return (
     <AnchoredPopover
@@ -62,7 +18,9 @@ export function FilterFieldMenu({ onChange, options, value }) {
         panel.querySelector('[role="menuitemradio"][aria-checked="true"]')
       }
       panelLabel="Filter field"
-      onKeyDown={handleMenuKeyDown}
+      onKeyDown={(event, panel) =>
+        handleMenuNavigation(event, panel, '[role="menuitemradio"]')
+      }
       renderTrigger={({ open, triggerProps }) => (
         <button
           {...triggerProps}
