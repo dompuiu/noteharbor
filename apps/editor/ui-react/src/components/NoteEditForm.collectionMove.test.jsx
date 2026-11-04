@@ -122,7 +122,7 @@ describe("changing a note's collection in the editor", () => {
       expect(route()).toContain("/catalog/collections/2/view");
     });
     expect(route()).toContain('"toast":"Moved to Other."');
-    expect(route()).toContain('"highlightNoteId":1');
+    expect(route()).toContain('"highlightNoteIds":[1]');
   });
 
   test("turning the checkbox off keeps the save on this screen", async () => {

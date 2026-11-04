@@ -955,6 +955,11 @@ function NotesTable({
   }, [collections, collectionsError, loadingCollections]);
 
   const [notes, setNotes] = useState([]);
+  // The collection the `notes` state belongs to. A route change renders once
+  // with the new id and the previous collection's rows still in state, so the
+  // hand-off reveal waits for this to name the destination before it looks
+  // for the moved notes.
+  const notesCollectionIdRef = useRef(null);
   // Filter chips: view state only. A cold-opened slideshow URL carries the
   // chips so closing the slideshow returns to the same filtered table.
   const [conditions, setConditions] = useState(() =>
@@ -997,14 +1002,15 @@ function NotesTable({
   // collector sees in the table.
   const [moveRequest, setMoveRequest] = useState(null);
   // A hand-off from another table (a move or create that redirected here):
-  // shown once the destination's notes load, then forgotten.
-  const pendingHighlightNoteIdRef = useRef(null);
+  // the notes to reveal, in the order the move saw them, once this table's
+  // own list has landed. The first id is the one that takes focus.
+  const pendingHighlightNoteIdsRef = useRef(null);
 
   // A move or a create that switched collections lands here with a one-shot
-  // hand-off: the toast to show on this table, and the note to reveal. It also
-  // reopens the destination fresh: default sort, no filters, no search. The
-  // route state is cleared at once so a refresh or a back-navigation does not
-  // replay it.
+  // hand-off: the toast to show on this table, and the notes to reveal. It
+  // also reopens the destination fresh: default sort, no filters, no search.
+  // The route state is cleared at once so a refresh or a back-navigation does
+  // not replay it.
   const handoffState = location.state;
   useEffect(() => {
     if (!handoffState) {
@@ -1015,7 +1021,10 @@ function NotesTable({
       moveToastRef.current?.show(handoffState.toast);
     }
 
-    pendingHighlightNoteIdRef.current = handoffState.highlightNoteId ?? null;
+    const highlightedIds = handoffState.highlightNoteIds ?? [];
+    pendingHighlightNoteIdsRef.current = highlightedIds.length
+      ? highlightedIds
+      : null;
 
     const defaults = defaultTableState();
     setTableView((current) => ({
@@ -1288,21 +1297,9 @@ function NotesTable({
     [conditions, notes, searchColumns, sortDirection, sortKey],
   );
   // A note handed over by a move or create in another collection is revealed
-  // once this table's own list has landed.
-  useEffect(() => {
-    const noteId = pendingHighlightNoteIdRef.current;
-
-    if (noteId == null || loading) {
-      return;
-    }
-
-    if (orderedNotes.some((note) => note.id === noteId)) {
-      pendingHighlightNoteIdRef.current = null;
-      focusRowByNoteId(noteId);
-    }
-    // `focusRowByNoteId` reads the list of the render it runs in.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [loading, orderedNotes]);
+  // once this table's own list has landed (see the reveal effect after the
+  // collection-switch scroll reset: the reset must run first, or it takes the
+  // scroll back to the top before the row can be seen or focused).
   // The painted row list lags one step behind the filter state: inputs,
   // chips, and counts stay instant while the heavy row re-mount happens in
   // a background render. Everything that reads note *identity* (selection,
@@ -1501,14 +1498,21 @@ function NotesTable({
     };
   }
 
+  // The one place notes state is committed, so the "which collection do these
+  // rows belong to" marker can never drift from the rows themselves.
+  function showNotes(nextNotes, ownerCollectionId) {
+    notesCollectionIdRef.current = ownerCollectionId;
+    setNotes(nextNotes);
+  }
+
   async function loadNotes() {
     if (!Number.isInteger(collectionId)) {
-      setNotes([]);
+      showNotes([], null);
       return [];
     }
 
     const payload = await getNotes(collectionId);
-    setNotes(payload.notes);
+    showNotes(payload.notes, collectionId);
     return payload.notes;
   }
 
@@ -1519,18 +1523,22 @@ function NotesTable({
 
     if (!Number.isInteger(collectionId)) {
       setLoading(false);
-      setNotes([]);
+      showNotes([], null);
       return;
     }
 
     let active = true;
+    // The new collection's list has not landed yet. A route change renders
+    // once with the new id and the previous collection's notes, and a reveal
+    // must not read that stale list as the destination's.
+    notesCollectionIdRef.current = null;
     setLoading(true);
     setLoadError("");
 
     getNotes(collectionId)
       .then((notesPayload) => {
         if (active) {
-          setNotes(notesPayload.notes);
+          showNotes(notesPayload.notes, collectionId);
         }
       })
       .catch((fetchError) => {
@@ -2087,6 +2095,45 @@ function NotesTable({
     // not be a dependency: including it would fire this on every render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [orderedNotes]);
+
+  // Reveal the notes handed over by a move or a create in another collection
+  // once this table's own rows have landed. It deliberately runs after the
+  // collection-switch reset above: that reset is how the new collection opens
+  // at the top, and a reveal issued earlier is undone before its row mounts.
+  useEffect(() => {
+    const pendingIds = pendingHighlightNoteIdsRef.current;
+
+    if (
+      !pendingIds ||
+      loading ||
+      rowsPending ||
+      notesCollectionIdRef.current !== collectionId
+    ) {
+      return;
+    }
+
+    const presentIds = pendingIds.filter((noteId) =>
+      orderedNotes.some((note) => note.id === noteId),
+    );
+
+    if (!presentIds.length) {
+      // The destination settled without these notes (deleted by someone else,
+      // or moved on again). Drop the hand-off rather than let a later reload
+      // in this collection scroll to rows the collector did not just move.
+      pendingHighlightNoteIdsRef.current = null;
+      return;
+    }
+
+    pendingHighlightNoteIdsRef.current = null;
+
+    // Pinning the first moved note to the top shows the whole moved block;
+    // scrolling just far enough would stop with the first row at the bottom
+    // edge and the rest below it. Near the end of the list the scroller
+    // clamps, which still leaves the block in view.
+    focusRowByNoteId(presentIds[0], { pinToTop: true });
+    // `focusRowByNoteId` reads the painted list of the render it runs in.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, orderedNotes, rowsPending]);
 
   // Returns the table scroller when the columns actually overflow, so
   // panning is a no-op on a wide window just like the Viewer's table.

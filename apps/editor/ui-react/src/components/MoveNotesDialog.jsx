@@ -176,7 +176,7 @@ function MoveNotesDialog({
         // The destination table shows the moved note and the toast; it opens
         // fresh because the collection switch owns the filter and view reset.
         navigate(CATALOG_ROUTES.collection(destinationCollectionId), {
-          state: { highlightNoteId: noteIds[0], toast: message },
+          state: { highlightNoteIds: noteIds, toast: message },
         });
         return;
       }

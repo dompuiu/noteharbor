@@ -1139,7 +1139,7 @@ function NoteEditForm({
   function landInCollection({ collection, collectionId, message, note }) {
     if (showCollectionAfterSave) {
       navigate(CATALOG_ROUTES.collection(collectionId), {
-        state: { highlightNoteId: note.id, toast: message },
+        state: { highlightNoteIds: [note.id], toast: message },
       });
       return;
     }
