@@ -74,9 +74,9 @@ const collectionNotes = [
   }),
 ];
 
-function renderTable() {
+function renderTable(hash = "") {
   return render(
-    <MemoryRouter initialEntries={["/catalog/collections/1/view"]}>
+    <MemoryRouter initialEntries={[`/catalog/collections/1/view${hash}`]}>
       <NotesTable
         collection={{ id: 1, is_default: 1, name: "Test" }}
         collectionId={1}
@@ -105,6 +105,9 @@ async function commitChip(user, label, value) {
 beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.clear();
+  // The table reads a cold-open slideshow route from the real hash, not the
+  // MemoryRouter's entry, so each test starts without one.
+  window.history.replaceState(null, "", "/");
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   vi.spyOn(HTMLCanvasElement.prototype, "getContext").mockReturnValue({
     font: "",
@@ -421,6 +424,120 @@ describe("NotesTable filter chips", () => {
     expect(
       screen.getByRole("button", { name: "Edit Company filter PCGS" }),
     ).toBeInTheDocument();
+  });
+
+  test("a range commits one chip per value and filters by them", async () => {
+    getNotes.mockResolvedValue({
+      notes: [
+        note(1, { denomination: "AAAA", catalog_number: "23" }),
+        note(2, { denomination: "BBBB", catalog_number: "30" }),
+        note(3, { denomination: "CCCC", catalog_number: "25a" }),
+      ],
+    });
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Catalog", "22-25");
+
+    // The rail states exactly what is filtered: one chip per value, just as
+    // a comma list would have produced.
+    for (const value of ["22", "23", "24", "25"]) {
+      expect(
+        screen.getByRole("button", { name: `Edit Catalog filter ${value}` }),
+      ).toBeInTheDocument();
+    }
+    expect(filterInput("Catalog")).toHaveValue("");
+    await waitFor(() => {
+      expect(screen.queryByText("BBBB")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("AAAA")).toBeInTheDocument();
+    // Matching is unchanged, so the catalog prefix arm still matches 25a.
+    expect(screen.getByText("CCCC")).toBeInTheDocument();
+  });
+
+  test("a prefixed range commits prefixed chips", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Grade", "M1-M3");
+
+    for (const value of ["M1", "M2", "M3"]) {
+      expect(
+        screen.getByRole("button", { name: `Edit Grade filter ${value}` }),
+      ).toBeInTheDocument();
+    }
+  });
+
+  test("a slideshow link carrying a range opens with expanded chips", async () => {
+    const hash = "#slideshow/1?f_catalog_number=M1-M8";
+    window.location.hash = hash;
+    // The cold-open chips come from the real hash; the live route reads the
+    // router's, so the link has to seed both.
+    renderTable(hash);
+
+    // The table behind the slideshow states the same filter the link asked
+    // for, one chip per value.
+    expect(
+      await screen.findByRole("button", { name: "Edit Catalog filter M1" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit Catalog filter M8" }),
+    ).toBeInTheDocument();
+  });
+
+  test("a range wider than 100 refuses the commit and keeps the draft", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await chooseField(user, "Catalog");
+    await user.type(filterInput("Catalog"), "1-500{Enter}");
+
+    // Nothing was committed and the typed range is still there to shorten.
+    expect(filterInput("Catalog")).toHaveValue("1-500");
+    expect(
+      screen.queryByRole("button", { name: /^Edit Catalog/ }),
+    ).toBeNull();
+    expect(screen.getByText("AAAA")).toBeInTheDocument();
+
+    // The refusal takes the commit hint's slot rather than opening a line.
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Up to 100 values per range",
+    );
+    expect(document.querySelector(".table-filter-enter")).toBeNull();
+
+    // The next keystroke clears it; the note is about that one draft.
+    await user.type(filterInput("Catalog"), "0");
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  test("the refusal note clears on a successful commit and on reset", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await chooseField(user, "Catalog");
+    await user.type(filterInput("Catalog"), "1-500{Enter}");
+    expect(screen.getByRole("status")).toBeInTheDocument();
+
+    await user.clear(filterInput("Catalog"));
+    await user.type(filterInput("Catalog"), "1-5{Enter}");
+
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Edit Catalog filter 5" }),
+    ).toBeInTheDocument();
+    expect(filterInput("Catalog")).toHaveValue("");
+
+    // Reset view drops the draft and its note together.
+    await user.type(filterInput("Catalog"), "1-500{Enter}");
+    expect(screen.getByRole("status")).toBeInTheDocument();
+    await user.click(screen.getByRole("button", { name: "Reset view" }));
+
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(filterInput("Catalog")).toHaveValue("");
   });
 
   test("a leading ! negates a chip", async () => {

@@ -68,7 +68,7 @@ import {
   noteThumbnailPath,
   stickyCellAttributes,
 } from "../lib/tableCells.jsx";
-import { conditionsFromInput, makeCondition } from "../lib/tableFilters.js";
+import { makeCondition, parseFilterInput } from "../lib/tableFilters.js";
 import { ColumnPicker } from "./ColumnPicker.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
@@ -200,7 +200,16 @@ function conditionsFromRoute(route) {
   const parsed = [...(route.slideshowConditions ?? [])];
 
   for (const [key, raw] of Object.entries(route.slideshowFilters ?? {})) {
-    parsed.push(...conditionsFromInput(key, raw));
+    const { conditions, tooWide } = parseFilterInput(key, raw);
+
+    // A hand-written link can only carry a range past the cap by accident;
+    // there is no field to keep the draft in, so keep its text as written
+    // rather than opening to no filter at all.
+    parsed.push(
+      ...(tooWide
+        ? parseFilterInput(key, raw, { expandRanges: false }).conditions
+        : conditions),
+    );
   }
 
   if (route.slideshowQuery) {

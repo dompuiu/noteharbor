@@ -2,6 +2,12 @@
 
 All notable changes to the Note Harbor Editor (desktop, server, and web) are documented in this file.
 
+## [Unreleased]
+
+### Added
+
+- Table screen: the filter field accepts ranges (`22-25`, `M1-M8`, `M1-8`) and commits them as one chip per value, exactly like a comma list; a range wider than 100 values is refused with a short note while the draft stays in the field.
+
 ## [2.8.0] - 2026-11-02
 
 ### Added

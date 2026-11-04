@@ -13,12 +13,13 @@ import { FilterFieldMenu } from "./FilterFieldMenu.jsx";
 import { HighlightMatch, rankTagSuggestions } from "./TagsField.jsx";
 import { tagsColumnKey } from "../lib/tableColumns.js";
 import {
-  conditionsFromInput,
-  conditionIdentity,
+  appendConditions,
   defaultFilterField,
   filterFieldLabel,
   filterPlaceholderFor,
   groupConditions,
+  maxRangeValues,
+  parseFilterInput,
 } from "../lib/tableFilters.js";
 
 // The filter bar owns its draft. Typing, the field picker, tag suggestions and
@@ -38,6 +39,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
 ) {
   const [filterField, setFilterField] = useState(defaultFilterField);
   const [filterDraft, setFilterDraft] = useState("");
+  const [rangeRefused, setRangeRefused] = useState(false);
   const [tagSuggestionOpen, setTagSuggestionOpen] = useState(false);
   const [tagSuggestionIndex, setTagSuggestionIndex] = useState(-1);
   const [tagSuggestionPosition, setTagSuggestionPosition] = useState(null);
@@ -68,6 +70,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
     },
     reset() {
       setFilterDraft("");
+      setRangeRefused(false);
       setEditingConditionId(null);
       setConditionDraft("");
       setFilterField(defaultFilterField);
@@ -149,21 +152,24 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
   }, [filterField, visibleFieldKeys]);
 
   // Commit is explicit: Enter turns the field text into chips. Duplicates are
-  // ignored, so re-typing a value does not silently add a second OR arm.
+  // ignored, so re-typing a value does not silently add a second OR arm. A
+  // range wider than the cap refuses the commit and keeps the draft, so the
+  // reader can shorten it instead of losing it.
   function commitFilterDraft(raw = filterDraft) {
-    const parsed = conditionsFromInput(filterField, raw);
+    const { conditions: parsed, tooWide } = parseFilterInput(filterField, raw);
+
+    if (tooWide) {
+      setRangeRefused(true);
+      return;
+    }
+
+    setRangeRefused(false);
 
     if (!parsed.length) {
       return;
     }
 
-    onConditionsChange((current) => {
-      const seen = new Set(current.map(conditionIdentity));
-      return [
-        ...current,
-        ...parsed.filter((condition) => !seen.has(conditionIdentity(condition))),
-      ];
-    });
+    onConditionsChange((current) => appendConditions(current, parsed));
     setFilterDraft("");
     closeTagSuggestions();
   }
@@ -375,6 +381,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
           }
           onChange={(event) => {
             setFilterDraft(event.target.value);
+            setRangeRefused(false);
 
             if (filterField === tagsColumnKey) {
               openTagSuggestions();
@@ -423,7 +430,13 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
             </svg>
           </button>
         ) : null}
-        {filterDraft.trim() ? (
+        {rangeRefused ? (
+          // The refusal takes the commit hint's slot and height, so a rejected
+          // range says why without moving the table.
+          <span className="table-filter-note" role="status">
+            Up to {maxRangeValues} values per range
+          </span>
+        ) : filterDraft.trim() ? (
           // The commit hint keeps the keycap the idle field shows, so the one
           // key that adds a chip never changes costume as you type.
           <span aria-hidden="true" className="table-filter-enter">
