@@ -167,23 +167,23 @@ describe("moving notes from the table", () => {
     ).toBeInTheDocument();
   });
 
-  test("the row menu rules off Move to… and keeps Delete beside it", async () => {
+  test("the row menu keeps Move to… above the rule that sets Delete apart", async () => {
     const user = userEvent.setup();
     const { unmount } = renderTable();
 
     const menu = await openRowMenu(user, "AAAA");
-    const items = within(menu).getAllByRole("menuitem");
-    const labels = items.map((item) => item.textContent);
+    const menuItems = within(menu).getAllByRole("menuitem");
+    const labels = menuItems.map((item) => item.textContent);
 
     expect(labels.slice(-2)).toEqual(["Move to…", "Delete"]);
 
-    const moveIndex = menu.children.length - 3;
-    expect(menu.children[moveIndex].className).toBe(
-      "row-actions-menu-separator",
+    const children = Array.from(menu.children);
+    const separatorIndex = children.findIndex(
+      (child) => child.className === "row-actions-menu-separator",
     );
-    expect(items[items.length - 1].previousElementSibling.textContent).toBe(
-      "Move to…",
-    );
+    expect(separatorIndex).toBeGreaterThan(0);
+    expect(children[separatorIndex - 1].textContent).toContain("Move to…");
+    expect(children[separatorIndex + 1].textContent).toContain("Delete");
 
     unmount();
 

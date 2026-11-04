@@ -329,7 +329,6 @@ export const NoteRow = memo(function NoteRow({
         icon: "move",
         label: "Move to…",
         onSelect: () => handlers.onMoveNote(note.id),
-        separated: true,
       });
     }
 
@@ -339,9 +338,9 @@ export const NoteRow = memo(function NoteRow({
       label: "Delete",
       onSelect: () => handlers.onDeleteNote(note.id),
       danger: true,
-      // The rule belongs above Move to…; Delete sits in the same trailing
-      // group when Move is present.
-      separated: !canMove,
+      // Delete is destructive and always closes the menu: the rule sets it
+      // apart, whether Move to… precedes it or not.
+      separated: true,
       shortcut: "d",
     });
 
