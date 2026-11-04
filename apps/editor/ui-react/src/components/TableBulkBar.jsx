@@ -5,10 +5,12 @@ import { useRef, useState } from "react";
 // running delete repaints the bar alone instead of committing the Table screen.
 export function TableBulkBar({
   barRef,
+  canMove = false,
   onClear,
   onDelete,
   onLeaveBackward,
   onLeaveForward,
+  onMove,
   selectedCount,
 }) {
   const [working, setWorking] = useState(false);
@@ -82,6 +84,16 @@ export function TableBulkBar({
     >
       <span className="table-bulk-bar-count">{selectedCount} selected</span>
       <span aria-hidden="true" className="table-bulk-bar-separator" />
+      {canMove ? (
+        <button
+          className="table-bulk-bar-move"
+          disabled={working}
+          onClick={onMove}
+          type="button"
+        >
+          Move to…
+        </button>
+      ) : null}
       <button
         className="table-bulk-bar-delete"
         disabled={working}

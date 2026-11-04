@@ -373,6 +373,17 @@ Body: {
   position_reference_id? // required for "before" / "after"
 }
 -> { note: NoteWithTags }
+
+POST /api/collections/:collectionId/notes/move
+Body: {
+  note_ids: [number, ...],
+  target_collection_id,
+  position_mode: "start" | "end" | "before" | "after",
+  position_reference_id? // required for "before" / "after"
+}
+-> { notes: [NoteWithTags, ...] }
+// One transaction: a bad id or position moves nothing.
+// Scoped route only; `note_ids` keeps the caller's order.
 ```
 
 `NoteWithTags` includes the banknote fields plus `tags: [{ id, name }]`, parsed `images`, and parsed `scraped_data`.

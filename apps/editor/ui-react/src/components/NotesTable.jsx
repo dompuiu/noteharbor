@@ -80,6 +80,7 @@ import { TableFilterBar } from "./TableFilterBar.jsx";
 import { TableRows } from "./TableRows.jsx";
 import { TableBulkBar } from "./TableBulkBar.jsx";
 import { TableMoveToast } from "./TableMoveToast.jsx";
+import { MoveNotesDialog } from "./MoveNotesDialog.jsx";
 import { TableScrollbar } from "./TableScrollbar.jsx";
 
 export function HomeHero() {
@@ -541,21 +542,38 @@ function slideshowLandingNoteId(noteList, removedId) {
 // does (`display_order - 1 WHERE display_order > removed_order`), so the
 // optimistic list never shows stale IDs while the refetch is skipped. A note
 // without a `display_order` only filters, matching the backend's no-op.
-function dropNoteAndRenumber(noteList, removedId) {
-  const removed = noteList.find((note) => note.id === removedId);
-  const removedOrder = removed?.display_order;
+function dropNotesAndRenumber(noteList, removedIds) {
+  const removed = new Set(removedIds);
 
-  const remaining = noteList.filter((note) => note.id !== removedId);
+  if (!removed.size) {
+    return noteList;
+  }
 
-  if (removedOrder == null) {
+  const removedOrders = noteList
+    .filter((note) => removed.has(note.id))
+    .map((note) => note.display_order)
+    .filter((order) => order != null);
+  const remaining = noteList.filter((note) => !removed.has(note.id));
+
+  if (!removedOrders.length) {
     return remaining;
   }
 
-  return remaining.map((note) =>
-    note.display_order != null && note.display_order > removedOrder
-      ? { ...note, display_order: note.display_order - 1 }
-      : note,
-  );
+  return remaining.map((note) => {
+    if (note.display_order == null) {
+      return note;
+    }
+
+    const shift = removedOrders.filter(
+      (removedOrder) => removedOrder < note.display_order,
+    ).length;
+
+    return shift ? { ...note, display_order: note.display_order - shift } : note;
+  });
+}
+
+function dropNoteAndRenumber(noteList, removedId) {
+  return dropNotesAndRenumber(noteList, [removedId]);
 }
 
 function parsePositiveInteger(value) {
@@ -889,6 +907,30 @@ function NotesTable({
   const location = useLocation();
   const navigate = useNavigate();
 
+  // A move or a create that switched collections lands here with a one-shot
+  // hand-off: the toast to show on this table, and the note to reveal. The
+  // route state is cleared at once so a refresh or a back-navigation does not
+  // replay it.
+  const handoffState = location.state;
+  useEffect(() => {
+    if (!handoffState) {
+      return;
+    }
+
+    if (handoffState.toast) {
+      moveToastRef.current?.show(handoffState.toast);
+    }
+
+    pendingHighlightNoteIdRef.current = handoffState.highlightNoteId ?? null;
+    navigate(`${location.pathname}${location.search}${location.hash}`, {
+      replace: true,
+      state: null,
+    });
+    // The state is consumed exactly once; the navigation itself is not a
+    // reason to run again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [handoffState]);
+
   // Table structure — sort and visible columns — is one saved, per-collection
   // preference. Filters, search and selection are not: they are seeded from a
   // slideshow URL when it carries context and otherwise start empty.
@@ -974,6 +1016,15 @@ function NotesTable({
   // The move toast owns its message and timer; the table only tells it when to
   // show one.
   const moveToastRef = useRef(null);
+  // The one Move dialog, opened by the bulk bar or a row menu. It holds the
+  // notes as an ordered list, because a bulk move keeps the order the
+  // collector sees in the table.
+  const [moveRequest, setMoveRequest] = useState(null);
+  // A hand-off from another table (a move or create that redirected here):
+  // shown once the destination's notes load, then forgotten.
+  const pendingHighlightNoteIdRef = useRef(null);
+  const canMoveNotes =
+    Array.isArray(collections) && collections.length > 1;
   const [loading, setLoading] = useState(true);
   // Bumped by the load-error panel's Try again. It is the effect's only
   // manual trigger: collection switches and the first mount change the other
@@ -1226,6 +1277,22 @@ function NotesTable({
     () => applyTableView(notes, conditions, sortKey, sortDirection, searchColumns),
     [conditions, notes, searchColumns, sortDirection, sortKey],
   );
+  // A note handed over by a move or create in another collection is revealed
+  // once this table's own list has landed.
+  useEffect(() => {
+    const noteId = pendingHighlightNoteIdRef.current;
+
+    if (noteId == null || loading) {
+      return;
+    }
+
+    if (orderedNotes.some((note) => note.id === noteId)) {
+      pendingHighlightNoteIdRef.current = null;
+      focusRowByNoteId(noteId);
+    }
+    // `focusRowByNoteId` reads the list of the render it runs in.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading, orderedNotes]);
   // The painted row list lags one step behind the filter state: inputs,
   // chips, and counts stay instant while the heavy row re-mount happens in
   // a background render. Everything that reads note *identity* (selection,
@@ -1859,6 +1926,7 @@ function NotesTable({
       onDeleteNote: invoke("onDeleteNote"),
       onEditNote: invoke("onEditNote"),
       onInsertNoteAfter: invoke("onInsertNoteAfter"),
+      onMoveNote: invoke("onMoveNote"),
       onOpenNote: invoke("onOpenNote"),
       onRowBlur: invoke("onRowBlur"),
       onRowClick: invoke("onRowClick"),
@@ -3470,6 +3538,7 @@ function NotesTable({
     reorderedNotes,
     movedToCollection,
     intent = "return",
+    toastMessage = null,
   ) {
     editorDirtyRef.current = false;
 
@@ -3485,7 +3554,9 @@ function NotesTable({
       setSlideshowNotes((current) =>
         dropNoteAndRenumber(current, updatedNote.id),
       );
-      moveToastRef.current?.show(`Moved to ${movedToCollection.name}.`);
+      moveToastRef.current?.show(
+        toastMessage ?? `Moved to ${movedToCollection.name}.`,
+      );
     } else if (reorderedNotes) {
       setNotes(reorderedNotes);
       setSlideshowNotes((current) => {
@@ -3588,6 +3659,50 @@ function NotesTable({
 
   function clearSelection() {
     setSelectedIds([]);
+  }
+
+  function openMoveDialog(noteIds) {
+    if (!canMoveNotes || !noteIds.length) {
+      return;
+    }
+
+    setActionError("");
+    setMoveRequest({ noteIds });
+  }
+
+  function openMoveForSelection() {
+    // The dialog moves the selection in the order the table shows it, not in
+    // the order the checkboxes were ticked.
+    const selected = new Set(selectedIdsRef.current);
+    openMoveDialog(
+      orderedNotes
+        .filter((note) => selected.has(note.id))
+        .map((note) => note.id),
+    );
+  }
+
+  function openMoveForNote(noteId) {
+    openMoveDialog([noteId]);
+  }
+
+  // A move that stays on this table: the rows are gone, so the selection goes
+  // with them, and the toast names the destination. A same-collection no-op
+  // passes no ids, so nothing leaves the table.
+  function handleMoveStayed(message, movedIds = []) {
+    if (movedIds.length) {
+      // Renumber like a delete: the backend closes the source gap, so the ID
+      // column must not keep stale values.
+      setNotes((current) => dropNotesAndRenumber(current, movedIds));
+      setSlideshowNotes((current) =>
+        dropNotesAndRenumber(current, movedIds),
+      );
+    }
+
+    clearSelection();
+
+    if (message) {
+      moveToastRef.current?.show(message);
+    }
   }
 
   function autoScrollTableShell(event) {
@@ -4266,6 +4381,7 @@ function NotesTable({
     },
     onEditNote: openEditor,
     onInsertNoteAfter: openCreateNoteAfter,
+    onMoveNote: openMoveForNote,
     onOpenNote: openSlideshow,
     onRowBlur: handleRowBlur,
     onRowClick: handleRowClick,
@@ -4710,6 +4826,16 @@ function NotesTable({
         ) : null}
         <TableMoveToast toastRef={moveToastRef} />
 
+        {moveRequest ? (
+          <MoveNotesDialog
+            collections={collections}
+            currentCollectionId={collectionId}
+            noteIds={moveRequest.noteIds}
+            onClose={() => setMoveRequest(null)}
+            onStayed={handleMoveStayed}
+          />
+        ) : null}
+
         {loadError ? (
           // A failed load replaces the table with a card the height of the
           // table it stands in for: the screen keeps its shape, the failure
@@ -4963,6 +5089,7 @@ function NotesTable({
                       </thead>
                       <TableRows
                         activeNoteId={activeNoteId}
+                        canMove={canMoveNotes}
                         canReorder={canReorder}
                         columns={visibleColumns}
                         dragStateRef={dragStateRef}
@@ -4999,8 +5126,10 @@ function NotesTable({
               {selectedIds.length ? (
                 <TableBulkBar
                   barRef={bulkBarRef}
+                  canMove={canMoveNotes}
                   onClear={clearSelection}
                   onDelete={handleBulkDelete}
+                  onMove={openMoveForSelection}
                   onLeaveBackward={() => {
                     selectionTabArmedRef.current = false;
                     focusRowActionsButtonByNoteId(bulkBarExitNoteId());

@@ -69,6 +69,11 @@ describe("Note editor create mode over the table", () => {
     });
     expect(getNote).not.toHaveBeenCalled();
     expect(await screen.findByLabelText("Denomination")).toHaveValue("");
+    // The destination Collection is part of creating a note too, not just
+    // editing one.
+    expect(
+      screen.getByRole("combobox", { name: "Collection" }),
+    ).toHaveValue("1");
   });
 
   test("an explicit note id still edits that note under a collection route", async () => {

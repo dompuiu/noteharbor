@@ -529,6 +529,193 @@ async fn move_rematches_tags_into_destination_scope() {
     assert_eq!(reread["note"]["tags"][0]["name"], json!("Rare"));
 }
 
+// --- bulk move --------------------------------------------------------------
+
+#[tokio::test]
+async fn bulk_move_keeps_the_given_order_and_compacts_the_source() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let source = create_collection(app.clone(), "Bulk Move From").await;
+    let target = create_collection(app.clone(), "Bulk Move To").await;
+    let (source_id, target_id) = (source["id"].as_i64().unwrap(), target["id"].as_i64().unwrap());
+
+    let note_a = create_note(app.clone(), source_id, json!({ "notes": "A" })).await;
+    let note_b = create_note(app.clone(), source_id, json!({ "notes": "B" })).await;
+    let note_c = create_note(app.clone(), source_id, json!({ "notes": "C" })).await;
+    let note_d = create_note(app.clone(), source_id, json!({ "notes": "D" })).await;
+    let note_x = create_note(app.clone(), target_id, json!({ "notes": "X" })).await;
+    let note_y = create_note(app.clone(), target_id, json!({ "notes": "Y" })).await;
+    let (aid, bid, cid, did, xid, yid) = (
+        note_a["id"].as_i64().unwrap(), note_b["id"].as_i64().unwrap(),
+        note_c["id"].as_i64().unwrap(), note_d["id"].as_i64().unwrap(),
+        note_x["id"].as_i64().unwrap(), note_y["id"].as_i64().unwrap(),
+    );
+
+    // D before A is ignored: the request's own order is what the group keeps.
+    let (status, body) = call(
+        app.clone(), "POST", &format!("/api/collections/{source_id}/notes/move"),
+        Some(json!({
+            "note_ids": [did, bid],
+            "target_collection_id": target_id,
+            "position_mode": "before",
+            "position_reference_id": yid,
+        })),
+    ).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(
+        body["notes"].as_array().unwrap().iter().map(|note| note["id"].as_i64().unwrap()).collect::<Vec<_>>(),
+        vec![did, bid],
+    );
+    assert_eq!(ordered_ids(app.clone(), target_id).await, vec![xid, did, bid, yid]);
+    assert_eq!(ordered_ids(app.clone(), source_id).await, vec![aid, cid]);
+
+    // Orders stay contiguous on both sides.
+    let (_, source_notes) = call(app.clone(), "GET", &format!("/api/collections/{source_id}/notes"), None).await;
+    let source_orders: Vec<i64> = source_notes["notes"]
+        .as_array().unwrap().iter().map(|note| note["display_order"].as_i64().unwrap()).collect();
+    assert_eq!(source_orders, vec![1, 2]);
+    let (_, target_notes) = call(app.clone(), "GET", &format!("/api/collections/{target_id}/notes"), None).await;
+    let target_orders: Vec<i64> = target_notes["notes"]
+        .as_array().unwrap().iter().map(|note| note["display_order"].as_i64().unwrap()).collect();
+    assert_eq!(target_orders, vec![1, 2, 3, 4]);
+}
+
+#[tokio::test]
+async fn bulk_move_start_and_end_splice_the_group_whole() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let source = create_collection(app.clone(), "Bulk Splice From").await;
+    let target = create_collection(app.clone(), "Bulk Splice To").await;
+    let (source_id, target_id) = (source["id"].as_i64().unwrap(), target["id"].as_i64().unwrap());
+    let note_a = create_note(app.clone(), source_id, json!({})).await;
+    let note_b = create_note(app.clone(), source_id, json!({})).await;
+    let note_x = create_note(app.clone(), target_id, json!({})).await;
+    let (aid, bid, xid) = (
+        note_a["id"].as_i64().unwrap(), note_b["id"].as_i64().unwrap(),
+        note_x["id"].as_i64().unwrap(),
+    );
+
+    let (status, _) = call(
+        app.clone(), "POST", &format!("/api/collections/{source_id}/notes/move"),
+        Some(json!({
+            "note_ids": [bid, aid],
+            "target_collection_id": target_id,
+            "position_mode": "start",
+        })),
+    ).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(ordered_ids(app.clone(), target_id).await, vec![bid, aid, xid]);
+}
+
+#[tokio::test]
+async fn bulk_move_rejects_the_whole_request_and_moves_nothing() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let source = create_collection(app.clone(), "Bulk Reject From").await;
+    let target = create_collection(app.clone(), "Bulk Reject To").await;
+    let (source_id, target_id) = (source["id"].as_i64().unwrap(), target["id"].as_i64().unwrap());
+    let note_a = create_note(app.clone(), source_id, json!({})).await;
+    let note_b = create_note(app.clone(), source_id, json!({})).await;
+    let (aid, bid) = (note_a["id"].as_i64().unwrap(), note_b["id"].as_i64().unwrap());
+    let path = format!("/api/collections/{source_id}/notes/move");
+
+    // One bad id rejects the whole request: the good id must not move either.
+    let (status, body) = call(
+        app.clone(), "POST", &path,
+        Some(json!({
+            "note_ids": [aid, 999999],
+            "target_collection_id": target_id,
+            "position_mode": "end",
+        })),
+    ).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+    assert_eq!(ordered_ids(app.clone(), source_id).await, vec![aid, bid]);
+    assert!(ordered_ids(app.clone(), target_id).await.is_empty());
+
+    let (status, _) = call(
+        app.clone(), "POST", &path,
+        Some(json!({
+            "note_ids": [aid, bid],
+            "target_collection_id": source_id,
+            "position_mode": "end",
+        })),
+    ).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let (status, _) = call(
+        app.clone(), "POST", &path,
+        Some(json!({
+            "note_ids": [aid],
+            "target_collection_id": 999999,
+            "position_mode": "end",
+        })),
+    ).await;
+    assert_eq!(status, StatusCode::NOT_FOUND);
+
+    let (status, _) = call(
+        app.clone(), "POST", &path,
+        Some(json!({
+            "note_ids": [aid],
+            "target_collection_id": target_id,
+            "position_mode": "middle",
+        })),
+    ).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let (status, _) = call(
+        app.clone(), "POST", &path,
+        Some(json!({
+            "note_ids": [aid],
+            "target_collection_id": target_id,
+            "position_mode": "before",
+        })),
+    ).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    let (status, _) = call(
+        app.clone(), "POST", &path,
+        Some(json!({
+            "note_ids": [],
+            "target_collection_id": target_id,
+            "position_mode": "end",
+        })),
+    ).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+
+    assert_eq!(ordered_ids(app.clone(), source_id).await, vec![aid, bid]);
+    assert!(ordered_ids(app, target_id).await.is_empty());
+}
+
+#[tokio::test]
+async fn bulk_move_reattaches_tags_and_keeps_them_per_note() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let source = create_collection(app.clone(), "Bulk Tags From").await;
+    let target = create_collection(app.clone(), "Bulk Tags To").await;
+    let (source_id, target_id) = (source["id"].as_i64().unwrap(), target["id"].as_i64().unwrap());
+    let note_a = create_note(app.clone(), source_id, json!({ "tags": ["Rare", "Silver"] })).await;
+    let note_b = create_note(app.clone(), source_id, json!({ "tags": ["Rare"] })).await;
+    let (aid, bid) = (note_a["id"].as_i64().unwrap(), note_b["id"].as_i64().unwrap());
+
+    let (status, body) = call(
+        app.clone(), "POST", &format!("/api/collections/{source_id}/notes/move"),
+        Some(json!({
+            "note_ids": [aid, bid],
+            "target_collection_id": target_id,
+            "position_mode": "end",
+        })),
+    ).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    let moved = body["notes"].as_array().unwrap();
+    assert_eq!(moved[0]["tags"].as_array().unwrap().len(), 2);
+    assert_eq!(moved[1]["tags"][0]["name"], json!("Rare"));
+
+    let (_, tags) = call(app, "GET", &format!("/api/collections/{target_id}/tags"), None).await;
+    let names: Vec<String> = tags["tags"]
+        .as_array().unwrap().iter().map(|tag| tag["name"].as_str().unwrap().to_owned()).collect();
+    assert_eq!(names, vec!["Rare", "Silver"]);
+}
+
 // --- bare mounts ------------------------------------------------------------
 
 #[tokio::test]

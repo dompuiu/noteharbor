@@ -24,7 +24,7 @@ import { normalizePastedImageFile } from "../lib/pastedImages.js";
 import { extractPmgDescriptionFields } from "../lib/pmgDescription.js";
 import { CATALOG_ROUTES } from "../lib/routes.js";
 import { NoteCounter } from "./NoteCounter.jsx";
-import { PositionPicker } from "./PositionPicker.jsx";
+import { CollectionPositionFields } from "./CollectionPositionFields.jsx";
 import { TagsField } from "./TagsField.jsx";
 
 const SCRAPE_BROWSER_POLL_INTERVAL_MS = 500;
@@ -275,6 +275,7 @@ function NoteEditForm({
   const [destinationCollectionId, setDestinationCollectionId] = useState(
     selectedCollectionId,
   );
+  const [showCollectionAfterSave, setShowCollectionAfterSave] = useState(true);
   const [destinationNotesOverride, setDestinationNotesOverride] = useState(null);
   const destinationRequestRef = useRef(0);
   const [scraping, setScraping] = useState(false);
@@ -364,6 +365,7 @@ function NoteEditForm({
 
     setDestinationCollectionId(nextCollectionId);
     setPositionReferenceId(null);
+    setPositionMode("end");
 
     if (nextCollectionId === selectedCollectionId) {
       setDestinationNotesOverride(null);
@@ -372,14 +374,12 @@ function NoteEditForm({
     }
 
     setDestinationNotesOverride(null);
-    setPositionMode("before");
 
     getNotes(nextCollectionId)
       .then((payload) => {
         if (destinationRequestRef.current !== requestId) return;
         const notes = payload.notes ?? [];
         setDestinationNotesOverride(notes);
-        setPositionMode(notes.length > 0 ? "before" : "end");
       })
       .catch((fetchError) => {
         if (destinationRequestRef.current !== requestId) return;
@@ -457,6 +457,7 @@ function NoteEditForm({
     setDestinationCollectionId(selectedCollectionId);
     setDestinationNotesOverride(null);
     destinationRequestRef.current += 1;
+    setShowCollectionAfterSave(true);
     setScraping(false);
     setScrapeToast(null);
     setScrapeDetails(null);
@@ -1094,11 +1095,14 @@ function NoteEditForm({
     return imageItem?.getAsFile() ?? null;
   }
 
-  async function applyPositionAfterSave(savedNoteId) {
-    if (positionMode === "keep" || allNotes.length === 0) return null;
+  async function applyPositionAfterSave(
+    savedNoteId,
+    collectionId = selectedCollectionId,
+  ) {
+    if (positionMode === "keep") return null;
 
     // Re-fetch to avoid using a stale snapshot from form-open time
-    const { notes: freshNotes } = await getNotes(selectedCollectionId);
+    const { notes: freshNotes } = await getNotes(collectionId);
     const withoutSaved = freshNotes
       .filter((n) => n.id !== savedNoteId)
       .map((n) => n.id);
@@ -1123,7 +1127,7 @@ function NoteEditForm({
       }
     }
 
-    const result = await reorderNotes(nextOrder, selectedCollectionId);
+    const result = await reorderNotes(nextOrder, collectionId);
     return result.notes ?? null;
   }
 
@@ -1156,42 +1160,98 @@ function NoteEditForm({
         }
       });
 
+      const targetCollectionId = destinationCollectionId ?? selectedCollectionId;
+      const destinationDiffers = targetCollectionId !== selectedCollectionId;
+      const destinationCollection =
+        collections.find(
+          (collection) => collection.id === targetCollectionId,
+        ) ?? null;
+      const destinationName = destinationCollection?.name ?? "the collection";
       const payload = isCreateMode
-        ? await createNote(payloadWithImages, selectedCollectionId)
+        ? await createNote(payloadWithImages, targetCollectionId)
         : await updateNote(noteId, payloadWithImages, selectedCollectionId);
       const intent = saveIntentRef.current;
 
-      if (movingToDifferentCollection) {
+      if (!isCreateMode && movingToDifferentCollection) {
         const movedPayload = await moveNote(
           payload.note.id,
           selectedCollectionId,
           destinationCollectionId,
           { mode: positionMode, referenceId: positionReferenceId },
         );
+        const movedToCollection = collections.find(
+          (collection) => collection.id === destinationCollectionId,
+        ) ?? null;
+        const toastMessage = `Moved to ${destinationName}.`;
 
-        if (onSaveSuccess) {
-          const movedToCollection = collections.find(
-            (collection) => collection.id === destinationCollectionId,
-          );
-          onSaveSuccess(movedPayload.note, null, movedToCollection ?? null);
+        // The default is to land on the destination and see the note there;
+        // staying is the deliberate opt-out in the checkbox.
+        if (showCollectionAfterSave) {
+          navigate(CATALOG_ROUTES.collection(destinationCollectionId), {
+            state: {
+              highlightNoteId: movedPayload.note.id,
+              toast: toastMessage,
+            },
+          });
           return;
         }
 
-        navigate(
-          Number.isInteger(destinationCollectionId)
-            ? CATALOG_ROUTES.collection(destinationCollectionId)
-            : CATALOG_ROUTES.collections,
-        );
+        if (onSaveSuccess) {
+          onSaveSuccess(
+            movedPayload.note,
+            null,
+            movedToCollection,
+            intent,
+            toastMessage,
+          );
+          return;
+        }
+
+        navigate(CATALOG_ROUTES.collection(destinationCollectionId));
         return;
       }
 
-      const reorderedNotes = await applyPositionAfterSave(payload.note.id);
+      const reorderedNotes = await applyPositionAfterSave(
+        payload.note.id,
+        targetCollectionId,
+      );
 
       // Saving an edit keeps the same note loaded, so the snapshot has to be
       // re-taken here; a create reloads the new note (and re-snapshots on
       // load) because the overlay switches into edit mode.
       if (!isCreateMode) {
         baselineSignatureRef.current = editorSnapshot();
+      }
+
+      // A create can pick another collection: the note was written straight
+      // into it, so the destination is either shown (default) or reported
+      // with a toast while the table stays put.
+      if (isCreateMode && destinationDiffers) {
+        const toastMessage = `Note added to ${destinationName}.`;
+
+        if (showCollectionAfterSave) {
+          navigate(CATALOG_ROUTES.collection(targetCollectionId), {
+            state: {
+              highlightNoteId: payload.note.id,
+              toast: toastMessage,
+            },
+          });
+          return;
+        }
+
+        if (onSaveSuccess) {
+          onSaveSuccess(
+            payload.note,
+            null,
+            destinationCollection,
+            intent,
+            toastMessage,
+          );
+          return;
+        }
+
+        navigate(CATALOG_ROUTES.collection(targetCollectionId));
+        return;
       }
 
       if (onSaveSuccess) {
@@ -1876,63 +1936,31 @@ function NoteEditForm({
               onSelect={(tag) => tagsFieldRef.current?.add(tag)}
             />
           </div>
-          {!isCreateMode && collections.length > 1 ? (
-            <div className="field-block full-span">
-              <span>Collection</span>
-              <select
-                className="select-input"
-                onChange={(event) =>
-                  handleDestinationCollectionChange(event.target.value)
-                }
-                value={destinationCollectionId ?? ""}
-              >
-                {collections.map((collection) => (
-                  <option key={collection.id} value={collection.id}>
-                    {collection.name}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
-          {otherNotes.length > 0 ? (
-            <div className="field-block full-span">
-              <span>Position in collection</span>
-              <select
-                aria-label="Position in collection"
-                className="select-input"
-                onChange={(event) => {
-                  setPositionMode(event.target.value);
-                  setPositionReferenceId(null);
-                }}
-                value={positionMode}
-              >
-                {!isCreateMode && !movingToDifferentCollection ? (
-                  <option value="keep">Keep current position</option>
-                ) : null}
-                <option value="start">Start of collection</option>
-                <option value="end">End of collection</option>
-                <option value="before">Before a note...</option>
-                <option value="after">After a note...</option>
-              </select>
-              {positionInvalid ? (
-                <p className="error-text">
-                  Select a reference note from the list below.
-                </p>
-              ) : null}
-              {positionNeedsReference ? (
-                <PositionPicker
-                  key={positionMode}
-                  notes={otherNotes}
-                  onSelect={(id) => setPositionReferenceId(id)}
-                  selectedId={positionReferenceId}
-                />
-              ) : null}
-            </div>
-          ) : movingToDifferentCollection ? (
-            <p className="muted field-block full-span">
-              This note will be the only one in the destination collection.
-            </p>
-          ) : null}
+          <CollectionPositionFields
+            collections={collections}
+            currentCollectionId={selectedCollectionId}
+            emptyPositionMessage={
+              destinationCollectionId !== selectedCollectionId
+                ? "This note will be the only one in the destination collection."
+                : null
+            }
+            onCollectionChange={handleDestinationCollectionChange}
+            onPositionModeChange={(mode) => {
+              setPositionMode(mode);
+              setPositionReferenceId(null);
+            }}
+            onPositionReferenceChange={setPositionReferenceId}
+            onShowCollectionAfterChange={setShowCollectionAfterSave}
+            positionMode={positionMode}
+            positionNotes={otherNotes}
+            positionReferenceId={positionReferenceId}
+            selectedCollectionId={destinationCollectionId}
+            showAfterAction="saving"
+            showCollectionAfter={showCollectionAfterSave}
+            showKeepPosition={
+              !isCreateMode && !movingToDifferentCollection
+            }
+          />
         </form>
 
         {scrapeDetails ? (

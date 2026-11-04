@@ -95,6 +95,14 @@ _Avoid_: Variation set
 A named group of notes forming one archive. Each note belongs to exactly one collection, and a collection's notes have an order.
 _Avoid_: Album, group
 
+**Position**:
+Where a note sits in a collection's order: the start, the end, or immediately before or after a reference note.
+_Avoid_: Index, slot, rank
+
+**Move**:
+Changing a note's collection, optionally placing it at a Position in the destination. A move leaves the source collection and re-attaches the note's Tags to the destination.
+_Avoid_: Transfer, copy
+
 **Scrape status**:
 The progress of a note's Scrape: pending, in progress, succeeded, or failed with an error.
 _Avoid_: Fetch state

@@ -5895,6 +5895,42 @@ button.tag {
   gap: 12px;
 }
 
+/* The destination fields shared by the Note editor and the Table screen's
+   Move dialog. The checkbox is the one opt-out from the default redirect. */
+.field-checkbox {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  justify-self: start;
+  font-size: 0.86rem;
+  color: var(--text-muted);
+}
+
+.field-checkbox input[type="checkbox"] {
+  width: 15px;
+  height: 15px;
+  min-height: 0;
+  padding: 0;
+}
+
+.field-checkbox:has(input:disabled) {
+  opacity: 0.55;
+}
+
+/* The Move dialog reuses the confirmation shell, but holds fields rather than
+   one destructive sentence, so it is a little wider and scrolls on a short
+   window instead of clipping its position picker. */
+.move-dialog {
+  width: min(100%, 480px);
+  max-height: calc(100vh - 48px);
+  overflow-y: auto;
+}
+
+.move-dialog-form {
+  display: grid;
+  gap: 14px;
+}
+
 .slideshow-topbar {
   display: flex;
   justify-content: flex-end;

@@ -15,6 +15,7 @@ import { NoteRow } from "./NoteRow.jsx";
 // to scroll up.
 export function TableRows({
   activeNoteId,
+  canMove,
   canReorder,
   columns,
   dragStateRef,
@@ -228,6 +229,7 @@ export function TableRows({
 
         return (
           <NoteRow
+            canMove={canMove}
             canReorder={canReorder}
             columns={columns}
             dropPlacement={

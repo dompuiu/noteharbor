@@ -12,6 +12,10 @@
 //!   (503/500). Collection-id validation (`400`/`404`) runs before payload
 //!   validation, and move checks run target → same → target-exists → mode →
 //!   reference in this order (so a bad mode against a missing target is 404).
+//! - The scoped bulk move (`POST /api/collections/:id/notes/move`) applies the
+//!   same validation order, then moves every `note_id` in one transaction: a
+//!   bad id, mode, reference or same-collection target rejects the whole
+//!   request and leaves both collections untouched.
 //! - Note ids are never 400: an unparsable id simply matches no row, so it
 //!   answers `404 { error: 'Note not found.' }`.
 //! - Multipart and JSON share one handler each for POST/PUT (Axum cannot
@@ -615,34 +619,25 @@ impl MoveMode {
     }
 }
 
-fn move_note_row(
-    conn: &mut Connection,
-    note_id: i64,
-    source_collection_id: i64,
-    target_collection_id: i64,
+/// The target collection's order with `moving_ids` spliced in at the requested
+/// slot. The group keeps the order it was given, so a bulk move preserves the
+/// selection's relative order as the collector saw it. An unknown reference
+/// falls back to appending, exactly like Node.
+fn insertion_order(
+    target_ids: &[i64],
     mode: MoveMode,
     reference_id: Option<i64>,
-) -> Result<Note, DbError> {
-    if source_collection_id == target_collection_id {
-        return Err(DbError::Failed("Note is already in this collection.".to_owned()));
-    }
-    let existing = get_note_in_collection(conn, note_id, source_collection_id)?
-        .ok_or_else(|| DbError::Failed("Note not found.".to_owned()))?;
-    let tag_names: Vec<String> = existing.tags.iter().map(|tag| tag.name.clone()).collect();
-    let target_ids: Vec<i64> = list_notes(conn, target_collection_id)?
-        .iter()
-        .map(|note| note.id)
-        .collect();
-
-    let mut next_order: Vec<i64> = Vec::with_capacity(target_ids.len() + 1);
+    moving_ids: &[i64],
+) -> Vec<i64> {
+    let mut next_order: Vec<i64> = Vec::with_capacity(target_ids.len() + moving_ids.len());
     match mode {
         MoveMode::Start => {
-            next_order.push(note_id);
-            next_order.extend(target_ids);
+            next_order.extend(moving_ids.iter().copied());
+            next_order.extend(target_ids.iter().copied());
         }
         MoveMode::End => {
-            next_order.extend(target_ids);
-            next_order.push(note_id);
+            next_order.extend(target_ids.iter().copied());
+            next_order.extend(moving_ids.iter().copied());
         }
         MoveMode::Before | MoveMode::After => {
             let position = reference_id.and_then(|reference| {
@@ -651,28 +646,98 @@ fn move_note_row(
                 })
             });
             match position {
-                // Unknown references fall back to appending, exactly like Node.
                 None => {
-                    next_order.extend(target_ids);
-                    next_order.push(note_id);
+                    next_order.extend(target_ids.iter().copied());
+                    next_order.extend(moving_ids.iter().copied());
                 }
                 Some(index) => {
                     next_order.extend(target_ids[..index].iter().copied());
-                    next_order.push(note_id);
+                    next_order.extend(moving_ids.iter().copied());
                     next_order.extend(target_ids[index..].iter().copied());
                 }
             }
         }
     }
+    next_order
+}
+
+fn move_note_row(
+    conn: &mut Connection,
+    note_id: i64,
+    source_collection_id: i64,
+    target_collection_id: i64,
+    mode: MoveMode,
+    reference_id: Option<i64>,
+) -> Result<Note, DbError> {
+    let moved = move_notes_row(
+        conn,
+        &[note_id],
+        source_collection_id,
+        target_collection_id,
+        mode,
+        reference_id,
+    )?;
+    moved
+        .into_iter()
+        .next()
+        .ok_or_else(|| DbError::Failed("Note not found.".to_owned()))
+}
+
+/// Moves several notes into another collection in one transaction: the group
+/// keeps `note_ids`' order, every note re-attaches its tags to the target
+/// scope, and the source closes its gaps. Any bad id rejects the whole move
+/// and leaves both collections untouched.
+fn move_notes_row(
+    conn: &mut Connection,
+    note_ids: &[i64],
+    source_collection_id: i64,
+    target_collection_id: i64,
+    mode: MoveMode,
+    reference_id: Option<i64>,
+) -> Result<Vec<Note>, DbError> {
+    if source_collection_id == target_collection_id {
+        return Err(DbError::Failed("Notes are already in this collection.".to_owned()));
+    }
+    let source_notes = list_notes(conn, source_collection_id)?;
+    let source_by_id: HashMap<i64, &Note> =
+        source_notes.iter().map(|note| (note.id, note)).collect();
+    let mut seen = HashSet::with_capacity(note_ids.len());
+    let mut tag_names_by_note: Vec<(i64, Vec<String>)> = Vec::with_capacity(note_ids.len());
+    for note_id in note_ids {
+        if !seen.insert(*note_id) {
+            return Err(DbError::Failed("Each note can only be moved once.".to_owned()));
+        }
+        let note = source_by_id
+            .get(note_id)
+            .ok_or_else(|| DbError::Failed("Note not found.".to_owned()))?;
+        tag_names_by_note.push((
+            *note_id,
+            note.tags.iter().map(|tag| tag.name.clone()).collect(),
+        ));
+    }
+
+    let target_ids: Vec<i64> = list_notes(conn, target_collection_id)?
+        .iter()
+        .map(|note| note.id)
+        .collect();
+    let next_order = insertion_order(&target_ids, mode, reference_id, note_ids);
+    // The source keeps its order with the moved rows removed.
+    let remaining_source: Vec<i64> = source_notes
+        .iter()
+        .map(|note| note.id)
+        .filter(|id| !seen.contains(id))
+        .collect();
 
     let tx = conn.transaction().map_err(classify)?;
-    tx.execute(
-        "UPDATE banknotes
-         SET collection_id = ?1, updated_at = datetime('now')
-         WHERE id = ?2",
-        params![target_collection_id, note_id],
-    )
-    .map_err(classify)?;
+    for note_id in note_ids {
+        tx.execute(
+            "UPDATE banknotes
+             SET collection_id = ?1, updated_at = datetime('now')
+             WHERE id = ?2",
+            params![target_collection_id, note_id],
+        )
+        .map_err(classify)?;
+    }
     for (index, id) in next_order.iter().enumerate() {
         tx.execute(
             "UPDATE banknotes
@@ -682,19 +747,27 @@ fn move_note_row(
         )
         .map_err(classify)?;
     }
-    replace_note_tags(&tx, note_id, &tag_names, target_collection_id)?;
-    if let Some(order) = existing.display_order {
+    for (index, id) in remaining_source.iter().enumerate() {
         tx.execute(
             "UPDATE banknotes
-             SET display_order = display_order - 1, updated_at = datetime('now')
-             WHERE collection_id = ?1 AND display_order > ?2",
-            params![source_collection_id, order],
+             SET display_order = ?1, updated_at = datetime('now')
+             WHERE id = ?2",
+            params![(index + 1) as i64, id],
         )
         .map_err(classify)?;
     }
+    for (note_id, tag_names) in &tag_names_by_note {
+        replace_note_tags(&tx, *note_id, tag_names, target_collection_id)?;
+    }
     tx.commit().map_err(classify)?;
-    get_note_in_collection(conn, note_id, target_collection_id)?
-        .ok_or_else(|| DbError::Failed("Note not found.".to_owned()))
+
+    let mut moved = Vec::with_capacity(note_ids.len());
+    for note_id in note_ids {
+        let note = get_note_in_collection(conn, *note_id, target_collection_id)?
+            .ok_or_else(|| DbError::Failed("Note not found.".to_owned()))?;
+        moved.push(note);
+    }
+    Ok(moved)
 }
 
 // ---------------------------------------------------------------------------
@@ -1424,6 +1497,74 @@ async fn move_note_handler(
     }
 }
 
+async fn move_notes_handler(
+    State(state): State<AppState>,
+    collection: Option<Path<Vec<String>>>,
+    req: Request,
+) -> Response {
+    let raw = captures(collection);
+    let collection_id = match resolve_for_write(&state.pool, raw.first().cloned()).await {
+        Ok(id) => id,
+        Err((status, message)) => return status_response(status, &message),
+    };
+    let body = read_json_body(req).await;
+
+    let ids_message = "A valid list of note IDs is required.";
+    let Some(raw_ids) = body.get("note_ids").and_then(Value::as_array) else {
+        return bad_request(ids_message);
+    };
+    if raw_ids.is_empty() {
+        return bad_request("Select at least one note to move.");
+    }
+    let mut note_ids = Vec::with_capacity(raw_ids.len());
+    for item in raw_ids {
+        match js_number(item) {
+            Some(id) if id > 0 => note_ids.push(id),
+            _ => return bad_request(ids_message),
+        }
+    }
+
+    let target = body.get("target_collection_id").and_then(js_number);
+    let Some(target_collection_id) = target else {
+        return bad_request("A valid target collection ID is required.");
+    };
+    if target_collection_id <= 0 {
+        return bad_request("A valid target collection ID is required.");
+    }
+    if target_collection_id == collection_id {
+        return bad_request("Notes are already in this collection.");
+    }
+    let target_exists = db::with_conn(&state.pool, move |conn| {
+        db::collection_exists(conn, target_collection_id)
+    })
+    .await;
+    match target_exists {
+        Ok(true) => {}
+        Ok(false) => return not_found("Target collection not found."),
+        Err(error) => return db_failure(error),
+    }
+
+    let Some(mode) = MoveMode::parse(body.get("position_mode")) else {
+        return bad_request("A valid position mode is required.");
+    };
+    let reference_id = match body.get("position_reference_id") {
+        None | Some(Value::Null) => None,
+        Some(value) => js_number(value),
+    };
+    if matches!(mode, MoveMode::Before | MoveMode::After) && reference_id.is_none() {
+        return bad_request("A reference note is required for this position.");
+    }
+
+    match db::with_conn(&state.pool, move |conn| {
+        move_notes_row(conn, &note_ids, collection_id, target_collection_id, mode, reference_id)
+    })
+    .await
+    {
+        Ok(notes) => ok(json!({ "notes": notes })),
+        Err(error) => db_failure(error),
+    }
+}
+
 async fn list_tags_handler(
     State(state): State<AppState>,
     collection: Option<Path<Vec<String>>>,
@@ -1440,6 +1581,10 @@ pub fn notes_router() -> Router<AppState> {
         .route(
             "/api/collections/{collectionId}/notes/reorder",
             post(reorder_notes_handler),
+        )
+        .route(
+            "/api/collections/{collectionId}/notes/move",
+            post(move_notes_handler),
         )
         .route(
             "/api/collections/{collectionId}/notes/{id}",

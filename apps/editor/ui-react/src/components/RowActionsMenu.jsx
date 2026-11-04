@@ -109,6 +109,25 @@ const ACTION_ICONS = {
       />
     </>
   ),
+  move: (
+    <>
+      <path
+        d="M3 7a2 2 0 0 1 2-2h4l2 2h8a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V7Z"
+        fill="none"
+        stroke="currentColor"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+      <path
+        d="M12 16v-5m0 0-2.5 2.5M12 11l2.5 2.5"
+        fill="none"
+        stroke="currentColor"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        strokeWidth="2"
+      />
+    </>
+  ),
   delete: (
     <>
       <path

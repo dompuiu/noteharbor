@@ -296,6 +296,21 @@ async function moveNote(id, collectionId, targetCollectionId, position) {
   return handleResponse(response);
 }
 
+async function moveNotes(ids, sourceCollectionId, targetCollectionId, position) {
+  const response = await fetch(`${notesBasePath(sourceCollectionId)}/move`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      note_ids: ids,
+      target_collection_id: targetCollectionId,
+      position_mode: position?.mode,
+      position_reference_id: position?.referenceId ?? null
+    })
+  });
+
+  return handleResponse(response);
+}
+
 async function importArchive(file, onProgress, mode = 'replace') {
   if (!isFileValue(file)) {
     throw new Error('Choose a .zip archive before importing.');
@@ -577,6 +592,7 @@ export {
   getTags,
   importArchive,
   moveNote,
+  moveNotes,
   renameCategory,
   renameCollection,
   renameShowcase,

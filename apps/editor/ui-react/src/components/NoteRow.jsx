@@ -33,7 +33,8 @@ function noteRowLabel(note) {
 //   It is bundled because all of it is rebuilt together when the note, the
 //   columns or the filter change, and a row must never recompute any of it.
 // - `columns`, `showGutter`, `totalColumnCount`, `canReorder`: the table's
-//   structure at this commit.
+//   structure at this commit. `canMove` hides the menu's Move to… when the
+//   workspace has one collection.
 // - `reorderRail`: whether this view paints the reorder rail at all. It stays
 //   true while an order save is in flight, so the rail never blanks mid-save;
 //   `canReorder` is what gates the drop, not the paint.
@@ -44,6 +45,7 @@ function noteRowLabel(note) {
 // a new `columns` array or an inline handler re-renders every row, which is the
 // cost this boundary exists to avoid.
 export const NoteRow = memo(function NoteRow({
+  canMove,
   canReorder,
   columns,
   dropPlacement,
@@ -321,13 +323,25 @@ export const NoteRow = memo(function NoteRow({
       });
     }
 
+    if (canMove) {
+      items.push({
+        key: "move",
+        icon: "move",
+        label: "Move to…",
+        onSelect: () => handlers.onMoveNote(note.id),
+        separated: true,
+      });
+    }
+
     items.push({
       key: "delete",
       icon: "delete",
       label: "Delete",
       onSelect: () => handlers.onDeleteNote(note.id),
       danger: true,
-      separated: true,
+      // The rule belongs above Move to…; Delete sits in the same trailing
+      // group when Move is present.
+      separated: !canMove,
       shortcut: "d",
     });
 

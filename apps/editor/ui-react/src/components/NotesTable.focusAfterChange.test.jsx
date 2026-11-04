@@ -349,6 +349,11 @@ describe("The note editor hands the cursor back", () => {
       ".edit-note-overlay select",
     );
     await user.selectOptions(collectionSelect, "2");
+    // Redirecting to the destination is the default now; staying is the
+    // deliberate opt-out these tests are about.
+    await user.click(
+      screen.getByRole("checkbox", { name: "Show Archive after saving" }),
+    );
     await user.click(
       await screen.findByRole("button", { name: "Save & close" }),
     );
@@ -376,6 +381,11 @@ describe("The note editor hands the cursor back", () => {
       ".edit-note-overlay select",
     );
     await user.selectOptions(collectionSelect, "2");
+    // Redirecting to the destination is the default now; staying is the
+    // deliberate opt-out these tests are about.
+    await user.click(
+      screen.getByRole("checkbox", { name: "Show Archive after saving" }),
+    );
     await user.click(
       await screen.findByRole("button", { name: "Save & close" }),
     );
