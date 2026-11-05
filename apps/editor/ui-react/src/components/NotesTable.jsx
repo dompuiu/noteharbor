@@ -136,39 +136,49 @@ function noteDisplayName(note) {
   return name || `Note ${note?.id ?? ""}`.replace(/\s+$/, "");
 }
 
-// The run around one row: its contiguous selected block, or the row alone
-// when it is not selected. A selected row on the far side of a gap stays put —
-// only a drag collapses a scattered selection, and that is out of scope here.
-function reorderRunAt(notes, index, selectedIdSet) {
-  const selected = selectedIdSet.has(notes[index].id);
-  let start = index;
-  let end = index;
-
-  if (selected) {
-    while (start > 0 && selectedIdSet.has(notes[start - 1].id)) {
-      start -= 1;
-    }
-
-    while (end < notes.length - 1 && selectedIdSet.has(notes[end + 1].id)) {
-      end += 1;
-    }
-  }
-
+// A single row's run: one step up or down, bounded by the table's edges.
+function rowRunAt(notes, index) {
   return {
-    start,
-    end,
-    length: end - start + 1,
-    canMoveUp: start > 0,
-    canMoveDown: end < notes.length - 1,
+    start: index,
+    end: index,
+    length: 1,
+    canMoveUp: index > 0,
+    canMoveDown: index < notes.length - 1,
   };
 }
 
-// The keyboard and the row menu move the same unit, so both read the run
-// through this one lookup.
-function reorderRunFor(notes, noteId, selectedIdSet) {
-  const index = notes.findIndex((note) => note.id === noteId);
+// The whole selection as one run, but only when it is contiguous. A gapped
+// selection has no unambiguous bulk move, so it is refused rather than
+// partially moving. This is the one unit the bulk bar and the shortcut share.
+function selectedRunFor(notes, selectedIdSet) {
+  let first = -1;
+  let last = -1;
+  let count = 0;
 
-  return index < 0 ? null : reorderRunAt(notes, index, selectedIdSet);
+  notes.forEach((note, index) => {
+    if (!selectedIdSet.has(note.id)) {
+      return;
+    }
+
+    if (first < 0) {
+      first = index;
+    }
+
+    last = index;
+    count += 1;
+  });
+
+  if (count === 0 || last - first + 1 !== count) {
+    return null;
+  }
+
+  return {
+    start: first,
+    end: last,
+    length: count,
+    canMoveUp: first > 0,
+    canMoveDown: last < notes.length - 1,
+  };
 }
 
 // One step of a run: past its predecessor for up, past its successor for down.
@@ -209,19 +219,6 @@ function withDisplayOrder(notes) {
     ...note,
     display_order: index + 1,
   }));
-}
-
-function sameReorderRun(left, right) {
-  return (
-    left === right ||
-    (left &&
-      right &&
-      left.start === right.start &&
-      left.end === right.end &&
-      left.length === right.length &&
-      left.canMoveUp === right.canMoveUp &&
-      left.canMoveDown === right.canMoveDown)
-  );
 }
 
 function noteIdentityDetails(note) {
@@ -1982,40 +1979,13 @@ function NotesTable({
         : `Sort by ${getTableColumn(defaultSortKey)?.label ?? "#"} ascending to reorder`;
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
-  // What the row menu's Move up / Move down items act on, computed from the
-  // same run rule as the shortcut so the two paths cannot diverge. Runs are
-  // structurally shared: toggling one checkbox changes the run length only
-  // around that row, so every other row keeps its old object and its memo
-  // boundary.
-  const reorderRunCacheRef = useRef(new Map());
-  const reorderRunByNoteId = useMemo(() => {
-    const runs = new Map();
-
-    if (!canReorder) {
-      reorderRunCacheRef.current = runs;
-      return runs;
-    }
-
-    // One linear pass: each contiguous selected block builds one run object
-    // shared by its rows, so a checkbox tick is never quadratic in the list.
-    let index = 0;
-
-    while (index < notes.length) {
-      const run = reorderRunAt(notes, index, selectedIdSet);
-
-      for (let rowIndex = index; rowIndex <= run.end; rowIndex += 1) {
-        const noteId = notes[rowIndex].id;
-        const previous = reorderRunCacheRef.current.get(noteId);
-
-        runs.set(noteId, sameReorderRun(previous, run) ? previous : run);
-      }
-
-      index = run.end + 1;
-    }
-
-    reorderRunCacheRef.current = runs;
-    return runs;
-  }, [canReorder, notes, selectedIdSet]);
+  // The bulk bar and Alt+Up/Down share one unit: the whole selection when it
+  // is contiguous, nothing when it has gaps. The run stays computed while an
+  // order save is in flight so the bar's arrows never unmount under focus.
+  const selectionReorderRun = useMemo(
+    () => (reorderRail ? selectedRunFor(notes, selectedIdSet) : null),
+    [notes, reorderRail, selectedIdSet],
+  );
   const allVisibleSelected = useMemo(
     () =>
       orderedNotes.length > 0 &&
@@ -3049,7 +3019,7 @@ function NotesTable({
         // next Tab enters its first enabled control instead of walking
         // the row's checkbox and links.
         const firstBarItem = bulkBarRef.current?.querySelector(
-          "button:not([disabled])",
+          "button:not([disabled]):not([tabindex='-1'])",
         );
 
         if (firstBarItem) {
@@ -4161,28 +4131,99 @@ function NotesTable({
   // A drag is one step with its own drop feedback, so it saves at once rather
   // than waiting for a burst to settle.
   async function commitOrder(nextNotes, movedNoteId) {
+    const previousNotes =
+      reorderRollbackRef.current?.notes ?? notesRef.current;
+
     window.clearTimeout(reorderSaveTimerRef.current);
     reorderSaveTimerRef.current = null;
     pendingReorderRef.current = null;
     reorderRollbackRef.current = null;
 
-    const previousNotes = notesRef.current;
     const reorderedNotes = applyReorderLocally(nextNotes, movedNoteId);
 
     await persistReorder(reorderedNotes, previousNotes, collectionId);
   }
 
-  function handleKeyboardReorder(direction, noteId = focusedRowIdRef.current) {
-    if (noteId == null) {
+  function handleRowReorder(noteId, direction) {
+    const currentNotes = notesRef.current;
+    const index = currentNotes.findIndex((note) => note.id === noteId);
+
+    if (index < 0) {
+      return;
+    }
+
+    const nextNotes = moveNotesRun(
+      currentNotes,
+      rowRunAt(currentNotes, index),
+      direction,
+    );
+
+    if (!nextNotes) {
+      return;
+    }
+
+    void commitOrder(nextNotes, noteId);
+  }
+
+  function handleSelectionReorder(direction) {
+    if (!canReorder) {
+      // An order save is in flight; the arrows stay mounted so focus survives
+      // it, but a press must not start a second save.
       return;
     }
 
     const currentNotes = notesRef.current;
-    const run = reorderRunFor(
+    const run = selectedRunFor(
       currentNotes,
-      noteId,
       new Set(selectedIdsRef.current),
     );
+    const nextNotes = moveNotesRun(currentNotes, run, direction);
+
+    if (!nextNotes) {
+      return;
+    }
+
+    // The bar's arrow keeps focus, so a repeated press lands on the same
+    // control.
+    void commitOrder(nextNotes, null);
+  }
+
+  function handleKeyboardReorder(direction) {
+    const currentNotes = notesRef.current;
+    const selectedIds = selectedIdsRef.current;
+    let run;
+    let focusNoteId;
+
+    if (selectedIds.length) {
+      // A selection is the command's scope, exactly like the bar.
+      run = selectedRunFor(currentNotes, new Set(selectedIds));
+
+      if (!run) {
+        announceReorderBlock("Select a continuous range to reorder");
+        return;
+      }
+
+      const cursorId = focusedRowIdRef.current;
+      const cursorIndex = currentNotes.findIndex(
+        (note) => note.id === cursorId,
+      );
+      const cursorInRun =
+        cursorIndex >= run.start && cursorIndex <= run.end;
+
+      focusNoteId = cursorInRun ? cursorId : currentNotes[run.start].id;
+    } else {
+      // No selection: the focused row is the unit.
+      const cursorId = focusedRowIdRef.current;
+      const index = currentNotes.findIndex((note) => note.id === cursorId);
+
+      if (index < 0) {
+        return;
+      }
+
+      run = rowRunAt(currentNotes, index);
+      focusNoteId = cursorId;
+    }
+
     const nextNotes = moveNotesRun(currentNotes, run, direction);
 
     if (!nextNotes) {
@@ -4197,7 +4238,7 @@ function NotesTable({
       };
     }
 
-    const reorderedNotes = applyReorderLocally(nextNotes, noteId);
+    const reorderedNotes = applyReorderLocally(nextNotes, focusNoteId);
 
     pendingReorderRef.current = {
       notes: reorderedNotes,
@@ -4206,8 +4247,8 @@ function NotesTable({
     scheduleReorderSave();
   }
 
-  function announceReorderBlock() {
-    if (!reorderHint) {
+  function announceReorderBlock(message = reorderHint) {
+    if (!message) {
       return;
     }
 
@@ -4216,7 +4257,7 @@ function NotesTable({
     window.clearTimeout(reorderAnnouncementTimerRef.current);
     reorderAnnouncementTimerRef.current = window.setTimeout(() => {
       reorderAnnouncementTimerRef.current = null;
-      setReorderAnnouncement(reorderHint);
+      setReorderAnnouncement(message);
     }, 0);
   }
 
@@ -4852,9 +4893,7 @@ function NotesTable({
     onInsertNoteAfter: openCreateNoteAfter,
     onMoveNote: openMoveForNote,
     onOpenNote: openSlideshow,
-    onReorderNote(noteId, direction) {
-      void handleKeyboardReorder(direction, noteId);
-    },
+    onReorderNote: handleRowReorder,
     onRowBlur: handleRowBlur,
     onRowClick: handleRowClick,
     onRowElement: registerRowElement,
@@ -5570,7 +5609,6 @@ function NotesTable({
                         notes={deferredOrderedNotes}
                         onReorder={handleReorder}
                         reorderRail={reorderRail}
-                        reorderRunByNoteId={reorderRunByNoteId}
                         rowElementFor={(noteId) =>
                           rowElementMapRef.current.get(noteId)
                         }
@@ -5600,9 +5638,14 @@ function NotesTable({
                 <TableBulkBar
                   barRef={bulkBarRef}
                   canMove={canMoveNotes}
+                  canMoveSelectionDown={selectionReorderRun?.canMoveDown ?? false}
+                  canMoveSelectionUp={selectionReorderRun?.canMoveUp ?? false}
+                  canReorder={reorderRail}
                   onClear={clearSelection}
                   onDelete={handleBulkDelete}
                   onMove={openMoveForSelection}
+                  onMoveSelectionDown={() => handleSelectionReorder(1)}
+                  onMoveSelectionUp={() => handleSelectionReorder(-1)}
                   onLeaveBackward={() => {
                     selectionTabArmedRef.current = false;
                     focusRowActionsButtonByNoteId(bulkBarExitNoteId());
@@ -5612,6 +5655,8 @@ function NotesTable({
                     focusRowCheckboxByNoteId(bulkBarExitNoteId());
                   }}
                   selectedCount={selectedIds.length}
+                  selectionContiguous={selectionReorderRun != null}
+                  saving={reorderLoading}
                 />
               ) : null}
             </div>

@@ -1228,14 +1228,16 @@ describe("Selection actions tab cycle", () => {
     const bar = await screen.findByRole("region", {
       name: "Selection actions",
     });
-    const deleteButton = within(bar).getByRole("button", { name: "Delete" });
+    const moveDown = within(bar).getByRole("button", {
+      name: "Move 1 selected note down",
+    });
 
     await user.tab();
 
-    expect(deleteButton).toHaveFocus();
+    expect(moveDown).toHaveFocus();
   });
 
-  test("Tab walks Delete, Clear, then the last selected row's checkbox", async () => {
+  test("Tab walks Move down, Delete, Clear, then the last selected row's checkbox", async () => {
     const user = userEvent.setup();
     getNotes.mockResolvedValue({ notes: threeNotes });
     renderTable();
@@ -1245,10 +1247,16 @@ describe("Selection actions tab cycle", () => {
     const bar = await screen.findByRole("region", {
       name: "Selection actions",
     });
+    const moveDown = within(bar).getByRole("button", {
+      name: "Move 1 selected note down",
+    });
     const deleteButton = within(bar).getByRole("button", { name: "Delete" });
     const clearButton = within(bar).getByRole("button", {
       name: "Clear selection",
     });
+
+    await user.tab();
+    expect(moveDown).toHaveFocus();
 
     await user.tab();
     expect(deleteButton).toHaveFocus();
@@ -1283,16 +1291,21 @@ describe("Selection actions tab cycle", () => {
     const bar = await screen.findByRole("region", {
       name: "Selection actions",
     });
-    const deleteButton = within(bar).getByRole("button", { name: "Delete" });
+    const moveDown = within(bar).getByRole("button", {
+      name: "Move 1 selected note down",
+    });
 
     await user.tab();
-    expect(deleteButton).toHaveFocus();
+    expect(moveDown).toHaveFocus();
     expect(secondRow).toHaveClass("table-row-link--active");
 
     // After the bar, focus returns to the row the cursor now sits on.
+    const deleteButton = within(bar).getByRole("button", { name: "Delete" });
     const clearButton = within(bar).getByRole("button", {
       name: "Clear selection",
     });
+    await user.tab();
+    expect(deleteButton).toHaveFocus();
     await user.tab();
     expect(clearButton).toHaveFocus();
     await user.tab();
@@ -1340,10 +1353,12 @@ describe("Selection actions tab cycle", () => {
     const bar = await screen.findByRole("region", {
       name: "Selection actions",
     });
-    const deleteButton = within(bar).getByRole("button", { name: "Delete" });
+    const moveDown = within(bar).getByRole("button", {
+      name: "Move 1 selected note down",
+    });
 
     await user.tab();
-    expect(deleteButton).toHaveFocus();
+    expect(moveDown).toHaveFocus();
 
     await user.tab({ shift: true });
 
@@ -1456,7 +1471,9 @@ describe("Escape clears the selection before the row cursor", () => {
     });
     await user.tab();
     expect(
-      within(bar).getByRole("button", { name: "Delete" }),
+      within(bar).getByRole("button", {
+        name: "Move 2 selected notes down",
+      }),
     ).toHaveFocus();
 
     await user.keyboard("{Escape}");
@@ -1584,10 +1601,12 @@ describe("Escape clears the selection before the row cursor", () => {
     const bar = await screen.findByRole("region", {
       name: "Selection actions",
     });
-    const deleteButton = within(bar).getByRole("button", { name: "Delete" });
+    const moveDown = within(bar).getByRole("button", {
+      name: "Move 1 selected note down",
+    });
 
     await user.tab();
-    expect(deleteButton).toHaveFocus();
+    expect(moveDown).toHaveFocus();
 
     await user.keyboard("{Escape}");
 
@@ -1610,7 +1629,9 @@ describe("Escape clears the selection before the row cursor", () => {
     });
     await user.tab();
     expect(
-      within(bar).getByRole("button", { name: "Delete" }),
+      within(bar).getByRole("button", {
+        name: "Delete",
+      }),
     ).toHaveFocus();
 
     await user.keyboard("{Escape}");

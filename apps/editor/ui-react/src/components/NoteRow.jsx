@@ -38,9 +38,8 @@ function noteRowLabel(note) {
 // - `reorderRail`: whether this view paints the reorder rail at all. It stays
 //   true while an order save is in flight, so the rail never blanks mid-save;
 //   `canReorder` is what gates the drop, not the paint.
-// - `reorderRun`: the contiguous selection run this row belongs to when it is
-//   selected, or just itself. It feeds the menu's Move up / Move down labels
-//   and their boundary state, the same unit the Alt+Up/Down shortcut moves.
+// - `canMoveUp`, `canMoveDown`: the menu's Move up / Move down state. The menu
+//   moves this row alone; a selection is moved from the bulk bar.
 // - `handlers`: one object with a stable identity; every member reads live
 //   state through a ref instead of closing over it.
 //
@@ -49,6 +48,8 @@ function noteRowLabel(note) {
 // cost this boundary exists to avoid.
 export const NoteRow = memo(function NoteRow({
   canMove,
+  canMoveDown,
+  canMoveUp,
   canReorder,
   columns,
   dropPlacement,
@@ -60,7 +61,6 @@ export const NoteRow = memo(function NoteRow({
   model,
   note,
   reorderRail,
-  reorderRun,
   showGutter,
   totalColumnCount,
 }) {
@@ -337,27 +337,21 @@ export const NoteRow = memo(function NoteRow({
     }
 
     if (canReorder) {
-      // The menu moves the same contiguous run as Alt+Up/Down, so a
-      // multi-selection reads as one count instead of silently moving one row.
-      const runLength = reorderRun?.length ?? 1;
-      const moveLabel = (direction) =>
-        runLength > 1
-          ? `Move ${runLength} notes ${direction}`
-          : `Move ${direction}`;
-
+      // This menu is row-scoped: it moves this row alone, even when other
+      // rows are selected. Moving a selection is the bulk bar's job.
       items.push(
         {
           key: "move-up",
           icon: "arrow-up",
-          label: moveLabel("up"),
-          disabled: !reorderRun?.canMoveUp,
+          label: "Move up",
+          disabled: !canMoveUp,
           onSelect: () => handlers.onReorderNote(note.id, -1),
         },
         {
           key: "move-down",
           icon: "arrow-down",
-          label: moveLabel("down"),
-          disabled: !reorderRun?.canMoveDown,
+          label: "Move down",
+          disabled: !canMoveDown,
           onSelect: () => handlers.onReorderNote(note.id, 1),
         },
       );

@@ -410,7 +410,7 @@ describe("NotesTable row reordering", () => {
     expect(reorderNotes).toHaveBeenCalledTimes(1);
   });
 
-  test("a contiguous selected run moves as one across a gap in the selection", async () => {
+  test("a gapped selection refuses the keyboard move and announces why", async () => {
     const user = userEvent.setup();
     const notes = [
       note(1, "AAAA"),
@@ -424,8 +424,8 @@ describe("NotesTable row reordering", () => {
     const { container } = renderTable();
 
     await screen.findByText("AAAA");
-    // A gap: BBBB and DDDD are selected, so only the run holding the cursor
-    // (BBBB) moves; DDDD stays where it is.
+    // BBBB and DDDD have CCCC between them: no unambiguous whole-selection
+    // move, so the shortcut refuses instead of moving only one of them.
     await user.click(screen.getByLabelText("Select BBBB"));
     await user.click(screen.getByLabelText("Select DDDD"));
     await focusRow(container, "BBBB");
@@ -434,15 +434,17 @@ describe("NotesTable row reordering", () => {
 
     expect(rowDenominations(container)).toEqual([
       "AAAA",
-      "CCCC",
       "BBBB",
+      "CCCC",
       "DDDD",
       "EEEE",
     ]);
+    expect(reorderNotes).not.toHaveBeenCalled();
     await waitFor(() => {
-      expect(reorderNotes).toHaveBeenCalledWith([1, 3, 2, 4, 5], 1);
+      expect(container.querySelector(".table-announcer")).toHaveTextContent(
+        "Select a continuous range to reorder",
+      );
     });
-    expect(reorderNotes).toHaveBeenCalledTimes(1);
   });
 
   test("the run moves past a neighbour as one block", async () => {
@@ -472,6 +474,7 @@ describe("NotesTable row reordering", () => {
       "CCCC",
       "EEEE",
     ]);
+    expect(rowFor(container, "CCCC")).toHaveFocus();
     await waitFor(() => {
       expect(reorderNotes).toHaveBeenCalledWith([1, 4, 2, 3, 5], 1);
     });
@@ -608,7 +611,7 @@ describe("NotesTable row reordering", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("the row menu disables the edge moves and counts a selected run", async () => {
+  test("the row menu disables the edge moves and moves only its row", async () => {
     const user = userEvent.setup();
     const notes = [
       note(1, "AAAA"),
@@ -647,21 +650,36 @@ describe("NotesTable row reordering", () => {
     menu = await screen.findByRole("menu", {
       name: "Actions for CCCC",
     });
+    // The menu is row-scoped even with a multi-selection: no count, and only
+    // CCCC moves.
     const moveDown = within(menu).getByRole("menuitem", {
-      name: "Move 2 notes down",
+      name: "Move down",
     });
 
     await user.click(moveDown);
 
     expect(rowDenominations(container)).toEqual([
       "AAAA",
-      "DDDD",
       "BBBB",
+      "DDDD",
       "CCCC",
       "EEEE",
     ]);
+    expect(screen.getByLabelText("Select BBBB")).toBeChecked();
+    expect(screen.getByLabelText("Select CCCC")).toBeChecked();
+
+    // Moving CCCC alone leaves the selection gapped, so the bulk bar now
+    // refuses both whole-selection moves.
+    const bar = screen.getByRole("region", { name: "Selection actions" });
+    expect(
+      within(bar).getByRole("button", { name: "Move 2 selected notes up" }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(
+      within(bar).getByRole("button", { name: "Move 2 selected notes down" }),
+    ).toHaveAttribute("aria-disabled", "true");
+
     await waitFor(() => {
-      expect(reorderNotes).toHaveBeenCalledWith([1, 4, 2, 3, 5], 1);
+      expect(reorderNotes).toHaveBeenCalledWith([1, 2, 4, 3, 5], 1);
     });
     expect(reorderNotes).toHaveBeenCalledTimes(1);
   });
@@ -704,6 +722,226 @@ describe("NotesTable row reordering", () => {
       expect(reorderNotes).toHaveBeenCalledWith([1, 2, 3, 5, 4], 1);
     });
     expect(reorderNotes).toHaveBeenCalledTimes(1);
+  });
+
+  test("the bulk bar moves a contiguous selection as one block", async () => {
+    const user = userEvent.setup();
+    const notes = [
+      note(1, "AAAA"),
+      note(2, "BBBB"),
+      note(3, "CCCC"),
+      note(4, "DDDD"),
+      note(5, "EEEE"),
+    ];
+    getNotes.mockResolvedValue({ notes });
+    echoReorderedNotes(notes);
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await user.click(screen.getByLabelText("Select BBBB"));
+    await user.click(screen.getByLabelText("Select CCCC"));
+
+    const bar = screen.getByRole("region", { name: "Selection actions" });
+    const moveDown = within(bar).getByRole("button", {
+      name: "Move 2 selected notes down",
+    });
+
+    expect(moveDown).toBeEnabled();
+    await user.click(moveDown);
+
+    expect(rowDenominations(container)).toEqual([
+      "AAAA",
+      "DDDD",
+      "BBBB",
+      "CCCC",
+      "EEEE",
+    ]);
+    expect(screen.getByLabelText("Select BBBB")).toBeChecked();
+    expect(screen.getByLabelText("Select CCCC")).toBeChecked();
+    expect(moveDown).toHaveFocus();
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenCalledWith([1, 4, 2, 3, 5], 1);
+    });
+    expect(reorderNotes).toHaveBeenCalledTimes(1);
+  });
+
+  test("the bulk move stays mounted and focused while the save is in flight", async () => {
+    const user = userEvent.setup();
+    const notes = [
+      note(1, "AAAA"),
+      note(2, "BBBB"),
+      note(3, "CCCC"),
+      note(4, "DDDD"),
+      note(5, "EEEE"),
+    ];
+    const byId = new Map(notes.map((item) => [item.id, item]));
+    let resolveSave;
+    getNotes.mockResolvedValue({ notes });
+    reorderNotes.mockImplementation(
+      (ids) =>
+        new Promise((resolve) => {
+          resolveSave = () =>
+            resolve({
+              notes: ids.map((id, index) => ({
+                ...byId.get(id),
+                display_order: index + 1,
+              })),
+            });
+        }),
+    );
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await user.click(screen.getByLabelText("Select BBBB"));
+    await user.click(screen.getByLabelText("Select CCCC"));
+
+    const bar = screen.getByRole("region", { name: "Selection actions" });
+    const moveDown = within(bar).getByRole("button", {
+      name: "Move 2 selected notes down",
+    });
+
+    await user.click(moveDown);
+
+    // The arrow keeps its node and its focus; it reports the save instead of
+    // vanishing or accepting a second press.
+    await waitFor(() => {
+      expect(moveDown).toHaveAttribute("aria-disabled", "true");
+    });
+    expect(moveDown).toHaveAttribute("title", "Saving manual order…");
+    expect(moveDown).toHaveFocus();
+
+    await act(async () => {
+      resolveSave();
+    });
+
+    await waitFor(() => {
+      expect(moveDown).not.toHaveAttribute("aria-disabled");
+    });
+    expect(rowDenominations(container)).toEqual([
+      "AAAA",
+      "DDDD",
+      "BBBB",
+      "CCCC",
+      "EEEE",
+    ]);
+  });
+
+  test("the bulk bar refuses a gapped selection", async () => {
+    const user = userEvent.setup();
+    const notes = [
+      note(1, "AAAA"),
+      note(2, "BBBB"),
+      note(3, "CCCC"),
+      note(4, "DDDD"),
+      note(5, "EEEE"),
+    ];
+    getNotes.mockResolvedValue({ notes });
+    echoReorderedNotes(notes);
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await user.click(screen.getByLabelText("Select AAAA"));
+    await user.click(screen.getByLabelText("Select CCCC"));
+
+    const bar = screen.getByRole("region", { name: "Selection actions" });
+    const moveUp = within(bar).getByRole("button", {
+      name: "Move 2 selected notes up",
+    });
+    const moveDown = within(bar).getByRole("button", {
+      name: "Move 2 selected notes down",
+    });
+
+    expect(moveUp).toHaveAttribute("aria-disabled", "true");
+    expect(moveDown).toHaveAttribute("aria-disabled", "true");
+    expect(moveUp).toHaveAccessibleDescription(
+      "Select a continuous range to reorder",
+    );
+    expect(moveUp).toHaveAttribute(
+      "title",
+      "Select a continuous range to reorder",
+    );
+    expect(reorderNotes).not.toHaveBeenCalled();
+    expect(rowDenominations(container)).toEqual([
+      "AAAA",
+      "BBBB",
+      "CCCC",
+      "DDDD",
+      "EEEE",
+    ]);
+  });
+
+  test("the bulk bar disables the move that is already at the edge", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await user.click(screen.getByLabelText("Select AAAA"));
+    await user.click(screen.getByLabelText("Select BBBB"));
+
+    const bar = screen.getByRole("region", { name: "Selection actions" });
+    const moveUp = within(bar).getByRole("button", {
+      name: "Move 2 selected notes up",
+    });
+
+    expect(moveUp).toHaveAttribute("aria-disabled", "true");
+    expect(moveUp).toHaveAttribute(
+      "title",
+      "The selection is already at the top",
+    );
+    expect(moveUp).toHaveAccessibleDescription(
+      "The selection is already at the top",
+    );
+    expect(reorderNotes).not.toHaveBeenCalled();
+    expect(rowDenominations(container)).toEqual(["AAAA", "BBBB", "CCCC"]);
+  });
+
+  test("the bulk bar disables the move at the bottom edge", async () => {
+    const user = userEvent.setup();
+    const notes = [
+      note(1, "AAAA"),
+      note(2, "BBBB"),
+      note(3, "CCCC"),
+      note(4, "DDDD"),
+      note(5, "EEEE"),
+    ];
+    getNotes.mockResolvedValue({ notes });
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await user.click(screen.getByLabelText("Select DDDD"));
+    await user.click(screen.getByLabelText("Select EEEE"));
+
+    const bar = screen.getByRole("region", { name: "Selection actions" });
+    const moveDown = within(bar).getByRole("button", {
+      name: "Move 2 selected notes down",
+    });
+
+    expect(moveDown).toHaveAttribute("aria-disabled", "true");
+    expect(moveDown).toHaveAccessibleDescription(
+      "The selection is already at the bottom",
+    );
+    expect(reorderNotes).not.toHaveBeenCalled();
+    expect(rowDenominations(container)).toEqual([
+      "AAAA",
+      "BBBB",
+      "CCCC",
+      "DDDD",
+      "EEEE",
+    ]);
+  });
+
+  test("the bulk bar hides its move buttons when the view cannot reorder", async () => {
+    const user = userEvent.setup();
+    renderTable();
+
+    await screen.findByText("AAAA");
+    await user.click(screen.getByRole("button", { name: "Company" }));
+    await user.click(screen.getByLabelText("Select AAAA"));
+
+    const bar = screen.getByRole("region", { name: "Selection actions" });
+    expect(
+      within(bar).queryByRole("button", { name: /^Move 1 selected note/ }),
+    ).not.toBeInTheDocument();
   });
 
   test("an open row menu keeps its keys instead of reordering the row", async () => {

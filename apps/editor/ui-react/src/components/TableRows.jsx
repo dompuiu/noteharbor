@@ -24,7 +24,6 @@ export function TableRows({
   notes,
   onReorder,
   reorderRail,
-  reorderRunByNoteId,
   rowElementFor,
   rowModelsByNoteId,
   selectedIdSet,
@@ -231,6 +230,8 @@ export function TableRows({
         return (
           <NoteRow
             canMove={canMove}
+            canMoveDown={virtualRow.index < notes.length - 1}
+            canMoveUp={virtualRow.index > 0}
             canReorder={canReorder}
             columns={columns}
             dropPlacement={
@@ -247,7 +248,6 @@ export function TableRows({
             model={rowModelsByNoteId.get(note.id)}
             note={note}
             reorderRail={reorderRail}
-            reorderRun={reorderRunByNoteId.get(note.id)}
             showGutter={showGutter}
             totalColumnCount={totalColumnCount}
           />

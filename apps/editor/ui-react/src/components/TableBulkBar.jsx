@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 
 // The selection actions bar. It sits at the bottom of the table and belongs to
 // the row's tab cycle. It owns the progress of the bulk action it starts, so a
@@ -6,15 +6,45 @@ import { useRef, useState } from "react";
 export function TableBulkBar({
   barRef,
   canMove = false,
+  canMoveSelectionDown = false,
+  canMoveSelectionUp = false,
+  canReorder = false,
   onClear,
   onDelete,
   onLeaveBackward,
   onLeaveForward,
   onMove,
+  onMoveSelectionDown,
+  onMoveSelectionUp,
   selectedCount,
+  selectionContiguous = false,
+  saving = false,
 }) {
   const [working, setWorking] = useState(false);
   const workingRef = useRef(false);
+  const moveReasonId = useId();
+  const moveUpReasonId = `${moveReasonId}-up`;
+  const moveDownReasonId = `${moveReasonId}-down`;
+  const selectedNoun = `${selectedCount} selected note${selectedCount === 1 ? "" : "s"}`;
+
+  function moveReason(direction, canMove) {
+    if (!selectionContiguous) {
+      return "Select a continuous range to reorder";
+    }
+
+    if (saving) {
+      return "Saving manual order…";
+    }
+
+    return canMove
+      ? null
+      : `The selection is already at the ${direction === "up" ? "top" : "bottom"}`;
+  }
+
+  const moveUpReason = moveReason("up", canMoveSelectionUp);
+  const moveDownReason = moveReason("down", canMoveSelectionDown);
+  const moveUpDisabled = working || moveUpReason != null;
+  const moveDownDisabled = working || moveDownReason != null;
 
   async function handleDelete() {
     // The disabled button already blocks a second click, but the flag makes the
@@ -47,7 +77,9 @@ export function TableBulkBar({
     }
 
     const items = Array.from(
-      barRef.current?.querySelectorAll("button:not([disabled])") ?? [],
+      barRef.current?.querySelectorAll(
+        "button:not([disabled]):not([tabindex='-1'])",
+      ) ?? [],
     );
 
     if (!items.length) {
@@ -84,6 +116,74 @@ export function TableBulkBar({
     >
       <span className="table-bulk-bar-count">{selectedCount} selected</span>
       <span aria-hidden="true" className="table-bulk-bar-separator" />
+      {canReorder ? (
+        <>
+          <button
+            aria-describedby={moveUpReason ? moveUpReasonId : undefined}
+            aria-disabled={moveUpDisabled || undefined}
+            aria-label={`Move ${selectedNoun} up`}
+            className="table-bulk-bar-move"
+            onClick={moveUpDisabled ? undefined : onMoveSelectionUp}
+            tabIndex={moveUpDisabled ? -1 : undefined}
+            title={moveUpReason ?? `Move ${selectedNoun} up`}
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              focusable="false"
+              height="13"
+              viewBox="0 0 24 24"
+              width="13"
+            >
+              <path
+                d="M12 19V5m0 0-6 6m6-6 6 6"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+              />
+            </svg>
+          </button>
+          {moveUpReason ? (
+            <span className="table-bulk-bar-note" id={moveUpReasonId}>
+              {moveUpReason}
+            </span>
+          ) : null}
+          <button
+            aria-describedby={moveDownReason ? moveDownReasonId : undefined}
+            aria-disabled={moveDownDisabled || undefined}
+            aria-label={`Move ${selectedNoun} down`}
+            className="table-bulk-bar-move"
+            onClick={moveDownDisabled ? undefined : onMoveSelectionDown}
+            tabIndex={moveDownDisabled ? -1 : undefined}
+            title={moveDownReason ?? `Move ${selectedNoun} down`}
+            type="button"
+          >
+            <svg
+              aria-hidden="true"
+              focusable="false"
+              height="13"
+              viewBox="0 0 24 24"
+              width="13"
+            >
+              <path
+                d="M12 5v14m0 0-6-6m6 6 6-6"
+                fill="none"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="2"
+              />
+            </svg>
+          </button>
+          {moveDownReason ? (
+            <span className="table-bulk-bar-note" id={moveDownReasonId}>
+              {moveDownReason}
+            </span>
+          ) : null}
+        </>
+      ) : null}
       {canMove ? (
         <button
           disabled={working}

@@ -150,7 +150,13 @@ describe("moving notes from the table", () => {
     const labels = within(bar)
       .getAllByRole("button")
       .map((button) => button.getAttribute("aria-label") ?? button.textContent);
-    expect(labels).toEqual(["Move to…", "Delete", "Clear selection"]);
+    expect(labels).toEqual([
+      "Move 1 selected note up",
+      "Move 1 selected note down",
+      "Move to…",
+      "Delete",
+      "Clear selection",
+    ]);
 
     unmount();
 

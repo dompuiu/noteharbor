@@ -177,7 +177,7 @@ describe("NotesTable bulk bar", () => {
     ).not.toBeChecked();
   });
 
-  test("shows the count with Delete before the clear icon", async () => {
+  test("shows the count, keeps gapped moves disabled, and puts Delete before the clear icon", async () => {
     renderTable();
     const user = userEvent.setup();
     await screen.findByText("AAAA");
@@ -188,7 +188,18 @@ describe("NotesTable bulk bar", () => {
     const bar = screen.getByRole("region", { name: "Selection actions" });
     expect(within(bar).getByText("2 selected")).toBeInTheDocument();
 
-    const [deleteButton, clearButton] = within(bar).getAllByRole("button");
+    // AAAA and CCCC are gapped, so the bulk bar refuses both moves.
+    expect(
+      within(bar).getByRole("button", { name: "Move 2 selected notes up" }),
+    ).toHaveAttribute("aria-disabled", "true");
+    expect(
+      within(bar).getByRole("button", { name: "Move 2 selected notes down" }),
+    ).toHaveAttribute("aria-disabled", "true");
+
+    const deleteButton = within(bar).getByRole("button", { name: "Delete" });
+    const clearButton = within(bar).getByRole("button", {
+      name: "Clear selection",
+    });
     expect(deleteButton).toHaveTextContent("Delete");
     expect(deleteButton).not.toHaveAttribute("aria-label");
     expect(deleteButton).toBeEnabled();
