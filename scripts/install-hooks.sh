@@ -8,7 +8,8 @@ set -eu
 
 git rev-parse --git-dir >/dev/null 2>&1 || exit 0
 
-root=$(cd "$(dirname "$0")/.." && pwd)
 hooks=$(git rev-parse --git-path hooks)
 mkdir -p "$hooks"
-ln -sf "$root/scripts/post-checkout" "$hooks/post-checkout"
+# Relative so the shared hook (one per clone, in the common git dir) keeps
+# resolving after the worktree that installed it is deleted.
+ln -sfn ../../scripts/post-checkout "$hooks/post-checkout"
