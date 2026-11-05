@@ -115,6 +115,7 @@ export const NoteRow = memo(function NoteRow({
             className="drag-handle"
             draggable={canReorder}
             tabIndex={-1}
+            title="Drag to reorder · Alt+Up/Down to move"
             onClick={(event) => event.stopPropagation()}
             onDragEnd={() => handlers.onDragEnd()}
             onDragStart={(event) => handlers.onDragStart(note, event)}

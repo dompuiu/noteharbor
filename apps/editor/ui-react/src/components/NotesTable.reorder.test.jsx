@@ -36,6 +36,7 @@ vi.mock("@tanstack/react-virtual", () => ({
 }));
 
 import {
+  deleteNote,
   getNotes,
   reorderNotes,
 } from "../lib/api.js";
@@ -150,17 +151,24 @@ async function focusRow(container, denomination) {
 
 // The server echoes the reordered notes back in these tests, so the rows stay
 // mounted and focus can follow the moved row.
-function echoReorderedNotes(notes) {
+function echoReorderedNotes(notes, { failOnCall = 0 } = {}) {
   const byId = new Map(notes.map((item) => [item.id, item]));
+  let call = 0;
 
-  reorderNotes.mockImplementation((ids) =>
-    Promise.resolve({
+  reorderNotes.mockImplementation((ids) => {
+    call += 1;
+
+    if (call === failOnCall) {
+      return Promise.reject(new Error("Order could not be saved"));
+    }
+
+    return Promise.resolve({
       notes: ids.map((id, index) => ({
         ...byId.get(id),
         display_order: index + 1,
       })),
-    }),
-  );
+    });
+  });
 }
 
 describe("NotesTable row reordering", () => {
@@ -319,6 +327,310 @@ describe("NotesTable row reordering", () => {
     expect(rows[0]).toContain("AAAA");
     expect(rows[1]).toContain("BBBB");
     expect(rows[2]).toContain("CCCC");
+  });
+
+  test("the drag grip names both ways to reorder", async () => {
+    renderTable();
+
+    const handle = await screen.findByLabelText("Reorder AAAA");
+
+    expect(handle).toHaveAttribute(
+      "title",
+      "Drag to reorder · Alt+Up/Down to move",
+    );
+  });
+
+  test("the drag preview is a table wrapping the cloned row", async () => {
+    renderTable();
+
+    const handle = await screen.findByLabelText("Reorder AAAA");
+    const dataTransfer = makeDataTransfer();
+
+    await act(async () => {
+      handle.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+    });
+
+    const preview = document.querySelector(".table-drag-preview");
+
+    expect(preview?.tagName).toBe("TABLE");
+    expect(preview?.getAttribute("aria-hidden")).toBe("true");
+    expect(preview?.querySelector("colgroup")).not.toBeNull();
+    expect(preview?.querySelectorAll("tbody tr")).toHaveLength(1);
+    expect(preview?.textContent).toContain("AAAA");
+    expect(dataTransfer.setDragImage).toHaveBeenCalledWith(preview, 24, 24);
+
+    await act(async () => {
+      handle.dispatchEvent(dragEvent("dragend", { dataTransfer }));
+    });
+    expect(document.querySelector(".table-drag-preview")).toBeNull();
+  });
+
+  test("a committed drag announces its landed position and offers undo", async () => {
+    const user = userEvent.setup();
+    const notes = [note(1, "AAAA"), note(2, "BBBB"), note(3, "CCCC")];
+    getNotes.mockResolvedValue({ notes });
+    echoReorderedNotes(notes);
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    const handle = await screen.findByLabelText("Reorder AAAA");
+    const targetRow = rowFor(container, "CCCC");
+    const dataTransfer = makeDataTransfer();
+
+    await act(async () => {
+      handle.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+    });
+    await act(async () => {
+      targetRow.dispatchEvent(
+        dragEvent("dragover", { clientY: 400, dataTransfer }),
+      );
+    });
+    await act(async () => {
+      targetRow.dispatchEvent(
+        dragEvent("drop", { clientY: 400, dataTransfer }),
+      );
+    });
+
+    await waitFor(() => {
+      expect(container.querySelector(".table-announcer")).toHaveTextContent(
+        "Moved to position 3 of 3",
+      );
+    });
+    const announcer = container.querySelector(".table-announcer");
+    expect(announcer).toHaveAttribute("aria-live", "polite");
+    expect(announcer).toHaveAttribute("aria-atomic", "true");
+    expect(container.querySelector(".table-footer-status")).toHaveTextContent(
+      "Moved to position 3",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenLastCalledWith([1, 2, 3], 1);
+    });
+    expect(rowDenominations(container)).toEqual(["AAAA", "BBBB", "CCCC"]);
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Undo" }),
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  test("a committed keyboard move announces the same position and offers undo", async () => {
+    const user = userEvent.setup();
+    const notes = [note(1, "AAAA"), note(2, "BBBB"), note(3, "CCCC")];
+    getNotes.mockResolvedValue({ notes });
+    echoReorderedNotes(notes);
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await focusRow(container, "AAAA");
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+
+    await waitFor(() => {
+      expect(container.querySelector(".table-announcer")).toHaveTextContent(
+        "Moved to position 2 of 3",
+      );
+    });
+    expect(container.querySelector(".table-footer-status")).toHaveTextContent(
+      "Moved to position 2",
+    );
+    expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
+  });
+
+  test("a second reorder replaces the one undo target", async () => {
+    const user = userEvent.setup();
+    const notes = [note(1, "AAAA"), note(2, "BBBB"), note(3, "CCCC")];
+    getNotes.mockResolvedValue({ notes });
+    echoReorderedNotes(notes);
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await focusRow(container, "AAAA");
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenCalledWith([2, 1, 3], 1);
+    });
+    await screen.findByRole("button", { name: "Undo" });
+
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenLastCalledWith([2, 3, 1], 1);
+    });
+    await waitFor(() => {
+      expect(container.querySelector(".table-footer-status")).toHaveTextContent(
+        "Moved to position 3",
+      );
+    });
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenLastCalledWith([2, 1, 3], 1);
+    });
+    expect(rowDenominations(container)).toEqual(["BBBB", "AAAA", "CCCC"]);
+  });
+
+  test("a failed save leaves the previous undo offer alone", async () => {
+    const user = userEvent.setup();
+    const notes = [note(1, "AAAA"), note(2, "BBBB"), note(3, "CCCC")];
+    getNotes.mockResolvedValue({ notes });
+    echoReorderedNotes(notes, { failOnCall: 2 });
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await focusRow(container, "AAAA");
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    await screen.findByRole("button", { name: "Undo" });
+
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+
+    await waitFor(() => {
+      expect(screen.getByText("Order could not be saved")).toBeInTheDocument();
+    });
+    // The rejected move rolled back to the order the previous undo belongs
+    // to, so that offer is still the one the server can honour.
+    await waitFor(() => {
+      expect(rowDenominations(container)).toEqual(["BBBB", "AAAA", "CCCC"]);
+    });
+    expect(container.querySelector(".table-footer-status")).toHaveTextContent(
+      "Moved to position 2",
+    );
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenLastCalledWith([1, 2, 3], 1);
+    });
+  });
+
+  test("changing the sort hides undo instead of saving an order it cannot show", async () => {
+    const user = userEvent.setup();
+    const notes = [note(1, "AAAA"), note(2, "BBBB"), note(3, "CCCC")];
+    getNotes.mockResolvedValue({ notes });
+    echoReorderedNotes(notes);
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await focusRow(container, "AAAA");
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    await screen.findByRole("button", { name: "Undo" });
+
+    await user.click(screen.getByRole("button", { name: "Company" }));
+
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Undo" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(reorderNotes).toHaveBeenCalledTimes(1);
+  });
+
+  test("a failed undo keeps the offer and restores the committed order", async () => {
+    const user = userEvent.setup();
+    const notes = [note(1, "AAAA"), note(2, "BBBB"), note(3, "CCCC")];
+    getNotes.mockResolvedValue({ notes });
+    echoReorderedNotes(notes, { failOnCall: 2 });
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await focusRow(container, "AAAA");
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    await screen.findByRole("button", { name: "Undo" });
+
+    await user.click(screen.getByRole("button", { name: "Undo" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("Order could not be saved")).toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(rowDenominations(container)).toEqual(["BBBB", "AAAA", "CCCC"]);
+    });
+    // The undo did not land, so the offer it came from is still valid.
+    expect(container.querySelector(".table-footer-status")).toHaveTextContent(
+      "Moved to position 2",
+    );
+    expect(screen.getByRole("button", { name: "Undo" })).toBeInTheDocument();
+  });
+
+  test("deleting a row withdraws the undo offer", async () => {
+    const user = userEvent.setup();
+    const notes = [note(1, "AAAA"), note(2, "BBBB"), note(3, "CCCC")];
+    getNotes.mockResolvedValue({ notes });
+    echoReorderedNotes(notes);
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await focusRow(container, "AAAA");
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    await screen.findByRole("button", { name: "Undo" });
+
+    await user.click(screen.getByLabelText("Select CCCC"));
+    await user.click(screen.getByRole("button", { name: "Delete" }));
+    const dialog = await screen.findByRole("dialog");
+
+    // The list that lands after the delete no longer has the committed ids.
+    getNotes.mockResolvedValue({
+      notes: [note(2, "BBBB"), note(1, "AAAA")],
+    });
+    await user.click(within(dialog).getByRole("button", { name: "Delete" }));
+
+    await waitFor(() => {
+      expect(deleteNote).toHaveBeenCalledWith(3, 1);
+    });
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Undo" }),
+      ).not.toBeInTheDocument();
+    });
+    expect(reorderNotes).toHaveBeenCalledTimes(1);
+  });
+
+  test("undo is not offered while an order save is in flight", async () => {
+    const user = userEvent.setup();
+    const notes = [note(1, "AAAA"), note(2, "BBBB"), note(3, "CCCC")];
+    const byId = new Map(notes.map((item) => [item.id, item]));
+    let saveCount = 0;
+    let resolveSecondSave;
+    getNotes.mockResolvedValue({ notes });
+    reorderNotes.mockImplementation((ids) => {
+      saveCount += 1;
+      const response = {
+        notes: ids.map((id, index) => ({
+          ...byId.get(id),
+          display_order: index + 1,
+        })),
+      };
+
+      if (saveCount === 1) {
+        return Promise.resolve(response);
+      }
+
+      return new Promise((resolve) => {
+        resolveSecondSave = () => resolve(response);
+      });
+    });
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await focusRow(container, "AAAA");
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    await screen.findByRole("button", { name: "Undo" });
+
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenCalledTimes(2);
+    });
+
+    expect(screen.getByText("Saving manual order...")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Undo" }),
+    ).not.toBeInTheDocument();
+
+    await act(async () => {
+      resolveSecondSave();
+    });
+    await screen.findByRole("button", { name: "Undo" });
   });
 
   test("dropping a row moves the keyboard cursor to its new place", async () => {

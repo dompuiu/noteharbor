@@ -1154,8 +1154,13 @@ function NotesTable({
   // dependencies.
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [reorderLoading, setReorderLoading] = useState(false);
-  // A blocked Alt+Up/Down press explains itself through this polite live
-  // region instead of failing silently.
+  // The one step of undo the footer offers after a committed reorder. It holds
+  // the order to restore, not the order on screen, and the committed ids are
+  // kept so a later delete, move or create invalidates it instead of offering
+  // an order the server no longer has.
+  const [reorderUndo, setReorderUndo] = useState(null);
+  // Reorder feedback — a landed position or a blocked move — explains itself
+  // through this polite live region instead of failing silently.
   const [reorderAnnouncement, setReorderAnnouncement] = useState("");
   const reorderAnnouncementTimerRef = useRef(null);
   // Keyboard moves apply locally at once and save once the burst settles.
@@ -1979,6 +1984,18 @@ function NotesTable({
         : `Sort by ${getTableColumn(defaultSortKey)?.label ?? "#"} ascending to reorder`;
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  // Undo belongs to the manual-order view and to the list the reorder
+  // committed. A filter, another sort, a delete, move, create or refetch
+  // changes either, so the offer disappears rather than saving an order the
+  // collector cannot see or the server cannot have any more.
+  const reorderUndoAvailable = useMemo(
+    () =>
+      reorderUndo != null &&
+      reorderRail &&
+      notes.length === reorderUndo.committedIds.length &&
+      notes.every((note, index) => note.id === reorderUndo.committedIds[index]),
+    [notes, reorderRail, reorderUndo],
+  );
   // The bulk bar and Alt+Up/Down share one unit: the whole selection when it
   // is contiguous, nothing when it has gaps. The run stays computed while an
   // order save is in flight so the bar's arrows never unmount under focus.
@@ -2139,6 +2156,7 @@ function NotesTable({
     reorderSaveTimerRef.current = null;
     pendingReorderRef.current = null;
     reorderRollbackRef.current = null;
+    setReorderUndo(null);
   }, [collectionId]);
 
   useEffect(
@@ -4028,14 +4046,45 @@ function NotesTable({
     return reorderedNotes;
   }
 
-  // The one save path shared by a drag and a keyboard move, including the one
-  // rollback: a rejection restores the order from before the change. The
-  // result carries the acknowledged order so a burst can move its rollback
-  // baseline forward after each successful save.
+  // A committed save is the one place the landed position, the announcement
+  // and the undo target are read from: the server's echo, not the optimistic
+  // order, so a keyboard burst, a drag and the menu all say the same thing.
+  function recordCommittedReorder(
+    committedNotes,
+    previousNotes,
+    positionNoteId,
+    offerUndo,
+  ) {
+    const position =
+      committedNotes.findIndex((note) => note.id === positionNoteId) + 1;
+
+    setReorderUndo(
+      offerUndo && position > 0
+        ? {
+            committedIds: committedNotes.map((note) => note.id),
+            noteId: positionNoteId,
+            position,
+            previousNotes,
+          }
+        : null,
+    );
+
+    if (position > 0) {
+      announceReorder(
+        `Moved to position ${position} of ${committedNotes.length}`,
+      );
+    }
+  }
+
+  // The one save path shared by a drag, a keyboard move, the menu and Undo,
+  // including the one rollback: a rejection restores the order from before
+  // the change. The result carries the acknowledged order so a burst can move
+  // its rollback baseline forward after each successful save.
   async function persistReorder(
     reorderedNotes,
     previousNotes,
     ownerCollectionId,
+    { positionNoteId = null, offerUndo = true } = {},
   ) {
     setReorderLoading(true);
 
@@ -4053,6 +4102,12 @@ function NotesTable({
       ) {
         notesRef.current = payload.notes;
         setNotes(payload.notes);
+        recordCommittedReorder(
+          payload.notes,
+          previousNotes,
+          positionNoteId,
+          offerUndo,
+        );
       }
 
       return { notes: payload.notes, ok: true };
@@ -4096,6 +4151,7 @@ function NotesTable({
       pending.notes,
       rollbackNotes,
       pending.collectionId,
+      { positionNoteId: pending.positionNoteId },
     );
 
     reorderSaveInFlightRef.current = false;
@@ -4130,7 +4186,11 @@ function NotesTable({
 
   // A drag is one step with its own drop feedback, so it saves at once rather
   // than waiting for a burst to settle.
-  async function commitOrder(nextNotes, movedNoteId) {
+  async function commitOrder(
+    nextNotes,
+    movedNoteId,
+    { positionNoteId = movedNoteId, offerUndo = true } = {},
+  ) {
     const previousNotes =
       reorderRollbackRef.current?.notes ?? notesRef.current;
 
@@ -4141,7 +4201,26 @@ function NotesTable({
 
     const reorderedNotes = applyReorderLocally(nextNotes, movedNoteId);
 
-    await persistReorder(reorderedNotes, previousNotes, collectionId);
+    await persistReorder(reorderedNotes, previousNotes, collectionId, {
+      positionNoteId,
+      offerUndo,
+    });
+  }
+
+  // Undo saves the one order the footer offers, through the same commit path
+  // and with no second offer behind it: a single step back, never a stack.
+  function handleUndoReorder() {
+    if (
+      reorderLoading ||
+      pendingReorderRef.current ||
+      !reorderUndoAvailable
+    ) {
+      return;
+    }
+
+    void commitOrder(reorderUndo.previousNotes, reorderUndo.noteId, {
+      offerUndo: false,
+    });
   }
 
   function handleRowReorder(noteId, direction) {
@@ -4184,8 +4263,11 @@ function NotesTable({
     }
 
     // The bar's arrow keeps focus, so a repeated press lands on the same
-    // control.
-    void commitOrder(nextNotes, null);
+    // control. The announcement names the top of the run, which both the bar
+    // and Alt+Up/Down move.
+    void commitOrder(nextNotes, null, {
+      positionNoteId: currentNotes[run.start].id,
+    });
   }
 
   function handleKeyboardReorder(direction) {
@@ -4243,22 +4325,25 @@ function NotesTable({
     pendingReorderRef.current = {
       notes: reorderedNotes,
       collectionId,
+      positionNoteId: currentNotes[run.start].id,
     };
     scheduleReorderSave();
   }
 
-  function announceReorderBlock(message = reorderHint) {
-    if (!message) {
-      return;
-    }
-
-    // Clearing first makes a repeated press re-announce the same sentence.
+  function announceReorder(message) {
+    // Clearing first makes a repeated sentence re-announce itself.
     setReorderAnnouncement("");
     window.clearTimeout(reorderAnnouncementTimerRef.current);
     reorderAnnouncementTimerRef.current = window.setTimeout(() => {
       reorderAnnouncementTimerRef.current = null;
       setReorderAnnouncement(message);
     }, 0);
+  }
+
+  function announceReorderBlock(message = reorderHint) {
+    if (message) {
+      announceReorder(message);
+    }
   }
 
   // The rows hand the drag back here once the drop lands; they own the
@@ -5692,6 +5777,19 @@ function NotesTable({
                 {reorderLoading ? (
                   <span className="table-footer-status">
                     Saving manual order...
+                  </span>
+                ) : reorderUndoAvailable ? (
+                  <span className="table-footer-status">
+                    Moved to position {reorderUndo.position}
+                    <span aria-hidden="true"> · </span>
+                    <button
+                      className="table-footer-undo"
+                      onClick={handleUndoReorder}
+                      title="Restore the order from before the last move"
+                      type="button"
+                    >
+                      Undo
+                    </button>
                   </span>
                 ) : null}
                 <span className="table-footer-keys">

@@ -4930,6 +4930,32 @@ th[aria-sort="descending"] .sort-chevron {
   white-space: nowrap;
 }
 
+.table-footer-undo {
+  appearance: none;
+  display: inline-flex;
+  align-items: center;
+  min-height: 24px;
+  margin: 0;
+  padding: 0 2px;
+  border: 0;
+  background: transparent;
+  color: var(--accent-strong);
+  cursor: pointer;
+  font: inherit;
+  text-decoration: underline;
+  text-underline-offset: 2px;
+}
+
+.table-footer-undo:hover {
+  text-decoration-thickness: 2px;
+}
+
+.table-footer-undo:focus-visible {
+  border-radius: 2px;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* The instructions are separate segments so a narrow window stacks them
    instead of clipping the last one; the separator rides on the segment, not
    the text, so the hint's own copy stays free of punctuation. */
@@ -5199,6 +5225,8 @@ td.drag-cell {
   position: fixed;
   top: -1000px;
   left: -1000px;
+  border-collapse: collapse;
+  table-layout: fixed;
   background: var(--surface);
   box-shadow: var(--shadow-lg);
   opacity: 0.98;

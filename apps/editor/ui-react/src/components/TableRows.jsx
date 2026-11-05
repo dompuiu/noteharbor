@@ -91,9 +91,21 @@ export function TableRows({
       event.dataTransfer.setData("text/plain", String(note.id));
 
       if (row) {
-        const preview = row.cloneNode(true);
+        // A cloned <tr> only lays out inside a table, and its <colgroup>
+        // carries the column widths the real row was painted with. Wrap both
+        // so the drag image keeps the row's geometry.
+        const preview = document.createElement("table");
+        const sourceColumns = row.closest("table")?.querySelector("colgroup");
+
         preview.classList.add("table-drag-preview");
+        preview.setAttribute("aria-hidden", "true");
         preview.style.width = `${row.getBoundingClientRect().width}px`;
+
+        if (sourceColumns) {
+          preview.appendChild(sourceColumns.cloneNode(true));
+        }
+
+        preview.createTBody().appendChild(row.cloneNode(true));
         document.body.appendChild(preview);
         dragPreviewRef.current = preview;
         event.dataTransfer.setDragImage(preview, 24, 24);
