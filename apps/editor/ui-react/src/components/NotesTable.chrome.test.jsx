@@ -362,6 +362,14 @@ describe("NotesTable chrome", () => {
     expect(
       within(dialog).getAllByText("Toggle this help").length,
     ).toBeGreaterThan(0);
+
+    // The long Table and Showcase groups each hold a column of their own,
+    // instead of stacking every section on one side.
+    const columns = dialog.querySelectorAll(".shortcuts-column");
+    expect(columns).toHaveLength(3);
+    expect(columns[0]).toHaveTextContent("Table");
+    expect(columns[1]).toHaveTextContent("Slideshow");
+    expect(columns[2]).toHaveTextContent("Showcase");
   });
 
   test("Reset view stays hidden on a default view", async () => {

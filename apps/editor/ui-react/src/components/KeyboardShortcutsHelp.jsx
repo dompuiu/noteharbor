@@ -3,6 +3,7 @@ import { useEffect } from "react";
 const shortcutGroups = [
   {
     title: "Table",
+    column: 1,
     items: [
       { keys: ["/"], description: "Focus the filter field" },
       {
@@ -42,6 +43,7 @@ const shortcutGroups = [
   },
   {
     title: "Note editor",
+    column: 2,
     items: [
       { keys: ["Alt", "←"], description: "Go to the previous note" },
       { keys: ["Alt", "→"], description: "Go to the next note" },
@@ -69,6 +71,7 @@ const shortcutGroups = [
   },
   {
     title: "Slideshow",
+    column: 2,
     items: [
       { keys: ["←", "→"], description: "Go to the previous / next note" },
       { keys: ["Home", "End"], description: "Go to the first / last note" },
@@ -81,6 +84,7 @@ const shortcutGroups = [
   },
   {
     title: "Image preview",
+    column: 2,
     items: [
       { keys: ["←", "→"], description: "Go to the previous / next image" },
       { keys: ["Home", "End"], description: "Go to the first / last image" },
@@ -89,6 +93,7 @@ const shortcutGroups = [
   },
   {
     title: "Showcase",
+    column: 3,
     items: [
       {
         keys: ["←", "↑", "→", "↓", "h", "j", "k", "l"],
@@ -145,6 +150,7 @@ const shortcutGroups = [
   },
   {
     title: "Everywhere",
+    column: 3,
     items: [
       { keys: ["?"], description: "Toggle this help" },
       {
@@ -155,6 +161,12 @@ const shortcutGroups = [
     ],
   },
 ];
+
+// Three balanced columns: the long Table and Showcase groups each get their
+// own column, while the middle holds the editor, slideshow and image preview.
+const shortcutColumns = [1, 2, 3].map((column) =>
+  shortcutGroups.filter((group) => group.column === column),
+);
 
 function KeyboardShortcutsHelp({ onClose }) {
   useEffect(() => {
@@ -196,21 +208,25 @@ function KeyboardShortcutsHelp({ onClose }) {
           </button>
         </div>
         <div className="shortcuts-groups">
-          {shortcutGroups.map((group) => (
-            <div className="shortcuts-group" key={group.title}>
-              <h3>{group.title}</h3>
-              <ul>
-                {group.items.map((item) => (
-                  <li key={item.description}>
-                    <span className="shortcuts-keys">
-                      {item.keys.map((key) => (
-                        <kbd key={key}>{key}</kbd>
-                      ))}
-                    </span>
-                    <span>{item.description}</span>
-                  </li>
-                ))}
-              </ul>
+          {shortcutColumns.map((groups, index) => (
+            <div className="shortcuts-column" key={index}>
+              {groups.map((group) => (
+                <div className="shortcuts-group" key={group.title}>
+                  <h3>{group.title}</h3>
+                  <ul>
+                    {group.items.map((item) => (
+                      <li key={item.description}>
+                        <span className="shortcuts-keys">
+                          {item.keys.map((key) => (
+                            <kbd key={key}>{key}</kbd>
+                          ))}
+                        </span>
+                        <span>{item.description}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </div>
           ))}
         </div>
