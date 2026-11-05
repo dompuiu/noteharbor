@@ -7,7 +7,11 @@
 // `itemSelector` is the menu's item role (`menuitem`, `menuitemradio`), so
 // every menu caller shares one implementation of the traversal.
 export function handleMenuNavigation(event, panel, itemSelector) {
-  const items = Array.from(panel?.querySelectorAll(itemSelector) ?? []);
+  // A disabled item is not a stop: native focus() refuses it, which would
+  // otherwise leave the arrow key stuck on its neighbour.
+  const items = Array.from(panel?.querySelectorAll(itemSelector) ?? []).filter(
+    (item) => !item.disabled && item.getAttribute("aria-disabled") !== "true",
+  );
 
   if (!items.length) {
     return;

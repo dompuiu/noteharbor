@@ -136,6 +136,94 @@ function noteDisplayName(note) {
   return name || `Note ${note?.id ?? ""}`.replace(/\s+$/, "");
 }
 
+// The run around one row: its contiguous selected block, or the row alone
+// when it is not selected. A selected row on the far side of a gap stays put —
+// only a drag collapses a scattered selection, and that is out of scope here.
+function reorderRunAt(notes, index, selectedIdSet) {
+  const selected = selectedIdSet.has(notes[index].id);
+  let start = index;
+  let end = index;
+
+  if (selected) {
+    while (start > 0 && selectedIdSet.has(notes[start - 1].id)) {
+      start -= 1;
+    }
+
+    while (end < notes.length - 1 && selectedIdSet.has(notes[end + 1].id)) {
+      end += 1;
+    }
+  }
+
+  return {
+    start,
+    end,
+    length: end - start + 1,
+    canMoveUp: start > 0,
+    canMoveDown: end < notes.length - 1,
+  };
+}
+
+// The keyboard and the row menu move the same unit, so both read the run
+// through this one lookup.
+function reorderRunFor(notes, noteId, selectedIdSet) {
+  const index = notes.findIndex((note) => note.id === noteId);
+
+  return index < 0 ? null : reorderRunAt(notes, index, selectedIdSet);
+}
+
+// One step of a run: past its predecessor for up, past its successor for down.
+// A run at the boundary has nowhere to go and returns null, which the callers
+// read as a no-op (no save, no request).
+function moveNotesRun(notes, run, direction) {
+  if (!run) {
+    return null;
+  }
+
+  if (direction < 0) {
+    if (!run.canMoveUp) {
+      return null;
+    }
+
+    return [
+      ...notes.slice(0, run.start - 1),
+      ...notes.slice(run.start, run.end + 1),
+      notes[run.start - 1],
+      ...notes.slice(run.end + 1),
+    ];
+  }
+
+  if (!run.canMoveDown) {
+    return null;
+  }
+
+  return [
+    ...notes.slice(0, run.start),
+    notes[run.end + 1],
+    ...notes.slice(run.start, run.end + 1),
+    ...notes.slice(run.end + 2),
+  ];
+}
+
+function withDisplayOrder(notes) {
+  return notes.map((note, index) => ({
+    ...note,
+    display_order: index + 1,
+  }));
+}
+
+function sameReorderRun(left, right) {
+  return (
+    left === right ||
+    (left &&
+      right &&
+      left.start === right.start &&
+      left.end === right.end &&
+      left.length === right.length &&
+      left.canMoveUp === right.canMoveUp &&
+      left.canMoveDown === right.canMoveDown)
+  );
+}
+
 function noteIdentityDetails(note) {
   return [
     note?.grading_company,
@@ -970,6 +1058,10 @@ function NotesTable({
   }, [collections, collectionsError, loadingCollections]);
 
   const [notes, setNotes] = useState([]);
+  // Synchronous mirror of the painted list for a key repeat that lands before
+  // the state update has committed.
+  const notesRef = useRef(notes);
+  notesRef.current = notes;
   // The collection the `notes` state belongs to. A route change renders once
   // with the new id and the previous collection's rows still in state, so the
   // hand-off reveal waits for this to name the destination before it looks
@@ -1065,6 +1157,19 @@ function NotesTable({
   // dependencies.
   const [loadAttempt, setLoadAttempt] = useState(0);
   const [reorderLoading, setReorderLoading] = useState(false);
+  // A blocked Alt+Up/Down press explains itself through this polite live
+  // region instead of failing silently.
+  const [reorderAnnouncement, setReorderAnnouncement] = useState("");
+  const reorderAnnouncementTimerRef = useRef(null);
+  // Keyboard moves apply locally at once and save once the burst settles.
+  // `pendingReorderRef` holds the order still to post, so a move that lands
+  // while a save is in flight queues behind it instead of being dropped.
+  const reorderSaveTimerRef = useRef(null);
+  const reorderSaveInFlightRef = useRef(false);
+  const pendingReorderRef = useRef(null);
+  // The order before a keyboard burst began: the one rollback restores when
+  // any save in the burst fails.
+  const reorderRollbackRef = useRef(null);
   const [slideshowNotes, setSlideshowNotes] = useState([]);
   const [activeNoteId, setActiveNoteId] = useState(null);
   const [thumbPreviewState, setThumbPreviewState] = useState(null);
@@ -1871,12 +1976,46 @@ function NotesTable({
   const reorderHint = !deferredOrderedNotes.length
     ? null
     : reorderRail
-      ? "Drag the handle to reorder"
+      ? "Drag the handle or press Alt+Up/Down to reorder"
       : deferredConditions.length
         ? "Clear filters to reorder"
         : `Sort by ${getTableColumn(defaultSortKey)?.label ?? "#"} ascending to reorder`;
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  // What the row menu's Move up / Move down items act on, computed from the
+  // same run rule as the shortcut so the two paths cannot diverge. Runs are
+  // structurally shared: toggling one checkbox changes the run length only
+  // around that row, so every other row keeps its old object and its memo
+  // boundary.
+  const reorderRunCacheRef = useRef(new Map());
+  const reorderRunByNoteId = useMemo(() => {
+    const runs = new Map();
+
+    if (!canReorder) {
+      reorderRunCacheRef.current = runs;
+      return runs;
+    }
+
+    // One linear pass: each contiguous selected block builds one run object
+    // shared by its rows, so a checkbox tick is never quadratic in the list.
+    let index = 0;
+
+    while (index < notes.length) {
+      const run = reorderRunAt(notes, index, selectedIdSet);
+
+      for (let rowIndex = index; rowIndex <= run.end; rowIndex += 1) {
+        const noteId = notes[rowIndex].id;
+        const previous = reorderRunCacheRef.current.get(noteId);
+
+        runs.set(noteId, sameReorderRun(previous, run) ? previous : run);
+      }
+
+      index = run.end + 1;
+    }
+
+    reorderRunCacheRef.current = runs;
+    return runs;
+  }, [canReorder, notes, selectedIdSet]);
   const allVisibleSelected = useMemo(
     () =>
       orderedNotes.length > 0 &&
@@ -1961,6 +2100,7 @@ function NotesTable({
       onInsertNoteAfter: invoke("onInsertNoteAfter"),
       onMoveNote: invoke("onMoveNote"),
       onOpenNote: invoke("onOpenNote"),
+      onReorderNote: invoke("onReorderNote"),
       onRowBlur: invoke("onRowBlur"),
       onRowClick: invoke("onRowClick"),
       onRowElement: invoke("onRowElement"),
@@ -2021,6 +2161,34 @@ function NotesTable({
         someVisibleSelected && !allVisibleSelected;
     }
   }, [allVisibleSelected, someVisibleSelected]);
+
+  // A collection switch abandons a burst: the queued order names the previous
+  // collection's rows, so it must not land under the new collection.
+  useEffect(() => {
+    window.clearTimeout(reorderSaveTimerRef.current);
+    reorderSaveTimerRef.current = null;
+    pendingReorderRef.current = null;
+    reorderRollbackRef.current = null;
+  }, [collectionId]);
+
+  useEffect(
+    () => () => {
+      // Leaving the screen mid-burst still persists the last applied order;
+      // there is no state left to roll back into.
+      window.clearTimeout(reorderSaveTimerRef.current);
+      window.clearTimeout(reorderAnnouncementTimerRef.current);
+      const pending = pendingReorderRef.current;
+      pendingReorderRef.current = null;
+
+      if (pending) {
+        void saveNotesOrder(
+          pending.notes.map((note) => note.id),
+          pending.collectionId,
+        ).catch(() => {});
+      }
+    },
+    [],
+  );
 
   useEffect(() => {
     const saved = savedTableViewRef.current;
@@ -2723,6 +2891,19 @@ function NotesTable({
       return true;
     }
 
+    function overlayOwnsReorderKeys(target) {
+      // A row menu or any other open menu/listbox claims the arrows while it
+      // is on screen, even if focus has returned to its trigger. Modal
+      // surfaces (row menu dialogs, the editor, the slideshow) already stop
+      // the table through `tableKeysActive`; this also covers the panel's
+      // own focused items.
+      return (
+        (target instanceof Element &&
+          Boolean(target.closest(MODAL_SURFACE_SELECTOR))) ||
+        Boolean(document.querySelector("[role='menu'], [role='listbox']"))
+      );
+    }
+
     function handleGlobalKeyDown(event) {
       if (showShortcutsHelp || confirmOpenRef.current) {
         return;
@@ -2756,6 +2937,38 @@ function NotesTable({
         event.target instanceof Element &&
         event.target.closest("#app-sidebar")
       ) {
+        return;
+      }
+
+      // Alt+Up/Down reorders the focused row (or its contiguous selected
+      // run). It sits above the column jump because both are modified arrows
+      // that must be read before the modifier guard below swallows them. A
+      // menu, popover or modal surface owns the keys while it is open.
+      const reorderDirection =
+        event.key === "ArrowUp" ? -1 : event.key === "ArrowDown" ? 1 : null;
+
+      if (
+        tableKeysActive &&
+        reorderDirection != null &&
+        event.altKey &&
+        !event.metaKey &&
+        !event.ctrlKey &&
+        !event.shiftKey &&
+        !editable &&
+        event.target instanceof Element &&
+        event.target.closest("tr.table-row-link") &&
+        !overlayOwnsReorderKeys(event.target)
+      ) {
+        event.preventDefault();
+
+        if (!reorderRail) {
+          announceReorderBlock();
+        } else if (canReorder || reorderSaveInFlightRef.current) {
+          // A keyboard burst may queue behind its own save; a drag save keeps
+          // the table closed to reordering until it lands.
+          handleKeyboardReorder(reorderDirection);
+        }
+
         return;
       }
 
@@ -3045,6 +3258,7 @@ function NotesTable({
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
   }, [
     activeNoteId,
+    canReorder,
     clearRowCursor,
     clearSelection,
     collection,
@@ -3060,6 +3274,8 @@ function NotesTable({
     onRenameCollection,
     orderedNotes,
     renamingCollection,
+    reorderHint,
+    reorderRail,
     rowVirtualizer,
     savingCollectionRename,
     slideshowRouteActive,
@@ -3824,6 +4040,186 @@ function NotesTable({
     }
   }
 
+  // Apply an order locally at once, so the rows, the cursor and the next key
+  // press all see it before the save round trip.
+  function applyReorderLocally(nextNotes, movedNoteId) {
+    const reorderedNotes = withDisplayOrder(nextNotes);
+
+    notesRef.current = reorderedNotes;
+    setActionError("");
+    setNotes(reorderedNotes);
+
+    if (movedNoteId != null) {
+      // Focus follows the moved row: its key is stable, so React moves the
+      // same DOM node and focus travels with it.
+      focusRowByNoteId(movedNoteId);
+    }
+
+    return reorderedNotes;
+  }
+
+  // The one save path shared by a drag and a keyboard move, including the one
+  // rollback: a rejection restores the order from before the change. The
+  // result carries the acknowledged order so a burst can move its rollback
+  // baseline forward after each successful save.
+  async function persistReorder(
+    reorderedNotes,
+    previousNotes,
+    ownerCollectionId,
+  ) {
+    setReorderLoading(true);
+
+    try {
+      const payload = await saveNotesOrder(
+        reorderedNotes.map((note) => note.id),
+        ownerCollectionId,
+      );
+
+      // A newer keyboard move queued while this save was in flight owns the
+      // list now; its save will adopt the server's echo instead.
+      if (
+        notesCollectionIdRef.current === ownerCollectionId &&
+        !pendingReorderRef.current
+      ) {
+        notesRef.current = payload.notes;
+        setNotes(payload.notes);
+      }
+
+      return { notes: payload.notes, ok: true };
+    } catch (reorderError) {
+      if (notesCollectionIdRef.current === ownerCollectionId) {
+        notesRef.current = previousNotes;
+        setNotes(previousNotes);
+        setActionError(reorderError.message);
+      }
+
+      return { notes: previousNotes, ok: false };
+    } finally {
+      setReorderLoading(false);
+    }
+  }
+
+  function scheduleReorderSave() {
+    window.clearTimeout(reorderSaveTimerRef.current);
+    reorderSaveTimerRef.current = window.setTimeout(() => {
+      reorderSaveTimerRef.current = null;
+      void flushPendingReorder();
+    }, 250);
+  }
+
+  async function flushPendingReorder() {
+    if (reorderSaveInFlightRef.current) {
+      return;
+    }
+
+    const pending = pendingReorderRef.current;
+
+    if (!pending) {
+      return;
+    }
+
+    pendingReorderRef.current = null;
+    reorderSaveInFlightRef.current = true;
+
+    const rollbackNotes = reorderRollbackRef.current?.notes ?? pending.notes;
+    const result = await persistReorder(
+      pending.notes,
+      rollbackNotes,
+      pending.collectionId,
+    );
+
+    reorderSaveInFlightRef.current = false;
+
+    let queued = pendingReorderRef.current;
+
+    if (!result.ok) {
+      // Drop what queued behind a failed save: that order was built on the
+      // one just rolled back. A different collection's burst can survive — it
+      // did not share this rollback baseline.
+      if (!queued || queued.collectionId === pending.collectionId) {
+        queued = null;
+        pendingReorderRef.current = null;
+        reorderRollbackRef.current = null;
+      }
+    } else if (!queued) {
+      reorderRollbackRef.current = null;
+    } else if (queued.collectionId === pending.collectionId) {
+      // Move the baseline to what the server just acknowledged, so a later
+      // failure in the same burst cannot discard this save. A queued burst in
+      // another collection keeps its own baseline.
+      reorderRollbackRef.current = {
+        notes: result.notes,
+        collectionId: pending.collectionId,
+      };
+    }
+
+    if (queued) {
+      scheduleReorderSave();
+    }
+  }
+
+  // A drag is one step with its own drop feedback, so it saves at once rather
+  // than waiting for a burst to settle.
+  async function commitOrder(nextNotes, movedNoteId) {
+    window.clearTimeout(reorderSaveTimerRef.current);
+    reorderSaveTimerRef.current = null;
+    pendingReorderRef.current = null;
+    reorderRollbackRef.current = null;
+
+    const previousNotes = notesRef.current;
+    const reorderedNotes = applyReorderLocally(nextNotes, movedNoteId);
+
+    await persistReorder(reorderedNotes, previousNotes, collectionId);
+  }
+
+  function handleKeyboardReorder(direction, noteId = focusedRowIdRef.current) {
+    if (noteId == null) {
+      return;
+    }
+
+    const currentNotes = notesRef.current;
+    const run = reorderRunFor(
+      currentNotes,
+      noteId,
+      new Set(selectedIdsRef.current),
+    );
+    const nextNotes = moveNotesRun(currentNotes, run, direction);
+
+    if (!nextNotes) {
+      // The run is already against the edge: a no-op, not a request.
+      return;
+    }
+
+    if (!reorderRollbackRef.current) {
+      reorderRollbackRef.current = {
+        notes: currentNotes,
+        collectionId,
+      };
+    }
+
+    const reorderedNotes = applyReorderLocally(nextNotes, noteId);
+
+    pendingReorderRef.current = {
+      notes: reorderedNotes,
+      collectionId,
+    };
+    scheduleReorderSave();
+  }
+
+  function announceReorderBlock() {
+    if (!reorderHint) {
+      return;
+    }
+
+    // Clearing first makes a repeated press re-announce the same sentence.
+    setReorderAnnouncement("");
+    window.clearTimeout(reorderAnnouncementTimerRef.current);
+    reorderAnnouncementTimerRef.current = window.setTimeout(() => {
+      reorderAnnouncementTimerRef.current = null;
+      setReorderAnnouncement(reorderHint);
+    }, 0);
+  }
+
   // The rows hand the drag back here once the drop lands; they own the
   // placeholder and the preview, so all that is left is the reorder itself.
   async function handleReorder(draggedNoteId, targetNoteId, placement) {
@@ -3831,8 +4227,13 @@ function NotesTable({
       return;
     }
 
-    const startIndex = notes.findIndex((note) => note.id === draggedNoteId);
-    const targetIndex = notes.findIndex((note) => note.id === targetNoteId);
+    const currentNotes = notesRef.current;
+    const startIndex = currentNotes.findIndex(
+      (note) => note.id === draggedNoteId,
+    );
+    const targetIndex = currentNotes.findIndex(
+      (note) => note.id === targetNoteId,
+    );
 
     if (startIndex < 0 || targetIndex < 0) {
       return;
@@ -3847,38 +4248,13 @@ function NotesTable({
       return;
     }
 
-    const previousNotes = notes;
-    const nextNotes = [...notes];
+    const nextNotes = [...currentNotes];
     const [movedNote] = nextNotes.splice(startIndex, 1);
     const insertIndex =
       startIndex < rawInsertIndex ? rawInsertIndex - 1 : rawInsertIndex;
     nextNotes.splice(insertIndex, 0, movedNote);
 
-    const reorderedNotes = nextNotes.map((note, index) => ({
-      ...note,
-      display_order: index + 1,
-    }));
-
-    setActionError("");
-    setNotes(reorderedNotes);
-    setReorderLoading(true);
-    // Land the keyboard cursor on the moved row in its new place. The row
-    // keeps its key, so React moves the same DOM node and focus follows it
-    // there.
-    focusRowByNoteId(draggedNoteId);
-
-    try {
-      const payload = await saveNotesOrder(
-        reorderedNotes.map((note) => note.id),
-        collectionId,
-      );
-      setNotes(payload.notes);
-    } catch (reorderError) {
-      setActionError(reorderError.message);
-      setNotes(previousNotes);
-    } finally {
-      setReorderLoading(false);
-    }
+    await commitOrder(nextNotes, draggedNoteId);
   }
 
   async function handleBulkDelete(reportWorkStarted) {
@@ -4476,6 +4852,9 @@ function NotesTable({
     onInsertNoteAfter: openCreateNoteAfter,
     onMoveNote: openMoveForNote,
     onOpenNote: openSlideshow,
+    onReorderNote(noteId, direction) {
+      void handleKeyboardReorder(direction, noteId);
+    },
     onRowBlur: handleRowBlur,
     onRowClick: handleRowClick,
     onRowElement: registerRowElement,
@@ -5191,6 +5570,7 @@ function NotesTable({
                         notes={deferredOrderedNotes}
                         onReorder={handleReorder}
                         reorderRail={reorderRail}
+                        reorderRunByNoteId={reorderRunByNoteId}
                         rowElementFor={(noteId) =>
                           rowElementMapRef.current.get(noteId)
                         }
@@ -5236,6 +5616,15 @@ function NotesTable({
               ) : null}
             </div>
             <div className="table-footer-hint">
+              {/* A blocked reorder explains itself here; the sentence is the
+                  same one the footer paints for the current view. */}
+              <p
+                aria-atomic="true"
+                aria-live="polite"
+                className="table-announcer"
+              >
+                {reorderAnnouncement}
+              </p>
               {/* The count is the table's answer to every filter keystroke,
                   so it is a polite live region: a screen reader hears the
                   result set change without the table itself being

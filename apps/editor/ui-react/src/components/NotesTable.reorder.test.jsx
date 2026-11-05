@@ -1,8 +1,16 @@
 import { MemoryRouter } from "react-router-dom";
-import { act, render, screen, waitFor } from "@testing-library/react";
+import {
+  act,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+  within,
+} from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
+import { chooseFilterField } from "../test/filterBar.js";
 
 vi.mock("../lib/api.js", () => ({
   deleteNote: vi.fn(),
@@ -99,6 +107,7 @@ function renderTable() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  window.localStorage.clear();
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
     width: 1000,
@@ -121,6 +130,37 @@ function rowFor(container, denomination) {
   return Array.from(
     container.querySelectorAll("tbody tr.table-row-link"),
   ).find((row) => row.textContent.includes(denomination));
+}
+
+function rowDenominations(container) {
+  return Array.from(
+    container.querySelectorAll("tbody tr.table-row-link"),
+  ).map((row) => row.textContent.match(/[A-E]{4}/)?.[0] ?? "");
+}
+
+async function focusRow(container, denomination) {
+  const row = rowFor(container, denomination);
+
+  expect(row).toBeTruthy();
+  await act(async () => {
+    row.focus();
+  });
+  return row;
+}
+
+// The server echoes the reordered notes back in these tests, so the rows stay
+// mounted and focus can follow the moved row.
+function echoReorderedNotes(notes) {
+  const byId = new Map(notes.map((item) => [item.id, item]));
+
+  reorderNotes.mockImplementation((ids) =>
+    Promise.resolve({
+      notes: ids.map((id, index) => ({
+        ...byId.get(id),
+        display_order: index + 1,
+      })),
+    }),
+  );
 }
 
 describe("NotesTable row reordering", () => {
@@ -325,5 +365,470 @@ describe("NotesTable row reordering", () => {
       expect(movedRow).toHaveFocus();
     });
     expect(movedRow).toHaveClass("table-row-link--active");
+  });
+
+  test("Alt+Down saves the new order and focus follows the moved row", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    const firstRow = await focusRow(container, "AAAA");
+
+    expect(firstRow).toHaveAttribute(
+      "aria-keyshortcuts",
+      "Alt+ArrowUp Alt+ArrowDown",
+    );
+
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+
+    expect(rowDenominations(container)).toEqual(["BBBB", "AAAA", "CCCC"]);
+    expect(rowFor(container, "AAAA")).toHaveFocus();
+    expect(rowFor(container, "AAAA")).toHaveClass("table-row-link--active");
+
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenCalledWith([2, 1, 3], 1);
+    });
+    expect(reorderNotes).toHaveBeenCalledTimes(1);
+    expect(rowFor(container, "AAAA")).toHaveFocus();
+  });
+
+  test("Alt+Up saves the new order and keeps the cursor on the moved row", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+
+    await screen.findByText("CCCC");
+    await focusRow(container, "CCCC");
+
+    await user.keyboard("{Alt>}{ArrowUp}{/Alt}");
+
+    expect(rowDenominations(container)).toEqual(["AAAA", "CCCC", "BBBB"]);
+    expect(rowFor(container, "CCCC")).toHaveFocus();
+
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenCalledWith([1, 3, 2], 1);
+    });
+    expect(reorderNotes).toHaveBeenCalledTimes(1);
+  });
+
+  test("a contiguous selected run moves as one across a gap in the selection", async () => {
+    const user = userEvent.setup();
+    const notes = [
+      note(1, "AAAA"),
+      note(2, "BBBB"),
+      note(3, "CCCC"),
+      note(4, "DDDD"),
+      note(5, "EEEE"),
+    ];
+    getNotes.mockResolvedValue({ notes });
+    echoReorderedNotes(notes);
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    // A gap: BBBB and DDDD are selected, so only the run holding the cursor
+    // (BBBB) moves; DDDD stays where it is.
+    await user.click(screen.getByLabelText("Select BBBB"));
+    await user.click(screen.getByLabelText("Select DDDD"));
+    await focusRow(container, "BBBB");
+
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+
+    expect(rowDenominations(container)).toEqual([
+      "AAAA",
+      "CCCC",
+      "BBBB",
+      "DDDD",
+      "EEEE",
+    ]);
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenCalledWith([1, 3, 2, 4, 5], 1);
+    });
+    expect(reorderNotes).toHaveBeenCalledTimes(1);
+  });
+
+  test("the run moves past a neighbour as one block", async () => {
+    const user = userEvent.setup();
+    const notes = [
+      note(1, "AAAA"),
+      note(2, "BBBB"),
+      note(3, "CCCC"),
+      note(4, "DDDD"),
+      note(5, "EEEE"),
+    ];
+    getNotes.mockResolvedValue({ notes });
+    echoReorderedNotes(notes);
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await user.click(screen.getByLabelText("Select BBBB"));
+    await user.click(screen.getByLabelText("Select CCCC"));
+    await focusRow(container, "CCCC");
+
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+
+    expect(rowDenominations(container)).toEqual([
+      "AAAA",
+      "DDDD",
+      "BBBB",
+      "CCCC",
+      "EEEE",
+    ]);
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenCalledWith([1, 4, 2, 3, 5], 1);
+    });
+    expect(reorderNotes).toHaveBeenCalledTimes(1);
+  });
+
+  test("a run at either edge is a no-op with no request", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await focusRow(container, "AAAA");
+    await user.keyboard("{Alt>}{ArrowUp}{/Alt}");
+
+    await focusRow(container, "CCCC");
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+
+    expect(reorderNotes).not.toHaveBeenCalled();
+    expect(rowDenominations(container)).toEqual(["AAAA", "BBBB", "CCCC"]);
+  });
+
+  test("a filtered view refuses the move and announces why", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await chooseFilterField(user, "Denomination");
+    await user.type(
+      screen.getByRole("searchbox", { name: "Filter Denomination" }),
+      "AAAA{Enter}",
+    );
+    await focusRow(container, "AAAA");
+
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+
+    expect(reorderNotes).not.toHaveBeenCalled();
+    expect(rowDenominations(container)).toEqual(["AAAA"]);
+    await waitFor(() => {
+      expect(container.querySelector(".table-announcer")).toHaveTextContent(
+        "Clear filters to reorder",
+      );
+    });
+  });
+
+  test("a non-default sort refuses the move and announces the sort hint", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await user.click(screen.getByRole("button", { name: "Company" }));
+    await focusRow(container, "AAAA");
+
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+
+    expect(reorderNotes).not.toHaveBeenCalled();
+    expect(rowDenominations(container)).toEqual(["AAAA", "BBBB", "CCCC"]);
+    await waitFor(() => {
+      expect(container.querySelector(".table-announcer")).toHaveTextContent(
+        "Sort by # ascending to reorder",
+      );
+    });
+  });
+
+  test("a failed keyboard save rolls the order back and says why", async () => {
+    const user = userEvent.setup();
+    let rejectSave;
+    reorderNotes.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectSave = reject;
+        }),
+    );
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await focusRow(container, "AAAA");
+
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+
+    // The optimistic move lands at once...
+    expect(rowDenominations(container)).toEqual(["BBBB", "AAAA", "CCCC"]);
+
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenCalledWith([2, 1, 3], 1);
+    });
+    expect(rowDenominations(container)).toEqual(["BBBB", "AAAA", "CCCC"]);
+
+    // ...and the rejection restores the order from before the move.
+    await act(async () => {
+      rejectSave(new Error("Order could not be saved"));
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Order could not be saved")).toBeInTheDocument();
+    });
+
+    expect(rowDenominations(container)).toEqual(["AAAA", "BBBB", "CCCC"]);
+    expect(rowFor(container, "AAAA")).toHaveFocus();
+  });
+
+  test("Shift+Up/Down still leaves the order alone", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+
+    await screen.findByText("BBBB");
+    await focusRow(container, "BBBB");
+
+    await user.keyboard("{Shift>}{ArrowDown}{/Shift}");
+    await user.keyboard("{Shift>}{ArrowUp}{/Shift}");
+
+    expect(reorderNotes).not.toHaveBeenCalled();
+    expect(rowDenominations(container)).toEqual(["AAAA", "BBBB", "CCCC"]);
+    expect(rowFor(container, "BBBB")).toHaveFocus();
+  });
+
+  test("the row menu hides the move items when the view cannot reorder", async () => {
+    const user = userEvent.setup();
+    renderTable();
+
+    await screen.findByText("AAAA");
+    await user.click(screen.getByRole("button", { name: "Company" }));
+    await user.click(
+      screen.getByRole("button", { name: "Actions for AAAA" }),
+    );
+
+    const menu = await screen.findByRole("menu", {
+      name: "Actions for AAAA",
+    });
+    expect(
+      within(menu).queryByRole("menuitem", { name: "Move up" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(menu).queryByRole("menuitem", { name: "Move down" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("the row menu disables the edge moves and counts a selected run", async () => {
+    const user = userEvent.setup();
+    const notes = [
+      note(1, "AAAA"),
+      note(2, "BBBB"),
+      note(3, "CCCC"),
+      note(4, "DDDD"),
+      note(5, "EEEE"),
+    ];
+    getNotes.mockResolvedValue({ notes });
+    echoReorderedNotes(notes);
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await user.click(
+      screen.getByRole("button", { name: "Actions for AAAA" }),
+    );
+
+    let menu = await screen.findByRole("menu", {
+      name: "Actions for AAAA",
+    });
+    expect(
+      within(menu).getByRole("menuitem", { name: "Move up" }),
+    ).toBeDisabled();
+    expect(
+      within(menu).getByRole("menuitem", { name: "Move down" }),
+    ).toBeEnabled();
+
+    await user.keyboard("{Escape}");
+
+    await user.click(screen.getByLabelText("Select BBBB"));
+    await user.click(screen.getByLabelText("Select CCCC"));
+    await user.click(
+      screen.getByRole("button", { name: "Actions for CCCC" }),
+    );
+
+    menu = await screen.findByRole("menu", {
+      name: "Actions for CCCC",
+    });
+    const moveDown = within(menu).getByRole("menuitem", {
+      name: "Move 2 notes down",
+    });
+
+    await user.click(moveDown);
+
+    expect(rowDenominations(container)).toEqual([
+      "AAAA",
+      "DDDD",
+      "BBBB",
+      "CCCC",
+      "EEEE",
+    ]);
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenCalledWith([1, 4, 2, 3, 5], 1);
+    });
+    expect(reorderNotes).toHaveBeenCalledTimes(1);
+  });
+
+  test("the menu on a row outside the selection moves that row alone", async () => {
+    const user = userEvent.setup();
+    const notes = [
+      note(1, "AAAA"),
+      note(2, "BBBB"),
+      note(3, "CCCC"),
+      note(4, "DDDD"),
+      note(5, "EEEE"),
+    ];
+    getNotes.mockResolvedValue({ notes });
+    echoReorderedNotes(notes);
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await user.click(screen.getByLabelText("Select BBBB"));
+    await user.click(screen.getByLabelText("Select CCCC"));
+    await user.click(
+      screen.getByRole("button", { name: "Actions for EEEE" }),
+    );
+
+    const menu = await screen.findByRole("menu", {
+      name: "Actions for EEEE",
+    });
+    // EEEE is not in the selection, so the count-free label is the contract:
+    // the menu acts on the row it was opened from, not the far-away run.
+    await user.click(within(menu).getByRole("menuitem", { name: "Move up" }));
+
+    expect(rowDenominations(container)).toEqual([
+      "AAAA",
+      "BBBB",
+      "CCCC",
+      "EEEE",
+      "DDDD",
+    ]);
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenCalledWith([1, 2, 3, 5, 4], 1);
+    });
+    expect(reorderNotes).toHaveBeenCalledTimes(1);
+  });
+
+  test("an open row menu keeps its keys instead of reordering the row", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await user.click(
+      screen.getByRole("button", { name: "Actions for AAAA" }),
+    );
+    await screen.findByRole("menu", { name: "Actions for AAAA" });
+
+    // Even with focus back on the trigger, the open panel owns the arrows.
+    const trigger = screen.getByRole("button", { name: "Actions for AAAA" });
+    await act(async () => {
+      trigger.focus();
+    });
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+
+    expect(reorderNotes).not.toHaveBeenCalled();
+    expect(rowDenominations(container)).toEqual(["AAAA", "BBBB", "CCCC"]);
+  });
+
+  test("a burst of key presses saves once after the last move", async () => {
+    const notes = [
+      note(1, "AAAA"),
+      note(2, "BBBB"),
+      note(3, "CCCC"),
+      note(4, "DDDD"),
+      note(5, "EEEE"),
+    ];
+    getNotes.mockResolvedValue({ notes });
+    echoReorderedNotes(notes);
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    const row = await focusRow(container, "AAAA");
+
+    // Fire the repeats synchronously, before the debounce window closes: one
+    // request must carry the whole burst.
+    await act(async () => {
+      fireEvent.keyDown(row, { altKey: true, key: "ArrowDown" });
+      fireEvent.keyDown(row, { altKey: true, key: "ArrowDown" });
+    });
+
+    expect(rowDenominations(container)).toEqual([
+      "BBBB",
+      "CCCC",
+      "AAAA",
+      "DDDD",
+      "EEEE",
+    ]);
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenCalledWith([2, 3, 1, 4, 5], 1);
+    });
+    expect(reorderNotes).toHaveBeenCalledTimes(1);
+  });
+
+  test("a move queued behind an in-flight save still lands", async () => {
+    const user = userEvent.setup();
+    const notes = [
+      note(1, "AAAA"),
+      note(2, "BBBB"),
+      note(3, "CCCC"),
+      note(4, "DDDD"),
+    ];
+    const byId = new Map(notes.map((item) => [item.id, item]));
+    const resolvers = [];
+    getNotes.mockResolvedValue({ notes });
+    reorderNotes.mockImplementation(
+      (ids) =>
+        new Promise((resolve) => {
+          resolvers.push(() =>
+            resolve({
+              notes: ids.map((id, index) => ({
+                ...byId.get(id),
+                display_order: index + 1,
+              })),
+            }),
+          );
+        }),
+    );
+    const { container } = renderTable();
+
+    await screen.findByText("AAAA");
+    await focusRow(container, "AAAA");
+
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenCalledWith([2, 1, 3, 4], 1);
+    });
+    // The first save is still open; this repeat queues behind it instead of
+    // being dropped by the save-in-flight gate.
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+    expect(rowDenominations(container)).toEqual([
+      "BBBB",
+      "CCCC",
+      "AAAA",
+      "DDDD",
+    ]);
+    expect(reorderNotes).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      resolvers.shift()();
+    });
+
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenCalledWith([2, 3, 1, 4], 1);
+    });
+
+    await act(async () => {
+      resolvers.shift()();
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByText("Saving manual order...")).not.toBeInTheDocument();
+    });
+    await waitFor(() => {
+      expect(rowDenominations(container)).toEqual([
+        "BBBB",
+        "CCCC",
+        "AAAA",
+        "DDDD",
+      ]);
+    });
+    expect(reorderNotes).toHaveBeenCalledTimes(2);
   });
 });

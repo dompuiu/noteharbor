@@ -24,6 +24,11 @@ const shortcutGroups = [
         keys: ["Ctrl/Cmd/Shift", "←", "→"],
         description: "Jump to the first / last column",
       },
+      {
+        keys: ["Alt", "↑", "↓"],
+        description:
+          "Move the focused row (or selected run) up/down; only in default order with no filters",
+      },
       { keys: ["Enter"], description: "Open the focused note" },
       { keys: ["Space"], description: "Select / deselect the focused note" },
       { keys: ["e"], description: "Edit the focused note (or rename the collection when no row is focused)" },

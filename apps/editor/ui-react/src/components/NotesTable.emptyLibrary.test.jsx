@@ -93,7 +93,7 @@ describe("NotesTable with no collections", () => {
     await screen.findByText(/No collections yet/);
 
     expect(
-      screen.queryByText(/Drag the handle to reorder/),
+      screen.queryByText(/Drag the handle or press Alt\+Up\/Down to reorder/),
     ).not.toBeInTheDocument();
     expect(
       screen.queryByText(/ascending to reorder/),

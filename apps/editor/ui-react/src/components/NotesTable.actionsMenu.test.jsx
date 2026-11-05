@@ -198,6 +198,8 @@ describe("Row actions menu", () => {
       "Copy details",
       "Insert note below",
       "Open source",
+      "Move up",
+      "Move down",
       "Delete",
     ]);
     expect(actionsButton("AAAA")).toHaveAttribute("aria-expanded", "true");
@@ -214,13 +216,13 @@ describe("Row actions menu", () => {
       .getAllByRole("menuitem")
       .map((item) => item.querySelector("svg.row-actions-menu-icon"));
 
-    expect(icons).toHaveLength(6);
+    expect(icons).toHaveLength(8);
     for (const icon of icons) {
       expect(icon).not.toBeNull();
       expect(icon).toHaveAttribute("aria-hidden", "true");
     }
     // Each action gets its own glyph rather than a repeated placeholder.
-    expect(new Set(icons.map((icon) => icon.innerHTML)).size).toBe(6);
+    expect(new Set(icons.map((icon) => icon.innerHTML)).size).toBe(8);
   });
 
   test("Open opens the note slideshow", async () => {

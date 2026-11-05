@@ -164,8 +164,8 @@ describe("NotesTable chrome", () => {
       screen.queryByText(/Reordering is available only in the default/),
     ).not.toBeInTheDocument();
 
-    const hint = screen.getByText(/Drag the handle to reorder/);
-    expect(hint).toHaveTextContent("Drag the handle to reorder");
+    const hint = screen.getByText(/Drag the handle or press Alt\+Up\/Down to reorder/);
+    expect(hint).toHaveTextContent("Drag the handle or press Alt+Up/Down to reorder");
 
     // The hint is a list of segments sharing one band: each instruction keeps
     // its own node so a narrow window can stack them without clipping.
@@ -212,7 +212,7 @@ describe("NotesTable chrome", () => {
     expect(shell).not.toBeNull();
     expect(shell.contains(summary)).toBe(false);
 
-    const hint = screen.getByText(/Drag the handle to reorder/);
+    const hint = screen.getByText(/Drag the handle or press Alt\+Up\/Down to reorder/);
     expect(
       summary.compareDocumentPosition(hint) & Node.DOCUMENT_POSITION_FOLLOWING,
     ).toBeTruthy();
@@ -256,7 +256,7 @@ describe("NotesTable chrome", () => {
       await screen.findByText(/Clear filters to reorder/),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText(/Drag the handle to reorder/),
+      screen.queryByText(/Drag the handle or press Alt\+Up\/Down to reorder/),
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Reorder AAAA")).not.toBeInTheDocument();
   });
@@ -331,7 +331,7 @@ describe("NotesTable chrome", () => {
       await screen.findByText(/Sort by # ascending to reorder/),
     ).toBeInTheDocument();
     expect(
-      screen.queryByText(/Drag the handle to reorder/),
+      screen.queryByText(/Drag the handle or press Alt\+Up\/Down to reorder/),
     ).not.toBeInTheDocument();
     expect(screen.queryByLabelText("Reorder AAAA")).not.toBeInTheDocument();
   });
@@ -355,6 +355,9 @@ describe("NotesTable chrome", () => {
     ).toBeGreaterThan(0);
     expect(
       within(dialog).getByText(/Pan the columns to reveal/),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText(/Move the focused row \(or selected run\)/),
     ).toBeInTheDocument();
     expect(
       within(dialog).getAllByText("Toggle this help").length,
@@ -518,7 +521,9 @@ describe("NotesTable chrome", () => {
         screen.queryByText("Saving manual order..."),
       ).not.toBeInTheDocument();
     });
-    expect(screen.getByText(/Drag the handle to reorder/)).toBeInTheDocument();
+    expect(
+      screen.getByText(/Drag the handle or press Alt\+Up\/Down to reorder/),
+    ).toBeInTheDocument();
   });
 
   test("the card holds its footprint while the notes load", async () => {

@@ -921,6 +921,19 @@ input[type="radio"] {
   border: 0;
 }
 
+/* The table's blocked-reorder announcement is for assistive tech only. */
+.table-announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* The three-way note photo size control (Small 200px / Medium 320px / Large
    480px). It sits in the showcase header's trailing cluster in both view and
    edit mode and only sets the grid's minimum card width. The options are
@@ -5113,6 +5126,18 @@ td.drag-cell {
 .row-actions-menu-item--danger:focus-visible {
   background: var(--danger-bg);
   color: var(--danger);
+}
+
+.row-actions-menu-item:disabled,
+.row-actions-menu-item:disabled:hover,
+.row-actions-menu-item:disabled:focus-visible {
+  background: transparent;
+  color: var(--text-muted);
+  cursor: default;
+}
+
+.row-actions-menu-item:disabled .row-actions-menu-icon {
+  color: var(--text-muted);
 }
 
 .row-actions-menu-separator {

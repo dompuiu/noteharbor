@@ -38,6 +38,9 @@ function noteRowLabel(note) {
 // - `reorderRail`: whether this view paints the reorder rail at all. It stays
 //   true while an order save is in flight, so the rail never blanks mid-save;
 //   `canReorder` is what gates the drop, not the paint.
+// - `reorderRun`: the contiguous selection run this row belongs to when it is
+//   selected, or just itself. It feeds the menu's Move up / Move down labels
+//   and their boundary state, the same unit the Alt+Up/Down shortcut moves.
 // - `handlers`: one object with a stable identity; every member reads live
 //   state through a ref instead of closing over it.
 //
@@ -57,6 +60,7 @@ export const NoteRow = memo(function NoteRow({
   model,
   note,
   reorderRail,
+  reorderRun,
   showGutter,
   totalColumnCount,
 }) {
@@ -332,6 +336,33 @@ export const NoteRow = memo(function NoteRow({
       });
     }
 
+    if (canReorder) {
+      // The menu moves the same contiguous run as Alt+Up/Down, so a
+      // multi-selection reads as one count instead of silently moving one row.
+      const runLength = reorderRun?.length ?? 1;
+      const moveLabel = (direction) =>
+        runLength > 1
+          ? `Move ${runLength} notes ${direction}`
+          : `Move ${direction}`;
+
+      items.push(
+        {
+          key: "move-up",
+          icon: "arrow-up",
+          label: moveLabel("up"),
+          disabled: !reorderRun?.canMoveUp,
+          onSelect: () => handlers.onReorderNote(note.id, -1),
+        },
+        {
+          key: "move-down",
+          icon: "arrow-down",
+          label: moveLabel("down"),
+          disabled: !reorderRun?.canMoveDown,
+          onSelect: () => handlers.onReorderNote(note.id, 1),
+        },
+      );
+    }
+
     items.push({
       key: "delete",
       icon: "delete",
@@ -400,6 +431,9 @@ export const NoteRow = memo(function NoteRow({
         </tr>
       ) : null}
       <tr
+        aria-keyshortcuts={
+          reorderRail ? "Alt+ArrowUp Alt+ArrowDown" : undefined
+        }
         className={rowClassName()}
         data-index={index}
         onBlur={(event) => handlers.onRowBlur(note, event)}

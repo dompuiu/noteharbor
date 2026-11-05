@@ -44,6 +44,7 @@ vi.mock("@tanstack/react-virtual", () => ({
 
 import {
   getNotes,
+  reorderNotes,
 } from "../lib/api.js";
 
 class FakeResizeObserver {
@@ -894,6 +895,42 @@ describe("Arrow modifiers and h/j/k/l aliases", () => {
     await waitFor(() => {
       expect(firstRow).toHaveFocus();
     });
+  });
+
+  test("Alt+Down reorders the focused row while Shift+Down leaves it alone", async () => {
+    const user = userEvent.setup();
+    const notes = [
+      notePayload(1, "AAAA"),
+      notePayload(2, "BBBB"),
+      notePayload(3, "CCCC"),
+    ];
+    getNotes.mockResolvedValue({ notes });
+    reorderNotes.mockImplementation((ids) =>
+      Promise.resolve({
+        notes: ids.map((id) => notes.find((item) => item.id === id)),
+      }),
+    );
+    renderTable();
+
+    const firstRow = (await screen.findByText("AAAA")).closest("tr");
+    await act(async () => {
+      firstRow.focus();
+    });
+
+    // Shift stays reserved for range selection: it must not move the row.
+    await user.keyboard("{Shift>}{ArrowDown}{/Shift}");
+    expect(firstRow).toHaveFocus();
+    expect(reorderNotes).not.toHaveBeenCalled();
+
+    await user.keyboard("{Alt>}{ArrowDown}{/Alt}");
+
+    await waitFor(() => {
+      expect(reorderNotes).toHaveBeenCalledWith([2, 1, 3], 1);
+    });
+    await waitFor(() => {
+      expect(firstRow).toHaveFocus();
+    });
+    expect(firstRow).toHaveClass("table-row-link--active");
   });
 
   test("Shift+Down in a filter field does not pull focus into the table", async () => {

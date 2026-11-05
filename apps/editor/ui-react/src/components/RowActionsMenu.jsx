@@ -122,6 +122,26 @@ const ACTION_ICONS = {
       />
     </>
   ),
+  "arrow-up": (
+    <path
+      d="M12 19V5m0 0-6 6m6-6 6 6"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    />
+  ),
+  "arrow-down": (
+    <path
+      d="M12 5v14m0 0-6-6m6 6 6-6"
+      fill="none"
+      stroke="currentColor"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      strokeWidth="2"
+    />
+  ),
   delete: (
     <>
       <path
@@ -247,6 +267,7 @@ export const RowActionsMenu = forwardRef(function RowActionsMenu(
                 <button
                   className={`row-actions-menu-item${item.danger ? " row-actions-menu-item--danger" : ""}`}
                   data-shortcut={item.shortcut}
+                  disabled={item.disabled}
                   onClick={(event) => {
                     // React portals bubble through the component tree, so
                     // the menu item's click would otherwise reach the row

@@ -175,14 +175,20 @@ describe("moving notes from the table", () => {
     const menuItems = within(menu).getAllByRole("menuitem");
     const labels = menuItems.map((item) => item.textContent);
 
-    expect(labels.slice(-2)).toEqual(["Move to…", "Delete"]);
+    expect(labels.slice(-4)).toEqual([
+      "Move to…",
+      "Move up",
+      "Move down",
+      "Delete",
+    ]);
 
     const children = Array.from(menu.children);
     const separatorIndex = children.findIndex(
       (child) => child.className === "row-actions-menu-separator",
     );
     expect(separatorIndex).toBeGreaterThan(0);
-    expect(children[separatorIndex - 1].textContent).toContain("Move to…");
+    expect(children[separatorIndex - 1].textContent).toContain("Move down");
+    expect(children[separatorIndex - 3].textContent).toContain("Move to…");
     expect(children[separatorIndex + 1].textContent).toContain("Delete");
 
     unmount();
