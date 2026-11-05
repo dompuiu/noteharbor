@@ -287,6 +287,39 @@ describe("table styles", () => {
     expect(styles).toMatch(
       /\.sort-button:hover\s*\{\s*background:\s*var\(--accent-soft\)/,
     );
+    // No orphan hover rule: the media query owns the whole hover state.
+    expect(styles).not.toMatch(
+      /\.sort-button:hover\s*\{[^}]*color:\s*var\(--text\)/,
+    );
+  });
+
+  // Keyboard focus repeats the hover affordance so the header teaches that it
+  // sorts before activation, and sits outside the hover guard because a touch
+  // screen with a physical keyboard never matches :hover.
+  test("sort buttons tint with accent-soft on keyboard focus", () => {
+    const focus = styles.match(/\.sort-button:focus-visible\s*\{([^}]*)\}/);
+    expect(focus).not.toBeNull();
+    expect(focus[1]).toMatch(/background:\s*var\(--accent-soft\)/);
+    expect(focus[1]).toMatch(/color:\s*var\(--accent-strong\)/);
+    expect(styles).toMatch(
+      /\.sort-button:focus-visible\s+\.sort-chevron\s*\{\s*opacity:\s*0\.45/,
+    );
+    expect(styles).toMatch(
+      /\.sort-button--active:focus-visible\s+\.sort-chevron\s*\{\s*opacity:\s*1/,
+    );
+    // Equal specificity, so only source order keeps a focused sorted column
+    // from dimming its own caret.
+    expect(
+      styles.indexOf(".sort-button--active:focus-visible .sort-chevron"),
+    ).toBeGreaterThan(
+      styles.indexOf(".sort-button:focus-visible .sort-chevron"),
+    );
+
+    // atRule returns the whole guard, nested rules included, so this cannot
+    // pass by matching only the guard's opening line.
+    const hoverBlock = atRule(styles, "@media (hover: hover)");
+    expect(hoverBlock).not.toBeNull();
+    expect(hoverBlock).not.toMatch(/\.sort-button:focus-visible/);
   });
 
   // The prototype's sort control sits on the label, not on the whole column

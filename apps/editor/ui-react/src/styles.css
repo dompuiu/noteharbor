@@ -2469,11 +2469,6 @@ input[type="radio"] {
   color: var(--on-dark-text);
 }
 
-.sort-button:hover {
-  color: var(--text);
-  box-shadow: none;
-}
-
 .nav-link.active {
   background: var(--accent);
   border-color: var(--accent);
@@ -3945,6 +3940,23 @@ th[aria-sort="descending"] .sort-chevron {
   .sort-button--active:hover .sort-chevron {
     opacity: 1;
   }
+}
+
+/* Keyboard focus repeats the hover affordance so the header teaches that it
+   sorts before activation. Kept outside the hover guard on purpose: a touch
+   screen with a physical keyboard never matches :hover. */
+.sort-button:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+}
+
+.sort-button:focus-visible .sort-chevron {
+  opacity: 0.45;
+}
+
+/* A focused sorted column must not dim its own caret. */
+.sort-button--active:focus-visible .sort-chevron {
+  opacity: 1;
 }
 
 .filter-input,
