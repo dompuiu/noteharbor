@@ -280,7 +280,6 @@ export function BulkTagPanel({
           <span className="bulk-tag-label">Add a tag</span>
           <TagsField
             ariaLabel="Add a tag"
-            bubbleEscape
             maxSuggestions={9}
             onChange={handleAddChange}
             placeholder="Type a tag and press Enter"

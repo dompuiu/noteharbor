@@ -402,7 +402,7 @@ describe("bulk Tag editing from the selection bar", () => {
     ).toBeInTheDocument();
   });
 
-  test("Escape closes the panel even while the suggestion list is open", async () => {
+  test("Escape dismisses the suggestion list before the panel", async () => {
     const user = userEvent.setup();
     renderTable();
     await selectRows(user, ["AAAA"]);
@@ -414,6 +414,17 @@ describe("bulk Tag editing from the selection bar", () => {
     expect(
       await screen.findByRole("listbox", { name: "Tag suggestions" }),
     ).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+
+    // The first Escape belongs to the open list: the panel and its focus stay.
+    expect(
+      screen.queryByRole("listbox", { name: "Tag suggestions" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Tags" })).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("combobox", { name: "Add a tag" }),
+    ).toHaveFocus();
 
     await user.keyboard("{Escape}");
 

@@ -69,7 +69,6 @@ export function HighlightMatch({ text, query }) {
 export const TagsField = forwardRef(function TagsField(
   {
     ariaLabel = "Tags",
-    bubbleEscape = false,
     emptyText = "",
     inputProps,
     label,
@@ -308,10 +307,10 @@ export const TagsField = forwardRef(function TagsField(
     // element, and the blur handler below closes the dropdown.
     if (event.key === "Escape") {
       if (isOpen) {
+        // Escape dismisses the list first and must not reach the surface
+        // around the field (the bulk Tag panel), or one key would close both.
         closeSuggestions();
-        if (!bubbleEscape) {
-          event.stopPropagation();
-        }
+        event.stopPropagation();
       }
     }
   }
