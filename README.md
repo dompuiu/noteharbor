@@ -589,6 +589,25 @@ Primary editor screen with:
 - collection switcher (create, rename, delete, and set default collection)
 - row-level keyboard shortcuts (`e` edit, `d` delete, `c` copy, `a` add) plus table/slideshow navigation shortcuts — press `?` for the full list
 
+### All Notes (`/catalog/all-notes`)
+
+A read-only union of every collection's notes in one table, reached from the
+first row of the sidebar's Catalog group:
+
+- one row per note across collections, naming its collection and linking the
+  catalog number into that note's own collection slideshow
+- the Table screen's filter chips, with `All fields` selected by default, plus a
+  collection picker and a `Clear filters` action
+- sortable headers, including Collection in sidebar order
+- filter, collection and sort state in the URL, so Back from a note restores the
+  same view
+- a result count that reports both the visible notes and the number of
+  collections in the library
+
+The screen is deliberately read-only: selection, bulk actions, drag reorder and
+inline editing stay on the Table screen, where a collection's order and tag
+scope make them meaningful.
+
 ### Import and Export (`/catalog/import-export`)
 
 Handles:

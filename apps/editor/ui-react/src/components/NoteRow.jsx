@@ -2,19 +2,8 @@ import { Fragment, memo, useCallback, useMemo, useState } from "react";
 import { TagsCell } from "./TagsCell.jsx";
 import { RowActionsMenu } from "./RowActionsMenu.jsx";
 import { highlightTerms } from "../lib/tableCells.jsx";
-import { parseGradeValue } from "../lib/tableColumns.js";
-
-// A row's spoken identity. The denomination is the name a collector uses, but
-// a note scraped without one is still a note: the catalog number or the id
-// keeps every control from reading "Select " or "Reorder " with nothing after
-// it.
-function noteRowLabel(note) {
-  return (
-    String(note.denomination ?? "").trim() ||
-    String(note.catalog_number ?? "").trim() ||
-    `note ${note.id}`
-  );
-}
+import { gradeTier } from "../lib/tableColumns.js";
+import { noteRowLabel } from "../lib/noteRowModel.js";
 
 // One note row. The memo boundary lives here: props are plain values plus one
 // stable `handlers` object, so moving the cursor, ticking a checkbox or
@@ -253,15 +242,7 @@ export const NoteRow = memo(function NoteRow({
         );
       }
 
-      const numericGrade = parseGradeValue(gradeValue);
-      const tier =
-        numericGrade == null
-          ? "none"
-          : numericGrade >= 65
-            ? "unc"
-            : numericGrade >= 50
-              ? "choice"
-              : "circulated";
+      const tier = gradeTier(gradeValue);
 
       return (
         <td {...cellAttributes(column)} title={gradeValue}>

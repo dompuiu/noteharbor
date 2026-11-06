@@ -42,6 +42,7 @@ const ICONS = {
     '<path d="M20 5a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2H9a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h2.5a1.5 1.5 0 0 1 1.2.6l.6.8a1.5 1.5 0 0 0 1.2.6z"/><path d="M3 8.268a2 2 0 0 0-1 1.738V19a2 2 0 0 0 2 2h11a2 2 0 0 0 1.732-1"/>',
   swap: '<path d="M7.5 4.5v13M7.5 4.5 4.6 7.6M7.5 4.5l2.9 3.1M16.5 19.5v-13M16.5 19.5l2.9-3.1M16.5 19.5l-2.9-3.1"/>',
   grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/>',
+  list: '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
   // The reorder toggle and the drag handles shown while a group is in
   // reorder mode. Three horizontal strokes read as "grab these rows".
@@ -54,6 +55,15 @@ const ICONS = {
     '<rect width="8" height="18" x="3" y="3" rx="1"/><path d="M7 3v18"/><path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z"/>',
   showcases:
     '<path d="m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16"/><path d="M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2"/><circle cx="13" cy="7" r="1" fill="currentColor"/><rect x="8" y="2" width="14" height="14" rx="2"/>',
+};
+
+const ALL_NOTES_ITEM = {
+  icon: "list",
+  key: "all-notes",
+  label: "All notes",
+  to: CATALOG_ROUTES.allNotes,
+  // A destination, not a collection mode: only its exact route highlights it.
+  matches: (pathname) => pathname === CATALOG_ROUTES.allNotes,
 };
 
 const IMPORT_EXPORT_ITEM = {
@@ -210,6 +220,7 @@ function Sidebar({ pageFocusRef }) {
       label: "Catalog",
       reorderScope: "collections",
       items: [
+        ALL_NOTES_ITEM,
         ...collectionItems,
         newCollectionItem,
         IMPORT_EXPORT_ITEM,

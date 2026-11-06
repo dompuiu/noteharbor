@@ -38,6 +38,7 @@ import {
 // and `+ New showcase` rows are buttons, not links, so they are asserted
 // separately.
 const LINKS = [
+  "All notes",
   "Default",
   "Archive",
   "Import / Export",
@@ -187,6 +188,17 @@ describe("Sidebar navigation groups", () => {
     expect(
       screen.getByRole("link", { name: "Default" }),
     ).not.toHaveAttribute("aria-current");
+  });
+
+  test("puts All notes first in Catalog and marks it current only on its route", async () => {
+    const { container } = await renderSidebar(CATALOG_ROUTES.allNotes);
+
+    const allNotes = screen.getByRole("link", { name: "All notes" });
+    expect(allNotes).toHaveAttribute("aria-current", "page");
+    expect(
+      screen.getByRole("link", { name: "Default" }),
+    ).not.toHaveAttribute("aria-current");
+    expect(collectionLabels(container)[0]).toBe("All notes");
   });
 
   test("highlights the open showcase, in view and edit mode", async () => {
@@ -433,13 +445,18 @@ describe("Sidebar keyboard cursor", () => {
     await renderSidebar(CATALOG_ROUTES.collection(1));
 
     await user.keyboard("{b}");
-    // "b" lands on the active row link; one step back is its group's toggle.
+    // "b" lands on the active row link; one step back is All notes, then the
+    // group's toggle above the collections.
     expect(document.activeElement).toHaveTextContent("Default");
+    await user.keyboard("{ArrowUp}");
+    expect(document.activeElement).toHaveTextContent("All notes");
     await user.keyboard("{ArrowUp}");
     expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "Reorder Catalog" }),
     );
 
+    await user.keyboard("{ArrowDown}");
+    expect(document.activeElement).toHaveTextContent("All notes");
     await user.keyboard("{ArrowDown}");
     expect(document.activeElement).toHaveTextContent("Default");
   });
@@ -474,8 +491,10 @@ describe("Sidebar keyboard cursor", () => {
       screen.getByRole("button", { name: "Done reordering Catalog" }),
     ).toBeInTheDocument();
 
-    // Cursor stayed on the Catalog toggle; Default follows it, then the
-    // enabled Move down (the disabled Move up is skipped).
+    // Cursor stayed on the Catalog toggle; All notes follows, then Default,
+    // then the enabled Move down (the disabled Move up is skipped).
+    await user.keyboard("{ArrowDown}");
+    expect(document.activeElement).toHaveTextContent("All notes");
     await user.keyboard("{ArrowDown}");
     expect(document.activeElement).toHaveTextContent("Default");
     await user.keyboard("{ArrowDown}");
@@ -500,6 +519,7 @@ describe("Sidebar keyboard cursor", () => {
     await user.keyboard("{b}");
     await user.keyboard("{Home}");
     await user.keyboard("{Enter}");
+    await user.keyboard("{ArrowDown}"); // All notes
     await user.keyboard("{ArrowDown}"); // Default link
     await user.keyboard("{ArrowDown}"); // Move Default down
     expect(document.activeElement).toBe(
@@ -830,6 +850,7 @@ describe("Sidebar collection rows", () => {
     expect(screen.getByRole("link", { name: "Collection" })).toBeInTheDocument();
     const { container } = { container: document.querySelector(".sidebar-nav") };
     expect(collectionLabels(container)).toEqual([
+      "All notes",
       "Default",
       "Archive",
       "Collection",
@@ -881,6 +902,14 @@ describe("Sidebar collection reordering", () => {
     expect(
       document.querySelectorAll(".sidebar-ic--grip"),
     ).toHaveLength(2);
+    // The All notes destination is not a collection: it gains no grip and is
+    // never draggable, even while the Catalog group is reordering.
+    expect(
+      screen.getByRole("link", { name: "All notes" }).closest(".sidebar-row"),
+    ).toBeNull();
+    expect(
+      screen.getByRole("link", { name: "All notes" }).getAttribute("draggable"),
+    ).toBe("false");
     expect(
       screen.getByRole("button", { name: "Move Default up" }),
     ).toBeInTheDocument();
@@ -1082,6 +1111,7 @@ describe("Sidebar collection reordering", () => {
     });
     await waitFor(() => {
       expect(collectionLabels(container)).toEqual([
+        "All notes",
         "Archive",
         "Default",
         "New collection",
@@ -1127,6 +1157,7 @@ describe("Sidebar collection reordering", () => {
     });
     await waitFor(() => {
       expect(collectionLabels(container)).toEqual([
+        "All notes",
         "Archive",
         "Default",
         "New collection",

@@ -253,6 +253,28 @@ async function getNotes(collectionId) {
   return handleResponse(response);
 }
 
+// The All notes screen's single data seam. There is no cross-collection server
+// endpoint yet, so this fans out one request per collection and flattens the
+// results in sidebar order. Each note carries the collection it came from, so
+// the screen never has to join the two lists itself. A future
+// `GET /api/notes?scope=all` replaces only this function.
+async function getAllNotes(collections) {
+  const perCollection = await Promise.all(
+    (collections ?? []).map(async (collection, index) => {
+      const payload = await getNotes(collection.id);
+
+      return (payload.notes ?? []).map((note) => ({
+        ...note,
+        collection_id: note.collection_id ?? collection.id,
+        collection_name: collection.name,
+        collection_order: index + 1
+      }));
+    })
+  );
+
+  return { notes: perCollection.flat() };
+}
+
 async function reorderNotes(ids, collectionId) {
   const response = await request(`${notesBasePath(collectionId)}/reorder`, {
     method: 'POST',
@@ -604,6 +626,7 @@ export {
   getCategories,
   getCollections,
   getHealth,
+  getAllNotes,
   getNote,
   getNotes,
   getOperationStatus,

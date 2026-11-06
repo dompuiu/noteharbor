@@ -3,7 +3,7 @@ import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../lib/api.js", () => ({
-  getNotes: vi.fn(),
+  getAllNotes: vi.fn(),
 }));
 
 const virtualWindow = vi.hoisted(() => ({ start: 0, end: 10 }));
@@ -28,7 +28,7 @@ vi.mock("@tanstack/react-virtual", () => ({
 }));
 
 import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
-import { getNotes } from "../lib/api.js";
+import { getAllNotes } from "../lib/api.js";
 
 function note(id, overrides = {}) {
   return {
@@ -58,7 +58,7 @@ beforeEach(() => {
 
 describe("ShowcaseNotePicker thumbnails and virtualization", () => {
   test("renders a thumbnail per note and a placeholder when there is no image", async () => {
-    getNotes.mockResolvedValue({
+    getAllNotes.mockResolvedValue({
       notes: [
         note(1),
         note(2, { images: [] }),
@@ -90,7 +90,7 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
 
   test("only mounts the virtual window for a large list", async () => {
     const notes = Array.from({ length: 50 }, (_, index) => note(100 + index));
-    getNotes.mockResolvedValue({ notes });
+    getAllNotes.mockResolvedValue({ notes });
 
     render(
       <ShowcaseNotePicker
@@ -115,7 +115,7 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
 
   test("selection accumulates and Add selected stays enabled in the virtual window", async () => {
     const notes = Array.from({ length: 12 }, (_, index) => note(200 + index));
-    getNotes.mockResolvedValue({ notes });
+    getAllNotes.mockResolvedValue({ notes });
     const user = userEvent.setup();
 
     render(
@@ -137,7 +137,7 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
   });
 
   test("hovering a thumbnail shows the full-size preview and hides it after", async () => {
-    getNotes.mockResolvedValue({
+    getAllNotes.mockResolvedValue({
       notes: [
         note(1, {
           images: [
@@ -203,7 +203,7 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
           },
         ],
       });
-    getNotes.mockResolvedValue({ notes: [withFull(1), withFull(2), withFull(3)] });
+    getAllNotes.mockResolvedValue({ notes: [withFull(1), withFull(2), withFull(3)] });
     const user = userEvent.setup();
 
     render(
@@ -227,7 +227,7 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
   });
 
   test("a note without images has no hover preview", async () => {
-    getNotes.mockResolvedValue({ notes: [note(2, { images: [] })] });
+    getAllNotes.mockResolvedValue({ notes: [note(2, { images: [] })] });
     const user = userEvent.setup();
 
     render(
@@ -249,7 +249,7 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
   });
 
   test("Escape dismisses the picker", async () => {
-    getNotes.mockResolvedValue({ notes: [note(1)] });
+    getAllNotes.mockResolvedValue({ notes: [note(1)] });
     const onClose = vi.fn();
     const user = userEvent.setup();
 
@@ -269,7 +269,7 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
   });
 
   test("clicking the backdrop dismisses the picker but clicking inside does not", async () => {
-    getNotes.mockResolvedValue({ notes: [note(1)] });
+    getAllNotes.mockResolvedValue({ notes: [note(1)] });
     const onClose = vi.fn();
     const user = userEvent.setup();
 

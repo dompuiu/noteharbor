@@ -74,6 +74,9 @@ pub fn collapse_last_visited_pathname(pathname: &str) -> Option<String> {
     if pathname == "/catalog/import-export" {
         return Some(pathname.to_owned());
     }
+    if pathname == "/catalog/all-notes" {
+        return Some(pathname.to_owned());
+    }
     if pathname == "/catalog/banknotes" {
         return Some("/catalog/collections".to_owned());
     }
@@ -241,6 +244,10 @@ mod tests {
         assert_eq!(
             normalize_last_visited_route(Some("/catalog/import-export")),
             Some("/catalog/import-export".to_owned())
+        );
+        assert_eq!(
+            normalize_last_visited_route(Some("/catalog/all-notes")),
+            Some("/catalog/all-notes".to_owned())
         );
         // The retired address lands on the collections home.
         assert_eq!(

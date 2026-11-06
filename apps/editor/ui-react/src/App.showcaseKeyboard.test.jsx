@@ -21,7 +21,7 @@ vi.mock("./lib/api.js", () => ({
   getCategories: vi.fn(),
   getCollections: vi.fn(),
   getHealth: vi.fn(),
-  getNotes: vi.fn(),
+  getAllNotes: vi.fn(),
   getShowcases: vi.fn(),
   getShowcaseTree: vi.fn(),
   renameCategory: vi.fn(),
@@ -53,7 +53,7 @@ import {
   getCategories,
   getCollections,
   getHealth,
-  getNotes,
+  getAllNotes,
   getShowcases,
   getShowcaseTree,
   reorderNodes,
@@ -197,7 +197,7 @@ beforeEach(() => {
     showcases: [{ id: 1, name: "My showcase" }],
   });
   getCategories.mockResolvedValue({ categories: [] });
-  getNotes.mockResolvedValue({ notes: [] });
+  getAllNotes.mockResolvedValue({ notes: [] });
   getShowcaseTree.mockResolvedValue({ showcase_id: 1, nodes: summerTree() });
   deleteNode.mockResolvedValue({ success: true });
   reorderNodes.mockResolvedValue({ nodes: [] });
@@ -683,7 +683,7 @@ describe("guards", () => {
 
 describe("the note picker", () => {
   async function openPickerOnSub() {
-    getNotes.mockResolvedValue({ notes: [NOTE_WITH_BACK] });
+    getAllNotes.mockResolvedValue({ notes: [NOTE_WITH_BACK] });
     renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
 
     // Let the name draft converge before blurring it: the field is

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
-import { getNotes } from "../lib/api.js";
+import { getAllNotes } from "../lib/api.js";
 import { matchesCatalogFamily } from "../lib/catalogFamily.js";
 import {
   firstAvailableNoteImage,
@@ -14,11 +14,10 @@ import {
 // notes from several collections into one batch. "Add selected (N)" adds and
 // keeps the popup open; "Add & close" adds and closes it.
 //
-// Data loading: there is no global notes endpoint, so the picker fans out to
-// the per-collection `GET /api/collections/:id/notes` for every collection the
-// collections provider already loaded, and tags each note with its collection
-// name so the cross-collection list stays legible. The fan-out is documented in
-// the ticket; it is the cleanest read that needs no new endpoint.
+// Data loading: there is no global notes endpoint, so `getAllNotes` is the one
+// seam that fans out to the per-collection `GET /api/collections/:id/notes`
+// for every collection the collections provider already loaded, and tags each
+// note with its collection name so the cross-collection list stays legible.
 //
 // Virtualization: the list uses `@tanstack/react-virtual` (already used by the
 // Notes table) with a fixed row estimate, so collections with hundreds of notes
@@ -149,19 +148,10 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
     setLoading(true);
     setLoadError("");
 
-    Promise.all(
-      collections.map(async (collection) => {
-        const payload = await getNotes(collection.id);
-        return (payload.notes ?? []).map((note) => ({
-          ...note,
-          collection_id: collection.id,
-          collection_name: collection.name,
-        }));
-      }),
-    )
-      .then((groups) => {
+    getAllNotes(collections)
+      .then((payload) => {
         if (active) {
-          setNotes(groups.flat());
+          setNotes(payload.notes);
         }
       })
       .catch((error) => {

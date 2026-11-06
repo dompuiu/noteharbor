@@ -7,6 +7,7 @@ import {
   useLocation,
   useParams,
 } from "react-router-dom";
+import { AllNotesScreen } from "./components/AllNotesScreen.jsx";
 import { CollectionScreen } from "./components/CollectionScreen.jsx";
 import { ConnectionError } from "./components/ConnectionError.jsx";
 import { ImportScreen } from "./components/ImportScreen.jsx";
@@ -238,6 +239,10 @@ function ShellContent() {
             />
           ) : (
             <Routes>
+              <Route
+                element={<AllNotesScreen />}
+                path={CATALOG_ROUTES.allNotes}
+              />
               <Route
                 element={<CollectionScreen key="collection-view" mode="view" />}
                 path={CATALOG_ROUTES.collection(":id")}

@@ -135,6 +135,22 @@ export function parseGradeValue(value) {
   return Number.isFinite(numeric) ? numeric : null;
 }
 
+// The three bands the catalogue trade uses: uncirculated (65+), choice (50–64),
+// and circulated below that. A readable grade with no match reads as `none`.
+export function gradeTier(value) {
+  const numeric = parseGradeValue(value);
+
+  if (numeric == null) {
+    return "none";
+  }
+
+  if (numeric >= 65) {
+    return "unc";
+  }
+
+  return numeric >= 50 ? "choice" : "circulated";
+}
+
 // For data columns `width` is a preferred share of the viewport rather than a
 // pixel width: the shares are close to the space each field needs, so the
 // table stretches evenly instead of one short-code column swallowing the

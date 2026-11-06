@@ -36,6 +36,7 @@ import {
 export const TableFilterBar = forwardRef(function TableFilterBar(
   {
     conditions,
+    defaultField = defaultFilterField,
     hasRows,
     onConditionsChange,
     onFirstRow,
@@ -44,7 +45,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
   },
   ref,
 ) {
-  const [filterField, setFilterField] = useState(defaultFilterField);
+  const [filterField, setFilterField] = useState(defaultField);
   const [filterDraft, setFilterDraft] = useState("");
   const [rangeRefused, setRangeRefused] = useState(false);
   const [tagSuggestionOpen, setTagSuggestionOpen] = useState(false);
@@ -83,7 +84,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
       setRangeRefused(false);
       setEditingConditionId(null);
       setConditionDraft("");
-      setFilterField(defaultFilterField);
+      setFilterField(defaultField);
       setTagSuggestionOpen(false);
       setTagSuggestionIndex(-1);
     },
@@ -154,12 +155,12 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
   useEffect(() => {
     if (
       filterField !== "all" &&
-      filterField !== defaultFilterField &&
+      filterField !== defaultField &&
       !visibleFieldKeys.split(",").includes(filterField)
     ) {
-      setFilterField(defaultFilterField);
+      setFilterField(defaultField);
     }
-  }, [filterField, visibleFieldKeys]);
+  }, [defaultField, filterField, visibleFieldKeys]);
 
   // Commit is explicit: Enter turns the field text into chips through the
   // latched mode. Replace (the default) swaps the committed field's chips and

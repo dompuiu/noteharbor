@@ -17,7 +17,7 @@ vi.mock("./lib/api.js", () => ({
   getCategories: vi.fn(),
   getCollections: vi.fn(),
   getHealth: vi.fn(),
-  getNotes: vi.fn(),
+  getAllNotes: vi.fn(),
   getShowcases: vi.fn(),
   getShowcaseTree: vi.fn(),
   renameCategory: vi.fn(),
@@ -51,7 +51,7 @@ import {
   getCategories,
   getCollections,
   getHealth,
-  getNotes,
+  getAllNotes,
   getShowcases,
   getShowcaseTree,
 } from "./lib/api.js";
@@ -138,11 +138,19 @@ beforeEach(() => {
     showcase_id: 1,
     nodes: [categoryNode()],
   });
-  getNotes.mockImplementation(async (collectionId) =>
-    collectionId === 1
-      ? { notes: [NOTE_A, NOTE_B, NOTE_C] }
-      : { notes: [NOTE_D] },
-  );
+  getAllNotes.mockImplementation(async (collections) => ({
+    notes: collections.flatMap((collection) =>
+      (collection.id === 1
+        ? [NOTE_A, NOTE_B, NOTE_C]
+        : [NOTE_D]
+      ).map((entry) => ({
+        ...entry,
+        collection_id: collection.id,
+        collection_name: collection.name,
+        collection_order: collection.id,
+      })),
+    ),
+  }));
   createShowcaseNode.mockResolvedValue({ nodes: [] });
 });
 

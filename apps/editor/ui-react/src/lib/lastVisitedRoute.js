@@ -27,6 +27,9 @@ function collapseLastVisitedPathname(pathname) {
   if (pathname === "/catalog/import-export") {
     return "/catalog/import-export";
   }
+  if (pathname === "/catalog/all-notes") {
+    return "/catalog/all-notes";
+  }
   if (pathname === "/catalog/banknotes") {
     return "/catalog/collections";
   }

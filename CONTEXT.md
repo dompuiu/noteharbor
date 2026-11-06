@@ -28,6 +28,10 @@ The Editor's main screen: the collection's notes as a table, with search, filter
 _Sidebar label_: Banknotes
 _Avoid_: Notes table, list view
 
+**All notes screen**:
+The Editor's read-only union of every collection's notes in one table, with its own collection picker, filters, sorting, and links into each note's own collection slideshow. Its sidebar label is **All notes**; it is a destination beside the collections, not a mode of one.
+_Avoid_: Notes table (that is the Table screen), library
+
 **Import screen**:
 The Editor screen for importing and exporting collection data and managing collections.
 _Avoid_: Data screen (when meaning import only)

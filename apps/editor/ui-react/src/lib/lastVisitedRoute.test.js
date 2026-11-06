@@ -19,6 +19,9 @@ describe("normalizeLastVisitedRoute", () => {
     expect(normalizeLastVisitedRoute("/catalog/import-export")).toBe(
       "/catalog/import-export",
     );
+    expect(normalizeLastVisitedRoute("/catalog/all-notes")).toBe(
+      "/catalog/all-notes",
+    );
     expect(normalizeLastVisitedRoute("/catalog/banknotes")).toBe(
       "/catalog/collections",
     );

@@ -1,7 +1,10 @@
 export const CATALOG_ROUTES = {
+  allNotes: "/catalog/all-notes",
   collections: "/catalog/collections",
   collection: (id) => `/catalog/collections/${id}/view`,
   collectionEdit: (id) => `/catalog/collections/${id}/edit`,
+  noteSlideshow: (collectionId, noteId) =>
+    `/catalog/collections/${collectionId}/view#slideshow/${noteId}`,
   importExport: "/catalog/import-export",
   noteEdit: (id) => `/catalog/notes/${id}/edit`,
 };
