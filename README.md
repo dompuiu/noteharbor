@@ -384,6 +384,18 @@ Body: {
 -> { notes: [NoteWithTags, ...] }
 // One transaction: a bad id or position moves nothing; each note once.
 // Scoped route only; `note_ids` keeps the caller's order.
+
+POST /api/collections/:collectionId/notes/tags
+Body: {
+  note_ids: [number, ...],
+  add: ["tag1", ...],
+  remove: ["tag2", ...]
+}
+-> { notes: [NoteWithTags, ...] }
+// One transaction, all-or-nothing: unknown/foreign ids are 404, duplicate
+// ids, the same tag in both lists, or two empty lists are 400. `add` finds
+// or creates in the collection's scope; `remove` drops only the link.
+// Scoped route only; the answer follows `note_ids` order.
 ```
 
 `NoteWithTags` includes the banknote fields plus `tags: [{ id, name }]`, parsed `images`, and parsed `scraped_data`.

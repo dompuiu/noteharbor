@@ -9,20 +9,15 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
+import { normalizeTag, splitTagInput, tagKey } from "../lib/tags.js";
 import { ChipRemoveButton } from "./ChipRemoveButton.jsx";
 
-const normalizeTag = (value) =>
-  String(value ?? "")
-    .replace(/\s+/g, " ")
-    .trim();
-const tagKey = (value) => normalizeTag(value).toLowerCase();
-const splitTagInput = (raw) =>
-  String(raw ?? "")
-    .split(",")
-    .map(normalizeTag)
-    .filter(Boolean);
-
-export function rankTagSuggestions(vocabulary, selectedKeys, query) {
+export function rankTagSuggestions(
+  vocabulary,
+  selectedKeys,
+  query,
+  limit = 16,
+) {
   const normalizedQuery = normalizeTag(query).toLowerCase();
   const pool = vocabulary
     .map(normalizeTag)
@@ -32,7 +27,7 @@ export function rankTagSuggestions(vocabulary, selectedKeys, query) {
     ? pool.filter((tag) => tag.toLowerCase().includes(normalizedQuery))
     : pool;
   if (!normalizedQuery) {
-    return matching.slice(0, 16);
+    return matching.slice(0, limit);
   }
   const starts = [];
   const contains = [];
@@ -43,7 +38,7 @@ export function rankTagSuggestions(vocabulary, selectedKeys, query) {
   }
   starts.sort();
   contains.sort();
-  return [...starts, ...contains].slice(0, 16);
+  return [...starts, ...contains].slice(0, limit);
 }
 
 export function HighlightMatch({ text, query }) {
@@ -73,10 +68,13 @@ export function HighlightMatch({ text, query }) {
 export const TagsField = forwardRef(function TagsField(
   {
     ariaLabel = "Tags",
+    bubbleEscape = false,
     emptyText = "",
+    initiallyOpen = false,
     inputProps,
     label,
     maxLength,
+    maxSuggestions = 16,
     maxTags,
     onArrowDown,
     onChange,
@@ -84,6 +82,9 @@ export const TagsField = forwardRef(function TagsField(
     onHeightChange,
     onSearch,
     placeholder = "Type a tag and press Enter",
+    showClearAll = true,
+    suggestionCounts = null,
+    suggestionTotal = null,
     value = [],
     vocabulary = [],
   },
@@ -128,8 +129,8 @@ export const TagsField = forwardRef(function TagsField(
 
   const selectedKeys = useMemo(() => new Set(value.map(tagKey)), [value]);
   const filtered = useMemo(
-    () => rankTagSuggestions(vocabulary, selectedKeys, input),
-    [vocabulary, selectedKeys, input],
+    () => rankTagSuggestions(vocabulary, selectedKeys, input, maxSuggestions),
+    [vocabulary, selectedKeys, input, maxSuggestions],
   );
   const trimmed = normalizeTag(input);
   const vocabularyKeys = useMemo(
@@ -145,6 +146,15 @@ export const TagsField = forwardRef(function TagsField(
   useEffect(() => {
     setHighlighted(-1);
   }, [input]);
+
+  // The bulk Tag panel wants its vocabulary visible the moment it opens; the
+  // Note editor and filter rail keep the field closed until the collector
+  // types or presses ArrowDown.
+  useEffect(() => {
+    if (initiallyOpen) {
+      setIsOpen(true);
+    }
+  }, [initiallyOpen]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -297,7 +307,9 @@ export const TagsField = forwardRef(function TagsField(
       if (isOpen) {
         setIsOpen(false);
         setHighlighted(-1);
-        event.stopPropagation();
+        if (!bubbleEscape) {
+          event.stopPropagation();
+        }
       }
     }
   }
@@ -350,7 +362,7 @@ export const TagsField = forwardRef(function TagsField(
               {emptyText}
             </span>
           )}
-          {value.length ? (
+          {value.length && showClearAll ? (
             <button
               aria-label="Clear all tags"
               className="table-filter-clear-all"
@@ -409,6 +421,7 @@ export const TagsField = forwardRef(function TagsField(
             >
               {filtered.map((tag) => {
                 const index = navList.indexOf(tag);
+                const count = suggestionCounts?.[tagKey(tag)] ?? 0;
                 return (
                   <button
                     aria-selected={index === highlighted}
@@ -425,6 +438,11 @@ export const TagsField = forwardRef(function TagsField(
                     type="button"
                   >
                     <HighlightMatch text={tag} query={trimmed} />
+                    {count > 0 && suggestionTotal ? (
+                      <span className="tags-filter-option-count">
+                        {count}/{suggestionTotal}
+                      </span>
+                    ) : null}
                   </button>
                 );
               })}

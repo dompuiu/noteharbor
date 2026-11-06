@@ -317,6 +317,20 @@ async function moveNotes(ids, sourceCollectionId, targetCollectionId, position) 
   return handleResponse(response);
 }
 
+async function updateNotesTags(collectionId, noteIds, add, remove) {
+  const response = await request(`/api/collections/${collectionId}/notes/tags`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      note_ids: noteIds,
+      add,
+      remove
+    })
+  });
+
+  return handleResponse(response);
+}
+
 async function importArchive(file, onProgress, mode = 'replace') {
   if (!isFileValue(file)) {
     throw new Error('Choose a .zip archive before importing.');
@@ -609,5 +623,6 @@ export {
   scrapePreview,
   scrapeTimeoutMessage,
   updateNode,
-  updateNote
+  updateNote,
+  updateNotesTags
 };

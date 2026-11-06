@@ -14,7 +14,9 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   deleteNote,
   getNotes,
+  getTags,
   reorderNotes as saveNotesOrder,
+  updateNotesTags,
 } from "../lib/api.js";
 import {
   copyTextToClipboard,
@@ -73,6 +75,7 @@ import { makeCondition, parseFilterInput } from "../lib/tableFilters.js";
 import { ColumnPicker } from "./ColumnPicker.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
+import { BulkTagPanel } from "./BulkTagPanel.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { NoCollectionsPrompt } from "./NoCollectionsPrompt.jsx";
 import { RowActionsMenu } from "./RowActionsMenu.jsx";
@@ -1123,6 +1126,59 @@ function NotesTable({
   // notes as an ordered list, because a bulk move keeps the order the
   // collector sees in the table.
   const [moveRequest, setMoveRequest] = useState(null);
+  // The bulk Tag panel. The Table owns the open state, the vocabulary fetch and
+  // the write; the panel only stages an add/remove set against the selection.
+  const [tagsOpen, setTagsOpen] = useState(false);
+  const [tagVocabulary, setTagVocabulary] = useState([]);
+  const [tagVocabularyLoading, setTagVocabularyLoading] = useState(false);
+  const [tagVocabularyError, setTagVocabularyError] = useState("");
+  const [tagsSaving, setTagsSaving] = useState(false);
+  const [tagsError, setTagsError] = useState("");
+  const bulkTagsButtonRef = useRef(null);
+
+  // A staged Tag change belongs to the selection it was built against: any
+  // row checkbox or Select all change closes the panel and discards it.
+  useEffect(() => {
+    setTagsOpen(false);
+    setTagsError("");
+  }, [selectedIds]);
+
+  useEffect(() => {
+    if (!tagsOpen || !Number.isInteger(collectionId)) {
+      return undefined;
+    }
+
+    let active = true;
+    setTagVocabularyLoading(true);
+    setTagVocabularyError("");
+
+    getTags(collectionId)
+      .then((payload) => {
+        if (active) {
+          setTagVocabulary(
+            (payload.tags ?? []).map((tag) => tag.name).filter(Boolean),
+          );
+        }
+      })
+      .catch((fetchError) => {
+        if (active) {
+          // The panel merges the selection's own Tags in, so a failed fetch
+          // degrades the suggestions instead of blocking the edit.
+          setTagVocabulary([]);
+          setTagVocabularyError(fetchError.message);
+        }
+      })
+      .finally(() => {
+        if (active) {
+          setTagVocabularyLoading(false);
+        }
+      });
+
+    return () => {
+      active = false;
+    };
+  }, [collectionId, tagsOpen]);
+
   // A hand-off from another table (a move or create that redirected here):
   // the notes to reveal, in the order the move saw them, once this table's
   // own list has landed. The first id is the one that takes focus.
@@ -2086,6 +2142,13 @@ function NotesTable({
         : `Sort by ${getTableColumn(defaultSortKey)?.label ?? "#"} ascending to reorder`;
 
   const selectedIdSet = useMemo(() => new Set(selectedIds), [selectedIds]);
+  // The bulk Tag panel counts and writes against the whole selection, not only
+  // the rows a filter or sort currently shows: a selection made before
+  // filtering must still be honoured.
+  const selectedNotes = useMemo(
+    () => notes.filter((note) => selectedIdSet.has(note.id)),
+    [notes, selectedIdSet],
+  );
   // Undo belongs to the manual-order view and to the list the reorder
   // committed. A filter, another sort, a delete, move, create or refetch
   // changes either, so the offer disappears rather than saving an order the
@@ -4251,6 +4314,84 @@ function NotesTable({
     openMoveDialog([noteId]);
   }
 
+  function openTagsPanel() {
+    setTagVocabulary([]);
+    setTagVocabularyError("");
+    setTagsError("");
+    setTagsOpen(true);
+  }
+
+  function closeTagsPanel() {
+    setTagsOpen(false);
+    setTagsError("");
+    requestAnimationFrame(() => bulkTagsButtonRef.current?.focus());
+  }
+
+  function toggleTagsPanel() {
+    if (tagsOpen) {
+      closeTagsPanel();
+      return;
+    }
+
+    openTagsPanel();
+  }
+
+  async function applyTags({ add, remove }) {
+    if (tagsSaving || (!add.length && !remove.length)) {
+      return;
+    }
+
+    const noteIds = selectedNotes.map((note) => note.id);
+    setTagsError("");
+    setTagsSaving(true);
+
+    try {
+      await updateNotesTags(collectionId, noteIds, add, remove);
+    } catch (actionError) {
+      // Keep the panel and its staged lists so the collector can retry without
+      // rebuilding the change.
+      setTagsError(actionError.message);
+      setTagsSaving(false);
+      return;
+    }
+
+    try {
+      // Repaint from the server rather than patching the rows locally: the
+      // request may have created Tags this table has never seen.
+      await loadNotes();
+    } catch (loadFailure) {
+      // The write landed; a failed repaint must not read as a failed write.
+      setActionError(loadFailure.message);
+    }
+
+    setTagsOpen(false);
+    setTagsSaving(false);
+    moveToastRef.current?.show(
+      `Tags updated on ${noteIds.length} note${noteIds.length === 1 ? "" : "s"}`,
+    );
+    requestAnimationFrame(() => bulkTagsButtonRef.current?.focus());
+  }
+
+  async function handleClearAllTags(tagNames) {
+    if (tagsSaving || !tagNames.length) {
+      return;
+    }
+
+    // The dialog is modal but the selection that opened it is not frozen:
+    // abort if it changed underneath, rather than wiping Tags from rows the
+    // collector no longer has selected.
+    const expectedIds = selectedNotes.map((note) => note.id).join(",");
+    const confirmed = await requestConfirmation({
+      title: `Remove all tags from ${selectedNotes.length} note${selectedNotes.length === 1 ? "" : "s"}?`,
+      body: "Every selected note loses every tag.",
+      confirmLabel: "Remove all tags",
+    });
+
+    if (confirmed && selectedIdsRef.current.join(",") === expectedIds) {
+      await applyTags({ add: [], remove: tagNames });
+    }
+  }
+
   // A move that stays on this table: the rows are gone, so the selection goes
   // with them, and the toast names the destination. A same-collection no-op
   // passes no ids, so nothing leaves the table.
@@ -5701,6 +5842,21 @@ function NotesTable({
           />
         ) : null}
 
+        {tagsOpen && selectedNotes.length ? (
+          <BulkTagPanel
+            anchorRef={bulkTagsButtonRef}
+            error={tagsError}
+            notes={selectedNotes}
+            onApply={applyTags}
+            onClearAll={handleClearAllTags}
+            onClose={closeTagsPanel}
+            saving={tagsSaving}
+            vocabulary={tagVocabulary}
+            vocabularyError={tagVocabularyError}
+            vocabularyLoading={tagVocabularyLoading}
+          />
+        ) : null}
+
         {loadError ? (
           // A failed load replaces the table with a card the height of the
           // table it stands in for: the screen keeps its shape, the failure
@@ -6041,6 +6197,7 @@ function NotesTable({
                   onMove={openMoveForSelection}
                   onMoveSelectionDown={() => handleSelectionReorder(1)}
                   onMoveSelectionUp={() => handleSelectionReorder(-1)}
+                  onTags={toggleTagsPanel}
                   onLeaveBackward={() => {
                     selectionTabArmedRef.current = false;
                     focusRowActionsButtonByNoteId(bulkBarExitNoteId());
@@ -6052,6 +6209,9 @@ function NotesTable({
                   selectedCount={selectedIds.length}
                   selectionContiguous={selectionReorderRun != null}
                   saving={reorderLoading}
+                  tagsButtonRef={bulkTagsButtonRef}
+                  tagsOpen={tagsOpen}
+                  tagsSaving={tagsSaving}
                 />
               ) : null}
             </div>

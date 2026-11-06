@@ -716,6 +716,242 @@ async fn bulk_move_reattaches_tags_and_keeps_them_per_note() {
     assert_eq!(names, vec!["Rare", "Silver"]);
 }
 
+// --- bulk tag editing -------------------------------------------------------
+
+async fn note_tag_names(app: Router, collection_id: i64, note_id: i64) -> Vec<String> {
+    let (_, body) = call(
+        app,
+        "GET",
+        &format!("/api/collections/{collection_id}/notes/{note_id}"),
+        None,
+    )
+    .await;
+    let mut names: Vec<String> = body["note"]["tags"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|tag| tag["name"].as_str().unwrap().to_owned())
+        .collect();
+    names.sort();
+    names
+}
+
+#[tokio::test]
+async fn bulk_tags_add_and_remove_keep_each_notes_scope() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let collection = create_collection(app.clone(), "Bulk Tags Edit").await;
+    let id = collection["id"].as_i64().unwrap();
+    let first = create_note(app.clone(), id, json!({ "tags": ["Hoard", "Silver"] })).await;
+    let second = create_note(app.clone(), id, json!({ "tags": ["Hoard"] })).await;
+    let third = create_note(app.clone(), id, json!({ "tags": ["For sale", "Hoard"] })).await;
+    let (first_id, second_id, third_id) = (
+        first["id"].as_i64().unwrap(),
+        second["id"].as_i64().unwrap(),
+        third["id"].as_i64().unwrap(),
+    );
+
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/collections/{id}/notes/tags"),
+        Some(json!({
+            "note_ids": [second_id, first_id, third_id],
+            "add": [" Hoard ", "Rare   Paper"],
+            "remove": ["for sale"],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+
+    // The response follows note_ids, not the collection's own order, and each
+    // note carries its Tags.
+    let returned = body["notes"].as_array().unwrap();
+    let returned_ids: Vec<i64> = returned
+        .iter()
+        .map(|note| note["id"].as_i64().unwrap())
+        .collect();
+    assert_eq!(returned_ids, vec![second_id, first_id, third_id]);
+    let returned_names: Vec<String> = returned[0]["tags"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|tag| tag["name"].as_str().unwrap().to_owned())
+        .collect();
+    assert!(returned_names.contains(&"Hoard".to_owned()));
+    assert!(returned_names.contains(&"Rare Paper".to_owned()));
+
+    assert_eq!(
+        note_tag_names(app.clone(), id, first_id).await,
+        vec!["Hoard", "Rare Paper", "Silver"],
+    );
+    // Adding a Tag a note already carries is idempotent.
+    assert_eq!(
+        note_tag_names(app.clone(), id, second_id).await,
+        vec!["Hoard", "Rare Paper"],
+    );
+    // Removal drops only the link, so the rest of the note's Tags survive.
+    assert_eq!(
+        note_tag_names(app, id, third_id).await,
+        vec!["Hoard", "Rare Paper"],
+    );
+}
+
+#[tokio::test]
+async fn bulk_tags_remove_leaves_the_tag_on_unselected_notes() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let collection = create_collection(app.clone(), "Bulk Tags Selective Remove").await;
+    let id = collection["id"].as_i64().unwrap();
+    let first = create_note(app.clone(), id, json!({ "tags": ["Hoard"] })).await;
+    let second = create_note(app.clone(), id, json!({ "tags": ["Hoard"] })).await;
+    let third = create_note(app.clone(), id, json!({ "tags": ["Hoard"] })).await;
+    let (first_id, second_id, third_id) = (
+        first["id"].as_i64().unwrap(),
+        second["id"].as_i64().unwrap(),
+        third["id"].as_i64().unwrap(),
+    );
+
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/collections/{id}/notes/tags"),
+        Some(json!({
+            "note_ids": [second_id],
+            "add": [],
+            "remove": ["Hoard"],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+
+    assert!(note_tag_names(app.clone(), id, second_id).await.is_empty());
+    assert_eq!(
+        note_tag_names(app.clone(), id, first_id).await,
+        vec!["Hoard"],
+    );
+    assert_eq!(note_tag_names(app, id, third_id).await, vec!["Hoard"]);
+}
+
+#[tokio::test]
+async fn bulk_tags_find_or_create_stays_inside_the_collection() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let first_collection = create_collection(app.clone(), "Bulk Tags Scope One").await;
+    let second_collection = create_collection(app.clone(), "Bulk Tags Scope Two").await;
+    let (first_id, second_id) = (
+        first_collection["id"].as_i64().unwrap(),
+        second_collection["id"].as_i64().unwrap(),
+    );
+    let first_note = create_note(app.clone(), first_id, json!({ "tags": ["Shared"] })).await;
+    let second_note = create_note(app.clone(), second_id, json!({})).await;
+
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &format!("/api/collections/{second_id}/notes/tags"),
+        Some(json!({
+            "note_ids": [second_note["id"]],
+            "add": ["Shared"],
+            "remove": [],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+
+    let (_, first_tags) =
+        call(app.clone(), "GET", &format!("/api/collections/{first_id}/tags"), None).await;
+    let (_, second_tags) =
+        call(app.clone(), "GET", &format!("/api/collections/{second_id}/tags"), None).await;
+    assert_eq!(first_tags["tags"][0]["name"], json!("Shared"));
+    assert_eq!(second_tags["tags"][0]["name"], json!("Shared"));
+    assert_ne!(first_tags["tags"][0]["id"], second_tags["tags"][0]["id"]);
+    assert_eq!(
+        note_tag_names(app, second_id, second_note["id"].as_i64().unwrap()).await,
+        vec!["Shared"],
+    );
+}
+
+#[tokio::test]
+async fn bulk_tags_rejects_the_whole_request_and_writes_nothing() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let collection = create_collection(app.clone(), "Bulk Tags Reject").await;
+    let other = create_collection(app.clone(), "Bulk Tags Reject Other").await;
+    let (id, other_id) = (
+        collection["id"].as_i64().unwrap(),
+        other["id"].as_i64().unwrap(),
+    );
+    let first = create_note(app.clone(), id, json!({ "tags": ["Hoard"] })).await;
+    let second = create_note(app.clone(), id, json!({})).await;
+    let foreign = create_note(app.clone(), other_id, json!({})).await;
+    let (first_id, second_id, foreign_id) = (
+        first["id"].as_i64().unwrap(),
+        second["id"].as_i64().unwrap(),
+        foreign["id"].as_i64().unwrap(),
+    );
+    let path = format!("/api/collections/{id}/notes/tags");
+
+    for note_ids in [
+        json!([first_id, 999999]),
+        json!([first_id, foreign_id]),
+    ] {
+        let (status, body) = call(
+            app.clone(),
+            "POST",
+            &path,
+            Some(json!({ "note_ids": note_ids, "add": ["Rare"], "remove": [] })),
+        )
+        .await;
+        assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+        assert_eq!(body, json!({ "error": "Note not found." }));
+    }
+
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &path,
+        Some(json!({
+            "note_ids": [first_id, first_id],
+            "add": ["Rare"],
+            "remove": [],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &path,
+        Some(json!({
+            "note_ids": [first_id],
+            "add": ["Hoard"],
+            "remove": ["  hoard  "],
+        })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+
+    let (status, body) = call(
+        app.clone(),
+        "POST",
+        &path,
+        Some(json!({ "note_ids": [first_id], "add": [], "remove": [] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+
+    // The rejected requests never created the new Tag or touched the notes.
+    assert_eq!(
+        note_tag_names(app.clone(), id, first_id).await,
+        vec!["Hoard"],
+    );
+    assert!(note_tag_names(app.clone(), id, second_id).await.is_empty());
+    let (_, tags) = call(app, "GET", &format!("/api/collections/{id}/tags"), None).await;
+    assert_eq!(tags, json!({ "tags": [{ "id": tags["tags"][0]["id"], "name": "Hoard" }] }));
+}
+
 // --- bare mounts ------------------------------------------------------------
 
 #[tokio::test]

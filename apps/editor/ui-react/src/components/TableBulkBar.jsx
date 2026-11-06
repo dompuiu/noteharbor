@@ -16,9 +16,13 @@ export function TableBulkBar({
   onMove,
   onMoveSelectionDown,
   onMoveSelectionUp,
+  onTags,
   selectedCount,
   selectionContiguous = false,
   saving = false,
+  tagsButtonRef,
+  tagsOpen = false,
+  tagsSaving = false,
 }) {
   const [working, setWorking] = useState(false);
   const workingRef = useRef(false);
@@ -193,6 +197,18 @@ export function TableBulkBar({
           Move to…
         </button>
       ) : null}
+      <button
+        aria-controls={tagsOpen ? "bulk-tag-panel" : undefined}
+        aria-expanded={tagsOpen}
+        aria-haspopup="dialog"
+        className="table-bulk-bar-tags"
+        disabled={working || tagsSaving}
+        onClick={onTags}
+        ref={tagsButtonRef}
+        type="button"
+      >
+        Tags…
+      </button>
       <button
         className="table-bulk-bar-delete"
         disabled={working}

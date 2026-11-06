@@ -16,6 +16,11 @@
 //!   destination in that same order, then validates `note_ids`, then moves
 //!   every id in one transaction: a bad id, mode, reference or same-collection
 //!   target rejects the whole request and leaves both collections untouched.
+//! - The scoped bulk Tag write (`POST /api/collections/:id/notes/tags`) is one
+//!   transaction too: unknown or foreign ids answer 404, and duplicate ids, a
+//!   Tag in both lists, or two empty lists answer 400 with nothing written.
+//!   `add` finds or creates in the collection's scope; `remove` drops only the
+//!   link. The answer's `notes` follow `note_ids` order.
 //! - A single note's unparsable id is never 400: it matches no row and answers
 //!   `404 { error: 'Note not found.' }`. The bulk route is stricter: a
 //!   non-positive or unknown id answers 400 and moves nothing.
@@ -318,6 +323,92 @@ fn replace_note_tags(
         }
     }
     Ok(())
+}
+
+/// Normalizes a Tag name list the way the bulk route documents: trim, collapse
+/// whitespace, drop blanks and dedupe case-insensitively while keeping the
+/// first spelling the collector sent.
+fn normalize_tag_list(names: &[String]) -> Vec<String> {
+    let mut seen: HashSet<String> = HashSet::new();
+    let mut normalized_names = Vec::new();
+    for name in names {
+        let normalized = normalize_tag_name(name);
+        if normalized.is_empty() || !seen.insert(normalized.to_lowercase()) {
+            continue;
+        }
+        normalized_names.push(normalized);
+    }
+    normalized_names
+}
+
+/// Adds and removes Tags across several Notes in one transaction. `None` means
+/// at least one note id was unknown or belonged to another collection: nothing
+/// was written, and the route answers the documented 404. Adds find or create
+/// the Tag in the collection's scope, while removes drop only the link and
+/// leave the Tag row alone.
+fn update_note_tags_row(
+    conn: &mut Connection,
+    note_ids: &[i64],
+    add: &[String],
+    remove: &[String],
+    collection_id: i64,
+) -> Result<Option<Vec<Note>>, DbError> {
+    let existing_ids: HashSet<i64> = list_notes(conn, collection_id)?
+        .into_iter()
+        .map(|note| note.id)
+        .collect();
+    if note_ids.iter().any(|id| !existing_ids.contains(id)) {
+        return Ok(None);
+    }
+
+    let tx = conn.transaction().map_err(classify)?;
+    for name in add {
+        if let Some(tag) = ensure_tag(&tx, collection_id, name)? {
+            for note_id in note_ids {
+                tx.execute(
+                    "INSERT OR IGNORE INTO banknote_tags (banknote_id, tag_id) VALUES (?1, ?2)",
+                    params![note_id, tag.id],
+                )
+                .map_err(classify)?;
+            }
+        }
+    }
+    for name in remove {
+        let mut stmt = tx
+            .prepare("SELECT id FROM tags WHERE collection_id = ?1 AND lower(name) = lower(?2)")
+            .map_err(classify)?;
+        let tag_id = match stmt.query_row(params![collection_id, name], |row| {
+            row.get::<_, i64>(0)
+        }) {
+            Ok(id) => Some(id),
+            Err(rusqlite::Error::QueryReturnedNoRows) => None,
+            Err(error) => return Err(classify(error)),
+        };
+        if let Some(tag_id) = tag_id {
+            for note_id in note_ids {
+                tx.execute(
+                    "DELETE FROM banknote_tags WHERE banknote_id = ?1 AND tag_id = ?2",
+                    params![note_id, tag_id],
+                )
+                .map_err(classify)?;
+            }
+        }
+    }
+    tx.commit().map_err(classify)?;
+
+    // One fresh list after the commit carries the new links and the Tag rows
+    // they point at; the response only needs the affected notes, in the order
+    // the caller sent.
+    let updated: HashMap<i64, Note> = list_notes(conn, collection_id)?
+        .into_iter()
+        .map(|note| (note.id, note))
+        .collect();
+    Ok(Some(
+        note_ids
+            .iter()
+            .filter_map(|id| updated.get(id).cloned())
+            .collect(),
+    ))
 }
 
 // ---------------------------------------------------------------------------
@@ -1574,6 +1665,63 @@ async fn move_notes_handler(
     }
 }
 
+async fn update_notes_tags_handler(
+    State(state): State<AppState>,
+    collection: Option<Path<Vec<String>>>,
+    req: Request,
+) -> Response {
+    let raw = captures(collection);
+    let collection_id = match resolve_for_write(&state.pool, raw.first().cloned()).await {
+        Ok(id) => id,
+        Err((status, message)) => return status_response(status, &message),
+    };
+    let body = read_json_body(req).await;
+
+    let ids_message = "A valid list of note IDs is required.";
+    let Some(raw_ids) = body.get("note_ids").and_then(Value::as_array) else {
+        return bad_request(ids_message);
+    };
+    if raw_ids.is_empty() {
+        return bad_request("Select at least one note.");
+    }
+    let mut note_ids = Vec::with_capacity(raw_ids.len());
+    let mut seen_ids = HashSet::with_capacity(raw_ids.len());
+    for item in raw_ids {
+        match js_number(item) {
+            Some(id) if id > 0 => {
+                if !seen_ids.insert(id) {
+                    return bad_request("Each note can only be tagged once.");
+                }
+                note_ids.push(id);
+            }
+            _ => return bad_request(ids_message),
+        }
+    }
+
+    let add = normalize_tag_list(&normalize_tags(body.get("add")));
+    let remove = normalize_tag_list(&normalize_tags(body.get("remove")));
+    if add.is_empty() && remove.is_empty() {
+        return bad_request("Select at least one tag to add or remove.");
+    }
+    let remove_keys: HashSet<String> =
+        remove.iter().map(|name| name.to_lowercase()).collect();
+    if add.iter().any(|name| remove_keys.contains(&name.to_lowercase())) {
+        return bad_request("A tag cannot be added and removed in the same request.");
+    }
+
+    // Unknown and foreign ids reject before the write, so the answer is the
+    // documented 404 instead of a generic 400 and nothing is touched.
+    match db::with_conn(&state.pool, move |conn| {
+        update_note_tags_row(conn, &note_ids, &add, &remove, collection_id)
+    })
+    .await
+    {
+        Ok(Some(notes)) => ok(json!({ "notes": notes })),
+        Ok(None) => not_found("Note not found."),
+        Err(error) => db_failure(error),
+    }
+}
+
 async fn list_tags_handler(
     State(state): State<AppState>,
     collection: Option<Path<Vec<String>>>,
@@ -1594,6 +1742,10 @@ pub fn notes_router() -> Router<AppState> {
         .route(
             "/api/collections/{collectionId}/notes/move",
             post(move_notes_handler),
+        )
+        .route(
+            "/api/collections/{collectionId}/notes/tags",
+            post(update_notes_tags_handler),
         )
         .route(
             "/api/collections/{collectionId}/notes/{id}",
