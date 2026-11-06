@@ -281,12 +281,12 @@ export function BulkTagPanel({
           <TagsField
             ariaLabel="Add a tag"
             bubbleEscape
-            initiallyOpen
             maxSuggestions={9}
             onChange={handleAddChange}
             placeholder="Type a tag and press Enter"
             ref={tagsFieldRef}
             showClearAll={false}
+            showSuggestionsToggle
             suggestionCounts={suggestionCounts}
             suggestionTotal={selectedCount}
             value={stagedAdd}

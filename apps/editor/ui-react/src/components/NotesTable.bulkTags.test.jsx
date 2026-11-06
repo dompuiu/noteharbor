@@ -213,13 +213,27 @@ describe("bulk Tag editing from the selection bar", () => {
     expect(tagRow(panel, "Silver")).toHaveTextContent("1/3");
     expect(tagRow(panel, "For sale")).toHaveTextContent("1/3");
 
-    // The suggestion listbox opens with the vocabulary and shows coverage for
-    // a Tag only some selected notes carry.
+    // Focusing the add field no longer dumps the vocabulary open: the list
+    // waits for the chevron (or typing) and then shows coverage for a Tag
+    // only some selected notes carry.
+    const input = within(panel).getByRole("combobox", { name: "Add a tag" });
+    expect(input).toHaveFocus();
+    expect(
+      screen.queryByRole("listbox", { name: "Tag suggestions" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(
+      within(panel).getByRole("button", { name: "Show tag suggestions" }),
+    );
+
     const silverOption = await screen.findByRole("option", { name: /Silver/ });
     expect(silverOption).toHaveTextContent("1/3");
     expect(
       await screen.findByRole("option", { name: /Gold/ }),
     ).toBeInTheDocument();
+    expect(
+      within(panel).getByRole("button", { name: "Show tag suggestions" }),
+    ).toHaveAttribute("aria-expanded", "true");
   });
 
   test("stages adds and removes, keeps them mutually exclusive, and disables Apply until one exists", async () => {
@@ -394,6 +408,9 @@ describe("bulk Tag editing from the selection bar", () => {
     await selectRows(user, ["AAAA"]);
 
     const panel = await openTagsPanel(user);
+    await user.click(
+      within(panel).getByRole("button", { name: "Show tag suggestions" }),
+    );
     expect(
       await screen.findByRole("listbox", { name: "Tag suggestions" }),
     ).toBeInTheDocument();

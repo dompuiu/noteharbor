@@ -11,6 +11,7 @@ import { createPortal } from "react-dom";
 import { ChipRemoveButton } from "./ChipRemoveButton.jsx";
 import { FilterFieldMenu } from "./FilterFieldMenu.jsx";
 import { HighlightMatch, rankTagSuggestions } from "./TagsField.jsx";
+import { TagSuggestionsToggle } from "./TagSuggestionsToggle.jsx";
 import { tagsColumnKey } from "../lib/tableColumns.js";
 import {
   commitModeLabel,
@@ -447,14 +448,10 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
         {filterField === tagsColumnKey ? (
           // The list opens on demand: this chevron sits before the shortcut
           // and says "press Down to see the suggestions".
-          <button
-            aria-controls={
-              tagListVisible ? "table-filter-tag-suggestions" : undefined
-            }
-            aria-expanded={tagListVisible}
-            aria-haspopup="listbox"
-            aria-label="Show tag suggestions"
-            className={`table-filter-tags-toggle${tagListVisible ? " is-open" : ""}`}
+          <TagSuggestionsToggle
+            className="table-filter-tags-toggle"
+            controlsId="table-filter-tag-suggestions"
+            expanded={tagListVisible}
             onClick={() => {
               if (tagSuggestionOpen) {
                 closeTagSuggestions();
@@ -463,23 +460,8 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
               }
               searchInputRef.current?.focus();
             }}
-            onMouseDown={(event) => event.preventDefault()}
-            tabIndex={-1}
-            type="button"
-          >
-            <svg
-              aria-hidden="true"
-              fill="none"
-              focusable="false"
-              stroke="currentColor"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth="2.4"
-              viewBox="0 0 24 24"
-            >
-              <path d="m6 9 6 6 6-6" />
-            </svg>
-          </button>
+            strokeWidth={2.4}
+          />
         ) : null}
         {rangeRefused ? (
           // The refusal takes the commit hint's slot and height, so a rejected

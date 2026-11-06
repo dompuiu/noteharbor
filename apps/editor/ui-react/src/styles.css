@@ -4452,6 +4452,8 @@ th[aria-sort="descending"] .sort-chevron {
 
 .tags-filter-combobox {
   position: relative;
+  display: flex;
+  align-items: center;
   border-radius: 10px;
   border: 1px solid var(--border-control);
   background: var(--surface);
@@ -4459,6 +4461,8 @@ th[aria-sort="descending"] .sort-chevron {
 
 .tags-filter-chips-scroll {
   display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
   flex-wrap: wrap;
   align-items: center;
   align-content: flex-start;
@@ -4471,6 +4475,40 @@ th[aria-sort="descending"] .sort-chevron {
   overflow-y: auto;
   scrollbar-width: thin;
   padding: 5px 8px;
+}
+
+/* The suggestions open on demand, so a tag field ends with a chevron that
+   says "this is a combobox". Table filters and the bulk Tag panel share it. */
+.tag-suggestions-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: none;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: var(--accent-strong);
+}
+
+.tags-filter-toggle {
+  margin-right: 6px;
+}
+
+.tag-suggestions-toggle:hover {
+  background: var(--accent-soft);
+}
+
+.tag-suggestions-toggle svg {
+  width: 13px;
+  height: 13px;
+  transition: transform 120ms ease;
+}
+
+.tag-suggestions-toggle.is-open svg {
+  transform: rotate(180deg);
 }
 
 /* The chips themselves reuse the table filter's `.table-filter-chip` rules so
@@ -4908,36 +4946,6 @@ th[aria-sort="descending"] .sort-chevron {
   font-size: 0.6875rem;
   font-weight: 600;
   white-space: nowrap;
-}
-
-/* The tags list opens on demand, so the field ends with a chevron pointing
-   down: press Down (or click it) to see the suggestions. */
-.table-filter-tags-toggle {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: none;
-  width: 20px;
-  height: 20px;
-  padding: 0;
-  border: 0;
-  border-radius: 5px;
-  background: transparent;
-  color: var(--accent-strong);
-}
-
-.table-filter-tags-toggle:hover {
-  background: var(--accent-soft);
-}
-
-.table-filter-tags-toggle svg {
-  width: 13px;
-  height: 13px;
-  transition: transform 120ms ease;
-}
-
-.table-filter-tags-toggle.is-open svg {
-  transform: rotate(180deg);
 }
 
 .table-search-input {

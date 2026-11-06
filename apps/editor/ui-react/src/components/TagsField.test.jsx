@@ -67,3 +67,39 @@ describe("TagsField chips", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("TagsField suggestions toggle", () => {
+  test("the chevron stays absent unless the field asks for it", () => {
+    renderField();
+
+    expect(
+      screen.queryByRole("button", { name: "Show tag suggestions" }),
+    ).toBeNull();
+  });
+
+  test("the chevron opens and closes the suggestion list in place", async () => {
+    const user = userEvent.setup();
+    renderField({ showSuggestionsToggle: true, vocabulary: ["alpha", "gamma"] });
+
+    const toggle = screen.getByRole("button", {
+      name: "Show tag suggestions",
+    });
+    expect(toggle).toHaveAttribute("aria-expanded", "false");
+    expect(screen.queryByRole("listbox", { name: "Tag suggestions" })).toBeNull();
+
+    await user.click(toggle);
+
+    expect(
+      screen.getByRole("listbox", { name: "Tag suggestions" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Show tag suggestions" }),
+    ).toHaveAttribute("aria-expanded", "true");
+
+    await user.click(
+      screen.getByRole("button", { name: "Show tag suggestions" }),
+    );
+
+    expect(screen.queryByRole("listbox", { name: "Tag suggestions" })).toBeNull();
+  });
+});

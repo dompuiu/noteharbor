@@ -11,6 +11,7 @@ import {
 import { createPortal } from "react-dom";
 import { normalizeTag, splitTagInput, tagKey } from "../lib/tags.js";
 import { ChipRemoveButton } from "./ChipRemoveButton.jsx";
+import { TagSuggestionsToggle } from "./TagSuggestionsToggle.jsx";
 
 export function rankTagSuggestions(
   vocabulary,
@@ -70,7 +71,6 @@ export const TagsField = forwardRef(function TagsField(
     ariaLabel = "Tags",
     bubbleEscape = false,
     emptyText = "",
-    initiallyOpen = false,
     inputProps,
     label,
     maxLength,
@@ -83,6 +83,7 @@ export const TagsField = forwardRef(function TagsField(
     onSearch,
     placeholder = "Type a tag and press Enter",
     showClearAll = true,
+    showSuggestionsToggle = false,
     suggestionCounts = null,
     suggestionTotal = null,
     value = [],
@@ -100,6 +101,7 @@ export const TagsField = forwardRef(function TagsField(
   const inputRef = useRef(null);
   const autoId = useId();
   const inputId = inputProps?.id ?? autoId;
+  const dropdownId = `${inputId}-suggestions`;
 
   useImperativeHandle(forwardedRef, () => ({
     focus: () => inputRef.current?.focus(),
@@ -147,15 +149,6 @@ export const TagsField = forwardRef(function TagsField(
     setHighlighted(-1);
   }, [input]);
 
-  // The bulk Tag panel wants its vocabulary visible the moment it opens; the
-  // Note editor and filter rail keep the field closed until the collector
-  // types or presses ArrowDown.
-  useEffect(() => {
-    if (initiallyOpen) {
-      setIsOpen(true);
-    }
-  }, [initiallyOpen]);
-
   useEffect(() => {
     if (!isOpen) {
       setPosition(null);
@@ -199,6 +192,16 @@ export const TagsField = forwardRef(function TagsField(
   }, [isOpen]);
 
   const focusInput = () => inputRef.current?.focus();
+
+  function closeSuggestions() {
+    setIsOpen(false);
+    setHighlighted(-1);
+  }
+
+  function toggleSuggestions() {
+    setIsOpen((current) => !current);
+    setHighlighted(-1);
+  }
 
   function commitRaw(raw) {
     const parts = splitTagInput(raw);
@@ -305,8 +308,7 @@ export const TagsField = forwardRef(function TagsField(
     // element, and the blur handler below closes the dropdown.
     if (event.key === "Escape") {
       if (isOpen) {
-        setIsOpen(false);
-        setHighlighted(-1);
+        closeSuggestions();
         if (!bubbleEscape) {
           event.stopPropagation();
         }
@@ -379,6 +381,7 @@ export const TagsField = forwardRef(function TagsField(
           <input
             {...inputProps}
             id={inputId}
+            aria-controls={isOpen ? dropdownId : undefined}
             aria-expanded={isOpen}
             aria-label={label ?? ariaLabel}
             autoComplete="off"
@@ -394,8 +397,7 @@ export const TagsField = forwardRef(function TagsField(
               if (dropdownRef.current?.contains(event.relatedTarget)) {
                 return;
               }
-              setIsOpen(false);
-              setHighlighted(-1);
+              closeSuggestions();
             }}
             onKeyDown={handleKeyDown}
             onPaste={handlePaste}
@@ -405,14 +407,26 @@ export const TagsField = forwardRef(function TagsField(
             value={input}
           />
         </div>
+        {showSuggestionsToggle ? (
+          <TagSuggestionsToggle
+            className="tags-filter-toggle"
+            controlsId={dropdownId}
+            expanded={isOpen}
+            onClick={() => {
+              toggleSuggestions();
+              focusInput();
+            }}
+          />
+        ) : null}
       </div>
       {isOpen && position
         ? createPortal(
             <div
+              aria-label="Tag suggestions"
               className="tags-filter-dropdown"
+              id={dropdownId}
               ref={dropdownRef}
               role="listbox"
-              aria-label="Tag suggestions"
               style={{
                 top: position.top,
                 left: position.left,
