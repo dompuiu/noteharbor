@@ -84,7 +84,7 @@ import { TableFilterBar } from "./TableFilterBar.jsx";
 import { TableFindBar } from "./TableFindBar.jsx";
 import { TableRows } from "./TableRows.jsx";
 import { TableBulkBar } from "./TableBulkBar.jsx";
-import { TableMoveToast } from "./TableMoveToast.jsx";
+import { ToastHost } from "./Toast.jsx";
 import { MoveNotesDialog } from "./MoveNotesDialog.jsx";
 import { TableScrollbar } from "./TableScrollbar.jsx";
 
@@ -1119,9 +1119,9 @@ function NotesTable({
   }, [selectedIds]);
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
-  // The move toast owns its message and timer; the table only tells it when to
+  // The toast owns its message and timer; the table only tells it when to
   // show one.
-  const moveToastRef = useRef(null);
+  const toastRef = useRef(null);
   // The one Move dialog, opened by the bulk bar or a row menu. It holds the
   // notes as an ordered list, because a bulk move keeps the order the
   // collector sees in the table.
@@ -1196,7 +1196,7 @@ function NotesTable({
     }
 
     if (handoffState.toast) {
-      moveToastRef.current?.show(handoffState.toast);
+      toastRef.current?.show(handoffState.toast);
     }
 
     const highlightedIds = handoffState.highlightNoteIds ?? [];
@@ -4183,7 +4183,7 @@ function NotesTable({
       setSlideshowNotes((current) =>
         dropNoteAndRenumber(current, updatedNote.id),
       );
-      moveToastRef.current?.show(
+      toastRef.current?.show(
         toastMessage ?? `Moved to ${movedToCollection.name}.`,
       );
     } else if (reorderedNotes) {
@@ -4366,7 +4366,7 @@ function NotesTable({
 
     setTagsOpen(false);
     setTagsSaving(false);
-    moveToastRef.current?.show(
+    toastRef.current?.show(
       `Tags updated on ${noteIds.length} note${noteIds.length === 1 ? "" : "s"}`,
     );
     requestAnimationFrame(() => bulkTagsButtonRef.current?.focus());
@@ -4408,7 +4408,7 @@ function NotesTable({
     clearSelection();
 
     if (message) {
-      moveToastRef.current?.show(message);
+      toastRef.current?.show(message);
     }
   }
 
@@ -5830,7 +5830,7 @@ function NotesTable({
             {actionError}
           </p>
         ) : null}
-        <TableMoveToast toastRef={moveToastRef} />
+        <ToastHost toastRef={toastRef} />
 
         {moveRequest ? (
           <MoveNotesDialog

@@ -1854,6 +1854,10 @@ input[type="radio"] {
 
 .showcase-error {
   margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
   color: var(--danger);
   font-size: 0.88rem;
 }
@@ -2280,6 +2284,10 @@ input[type="radio"] {
   .sidebar,
   .sidebar-link {
     transition: none;
+  }
+
+  .toast {
+    animation: none;
   }
 
   .sidebar-dock:hover .sidebar-wordmark,
@@ -3343,8 +3351,8 @@ input[type="radio"] {
 }
 
 .bulk-tag-error {
-  margin: 0;
-  padding: 0 14px 10px;
+  margin: 0 14px 10px;
+  padding: 8px 10px;
   font-size: 0.82rem;
 }
 
@@ -6052,7 +6060,15 @@ button.tag {
   color: var(--text-muted);
 }
 
+/* A message that belongs to the surface that raised it keeps the same shape
+   as a floating toast: one semantic edge and a wash of its tone on the panel
+   ground. Field-level copy stays beside the control that caused it. */
 .error-text {
+  margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--danger);
+  border-radius: var(--radius-sm);
+  background: var(--danger-bg);
   color: var(--danger);
   font-weight: 500;
   /* A server message can carry a path or URL with no break opportunity. */
@@ -6060,8 +6076,12 @@ button.tag {
 }
 
 .warning-text {
-  color: var(--warning);
   margin: 0;
+  padding: 8px 12px;
+  border-left: 3px solid var(--warning);
+  border-radius: var(--radius-sm);
+  background: var(--warning-bg);
+  color: var(--warning);
 }
 
 .import-card-warning {
@@ -6960,25 +6980,71 @@ button.tag {
   font-size: 0.86rem;
 }
 
-.scrape-toast {
-  padding: 10px 14px;
+/* Every transient confirmation and failure uses one floating card in the
+   bottom-right corner: white surface, lifted shadow, and a semantic edge that
+   names the tone. It sits above dialogs, so a failed save is still visible
+   when the action came from a panel. */
+.toast {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  z-index: 300;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  max-width: min(420px, calc(100vw - 48px));
+  padding: 12px 16px 12px 14px;
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--toast-accent, var(--accent));
   border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+  color: var(--text);
   font-size: 0.86rem;
   font-weight: 500;
-  margin-bottom: 10px;
-  box-shadow: var(--shadow-sm);
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+  animation: toast-rise 0.18s ease-out;
 }
 
-.scrape-toast--error {
-  background: var(--danger-bg);
-  border: 1px solid rgba(163, 0, 0, 0.3);
-  color: var(--danger);
+.toast--success {
+  --toast-accent: var(--success);
+  --toast-wash: var(--success-bg);
 }
 
-.scrape-toast--success {
-  background: var(--success-bg);
-  border: 1px solid rgba(49, 162, 76, 0.3);
-  color: var(--success);
+.toast--danger {
+  --toast-accent: var(--danger);
+  --toast-wash: var(--danger-bg);
+}
+
+.toast--warning {
+  --toast-accent: var(--warning);
+  --toast-wash: var(--warning-bg);
+}
+
+.toast--info {
+  --toast-accent: var(--info);
+  --toast-wash: var(--info-bg);
+}
+
+.toast-mark {
+  flex: none;
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--toast-accent);
+  box-shadow: 0 0 0 3px var(--toast-wash);
+}
+
+@keyframes toast-rise {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
 }
 
 .scraped-details-panel--form {

@@ -29,6 +29,7 @@ import {
   needsPositionReference,
 } from "./CollectionPositionFields.jsx";
 import { TagsField } from "./TagsField.jsx";
+import { Toast } from "./Toast.jsx";
 
 const SCRAPE_BROWSER_POLL_INTERVAL_MS = 500;
 const SCRAPE_BROWSER_POLL_TIMEOUT_MS = 10000;
@@ -1627,11 +1628,7 @@ function NoteEditForm({
         </div>
 
         {error ? <p className="error-text">{error}</p> : null}
-        {scrapeToast ? (
-          <div className="scrape-toast scrape-toast--error" role="alert">
-            {scrapeToast}
-          </div>
-        ) : null}
+        {scrapeToast ? <Toast tone="danger">{scrapeToast}</Toast> : null}
 
         <form
           className="form-grid"

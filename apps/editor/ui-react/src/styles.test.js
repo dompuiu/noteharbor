@@ -2086,3 +2086,40 @@ describe("primary buttons", () => {
     );
   });
 });
+
+describe("message styles", () => {
+  // A toast floats over the screen, so it earns the lifted shadow the design
+  // reserves for chrome that leaves the page.
+  test("a toast floats on the lifted shadow", () => {
+    const toast = styles.slice(
+      styles.indexOf(".toast {"),
+      styles.indexOf(".toast--success"),
+    );
+
+    expect(toast).toMatch(/position:\s*fixed/);
+    expect(toast).toMatch(/box-shadow:\s*var\(--shadow-md\)/);
+    expect(toast).toMatch(
+      /border-left:\s*3px solid var\(--toast-accent,\s*var\(--accent\)\)/,
+    );
+  });
+
+  // Floating and inline messages wear the same semantic edge: the tone is
+  // named by one token, never by a second colour written at the call site.
+  test("toasts and inline messages share the semantic edge", () => {
+    expect(styles).toMatch(
+      /\.toast--danger\s*\{[^}]*--toast-accent:\s*var\(--danger\)/,
+    );
+    expect(styles).toMatch(
+      /\.toast--success\s*\{[^}]*--toast-accent:\s*var\(--success\)/,
+    );
+    expect(styles).toMatch(
+      /\.error-text\s*\{[^}]*border-left:\s*3px solid var\(--danger\)/,
+    );
+    expect(styles).toMatch(
+      /\.warning-text\s*\{[^}]*border-left:\s*3px solid var\(--warning\)/,
+    );
+    expect(styles).toMatch(
+      /\.showcase-error\s*\{[^}]*border-left:\s*3px solid var\(--danger\)/,
+    );
+  });
+});

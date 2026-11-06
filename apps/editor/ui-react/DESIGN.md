@@ -187,6 +187,8 @@ Tags are labels, not state, so they left the accent family for their own warm Oc
 
 **The White Room Rule.** Content lives on white or on a grey step of the same neutral family. No warm cream, blue-grey, or second tinted neutral enters the page, with one sanctioned exception: the Ochre tag chips above.
 
+**The One Message Rule.** Feedback has one shape and two homes. Transient confirmation and failure float in the bottom-right toast; a message owned by a panel or field sits inline with the same semantic edge and wash. Semantic hues appear only inside those messages, never as a ground for content or a button.
+
 ## Typography
 
 **Display Font:** none — the system uses no display face.
@@ -280,6 +282,12 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Style:** replace the table in place at the table's height, inside the same card shell. A 700-weight title, a muted detail line, a reassurance line, and one primary Try again pill; only the copy block is a live region so the button is not announced twice.
 - **Loading:** the same shell at the same height, a 650-weight "Loading notes…" title, and one muted detail line as a polite status; no spinner and no skeleton bars.
 
+### Messages
+- **Floating toast:** every transient confirmation and failure is one fixed card in the bottom-right corner, 24px from the edges, above dialogs. White ground, 1px structural hairline, 6px radius, the lifted shadow, a 3px semantic left edge and a 7px tone dot ringed by that tone's wash. Message copy stays Ink at 0.86rem/500.
+- **Tone:** Success is green, Danger red, Warning amber, Info blue. Danger is the only tone that renders as an assertive alert; every other tone is a polite status.
+- **Timing:** four seconds. One message at a time — a new message replaces the last and restarts the clock, so cards never stack.
+- **Inline message:** a message owned by a panel or field wears the same geometry on its own ground: a 3px semantic edge, the tone's wash, an 8px radius, and the tone's dark text. Errors, warnings, and showcase validation all use it; bare coloured text is not a message style.
+
 ### Overlays
 - **Scrim:** ink at 50–88% opacity. The slideshow and image popover keep the deep ink surfaces with white text; the note editor uses a light grey scrim with a white panel.
 - **Panel:** 6px radius, 1px ink hairline, floating shadow. Slideshow tags use an Ochre wash on dark with white text.
@@ -293,6 +301,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Do** cycle the page: slate rail → white content → ink only for overlays. Polarity is the depth cue.
 - **Do** keep the Table compact (40px headers, 45px rows, 12px cell padding, truncation) and let Showcases be the looser surface.
 - **Do** write status feedback as a named title plus one detail line, with the recovery action adjacent.
+- **Do** float transient feedback as the bottom-right toast and keep panel- or field-level messages inline, both wearing the same semantic edge.
 
 ### Don't:
 - **Don't** introduce a second accent hue, a gradient, or glassmorphism. The Ochre tag family is a label neutral, not a second accent: it never fills a button, a band, or a marker.
@@ -302,3 +311,4 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Don't** set body copy in uppercase or weight 800; the display voice is for titles only.
 - **Don't** turn the sidebar into a drawer or let it push the main column.
 - **Don't** square off a button or a chip: buttons are pills and chips keep their 7px rectangle.
+- **Don't** paint a message as bare coloured text or give each screen its own notice box; toasts and inline messages share one edge-and-wash pattern.
