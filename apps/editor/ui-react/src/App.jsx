@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import {
   BrowserRouter,
   Navigate,
@@ -116,10 +116,13 @@ function ShellContent() {
     collections,
     collectionsError,
     collectionsErrorReason,
+    connectionLostReason,
     loadingCollections,
+    markDisconnected,
     refreshCollections,
   } = useCollections();
   const { showcases, showcasesError, loadingShowcases } = useShowcases();
+  const location = useLocation();
 
   // The connection state is read from the collections load the provider already
   // performs on mount, so no health probe sits in front of the first paint.
@@ -129,6 +132,54 @@ function ShellContent() {
   // The sidebar's Escape/Tab-out hands focus here, so it lands inside the page
   // rather than on <body>. Inert and visually hidden; Tab skips past it.
   const pageFocusRef = useRef(null);
+
+  // A pinned retry reason is the most recent check, so it wins over the reason
+  // recorded by the collections load; a connection failure reported after boot
+  // fills in when the load itself succeeded.
+  const loadReason = collectionsError
+    ? collectionsErrorReason ?? "generic"
+    : null;
+  const disconnectedReason = retryReason ?? loadReason ?? connectionLostReason;
+
+  // Route changes and regaining focus are the two cheap moments to ask
+  // /api/health whether the server is still there; neither polls it. The ref
+  // lets the probe read the latest card without resubscribing the listener.
+  const disconnectedRef = useRef(disconnectedReason);
+  disconnectedRef.current = disconnectedReason;
+  const previousPathRef = useRef(location.pathname);
+
+  const probeConnection = useCallback(async () => {
+    const result = await getHealth();
+
+    if (result.connected) {
+      // Only a shell already showing a failure reloads: a healthy shell must
+      // not refetch, or every navigation would blank the table twice.
+      if (disconnectedRef.current) {
+        await refreshCollections();
+      }
+      return;
+    }
+
+    markDisconnected(result.reason);
+  }, [markDisconnected, refreshCollections]);
+
+  useEffect(() => {
+    if (previousPathRef.current === location.pathname) {
+      return;
+    }
+
+    previousPathRef.current = location.pathname;
+    void probeConnection();
+  }, [location.pathname, probeConnection]);
+
+  useEffect(() => {
+    function handleWindowFocus() {
+      void probeConnection();
+    }
+
+    window.addEventListener("focus", handleWindowFocus);
+    return () => window.removeEventListener("focus", handleWindowFocus);
+  }, [probeConnection]);
 
   // A failed retry pins its reason; a collections load that later succeeds
   // proves the connection is back, so drop the pin.
@@ -145,7 +196,7 @@ function ShellContent() {
       const result = await getHealth();
 
       if (!result.connected) {
-        setRetryReason(result.reason ?? "generic");
+        setRetryReason(result.reason);
         return;
       }
 
@@ -155,13 +206,6 @@ function ShellContent() {
       setCheckingConnection(false);
     }
   }
-
-  // A pinned retry reason is the most recent check, so it wins over the reason
-  // recorded by the collections load.
-  const loadReason = collectionsError
-    ? collectionsErrorReason ?? "generic"
-    : null;
-  const disconnectedReason = retryReason ?? loadReason;
 
   const showEmptyLibrary = isEmptyLibrary({
     collections,

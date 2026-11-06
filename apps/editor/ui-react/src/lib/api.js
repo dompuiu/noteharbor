@@ -95,12 +95,26 @@ function connectionError(reason, message) {
   return error;
 }
 
+// Every fetch goes through here, so a dead server reads the same whether it is
+// found at boot, on a route change, or inside a screen's own load. An abort is
+// the caller's own timeout and stays a plain abort.
+async function request(url, options) {
+  try {
+    // Keep a plain GET a one-argument fetch call, the shape the API tests read.
+    return await (options === undefined ? fetch(url) : fetch(url, options));
+  } catch (error) {
+    if (error?.name === 'AbortError') {
+      throw error;
+    }
+
+    throw connectionError('server');
+  }
+}
+
 async function handleResponse(response) {
   const payload = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    // The shell reads its connection state from the collections load, so a
-    // failure has to say whether the server answered but its database did not.
     throw connectionError(reasonForStatus(response.status), payload.error);
   }
 
@@ -148,10 +162,10 @@ function postFormDataWithUploadProgress(url, formData, onProgress) {
         return;
       }
 
-      reject(new Error(payload.error || 'Request failed.'));
+      reject(connectionError(reasonForStatus(xhr.status), payload.error));
     };
     xhr.onerror = () => {
-      reject(new Error('Request failed.'));
+      reject(connectionError('server'));
     };
     xhr.send(formData);
   });
@@ -170,15 +184,7 @@ function tagsBasePath(collectionId) {
 }
 
 async function getCollections() {
-  let response;
-
-  try {
-    response = await fetch('/api/collections');
-  } catch {
-    // Nothing answered at all, which the shell reports as a server problem.
-    throw connectionError('server');
-  }
-
+  const response = await request('/api/collections');
   return handleResponse(response);
 }
 
@@ -189,7 +195,7 @@ async function getHealth() {
   let response;
 
   try {
-    response = await fetch('/api/health');
+    response = await request('/api/health');
   } catch {
     return { connected: false, reason: 'server' };
   }
@@ -205,7 +211,7 @@ async function getHealth() {
 }
 
 async function createCollection(name) {
-  const response = await fetch('/api/collections', {
+  const response = await request('/api/collections', {
     method: 'POST',
     headers,
     body: JSON.stringify(name ? { name } : {})
@@ -215,7 +221,7 @@ async function createCollection(name) {
 }
 
 async function renameCollection(collectionId, name) {
-  const response = await fetch(`/api/collections/${collectionId}`, {
+  const response = await request(`/api/collections/${collectionId}`, {
     method: 'PUT',
     headers,
     body: JSON.stringify({ name })
@@ -225,7 +231,7 @@ async function renameCollection(collectionId, name) {
 }
 
 async function deleteCollection(collectionId) {
-  const response = await fetch(`/api/collections/${collectionId}`, {
+  const response = await request(`/api/collections/${collectionId}`, {
     method: 'DELETE'
   });
 
@@ -233,7 +239,7 @@ async function deleteCollection(collectionId) {
 }
 
 async function reorderCollections(ids) {
-  const response = await fetch('/api/collections/reorder', {
+  const response = await request('/api/collections/reorder', {
     method: 'POST',
     headers,
     body: JSON.stringify({ ids })
@@ -243,12 +249,12 @@ async function reorderCollections(ids) {
 }
 
 async function getNotes(collectionId) {
-  const response = await fetch(notesBasePath(collectionId));
+  const response = await request(notesBasePath(collectionId));
   return handleResponse(response);
 }
 
 async function reorderNotes(ids, collectionId) {
-  const response = await fetch(`${notesBasePath(collectionId)}/reorder`, {
+  const response = await request(`${notesBasePath(collectionId)}/reorder`, {
     method: 'POST',
     headers,
     body: JSON.stringify({ ids })
@@ -258,24 +264,24 @@ async function reorderNotes(ids, collectionId) {
 }
 
 async function getNote(id, collectionId) {
-  const response = await fetch(`${notesBasePath(collectionId)}/${id}`);
+  const response = await request(`${notesBasePath(collectionId)}/${id}`);
   return handleResponse(response);
 }
 
 async function createNote(payload, collectionId) {
-  const response = await fetch(notesBasePath(collectionId), buildNoteRequestOptions('POST', payload));
+  const response = await request(notesBasePath(collectionId), buildNoteRequestOptions('POST', payload));
 
   return handleResponse(response);
 }
 
 async function updateNote(id, payload, collectionId) {
-  const response = await fetch(`${notesBasePath(collectionId)}/${id}`, buildNoteRequestOptions('PUT', payload));
+  const response = await request(`${notesBasePath(collectionId)}/${id}`, buildNoteRequestOptions('PUT', payload));
 
   return handleResponse(response);
 }
 
 async function deleteNote(id, collectionId) {
-  const response = await fetch(`${notesBasePath(collectionId)}/${id}`, {
+  const response = await request(`${notesBasePath(collectionId)}/${id}`, {
     method: 'DELETE'
   });
 
@@ -283,7 +289,7 @@ async function deleteNote(id, collectionId) {
 }
 
 async function moveNote(id, collectionId, targetCollectionId, position) {
-  const response = await fetch(`${notesBasePath(collectionId)}/${id}/move`, {
+  const response = await request(`${notesBasePath(collectionId)}/${id}/move`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -297,7 +303,7 @@ async function moveNote(id, collectionId, targetCollectionId, position) {
 }
 
 async function moveNotes(ids, sourceCollectionId, targetCollectionId, position) {
-  const response = await fetch(`${notesBasePath(sourceCollectionId)}/move`, {
+  const response = await request(`${notesBasePath(sourceCollectionId)}/move`, {
     method: 'POST',
     headers,
     body: JSON.stringify({
@@ -348,7 +354,7 @@ async function downloadArchive(collectionIds = null, showcaseIds = undefined) {
   searchParams.set('_ts', String(Date.now()));
 
   const query = searchParams.toString();
-  const response = await fetch(`/api/archive/export?${query}`, {
+  const response = await request(`/api/archive/export?${query}`, {
     cache: 'no-store'
   });
 
@@ -391,12 +397,12 @@ async function downloadArchive(collectionIds = null, showcaseIds = undefined) {
 }
 
 async function getOperationStatus() {
-  const response = await fetch('/api/operations/status');
+  const response = await request('/api/operations/status');
   return handleResponse(response);
 }
 
 async function clearAppData() {
-  const response = await fetch('/api/archive/data', {
+  const response = await request('/api/archive/data', {
     method: 'DELETE'
   });
 
@@ -404,17 +410,17 @@ async function clearAppData() {
 }
 
 async function getTags(collectionId) {
-  const response = await fetch(`${tagsBasePath(collectionId)}/suggestions`);
+  const response = await request(`${tagsBasePath(collectionId)}/suggestions`);
   return handleResponse(response);
 }
 
 async function getShowcases() {
-  const response = await fetch('/api/showcases');
+  const response = await request('/api/showcases');
   return handleResponse(response);
 }
 
 async function createShowcase(name) {
-  const response = await fetch('/api/showcases', {
+  const response = await request('/api/showcases', {
     method: 'POST',
     headers,
     body: JSON.stringify(name ? { name } : {})
@@ -424,12 +430,12 @@ async function createShowcase(name) {
 }
 
 async function getCategories() {
-  const response = await fetch('/api/categories');
+  const response = await request('/api/categories');
   return handleResponse(response);
 }
 
 async function createCategory(name) {
-  const response = await fetch('/api/categories', {
+  const response = await request('/api/categories', {
     method: 'POST',
     headers,
     body: JSON.stringify({ name })
@@ -439,7 +445,7 @@ async function createCategory(name) {
 }
 
 async function renameCategory(id, name) {
-  const response = await fetch(`/api/categories/${id}`, {
+  const response = await request(`/api/categories/${id}`, {
     method: 'PUT',
     headers,
     body: JSON.stringify({ name })
@@ -449,12 +455,12 @@ async function renameCategory(id, name) {
 }
 
 async function getShowcaseTree(showcaseId) {
-  const response = await fetch(`/api/showcases/${showcaseId}/tree`);
+  const response = await request(`/api/showcases/${showcaseId}/tree`);
   return handleResponse(response);
 }
 
 async function createShowcaseNode(showcaseId, payload) {
-  const response = await fetch(`/api/showcases/${showcaseId}/nodes`, {
+  const response = await request(`/api/showcases/${showcaseId}/nodes`, {
     method: 'POST',
     headers,
     body: JSON.stringify(payload)
@@ -464,7 +470,7 @@ async function createShowcaseNode(showcaseId, payload) {
 }
 
 async function updateNode(id, payload) {
-  const response = await fetch(`/api/nodes/${id}`, {
+  const response = await request(`/api/nodes/${id}`, {
     method: 'PUT',
     headers,
     body: JSON.stringify(payload)
@@ -474,7 +480,7 @@ async function updateNode(id, payload) {
 }
 
 async function deleteNode(id) {
-  const response = await fetch(`/api/nodes/${id}`, {
+  const response = await request(`/api/nodes/${id}`, {
     method: 'DELETE'
   });
 
@@ -482,7 +488,7 @@ async function deleteNode(id) {
 }
 
 async function renameShowcase(showcaseId, name) {
-  const response = await fetch(`/api/showcases/${showcaseId}`, {
+  const response = await request(`/api/showcases/${showcaseId}`, {
     method: 'PUT',
     headers,
     body: JSON.stringify({ name })
@@ -492,7 +498,7 @@ async function renameShowcase(showcaseId, name) {
 }
 
 async function deleteShowcase(showcaseId) {
-  const response = await fetch(`/api/showcases/${showcaseId}`, {
+  const response = await request(`/api/showcases/${showcaseId}`, {
     method: 'DELETE'
   });
 
@@ -500,7 +506,7 @@ async function deleteShowcase(showcaseId) {
 }
 
 async function reorderShowcases(ids) {
-  const response = await fetch('/api/showcases/order', {
+  const response = await request('/api/showcases/order', {
     method: 'PUT',
     headers,
     body: JSON.stringify({ ids })
@@ -510,7 +516,7 @@ async function reorderShowcases(ids) {
 }
 
 async function reorderNodes(showcaseId, parentNodeId, nodeIds) {
-  const response = await fetch('/api/nodes/order', {
+  const response = await request('/api/nodes/order', {
     method: 'PUT',
     headers,
     body: JSON.stringify({
@@ -544,7 +550,7 @@ async function scrapePreview(url, { timeoutMs } = {}) {
     : null;
 
   try {
-    const response = await fetch('/api/scrape/preview', {
+    const response = await request('/api/scrape/preview', {
       method: 'POST',
       headers,
       body: JSON.stringify({ url, timeoutMs: clampedTimeoutMs }),

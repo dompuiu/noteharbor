@@ -17,6 +17,7 @@ import {
   renameCollection,
 } from "./api.js";
 import { CollectionsProvider, useCollections } from "./collections.jsx";
+import { reportConnectionFailure } from "./connection.js";
 
 // A tiny consumer that surfaces the context controls so tests can drive them
 // and read back the state the provider hands out.
@@ -27,6 +28,7 @@ function Probe() {
     <>
       <output data-testid="names">{context.collections.map((c) => c.name).join(",")}</output>
       <output data-testid="reason">{context.collectionsErrorReason ?? ""}</output>
+      <output data-testid="connection">{context.connectionLostReason ?? ""}</output>
     </>
   );
 }
@@ -121,6 +123,7 @@ describe("CollectionsProvider connection reason", () => {
     await waitFor(() => {
       expect(screen.getByTestId("reason")).toHaveTextContent("database");
     });
+    expect(screen.getByTestId("connection")).toHaveTextContent("database");
     expect(screen.getByTestId("names")).toHaveTextContent("");
   });
 
@@ -141,5 +144,55 @@ describe("CollectionsProvider connection reason", () => {
 
     expect(screen.getByTestId("reason")).toHaveTextContent("");
     expect(screen.getByTestId("names")).toHaveTextContent("Default,Archive");
+  });
+});
+
+describe("CollectionsProvider live connection state", () => {
+  test("picks up a connection failure reported by any request after boot", async () => {
+    renderProvider();
+    await screen.findByText("Default,Archive");
+
+    act(() => {
+      reportConnectionFailure("server");
+    });
+
+    expect(screen.getByTestId("connection")).toHaveTextContent("server");
+  });
+
+  test("keeps a database outage apart from a server outage", async () => {
+    renderProvider();
+    await screen.findByText("Default,Archive");
+
+    act(() => {
+      reportConnectionFailure("database");
+    });
+
+    expect(screen.getByTestId("connection")).toHaveTextContent("database");
+  });
+
+  test("ignores a generic failure that belongs to one screen", async () => {
+    renderProvider();
+    await screen.findByText("Default,Archive");
+
+    act(() => {
+      reportConnectionFailure("generic");
+    });
+
+    expect(screen.getByTestId("connection")).toHaveTextContent("");
+  });
+
+  test("a successful refresh clears the reported failure", async () => {
+    renderProvider();
+    await screen.findByText("Default,Archive");
+
+    act(() => {
+      reportConnectionFailure("server");
+    });
+
+    await act(async () => {
+      await context.refreshCollections();
+    });
+
+    expect(screen.getByTestId("connection")).toHaveTextContent("");
   });
 });

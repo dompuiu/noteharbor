@@ -1,12 +1,13 @@
 import { StrictMode } from "react";
 import { MemoryRouter, useLocation } from "react-router-dom";
-import { render, screen, waitFor } from "@testing-library/react";
+import { act, render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
 // The routing tests assert where each path lands, not what the screens render,
 // so the screens are stubbed out. The collections mock drives the shell's
-// connection state and the empty-library state; health is only used on retry.
+// connection state and the empty-library state; health serves the retry button
+// and the route/focus probes.
 vi.mock("./lib/api.js", () => ({
   createCategory: vi.fn(),
   createCollection: vi.fn(),
@@ -40,6 +41,7 @@ import { ShellContent } from "./App.jsx";
 import { CollectionsProvider } from "./lib/collections.jsx";
 import { ShowcasesProvider } from "./lib/showcases.jsx";
 import { getCollections, getHealth, getShowcases } from "./lib/api.js";
+import { reportConnectionFailure } from "./lib/connection.js";
 import { CATALOG_ROUTES } from "./lib/routes.js";
 
 function LocationProbe() {
@@ -305,5 +307,100 @@ describe("Connection state", () => {
 
     expect(await screen.findByText("Collection view screen")).toBeInTheDocument();
     expect(getHealth).not.toHaveBeenCalled();
+  });
+
+  test("a failure reported by a screen after boot replaces the page with the card", async () => {
+    renderAt(CATALOG_ROUTES.collection(1));
+    await screen.findByText("Collection view screen");
+
+    act(() => {
+      reportConnectionFailure("server");
+    });
+
+    expect(
+      await screen.findByText("Can't reach the editor server."),
+    ).toBeInTheDocument();
+    expect(screen.queryByText("Collection view screen")).not.toBeInTheDocument();
+  });
+
+  test("a route change probes health and surfaces a dead server", async () => {
+    const user = userEvent.setup();
+    renderAt(CATALOG_ROUTES.importExport);
+    await screen.findByText("Import and export screen");
+
+    getHealth.mockResolvedValue({ connected: false, reason: "server" });
+    await user.click(screen.getByRole("link", { name: "Default" }));
+
+    expect(
+      await screen.findByText("Can't reach the editor server."),
+    ).toBeInTheDocument();
+  });
+
+  test("regaining focus probes health and surfaces a dead database", async () => {
+    renderAt(CATALOG_ROUTES.collection(1));
+    await screen.findByText("Collection view screen");
+
+    getHealth.mockResolvedValue({ connected: false, reason: "database" });
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    expect(
+      await screen.findByText("Can't reach the database."),
+    ).toBeInTheDocument();
+  });
+
+  test("a focus probe that finds the server back reloads the page", async () => {
+    renderAt(CATALOG_ROUTES.collection(1));
+    await screen.findByText("Collection view screen");
+
+    act(() => {
+      reportConnectionFailure("server");
+    });
+    await screen.findByText("Can't reach the editor server.");
+
+    getHealth.mockResolvedValue({ connected: true });
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    expect(await screen.findByText("Collection view screen")).toBeInTheDocument();
+  });
+
+  test("a route change in a healthy shell does not refetch collections", async () => {
+    const user = userEvent.setup();
+    renderAt(CATALOG_ROUTES.importExport);
+    await screen.findByText("Import and export screen");
+
+    const loadsBefore = getCollections.mock.calls.length;
+    await user.click(screen.getByRole("link", { name: "Default" }));
+
+    expect(await screen.findByText("Collection view screen")).toBeInTheDocument();
+    expect(getCollections.mock.calls.length).toBe(loadsBefore);
+  });
+
+  test("a focus probe in a healthy shell does not refetch collections", async () => {
+    renderAt(CATALOG_ROUTES.collection(1));
+    await screen.findByText("Collection view screen");
+
+    const loadsBefore = getCollections.mock.calls.length;
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    expect(getCollections.mock.calls.length).toBe(loadsBefore);
+  });
+
+  test("a healthy probe clears a card pinned by a generic load failure", async () => {
+    getCollections.mockRejectedValueOnce(connectionError("generic"));
+    renderAt(CATALOG_ROUTES.collection(1));
+    await screen.findByText("Can't check the connection.");
+
+    getHealth.mockResolvedValue({ connected: true });
+    act(() => {
+      window.dispatchEvent(new Event("focus"));
+    });
+
+    expect(await screen.findByText("Collection view screen")).toBeInTheDocument();
   });
 });

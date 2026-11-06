@@ -7,6 +7,7 @@ import { chooseFilterField } from "../test/filterBar.js";
 
 vi.mock("../lib/api.js", () => ({
   deleteNote: vi.fn(),
+  getCollections: vi.fn(),
   getNotes: vi.fn(),
   reorderNotes: vi.fn(),
 }));
@@ -28,7 +29,9 @@ vi.mock("@tanstack/react-virtual", () => ({
   }),
 }));
 
-import { getNotes } from "../lib/api.js";
+import { getCollections, getNotes } from "../lib/api.js";
+import { CollectionsProvider, useCollections } from "../lib/collections.jsx";
+import { subscribeConnectionFailure } from "../lib/connection.js";
 
 class FakeResizeObserver {
   observe() {}
@@ -67,9 +70,35 @@ function renderTable() {
   );
 }
 
+// The shell's live connection state, surfaced the way App reads it.
+function ConnectionProbe() {
+  const { connectionLostReason } = useCollections();
+  return connectionLostReason ? <p>{`shell:${connectionLostReason}`}</p> : null;
+}
+
+function renderTableInsideShell() {
+  return render(
+    <CollectionsProvider>
+      <MemoryRouter initialEntries={["/catalog/collections/1/view"]}>
+        <NotesTable
+          collection={{ id: 1, is_default: 1, name: "Test" }}
+          collectionId={1}
+          collections={[{ id: 1, is_default: 1, name: "Test" }]}
+          collectionsError=""
+          loadingCollections={false}
+        />
+        <ConnectionProbe />
+      </MemoryRouter>
+    </CollectionsProvider>,
+  );
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.clear();
+  getCollections.mockResolvedValue({
+    collections: [{ id: 1, is_default: 1, name: "Test" }],
+  });
   vi.stubGlobal("ResizeObserver", FakeResizeObserver);
   vi.spyOn(HTMLElement.prototype, "getBoundingClientRect").mockReturnValue({
     width: 1000,
@@ -148,6 +177,66 @@ describe("NotesTable hardening: a failed load", () => {
 
     expect(await screen.findByText("Still offline")).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Try again" })).toBeInTheDocument();
+  });
+
+  test.each(["server", "database"])(
+    "a %s failure is left to the shell card instead of a second load panel",
+    async (reason) => {
+      const error = new Error("Request failed.");
+      error.reason = reason;
+      getNotes.mockRejectedValue(error);
+      const reported = [];
+      const unsubscribe = subscribeConnectionFailure((failure) => {
+        reported.push(failure);
+      });
+
+      try {
+        renderTable();
+
+        await waitFor(() => {
+          expect(screen.queryByText("Loading notes…")).not.toBeInTheDocument();
+        });
+      } finally {
+        unsubscribe();
+      }
+
+      expect(reported).toEqual([reason]);
+      expect(
+        screen.queryByRole("heading", {
+          name: "Couldn't load this collection's notes.",
+        }),
+      ).not.toBeInTheDocument();
+    },
+  );
+
+  test("a generic failure keeps the table's own panel", async () => {
+    const error = new Error("The query failed.");
+    error.reason = "generic";
+    getNotes.mockRejectedValue(error);
+
+    renderTable();
+
+    expect(
+      await screen.findByRole("heading", {
+        name: "Couldn't load this collection's notes.",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("The query failed.")).toBeInTheDocument();
+  });
+
+  test("a notes load that loses the server reaches the shell's live state", async () => {
+    const error = new Error("Request failed.");
+    error.reason = "server";
+    getNotes.mockRejectedValue(error);
+
+    renderTableInsideShell();
+
+    expect(await screen.findByText("shell:server")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("heading", {
+        name: "Couldn't load this collection's notes.",
+      }),
+    ).not.toBeInTheDocument();
   });
 });
 

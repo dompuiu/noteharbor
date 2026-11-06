@@ -26,6 +26,7 @@ import {
   TABLE_RAIL_SELECTOR,
 } from "../lib/editableElement.js";
 import { collectionDeleteConfirmation } from "../lib/collectionActions.js";
+import { reportConnectionFailure } from "../lib/connection.js";
 import { isEmptyLibrary } from "../lib/libraryState.js";
 import { CATALOG_ROUTES } from "../lib/routes.js";
 import {
@@ -1737,9 +1738,18 @@ function NotesTable({
         }
       })
       .catch((fetchError) => {
-        if (active) {
-          setLoadError(fetchError.message);
+        if (!active) {
+          return;
         }
+
+        // An unreachable server or database is the shell's card, not this
+        // table's: hand it up and paint no second "Couldn't load" panel, which
+        // would hide the one recovery that also reconnects every other screen.
+        if (reportConnectionFailure(fetchError?.reason)) {
+          return;
+        }
+
+        setLoadError(fetchError.message);
       })
       .finally(() => {
         if (active) {
