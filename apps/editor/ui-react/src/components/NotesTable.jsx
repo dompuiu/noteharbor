@@ -40,13 +40,9 @@ import {
   saveTableState,
 } from "../lib/notesTableState.js";
 import { shouldHandOffToFilters } from "../lib/filterFocusMemory.js";
+import { useColumnPan } from "../lib/useColumnPan.js";
 import {
-  COLUMN_PAN_THRESHOLD_PX,
   COLUMN_SCROLL_STEP,
-  clampColumnScrollLeft,
-  columnPanScrollLeft,
-  isColumnPanShadowVisible,
-  isColumnPanTarget,
 } from "../lib/tableColumnPan.js";
 import {
   dataColumns,
@@ -87,11 +83,10 @@ import { RowActionsMenu } from "./RowActionsMenu.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 import { TableFilterBar } from "./TableFilterBar.jsx";
 import { TableFindBar } from "./TableFindBar.jsx";
-import { TableRows } from "./TableRows.jsx";
+import { TableSurface } from "./TableSurface.jsx";
 import { TableBulkBar } from "./TableBulkBar.jsx";
 import { ToastHost } from "./Toast.jsx";
 import { MoveNotesDialog } from "./MoveNotesDialog.jsx";
-import { TableScrollbar } from "./TableScrollbar.jsx";
 
 export function HomeHero() {
   return null;
@@ -616,8 +611,6 @@ function NotesTable({
   // changing identity.
   const rowHandlerImplRef = useRef(null);
   const [tableWidth, setTableWidth] = useState(null);
-  const columnPanRef = useRef(null);
-  const suppressColumnPanClickRef = useRef(false);
   const editorOverlayRef = useRef(null);
   const focusedRowIdRef = useRef(null);
   const tableFocusAnchorRef = useRef(null);
@@ -926,9 +919,6 @@ function NotesTable({
   // The scrollbar owns its metrics; the table only needs to know whether its
   // gutter column is showing, which changes the column widths.
   const [vScrollVisible, setVScrollVisible] = useState(false);
-  // The horizontal scrollbar is hidden (the Flutter table does the same), so
-  // the footer offers the arrow keys whenever the columns really overflow.
-  const [columnPanAvailable, setColumnPanAvailable] = useState(false);
   const selectAllRef = useRef(null);
   const editorDirtyRef = useRef(false);
   const confirmOpenRef = useRef(false);
@@ -2004,24 +1994,6 @@ function NotesTable({
     return () => observer.disconnect();
   }, [loading, loadError]);
 
-  // The scroller's content width is the sum of the rendered <col> widths, so
-  // the table only needs re-checking when those widths change (a resize, a
-  // column toggle, or the scrollbar's gutter) or when the scroller remounts
-  // with the rows. Same overflow test as columnScroller(), so the footer only
-  // offers the arrows when pressing them would actually move the table.
-  useLayoutEffect(() => {
-    const scroller = tableScrollRef.current;
-
-    if (!scroller) {
-      return;
-    }
-
-    const overflows = scroller.scrollWidth > scroller.clientWidth + 1;
-    setColumnPanAvailable((current) =>
-      current === overflows ? current : overflows,
-    );
-  }, [columnWidths, loading, loadError, vScrollVisible]);
-
   useEffect(() => {
     if (selectAllRef.current) {
       selectAllRef.current.indeterminate =
@@ -2187,208 +2159,26 @@ function NotesTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, orderedNotes, rowsPending]);
 
-  // Returns the table scroller when the columns actually overflow, so
-  // panning is a no-op on a wide window just like the Viewer's table.
-  function columnScroller() {
-    const scroller = tableScrollRef.current;
-
-    if (!scroller || scroller.scrollWidth <= scroller.clientWidth + 1) {
-      return null;
-    }
-
-    return scroller;
-  }
-
-  function scrollColumnsTo(scroller, left) {
-    // Chromium animates the pan; jsdom (tests) has no scrollTo, so fall back
-    // to a direct assignment there.
-    if (typeof scroller.scrollTo === "function") {
-      // The shadow follows the scroll event, so it appears as the pan starts
-      // and clears exactly when the table reaches its start.
-      scroller.scrollTo({ behavior: "smooth", left });
-      return;
-    }
-
-    scroller.scrollLeft = left;
-    syncColumnScroll(scroller);
-  }
-
-  // The pinned block's edge shadow and the pan's grabbing cursor are painted on
-  // the scroller itself (see .is-scrolled-x and .is-panning in styles.css).
-  // They are pure scroll and gesture state, so writing the class directly keeps
-  // a pan from rebuilding the note rows or the header. The class is also kept
-  // in sync from the scroller's scroll event, because a scroll can arrive from
-  // a wheel, a trackpad or a keyboard pan without passing through here.
-  //
-  // The pinned cells themselves need no scroll offset: .table-scroll-x is the
-  // scrollport for both axes, so native sticky keeps them fixed while the
-  // columns pan.
-  function syncColumnScroll(scroller = tableScrollRef.current) {
-    scroller?.classList.toggle(
-      "is-scrolled-x",
-      isColumnPanShadowVisible(scroller.scrollLeft ?? 0),
-    );
-  }
-
-  function panColumnsBy(delta) {
-    const scroller = columnScroller();
-
-    if (!scroller) {
-      return false;
-    }
-
-    scrollColumnsTo(
-      scroller,
-      clampColumnScrollLeft(
-        scroller.scrollLeft,
-        delta,
-        scroller.scrollWidth - scroller.clientWidth,
-      ),
-    );
-    return true;
-  }
-
-  function panColumnsToEdge(forward) {
-    const scroller = columnScroller();
-
-    if (!scroller) {
-      return false;
-    }
-
-    scrollColumnsTo(scroller, forward ? scroller.scrollWidth : 0);
-    return true;
-  }
-
-  function resetColumnScroll() {
-    const scroller = tableScrollRef.current;
-
-    if (scroller) {
-      scroller.scrollLeft = 0;
-      syncColumnScroll(scroller);
-    }
-  }
-
-  function handleColumnPanPointerDown(event) {
-    // Clear first so a missed pointerup cannot leave a stale pending pan
-    // that would suppress focus on a later, unrelated press.
-    columnPanRef.current = null;
-    const scroller = columnScroller();
-
-    if (
-      event.button !== 0 ||
-      event.pointerType === "touch" ||
-      !scroller ||
-      !isColumnPanTarget(event.target)
-    ) {
-      return;
-    }
-
-    columnPanRef.current = {
-      active: false,
-      pointerId: event.pointerId,
-      startScrollLeft: scroller.scrollLeft,
-      startX: event.clientX,
-    };
-  }
-
-  function handleColumnPanMouseDown(event) {
-    // Pointerdown fires before mousedown and already armed the pan, so a
-    // press that can start a pan must stay focus-neutral: cancelling the
-    // press's default focus action keeps the active row's DOM focus, focus
-    // memory, and highlight intact. The follow-up click is unaffected, so
-    // ordinary clicks still fire; a completed pan swallows its own click.
-    if (columnPanRef.current) {
-      event.preventDefault();
-    }
-  }
-
-  function handleColumnPanPointerMove(event) {
-    const pan = columnPanRef.current;
-    const scroller = tableScrollRef.current;
-
-    if (!pan || !scroller || event.pointerId !== pan.pointerId) {
-      return;
-    }
-
-    const deltaX = event.clientX - pan.startX;
-
-    if (!pan.active) {
-      if (Math.abs(deltaX) < COLUMN_PAN_THRESHOLD_PX) {
-        return;
-      }
-
-      pan.active = true;
-      scroller.classList.add("is-panning");
-
-      if (typeof scroller.setPointerCapture === "function") {
-        scroller.setPointerCapture(event.pointerId);
-      }
-
-      window.getSelection()?.removeAllRanges();
-    }
-
-    event.preventDefault();
-    scroller.scrollLeft = columnPanScrollLeft({
-      startScrollLeft: pan.startScrollLeft,
-      startX: pan.startX,
-      clientX: event.clientX,
-      max: scroller.scrollWidth - scroller.clientWidth,
-    });
-    syncColumnScroll(scroller);
-  }
-
-  function handleColumnPanPointerEnd(event) {
-    const pan = columnPanRef.current;
-
-    if (
-      !pan ||
-      (event?.pointerId != null && event.pointerId !== pan.pointerId)
-    ) {
-      return;
-    }
-
-    if (pan.active) {
-      // The drag finishes with a click on whatever was under the pointer;
-      // swallow that one click so a pan ending on a row does not open the
-      // note. The timer clears the flag if no click follows.
-      suppressColumnPanClickRef.current = true;
-      window.setTimeout(() => {
-        suppressColumnPanClickRef.current = false;
-      }, 0);
-    }
-
-    columnPanRef.current = null;
-    // The row clears this on its own mouseup, but a pan captures the
-    // pointer to the scroller so the row's mouseup may never run. Reset
-    // here so a stale press flag cannot suppress a later keyboard paint.
-    mouseFocusSuppressRef.current = false;
-    tableScrollRef.current?.classList.remove("is-panning");
-  }
-
-  function handleColumnPanClickCapture(event) {
-    if (!suppressColumnPanClickRef.current) {
-      return;
-    }
-
-    suppressColumnPanClickRef.current = false;
-    event.preventDefault();
-    event.stopPropagation();
-  }
-
-  // A window switch mid-pan never delivers pointerup to the scroller, and the
-  // capture can outlive the gesture. End the pan on blur so the grabbing
-  // cursor and the suppressed text selection cannot stick. The handler only
-  // touches refs, so the first render's copy stays correct.
-  useEffect(() => {
-    function endPanOnBlur() {
-      if (columnPanRef.current) {
-        handleColumnPanPointerEnd();
-      }
-    }
-
-    window.addEventListener("blur", endPanOnBlur);
-    return () => window.removeEventListener("blur", endPanOnBlur);
-  }, []);
+  // The pan gesture and its availability measurement are shared with the
+  // All notes screen through one hook, so both tables reach off-screen
+  // columns the same way.
+  const {
+    columnPanAvailable,
+    panColumnsBy,
+    panColumnsToEdge,
+    resetColumnScroll,
+    scrollHandlers,
+    syncColumnScroll,
+  } = useColumnPan({
+    measureDeps: [columnWidths, loading, loadError, vScrollVisible],
+    onPanEnd: () => {
+      // A pan captures the pointer to the scroller, so the row's mouseup may
+      // never run. Reset here so a stale press flag cannot suppress a later
+      // keyboard paint.
+      mouseFocusSuppressRef.current = false;
+    },
+    scrollRef: tableScrollRef,
+  });
 
   useEffect(() => {
     if (!thumbPreviewState) {
@@ -5647,190 +5437,68 @@ function NotesTable({
                   />
                 </div>
               </div>
-              <div className="table-viewport">
-                {findOpen ? (
-                  <TableFindBar
-                    canSearchAll={canSearchAllNotes}
-                    currentIndex={findCurrentIndex}
-                    filtersActive={hasActiveFilters}
-                    inputRef={findInputRef}
-                    matchCount={findMatches.length}
-                    onClose={closeFind}
-                    onQueryChange={setFindQuery}
-                    onSearchAll={searchAllNotesForFind}
-                    onStep={stepFind}
-                    pending={findPending}
-                    query={findQuery}
-                  />
-                ) : null}
-                <div
-                  className="table-scroll-x"
-                  onClickCapture={handleColumnPanClickCapture}
-                  onLostPointerCapture={handleColumnPanPointerEnd}
-                  onMouseDown={handleColumnPanMouseDown}
-                  onPointerCancel={handleColumnPanPointerEnd}
-                  onPointerDown={handleColumnPanPointerDown}
-                  onPointerMove={handleColumnPanPointerMove}
-                  onPointerUp={handleColumnPanPointerEnd}
-                  onScroll={() => syncColumnScroll()}
-                  ref={tableScrollRef}
-                >
-                  <div
-                    className={`table-scroll-content${emptyViewSettled ? " is-empty-view" : ""}`}
-                  >
-                    <table aria-busy={rowsPending || undefined}>
-                      <colgroup>
-                        {visibleColumns.map((column) => (
-                          <col
-                            key={column.key}
-                            style={{
-                              width: `${columnWidths[column.key] ?? column.width ?? 0}px`,
-                            }}
-                          />
-                        ))}
-                        {vScrollVisible ? (
-                          <col style={{ width: `${tableGutterWidth}px` }} />
-                        ) : null}
-                      </colgroup>
-                      <thead>
-                        <tr>
-                          {visibleColumns.map((column) => {
-                            if (column.kind === "reorder") {
-                              return (
-                                <th
-                                  key={column.key}
-                                  scope="col"
-                                  {...tableCellAttributes(column)}
-                                />
-                              );
-                            }
-
-                            if (column.kind === "selection") {
-                              return (
-                                <th
-                                  key={column.key}
-                                  scope="col"
-                                  {...tableCellAttributes(column)}
-                                >
-                                  <input
-                                    aria-label="Select all visible rows"
-                                    checked={allVisibleSelected}
-                                    onChange={toggleAllVisible}
-                                    ref={selectAllRef}
-                                    type="checkbox"
-                                  />
-                                </th>
-                              );
-                            }
-
-                            if (!column.sortable) {
-                              // The actions column carries no visible label: the
-                              // three-dot button explains itself. Keep the name
-                              // for assistive tech so the column is not anonymous.
-                              const isActions = column.kind === "actions";
-
-                              return (
-                                <th
-                                  aria-label={isActions ? column.label : undefined}
-                                  key={column.key}
-                                  scope="col"
-                                  {...tableCellAttributes(column)}
-                                >
-                                  {isActions ? null : column.label}
-                                </th>
-                              );
-                            }
-
-                            const isSorted = sortKey === column.key;
-
-                            return (
-                              <th
-                                aria-sort={
-                                  isSorted
-                                    ? sortDirection === "asc"
-                                      ? "ascending"
-                                      : "descending"
-                                    : "none"
-                                }
-                                key={column.key}
-                                scope="col"
-                                {...tableCellAttributes(column)}
-                              >
-                                <button
-                                  className={`sort-button${isSorted ? " sort-button--active" : ""}`}
-                                  onClick={() => toggleSort(column.key)}
-                                  type="button"
-                                >
-                                  {column.label}
-                                  {/* Drawn on every sortable header: the
-                                      stylesheet keeps it hidden until hover and
-                                      lets the sorted column keep it visible. */}
-                                  <svg
-                                    aria-hidden="true"
-                                    className="sort-chevron"
-                                    focusable="false"
-                                    viewBox="0 0 24 24"
-                                  >
-                                    <path
-                                      d="m6 15 6-6 6 6"
-                                      fill="none"
-                                      stroke="currentColor"
-                                      strokeLinecap="round"
-                                      strokeLinejoin="round"
-                                      strokeWidth="2.4"
-                                    />
-                                  </svg>
-                                </button>
-                              </th>
-                            );
-                          })}
-                          {vScrollVisible ? (
-                            <th
-                              aria-hidden="true"
-                              className="table-gutter-cell"
-                              scope="col"
-                            />
-                          ) : null}
-                        </tr>
-                      </thead>
-                      <TableRows
-                        activeNoteId={activeNoteId}
-                        canMove={canMoveNotes}
-                        canReorder={canReorder}
-                        columns={visibleColumns}
-                        dragStateRef={dragStateRef}
-                        emptyContent={emptyTableRow}
-                        findCurrentNoteId={findCurrentMatchId}
-                        findMarksByNoteId={findMarksByNoteId}
-                        handlers={rowHandlers}
-                        notes={deferredOrderedNotes}
-                        onReorder={handleReorder}
-                        reorderRail={reorderRail}
-                        rowElementFor={(noteId) =>
-                          rowElementMapRef.current.get(noteId)
-                        }
-                        rowModelsByNoteId={rowModelsByNoteId}
-                        selectedIdSet={selectedIdSet}
-                        showGutter={vScrollVisible}
-                        topSpacerHeight={topSpacerHeight}
-                        bottomSpacerHeight={bottomSpacerHeight}
-                        totalColumnCount={totalColumnCount}
-                        virtualRows={virtualRows}
-                      />
-                    </table>
-                  </div>
-                </div>
-                <TableScrollbar
-                  loading={loading}
-                  onFirstRow={focusFirstRow}
-                  onLastRow={focusLastRow}
-                  onPage={pageTable}
-                  onVisibleChange={setVScrollVisible}
-                  rowCount={deferredOrderedNotes.length}
-                  rowHeight={rowHeightEstimate}
-                  scrollRef={tableScrollRef}
-                />
-              </div>
+              <TableSurface
+                activeNoteId={activeNoteId}
+                allVisibleSelected={allVisibleSelected}
+                ariaBusy={rowsPending}
+                bottomSpacerHeight={bottomSpacerHeight}
+                canMove={canMoveNotes}
+                canReorder={canReorder}
+                columnWidths={columnWidths}
+                columns={visibleColumns}
+                dragStateRef={dragStateRef}
+                emptyContent={emptyTableRow}
+                emptyView={emptyViewSettled}
+                findBar={
+                  findOpen ? (
+                    <TableFindBar
+                      canSearchAll={canSearchAllNotes}
+                      currentIndex={findCurrentIndex}
+                      filtersActive={hasActiveFilters}
+                      inputRef={findInputRef}
+                      matchCount={findMatches.length}
+                      onClose={closeFind}
+                      onQueryChange={setFindQuery}
+                      onSearchAll={searchAllNotesForFind}
+                      onStep={stepFind}
+                      pending={findPending}
+                      query={findQuery}
+                    />
+                  ) : null
+                }
+                findCurrentNoteId={findCurrentMatchId}
+                findMarksByNoteId={findMarksByNoteId}
+                gutterWidth={tableGutterWidth}
+                handlers={rowHandlers}
+                loading={loading}
+                notes={deferredOrderedNotes}
+                onFirstRow={focusFirstRow}
+                onLastRow={focusLastRow}
+                onPage={pageTable}
+                onReorder={handleReorder}
+                onScroll={() => syncColumnScroll()}
+                onVisibleChange={setVScrollVisible}
+                reorderRail={reorderRail}
+                rowCount={deferredOrderedNotes.length}
+                rowElementFor={(noteId) =>
+                  rowElementMapRef.current.get(noteId)
+                }
+                rowHeight={rowHeightEstimate}
+                rowModelsByNoteId={rowModelsByNoteId}
+                scrollHandlers={scrollHandlers}
+                scrollRef={tableScrollRef}
+                selectAllRef={selectAllRef}
+                selectedIdSet={selectedIdSet}
+                showGutter={vScrollVisible}
+                sortDirection={sortDirection}
+                sortKey={sortKey}
+                tableCellAttributes={tableCellAttributes}
+                toggleAllVisible={toggleAllVisible}
+                toggleSort={toggleSort}
+                topSpacerHeight={topSpacerHeight}
+                totalColumnCount={totalColumnCount}
+                virtualRows={virtualRows}
+              />
               {selectedIds.length ? (
                 <TableBulkBar
                   barRef={bulkBarRef}

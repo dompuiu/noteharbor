@@ -38,6 +38,7 @@ describe("getAllNotes", () => {
       {
         id: 1,
         catalog_number: "Fr. 2300",
+        collection: "Serban's Notes",
         collection_id: 1,
         collection_name: "Serban's Notes",
         collection_order: 1,
@@ -45,6 +46,7 @@ describe("getAllNotes", () => {
       {
         id: 2,
         catalog_number: "Fr. 500",
+        collection: "Serban's Notes",
         collection_id: 1,
         collection_name: "Serban's Notes",
         collection_order: 1,
@@ -52,6 +54,7 @@ describe("getAllNotes", () => {
       {
         id: 3,
         catalog_number: "P-22a",
+        collection: "Vault",
         collection_id: 2,
         collection_name: "Vault",
         collection_order: 2,

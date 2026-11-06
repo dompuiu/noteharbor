@@ -7549,81 +7549,12 @@ kbd {
   outline-offset: 0;
 }
 
-/* The table keeps the Table screen's 1200px floor and adds the collection
-   column's own 200px: the narrowest window still pans instead of squeezing
-   the cells into unreadable columns. */
-.all-notes-table {
-  min-width: 1244px;
-}
-
-/* The All notes table keeps native scrollbars visible: it owns no custom
-   vertical track, and the horizontal bar is the pointer user's only way to
-   reach the Tags column once the card is narrower than the table. */
-.all-notes-scroll {
-  scrollbar-width: thin;
-}
-
-.all-notes-scroll::-webkit-scrollbar {
-  display: block;
-  width: 10px;
-  height: 10px;
-}
-
-.all-notes-scroll::-webkit-scrollbar-track {
-  background: var(--scroll-track);
-}
-
-.all-notes-scroll::-webkit-scrollbar-thumb {
-  border-radius: 999px;
-  background: var(--scroll-thumb);
-}
-
-.all-notes-scroll::-webkit-scrollbar-thumb:hover {
-  background: var(--scroll-thumb-hover);
-}
-
-/* The spec's 40×26 front image fits the 64px column with its 6px side
-   padding; the Table screen's 56×32 image would be clipped here. */
-.all-notes-thumb {
-  width: 40px;
-  height: 26px;
-}
-
-.all-notes-caption {
-  position: absolute;
-  width: 1px;
-  height: 1px;
-  margin: -1px;
-  padding: 0;
-  overflow: hidden;
-  clip: rect(0 0 0 0);
-  white-space: nowrap;
-  border: 0;
-}
+/* The table keeps the Table screen's 1200px floor. The data columns flex to
+   the card's width exactly like the collection table, so the extra Collection
+   column never forces a hidden horizontal scrollbar. */
 
 /* The collection name is a location, not a badge: muted body text keeps it
    one step behind the catalog number it identifies. */
-td.table-col-collection .all-notes-collection {
+td.table-col-collection {
   color: var(--text-muted);
-}
-
-/* The catalog number is the row's keyboard and assistive path into the note
-   slideshow. The underline appears only on hover/focus, matching the rest of
-   the table's quiet link language. */
-.all-notes-note-link {
-  color: var(--text);
-  font-weight: 600;
-  text-decoration: none;
-}
-
-.all-notes-note-link:hover,
-.all-notes-note-link:focus-visible {
-  color: var(--accent-strong);
-  text-decoration: underline;
-  text-underline-offset: 2px;
-}
-
-.all-notes-scroll:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: -2px;
 }

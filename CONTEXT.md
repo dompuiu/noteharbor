@@ -29,7 +29,7 @@ _Sidebar label_: Banknotes
 _Avoid_: Notes table, list view
 
 **All notes screen**:
-The Editor's read-only union of every collection's notes in one table, with its own collection picker, filters, sorting, and links into each note's own collection slideshow. Its sidebar label is **All notes**; it is a destination beside the collections, not a mode of one.
+The Editor's read-only union of every collection's notes in one table, with its own collection picker, filters, sorting, find, column choice, keyboard row navigation, and a slideshow over the current view. Its sidebar label is **All notes**; it is a destination beside the collections, not a mode of one. Closing that slideshow with Esc returns to the screen.
 _Avoid_: Notes table (that is the Table screen), library
 
 **Import screen**:

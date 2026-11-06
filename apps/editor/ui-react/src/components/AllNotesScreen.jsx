@@ -1,6 +1,15 @@
-import { useEffect, useMemo, useState } from "react";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
 import { getAllNotes } from "../lib/api.js";
+import {
+  allNotesColumns,
+  allNotesDefaultSortKey,
+  hideableAllNotesColumns,
+  hideableAllNotesColumnKeys,
+  lastVisibleAllNotesDataColumnKey,
+  loadAllNotesVisibleColumnKeys,
+  saveAllNotesVisibleColumnKeys,
+} from "../lib/allNotesColumns.js";
 import { useCollections } from "../lib/collections.jsx";
 import { reportConnectionFailure } from "../lib/connection.js";
 import {
@@ -14,8 +23,11 @@ import {
 import { CATALOG_ROUTES } from "../lib/routes.js";
 import { dataColumns, validSortKeys } from "../lib/tableColumns.js";
 import { AllNotesTable } from "./AllNotesTable.jsx";
+import { Slideshow } from "./Slideshow.jsx";
 
-const collectionSortKey = "collection";
+const slideshowHashPattern =
+  /^#slideshow\/(\d+)(?:\/preview\/(front|back))?$/;
+const previewKinds = ["front", "back"];
 
 function noteCountLabel(count) {
   return `${count} ${count === 1 ? "note" : "notes"}`;
@@ -26,14 +38,28 @@ function collectionCountLabel(count) {
 }
 
 function normalizeSortKey(raw) {
-  if (raw === collectionSortKey) {
-    return collectionSortKey;
+  if (raw === allNotesDefaultSortKey) {
+    return allNotesDefaultSortKey;
   }
 
   return validSortKeys.has(raw) ? raw : null;
 }
 
+function parseSlideshowHash(hash) {
+  const match = String(hash ?? "").match(slideshowHashPattern);
+
+  if (!match) {
+    return null;
+  }
+
+  return {
+    noteId: Number.parseInt(match[1], 10),
+    previewKind: match[2] ?? null,
+  };
+}
+
 export function AllNotesScreen() {
+  const location = useLocation();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const {
@@ -46,6 +72,10 @@ export function AllNotesScreen() {
   const [notesLoading, setNotesLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
   const [reloadToken, setReloadToken] = useState(0);
+  const [visibleColumnKeys, setVisibleColumnKeys] = useState(
+    loadAllNotesVisibleColumnKeys,
+  );
+  const savedVisibleColumnKeysRef = useRef(visibleColumnKeys);
 
   const conditionsParam = searchParams.get("fc") ?? "";
   const conditions = useMemo(
@@ -62,6 +92,15 @@ export function AllNotesScreen() {
   const sortKey = normalizeSortKey(searchParams.get("sort"));
   const sortDirection =
     sortKey && searchParams.get("dir") === "desc" ? "desc" : "asc";
+
+  useEffect(() => {
+    if (savedVisibleColumnKeysRef.current === visibleColumnKeys) {
+      return;
+    }
+
+    savedVisibleColumnKeysRef.current = visibleColumnKeys;
+    saveAllNotesVisibleColumnKeys(visibleColumnKeys);
+  }, [visibleColumnKeys]);
 
   useEffect(() => {
     let cancelled = false;
@@ -106,6 +145,24 @@ export function AllNotesScreen() {
 
   const totalCount = notes.length;
   const collectionCount = collections.length;
+  const visibleColumns = useMemo(
+    () =>
+      allNotesColumns.filter(
+        (column) =>
+          !column.hideable || visibleColumnKeys.includes(column.key),
+      ),
+    [visibleColumnKeys],
+  );
+  // The All-fields chip and Find only search the columns the collector can
+  // see, so a hidden column can never keep hiding rows.
+  const searchColumns = useMemo(
+    () =>
+      dataColumns.filter(
+        (column) =>
+          !column.hideable || visibleColumnKeys.includes(column.key),
+      ),
+    [visibleColumnKeys],
+  );
   const visibleNotes = useMemo(() => {
     const collectionNotes = selectedCollectionId
       ? notes.filter((note) => note.collection_id === selectedCollectionId)
@@ -113,15 +170,22 @@ export function AllNotesScreen() {
     const filtered = filterNotesByConditions(
       collectionNotes,
       conditions,
-      dataColumns,
+      searchColumns,
     );
 
-    if (!sortKey || sortKey === collectionSortKey) {
+    if (!sortKey || sortKey === allNotesDefaultSortKey) {
       return sortNotesByCollection(filtered, sortDirection);
     }
 
     return sortNotesBySort(filtered, sortKey, sortDirection);
-  }, [conditions, notes, selectedCollectionId, sortDirection, sortKey]);
+  }, [
+    conditions,
+    notes,
+    searchColumns,
+    selectedCollectionId,
+    sortDirection,
+    sortKey,
+  ]);
 
   const tagNames = useMemo(() => {
     const seen = new Map();
@@ -186,7 +250,37 @@ export function AllNotesScreen() {
   const subtitle = loading
     ? "Reading every collection."
     : `${countText} ${scopeText}`;
-  const summary = `Showing ${shownCount} of ${noteCountLabel(totalCount)} across ${collectionCountLabel(collectionCount)}`;
+  const canResetView = hasActiveFilters || sortKey != null;
+  const lastVisibleDataColumnKey = lastVisibleAllNotesDataColumnKey(
+    visibleColumnKeys,
+  );
+
+  const slideshowRoute = parseSlideshowHash(location.hash);
+  const slideshowNoteId = slideshowRoute?.noteId ?? null;
+  const previewKind = slideshowRoute?.previewKind ?? null;
+  const slideshowIndex =
+    slideshowNoteId == null
+      ? -1
+      : visibleNotes.findIndex((note) => note.id === slideshowNoteId);
+  const slideshowActive = slideshowNoteId != null;
+
+  function allNotesUrl(hash = "") {
+    return {
+      pathname: location.pathname,
+      search: location.search,
+      hash,
+    };
+  }
+
+  useEffect(() => {
+    if (!slideshowActive || loading) {
+      return;
+    }
+
+    if (slideshowIndex < 0) {
+      navigate(allNotesUrl(), { replace: true });
+    }
+  }, [loading, navigate, slideshowActive, slideshowIndex, location.search]);
 
   function updateParam(name, value) {
     setSearchParams(
@@ -261,6 +355,20 @@ export function AllNotesScreen() {
     );
   }
 
+  function handleResetView() {
+    setSearchParams(
+      (current) => {
+        const next = new URLSearchParams(current);
+        next.delete("collection");
+        next.delete("fc");
+        next.delete("sort");
+        next.delete("dir");
+        return next;
+      },
+      { replace: true },
+    );
+  }
+
   function handleCollectionChange(value) {
     updateParam("collection", value);
   }
@@ -271,8 +379,174 @@ export function AllNotesScreen() {
     );
   }
 
+  function handleToggleColumn(key) {
+    const column = allNotesColumns.find((entry) => entry.key === key);
+
+    if (!column?.hideable) {
+      return;
+    }
+
+    if (!visibleColumnKeys.includes(key)) {
+      const restoredColumns = hideableAllNotesColumnKeys.filter(
+        (currentKey) =>
+          currentKey === key || visibleColumnKeys.includes(currentKey),
+      );
+
+      setVisibleColumnKeys(restoredColumns);
+      return;
+    }
+
+    const remaining = visibleColumnKeys.filter(
+      (currentKey) => currentKey !== key,
+    );
+
+    if (!remaining.length) {
+      return;
+    }
+
+    // A hidden column must not keep hiding rows: drop its chips with it.
+    if (conditions.some((condition) => condition.field === key)) {
+      handleConditionsChange((current) =>
+        current.filter((condition) => condition.field !== key),
+      );
+    }
+
+    // The sorted column is about to disappear: fall back to the screen's
+    // default collection order so the active sort always names a header.
+    if (sortKey === key) {
+      setSearchParams(
+        (current) => {
+          const next = new URLSearchParams(current);
+          next.delete("sort");
+          next.delete("dir");
+          return next;
+        },
+        { replace: true },
+      );
+    }
+
+    setVisibleColumnKeys(remaining);
+  }
+
   function handleOpenNote(note) {
-    navigate(CATALOG_ROUTES.noteSlideshow(note.collection_id, note.id));
+    navigate(allNotesUrl(`#slideshow/${note.id}`));
+  }
+
+  function handleCloseSlideshow() {
+    navigate(allNotesUrl(), { replace: true });
+  }
+
+  function handleChangeSlideshowIndex(updater) {
+    if (!visibleNotes.length || slideshowIndex < 0) {
+      return;
+    }
+
+    const resolvedIndex =
+      typeof updater === "function" ? updater(slideshowIndex) : updater;
+    const boundedIndex =
+      ((resolvedIndex % visibleNotes.length) + visibleNotes.length) %
+      visibleNotes.length;
+    const nextNote = visibleNotes[boundedIndex];
+
+    if (nextNote) {
+      navigate(allNotesUrl(`#slideshow/${nextNote.id}`));
+    }
+  }
+
+  function handleOpenPreview(noteId, kind) {
+    navigate(allNotesUrl(`#slideshow/${noteId}/preview/${kind}`));
+  }
+
+  function handleClosePreview(noteId) {
+    navigate(allNotesUrl(`#slideshow/${noteId}`), { replace: true });
+  }
+
+  function movePreview(offset) {
+    if (!slideshowActive || !visibleNotes.length || !previewKind) {
+      return;
+    }
+
+    const direction = offset >= 0 ? 1 : -1;
+    let nextNoteIndex = slideshowIndex;
+
+    if (nextNoteIndex < 0) {
+      return;
+    }
+
+    let nextItemIndex = previewKinds.indexOf(previewKind);
+
+    if (nextItemIndex < 0) {
+      nextItemIndex = direction > 0 ? -1 : previewKinds.length;
+    }
+
+    let remainingSteps = Math.abs(offset);
+
+    while (remainingSteps > 0) {
+      const candidateIndex = nextItemIndex + direction;
+
+      if (candidateIndex >= 0 && candidateIndex < previewKinds.length) {
+        nextItemIndex = candidateIndex;
+        remainingSteps -= 1;
+        continue;
+      }
+
+      nextNoteIndex =
+        (nextNoteIndex + direction + visibleNotes.length) %
+        visibleNotes.length;
+      nextItemIndex = direction > 0 ? 0 : previewKinds.length - 1;
+      remainingSteps -= 1;
+    }
+
+    navigate(
+      allNotesUrl(
+        `#slideshow/${visibleNotes[nextNoteIndex].id}/preview/${previewKinds[nextItemIndex]}`,
+      ),
+    );
+  }
+
+  function jumpToPreview(position) {
+    if (!slideshowActive || !visibleNotes.length || !previewKind) {
+      return;
+    }
+
+    const perNote = previewKinds.length;
+    const target = Math.min(
+      Math.max(position, 1),
+      visibleNotes.length * perNote,
+    );
+    const nextNoteIndex = Math.floor((target - 1) / perNote);
+    const nextItemIndex = (target - 1) % perNote;
+    const nextNote = visibleNotes[nextNoteIndex];
+
+    if (nextNote) {
+      navigate(
+        allNotesUrl(
+          `#slideshow/${nextNote.id}/preview/${previewKinds[nextItemIndex]}`,
+        ),
+      );
+    }
+  }
+
+  function jumpPreview(edge) {
+    if (!slideshowActive || !visibleNotes.length || !previewKind) {
+      return false;
+    }
+
+    const atStart = edge === "start";
+    const nextNoteIndex = atStart ? 0 : visibleNotes.length - 1;
+    const nextKind = atStart ? previewKinds[0] : previewKinds[previewKinds.length - 1];
+    const nextNote = visibleNotes[nextNoteIndex];
+
+    if (
+      nextNote.id === slideshowNoteId &&
+      nextKind === previewKind
+    ) {
+      return false;
+    }
+
+    navigate(allNotesUrl(`#slideshow/${nextNote.id}/preview/${nextKind}`));
+
+    return true;
   }
 
   async function handleRetry() {
@@ -365,26 +639,55 @@ export function AllNotesScreen() {
           </div>
         ) : (
           <AllNotesTable
+            allNotes={notes}
+            canResetView={canResetView}
+            collectionCount={collectionCount}
             collectionOptions={collectionOptions}
+            columns={visibleColumns}
             conditions={conditions}
             emptyContent={renderEmptyContent()}
             hasActiveFilters={hasActiveFilters}
+            hideableColumns={hideableAllNotesColumns}
             notes={visibleNotes}
             onApplyTagFilter={handleApplyTagFilter}
             onClearFilters={handleClearFilters}
             onCollectionChange={handleCollectionChange}
             onConditionsChange={handleConditionsChange}
             onOpenNote={handleOpenNote}
+            onResetView={handleResetView}
+            onSearchAll={handleClearFilters}
             onSort={handleSort}
-            searchColumns={dataColumns}
+            onToggleColumn={handleToggleColumn}
+            searchColumns={searchColumns}
             selectedCollectionId={selectedCollectionId}
             showToolbar={!emptyLibrary}
+            slideshowActive={slideshowActive}
             sortDirection={sortDirection}
             sortKey={sortKey}
-            summary={summary}
             tagNames={tagNames}
+            totalCount={totalCount}
+            visibleColumnKeys={visibleColumnKeys}
+            lastVisibleDataColumnKey={lastVisibleDataColumnKey}
           />
         )}
+
+        {slideshowActive && slideshowIndex >= 0 ? (
+          <Slideshow
+            currentIndex={slideshowIndex}
+            notes={visibleNotes}
+            onChangeIndex={handleChangeSlideshowIndex}
+            onClose={handleCloseSlideshow}
+            onClosePreview={handleClosePreview}
+            onJump={(position) => handleChangeSlideshowIndex(position - 1)}
+            onJumpPreview={jumpToPreview}
+            onMovePreview={movePreview}
+            onOpenPreview={handleOpenPreview}
+            onPreviewEnd={() => jumpPreview("end")}
+            onPreviewStart={() => jumpPreview("start")}
+            previewKind={previewKind}
+            readOnly
+          />
+        ) : null}
       </div>
     </section>
   );

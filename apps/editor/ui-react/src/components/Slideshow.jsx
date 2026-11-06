@@ -665,6 +665,7 @@ function Slideshow({
   onPreviewEnd,
   onPreviewStart,
   previewKind = null,
+  readOnly = false,
 }) {
   const note = notes[currentIndex];
   const screenRef = useRef(null);
@@ -719,13 +720,13 @@ function Slideshow({
         return;
       }
 
-      if (event.key === "a" && note) {
+      if (event.key === "a" && note && !readOnly) {
         event.preventDefault();
         onAdd?.(note.id);
         return;
       }
 
-      if (event.key === "e" && note) {
+      if (event.key === "e" && note && !readOnly) {
         event.preventDefault();
         onEdit?.(note.id);
         return;
@@ -790,6 +791,7 @@ function Slideshow({
     onEdit,
     onOpenPreview,
     previewKind,
+    readOnly,
   ]);
 
   if (!notes.length) {
@@ -894,24 +896,28 @@ function Slideshow({
                 />
               </svg>
             </button>
-            <button
-              aria-label="Add note"
-              className="icon-link icon-link--on-dark"
-              onClick={() => onAdd?.(note.id)}
-              title="Add note before this one (a)"
-              type="button"
-            >
-              Add note
-            </button>
-            <button
-              aria-label="Edit note"
-              className="icon-link icon-link--on-dark"
-              onClick={() => onEdit?.(note.id)}
-              title="Edit note (e)"
-              type="button"
-            >
-              Edit note
-            </button>
+            {readOnly ? null : (
+              <>
+                <button
+                  aria-label="Add note"
+                  className="icon-link icon-link--on-dark"
+                  onClick={() => onAdd?.(note.id)}
+                  title="Add note before this one (a)"
+                  type="button"
+                >
+                  Add note
+                </button>
+                <button
+                  aria-label="Edit note"
+                  className="icon-link icon-link--on-dark"
+                  onClick={() => onEdit?.(note.id)}
+                  title="Edit note (e)"
+                  type="button"
+                >
+                  Edit note
+                </button>
+              </>
+            )}
             <button
               aria-label="Close slideshow"
               className="icon-link icon-link--on-dark"

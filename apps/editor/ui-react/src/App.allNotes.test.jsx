@@ -1,5 +1,5 @@
 import { MemoryRouter, useLocation, useNavigationType } from "react-router-dom";
-import { act, fireEvent, render, screen, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -10,6 +10,17 @@ vi.mock("./lib/api.js", () => ({
   getNotes: vi.fn(),
   getShowcases: vi.fn(),
 }));
+
+// The All notes table is virtualized now, so the app test needs the same
+// windowing stand-in the Table screen's tests use; the real virtualizer sees
+// no layout in jsdom and would render no rows.
+vi.mock("@tanstack/react-virtual", async () => {
+  const { makeWindowedVirtualizer } = await import(
+    "./test/windowedVirtualizer.js"
+  );
+
+  return { useVirtualizer: makeWindowedVirtualizer({ rowHeight: 45 }) };
+});
 
 import { ShellContent } from "./App.jsx";
 import { CollectionsProvider } from "./lib/collections.jsx";
@@ -32,6 +43,7 @@ function note(id, collection, overrides = {}) {
   return {
     id,
     collection_id: collection.id,
+    collection: collection.name,
     collection_name: collection.name,
     collection_order: collection.id === 1 ? 1 : 2,
     display_order: id,
@@ -107,9 +119,10 @@ function renderAllNotes(path = "/catalog/all-notes") {
 }
 
 function catalogLinks() {
-  return screen
-    .getAllByRole("link", { name: /^Open / })
-    .map((link) => link.textContent);
+  return Array.from(document.querySelectorAll("tr.table-row-link")).map(
+    (row) =>
+      row.querySelector(".table-col-catalog_number")?.textContent.trim() ?? "",
+  );
 }
 
 async function commitFilter(user, value) {
@@ -150,11 +163,14 @@ describe("All notes screen", () => {
 
     expect(await screen.findByText("Fr. 2300")).toBeInTheDocument();
     expect(screen.getByText("P-22a")).toBeInTheDocument();
-    const firstRow = screen.getByRole("link", { name: /Open Fr\. 2300/ }).closest("tr");
-    const secondRow = screen.getByRole("link", { name: /Open P-22a/ }).closest("tr");
+    const firstRow = screen.getByText("Fr. 2300").closest("tr");
+    const secondRow = screen.getByText("P-22a").closest("tr");
 
     expect(within(firstRow).getByText("Serban's Notes")).toBeInTheDocument();
     expect(within(secondRow).getByText("Vault")).toBeInTheDocument();
+    expect(
+      screen.queryByText("No notes match these filters."),
+    ).not.toBeInTheDocument();
     expect(screen.getByText("3 notes across 2 collections")).toBeInTheDocument();
     expect(
       screen.getByText("Showing 3 of 3 notes across 2 collections"),
@@ -254,18 +270,14 @@ describe("All notes screen", () => {
     expect(catalogLinks()).toEqual(["Fr. 2300", "Fr. 500", "P-22a"]);
   });
 
-  test("the catalog link opens the note in its own collection, and the row is a pointer convenience", async () => {
+  test("the catalog cell opens the note in the All notes slideshow", async () => {
     const user = userEvent.setup();
     renderAllNotes();
     await screen.findByText("P-22a");
 
-    expect(
-      screen.getByRole("link", { name: "Open P-22a in Vault" }),
-    ).toHaveAttribute("href", "/catalog/collections/2/view#slideshow/3");
-
-    await user.click(screen.getByRole("link", { name: "Open P-22a in Vault" }));
+    await user.click(screen.getByText("P-22a"));
     expect(screen.getByTestId("pathname")).toHaveTextContent(
-      "/catalog/collections/2/view#slideshow/3",
+      "/catalog/all-notes#slideshow/3",
     );
   });
 
@@ -276,7 +288,7 @@ describe("All notes screen", () => {
 
     await user.click(screen.getByText("25 Bani"));
     expect(screen.getByTestId("pathname")).toHaveTextContent(
-      "/catalog/collections/2/view#slideshow/3",
+      "/catalog/all-notes#slideshow/3",
     );
   });
 
@@ -451,10 +463,10 @@ describe("All notes screen", () => {
       container.querySelector("th.table-col-collection.table-sticky-cell"),
     ).not.toBeNull();
     expect(
-      screen.getByRole("table").querySelector("caption"),
-    ).toHaveTextContent("All notes across collections");
+      screen.getByRole("button", { name: "Collection" }).closest("th"),
+    ).toHaveAttribute("aria-sort", "ascending");
 
-    const scroller = container.querySelector(".all-notes-scroll");
+    const scroller = container.querySelector(".table-scroll-x");
     Object.defineProperty(scroller, "scrollLeft", {
       configurable: true,
       value: 40,
@@ -466,5 +478,132 @@ describe("All notes screen", () => {
     expect(
       screen.getByRole("button", { name: "Serial" }).closest("th"),
     ).toHaveAttribute("aria-sort", "ascending");
+  });
+
+  test("Ctrl/Cmd+F opens Find over the current view and Esc hands focus back to the match", async () => {
+    const user = userEvent.setup();
+    renderAllNotes();
+    await screen.findByText("Fr. 2300");
+
+    await user.keyboard("{Control>}f{/Control}");
+    const input = screen.getByRole("searchbox", {
+      name: "Find notes in this view",
+    });
+
+    await waitFor(() => expect(input).toHaveFocus());
+    await user.type(input, "P-22a");
+
+    await waitFor(() => {
+      expect(
+        within(screen.getByRole("search", { name: "Find in this view" }))
+          .getByText("1 of 1"),
+      ).toBeInTheDocument();
+    });
+
+    await user.type(input, "{Escape}");
+
+    expect(
+      screen.queryByRole("search", { name: "Find in this view" }),
+    ).toBeNull();
+    expect(screen.getByText("P-22a").closest("tr")).toHaveFocus();
+  });
+
+  test("the Columns control hides and restores a column, and remembers the choice", async () => {
+    const user = userEvent.setup();
+    renderAllNotes();
+    await screen.findByText("Fr. 2300");
+
+    await user.click(screen.getByRole("button", { name: "Columns" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Visible columns",
+    });
+
+    await user.click(within(dialog).getByRole("checkbox", { name: "Serial" }));
+
+    expect(
+      screen.queryByRole("columnheader", { name: "Serial" }),
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("SER-1")).not.toBeInTheDocument();
+    expect(
+      JSON.parse(window.localStorage.getItem("noteharbor.allNotesTableState"))
+        .visibleColumnKeys,
+    ).not.toContain("serial");
+
+    await user.click(within(dialog).getByRole("checkbox", { name: "Serial" }));
+    expect(screen.getByText("SER-1")).toBeInTheDocument();
+  });
+
+  test("arrow keys focus rows and Enter opens the All notes slideshow", async () => {
+    const user = userEvent.setup();
+    renderAllNotes();
+    await screen.findByText("Fr. 2300");
+
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByText("Fr. 2300").closest("tr")).toHaveFocus();
+
+    await user.keyboard("{ArrowDown}");
+    expect(screen.getByText("Fr. 500").closest("tr")).toHaveFocus();
+
+    await user.keyboard("{Enter}");
+    expect(screen.getByTestId("pathname")).toHaveTextContent(
+      "/catalog/all-notes#slideshow/2",
+    );
+    expect(screen.getByText("2 / 3")).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(screen.getByTestId("pathname")).toHaveTextContent(
+      "/catalog/all-notes",
+    );
+    expect(screen.getByText("Fr. 500").closest("tr")).toHaveFocus();
+  });
+
+  test("the slideshow walks the filtered All notes list, not a collection", async () => {
+    const user = userEvent.setup();
+    renderAllNotes();
+    await screen.findByText("Fr. 2300");
+
+    await user.selectOptions(
+      screen.getByRole("combobox", { name: "Collection" }),
+      "2",
+    );
+    await user.click(screen.getByText("25 Bani"));
+
+    expect(screen.getByTestId("pathname")).toHaveTextContent(
+      "/catalog/all-notes#slideshow/3",
+    );
+    expect(screen.getByText("1 / 1")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Close slideshow" }));
+    expect(screen.getByTestId("pathname")).toHaveTextContent(
+      "/catalog/all-notes",
+    );
+    expect(screen.getByTestId("search").textContent).toContain("collection=2");
+  });
+
+  test("the image preview opens from the All notes slideshow and Esc steps back", async () => {
+    const user = userEvent.setup();
+    renderAllNotes();
+    await screen.findByText("Fr. 2300");
+
+    await user.click(screen.getByText("1 Leu"));
+    expect(screen.getByTestId("pathname")).toHaveTextContent(
+      "/catalog/all-notes#slideshow/1",
+    );
+
+    await user.keyboard("{Enter}");
+    expect(screen.getByTestId("pathname")).toHaveTextContent(
+      "/catalog/all-notes#slideshow/1/preview/front",
+    );
+    expect(screen.getByText("No preview")).toBeInTheDocument();
+
+    await user.keyboard("{Escape}");
+    expect(screen.getByTestId("pathname")).toHaveTextContent(
+      "/catalog/all-notes#slideshow/1",
+    );
+
+    await user.keyboard("{Escape}");
+    expect(screen.getByTestId("pathname")).toHaveTextContent(
+      "/catalog/all-notes",
+    );
   });
 });

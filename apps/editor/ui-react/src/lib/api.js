@@ -266,6 +266,7 @@ async function getAllNotes(collections) {
       return (payload.notes ?? []).map((note) => ({
         ...note,
         collection_id: note.collection_id ?? collection.id,
+        collection: collection.name,
         collection_name: collection.name,
         collection_order: index + 1
       }));
