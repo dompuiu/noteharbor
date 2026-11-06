@@ -4394,13 +4394,15 @@ th[aria-sort="descending"] .sort-chevron {
 }
 
 /* One filter bar: the field button lives inside the field, the value input
-   next to it, and Enter turns the text into a chip. Same field ORs, different
-   fields AND, so the rail states the whole filter. The field leads the rail
-   at the column header's weight (36px) and holds a fixed 400px: it is the
-   rail's primary control, so the hint sentence's length must not decide its
-   width. Below the narrow query the hint leaves the first line instead, which
-   is what keeps the field 400px at every width; its min-width is what a value
-   still needs to stay readable if a future container is narrower than this. */
+   next to it, and Enter commits the text as chips. The default Replace swaps
+   the committed field's chips, so changing Catalog 22 to 23 leaves 23 only;
+   Add latches from the field's own mode control or Shift+Enter and restores
+   the same-field OR. The field leads the rail at the column header's weight
+   (36px) and holds a fixed 400px: it is the rail's primary control, so the
+   hint sentence's length must not decide its width. Below the narrow query
+   the hint leaves the first line instead, which is what keeps the field 400px
+   at every width; its min-width is what a value still needs to stay readable
+   if a future container is narrower than this. */
 .table-search--scoped {
   flex: 0 0 400px;
   width: min(400px, 100%);
@@ -4571,6 +4573,56 @@ th[aria-sort="descending"] .sort-chevron {
   font-size: 0.6875rem;
   font-weight: 600;
   white-space: nowrap;
+}
+
+/* The commit mode rides in the field's own trailing hint: at rest `⇄ replace`
+   before the `/` keycap, while typing the `flip` action between the mode word
+   and `⇧⏎`. It is a button with no chip surface, so it never reads as an
+   active filter. */
+.table-filter-mode {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  flex: none;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-family: inherit;
+  font-size: 0.6875rem;
+  font-weight: 600;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.table-filter-mode:hover {
+  color: var(--accent-strong);
+}
+
+.table-filter-mode:focus-visible {
+  border-radius: 4px;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.table-filter-mode-icon {
+  width: 10px;
+  height: 10px;
+}
+
+/* A flip moves focus back to the input, so the new mode has to be announced
+   here: the button is never re-read by the screen reader. */
+.table-filter-mode-announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 /* A refused commit swaps this note into the `⏎ add` slot, so the rail keeps

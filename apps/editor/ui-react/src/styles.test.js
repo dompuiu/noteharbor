@@ -448,6 +448,33 @@ describe("table styles", () => {
     expect(connectors[1]).not.toMatch(/text-transform:\s*uppercase/);
   });
 
+  // The commit mode lives inside the field as a pointer button, not a chip:
+  // hover turns it accent red and keyboard focus repeats the app's 2px ring.
+  test("the filter mode control is a pointer button with a hover and focus ring", () => {
+    const mode = styles.match(/^\.table-filter-mode\s*\{([^}]*)\}/m);
+    expect(mode).not.toBeNull();
+    expect(mode[1]).toMatch(/cursor:\s*pointer/);
+    expect(mode[1]).toMatch(/font-size:\s*0\.6875rem/);
+    expect(mode[1]).toMatch(/font-weight:\s*600/);
+    // No chip surface, so it can never read as an active filter.
+    expect(mode[1]).not.toMatch(/background:\s*var\(--tag-bg\)/);
+
+    const icon = styles.match(/^\.table-filter-mode-icon\s*\{([^}]*)\}/m);
+    expect(icon).not.toBeNull();
+    expect(icon[1]).toMatch(/width:\s*10px/);
+    expect(icon[1]).toMatch(/height:\s*10px/);
+
+    const hover = styles.match(/^\.table-filter-mode:hover\s*\{([^}]*)\}/m);
+    expect(hover).not.toBeNull();
+    expect(hover[1]).toMatch(/color:\s*var\(--accent-strong\)/);
+
+    const focus = styles.match(
+      /^\.table-filter-mode:focus-visible\s*\{([^}]*)\}/m,
+    );
+    expect(focus).not.toBeNull();
+    expect(focus[1]).toMatch(/outline:\s*2px solid var\(--accent\)/);
+  });
+
   // The filters describe only the table, so they are the card's own rail: the
   // field leads, the chips take the middle and wrap there, and the trailing
   // Add note / Reset / Columns cluster keeps the right edge. Rail padding stays

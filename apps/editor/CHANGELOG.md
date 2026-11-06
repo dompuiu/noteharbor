@@ -8,6 +8,10 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 - Table screen: the filter field accepts ranges (`22-25`, `M1-M8`, `M1-8`) and commits them as one chip per value, exactly like a comma list; a range wider than 100 values is refused with a short note while the draft stays in the field.
 
+### Changed
+
+- Table screen: pressing `⏎` in the filter field replaces that field's chips by default, so swapping Catalog `22` for `23` no longer leaves both. `Shift+Enter` or the field's own mode control latches Add without committing, and the choice is remembered across reloads.
+
 ### Fixed
 
 - Connection: a server that stops after boot now reaches the shell's connection card on the next route change, notes load, or window focus instead of leaving the Table screen's "Couldn't load" panel as the only signal.

@@ -1,5 +1,10 @@
 import { describe, expect, test } from "vitest";
-import { appendConditions, parseFilterInput } from "./tableFilters.js";
+import {
+  appendConditions,
+  commitConditions,
+  conditionIdentity,
+  parseFilterInput,
+} from "./tableFilters.js";
 
 function values(field, raw, options) {
   return parseFilterInput(field, raw, options).conditions.map(
@@ -88,6 +93,61 @@ describe("dedupe", () => {
     expect(appendConditions(current, incoming).map((item) => item.value)).toEqual(
       ["PMG", "PCGS"],
     );
+  });
+});
+
+describe("commit modes", () => {
+  function chip(field, value, negated = false) {
+    return { field, value, negated };
+  }
+
+  function identities(conditions) {
+    return conditions.map(conditionIdentity);
+  }
+
+  test("Replace swaps only the committed field's chips", () => {
+    const current = [
+      chip("grading_company", "PMG"),
+      chip("catalog_number", "22"),
+      chip("tags", "2 digits"),
+    ];
+    const incoming = parseFilterInput("catalog_number", "23").conditions;
+
+    expect(
+      identities(commitConditions(current, "catalog_number", incoming, "replace")),
+    ).toEqual(["grading_company:pmg", "tags:2 digits", "catalog_number:23"]);
+  });
+
+  test("Replace with no prior chip for the field behaves like Add", () => {
+    const current = [chip("grading_company", "PMG")];
+    const incoming = parseFilterInput("catalog_number", "23").conditions;
+
+    expect(
+      identities(commitConditions(current, "catalog_number", incoming, "replace")),
+    ).toEqual(["grading_company:pmg", "catalog_number:23"]);
+  });
+
+  test("Replace drops the whole field, including a negated chip", () => {
+    const current = [
+      chip("grading_company", "PMG"),
+      chip("grading_company", "PCGS", true),
+    ];
+    const incoming = parseFilterInput("grading_company", "!PCGS").conditions;
+
+    expect(
+      identities(
+        commitConditions(current, "grading_company", incoming, "replace"),
+      ),
+    ).toEqual(["grading_company:!pcgs"]);
+  });
+
+  test("Add keeps the field's existing chips", () => {
+    const current = [chip("catalog_number", "22")];
+    const incoming = parseFilterInput("catalog_number", "23").conditions;
+
+    expect(
+      identities(commitConditions(current, "catalog_number", incoming, "add")),
+    ).toEqual(["catalog_number:22", "catalog_number:23"]);
   });
 });
 

@@ -13,7 +13,13 @@ import { FilterFieldMenu } from "./FilterFieldMenu.jsx";
 import { HighlightMatch, rankTagSuggestions } from "./TagsField.jsx";
 import { tagsColumnKey } from "../lib/tableColumns.js";
 import {
-  appendConditions,
+  commitModeLabel,
+  loadFilterCommitMode,
+  otherCommitMode,
+  saveFilterCommitMode,
+} from "../lib/filterCommitMode.js";
+import {
+  commitConditions,
   defaultFilterField,
   filterFieldLabel,
   filterPlaceholderFor,
@@ -45,7 +51,10 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
   const [tagSuggestionPosition, setTagSuggestionPosition] = useState(null);
   const [editingConditionId, setEditingConditionId] = useState(null);
   const [conditionDraft, setConditionDraft] = useState("");
+  const [commitMode, setCommitMode] = useState(loadFilterCommitMode);
+  const [modeAnnouncement, setModeAnnouncement] = useState("");
   const searchInputRef = useRef(null);
+  const fieldRef = useRef(null);
   const tagSuggestionListRef = useRef(null);
 
   const tagMatches = useMemo(
@@ -116,7 +125,7 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
 
     const closeOnOutsidePress = (event) => {
       if (
-        searchInputRef.current?.contains(event.target) ||
+        fieldRef.current?.contains(event.target) ||
         tagSuggestionListRef.current?.contains(event.target)
       ) {
         return;
@@ -151,10 +160,11 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
     }
   }, [filterField, visibleFieldKeys]);
 
-  // Commit is explicit: Enter turns the field text into chips. Duplicates are
-  // ignored, so re-typing a value does not silently add a second OR arm. A
-  // range wider than the cap refuses the commit and keeps the draft, so the
-  // reader can shorten it instead of losing it.
+  // Commit is explicit: Enter turns the field text into chips through the
+  // latched mode. Replace (the default) swaps the committed field's chips and
+  // keeps every other field; Add widens the same-field OR. A range wider than
+  // the cap refuses the commit and keeps the draft, so the reader can shorten
+  // it instead of losing it.
   function commitFilterDraft(raw = filterDraft) {
     const { conditions: parsed, tooWide } = parseFilterInput(filterField, raw);
 
@@ -169,9 +179,21 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
       return;
     }
 
-    onConditionsChange((current) => appendConditions(current, parsed));
+    onConditionsChange((current) =>
+      commitConditions(current, filterField, parsed, commitMode),
+    );
     setFilterDraft("");
     closeTagSuggestions();
+  }
+
+  // Flipping is sticky and does not commit: the draft and the tag list stay,
+  // and focus returns to the input so typing can continue without a click.
+  function toggleCommitMode() {
+    const nextMode = otherCommitMode(commitMode);
+    setCommitMode(nextMode);
+    saveFilterCommitMode(nextMode);
+    setModeAnnouncement(`Commit mode: ${commitModeLabel(nextMode)}`);
+    searchInputRef.current?.focus();
   }
 
   function openTagSuggestions(index = -1) {
@@ -286,6 +308,20 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
       return;
     }
 
+    // Shift+Enter latches the other mode on every field, including while the
+    // tag list is open: it must never be mistaken for a suggestion pick. The
+    // latch keeps the draft and does not commit. Auto-repeat would flip the
+    // mode many times while the key is held, so it is swallowed.
+    if (event.key === "Enter" && event.shiftKey) {
+      event.preventDefault();
+
+      if (!event.repeat) {
+        toggleCommitMode();
+      }
+
+      return;
+    }
+
     const tagListOpen =
       tagsField && tagSuggestionOpen && tagMatches.length > 0;
 
@@ -329,10 +365,25 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
   }
 
   const filterPlaceholder = filterPlaceholderFor(filterField);
+  // The mode control's accessible name states both ends; the title names the
+  // pointer and keyboard routes to the same flip.
+  const nextModeLabel = commitModeLabel(otherCommitMode(commitMode));
+  const modeButtonName = `Switch commit mode to ${nextModeLabel} (currently ${commitModeLabel(commitMode)})`;
+  // While typing the visible word is `flip`, so the name has to contain it too:
+  // speech input can only find the control by what it reads.
+  const flipButtonName = `Flip: switch commit mode to ${nextModeLabel} (currently ${commitModeLabel(commitMode)})`;
+  const modeButtonTitle = `Click or Shift+Enter to switch to ${nextModeLabel}`;
+  const modeButtonProps = {
+    className: "table-filter-mode",
+    onClick: toggleCommitMode,
+    onMouseDown: (event) => event.preventDefault(),
+    title: modeButtonTitle,
+    type: "button",
+  };
 
   return (
     <Fragment>
-      <div className="table-search table-search--scoped">
+      <div className="table-search table-search--scoped" ref={fieldRef}>
         <svg
           aria-hidden="true"
           className="table-search-icon"
@@ -437,15 +488,49 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
             Up to {maxRangeValues} values per range
           </span>
         ) : filterDraft.trim() ? (
-          // The commit hint keeps the keycap the idle field shows, so the one
-          // key that adds a chip never changes costume as you type.
-          <span aria-hidden="true" className="table-filter-enter">
-            <kbd className="table-search-hint">⏎</kbd> add
+          // While typing the hint names the commit and the latch together: the
+          // mode word stays plain and `flip` is the button.
+          <span className="table-filter-enter">
+            <kbd className="table-search-hint">⏎</kbd> {commitMode}
+            <span aria-hidden="true">·</span>
+            <button aria-label={flipButtonName} {...modeButtonProps}>
+              flip
+            </button>
+            <kbd className="table-search-hint">⇧⏎</kbd>
           </span>
         ) : (
-          <kbd className="table-search-hint">/</kbd>
+          // At rest the mode reads before the `/` keycap, so the field states
+          // what ⏎ will do before anything is typed.
+          <Fragment>
+            <button aria-label={modeButtonName} {...modeButtonProps}>
+              <svg
+                aria-hidden="true"
+                className="table-filter-mode-icon"
+                fill="none"
+                focusable="false"
+                stroke="currentColor"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                strokeWidth="1.6"
+                viewBox="0 0 12 12"
+              >
+                <path d="M1 4h8.5L7.5 2M11 8H2.5L4.5 10" />
+              </svg>
+              {commitMode}
+            </button>
+            <kbd className="table-search-hint">/</kbd>
+          </Fragment>
         )}
       </div>
+      {/* A mode flip moves focus back to the input, so the change needs its
+          own polite announcement: the page never re-reads the button. */}
+      <p
+        aria-atomic="true"
+        aria-live="polite"
+        className="table-filter-mode-announcer"
+      >
+        {modeAnnouncement}
+      </p>
       {tagListVisible
         ? createPortal(
             <div
@@ -493,10 +578,16 @@ export const TableFilterBar = forwardRef(function TableFilterBar(
         : null}
       {conditionGroups.length ? null : (
         <p className="table-filter-hint">
-          <span>
-            Pick a field, type, press <kbd>⏎</kbd>. Same field ORs, different
-            fields AND.
-          </span>
+          {commitMode === "add" ? (
+            <span>
+              Pick a field, type, press <kbd>⏎</kbd>. Same field ORs, different
+              fields AND.
+            </span>
+          ) : (
+            // Replace is the default, so the idle rail states the swap instead
+            // of the OR/AND rule it would contradict.
+            <span>New values replace that field; other fields stay</span>
+          )}
         </p>
       )}
       {conditionGroups.length ? (

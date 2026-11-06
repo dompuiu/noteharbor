@@ -53,6 +53,12 @@ function note(id, overrides = {}) {
   };
 }
 
+const tagNotes = [
+  note(1, { denomination: "AAAA", tags: [{ name: "2 digits" }] }),
+  note(2, { denomination: "BBBB", tags: [{ name: "BNR: 298b" }] }),
+  note(3, { denomination: "CCCC" }),
+];
+
 const collectionNotes = [
   note(1, {
     denomination: "AAAA",
@@ -102,6 +108,14 @@ async function commitChip(user, label, value) {
   await user.type(filterInput(label), `${value}{Enter}`);
 }
 
+// The mode control's name gains a `Flip:` prefix while the field has a draft,
+// so both states are found by the part that names the target mode.
+function filterModeButton(target) {
+  return screen.getByRole("button", {
+    name: new RegExp(`switch commit mode to ${target} \\(currently`, "i"),
+  });
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   window.localStorage.clear();
@@ -142,7 +156,7 @@ describe("NotesTable filter chips", () => {
     // slot, beside the field it explains.
     expect(document.querySelector(".table-filter-chips")).toBeNull();
     expect(document.querySelector(".table-filter-hint")).toHaveTextContent(
-      "Pick a field, type, press ⏎. Same field ORs, different fields AND.",
+      "New values replace that field; other fields stay",
     );
   });
 
@@ -243,12 +257,14 @@ describe("NotesTable filter chips", () => {
     expect(screen.getByText("BBBB")).toBeInTheDocument();
   });
 
-  test("two chips on one field are ORed", async () => {
+  test("Add mode keeps two chips on one field ORed", async () => {
     renderTable();
     const user = userEvent.setup();
 
     await screen.findByText("AAAA");
     await commitChip(user, "Company", "PMG");
+    // Replace is the default; Shift+Enter latches Add without committing.
+    await user.keyboard("{Shift>}{Enter}{/Shift}");
     await commitChip(user, "Company", "PCGS");
 
     expect(screen.getByText("or")).toBeInTheDocument();
@@ -284,6 +300,8 @@ describe("NotesTable filter chips", () => {
 
     await screen.findByText("AAAA");
     await commitChip(user, "Company", "PMG");
+    // Two values on one field need Add: Replace would swap the first chip.
+    await user.keyboard("{Shift>}{Enter}{/Shift}");
     await commitChip(user, "Company", "PCGS");
     await commitChip(user, "Serial", "SER-3");
 
@@ -600,6 +618,9 @@ describe("NotesTable filter chips", () => {
 
     await screen.findByText("AAAA");
     await commitChip(user, "Company", "PMG");
+    // Duplicate suppression is an Add-mode concern: Replace would swap the
+    // chip out and back in even if dedupe were broken.
+    await user.keyboard("{Shift>}{Enter}{/Shift}");
     await commitChip(user, "Company", "PMG");
 
     expect(
@@ -879,19 +900,418 @@ describe("NotesTable filter chips", () => {
   });
 });
 
-// The field/Enter model and the OR/AND rule ride inline in the rail while it
-// has no chips, next to the field they explain. A popover parked at the far
-// edge of the rail put them a table's width away and kept saying "No filters
-// yet" over an active filter.
+// Replace is the default commit mode: a value for a field swaps that field's
+// chips and leaves every other field alone. Shift+Enter or a click on the
+// field's mode control latches Add without committing.
+describe("NotesTable filter commit mode", () => {
+  const numberedNotes = [
+    note(1, {
+      denomination: "AAAA",
+      catalog_number: "22",
+      grading_company: "PMG",
+    }),
+    note(2, {
+      denomination: "BBBB",
+      catalog_number: "23",
+      grading_company: "PCGS",
+    }),
+    note(3, {
+      denomination: "CCCC",
+      catalog_number: "24",
+      grading_company: "PMG",
+    }),
+  ];
+
+  test("Replace swaps only the committed field's chips", async () => {
+    getNotes.mockResolvedValue({ notes: numberedNotes });
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Catalog", "22");
+    expect(
+      screen.getByRole("button", { name: "Edit Catalog filter 22" }),
+    ).toBeInTheDocument();
+
+    await commitChip(user, "Catalog", "23");
+
+    expect(
+      screen.queryByRole("button", { name: "Edit Catalog filter 22" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Edit Catalog filter 23" }),
+    ).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.queryByText("AAAA")).not.toBeInTheDocument();
+    });
+    expect(screen.getByText("BBBB")).toBeInTheDocument();
+  });
+
+  test("Replace leaves another field's chips in place", async () => {
+    getNotes.mockResolvedValue({ notes: numberedNotes });
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Company", "PMG");
+    await commitChip(user, "Catalog", "22");
+    await commitChip(user, "Catalog", "23");
+
+    expect(
+      screen.getByRole("button", { name: "Edit Company filter PMG" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Edit Catalog filter 22" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Edit Catalog filter 23" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("and")).toBeInTheDocument();
+  });
+
+  test("one Replace commit may still carry an OR run", async () => {
+    getNotes.mockResolvedValue({ notes: numberedNotes });
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Catalog", "22");
+    await commitChip(user, "Catalog", "23,24");
+
+    expect(
+      screen.queryByRole("button", { name: "Edit Catalog filter 22" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Edit Catalog filter 23" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit Catalog filter 24" }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("or")).toBeInTheDocument();
+  });
+
+  test("a later value replaces an expanded range", async () => {
+    getNotes.mockResolvedValue({ notes: numberedNotes });
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Catalog", "22-24");
+    await commitChip(user, "Catalog", "23");
+
+    expect(
+      screen.getByRole("button", { name: "Edit Catalog filter 23" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Edit Catalog filter 22" }),
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Edit Catalog filter 24" }),
+    ).toBeNull();
+  });
+
+  test("a negated value replaces the same field's chips", async () => {
+    getNotes.mockResolvedValue({ notes: numberedNotes });
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Company", "PMG");
+    await commitChip(user, "Company", "!PCGS");
+
+    expect(
+      screen.queryByRole("button", { name: "Edit Company filter PMG" }),
+    ).toBeNull();
+    expect(
+      screen
+        .getByRole("button", { name: "Edit Company filter PCGS" })
+        .closest(".table-filter-chip"),
+    ).toHaveClass("table-filter-chip--negated");
+  });
+
+  test("Shift+Enter flips to Add, keeps the draft and does not commit", async () => {
+    getNotes.mockResolvedValue({ notes: numberedNotes });
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Catalog", "22");
+    await chooseField(user, "Catalog");
+    await user.type(filterInput("Catalog"), "23");
+
+    await user.keyboard("{Shift>}{Enter}{/Shift}");
+
+    // Nothing committed: the draft is intact and the hint names Add now.
+    expect(filterInput("Catalog")).toHaveValue("23");
+    expect(
+      screen.queryByRole("button", { name: "Edit Catalog filter 23" }),
+    ).toBeNull();
+    expect(filterModeButton("Replace")).toBeInTheDocument();
+    expect(screen.getByText("Commit mode: Add")).toBeInTheDocument();
+
+    await user.keyboard("{Enter}");
+
+    // Add was latched: the first chip survives the second commit.
+    expect(
+      screen.getByRole("button", { name: "Edit Catalog filter 22" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit Catalog filter 23" }),
+    ).toBeInTheDocument();
+  });
+
+  test("Shift+Enter with the tag list open flips instead of committing", async () => {
+    getNotes.mockResolvedValue({ notes: tagNotes });
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await chooseField(user, "Tags");
+    await user.type(filterInput("Tags"), "2");
+    await user.keyboard("{ArrowDown}");
+
+    // A highlighted suggestion is waiting for a plain Enter.
+    await user.keyboard("{Shift>}{Enter}{/Shift}");
+
+    expect(filterInput("Tags")).toHaveValue("2");
+    expect(screen.queryByRole("button", { name: /^Edit Tags/ })).toBeNull();
+    expect(filterModeButton("Replace")).toBeInTheDocument();
+    // The latch does not dismiss the list it sits above.
+    expect(
+      screen.getByRole("listbox", { name: "Tag suggestions" }),
+    ).toBeInTheDocument();
+    // The change is announced politely because focus stays in the input.
+    expect(
+      document.querySelector(".table-filter-mode-announcer"),
+    ).toHaveAttribute("aria-live", "polite");
+    expect(
+      document.querySelector(".table-filter-mode-announcer"),
+    ).toHaveTextContent("Commit mode: Add");
+  });
+
+  test("a click on the mode control keeps the tag list open", async () => {
+    getNotes.mockResolvedValue({ notes: tagNotes });
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await chooseField(user, "Tags");
+    await user.type(filterInput("Tags"), "2");
+    expect(
+      screen.getByRole("listbox", { name: "Tag suggestions" }),
+    ).toBeInTheDocument();
+
+    await user.click(filterModeButton("Add"));
+
+    expect(
+      screen.getByRole("listbox", { name: "Tag suggestions" }),
+    ).toBeInTheDocument();
+    expect(filterInput("Tags")).toHaveValue("2");
+    expect(filterInput("Tags")).toHaveFocus();
+    expect(filterModeButton("Replace")).toBeInTheDocument();
+  });
+
+  test("clicking the mode control flips, keeps the draft and returns focus", async () => {
+    getNotes.mockResolvedValue({ notes: numberedNotes });
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await chooseField(user, "Catalog");
+    await user.type(filterInput("Catalog"), "23");
+
+    await user.click(filterModeButton("Add"));
+
+    expect(filterInput("Catalog")).toHaveFocus();
+    expect(filterInput("Catalog")).toHaveValue("23");
+    expect(
+      screen.queryByRole("button", { name: "Edit Catalog filter 23" }),
+    ).toBeNull();
+    expect(filterModeButton("Replace")).toBeInTheDocument();
+
+    await user.keyboard("{Enter}");
+
+    expect(
+      screen.getByRole("button", { name: "Edit Catalog filter 23" }),
+    ).toBeInTheDocument();
+  });
+
+  test("a tag suggestion pick follows Replace", async () => {
+    getNotes.mockResolvedValue({ notes: tagNotes });
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await chooseField(user, "Tags");
+    await user.keyboard("{ArrowDown}");
+    const firstList = await screen.findByRole("listbox", {
+      name: "Tag suggestions",
+    });
+    await user.click(within(firstList).getByRole("option", { name: "2 digits" }));
+
+    expect(
+      screen.getByRole("button", { name: "Edit Tags filter 2 digits" }),
+    ).toBeInTheDocument();
+
+    await chooseField(user, "Tags");
+    await user.type(filterInput("Tags"), "BNR");
+    const secondList = await screen.findByRole("listbox", {
+      name: "Tag suggestions",
+    });
+    await user.click(
+      within(secondList).getByRole("option", { name: "BNR: 298b" }),
+    );
+
+    expect(
+      screen.queryByRole("button", { name: "Edit Tags filter 2 digits" }),
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Edit Tags filter BNR: 298b" }),
+    ).toBeInTheDocument();
+  });
+
+  test("a refused range keeps the draft, the chips and the latched mode", async () => {
+    getNotes.mockResolvedValue({ notes: numberedNotes });
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await commitChip(user, "Catalog", "22");
+    await user.keyboard("{Shift>}{Enter}{/Shift}");
+    await user.type(filterInput("Catalog"), "1-500{Enter}");
+
+    expect(filterInput("Catalog")).toHaveValue("1-500");
+    expect(screen.getByRole("status")).toHaveTextContent(
+      "Up to 100 values per range",
+    );
+    expect(
+      screen.getByRole("button", { name: "Edit Catalog filter 22" }),
+    ).toBeInTheDocument();
+
+    // Add survived the refusal: the next commit keeps the first chip.
+    await user.clear(filterInput("Catalog"));
+    await user.type(filterInput("Catalog"), "23{Enter}");
+
+    expect(
+      screen.getByRole("button", { name: "Edit Catalog filter 22" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Edit Catalog filter 23" }),
+    ).toBeInTheDocument();
+  });
+
+  test("hiding a filtered column drops its chips and keeps the mode", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await user.click(filterInput("Catalog"));
+    await user.keyboard("{Shift>}{Enter}{/Shift}");
+    await commitChip(user, "Company", "PMG");
+
+    await user.click(screen.getByRole("button", { name: /Columns/ }));
+    await user.click(screen.getByRole("checkbox", { name: "Company" }));
+
+    expect(
+      screen.queryByRole("button", { name: /^Edit Company/ }),
+    ).toBeNull();
+    expect(filterModeButton("Replace")).toBeInTheDocument();
+  });
+
+  test("the latched mode survives a remount", async () => {
+    const { unmount } = renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await user.click(filterModeButton("Add"));
+    expect(filterModeButton("Replace")).toBeInTheDocument();
+    unmount();
+
+    renderTable();
+
+    await screen.findByText("AAAA");
+    expect(filterModeButton("Replace")).toBeInTheDocument();
+  });
+
+  test("the mode control flips from the keyboard and returns focus", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await user.click(filterInput("Catalog"));
+    await user.tab();
+
+    expect(filterModeButton("Add")).toHaveFocus();
+    await user.keyboard("{Enter}");
+
+    expect(filterModeButton("Replace")).toBeInTheDocument();
+    expect(filterInput("Catalog")).toHaveFocus();
+
+    // Space latches Replace again, the same way a click would.
+    await user.tab();
+    expect(filterModeButton("Replace")).toHaveFocus();
+    await user.keyboard(" ");
+
+    expect(filterModeButton("Add")).toBeInTheDocument();
+    expect(filterInput("Catalog")).toHaveFocus();
+  });
+
+  test("at rest the mode control leads the / keycap", async () => {
+    renderTable();
+
+    await screen.findByText("AAAA");
+
+    const field = document.querySelector(".table-search--scoped");
+    const button = filterModeButton("Add");
+    const keycap = field.querySelector(".table-search-hint");
+
+    expect(button).toHaveTextContent("replace");
+    expect(button).toHaveAttribute(
+      "title",
+      "Click or Shift+Enter to switch to Add",
+    );
+    expect(keycap).toHaveTextContent("/");
+    expect(Array.from(field.children).indexOf(button)).toBeLessThan(
+      Array.from(field.children).indexOf(keycap),
+    );
+  });
+
+  test("typing names the commit and the flip key beside it", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await user.type(filterInput("Catalog"), "22");
+
+    const hint = document.querySelector(".table-filter-enter");
+    const keycaps = hint.querySelectorAll("kbd");
+
+    expect(hint).toHaveTextContent("⏎");
+    expect(hint).toHaveTextContent("replace");
+    expect(hint).toHaveTextContent("·");
+    expect(hint).toHaveTextContent("flip");
+    expect(hint).toHaveTextContent("⇧⏎");
+    expect(keycaps[0]).toHaveTextContent("⏎");
+    expect(keycaps[1]).toHaveTextContent("⇧⏎");
+    expect(hint.querySelector("button")).toHaveTextContent("flip");
+    // The visible word leads the name, so speech input can find it.
+    expect(hint.querySelector("button")).toHaveAccessibleName(
+      "Flip: switch commit mode to Add (currently Replace)",
+    );
+  });
+});
+
+
 describe("NotesTable filter hint", () => {
-  const hintText =
+  const replaceHint = "New values replace that field; other fields stay";
+  const addHint =
     "Pick a field, type, press ⏎. Same field ORs, different fields AND.";
 
   function filterHint() {
     return document.querySelector(".table-filter-hint");
   }
 
-  test("the idle rail states the rule beside the field", async () => {
+  test("the idle rail states the Replace default beside the field", async () => {
     renderTable();
 
     await screen.findByText("AAAA");
@@ -899,15 +1319,26 @@ describe("NotesTable filter hint", () => {
     const hint = filterHint();
     const rail = document.querySelector(".table-rail");
 
-    expect(hint).toHaveTextContent(hintText);
+    expect(hint).toHaveTextContent(replaceHint);
     expect(rail).toContainElement(hint);
     expect(hint).toHaveClass("table-filter-hint");
-    // The key it names is a keycap, not a glyph in the sentence.
-    expect(hint.querySelector("kbd")).toHaveTextContent("⏎");
+    // The Replace sentence names no key: the field's own hint carries ⏎.
+    expect(hint.querySelector("kbd")).toBeNull();
     // The hint replaced the ? trigger rather than joining it.
     expect(
       screen.queryByRole("button", { name: "How filters combine" }),
     ).toBeNull();
+  });
+
+  test("Add mode restores the OR/AND sentence", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await user.click(filterModeButton("Add"));
+
+    expect(filterHint()).toHaveTextContent(addHint);
+    expect(filterHint().querySelector("kbd")).toHaveTextContent("⏎");
   });
 
   test("the first chip replaces the hint", async () => {
@@ -931,7 +1362,7 @@ describe("NotesTable filter hint", () => {
     await commitChip(user, "Company", "PMG");
     await user.click(screen.getByRole("button", { name: "Clear all" }));
 
-    await waitFor(() => expect(filterHint()).toHaveTextContent(hintText));
+    await waitFor(() => expect(filterHint()).toHaveTextContent(replaceHint));
   });
 });
 
@@ -1001,7 +1432,7 @@ describe("NotesTable filter bar tab order", () => {
     return screen.getByRole("button", { name: "Columns" });
   }
 
-  test("Tab leaves the field for Add note when no chip exists", async () => {
+  test("Tab leaves the field for the mode control, then Add note", async () => {
     renderTable();
     const user = userEvent.setup();
 
@@ -1009,7 +1440,11 @@ describe("NotesTable filter bar tab order", () => {
     await user.click(filterInput("Catalog"));
     expect(filterInput("Catalog")).toHaveFocus();
 
-    // The idle hint is prose, not a stop on the way to the rail controls.
+    // The mode control is the field's own trailing hint, so it is the next
+    // stop; the idle rail sentence is prose, not a stop.
+    await user.tab();
+    expect(filterModeButton("Add")).toHaveFocus();
+
     await user.tab();
 
     expect(addNoteButton()).toHaveFocus();
@@ -1039,6 +1474,9 @@ describe("NotesTable filter bar tab order", () => {
     const resetView = screen.getByRole("button", { name: "Reset view" });
 
     await user.click(filterInput("Serial"));
+    await user.tab();
+    expect(filterModeButton("Add")).toHaveFocus();
+
     await user.tab();
     expect(firstValue).toHaveFocus();
 
@@ -1104,6 +1542,9 @@ describe("NotesTable filter bar tab order", () => {
 
     await user.tab({ shift: true });
     expect(firstValue).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(filterModeButton("Add")).toHaveFocus();
 
     await user.tab({ shift: true });
     expect(filterInput("Company")).toHaveFocus();
