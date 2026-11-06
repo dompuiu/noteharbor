@@ -304,29 +304,36 @@ export function marksForNote(
 export function sortNotesBySort(noteList, key, direction) {
   const sortKey = validSortKeys.has(key) ? key : defaultSortKey;
   const sortDirection = direction === "desc" ? "desc" : "asc";
-  const sortValue = getTableColumn(sortKey)?.sortValue ?? null;
-  return [...noteList].sort((left, right) => {
-    if (sortKey === defaultSortKey) {
+
+  if (sortKey === defaultSortKey) {
+    return [...noteList].sort((left, right) => {
       const orderResult = noteOrderValue(left) - noteOrderValue(right);
       const result = orderResult || left.id - right.id;
       return sortDirection === "asc" ? result : -result;
-    }
+    });
+  }
 
-    const leftText = valueToString(left, sortKey).toLowerCase();
-    const rightText = valueToString(right, sortKey).toLowerCase();
-    // Ordering on the printed text is wrong the moment a column carries a
-    // number or a date (`1917` vs `01/01/1917`, `1,000 Lei` vs `100 Lei`), so
-    // a column that can be read declares its own comparable value.
-    const leftValue = sortValue ? sortValue(left) : null;
-    const rightValue = sortValue ? sortValue(right) : null;
-    const leftMissing = leftValue == null || Number.isNaN(leftValue);
-    const rightMissing = rightValue == null || Number.isNaN(rightValue);
+  const sortValue = getTableColumn(sortKey)?.sortValue ?? null;
+  // Ordering on the printed text is wrong the moment a column carries a
+  // number or a date (`1917` vs `01/01/1917`, `1,000 Lei` vs `100 Lei`), so
+  // a column that can be read declares its own comparable value. Read both
+  // once per note: a comparator would run the column's parser O(n log n)
+  // times instead of n.
+  const decorated = noteList.map((note) => ({
+    note,
+    text: valueToString(note, sortKey).toLowerCase(),
+    value: sortValue ? sortValue(note) : null,
+  }));
+
+  decorated.sort((left, right) => {
+    const leftMissing = left.value == null || Number.isNaN(left.value);
+    const rightMissing = right.value == null || Number.isNaN(right.value);
 
     if (leftMissing || rightMissing) {
       if (leftMissing && rightMissing) {
         // Both unreadable: fall back to the printed text, in the same
         // direction, so a column of free-form values still reverses.
-        const result = rowSortCollator.compare(leftText, rightText);
+        const result = rowSortCollator.compare(left.text, right.text);
         return sortDirection === "asc" ? result : -result;
       }
 
@@ -336,11 +343,13 @@ export function sortNotesBySort(noteList, key, direction) {
     }
 
     const result =
-      leftValue === rightValue
-        ? rowSortCollator.compare(leftText, rightText)
-        : leftValue - rightValue;
+      left.value === right.value
+        ? rowSortCollator.compare(left.text, right.text)
+        : left.value - right.value;
     return sortDirection === "asc" ? result : -result;
   });
+
+  return decorated.map((entry) => entry.note);
 }
 
 // One composition for both note tables: optional collection scope, then the

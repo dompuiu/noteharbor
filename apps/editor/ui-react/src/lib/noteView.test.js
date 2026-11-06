@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest";
-import { applyNoteView } from "./noteView.js";
+import { applyNoteView, sortNotesBySort } from "./noteView.js";
 import { dataColumns } from "./tableColumns.js";
 
 function note(id, overrides = {}) {
@@ -98,5 +98,31 @@ describe("applyNoteView", () => {
     });
 
     expect(result.map((entry) => entry.id)).toEqual([2, 1]);
+  });
+});
+
+describe("sortNotesBySort", () => {
+  test("reads each note's sort text and value once", () => {
+    let reads = 0;
+    const notes = Array.from({ length: 100 }, (_, index) => {
+      const entry = note(index + 1);
+
+      Object.defineProperty(entry, "denomination", {
+        configurable: true,
+        enumerable: true,
+        get() {
+          reads += 1;
+          return `NOTE-${100 - index}`;
+        },
+      });
+
+      return entry;
+    });
+
+    sortNotesBySort(notes, "denomination", "asc");
+
+    // The text and the column's parsed value are read once per note. A
+    // comparator that reads them instead would run O(n log n) times.
+    expect(reads).toBe(notes.length * 2);
   });
 });

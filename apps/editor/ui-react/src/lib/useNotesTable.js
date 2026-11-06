@@ -98,17 +98,36 @@ export function useNotesTable({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cursor.scrollRef, ...measureDeps]);
 
-  // Per-note row models are built once for the whole painted list, not once per
-  // row per commit. Their identities only change when the notes, the column
-  // geometry or the filter change, so an unrelated re-render leaves every
-  // row's props alone.
-  const rowModelsByNoteId = useMemo(() => {
-    const map = new Map();
+  // The lazy model cache answers by note id, so it needs an id lookup. That
+  // one pass is cheap next to a row model and survives a geometry change.
+  const notesById = useMemo(
+    () => new Map(rows.map((note) => [note.id, note])),
+    [rows],
+  );
 
-    for (const note of rows) {
-      map.set(
-        note.id,
-        buildNoteRowModel({
+  // Per-note row models are built on demand, when a row first paints, and then
+  // cached for the life of this list and geometry. Building all N up front was
+  // O(N) on every filter or sort even though the virtualizer paints only the
+  // window; the cache keeps each model's identity stable across scroll, so a
+  // row that stays in the window does not re-render.
+  const rowModelsByNoteId = useMemo(() => {
+    const models = new Map();
+
+    return {
+      get(noteId) {
+        const cached = models.get(noteId);
+
+        if (cached) {
+          return cached;
+        }
+
+        const note = notesById.get(noteId);
+
+        if (!note) {
+          return undefined;
+        }
+
+        const model = buildNoteRowModel({
           columnWidths,
           columns,
           lastStickyColumnKey,
@@ -117,17 +136,18 @@ export function useNotesTable({
             : null,
           note,
           stickyLeftByColumn,
-        }),
-      );
-    }
+        });
 
-    return map;
+        models.set(noteId, model);
+        return model;
+      },
+    };
   }, [
     columnWidths,
     columns,
     conditions,
     lastStickyColumnKey,
-    rows,
+    notesById,
     searchColumns,
     stickyLeftByColumn,
   ]);
