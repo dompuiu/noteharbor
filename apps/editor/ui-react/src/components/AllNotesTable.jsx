@@ -1,5 +1,4 @@
 import {
-  useDeferredValue,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -18,11 +17,11 @@ import {
 import {
   getTableColumn,
   lastStickyKey,
-  matchesSearchQuery,
   stickyOffsets,
   tableColumnWidths,
 } from "../lib/tableColumns.js";
 import { isEditableElement } from "../lib/editableElement.js";
+import { useTableFind } from "../lib/useTableFind.js";
 import { ColumnPicker } from "./ColumnPicker.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { TableFilterBar } from "./TableFilterBar.jsx";
@@ -89,14 +88,10 @@ export function AllNotesTable({
   const previousSlideshowActiveRef = useRef(slideshowActive);
   const dragStateRef = useRef({ draggedNoteId: null, dropTarget: null });
   const rowHandlerImplRef = useRef(null);
-  const findInputRef = useRef(null);
   const [tableWidth, setTableWidth] = useState(null);
   const [vScrollVisible, setVScrollVisible] = useState(false);
   const [activeNoteId, setActiveNoteId] = useState(null);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
-  const [findOpen, setFindOpen] = useState(false);
-  const [findQuery, setFindQuery] = useState("");
-  const [findCurrentId, setFindCurrentId] = useState(null);
 
   // The default order is Collection ascending even when the URL carries no
   // sort, so the header and footer name the order the rows are actually in.
@@ -134,64 +129,21 @@ export function AllNotesTable({
     scrollRef,
   });
 
-  const deferredFindQuery = useDeferredValue(findQuery);
-  const findQueryActive = findOpen && deferredFindQuery.trim().length > 0;
-  const findPending =
-    findOpen && findQuery.trim() !== deferredFindQuery.trim();
-  const findCondition = useMemo(
-    () => ({ field: "all", negated: false, value: deferredFindQuery }),
-    [deferredFindQuery],
-  );
-  const findMatches = useMemo(() => {
-    if (!findQueryActive) {
-      return [];
-    }
-
-    return notes.filter((note) =>
-      matchesSearchQuery(note, findCondition.value, searchColumns),
-    );
-  }, [findCondition, findQueryActive, notes, searchColumns]);
-  const currentMatchPosition = findMatches.findIndex(
-    (note) => note.id === findCurrentId,
-  );
-  const findCurrentIndex = findMatches.length
-    ? Math.max(currentMatchPosition, 0)
-    : -1;
-  const findCurrentMatchId =
-    findCurrentIndex >= 0 ? findMatches[findCurrentIndex].id : null;
-  const findMarksByNoteId = useMemo(() => {
-    const map = new Map();
-
-    for (const note of findMatches) {
-      map.set(
-        note.id,
-        marksForNote(note, [findCondition], searchColumns, {
-          normalized: true,
-        }),
-      );
-    }
-
-    return map;
-  }, [findCondition, findMatches, searchColumns]);
-
-  // Find may search the whole library when the current scope hides every
-  // match, exactly like the Table screen's fallback.
-  const canSearchAll = useMemo(() => {
-    if (!hasActiveFilters || !findQueryActive || findMatches.length) {
-      return false;
-    }
-
-    return allNotes.some((note) =>
-      matchesSearchQuery(note, findCondition.value, searchColumns),
-    );
-  }, [
-    allNotes,
-    findCondition,
-    findMatches.length,
-    findQueryActive,
+  const find = useTableFind({
+    allRows: allNotes,
     hasActiveFilters,
+    onCloseFocus: (noteId) => {
+      if (noteId != null && notes.some((note) => note.id === noteId)) {
+        focusRowByNoteId(noteId);
+      } else {
+        focusTableAnchor();
+      }
+    },
+    onRevealMatch: revealFindMatch,
+    onSearchAll,
+    rows: notes,
     searchColumns,
-  ]);
+  });
 
   const rowVirtualizer = useVirtualizer({
     count: notes.length,
@@ -398,47 +350,6 @@ export function AllNotesTable({
     focusRowByNoteId(notes[nextIndex].id);
   }
 
-  function resetFind() {
-    setFindQuery("");
-    setFindCurrentId(null);
-  }
-
-  function openFind() {
-    if (findOpen) {
-      findInputRef.current?.focus();
-      findInputRef.current?.select();
-      return;
-    }
-
-    setFindOpen(true);
-    resetFind();
-  }
-
-  function closeFind() {
-    const noteId = findCurrentMatchId;
-
-    setFindOpen(false);
-    resetFind();
-
-    if (noteId != null && notes.some((note) => note.id === noteId)) {
-      focusRowByNoteId(noteId);
-    } else {
-      focusTableAnchor();
-    }
-  }
-
-  function stepFind(direction) {
-    if (findMatches.length < 2) {
-      return;
-    }
-
-    const from = findCurrentIndex >= 0 ? findCurrentIndex : 0;
-    const next =
-      (from + direction + findMatches.length) % findMatches.length;
-
-    setFindCurrentId(findMatches[next].id);
-  }
-
   function focusFirstNote() {
     if (notes[0]) {
       focusRowByNoteId(notes[0].id);
@@ -516,45 +427,6 @@ export function AllNotesTable({
       onToggleSelection: noop,
     };
   }, []);
-
-  useEffect(() => {
-    if (!findOpen) {
-      return;
-    }
-
-    if (!findMatches.length) {
-      setFindCurrentId(null);
-      return;
-    }
-
-    if (!findMatches.some((note) => note.id === findCurrentId)) {
-      setFindCurrentId(findMatches[0].id);
-    }
-  }, [findCurrentId, findMatches, findOpen]);
-
-  useEffect(() => {
-    if (!findOpen || findCurrentMatchId == null) {
-      return;
-    }
-
-    revealFindMatch(findCurrentMatchId);
-    // The index is a dependency because a filter or sort change can re-order
-    // the matches while the current note stays the same.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [findCurrentIndex, findCurrentMatchId, findOpen]);
-
-  useEffect(() => {
-    if (!findOpen) {
-      return undefined;
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      findInputRef.current?.focus();
-      findInputRef.current?.select();
-    });
-
-    return () => window.cancelAnimationFrame(frameId);
-  }, [findOpen]);
 
   useEffect(() => {
     // A filter, sort or column change produces a new row order: drop a
@@ -640,26 +512,7 @@ export function AllNotesTable({
         return;
       }
 
-      if (
-        (event.metaKey || event.ctrlKey) &&
-        !event.altKey &&
-        !event.shiftKey &&
-        event.key.toLowerCase() === "f"
-      ) {
-        event.preventDefault();
-        openFind();
-        return;
-      }
-
-      if (event.key === "F3" && findOpen) {
-        event.preventDefault();
-        stepFind(event.shiftKey ? -1 : 1);
-        return;
-      }
-
-      if (event.key === "Escape" && findOpen) {
-        event.preventDefault();
-        closeFind();
+      if (find.handleShortcut(event)) {
         return;
       }
 
@@ -758,10 +611,7 @@ export function AllNotesTable({
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
     activeNoteId,
-    findCurrentIndex,
-    findCurrentMatchId,
-    findMatches,
-    findOpen,
+    find.handleShortcut,
     hasActiveFilters,
     notes,
     onClearFilters,
@@ -769,17 +619,10 @@ export function AllNotesTable({
     slideshowActive,
   ]);
 
-  const findStatus = findQueryActive
-    ? ` · Find ${
-        findMatches.length
-          ? `${findCurrentIndex + 1} of ${findMatches.length}`
-          : "no matches"
-      }`
-    : "";
   const sortStatus = sortKey
     ? ` · sorted by ${sortLabel} ${sortDirection === "asc" ? "ascending" : "descending"}`
     : "";
-  const summary = `Showing ${notes.length} of ${noteCountLabel(totalCount)} across ${collectionCountLabel(collectionCount)}${sortStatus}${findStatus}`;
+  const summary = `Showing ${notes.length} of ${noteCountLabel(totalCount)} across ${collectionCountLabel(collectionCount)}${sortStatus}${find.status}`;
 
   const emptyRow =
     notes.length === 0 ? (
@@ -832,7 +675,7 @@ export function AllNotesTable({
                 aria-label="Find in this view"
                 className="button"
                 data-shortcut="Ctrl+F"
-                onClick={openFind}
+                onClick={find.open}
                 title="Find in this view (Ctrl/Cmd+F)"
                 type="button"
               >
@@ -900,28 +743,10 @@ export function AllNotesTable({
           emptyContent={emptyRow}
           emptyView={notes.length === 0}
           findBar={
-            findOpen ? (
-              <TableFindBar
-                canSearchAll={canSearchAll}
-                currentIndex={findCurrentIndex}
-                filtersActive={hasActiveFilters}
-                inputRef={findInputRef}
-                matchCount={findMatches.length}
-                onClose={closeFind}
-                onQueryChange={setFindQuery}
-                onSearchAll={() => {
-                  onSearchAll();
-                  setFindCurrentId(null);
-                  findInputRef.current?.focus();
-                }}
-                onStep={stepFind}
-                pending={findPending}
-                query={findQuery}
-              />
-            ) : null
+            find.isOpen ? <TableFindBar {...find.barProps} /> : null
           }
-          findCurrentNoteId={findCurrentMatchId}
-          findMarksByNoteId={findMarksByNoteId}
+          findCurrentNoteId={find.currentMatchId}
+          findMarksByNoteId={find.marksByNoteId}
           gutterWidth={tableGutterWidth}
           handlers={rowHandlers}
           loading={false}

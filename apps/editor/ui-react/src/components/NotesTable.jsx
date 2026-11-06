@@ -41,6 +41,7 @@ import {
 } from "../lib/notesTableState.js";
 import { shouldHandOffToFilters } from "../lib/filterFocusMemory.js";
 import { useColumnPan } from "../lib/useColumnPan.js";
+import { useTableFind } from "../lib/useTableFind.js";
 import {
   COLUMN_SCROLL_STEP,
 } from "../lib/tableColumnPan.js";
@@ -52,7 +53,6 @@ import {
   hideableColumns,
   hideableDataColumns,
   lastStickyKey,
-  matchesSearchQuery,
   slideshowFilterKeys,
   stickyOffsets,
   tableColumns,
@@ -904,17 +904,6 @@ function NotesTable({
   const [activeNoteId, setActiveNoteId] = useState(null);
   const [thumbPreviewState, setThumbPreviewState] = useState(null);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
-  // Find is a cursor over the painted view, not a filter: it owns only an open
-  // flag, the query and the note it is currently on. Nothing here is persisted
-  // or written to the URL.
-  const [findOpen, setFindOpen] = useState(false);
-  const [findQuery, setFindQuery] = useState("");
-  const [findCurrentId, setFindCurrentId] = useState(null);
-  const findInputRef = useRef(null);
-  const resetFind = useCallback(() => {
-    setFindQuery("");
-    setFindCurrentId(null);
-  }, []);
   const [columnFilterHeights, setColumnFilterHeights] = useState({});
   // The scrollbar owns its metrics; the table only needs to know whether its
   // gutter column is showing, which changes the column widths.
@@ -1174,51 +1163,6 @@ function NotesTable({
   const deferredOrderedNotes = deferredView.notes;
   const deferredConditions = deferredView.conditions;
   const rowsPending = deferredView !== paintedView;
-  // Find follows the painted list and defers its query like the painted view
-  // does, so typing never forces the virtualizer to rebuild in the urgent
-  // render. It searches the current filtered and sorted view only.
-  const deferredFindQuery = useDeferredValue(findQuery);
-  const findQueryActive = findOpen && deferredFindQuery.trim().length > 0;
-  const findPending =
-    findOpen && findQuery.trim() !== deferredFindQuery.trim();
-  const findCondition = useMemo(
-    () => ({ field: "all", negated: false, value: deferredFindQuery }),
-    [deferredFindQuery],
-  );
-  const findMatches = useMemo(() => {
-    if (!findQueryActive) {
-      return [];
-    }
-
-    return deferredOrderedNotes.filter((note) =>
-      matchesSearchQuery(note, findCondition.value, searchColumns),
-    );
-  }, [deferredOrderedNotes, findCondition, findQueryActive, searchColumns]);
-  const currentMatchPosition = findMatches.findIndex(
-    (note) => note.id === findCurrentId,
-  );
-  const findCurrentIndex = findMatches.length
-    ? Math.max(currentMatchPosition, 0)
-    : -1;
-  const findCurrentMatchId =
-    findCurrentIndex >= 0 ? findMatches[findCurrentIndex].id : null;
-  // The terms find should mark, per matching row. Keeping the map apart from
-  // the row models means an unmatchable row keeps its model and its identity,
-  // so typing in find only re-renders the rows whose marks changed.
-  const findMarksByNoteId = useMemo(() => {
-    const map = new Map();
-
-    for (const note of findMatches) {
-      map.set(
-        note.id,
-        marksForNote(note, [findCondition], searchColumns, {
-          normalized: true,
-        }),
-      );
-    }
-
-    return map;
-  }, [findCondition, findMatches, searchColumns]);
   const slideshowRouteActive = currentRoute.kind === "slideshow";
   const creatingNote = isCreateRoute(currentRoute);
   const editingNoteId = isEditNoteRoute(currentRoute)
@@ -1700,25 +1644,25 @@ function NotesTable({
   }, [editorOverlayOpen]);
 
   const hasActiveFilters = conditions.length > 0;
-  // The fallback only makes sense when clearing the filters would actually
-  // reveal a match. A nonsense query under filters must not offer to throw the
-  // collector's view away for nothing.
-  const canSearchAllNotes = useMemo(() => {
-    if (!hasActiveFilters || !findQueryActive || findMatches.length) {
-      return false;
-    }
-
-    return notes.some((note) =>
-      matchesSearchQuery(note, findCondition.value, searchColumns),
-    );
-  }, [
-    findCondition,
-    findMatches.length,
-    findQueryActive,
+  // Find is a cursor over the painted view, not a filter. The shared hook owns
+  // its query, match list and focus effects; the screen only supplies the
+  // painted rows, the searchable columns and the focus hand-off.
+  const find = useTableFind({
+    allRows: notes,
     hasActiveFilters,
-    notes,
+    onCloseFocus: (noteId) => {
+      if (noteId != null && orderedNotes.some((note) => note.id === noteId)) {
+        focusRowByNoteId(noteId);
+      } else {
+        focusTableAnchor();
+      }
+    },
+    onRevealMatch: revealFindMatch,
+    onSearchAll: clearFiltersAndResetDraft,
+    resetKey: collectionId,
+    rows: deferredOrderedNotes,
     searchColumns,
-  ]);
+  });
   // Permanent columns are always rendered; a hideable column is rendered only
   // while the collector's per-collection choice includes it.
   const visibleColumns = useMemo(
@@ -1917,60 +1861,6 @@ function NotesTable({
       onToggleSelection: invoke("onToggleSelection"),
     };
   }, []);
-
-  useEffect(() => {
-    // Keep the stored current match honest against the recomputed list: a
-    // filter, sort or column change can remove it, in which case find falls
-    // back to the first match instead of pointing at nothing.
-    if (!findOpen) {
-      return;
-    }
-
-    if (!findMatches.length) {
-      setFindCurrentId(null);
-      return;
-    }
-
-    if (!findMatches.some((note) => note.id === findCurrentId)) {
-      setFindCurrentId(findMatches[0].id);
-    }
-  }, [findCurrentId, findMatches, findOpen]);
-
-  useEffect(() => {
-    // Reveal the current match after it lands: a mounted row only needs to be
-    // nudged into view, while a virtualized one is centered by the virtualizer
-    // before it mounts. Focus stays in the find input, so no row cursor is
-    // painted and typing is never interrupted.
-    if (!findOpen || findCurrentMatchId == null) {
-      return;
-    }
-
-    revealFindMatch(findCurrentMatchId);
-    // The index is a dependency because a filter or sort change can re-order
-    // the matches while the current note stays the same; the function itself
-    // reads the painted list, so it must not re-run this effect every render.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [findCurrentIndex, findCurrentMatchId, findOpen]);
-
-  useEffect(() => {
-    if (!findOpen) {
-      return undefined;
-    }
-
-    const frameId = window.requestAnimationFrame(() => {
-      findInputRef.current?.focus();
-      findInputRef.current?.select();
-    });
-
-    return () => window.cancelAnimationFrame(frameId);
-  }, [findOpen]);
-
-  useEffect(() => {
-    // Find belongs to one collection's view. A switch starts cleaned up, the
-    // same way it starts with its saved columns and no filters.
-    setFindOpen(false);
-    resetFind();
-  }, [collectionId, resetFind]);
 
   // The data columns need the space the table can occupy, not the table's own
   // rendered width: once the columns are wide, a fixed-layout table refuses to
@@ -2593,34 +2483,7 @@ function NotesTable({
       const findKeysOwned =
         tableKeysActive && !overlayOwnsReorderKeys(event.target);
 
-      if (
-        findKeysOwned &&
-        (event.metaKey || event.ctrlKey) &&
-        !event.altKey &&
-        !event.shiftKey &&
-        event.key.toLowerCase() === "f"
-      ) {
-        event.preventDefault();
-        openFind();
-        return;
-      }
-
-      // F3 / Shift+F3 walk the current find matches without moving focus out
-      // of the find input, so a keyboard-only collector never has to reach
-      // for Enter between matches.
-      if (findKeysOwned && event.key === "F3" && findOpen) {
-        event.preventDefault();
-        stepFind(event.shiftKey ? -1 : 1);
-        return;
-      }
-
-      // Find closes before any other Escape level: the query and its marks go
-      // first, then the filter field, then the selection and row cursor. The
-      // input handles its own Escape and stops it; this covers focus that
-      // moved to the bar's buttons, the sidebar or back into a row.
-      if (findKeysOwned && event.key === "Escape" && findOpen) {
-        event.preventDefault();
-        closeFind();
+      if (findKeysOwned && find.handleShortcut(event)) {
         return;
       }
 
@@ -2958,10 +2821,7 @@ function NotesTable({
     collectionId,
     creatingNote,
     editingNoteId,
-    findCurrentIndex,
-    findCurrentMatchId,
-    findMatches,
-    findOpen,
+    find.handleShortcut,
     hasActiveFilters,
     isCollectionEditing,
     isNewCollection,
@@ -2981,57 +2841,6 @@ function NotesTable({
 
   function handleConditionsChange(next) {
     setConditions(next);
-  }
-
-  function openFind() {
-    if (findOpen) {
-      // A second Ctrl/Cmd+F is the browser's "find again": keep the current
-      // query and let the collector replace or step it from the input.
-      findInputRef.current?.focus();
-      findInputRef.current?.select();
-      return;
-    }
-
-    setFindOpen(true);
-    resetFind();
-  }
-
-  function closeFind() {
-    const noteId = findCurrentMatchId;
-
-    setFindOpen(false);
-    resetFind();
-
-    // Hand the cursor to the row find was last on, never to <body>: the
-    // collector can carry on with the arrow keys or open the note. With no
-    // match at all there is no row to land on, so keep the table focusable.
-    if (noteId != null && orderedNotes.some((note) => note.id === noteId)) {
-      focusRowByNoteId(noteId);
-    } else {
-      focusTableAnchor();
-    }
-  }
-
-  function stepFind(direction) {
-    if (findMatches.length < 2) {
-      return;
-    }
-
-    const from = findCurrentIndex >= 0 ? findCurrentIndex : 0;
-    const next =
-      (from + direction + findMatches.length) % findMatches.length;
-
-    setFindCurrentId(findMatches[next].id);
-  }
-
-  function searchAllNotesForFind() {
-    // The fallback deliberately changes the view: it clears the filters that
-    // hid the match, keeps the query, and lets the reconcile effect land on
-    // the first match of the newly cleared list. The bar stays mounted, so
-    // focus can return to it immediately.
-    clearFiltersAndResetDraft();
-    setFindCurrentId(null);
-    findInputRef.current?.focus();
   }
 
   function revealFindMatch(noteId) {
@@ -5384,7 +5193,7 @@ function NotesTable({
                     aria-label="Find in this view"
                     className="button"
                     data-shortcut="Ctrl+F"
-                    onClick={openFind}
+                    onClick={find.open}
                     title="Find in this view (Ctrl/Cmd+F)"
                     type="button"
                   >
@@ -5450,24 +5259,10 @@ function NotesTable({
                 emptyContent={emptyTableRow}
                 emptyView={emptyViewSettled}
                 findBar={
-                  findOpen ? (
-                    <TableFindBar
-                      canSearchAll={canSearchAllNotes}
-                      currentIndex={findCurrentIndex}
-                      filtersActive={hasActiveFilters}
-                      inputRef={findInputRef}
-                      matchCount={findMatches.length}
-                      onClose={closeFind}
-                      onQueryChange={setFindQuery}
-                      onSearchAll={searchAllNotesForFind}
-                      onStep={stepFind}
-                      pending={findPending}
-                      query={findQuery}
-                    />
-                  ) : null
+                  find.isOpen ? <TableFindBar {...find.barProps} /> : null
                 }
-                findCurrentNoteId={findCurrentMatchId}
-                findMarksByNoteId={findMarksByNoteId}
+                findCurrentNoteId={find.currentMatchId}
+                findMarksByNoteId={find.marksByNoteId}
                 gutterWidth={tableGutterWidth}
                 handlers={rowHandlers}
                 loading={loading}
@@ -5553,13 +5348,7 @@ function NotesTable({
                 {notes.length === 1 ? "note" : "notes"} · sorted by{" "}
                 {getTableColumn(sortKey)?.label ?? "#"}{" "}
                 {sortDirection === "asc" ? "ascending" : "descending"}
-                {findQueryActive
-                  ? ` · Find ${
-                      findMatches.length
-                        ? `${findCurrentIndex + 1} of ${findMatches.length}`
-                        : "no matches"
-                    }`
-                  : ""}
+                {find.status}
                 {selectedIds.length
                   ? ` · ${selectedIds.length} selected`
                   : ""}
