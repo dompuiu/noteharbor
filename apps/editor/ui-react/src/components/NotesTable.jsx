@@ -72,14 +72,6 @@ import { TableBulkBar } from "./TableBulkBar.jsx";
 import { ToastHost } from "./Toast.jsx";
 import { MoveNotesDialog } from "./MoveNotesDialog.jsx";
 
-export function HomeHero() {
-  return null;
-}
-
-const rowHeightEstimate = 45;
-// Mirrors the table's CSS min-width and the trailing scrollbar-gutter column.
-const minTableWidth = 1200;
-const tableGutterWidth = 14;
 const validPreviewKinds = new Set(["front", "back"]);
 const slideshowFilterParamPrefix = "f_";
 
