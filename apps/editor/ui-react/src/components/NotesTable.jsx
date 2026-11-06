@@ -9,7 +9,6 @@ import {
   useState,
 } from "react";
 import { createPortal } from "react-dom";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import {
   deleteNote,
@@ -39,8 +38,8 @@ import {
   pruneTableStates,
   saveTableState,
 } from "../lib/notesTableState.js";
-import { shouldHandOffToFilters } from "../lib/filterFocusMemory.js";
 import { useColumnPan } from "../lib/useColumnPan.js";
+import { useTableCursor } from "../lib/useTableCursor.js";
 import { useTableFind } from "../lib/useTableFind.js";
 import {
   COLUMN_SCROLL_STEP,
@@ -596,7 +595,6 @@ function NotesTable({
       ? emptyTableRoute()
       : parseTableHash(window.location.hash),
   );
-  const rowElementMapRef = useRef(new Map());
   const rowActionsMenuMapRef = useRef(new Map());
   const thumbPreviewElementMapRef = useRef(new Map());
   // Drag feedback lives in the rows (see TableRows.jsx), which are its only
@@ -605,23 +603,14 @@ function NotesTable({
   const dragStateRef = useRef({ draggedNoteId: null, dropTarget: null });
   const tableScreenRef = useRef(null);
   const tableShellRef = useRef(null);
-  const tableScrollRef = useRef(null);
   // The memoized rows receive one stable handlers object; its members call
   // through this ref so they always read the current render's state without
   // changing identity.
   const rowHandlerImplRef = useRef(null);
   const [tableWidth, setTableWidth] = useState(null);
   const editorOverlayRef = useRef(null);
-  const focusedRowIdRef = useRef(null);
   const tableFocusAnchorRef = useRef(null);
   const currentRouteRef = useRef(null);
-  const pendingRowFocusNoteIdRef = useRef(null);
-  // Tab from a row enters the selection actions bar before the row's own
-  // controls; Shift+Tab out of the bar's first item goes to the row's
-  // actions button. These requests can only be honoured once a virtualized
-  // row mounts, so they are held here like `pendingRowFocusNoteIdRef`.
-  const pendingRowCheckboxFocusNoteIdRef = useRef(null);
-  const pendingRowActionsFocusNoteIdRef = useRef(null);
   // The bar's own buttons come before the rows in the intended tab cycle
   // once a selection exists. The ref tracks whether the next Tab should
   // honour that, and the live selection size so the window-level handler
@@ -630,7 +619,6 @@ function NotesTable({
   const selectedIdsRef = useRef([]);
   const userSelectionChangeRef = useRef(false);
   const prevHasSelectionRef = useRef(false);
-  const pendingRowKeyboardFocusArmRef = useRef(null);
   const bulkBarRef = useRef(null);
   // A mouse-made selection leaves focus on a checkbox but paints no row
   // cursor. Escape drops that focus to the anchor, and this remembers the
@@ -666,14 +654,6 @@ function NotesTable({
   // to a route whose note has left the list, so it consumes this intent and
   // moves the slideshow on rather than bouncing to the Table.
   const pendingSlideshowLandingRef = useRef(null);
-  const clearRowCursor = useCallback(() => {
-    // The keyboard cursor is focus memory plus paint: both must drop
-    // together so the highlight can never outlive its focus target or
-    // vice versa. The last-focused-row memory is deliberately left alone —
-    // it is what lets the editor overlay hand the cursor back on close.
-    focusedRowIdRef.current = null;
-    setActiveNoteId(null);
-  }, []);
   // A mouse press focuses the row before any drag or click resolves. The
   // flag marks that focus as mouse-driven so it claims focus memory but
   // not the cursor paint: selection happens on drop, keyboard moves, and
@@ -901,7 +881,6 @@ function NotesTable({
   // any save in the burst fails.
   const reorderRollbackRef = useRef(null);
   const [slideshowNotes, setSlideshowNotes] = useState([]);
-  const [activeNoteId, setActiveNoteId] = useState(null);
   const [thumbPreviewState, setThumbPreviewState] = useState(null);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
   const [columnFilterHeights, setColumnFilterHeights] = useState({});
@@ -1169,6 +1148,38 @@ function NotesTable({
   const deferredOrderedNotes = deferredView.notes;
   const deferredConditions = deferredView.conditions;
   const rowsPending = deferredView !== paintedView;
+  // The virtualized cursor is shared with the All notes screen. The painted
+  // list drives the virtualizer; the urgent list resolves focus targets so a
+  // note that has just been created or moved can be found before it paints.
+  const cursor = useTableCursor({
+    indexRows: orderedNotes,
+    rows: deferredOrderedNotes,
+  });
+  const {
+    activeNoteId,
+    bottomSpacerHeight,
+    focusFirstRow,
+    focusLastRow,
+    focusRowByNoteId,
+    focusedRowIdRef,
+    moveRowFocus: moveCursorFocus,
+    pageRows: pageCursor,
+    revealRow: revealFindMatch,
+    rowElementMapRef,
+    rowVirtualizer,
+    scrollRef: tableScrollRef,
+    setActiveNoteId,
+    topSpacerHeight,
+    virtualRows,
+  } = cursor;
+  const clearRowCursor = useCallback(() => {
+    // The keyboard cursor is focus memory plus paint: both must drop
+    // together so the highlight can never outlive its focus target or
+    // vice versa. The last-focused-row memory is deliberately left alone —
+    // it is what lets the editor overlay hand the cursor back on close.
+    focusedRowIdRef.current = null;
+    setActiveNoteId(null);
+  }, [focusedRowIdRef, setActiveNoteId]);
   const slideshowRouteActive = currentRoute.kind === "slideshow";
   const creatingNote = isCreateRoute(currentRoute);
   const editingNoteId = isEditNoteRoute(currentRoute)
@@ -1788,22 +1799,6 @@ function NotesTable({
       selectedIds.length > 0,
     [hasActiveFilters, selectedIds, sortDirection, sortKey],
   );
-  const rowVirtualizer = useVirtualizer({
-    count: deferredOrderedNotes.length,
-    // Rows are one line and never wrap, so their height is fixed. Without
-    // dynamic measurement the offsets are pure arithmetic, which lets the
-    // virtualizer skip the synchronous render on every scroll tick.
-    estimateSize: () => rowHeightEstimate,
-    getScrollElement: () => tableScrollRef.current,
-    overscan: 4,
-    useFlushSync: false,
-  });
-  const virtualRows = rowVirtualizer.getVirtualItems();
-  const topSpacerHeight = virtualRows.length ? virtualRows[0].start : 0;
-  const bottomSpacerHeight = virtualRows.length
-    ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end
-    : 0;
-
   // Per-note row models are built once for the whole painted list, not once
   // per row per commit. Their identities only change when the notes, the
   // column geometry or the filter change, so an unrelated re-render leaves
@@ -1973,7 +1968,7 @@ function NotesTable({
     // do the last-focused-row memory and any focus still waiting on a list
     // change: they name rows of the old order. A collection switch is a new
     // order too.
-    pendingRowFocusNoteIdRef.current = null;
+    cursor.cancelPendingFocus();
     deferredRowFocusNoteIdRef.current = null;
     deferredAnchorFocusRef.current = false;
     pendingSlideshowLandingRef.current = null;
@@ -2200,7 +2195,6 @@ function NotesTable({
       // Any focus move that is not one of the arming actions (a selection
       // change or a keyboard row move) cancels a pending Tab-to-bar jump.
       selectionTabArmedRef.current = false;
-      pendingRowKeyboardFocusArmRef.current = null;
 
       if (event.target !== tableFocusAnchorRef.current) {
         // Any other focus target ends the "resume after Escape" intent.
@@ -2232,19 +2226,13 @@ function NotesTable({
     // key was one of them.
     function armSelectionTabForRowMove(noteId) {
       // With a selection on screen, moving the row cursor makes the bar the
-      // next Tab stop again. A virtualized target only receives focus once
-      // it mounts, so its arming waits for the row ref callback.
+      // next Tab stop again. The cursor calls this after the target row has
+      // focus, including a virtualized row that had to mount first.
       if (noteId == null || !selectedIdsRef.current.length) {
         return;
       }
 
-      const element = rowElementMapRef.current.get(noteId);
-
-      if (element && document.activeElement === element) {
-        selectionTabArmedRef.current = true;
-      } else {
-        pendingRowKeyboardFocusArmRef.current = noteId;
-      }
+      selectionTabArmedRef.current = true;
     }
 
     function isPageBackgroundTarget(target) {
@@ -2296,20 +2284,21 @@ function NotesTable({
 
       if (!event.shiftKey && (event.key === "ArrowDown" || event.key === "j")) {
         event.preventDefault();
-        armSelectionTabForRowMove(moveRowFocus(1));
+        moveRowFocus(1, armSelectionTabForRowMove);
         return true;
       }
 
       if (!event.shiftKey && (event.key === "ArrowUp" || event.key === "k")) {
         event.preventDefault();
-        armSelectionTabForRowMove(moveRowFocus(-1));
+        moveRowFocus(-1, armSelectionTabForRowMove);
         return true;
       }
 
       if (event.key === "PageDown" || event.key === "PageUp") {
         event.preventDefault();
-        armSelectionTabForRowMove(
-          pageTable(event.key === "PageDown" ? 1 : -1),
+        pageTable(
+          event.key === "PageDown" ? 1 : -1,
+          armSelectionTabForRowMove,
         );
         return true;
       }
@@ -2322,8 +2311,9 @@ function NotesTable({
             : orderedNotes[orderedNotes.length - 1];
 
         if (note) {
-          focusRowByNoteId(note.id);
-          armSelectionTabForRowMove(note.id);
+          focusRowByNoteId(note.id, {
+            after: () => armSelectionTabForRowMove(note.id),
+          });
         }
         return true;
       }
@@ -2848,41 +2838,6 @@ function NotesTable({
     setConditions(next);
   }
 
-  function revealFindMatch(noteId) {
-    const index = deferredOrderedNotes.findIndex(
-      (note) => note.id === noteId,
-    );
-
-    if (index < 0) {
-      return;
-    }
-
-    const element = rowElementMapRef.current.get(noteId);
-
-    if (element) {
-      ensureRowVisible(element);
-      return;
-    }
-
-    rowVirtualizer.scrollToIndex(index, { align: "center" });
-  }
-
-  function focusFirstRow() {
-    const first = orderedNotes[0];
-
-    if (first) {
-      focusRowByNoteId(first.id);
-    }
-  }
-
-  function focusLastRow() {
-    const last = orderedNotes[orderedNotes.length - 1];
-
-    if (last) {
-      focusRowByNoteId(last.id);
-    }
-  }
-
   function clearFiltersAndResetDraft() {
     setConditions([]);
     filterBarRef.current?.reset();
@@ -3028,53 +2983,6 @@ function NotesTable({
     }
   }
 
-  function focusRowByNoteId(noteId, options = {}) {
-    if (noteId == null) {
-      return;
-    }
-
-    const element = rowElementMapRef.current.get(noteId);
-
-    if (element) {
-      // Native focus scrolling ignores the sticky header and can leave
-      // the row hidden underneath it, so suppress it and reveal the row
-      // explicitly instead.
-      element.focus({ preventScroll: true });
-      focusedRowIdRef.current = noteId;
-      setActiveNoteId(noteId);
-
-      if (options.pinToTop) {
-        pinRowToTop(element);
-      } else {
-        ensureRowVisible(element);
-      }
-      return;
-    }
-
-    const index = orderedNotes.findIndex((note) => note.id === noteId);
-
-    if (index < 0) {
-      return;
-    }
-
-    pendingRowFocusNoteIdRef.current = noteId;
-    setActiveNoteId(noteId);
-    rowVirtualizer.scrollToIndex(index, {
-      align: options.pinToTop ? "start" : "auto",
-    });
-  }
-
-  // Focus a mounted row's control and make that row the cursor. A null
-  // selector focuses the row element itself.
-  function focusRowControlInElement(element, noteId, selector) {
-    const control = selector ? element.querySelector(selector) : element;
-
-    (control ?? element).focus({ preventScroll: true });
-    focusedRowIdRef.current = noteId;
-    setActiveNoteId(noteId);
-    ensureRowVisible(element);
-  }
-
   // The row a bar exit returns to: the live keyboard cursor when it still
   // exists, otherwise the row selected most recently (the end of the
   // selection array, which is also the checkbox the user touched last).
@@ -3090,158 +2998,34 @@ function NotesTable({
     return ids.length ? ids[ids.length - 1] : null;
   }
 
-  function focusRowControlByNoteId(noteId, selector, pendingRef) {
-    if (noteId == null) {
+  function focusRowControlByNoteId(noteId, selector, after) {
+    if (noteId == null || !orderedNotes.some((note) => note.id === noteId)) {
       focusTableAnchor();
       return;
     }
 
-    const row = rowElementMapRef.current.get(noteId);
-    const control = row?.querySelector(selector);
-
-    if (row && control) {
-      control.focus({ preventScroll: true });
-      focusedRowIdRef.current = noteId;
-      setActiveNoteId(noteId);
-      ensureRowVisible(row);
-      return;
-    }
-
-    const index = orderedNotes.findIndex((note) => note.id === noteId);
-
-    if (index < 0) {
-      focusTableAnchor();
-      return;
-    }
-
-    // The target row is outside the virtualized window. Scroll it in and
-    // let the row ref callback focus the control once it mounts.
-    pendingRef.current = noteId;
-    rowVirtualizer.scrollToIndex(index, { align: "auto" });
+    // A mounted row focuses its control at once; a virtualized one scrolls in
+    // and lets the row ref callback finish the focus when it mounts.
+    cursor.requestFocus(noteId, { after, selector });
   }
 
   function focusRowCheckboxByNoteId(noteId) {
-    focusRowControlByNoteId(
-      noteId,
-      'input[type="checkbox"]',
-      pendingRowCheckboxFocusNoteIdRef,
-    );
+    focusRowControlByNoteId(noteId, 'input[type="checkbox"]');
   }
 
   function focusRowActionsButtonByNoteId(noteId) {
-    focusRowControlByNoteId(
-      noteId,
-      'button[aria-haspopup="menu"]',
-      pendingRowActionsFocusNoteIdRef,
-    );
+    focusRowControlByNoteId(noteId, 'button[aria-haspopup="menu"]');
   }
 
-  function moveRowFocus(offset) {
-    if (!orderedNotes.length) {
-      return null;
-    }
-
-    const currentIndex = orderedNotes.findIndex(
-      (note) => note.id === focusedRowIdRef.current,
-    );
-    const currentElement =
-      currentIndex === 0
-        ? (rowElementMapRef.current.get(focusedRowIdRef.current) ?? null)
-        : null;
-
-    if (
-      shouldHandOffToFilters({
-        activeElement: document.activeElement,
-        currentIndex,
-        offset,
-        rowElement: currentElement,
-      })
-    ) {
-      filterBarRef.current?.focus();
-      clearRowCursor();
-      return null;
-    }
-
-    const baseIndex = currentIndex >= 0 ? currentIndex : offset > 0 ? -1 : 0;
-    const nextIndex = Math.min(
-      Math.max(baseIndex + offset, 0),
-      orderedNotes.length - 1,
-    );
-    const targetId = orderedNotes[nextIndex].id;
-
-    focusRowByNoteId(targetId);
-    return targetId;
+  function moveRowFocus(offset, onAfterFocus) {
+    return moveCursorFocus(offset, {
+      onAfterFocus,
+      onBeforeFirst: () => filterBarRef.current?.focus(),
+    });
   }
 
-  function ensureRowVisible(element) {
-    const scroller = tableScrollRef.current;
-
-    if (!scroller) {
-      return;
-    }
-
-    const headerBottom =
-      scroller.querySelector("thead")?.getBoundingClientRect().bottom ?? 0;
-    const scrollerBox = scroller.getBoundingClientRect();
-    const rowBox = element.getBoundingClientRect();
-
-    if (rowBox.top < headerBottom) {
-      scroller.scrollTop -= headerBottom - rowBox.top;
-    } else if (rowBox.bottom > scrollerBox.bottom) {
-      scroller.scrollTop += rowBox.bottom - scrollerBox.bottom;
-    }
-  }
-
-  function pinRowToTop(element) {
-    const scroller = tableScrollRef.current;
-
-    if (!scroller) {
-      return;
-    }
-
-    const headerBottom =
-      scroller.querySelector("thead")?.getBoundingClientRect().bottom ?? 0;
-    scroller.scrollTop += element.getBoundingClientRect().top - headerBottom;
-  }
-
-  function pageTable(direction) {
-    const scroller = tableScrollRef.current;
-
-    if (!scroller || !orderedNotes.length) {
-      return null;
-    }
-
-    const headerHeight = scroller.querySelector("thead")?.offsetHeight ?? 0;
-    const pageSize = Math.max(
-      1,
-      Math.floor((scroller.clientHeight - headerHeight) / rowHeightEstimate),
-    );
-    const currentIndex = orderedNotes.findIndex(
-      (note) => note.id === focusedRowIdRef.current,
-    );
-    // No focus yet (fresh load, Esc to the anchor): anchor on the current
-    // first visible row so the first press already jumps a full page.
-    const firstVisibleIndex = rowVirtualizer.getVirtualItems()[0]?.index ?? 0;
-    const baseIndex =
-      currentIndex >= 0
-        ? currentIndex
-        : Math.min(Math.max(firstVisibleIndex, 0), orderedNotes.length - 1);
-    const targetIndex = Math.min(
-      Math.max(baseIndex + direction * pageSize, 0),
-      orderedNotes.length - 1,
-    );
-    const target = orderedNotes[targetIndex];
-
-    // focusRowByNoteId drives the scrolling (scrollToIndex for virtualized
-    // rows, top-pin for mounted ones) so the target lands as the first row
-    // below the sticky header. Never set scrollTop here: the previous
-    // scroll-then-scan-DOM version read stale rows before the virtualizer
-    // re-rendered and scrolled right back to where it started.
-    if (target) {
-      focusRowByNoteId(target.id, { pinToTop: true });
-    }
-
-    return target?.id ?? null;
+  function pageTable(direction, onAfterFocus) {
+    return pageCursor(direction, { onAfterFocus });
   }
 
   function openEditor(noteId) {
@@ -4418,42 +4202,6 @@ function NotesTable({
     });
   }
 
-  function registerRowElement(noteId, element) {
-    if (!element) {
-      rowElementMapRef.current.delete(noteId);
-      return;
-    }
-
-    rowElementMapRef.current.set(noteId, element);
-
-    if (pendingRowCheckboxFocusNoteIdRef.current === noteId) {
-      pendingRowCheckboxFocusNoteIdRef.current = null;
-      focusRowControlInElement(element, noteId, 'input[type="checkbox"]');
-    } else if (pendingRowActionsFocusNoteIdRef.current === noteId) {
-      pendingRowActionsFocusNoteIdRef.current = null;
-      focusRowControlInElement(element, noteId, 'button[aria-haspopup="menu"]');
-    } else if (pendingRowFocusNoteIdRef.current === noteId) {
-      const armSelectionTab =
-        pendingRowKeyboardFocusArmRef.current === noteId;
-
-      pendingRowFocusNoteIdRef.current = null;
-      pendingRowKeyboardFocusArmRef.current = null;
-      focusRowControlInElement(element, noteId, null);
-
-      if (armSelectionTab) {
-        selectionTabArmedRef.current = true;
-      }
-    } else if (
-      focusedRowIdRef.current === noteId &&
-      document.activeElement === document.body
-    ) {
-      // The active row was scrolled out of the virtualized window (unmounting
-      // drops focus to <body> with no blur event) and has now remounted:
-      // reclaim focus without scrolling, since the user put it here.
-      element.focus({ preventScroll: true });
-    }
-  }
-
   function handleRowFocus(note) {
     focusedRowIdRef.current = note.id;
     lastRowFocusNoteIdRef.current = note.id;
@@ -4641,7 +4389,7 @@ function NotesTable({
     onReorderNote: handleRowReorder,
     onRowBlur: handleRowBlur,
     onRowClick: handleRowClick,
-    onRowElement: registerRowElement,
+    onRowElement: cursor.registerRowElement,
     onRowFocus: handleRowFocus,
     onRowKeyDown: handleRowKeyDown,
     onRowMouseDown() {

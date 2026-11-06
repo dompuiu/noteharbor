@@ -5,10 +5,10 @@ import {
   useRef,
   useState,
 } from "react";
-import { useVirtualizer } from "@tanstack/react-virtual";
 import { buildNoteRowModel } from "../lib/noteRowModel.js";
 import { marksForNote } from "../lib/noteView.js";
 import { useColumnPan } from "../lib/useColumnPan.js";
+import { useTableCursor } from "../lib/useTableCursor.js";
 import { allNotesDefaultSortKey } from "../lib/allNotesColumns.js";
 import {
   cellClass,
@@ -79,18 +79,27 @@ export function AllNotesTable({
   totalCount,
   visibleColumnKeys,
 }) {
-  const scrollRef = useRef(null);
   const filterBarRef = useRef(null);
   const tableFocusAnchorRef = useRef(null);
-  const rowElementMapRef = useRef(new Map());
-  const pendingRowFocusNoteIdRef = useRef(null);
-  const lastActiveNoteIdRef = useRef(null);
   const previousSlideshowActiveRef = useRef(slideshowActive);
   const dragStateRef = useRef({ draggedNoteId: null, dropTarget: null });
   const rowHandlerImplRef = useRef(null);
+  const cursor = useTableCursor({ rows: notes });
+  const {
+    activeNoteId,
+    bottomSpacerHeight,
+    clearRowCursor,
+    focusFirstRow: focusFirstNote,
+    focusLastRow: focusLastNote,
+    moveRowFocus,
+    pageRows: pageNotes,
+    rowElementMapRef,
+    scrollRef,
+    topSpacerHeight,
+    virtualRows,
+  } = cursor;
   const [tableWidth, setTableWidth] = useState(null);
   const [vScrollVisible, setVScrollVisible] = useState(false);
-  const [activeNoteId, setActiveNoteId] = useState(null);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
   // The default order is Collection ascending even when the URL carries no
@@ -126,7 +135,7 @@ export function AllNotesTable({
     syncColumnScroll,
   } = useColumnPan({
     measureDeps: [columnWidths, notes.length, vScrollVisible],
-    scrollRef,
+    scrollRef: cursor.scrollRef,
   });
 
   const find = useTableFind({
@@ -134,30 +143,16 @@ export function AllNotesTable({
     hasActiveFilters,
     onCloseFocus: (noteId) => {
       if (noteId != null && notes.some((note) => note.id === noteId)) {
-        focusRowByNoteId(noteId);
+        cursor.focusRowByNoteId(noteId);
       } else {
         focusTableAnchor();
       }
     },
-    onRevealMatch: revealFindMatch,
+    onRevealMatch: cursor.revealRow,
     onSearchAll,
     rows: notes,
     searchColumns,
   });
-
-  const rowVirtualizer = useVirtualizer({
-    count: notes.length,
-    estimateSize: () => rowHeightEstimate,
-    getScrollElement: () => scrollRef.current,
-    overscan: 4,
-    useFlushSync: false,
-  });
-  const virtualRows = rowVirtualizer.getVirtualItems();
-  const topSpacerHeight = virtualRows.length ? virtualRows[0].start : 0;
-  const bottomSpacerHeight = virtualRows.length
-    ? rowVirtualizer.getTotalSize() -
-      virtualRows[virtualRows.length - 1].end
-    : 0;
 
   const rowModelsByNoteId = useMemo(() => {
     const map = new Map();
@@ -194,7 +189,7 @@ export function AllNotesTable({
   // The table's measured width is the scroller's width, not the table's own
   // rendered width: fixed-layout tables refuse to shrink below their columns.
   useLayoutEffect(() => {
-    const scroller = scrollRef.current;
+    const scroller = cursor.scrollRef.current;
 
     if (!scroller) {
       return undefined;
@@ -211,155 +206,13 @@ export function AllNotesTable({
     return () => observer.disconnect();
   }, []);
 
-  function ensureRowVisible(element) {
-    const scroller = scrollRef.current;
-
-    if (!scroller) {
-      return;
-    }
-
-    const headerBottom =
-      scroller.querySelector("thead")?.getBoundingClientRect().bottom ?? 0;
-    const scrollerBox = scroller.getBoundingClientRect();
-    const rowBox = element.getBoundingClientRect();
-
-    if (rowBox.top < headerBottom) {
-      scroller.scrollTop -= headerBottom - rowBox.top;
-    } else if (rowBox.bottom > scrollerBox.bottom) {
-      scroller.scrollTop += rowBox.bottom - scrollerBox.bottom;
-    }
-  }
-
   function focusTableAnchor() {
     tableFocusAnchorRef.current?.focus({ preventScroll: true });
   }
 
-  function focusRowByNoteId(noteId) {
-    if (noteId == null) {
-      return;
-    }
-
-    const element = rowElementMapRef.current.get(noteId);
-
-    if (element) {
-      element.focus({ preventScroll: true });
-      lastActiveNoteIdRef.current = noteId;
-      setActiveNoteId(noteId);
-      ensureRowVisible(element);
-      return;
-    }
-
-    const index = notes.findIndex((note) => note.id === noteId);
-
-    if (index < 0) {
-      return;
-    }
-
-    pendingRowFocusNoteIdRef.current = noteId;
-    lastActiveNoteIdRef.current = noteId;
-    setActiveNoteId(noteId);
-    rowVirtualizer.scrollToIndex(index, { align: "auto" });
-  }
-
-  function clearRowCursor() {
-    setActiveNoteId(null);
-  }
-
   function openNote(note) {
-    lastActiveNoteIdRef.current = note.id;
-    setActiveNoteId(note.id);
+    cursor.markActiveNote(note.id);
     onOpenNote(note);
-  }
-
-  function registerRowElement(noteId, element) {
-    if (!element) {
-      rowElementMapRef.current.delete(noteId);
-      return;
-    }
-
-    rowElementMapRef.current.set(noteId, element);
-
-    if (pendingRowFocusNoteIdRef.current === noteId) {
-      pendingRowFocusNoteIdRef.current = null;
-      element.focus({ preventScroll: true });
-      ensureRowVisible(element);
-    } else if (
-      activeNoteId === noteId &&
-      document.activeElement === document.body
-    ) {
-      // The active row was scrolled out of the virtualized window and has now
-      // remounted: reclaim focus without scrolling, since the user put it here.
-      element.focus({ preventScroll: true });
-    }
-  }
-
-  function revealFindMatch(noteId) {
-    const index = notes.findIndex((note) => note.id === noteId);
-
-    if (index < 0) {
-      return;
-    }
-
-    const element = rowElementMapRef.current.get(noteId);
-
-    if (element) {
-      ensureRowVisible(element);
-      return;
-    }
-
-    rowVirtualizer.scrollToIndex(index, { align: "center" });
-  }
-
-  function moveRowFocus(offset) {
-    if (!notes.length) {
-      return;
-    }
-
-    const currentIndex = notes.findIndex((note) => note.id === activeNoteId);
-    const baseIndex = currentIndex >= 0 ? currentIndex : offset > 0 ? -1 : 0;
-    const nextIndex = Math.min(
-      Math.max(baseIndex + offset, 0),
-      notes.length - 1,
-    );
-
-    focusRowByNoteId(notes[nextIndex].id);
-  }
-
-  function pageNotes(direction) {
-    if (!notes.length) {
-      return;
-    }
-
-    const scroller = scrollRef.current;
-    const headerHeight = scroller?.querySelector("thead")?.offsetHeight ?? 0;
-    const pageSize = Math.max(
-      1,
-      Math.floor(((scroller?.clientHeight ?? 0) - headerHeight) / rowHeightEstimate),
-    );
-    const currentIndex = notes.findIndex((note) => note.id === activeNoteId);
-    const firstVisibleIndex = rowVirtualizer.getVirtualItems()[0]?.index ?? 0;
-    const baseIndex =
-      currentIndex >= 0
-        ? currentIndex
-        : Math.min(Math.max(firstVisibleIndex, 0), notes.length - 1);
-    const nextIndex = Math.min(
-      Math.max(baseIndex + direction * pageSize, 0),
-      notes.length - 1,
-    );
-
-    focusRowByNoteId(notes[nextIndex].id);
-  }
-
-  function focusFirstNote() {
-    if (notes[0]) {
-      focusRowByNoteId(notes[0].id);
-    }
-  }
-
-  function focusLastNote() {
-    if (notes.length) {
-      focusRowByNoteId(notes[notes.length - 1].id);
-    }
   }
 
   function tableCellAttributes(column) {
@@ -379,10 +232,9 @@ export function AllNotesTable({
 
       openNote(note);
     },
-    onRowElement: registerRowElement,
+    onRowElement: cursor.registerRowElement,
     onRowFocus: (note) => {
-      lastActiveNoteIdRef.current = note.id;
-      setActiveNoteId(note.id);
+      cursor.markActiveNote(note.id);
     },
     onRowKeyDown: (note, event) => {
       if (event.target !== event.currentTarget) {
@@ -432,7 +284,7 @@ export function AllNotesTable({
     // A filter, sort or column change produces a new row order: drop a
     // not-yet-landed virtualized focus so the next arrow starts from the new
     // first row.
-    pendingRowFocusNoteIdRef.current = null;
+    cursor.cancelPendingFocus();
     clearRowCursor();
   }, [conditions, sortDirection, sortKey, visibleColumnKeys]);
 
@@ -475,14 +327,14 @@ export function AllNotesTable({
       return undefined;
     }
 
-    const noteId = lastActiveNoteIdRef.current;
+    const noteId = cursor.lastActiveNoteIdRef.current;
 
     if (noteId == null || !notes.some((note) => note.id === noteId)) {
       return undefined;
     }
 
     const frameId = window.requestAnimationFrame(() => {
-      focusRowByNoteId(noteId);
+      cursor.focusRowByNoteId(noteId);
     });
 
     return () => window.cancelAnimationFrame(frameId);
