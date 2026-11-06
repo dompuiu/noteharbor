@@ -35,8 +35,9 @@ shared by both screens; the screens keep their own stores.
 
 ## Consequences
 
-- `AllNotesTable.jsx` is deleted; the All notes screen keeps its route, sidebar
-  entry, collection picker and `aria-label`.
+- `AllNotesTable.jsx` shrinks to the All notes screen's adapter over the shared
+  view; it no longer owns a table implementation. The All notes screen keeps
+  its route, sidebar entry, collection picker and `aria-label`.
 - `NotesTable` remains the public entry, so the existing Table-screen test suite
   stays the behavioural contract.
 - The module owns the table's keyboard map, so a shortcut added once reaches

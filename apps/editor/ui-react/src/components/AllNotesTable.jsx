@@ -1,37 +1,9 @@
-import {
-  useEffect,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
-import { buildNoteRowModel } from "../lib/noteRowModel.js";
-import { marksForNote } from "../lib/noteView.js";
-import { useColumnPan } from "../lib/useColumnPan.js";
-import { useTableCursor } from "../lib/useTableCursor.js";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { allNotesDefaultSortKey } from "../lib/allNotesColumns.js";
-import {
-  cellClass,
-  stickyCellAttributes,
-} from "../lib/tableCells.jsx";
-import {
-  getTableColumn,
-  lastStickyKey,
-  stickyOffsets,
-  tableColumnWidths,
-} from "../lib/tableColumns.js";
 import { isEditableElement } from "../lib/editableElement.js";
-import { useTableFind } from "../lib/useTableFind.js";
-import { ColumnPicker } from "./ColumnPicker.jsx";
-import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
-import { TableFilterBar } from "./TableFilterBar.jsx";
-import { TableFindBar } from "./TableFindBar.jsx";
-import { TableSurface } from "./TableSurface.jsx";
-
-// Mirrors the Table screen's row rhythm and its 1200px table floor.
-const rowHeightEstimate = 45;
-const minTableWidth = 1200;
-const tableGutterWidth = 14;
+import { useNotesTable } from "../lib/useNotesTable.js";
+import { getTableColumn } from "../lib/tableColumns.js";
+import { NotesTableView } from "./NotesTableView.jsx";
 
 function noteCountLabel(count) {
   return `${count} ${count === 1 ? "note" : "notes"}`;
@@ -84,142 +56,30 @@ export function AllNotesTable({
   const previousSlideshowActiveRef = useRef(slideshowActive);
   const dragStateRef = useRef({ draggedNoteId: null, dropTarget: null });
   const rowHandlerImplRef = useRef(null);
-  const cursor = useTableCursor({ rows: notes });
-  const {
-    activeNoteId,
-    bottomSpacerHeight,
-    clearRowCursor,
-    focusFirstRow: focusFirstNote,
-    focusLastRow: focusLastNote,
-    moveRowFocus,
-    pageRows: pageNotes,
-    rowElementMapRef,
-    scrollRef,
-    topSpacerHeight,
-    virtualRows,
-  } = cursor;
-  const [tableWidth, setTableWidth] = useState(null);
-  const [vScrollVisible, setVScrollVisible] = useState(false);
   const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
-  // The default order is Collection ascending even when the URL carries no
-  // sort, so the header and footer name the order the rows are actually in.
+  const table = useNotesTable({
+    allRows: allNotes,
+    columns,
+    conditions,
+    hasActiveFilters,
+    onFocusAnchor: () =>
+      tableFocusAnchorRef.current?.focus({ preventScroll: true }),
+    onSearchAll,
+    rows: notes,
+    searchColumns,
+  });
+  const { cursor, find } = table;
+
   const effectiveSortKey = sortKey ?? allNotesDefaultSortKey;
   const sortLabel =
     effectiveSortKey === allNotesDefaultSortKey
       ? "Collection"
       : (getTableColumn(effectiveSortKey)?.label ?? "#");
 
-  const columnWidths = useMemo(
-    () =>
-      tableColumnWidths(
-        columns,
-        Math.max(tableWidth ?? minTableWidth, minTableWidth),
-        vScrollVisible ? tableGutterWidth : 0,
-      ),
-    [columns, tableWidth, vScrollVisible],
-  );
-  const lastStickyColumnKey = useMemo(() => lastStickyKey(columns), [columns]);
-  const stickyLeftByColumn = useMemo(
-    () => stickyOffsets(columns, columnWidths),
-    [columnWidths, columns],
-  );
-  const totalColumnCount = columns.length + (vScrollVisible ? 1 : 0);
-
-  const {
-    columnPanAvailable,
-    panColumnsBy,
-    panColumnsToEdge,
-    resetColumnScroll,
-    scrollHandlers,
-    syncColumnScroll,
-  } = useColumnPan({
-    measureDeps: [columnWidths, notes.length, vScrollVisible],
-    scrollRef: cursor.scrollRef,
-  });
-
-  const find = useTableFind({
-    allRows: allNotes,
-    hasActiveFilters,
-    onCloseFocus: (noteId) => {
-      if (noteId != null && notes.some((note) => note.id === noteId)) {
-        cursor.focusRowByNoteId(noteId);
-      } else {
-        focusTableAnchor();
-      }
-    },
-    onRevealMatch: cursor.revealRow,
-    onSearchAll,
-    rows: notes,
-    searchColumns,
-  });
-
-  const rowModelsByNoteId = useMemo(() => {
-    const map = new Map();
-
-    for (const note of notes) {
-      map.set(
-        note.id,
-        buildNoteRowModel({
-          columnWidths,
-          columns,
-          lastStickyColumnKey,
-          marks: conditions.length
-            ? marksForNote(note, conditions, searchColumns)
-            : null,
-          note,
-          stickyLeftByColumn,
-        }),
-      );
-    }
-
-    return map;
-  }, [
-    columnWidths,
-    columns,
-    conditions,
-    lastStickyColumnKey,
-    notes,
-    searchColumns,
-    stickyLeftByColumn,
-  ]);
-
-  const selectedIdSet = useMemo(() => new Set(), []);
-
-  // The table's measured width is the scroller's width, not the table's own
-  // rendered width: fixed-layout tables refuse to shrink below their columns.
-  useLayoutEffect(() => {
-    const scroller = cursor.scrollRef.current;
-
-    if (!scroller) {
-      return undefined;
-    }
-
-    const measure = () => {
-      const nextWidth = scroller.getBoundingClientRect().width;
-      setTableWidth((current) => (current === nextWidth ? current : nextWidth));
-    };
-
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(scroller);
-    return () => observer.disconnect();
-  }, []);
-
-  function focusTableAnchor() {
-    tableFocusAnchorRef.current?.focus({ preventScroll: true });
-  }
-
   function openNote(note) {
     cursor.markActiveNote(note.id);
     onOpenNote(note);
-  }
-
-  function tableCellAttributes(column) {
-    return stickyCellAttributes(column, cellClass(column), {
-      lastStickyColumnKey,
-      stickyLeftByColumn,
-    });
   }
 
   rowHandlerImplRef.current = {
@@ -285,7 +145,7 @@ export function AllNotesTable({
     // not-yet-landed virtualized focus so the next arrow starts from the new
     // first row.
     cursor.cancelPendingFocus();
-    clearRowCursor();
+    cursor.clearRowCursor();
   }, [conditions, sortDirection, sortKey, visibleColumnKeys]);
 
   useEffect(() => {
@@ -310,7 +170,7 @@ export function AllNotesTable({
         return;
       }
 
-      clearRowCursor();
+      cursor.clearRowCursor();
     }
 
     document.addEventListener("focusin", handleFocusIn);
@@ -398,10 +258,10 @@ export function AllNotesTable({
       }
 
       if (event.key === "Escape") {
-        if (activeNoteId != null) {
+        if (cursor.activeNoteId != null) {
           event.preventDefault();
-          clearRowCursor();
-          focusTableAnchor();
+          cursor.clearRowCursor();
+          tableFocusAnchorRef.current?.focus({ preventScroll: true });
           return;
         }
 
@@ -414,19 +274,23 @@ export function AllNotesTable({
 
       if (!event.shiftKey && (event.key === "ArrowDown" || event.key === "j")) {
         event.preventDefault();
-        moveRowFocus(1);
+        cursor.moveRowFocus(1, {
+          onBeforeFirst: () => filterBarRef.current?.focus(),
+        });
         return;
       }
 
       if (!event.shiftKey && (event.key === "ArrowUp" || event.key === "k")) {
         event.preventDefault();
-        moveRowFocus(-1);
+        cursor.moveRowFocus(-1, {
+          onBeforeFirst: () => filterBarRef.current?.focus(),
+        });
         return;
       }
 
       if (event.key === "PageDown" || event.key === "PageUp") {
         event.preventDefault();
-        pageNotes(event.key === "PageDown" ? 1 : -1);
+        cursor.pageRows(event.key === "PageDown" ? 1 : -1);
         return;
       }
 
@@ -434,9 +298,9 @@ export function AllNotesTable({
         event.preventDefault();
 
         if (event.key === "Home") {
-          focusFirstNote();
+          cursor.focusFirstRow();
         } else {
-          focusLastNote();
+          cursor.focusLastRow();
         }
         return;
       }
@@ -446,14 +310,14 @@ export function AllNotesTable({
       }
 
       if (event.key === "ArrowRight" || event.key === "l") {
-        if (panColumnsBy(200)) {
+        if (table.columnPan.panColumnsBy(200)) {
           event.preventDefault();
         }
         return;
       }
 
       if (event.key === "ArrowLeft" || event.key === "h") {
-        if (panColumnsBy(-200)) {
+        if (table.columnPan.panColumnsBy(-200)) {
           event.preventDefault();
         }
       }
@@ -462,13 +326,13 @@ export function AllNotesTable({
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
   }, [
-    activeNoteId,
-    find.handleShortcut,
+    cursor,
+    find,
     hasActiveFilters,
-    notes,
     onClearFilters,
     showShortcutsHelp,
     slideshowActive,
+    table.columnPan,
   ]);
 
   const sortStatus = sortKey
@@ -476,184 +340,67 @@ export function AllNotesTable({
     : "";
   const summary = `Showing ${notes.length} of ${noteCountLabel(totalCount)} across ${collectionCountLabel(collectionCount)}${sortStatus}${find.status}`;
 
-  const emptyRow =
-    notes.length === 0 ? (
-      <tr className="table-empty-row">
-        <td className="table-empty-cell" colSpan={totalColumnCount}>
-          <div className="table-empty-frame">{emptyContent}</div>
-        </td>
-      </tr>
-    ) : null;
+  const selectedIdSet = useMemo(() => new Set(), []);
+  const collectionPicker = (
+    <select
+      aria-label="Collection"
+      className="all-notes-collection-picker"
+      onChange={(event) => onCollectionChange(event.target.value)}
+      value={selectedCollectionId ?? ""}
+    >
+      {collectionOptions.map((option) => (
+        <option key={option.value} value={option.value}>
+          {option.label}
+        </option>
+      ))}
+    </select>
+  );
 
   return (
-    <>
-      {showShortcutsHelp ? (
-        <KeyboardShortcutsHelp onClose={() => setShowShortcutsHelp(false)} />
-      ) : null}
-
-      <div className="table-shell">
-        <span
-          aria-hidden="true"
-          className="table-focus-anchor"
-          ref={tableFocusAnchorRef}
-          tabIndex={-1}
-        />
-        {showToolbar ? (
-          <div className="table-rail">
-            <TableFilterBar
-              conditions={conditions}
-              defaultField="all"
-              hasRows={notes.length > 0}
-              onConditionsChange={onConditionsChange}
-              onFirstRow={focusFirstNote}
-              ref={filterBarRef}
-              searchColumns={searchColumns}
-              tagNames={tagNames}
-            />
-            <div className="table-rail-actions">
-              <select
-                aria-label="Collection"
-                className="all-notes-collection-picker"
-                onChange={(event) => onCollectionChange(event.target.value)}
-                value={selectedCollectionId ?? ""}
-              >
-                {collectionOptions.map((option) => (
-                  <option key={option.value} value={option.value}>
-                    {option.label}
-                  </option>
-                ))}
-              </select>
-              <button
-                aria-label="Find in this view"
-                className="button"
-                data-shortcut="Ctrl+F"
-                onClick={find.open}
-                title="Find in this view (Ctrl/Cmd+F)"
-                type="button"
-              >
-                <svg
-                  aria-hidden="true"
-                  fill="none"
-                  focusable="false"
-                  height="15"
-                  stroke="currentColor"
-                  strokeLinecap="round"
-                  strokeWidth="1.9"
-                  viewBox="0 0 24 24"
-                  width="15"
-                >
-                  <circle cx="11" cy="11" r="7" />
-                  <path d="m20 20-3.5-3.5" />
-                </svg>
-                <span className="table-find-toggle-label">Find</span>
-              </button>
-              {canResetView ? (
-                <button
-                  className="button"
-                  onClick={onResetView}
-                  title="Clears the collection scope, filters and sort — keeps your columns"
-                  type="button"
-                >
-                  <svg
-                    aria-hidden="true"
-                    fill="none"
-                    focusable="false"
-                    height="15"
-                    stroke="currentColor"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth="1.8"
-                    viewBox="0 0 24 24"
-                    width="15"
-                  >
-                    <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                    <path d="M3 3v5h5" />
-                  </svg>
-                  Reset view
-                </button>
-              ) : null}
-              <ColumnPicker
-                columns={hideableColumns}
-                disabledColumnKey={lastVisibleDataColumnKey}
-                onToggle={onToggleColumn}
-                visibleColumnKeys={visibleColumnKeys}
-              />
-            </div>
-          </div>
-        ) : null}
-
-        <TableSurface
-          activeNoteId={activeNoteId}
-          allVisibleSelected={false}
-          ariaLabel="All notes table"
-          bottomSpacerHeight={bottomSpacerHeight}
-          canMove={false}
-          canReorder={false}
-          columnWidths={columnWidths}
-          columns={columns}
-          dragStateRef={dragStateRef}
-          emptyContent={emptyRow}
-          emptyView={notes.length === 0}
-          findBar={
-            find.isOpen ? <TableFindBar {...find.barProps} /> : null
-          }
-          findCurrentNoteId={find.currentMatchId}
-          findMarksByNoteId={find.marksByNoteId}
-          gutterWidth={tableGutterWidth}
-          handlers={rowHandlers}
-          loading={false}
-          notes={notes}
-          onFirstRow={focusFirstNote}
-          onLastRow={focusLastNote}
-          onPage={pageNotes}
-          onReorder={() => {}}
-          onScroll={() => syncColumnScroll()}
-          onVisibleChange={setVScrollVisible}
-          reorderRail={false}
-          rowCount={notes.length}
-          rowElementFor={(noteId) => rowElementMapRef.current.get(noteId)}
-          rowHeight={rowHeightEstimate}
-          rowModelsByNoteId={rowModelsByNoteId}
-          scrollHandlers={scrollHandlers}
-          scrollRef={scrollRef}
-          selectedIdSet={selectedIdSet}
-          showGutter={vScrollVisible}
-          sortDirection={sortDirection}
-          sortKey={effectiveSortKey}
-          tableCellAttributes={tableCellAttributes}
-          toggleAllVisible={() => {}}
-          toggleSort={onSort}
-          topSpacerHeight={topSpacerHeight}
-          totalColumnCount={totalColumnCount}
-          virtualRows={virtualRows}
-        />
-      </div>
-      <div className="table-footer-hint">
-        <span
-          aria-atomic="true"
-          aria-live="polite"
-          className="table-footer-summary"
-        >
-          {summary}
-        </span>
-        <span className="table-footer-right">
-          <span className="table-footer-keys">
-            {notes.length ? (
-              <span className="table-footer-segment">
-                <kbd>&uarr;</kbd> <kbd>&darr;</kbd> to browse
-              </span>
-            ) : null}
-            {columnPanAvailable ? (
-              <span className="table-footer-segment">
-                <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to pan
-              </span>
-            ) : null}
-            <span className="table-footer-segment">
-              <kbd>?</kbd> shortcuts
-            </span>
-          </span>
-        </span>
-      </div>
-    </>
+    <NotesTableView
+      ariaLabel="All notes table"
+      canResetView={canResetView}
+      columns={columns}
+      emptyContent={emptyContent}
+      emptyView={notes.length === 0}
+      filterBar={{
+        conditions,
+        defaultField: "all",
+        hasRows: notes.length > 0,
+        onConditionsChange,
+        searchColumns,
+        tagNames,
+      }}
+      filterBarRef={filterBarRef}
+      focusAnchorRef={tableFocusAnchorRef}
+      footerSummary={summary}
+      handlers={rowHandlers}
+      hideableColumns={hideableColumns}
+      lastVisibleDataColumnKey={lastVisibleDataColumnKey}
+      onCloseShortcuts={() => setShowShortcutsHelp(false)}
+      onResetView={onResetView}
+      onToggleColumn={onToggleColumn}
+      railStart={collectionPicker}
+      resetTitle="Clears the collection scope, filters and sort — keeps your columns"
+      rows={notes}
+      showShortcutsHelp={showShortcutsHelp}
+      showToolbar={showToolbar}
+      surface={{
+        allVisibleSelected: false,
+        canMove: false,
+        canReorder: false,
+        dragStateRef,
+        loading: false,
+        onReorder: () => {},
+        reorderRail: false,
+        selectedIdSet,
+        sortDirection,
+        sortKey: effectiveSortKey,
+        toggleAllVisible: () => {},
+        toggleSort: onSort,
+      }}
+      table={table}
+      visibleColumnKeys={visibleColumnKeys}
+    />
   );
 }

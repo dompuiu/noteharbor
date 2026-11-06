@@ -38,9 +38,7 @@ import {
   pruneTableStates,
   saveTableState,
 } from "../lib/notesTableState.js";
-import { useColumnPan } from "../lib/useColumnPan.js";
-import { useTableCursor } from "../lib/useTableCursor.js";
-import { useTableFind } from "../lib/useTableFind.js";
+import { useNotesTable } from "../lib/useNotesTable.js";
 import {
   COLUMN_SCROLL_STEP,
 } from "../lib/tableColumnPan.js";
@@ -51,38 +49,25 @@ import {
   hideableColumnKeys,
   hideableColumns,
   hideableDataColumns,
-  lastStickyKey,
   slideshowFilterKeys,
-  stickyOffsets,
   tableColumns,
-  tableColumnWidths,
   validSortKeys,
 } from "../lib/tableColumns.js";
-import { buildNoteRowModel } from "../lib/noteRowModel.js";
 import {
   addTagCondition,
   applyNoteView,
-  marksForNote,
   parseConditionsParam,
   serializeConditions,
 } from "../lib/noteView.js";
-import {
-  cellClass,
-  noteThumbnailPath,
-  stickyCellAttributes,
-} from "../lib/tableCells.jsx";
+import { noteThumbnailPath } from "../lib/tableCells.jsx";
 import { makeCondition, parseFilterInput } from "../lib/tableFilters.js";
-import { ColumnPicker } from "./ColumnPicker.jsx";
-import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 import { BulkTagPanel } from "./BulkTagPanel.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { NoCollectionsPrompt } from "./NoCollectionsPrompt.jsx";
+import { NotesTableView } from "./NotesTableView.jsx";
 import { RowActionsMenu } from "./RowActionsMenu.jsx";
 import { Slideshow } from "./Slideshow.jsx";
-import { TableFilterBar } from "./TableFilterBar.jsx";
-import { TableFindBar } from "./TableFindBar.jsx";
-import { TableSurface } from "./TableSurface.jsx";
 import { TableBulkBar } from "./TableBulkBar.jsx";
 import { ToastHost } from "./Toast.jsx";
 import { MoveNotesDialog } from "./MoveNotesDialog.jsx";
@@ -607,7 +592,6 @@ function NotesTable({
   // through this ref so they always read the current render's state without
   // changing identity.
   const rowHandlerImplRef = useRef(null);
-  const [tableWidth, setTableWidth] = useState(null);
   const editorOverlayRef = useRef(null);
   const tableFocusAnchorRef = useRef(null);
   const currentRouteRef = useRef(null);
@@ -886,7 +870,6 @@ function NotesTable({
   const [columnFilterHeights, setColumnFilterHeights] = useState({});
   // The scrollbar owns its metrics; the table only needs to know whether its
   // gutter column is showing, which changes the column widths.
-  const [vScrollVisible, setVScrollVisible] = useState(false);
   const selectAllRef = useRef(null);
   const editorDirtyRef = useRef(false);
   const confirmOpenRef = useRef(false);
@@ -1148,38 +1131,6 @@ function NotesTable({
   const deferredOrderedNotes = deferredView.notes;
   const deferredConditions = deferredView.conditions;
   const rowsPending = deferredView !== paintedView;
-  // The virtualized cursor is shared with the All notes screen. The painted
-  // list drives the virtualizer; the urgent list resolves focus targets so a
-  // note that has just been created or moved can be found before it paints.
-  const cursor = useTableCursor({
-    indexRows: orderedNotes,
-    rows: deferredOrderedNotes,
-  });
-  const {
-    activeNoteId,
-    bottomSpacerHeight,
-    focusFirstRow,
-    focusLastRow,
-    focusRowByNoteId,
-    focusedRowIdRef,
-    moveRowFocus: moveCursorFocus,
-    pageRows: pageCursor,
-    revealRow: revealFindMatch,
-    rowElementMapRef,
-    rowVirtualizer,
-    scrollRef: tableScrollRef,
-    setActiveNoteId,
-    topSpacerHeight,
-    virtualRows,
-  } = cursor;
-  const clearRowCursor = useCallback(() => {
-    // The keyboard cursor is focus memory plus paint: both must drop
-    // together so the highlight can never outlive its focus target or
-    // vice versa. The last-focused-row memory is deliberately left alone —
-    // it is what lets the editor overlay hand the cursor back on close.
-    focusedRowIdRef.current = null;
-    setActiveNoteId(null);
-  }, [focusedRowIdRef, setActiveNoteId]);
   const slideshowRouteActive = currentRoute.kind === "slideshow";
   const creatingNote = isCreateRoute(currentRoute);
   const editingNoteId = isEditNoteRoute(currentRoute)
@@ -1660,25 +1611,6 @@ function NotesTable({
   }, [editorOverlayOpen]);
 
   const hasActiveFilters = conditions.length > 0;
-  // Find is a cursor over the painted view, not a filter. The shared hook owns
-  // its query, match list and focus effects; the screen only supplies the
-  // painted rows, the searchable columns and the focus hand-off.
-  const find = useTableFind({
-    allRows: notes,
-    hasActiveFilters,
-    onCloseFocus: (noteId) => {
-      if (noteId != null && orderedNotes.some((note) => note.id === noteId)) {
-        focusRowByNoteId(noteId);
-      } else {
-        focusTableAnchor();
-      }
-    },
-    onRevealMatch: revealFindMatch,
-    onSearchAll: clearFiltersAndResetDraft,
-    resetKey: collectionId,
-    rows: deferredOrderedNotes,
-    searchColumns,
-  });
   // Permanent columns are always rendered; a hideable column is rendered only
   // while the collector's per-collection choice includes it.
   const visibleColumns = useMemo(
@@ -1688,30 +1620,6 @@ function NotesTable({
           !column.hideable || visibleColumnKeys.includes(column.key),
       ),
     [visibleColumnKeys],
-  );
-  // Control columns keep their declared width; the data columns share the
-  // viewport leftover in proportion to theirs. Every <col> therefore gets an
-  // explicit width that adds up to the table width, so a wide window cannot
-  // fall back to stretching the fixed identity columns.
-  const columnWidths = useMemo(
-    () =>
-      tableColumnWidths(
-        visibleColumns,
-        Math.max(tableWidth ?? minTableWidth, minTableWidth),
-        vScrollVisible ? tableGutterWidth : 0,
-      ),
-    [visibleColumns, tableWidth, vScrollVisible],
-  );
-  // Pinned identity columns take a cumulative left offset over the visible
-  // sticky columns only, so a hidden column never leaves a gap in the block.
-  // The rendered widths are used because a pinned data column flexes.
-  const stickyLeftByColumn = useMemo(
-    () => stickyOffsets(visibleColumns, columnWidths),
-    [visibleColumns, columnWidths],
-  );
-  const lastStickyColumnKey = useMemo(
-    () => lastStickyKey(visibleColumns),
-    [visibleColumns],
   );
   // The one field column that must stay visible: once it is alone, its
   // checkbox is disabled so the collector cannot reduce the table to
@@ -1723,12 +1631,59 @@ function NotesTable({
 
     return visibleDataKeys.length === 1 ? visibleDataKeys[0] : null;
   }, [visibleColumnKeys]);
-  const totalColumnCount =
-    visibleColumns.length +
-    // Trailing empty gutter column shared by the header and every body row,
-    // so row paint continues under the overlay scrollbar while row content
-    // still stops before it.
-    (vScrollVisible ? 1 : 0);
+  // The table controller is shared with the All notes screen: cursor, find,
+  // column geometry, the pan gesture and the row models all live in one hook.
+  const table = useNotesTable({
+    allRows: notes,
+    columns: visibleColumns,
+    conditions: deferredConditions,
+    hasActiveFilters,
+    indexRows: orderedNotes,
+    measureDeps: [loading, loadError],
+    onFocusAnchor: focusTableAnchor,
+    onPanEnd: () => {
+      // A pan captures the pointer to the scroller, so the row's mouseup may
+      // never run. Reset here so a stale press flag cannot suppress a later
+      // keyboard paint.
+      mouseFocusSuppressRef.current = false;
+    },
+    onSearchAll: clearFiltersAndResetDraft,
+    resetKey: collectionId,
+    rows: deferredOrderedNotes,
+    searchColumns,
+  });
+  const {
+    columnPan: {
+      columnPanAvailable,
+      panColumnsBy,
+      panColumnsToEdge,
+      resetColumnScroll,
+      scrollHandlers,
+      syncColumnScroll,
+    },
+    cursor,
+    find,
+    rowModelsByNoteId,
+  } = table;
+  const {
+    activeNoteId,
+    focusRowByNoteId,
+    focusedRowIdRef,
+    moveRowFocus: moveCursorFocus,
+    pageRows: pageCursor,
+    rowElementMapRef,
+    rowVirtualizer,
+    scrollRef: tableScrollRef,
+    setActiveNoteId,
+  } = cursor;
+  const clearRowCursor = useCallback(() => {
+    // The keyboard cursor is focus memory plus paint: both must drop
+    // together so the highlight can never outlive its focus target or
+    // vice versa. The last-focused-row memory is deliberately left alone —
+    // it is what lets the editor overlay hand the cursor back on close.
+    focusedRowIdRef.current = null;
+    setActiveNoteId(null);
+  }, [focusedRowIdRef, setActiveNoteId]);
   const isDefaultOrder =
     sortKey === defaultSortKey && sortDirection === "asc";
   // Follow the painted view: flipping the drag handles off in the urgent
@@ -1799,40 +1754,6 @@ function NotesTable({
       selectedIds.length > 0,
     [hasActiveFilters, selectedIds, sortDirection, sortKey],
   );
-  // Per-note row models are built once for the whole painted list, not once
-  // per row per commit. Their identities only change when the notes, the
-  // column geometry or the filter change, so an unrelated re-render leaves
-  // every row's props alone.
-  const rowModelsByNoteId = useMemo(() => {
-    const map = new Map();
-
-    for (const note of deferredOrderedNotes) {
-      map.set(
-        note.id,
-        buildNoteRowModel({
-          columnWidths,
-          columns: visibleColumns,
-          lastStickyColumnKey,
-          marks: deferredConditions.length
-            ? marksForNote(note, deferredConditions, searchColumns)
-            : null,
-          note,
-          stickyLeftByColumn,
-        }),
-      );
-    }
-
-    return map;
-  }, [
-    columnWidths,
-    deferredConditions,
-    deferredOrderedNotes,
-    lastStickyColumnKey,
-    searchColumns,
-    stickyLeftByColumn,
-    visibleColumns,
-  ]);
-
   const rowHandlers = useMemo(() => {
     const invoke = (name) => (...args) =>
       rowHandlerImplRef.current?.[name]?.(...args);
@@ -1861,28 +1782,6 @@ function NotesTable({
       onToggleSelection: invoke("onToggleSelection"),
     };
   }, []);
-
-  // The data columns need the space the table can occupy, not the table's own
-  // rendered width: once the columns are wide, a fixed-layout table refuses to
-  // shrink below their total. The scroller is independent of that content and
-  // keeps shrinking with the window.
-  useLayoutEffect(() => {
-    const scroller = tableScrollRef.current;
-
-    if (!scroller) {
-      return undefined;
-    }
-
-    const measure = () => {
-      const nextWidth = scroller.getBoundingClientRect().width;
-      setTableWidth((current) => (current === nextWidth ? current : nextWidth));
-    };
-
-    measure();
-    const observer = new ResizeObserver(measure);
-    observer.observe(scroller);
-    return () => observer.disconnect();
-  }, [loading, loadError]);
 
   useEffect(() => {
     if (selectAllRef.current) {
@@ -2044,31 +1943,14 @@ function NotesTable({
     // scrolling just far enough would stop with the first row at the bottom
     // edge and the rest below it. Near the end of the list the scroller
     // clamps, which still leaves the block in view.
-    focusRowByNoteId(presentIds[0], { pinToTop: true });
+    const frameId = window.requestAnimationFrame(() => {
+      focusRowByNoteId(presentIds[0], { pinToTop: true });
+    });
+
+    return () => window.cancelAnimationFrame(frameId);
     // `focusRowByNoteId` reads the painted list of the render it runs in.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading, orderedNotes, rowsPending]);
-
-  // The pan gesture and its availability measurement are shared with the
-  // All notes screen through one hook, so both tables reach off-screen
-  // columns the same way.
-  const {
-    columnPanAvailable,
-    panColumnsBy,
-    panColumnsToEdge,
-    resetColumnScroll,
-    scrollHandlers,
-    syncColumnScroll,
-  } = useColumnPan({
-    measureDeps: [columnWidths, loading, loadError, vScrollVisible],
-    onPanEnd: () => {
-      // A pan captures the pointer to the scroller, so the row's mouseup may
-      // never run. Reset here so a stale press flag cannot suppress a later
-      // keyboard paint.
-      mouseFocusSuppressRef.current = false;
-    },
-    scrollRef: tableScrollRef,
-  });
 
   useEffect(() => {
     if (!thumbPreviewState) {
@@ -4192,16 +4074,6 @@ function NotesTable({
     return true;
   }
 
-  // Header cells share the row cells' pinning contract. The pinning data is
-  // the table's, so the header binds it here and the composition itself lives
-  // with the rest of the cell classes.
-  function tableCellAttributes(column) {
-    return stickyCellAttributes(column, cellClass(column), {
-      lastStickyColumnKey,
-      stickyLeftByColumn,
-    });
-  }
-
   function handleRowFocus(note) {
     focusedRowIdRef.current = note.id;
     lastRowFocusNoteIdRef.current = note.id;
@@ -4300,71 +4172,53 @@ function NotesTable({
 
   // The empty view is the one body row the screen still owns: it is not a note
   // and it only exists while the list is empty.
-  const emptyTableRow = !orderedNotes.length ? (
-    <tr className="table-empty-row">
-      <td className="table-empty-cell" colSpan={totalColumnCount}>
-        {/* The cell spans the whole table, which can be wider than the card
-            when the columns overflow. The frame is pinned to the visible
-            scrollport so the message centres in what the reader can see, not
-            in the off-screen width of the table. */}
-        <div className="table-empty-frame">
-          {noCollections ? (
-            <NoCollectionsPrompt />
-          ) : notes.length ? (
-            // A filter that matches nothing is the most travelled error path in
-            // the screen: say the view is empty, not the collection, and put a
-            // recovery next to it.
-            <div className="table-empty-state">
-              <p className="table-empty-title">
-                No notes match the active filters.
-              </p>
-              <div className="table-empty-actions">
-                {hasActiveFilters ? (
-                  <button
-                    className="button"
-                    onClick={clearAllFilters}
-                    type="button"
-                  >
-                    Clear filters
-                  </button>
-                ) : null}
-              </div>
-              <p className="table-empty-hint">
-                A chip filters one field. Same field values are ORed; different
-                fields are ANDed.
-              </p>
-            </div>
-          ) : (
-            // An empty collection is a first-run moment, not a failed query:
-            // it names itself, offers both ways a note can arrive, and says
-            // where the new note will land. The filtered-empty state above
-            // explains the filter model instead, so the two never read alike.
-            <div className="table-empty-state">
-              <p className="table-empty-title">
-                No notes in this collection yet.
-              </p>
-              {!isCollectionEditing && !showingNewCollectionForm ? (
-                <div className="table-empty-actions">
-                  <button
-                    className="button button-primary"
-                    onClick={openCreateNote}
-                    type="button"
-                  >
-                    Add the first note
-                  </button>
-                  <Link className="button" to={CATALOG_ROUTES.importExport}>
-                    Import / Export
-                  </Link>
-                </div>
-              ) : null}
-              <p className="table-empty-hint">
-                A new note lands at the end of the collection's order.
-              </p>
-            </div>
-          )}
+  const emptyTableContent = !orderedNotes.length ? (
+    noCollections ? (
+      <NoCollectionsPrompt />
+    ) : notes.length ? (
+      // A filter that matches nothing is the most travelled error path in
+      // the screen: say the view is empty, not the collection, and put a
+      // recovery next to it.
+      <div className="table-empty-state">
+        <p className="table-empty-title">No notes match the active filters.</p>
+        <div className="table-empty-actions">
+          {hasActiveFilters ? (
+            <button className="button" onClick={clearAllFilters} type="button">
+              Clear filters
+            </button>
+          ) : null}
         </div>
-      </td>
-    </tr>
+        <p className="table-empty-hint">
+          A chip filters one field. Same field values are ORed; different fields
+          are ANDed.
+        </p>
+      </div>
+    ) : (
+      // An empty collection is a first-run moment, not a failed query: it
+      // names itself, offers both ways a note can arrive, and says where the
+      // new note will land. The filtered-empty state above explains the filter
+      // model instead, so the two never read alike.
+      <div className="table-empty-state">
+        <p className="table-empty-title">No notes in this collection yet.</p>
+        {!isCollectionEditing && !showingNewCollectionForm ? (
+          <div className="table-empty-actions">
+            <button
+              className="button button-primary"
+              onClick={openCreateNote}
+              type="button"
+            >
+              Add the first note
+            </button>
+            <Link className="button" to={CATALOG_ROUTES.importExport}>
+              Import / Export
+            </Link>
+          </div>
+        ) : null}
+        <p className="table-empty-hint">
+          A new note lands at the end of the collection's order.
+        </p>
+      </div>
+    )
   ) : null;
 
   rowHandlerImplRef.current = {
@@ -4412,10 +4266,6 @@ function NotesTable({
 
   return (
     <section className="screen-stack" ref={tableScreenRef}>
-      {showShortcutsHelp ? (
-        <KeyboardShortcutsHelp onClose={() => setShowShortcutsHelp(false)} />
-      ) : null}
-
       {confirmDialog}
 
       {thumbPreviewState?.top != null
@@ -4884,170 +4734,9 @@ function NotesTable({
         ) : null}
 
         {!loading && !loadError ? (
-          <>
-            <div
-              className="table-shell"
-              onDragOver={autoScrollTableShell}
-              ref={tableShellRef}
-            >
-              <span
-                aria-hidden="true"
-                className="table-focus-anchor"
-                ref={tableFocusAnchorRef}
-                tabIndex={-1}
-              />
-              {/* The filters describe only this table, so they are the card's
-                  own rail rather than a band above it. The rail sits outside
-                  `.table-scroll-x`, so it never pans with the columns and never
-                  scrolls away with the rows. */}
-              <div className="table-rail">
-                <TableFilterBar
-                  conditions={conditions}
-                  hasRows={deferredOrderedNotes.length > 0}
-                  onConditionsChange={handleConditionsChange}
-                  onFirstRow={focusFirstRow}
-                  ref={filterBarRef}
-                  searchColumns={searchColumns}
-                  tagNames={tagNames}
-                />
-                <div className="table-rail-actions">
-                  {/* Add note leads the trailing cluster so the primary action
-                      is reached before the view controls. Reset then sits
-                      before Columns: the pair grows leftwards, Columns keeps
-                      the card's right edge whether or not the view is dirty,
-                      and no empty slot reserves space for a control that is
-                      not there. */}
-                  {!isCollectionEditing && !showingNewCollectionForm ? (
-                    <button
-                      aria-label="Add note"
-                      className="button button-primary"
-                      data-shortcut="a"
-                      disabled={noCollections || isNewCollection}
-                      onClick={openCreateNote}
-                      type="button"
-                    >
-                      <svg
-                        aria-hidden="true"
-                        fill="none"
-                        focusable="false"
-                        height="15"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeWidth="2"
-                        viewBox="0 0 24 24"
-                        width="15"
-                      >
-                        <path d="M12 5v14M5 12h14" />
-                      </svg>
-                      Add note
-                    </button>
-                  ) : null}
-                  <button
-                    aria-label="Find in this view"
-                    className="button"
-                    data-shortcut="Ctrl+F"
-                    onClick={find.open}
-                    title="Find in this view (Ctrl/Cmd+F)"
-                    type="button"
-                  >
-                    <svg
-                      aria-hidden="true"
-                      fill="none"
-                      focusable="false"
-                      height="15"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeWidth="1.9"
-                      viewBox="0 0 24 24"
-                      width="15"
-                    >
-                      <circle cx="11" cy="11" r="7" />
-                      <path d="m20 20-3.5-3.5" />
-                    </svg>
-                    <span className="table-find-toggle-label">Find</span>
-                  </button>
-                  {canResetView ? (
-                    <button
-                      className="button"
-                      onClick={resetTableState}
-                      title="Clears filters, sort and selection — keeps your columns"
-                      type="button"
-                    >
-                      <svg
-                        aria-hidden="true"
-                        fill="none"
-                        focusable="false"
-                        height="15"
-                        stroke="currentColor"
-                        strokeLinecap="round"
-                        strokeLinejoin="round"
-                        strokeWidth="1.8"
-                        viewBox="0 0 24 24"
-                        width="15"
-                      >
-                        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8" />
-                        <path d="M3 3v5h5" />
-                      </svg>
-                      Reset view
-                    </button>
-                  ) : null}
-                  <ColumnPicker
-                    columns={hideableColumns}
-                    disabledColumnKey={lastVisibleDataColumnKey}
-                    onToggle={toggleColumnVisibility}
-                    visibleColumnKeys={visibleColumnKeys}
-                  />
-                </div>
-              </div>
-              <TableSurface
-                activeNoteId={activeNoteId}
-                allVisibleSelected={allVisibleSelected}
-                ariaBusy={rowsPending}
-                bottomSpacerHeight={bottomSpacerHeight}
-                canMove={canMoveNotes}
-                canReorder={canReorder}
-                columnWidths={columnWidths}
-                columns={visibleColumns}
-                dragStateRef={dragStateRef}
-                emptyContent={emptyTableRow}
-                emptyView={emptyViewSettled}
-                findBar={
-                  find.isOpen ? <TableFindBar {...find.barProps} /> : null
-                }
-                findCurrentNoteId={find.currentMatchId}
-                findMarksByNoteId={find.marksByNoteId}
-                gutterWidth={tableGutterWidth}
-                handlers={rowHandlers}
-                loading={loading}
-                notes={deferredOrderedNotes}
-                onFirstRow={focusFirstRow}
-                onLastRow={focusLastRow}
-                onPage={pageTable}
-                onReorder={handleReorder}
-                onScroll={() => syncColumnScroll()}
-                onVisibleChange={setVScrollVisible}
-                reorderRail={reorderRail}
-                rowCount={deferredOrderedNotes.length}
-                rowElementFor={(noteId) =>
-                  rowElementMapRef.current.get(noteId)
-                }
-                rowHeight={rowHeightEstimate}
-                rowModelsByNoteId={rowModelsByNoteId}
-                scrollHandlers={scrollHandlers}
-                scrollRef={tableScrollRef}
-                selectAllRef={selectAllRef}
-                selectedIdSet={selectedIdSet}
-                showGutter={vScrollVisible}
-                sortDirection={sortDirection}
-                sortKey={sortKey}
-                tableCellAttributes={tableCellAttributes}
-                toggleAllVisible={toggleAllVisible}
-                toggleSort={toggleSort}
-                topSpacerHeight={topSpacerHeight}
-                totalColumnCount={totalColumnCount}
-                virtualRows={virtualRows}
-              />
-              {selectedIds.length ? (
+          <NotesTableView
+            bulkBar={
+              selectedIds.length ? (
                 <TableBulkBar
                   barRef={bulkBarRef}
                   canMove={canMoveNotes}
@@ -5075,11 +4764,22 @@ function NotesTable({
                   tagsOpen={tagsOpen}
                   tagsSaving={tagsSaving}
                 />
-              ) : null}
-            </div>
-            <div className="table-footer-hint">
-              {/* A blocked reorder explains itself here; the sentence is the
-                  same one the footer paints for the current view. */}
+              ) : null
+            }
+            canResetView={canResetView}
+            columns={visibleColumns}
+            emptyContent={emptyTableContent}
+            emptyView={emptyViewSettled}
+            filterBar={{
+              conditions,
+              hasRows: deferredOrderedNotes.length > 0,
+              onConditionsChange: handleConditionsChange,
+              searchColumns,
+              tagNames,
+            }}
+            filterBarRef={filterBarRef}
+            focusAnchorRef={tableFocusAnchorRef}
+            footerAnnouncer={
               <p
                 aria-atomic="true"
                 aria-live="polite"
@@ -5087,16 +4787,34 @@ function NotesTable({
               >
                 {reorderAnnouncement}
               </p>
-              {/* The count is the table's answer to every filter keystroke,
-                  so it is a polite live region: a screen reader hears the
-                  result set change without the table itself being
-                  re-announced. It is not `role="status"` so the move toast
-                  stays the one status landmark on the screen. */}
-              <span
-                aria-atomic="true"
-                aria-live="polite"
-                className="table-footer-summary"
-              >
+            }
+            footerHint={
+              reorderHint ? (
+                <span className="table-footer-segment">{reorderHint}</span>
+              ) : null
+            }
+            footerStatus={
+              reorderLoading ? (
+                <span className="table-footer-status">
+                  Saving manual order...
+                </span>
+              ) : reorderUndoAvailable ? (
+                <span className="table-footer-status">
+                  Moved to position {reorderUndo.position}
+                  <span aria-hidden="true"> · </span>
+                  <button
+                    className="table-footer-undo"
+                    onClick={handleUndoReorder}
+                    title="Restore the order from before the last move"
+                    type="button"
+                  >
+                    Undo
+                  </button>
+                </span>
+              ) : null
+            }
+            footerSummary={
+              <>
                 Showing {deferredOrderedNotes.length} of {notes.length}{" "}
                 {notes.length === 1 ? "note" : "notes"} · sorted by{" "}
                 {getTableColumn(sortKey)?.label ?? "#"}{" "}
@@ -5105,56 +4823,65 @@ function NotesTable({
                 {selectedIds.length
                   ? ` · ${selectedIds.length} selected`
                   : ""}
-              </span>
-              <span className="table-footer-right">
-                {reorderLoading ? (
-                  <span className="table-footer-status">
-                    Saving manual order...
-                  </span>
-                ) : reorderUndoAvailable ? (
-                  <span className="table-footer-status">
-                    Moved to position {reorderUndo.position}
-                    <span aria-hidden="true"> · </span>
-                    <button
-                      className="table-footer-undo"
-                      onClick={handleUndoReorder}
-                      title="Restore the order from before the last move"
-                      type="button"
-                    >
-                      Undo
-                    </button>
-                  </span>
-                ) : null}
-                <span className="table-footer-keys">
-                  {/* Each instruction is one segment: they share a line while
-                      there is room and stack instead of clipping when the
-                      window is narrow. */}
-                  {reorderHint ? (
-                    <span className="table-footer-segment">{reorderHint}</span>
-                  ) : null}
-                  {/* With no rows there is nothing for the arrows to walk, so
-                      the hint stops offering them and keeps the one key that
-                      still does something. */}
-                  {deferredOrderedNotes.length ? (
-                    <span className="table-footer-segment">
-                      <kbd>&uarr;</kbd> <kbd>&darr;</kbd> to browse
-                    </span>
-                  ) : null}
-                  {/* The horizontal scrollbar is hidden, so the columns that
-                      sit off-screen are reachable only by dragging or by the
-                      arrow keys. The hint appears exactly when that is true. */}
-                  {columnPanAvailable ? (
-                    <span className="table-footer-segment">
-                      <kbd>&larr;</kbd> <kbd>&rarr;</kbd> to pan
-                    </span>
-                  ) : null}
-                  <span className="table-footer-segment">
-                    <kbd>?</kbd> shortcuts
-                  </span>
-                </span>
-              </span>
-            </div>
-          </>
+              </>
+            }
+            handlers={rowHandlers}
+            hideableColumns={hideableColumns}
+            lastVisibleDataColumnKey={lastVisibleDataColumnKey}
+            onCloseShortcuts={() => setShowShortcutsHelp(false)}
+            onDragOver={autoScrollTableShell}
+            onResetView={resetTableState}
+            onToggleColumn={toggleColumnVisibility}
+            railStart={
+              !isCollectionEditing && !showingNewCollectionForm ? (
+                <button
+                  aria-label="Add note"
+                  className="button button-primary"
+                  data-shortcut="a"
+                  disabled={noCollections || isNewCollection}
+                  onClick={openCreateNote}
+                  type="button"
+                >
+                  <svg
+                    aria-hidden="true"
+                    fill="none"
+                    focusable="false"
+                    height="15"
+                    stroke="currentColor"
+                    strokeLinecap="round"
+                    strokeWidth="2"
+                    viewBox="0 0 24 24"
+                    width="15"
+                  >
+                    <path d="M12 5v14M5 12h14" />
+                  </svg>
+                  Add note
+                </button>
+              ) : null
+            }
+            resetTitle="Clears filters, sort and selection — keeps your columns"
+            rows={deferredOrderedNotes}
+            shellRef={tableShellRef}
+            showShortcutsHelp={showShortcutsHelp}
+            surface={{
+              allVisibleSelected,
+              ariaBusy: rowsPending,
+              canMove: canMoveNotes,
+              canReorder,
+              dragStateRef,
+              loading,
+              onReorder: handleReorder,
+              reorderRail,
+              selectAllRef,
+              selectedIdSet,
+              sortDirection,
+              sortKey,
+              toggleAllVisible,
+              toggleSort,
+            }}
+            table={table}
+            visibleColumnKeys={visibleColumnKeys}
+          />
         ) : null}
       </div>
     </section>
