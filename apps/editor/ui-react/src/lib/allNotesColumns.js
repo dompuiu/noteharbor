@@ -1,4 +1,11 @@
 import { getTableColumn } from "./tableColumns.js";
+import {
+  defaultVisibleColumnKeysFor,
+  lastVisibleDataColumnKeyIn,
+  normalizeVisibleColumnKeysFor,
+  readStoredTableState,
+  writeStoredTableState,
+} from "./tableViewState.js";
 
 // The All notes screen's read-only column model. It borrows every note
 // column's label, kind, alignment, sorting, filtering and width metadata from
@@ -49,27 +56,11 @@ export const hideableAllNotesColumnKeys = hideableAllNotesColumns.map(
 export const allNotesDefaultSortKey = "collection";
 
 export function defaultAllNotesVisibleColumnKeys() {
-  return [...hideableAllNotesColumnKeys];
-}
-
-function keepsADataColumn(columnKeys) {
-  return columnKeys.some(
-    (key) => allNotesColumns.find((column) => column.key === key)?.kind === "data",
-  );
+  return defaultVisibleColumnKeysFor(allNotesColumns);
 }
 
 function normalizeVisibleColumnKeys(value) {
-  if (!Array.isArray(value)) {
-    return defaultAllNotesVisibleColumnKeys();
-  }
-
-  const savedKeys = hideableAllNotesColumnKeys.filter((key) =>
-    value.includes(key),
-  );
-
-  return keepsADataColumn(savedKeys)
-    ? savedKeys
-    : defaultAllNotesVisibleColumnKeys();
+  return normalizeVisibleColumnKeysFor(allNotesColumns, value);
 }
 
 const allNotesTableStateStorageKey = "noteharbor.allNotesTableState";
@@ -77,54 +68,23 @@ const allNotesTableStateStorageKey = "noteharbor.allNotesTableState";
 // Columns are the only structural choice the All notes screen keeps for
 // itself; filters, collection scope and sort live in the URL.
 export function loadAllNotesVisibleColumnKeys() {
-  if (typeof window === "undefined") {
+  const parsedValue = readStoredTableState(allNotesTableStateStorageKey);
+
+  if (!parsedValue) {
     return defaultAllNotesVisibleColumnKeys();
   }
 
-  try {
-    const rawValue = window.localStorage.getItem(
-      allNotesTableStateStorageKey,
-    );
-
-    if (!rawValue) {
-      return defaultAllNotesVisibleColumnKeys();
-    }
-
-    const parsedValue = JSON.parse(rawValue);
-
-    if (!parsedValue || typeof parsedValue !== "object") {
-      throw new Error("Saved All notes table state is not an object");
-    }
-
-    return normalizeVisibleColumnKeys(parsedValue.visibleColumnKeys);
-  } catch {
-    window.localStorage.removeItem(allNotesTableStateStorageKey);
-    return defaultAllNotesVisibleColumnKeys();
-  }
+  return normalizeVisibleColumnKeys(parsedValue.visibleColumnKeys);
 }
 
 export function saveAllNotesVisibleColumnKeys(visibleColumnKeys) {
-  if (typeof window === "undefined") {
-    return;
-  }
-
-  window.localStorage.setItem(
-    allNotesTableStateStorageKey,
-    JSON.stringify({
-      visibleColumnKeys: normalizeVisibleColumnKeys(visibleColumnKeys),
-    }),
-  );
+  writeStoredTableState(allNotesTableStateStorageKey, {
+    visibleColumnKeys: normalizeVisibleColumnKeys(visibleColumnKeys),
+  });
 }
 
 // The one field column that must stay visible: once it is alone, its checkbox
 // is disabled so the table cannot be reduced to identity columns only.
 export function lastVisibleAllNotesDataColumnKey(visibleColumnKeys) {
-  const visibleDataKeys = hideableAllNotesColumns
-    .filter(
-      (column) =>
-        column.kind === "data" && visibleColumnKeys.includes(column.key),
-    )
-    .map((column) => column.key);
-
-  return visibleDataKeys.length === 1 ? visibleDataKeys[0] : null;
+  return lastVisibleDataColumnKeyIn(allNotesColumns, visibleColumnKeys);
 }

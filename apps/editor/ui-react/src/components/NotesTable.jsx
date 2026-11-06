@@ -62,7 +62,7 @@ import {
 import { buildNoteRowModel } from "../lib/noteRowModel.js";
 import {
   addTagCondition,
-  applyTableView,
+  applyNoteView,
   marksForNote,
   parseConditionsParam,
   serializeConditions,
@@ -1140,7 +1140,13 @@ function NotesTable({
   // the filter reset below, which answers only to collection changes).
   currentRouteRef.current = currentRoute;
   const orderedNotes = useMemo(
-    () => applyTableView(notes, conditions, sortKey, sortDirection, searchColumns),
+    () =>
+      applyNoteView(notes, {
+        conditions,
+        searchColumns,
+        sortDirection,
+        sortKey,
+      }),
     [conditions, notes, searchColumns, sortDirection, sortKey],
   );
   // A note handed over by a move or create in another collection is revealed
@@ -1289,13 +1295,12 @@ function NotesTable({
     const contextSortDirection =
       currentRoute.slideshowSortDirection === "desc" ? "desc" : "asc";
 
-    return applyTableView(
-      notes,
-      contextConditions,
-      contextSortKey,
-      contextSortDirection,
-      dataColumns,
-    );
+    return applyNoteView(notes, {
+      conditions: contextConditions,
+      searchColumns: dataColumns,
+      sortDirection: contextSortDirection,
+      sortKey: contextSortKey,
+    });
   }, [currentRoute, notes]);
 
   function navigateToTableRoute(nextRoute, { replace = false } = {}) {

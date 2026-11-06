@@ -14,11 +14,9 @@ import { useCollections } from "../lib/collections.jsx";
 import { reportConnectionFailure } from "../lib/connection.js";
 import {
   addTagCondition,
-  filterNotesByConditions,
+  applyNoteView,
   parseConditionsParam,
   serializeConditions,
-  sortNotesByCollection,
-  sortNotesBySort,
 } from "../lib/noteView.js";
 import { CATALOG_ROUTES } from "../lib/routes.js";
 import { dataColumns, validSortKeys } from "../lib/tableColumns.js";
@@ -164,20 +162,14 @@ export function AllNotesScreen() {
     [visibleColumnKeys],
   );
   const visibleNotes = useMemo(() => {
-    const collectionNotes = selectedCollectionId
-      ? notes.filter((note) => note.collection_id === selectedCollectionId)
-      : notes;
-    const filtered = filterNotesByConditions(
-      collectionNotes,
+    return applyNoteView(notes, {
+      collectionId: selectedCollectionId,
+      collectionSortKey: allNotesDefaultSortKey,
       conditions,
       searchColumns,
-    );
-
-    if (!sortKey || sortKey === allNotesDefaultSortKey) {
-      return sortNotesByCollection(filtered, sortDirection);
-    }
-
-    return sortNotesBySort(filtered, sortKey, sortDirection);
+      sortDirection,
+      sortKey,
+    });
   }, [
     conditions,
     notes,

@@ -1,9 +1,15 @@
 import {
   defaultSortKey,
-  getTableColumn,
-  hideableColumnKeys,
+  tableColumns,
   validSortKeys,
 } from "./tableColumns.js";
+import {
+  defaultVisibleColumnKeysFor,
+  keepsADataColumnIn,
+  normalizeVisibleColumnKeysFor,
+  readStoredTableState,
+  writeStoredTableState,
+} from "./tableViewState.js";
 
 // Table *structure* is a per-collection preference: how the rows are ordered
 // and which columns are on screen. Filters, the search query and the selected
@@ -20,7 +26,7 @@ export function tableStateStorageKey(collectionId) {
 }
 
 export function defaultVisibleColumnKeys() {
-  return [...hideableColumnKeys];
+  return defaultVisibleColumnKeysFor(tableColumns);
 }
 
 export function defaultTableState() {
@@ -34,7 +40,7 @@ export function defaultTableState() {
 // Hiding is only a choice for field columns; at least one of them must stay
 // visible so the table is never reduced to identity columns alone.
 export function keepsADataColumn(columnKeys) {
-  return columnKeys.some((key) => getTableColumn(key)?.kind === "data");
+  return keepsADataColumnIn(tableColumns, columnKeys);
 }
 
 function isPersistableCollectionId(collectionId) {
@@ -42,15 +48,7 @@ function isPersistableCollectionId(collectionId) {
 }
 
 function normalizeVisibleColumnKeys(value) {
-  if (!Array.isArray(value)) {
-    return defaultVisibleColumnKeys();
-  }
-
-  const savedKeys = hideableColumnKeys.filter((key) => value.includes(key));
-
-  return keepsADataColumn(savedKeys)
-    ? savedKeys
-    : defaultVisibleColumnKeys();
+  return normalizeVisibleColumnKeysFor(tableColumns, value);
 }
 
 export function loadTableState(collectionId) {
@@ -62,33 +60,21 @@ export function loadTableState(collectionId) {
   }
 
   const storageKey = tableStateStorageKey(collectionId);
+  const parsedValue = readStoredTableState(storageKey);
 
-  try {
-    const rawValue = window.localStorage.getItem(storageKey);
-
-    if (!rawValue) {
-      return defaultTableState();
-    }
-
-    const parsedValue = JSON.parse(rawValue);
-
-    if (!parsedValue || typeof parsedValue !== "object") {
-      throw new Error("Saved table state is not an object");
-    }
-
-    return {
-      sortKey: validSortKeys.has(parsedValue.sortKey)
-        ? parsedValue.sortKey
-        : defaultSortKey,
-      sortDirection: parsedValue.sortDirection === "desc" ? "desc" : "asc",
-      visibleColumnKeys: normalizeVisibleColumnKeys(
-        parsedValue.visibleColumnKeys,
-      ),
-    };
-  } catch {
-    window.localStorage.removeItem(storageKey);
+  if (!parsedValue) {
     return defaultTableState();
   }
+
+  return {
+    sortKey: validSortKeys.has(parsedValue.sortKey)
+      ? parsedValue.sortKey
+      : defaultSortKey,
+    sortDirection: parsedValue.sortDirection === "desc" ? "desc" : "asc",
+    visibleColumnKeys: normalizeVisibleColumnKeys(
+      parsedValue.visibleColumnKeys,
+    ),
+  };
 }
 
 export function saveTableState(collectionId, tableState) {
@@ -99,14 +85,11 @@ export function saveTableState(collectionId, tableState) {
     return;
   }
 
-  window.localStorage.setItem(
-    tableStateStorageKey(collectionId),
-    JSON.stringify({
-      sortKey: tableState.sortKey,
-      sortDirection: tableState.sortDirection,
-      visibleColumnKeys: tableState.visibleColumnKeys,
-    }),
-  );
+  writeStoredTableState(tableStateStorageKey(collectionId), {
+    sortKey: tableState.sortKey,
+    sortDirection: tableState.sortDirection,
+    visibleColumnKeys: tableState.visibleColumnKeys,
+  });
 }
 
 function storedTableStateKeys() {

@@ -343,18 +343,35 @@ export function sortNotesBySort(noteList, key, direction) {
   });
 }
 
-export function applyTableView(
+// One composition for both note tables: optional collection scope, then the
+// filter chips, then the order. `collectionSortKey` names the key that means
+// "group by collection" on the All notes screen; the Table screen leaves it
+// null and sorts by its own display order.
+export function applyNoteView(
   noteList,
-  conditions,
-  key,
-  direction,
-  searchColumns = dataColumns,
+  {
+    collectionId = null,
+    collectionSortKey = null,
+    conditions = [],
+    searchColumns = dataColumns,
+    sortDirection = "asc",
+    sortKey = defaultSortKey,
+  } = {},
 ) {
-  return sortNotesBySort(
-    filterNotesByConditions(noteList, conditions, searchColumns),
-    key,
-    direction,
-  );
+  const scoped =
+    collectionId == null
+      ? noteList
+      : noteList.filter((note) => note.collection_id === collectionId);
+  const filtered = filterNotesByConditions(scoped, conditions, searchColumns);
+
+  if (
+    collectionSortKey != null &&
+    (!sortKey || sortKey === collectionSortKey)
+  ) {
+    return sortNotesByCollection(filtered, sortDirection);
+  }
+
+  return sortNotesBySort(filtered, sortKey, sortDirection);
 }
 
 // The All notes screen's collection sort: collection sidebar order, then each
