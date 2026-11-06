@@ -822,6 +822,42 @@ describe("NotesTable filter chips", () => {
     ).not.toContain("PMG");
   });
 
+  test("find recomputes when filters change and survives their clear", async () => {
+    renderTable();
+    const user = userEvent.setup();
+
+    await screen.findByText("AAAA");
+    await user.keyboard("{Control>}f{/Control}");
+    const input = screen.getByRole("searchbox", {
+      name: "Find notes in this view",
+    });
+    await waitFor(() => expect(input).toHaveFocus());
+    await user.type(input, "SER-");
+
+    await waitFor(() => {
+      expect(screen.getByText("1 of 3")).toBeInTheDocument();
+    });
+
+    await commitChip(user, "Company", "PMG");
+
+    // The query stays put and is re-run over the narrower view; the filter
+    // chips are find's input, not something find edits.
+    await waitFor(() => {
+      expect(screen.getByText("1 of 2")).toBeInTheDocument();
+    });
+    expect(input).toHaveValue("SER-");
+    expect(
+      screen.getByRole("button", { name: "Edit Company filter PMG" }),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Clear all" }));
+
+    await waitFor(() => {
+      expect(screen.getByText("1 of 3")).toBeInTheDocument();
+    });
+    expect(input).toHaveValue("SER-");
+  });
+
   test("a saved filter does not come back on a reload", async () => {
     window.localStorage.setItem(
       "noteharbor.notesTableState.1",
@@ -979,7 +1015,7 @@ describe("NotesTable filter bar tab order", () => {
     expect(addNoteButton()).toHaveFocus();
   });
 
-  test("Tab walks the chips before Add note, Reset view and Columns", async () => {
+  test("Tab walks the chips before Add note, Find, Reset view and Columns", async () => {
     renderTable();
     const user = userEvent.setup();
 
@@ -1022,6 +1058,11 @@ describe("NotesTable filter bar tab order", () => {
     expect(addNoteButton()).toHaveFocus();
 
     await user.tab();
+    expect(
+      screen.getByRole("button", { name: "Find in this view" }),
+    ).toHaveFocus();
+
+    await user.tab();
     expect(resetView).toHaveFocus();
 
     await user.tab();
@@ -1046,6 +1087,11 @@ describe("NotesTable filter bar tab order", () => {
     columnsButton().focus();
     await user.tab({ shift: true });
     expect(screen.getByRole("button", { name: "Reset view" })).toHaveFocus();
+
+    await user.tab({ shift: true });
+    expect(
+      screen.getByRole("button", { name: "Find in this view" }),
+    ).toHaveFocus();
 
     await user.tab({ shift: true });
     expect(addNoteButton()).toHaveFocus();

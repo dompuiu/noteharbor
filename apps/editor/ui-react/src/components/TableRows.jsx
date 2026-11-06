@@ -20,6 +20,8 @@ export function TableRows({
   columns,
   dragStateRef,
   emptyContent,
+  findCurrentNoteId,
+  findMarksByNoteId,
   handlers,
   notes,
   onReorder,
@@ -251,10 +253,12 @@ export function TableRows({
                 ? drag.dropTarget.placement
                 : null
             }
+            findMarks={findMarksByNoteId.get(note.id) ?? null}
             handlers={rowHandlers}
             index={virtualRow.index}
             isActive={activeNoteId === note.id}
             isDragging={drag.draggedNoteId === note.id}
+            isFindCurrent={findCurrentNoteId === note.id}
             isSelected={selectedIdSet.has(note.id)}
             key={note.id}
             model={rowModelsByNoteId.get(note.id)}

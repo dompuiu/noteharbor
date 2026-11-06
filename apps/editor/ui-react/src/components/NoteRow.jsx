@@ -1,4 +1,4 @@
-import { Fragment, memo, useCallback, useState } from "react";
+import { Fragment, memo, useCallback, useMemo, useState } from "react";
 import { TagsCell } from "./TagsCell.jsx";
 import { RowActionsMenu } from "./RowActionsMenu.jsx";
 import { highlightTerms } from "../lib/tableCells.jsx";
@@ -26,8 +26,12 @@ function noteRowLabel(note) {
 //   so a parent commit cannot make a row render by rebuilding a copy of it.
 // - `index`: the note's position in the filtered list. Zebra parity reads it,
 //   and it only changes when the list does.
-// - `isSelected`, `isActive`, `isDragging`, `dropPlacement`: the four row-level
-//   facts the table owns.
+// - `isSelected`, `isActive`, `isDragging`, `isFindCurrent`, `dropPlacement`:
+//   the row-level facts the table owns. `isFindCurrent` marks the note the
+//   transient find bar is on.
+// - `findMarks`: the terms the find query matched in this row, or null. It is
+//   kept outside `model` so a find keystroke only reaches the rows whose marks
+//   changed; the row merges it with the filter marks before painting cells.
 // - `model`: everything derived from the note and the table geometry — filter
 //   marks, each cell's class and pinned offset, the thumbnail, the tags plan.
 //   It is bundled because all of it is rebuilt together when the note, the
@@ -53,10 +57,12 @@ export const NoteRow = memo(function NoteRow({
   canReorder,
   columns,
   dropPlacement,
+  findMarks,
   handlers,
   index,
   isActive,
   isDragging,
+  isFindCurrent,
   isSelected,
   model,
   note,
@@ -74,6 +80,22 @@ export const NoteRow = memo(function NoteRow({
 
   const zebra = index % 2 === 1;
   const noteLabel = noteRowLabel(note);
+  // Filter and find marks share one cell treatment: a term found by either
+  // should read the same way, and merging keeps a term matched by both from
+  // being marked twice.
+  const rowMarks = useMemo(() => {
+    if (!findMarks || !Object.keys(findMarks).length) {
+      return model.marks;
+    }
+
+    const merged = { ...model.marks };
+
+    for (const [key, terms] of Object.entries(findMarks)) {
+      merged[key] = [...new Set([...(merged[key] ?? []), ...terms])];
+    }
+
+    return merged;
+  }, [findMarks, model.marks]);
 
   // An image file can be missing — an archive moved between machines, a scrape
   // whose file never landed — and a broken-image glyph with alt text spilling
@@ -195,7 +217,6 @@ export const NoteRow = memo(function NoteRow({
   }
 
   function renderDataCell(column) {
-    const rowMarks = model.marks;
     // The cell clips to one line (see the stylesheet), so a long value cannot
     // grow the row past the virtualizer's fixed height. The title carries the
     // whole value to a pointer; an empty field gets no tooltip.
@@ -408,6 +429,7 @@ export const NoteRow = memo(function NoteRow({
       isDragging ? "table-row-link--dragging" : null,
       isSelected ? "table-row-link--selected" : null,
       isActive ? "table-row-link--active" : null,
+      isFindCurrent ? "table-row-link--find-current" : null,
     ]
       .filter(Boolean)
       .join(" ");
@@ -426,6 +448,7 @@ export const NoteRow = memo(function NoteRow({
         </tr>
       ) : null}
       <tr
+        aria-current={isFindCurrent ? "true" : undefined}
         aria-keyshortcuts={
           reorderRail ? "Alt+ArrowUp Alt+ArrowDown" : undefined
         }

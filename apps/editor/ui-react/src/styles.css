@@ -55,6 +55,9 @@
      checked box carry selection; the extra tint keeps selected rows distinct
      while hovered. */
   --row-selected: rgba(184, 0, 0, 0.09);
+  /* The row find is currently on. A touch stronger than selection so it reads
+     as a cursor over the view rather than another selected row. */
+  --row-find: rgba(184, 0, 0, 0.13);
   --accent-ink: #ffffff;
   --success: #157a3a;
   --success-bg: rgba(49, 162, 76, 0.12);
@@ -2924,6 +2927,113 @@ input[type="radio"] {
   min-height: 0;
 }
 
+/* The transient find bar floats over the rows area, so opening it never takes
+   a band out of the table or reflows the columns. It sits above the sticky
+   header (z-index 4), and its own height is not reserved anywhere. */
+.table-find-bar {
+  position: absolute;
+  top: 7px;
+  right: 12px;
+  z-index: 6;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  width: min(560px, calc(100% - 24px));
+  min-height: 44px;
+  padding: 0 8px 0 12px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
+.table-find-icon {
+  flex: none;
+  color: var(--text-faint);
+}
+
+.table-find-input {
+  flex: 1 1 170px;
+  min-width: 130px;
+  height: 40px;
+  padding: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-size: 0.84rem;
+}
+
+.table-find-bar:focus-within {
+  border-color: var(--text-muted);
+}
+
+.table-find-input::-webkit-search-cancel-button {
+  display: none;
+}
+
+.table-find-count {
+  flex: none;
+  color: var(--text-muted);
+  font-size: 0.69rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.table-find-all {
+  flex: none;
+  height: 26px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.66rem;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.table-find-all:hover {
+  background: rgba(184, 0, 0, 0.12);
+}
+
+.table-find-actions {
+  display: flex;
+  align-items: center;
+  gap: 1px;
+  margin-left: auto;
+}
+
+.table-find-button {
+  display: grid;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.table-find-button:hover {
+  background: var(--surface-3);
+  color: var(--text);
+}
+
+.table-find-button:disabled {
+  color: var(--border-control);
+  cursor: default;
+}
+
+.table-find-button:disabled:hover {
+  background: transparent;
+}
+
 /* The bulk bar floats over the bottom of the rows inside the shell instead of
    taking a flex band: it reserves no layout space, so showing it never pushes
    the scroller or leaves a gap below the table. The shell is the relatively
@@ -3626,7 +3736,8 @@ td.table-col-id {
 .table-row-link--zebra:focus-visible,
 .table-row-link--zebra:has(:focus-visible),
 .table-row-link--zebra.table-row-link--active,
-.table-row-link--zebra.table-row-link--selected {
+.table-row-link--zebra.table-row-link--selected,
+.table-row-link--zebra.table-row-link--find-current {
   background: transparent;
 }
 
@@ -3671,7 +3782,8 @@ td.table-col-id {
 
 .table-row-link:focus-visible > td,
 .table-row-link:has(:focus-visible) > td,
-.table-row-link--active > td {
+.table-row-link--active > td,
+.table-row-link--find-current > td {
   box-shadow:
     inset 0 1px 0 var(--accent),
     inset 0 -1px 0 var(--accent);
@@ -3679,7 +3791,8 @@ td.table-col-id {
 
 .table-row-link:focus-visible > td:first-child,
 .table-row-link:has(:focus-visible) > td:first-child,
-.table-row-link--active > td:first-child {
+.table-row-link--active > td:first-child,
+.table-row-link--find-current > td:first-child {
   box-shadow:
     inset 0 1px 0 var(--accent),
     inset 0 -1px 0 var(--accent),
@@ -3691,9 +3804,11 @@ td.table-col-id {
 .table-row-link:focus-visible > td:last-child,
 .table-row-link:has(:focus-visible) > td:last-child,
 .table-row-link--active > td:last-child,
+.table-row-link--find-current > td:last-child,
 .table-row-link:focus-visible > td:has(+ td.table-gutter-cell),
 .table-row-link:has(:focus-visible) > td:has(+ td.table-gutter-cell),
-.table-row-link--active > td:has(+ td.table-gutter-cell) {
+.table-row-link--active > td:has(+ td.table-gutter-cell),
+.table-row-link--find-current > td:has(+ td.table-gutter-cell) {
   box-shadow:
     inset 0 1px 0 var(--accent),
     inset 0 -1px 0 var(--accent),
@@ -3702,8 +3817,21 @@ td.table-col-id {
 
 .table-row-link:focus-visible > td.table-gutter-cell,
 .table-row-link:has(:focus-visible) > td.table-gutter-cell,
-.table-row-link--active > td.table-gutter-cell {
+.table-row-link--active > td.table-gutter-cell,
+.table-row-link--find-current > td.table-gutter-cell {
   box-shadow: none;
+}
+
+/* The transient find bar's current match. It is a cursor over the view while
+   focus stays in the find input, so it paints its own tint and outline without
+   the row cursor (`--active`), which is a focus memory. Its inset ring is the
+   focus/active ring above; the tint is its own. */
+.table-row-link--find-current {
+  outline: none;
+}
+
+.table-row-link--find-current > td {
+  background-color: var(--row-find);
 }
 
 /* Pinned identity columns — the drag handle, selection, display order,
@@ -3789,6 +3917,14 @@ thead .table-sticky-cell {
 .table-row-link--selected.table-row-link--active > .table-sticky-cell {
   background-color: var(--surface);
   background-image: linear-gradient(var(--row-selected), var(--row-selected));
+}
+
+/* Find is a cursor over the view, so its current row stays visible even when
+   the row is selected, hovered or under the keyboard cursor. Pinned cells are
+   opaque, so the tint is layered over the surface like the other row states. */
+.table-row-link--find-current > .table-sticky-cell {
+  background-color: var(--surface);
+  background-image: linear-gradient(var(--row-find), var(--row-find));
 }
 
 /* The handle paints an opaque surface over the drag cell, hiding both the
@@ -4862,6 +4998,12 @@ th[aria-sort="descending"] .sort-chevron {
 @container table-shell (max-width: 1120px) {
   .table-rail-actions {
     order: 1;
+  }
+
+  /* The find control joins a crowded trailing cluster, so below the rail's
+     breakpoint it drops its word and keeps the icon and accessible name. */
+  .table-find-toggle-label {
+    display: none;
   }
 
   .table-filter-chips,

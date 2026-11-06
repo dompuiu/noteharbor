@@ -1,5 +1,6 @@
 import { MemoryRouter } from "react-router-dom";
 import { render, screen, waitFor } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
 
@@ -119,6 +120,63 @@ describe("NotesTable collection switch scroll reset", () => {
     // has to reset too — otherwise the new collection opens part-way down its
     // rows.
     expect(scrollToOffsetMock).toHaveBeenCalledWith(0);
+  });
+
+  test("switching collections closes and clears the find bar", async () => {
+    const { container, rerender } = render(
+      <MemoryRouter>
+        <NotesTable
+          collection={{ id: 1, is_default: 1, name: "First" }}
+          collectionId={1}
+          collections={[
+            { id: 1, is_default: 1, name: "First" },
+            { id: 2, is_default: 0, name: "Second" },
+          ]}
+          collectionsError=""
+          loadingCollections={false}
+        />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("C1-N101");
+    const user = userEvent.setup();
+    await user.keyboard("{Control>}f{/Control}");
+    const input = await screen.findByRole("searchbox", {
+      name: "Find notes in this view",
+    });
+    await waitFor(() => expect(input).toHaveFocus());
+    await user.type(input, "C1");
+
+    await waitFor(() => {
+      expect(screen.getByText("1 of 1")).toBeInTheDocument();
+    });
+
+    rerender(
+      <MemoryRouter>
+        <NotesTable
+          collection={{ id: 2, is_default: 0, name: "Second" }}
+          collectionId={2}
+          collections={[
+            { id: 1, is_default: 1, name: "First" },
+            { id: 2, is_default: 0, name: "Second" },
+          ]}
+          collectionsError=""
+          loadingCollections={false}
+        />
+      </MemoryRouter>,
+    );
+
+    await screen.findByText("C2-N201");
+    expect(
+      screen.queryByRole("search", { name: "Find in this view" }),
+    ).not.toBeInTheDocument();
+    expect(container.querySelectorAll("tbody mark")).toHaveLength(0);
+
+    // The new collection opens with an empty find, not the last query.
+    await user.keyboard("{Control>}f{/Control}");
+    expect(
+      await screen.findByRole("searchbox", { name: "Find notes in this view" }),
+    ).toHaveValue("");
   });
 
   test("a deleted collection drops its saved table structure", async () => {

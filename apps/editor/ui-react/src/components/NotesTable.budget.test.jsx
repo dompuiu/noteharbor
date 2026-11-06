@@ -227,6 +227,45 @@ describe("NotesTable render budget", () => {
       expect(noteRowRenderCount()).toBe(0);
     });
 
+    test("a find keystroke remounts no rows and commits once per deferred update", async () => {
+      getNotes.mockResolvedValue({
+        notes: manyNotes(60).map((item) => ({
+          ...item,
+          serial: `SER-${item.id}`,
+        })),
+      });
+      const { container } = renderTable();
+
+      await screen.findByText("NOTE-1");
+      setScrollMetrics(scrollerFor(container));
+      await flushFrame();
+
+      const user = userEvent.setup();
+      await user.keyboard("{Control>}f{/Control}");
+      const input = await screen.findByRole("searchbox", {
+        name: "Find notes in this view",
+      });
+      await flushFrame();
+
+      await user.type(input, "SER-");
+      await flushFrame();
+
+      resetNoteRowRenders();
+      virtualizerStats.renders = 0;
+      virtualizerStats.measureElementCalls = 0;
+
+      await user.type(input, "1");
+
+      // Find defers its query like the filter draft: the urgent keystroke
+      // commits without touching the rows, and the deferred match update is
+      // the only extra commit. A remount would detach every row.
+      expect(virtualizerStats.measureElementCalls).toBe(0);
+      expect(virtualizerStats.renders).toBeLessThanOrEqual(3);
+      // Only visible rows whose marks changed paint again: the `SER-1`
+      // matches on screen, not the whole window.
+      expect(noteRowRenderCount()).toBeLessThanOrEqual(12);
+    });
+
     test("a scroll tick commits the table body once", async () => {
       getNotes.mockResolvedValue({ notes: manyNotes(60) });
       const { container } = renderTable();

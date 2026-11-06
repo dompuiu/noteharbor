@@ -568,6 +568,7 @@ The server reuses the last open tab whose URL matches the requested URL (ignorin
 Primary editor screen with:
 
 - filterable and sortable table view: a field picker plus a value field where Enter adds a chip (same field ORs, different fields AND), a range such as `22-25` or `M1-M8` expands into one chip per value, tag suggestions in the Tags field, matched text marked in the row, and a "+N" overflow popover for rows with many tags
+- transient find bar (`Ctrl/Cmd+F` or the rail's Find button) that walks matches in the current filtered and sorted view with Enter / Shift+Enter or F3 / Shift+F3, without changing filters, sort, selection or the URL; when filters hide every match it offers to search all notes
 - thumbnail previews
 - bulk selection, delete, and move to another collection (selection bar or a row's actions menu)
 - drag-and-drop manual reordering in the default view

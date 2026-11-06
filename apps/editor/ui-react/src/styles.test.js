@@ -1161,6 +1161,7 @@ describe("table styles", () => {
     for (const rule of [
       /\.table-row-link:hover > \.table-sticky-cell[^{]*\{([^}]*)\}/,
       /\.table-row-link--selected > \.table-sticky-cell\s*\{([^}]*)\}/,
+      /\.table-row-link--find-current > \.table-sticky-cell\s*\{([^}]*)\}/,
     ]) {
       const match = styles.match(rule);
       expect(match).not.toBeNull();
@@ -1173,7 +1174,7 @@ describe("table styles", () => {
   // it into an outline or clip it at the sticky cell's edge.
   test("pinned cells keep the row's inset focus ring", () => {
     const ring = styles.match(
-      /\.table-row-link--active > td\s*\{([^}]*box-shadow[^}]*)\}/,
+      /\.table-row-link--active > td[^{]*\{([^}]*box-shadow[^}]*)\}/,
     );
     expect(ring).not.toBeNull();
     expect(ring[1]).toMatch(/inset 0 1px 0 var\(--accent\)/);

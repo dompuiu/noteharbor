@@ -7,6 +7,18 @@ const shortcutGroups = [
     items: [
       { keys: ["/"], description: "Focus the filter field" },
       {
+        keys: ["Ctrl/Cmd", "F"],
+        description: "Find in the current view (filters, sort and selection stay put)",
+      },
+      {
+        keys: ["Enter", "Shift+Enter"],
+        description: "Go to the next / previous find match, wrapping",
+      },
+      {
+        keys: ["F3", "Shift+F3"],
+        description: "Go to the next / previous find match",
+      },
+      {
         keys: ["↑", "↓"],
         description:
           "Move focus between rows (↑ from the first row → filter field; Shift+↑/↓ does nothing)",
@@ -38,7 +50,11 @@ const shortcutGroups = [
       { keys: ["o"], description: "Open the focused note's actions menu" },
       { keys: ["a"], description: "Add a new note (after the focused row when one is focused, otherwise at the end)" },
       { keys: ["↓"], description: "Jump from a filter field to the first row (Tags opens its suggestions first)" },
-      { keys: ["Esc"], description: "Filters → first row → deselect → clear filters" },
+      {
+        keys: ["Esc"],
+        description:
+          "Close find, leave the filter field, drop the selection, drop the row cursor, then clear filters",
+      },
     ],
   },
   {
