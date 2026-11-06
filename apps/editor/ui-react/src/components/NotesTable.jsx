@@ -5844,7 +5844,7 @@ function NotesTable({
 
         {tagsOpen && selectedNotes.length ? (
           <BulkTagPanel
-            anchorRef={bulkTagsButtonRef}
+            anchorRef={bulkBarRef}
             error={tagsError}
             notes={selectedNotes}
             onApply={applyTags}

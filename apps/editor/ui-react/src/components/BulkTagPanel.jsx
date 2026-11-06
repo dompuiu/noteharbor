@@ -3,13 +3,12 @@ import { createPortal } from "react-dom";
 import { normalizeTag, tagKey } from "../lib/tags.js";
 import { TagsField } from "./TagsField.jsx";
 
-// The bulk Tag editor hangs above the selection bar's Tags… button. It is
-// deliberately not a modal: the collector can still see the rows the change
-// will touch, and the bar underneath stays in place. The panel owns only the
-// staged lists; the Table screen owns the write and its refetch. The shared
-// AnchoredPopover is not used because it anchors below its trigger and closes
-// on blur; this surface hangs above the pill, keeps the table live, and owns
-// its own Tab trap.
+// The bulk Tag editor hangs above the selection bar. It is deliberately not a
+// modal: the collector can still see the rows the change will touch, and the
+// bar underneath stays in place. The panel owns only the staged lists; the
+// Table screen owns the write and its refetch. The shared AnchoredPopover is
+// not used because it anchors below its trigger and closes on blur; this
+// surface hangs above the bar, keeps the table live, and owns its own Tab trap.
 const panelWidth = 440;
 const panelGap = 6;
 const viewportMargin = 12;
@@ -43,24 +42,24 @@ function tagUnion(notes) {
   );
 }
 
-// Anchors the panel's bottom edge just above the bar button, centred over it
-// and clamped to the viewport. Using `bottom` rather than a measured `top`
+// Anchors the panel's bottom edge just above the selection bar, centred over
+// it and clamped to the viewport. Using `bottom` rather than a measured `top`
 // keeps the panel attached when its content grows or shrinks.
 function panelLayout(anchor) {
   const width = Math.min(panelWidth, window.innerWidth - viewportMargin * 2);
-  const buttonBox = anchor?.getBoundingClientRect?.() ?? null;
-  const centre = buttonBox
-    ? buttonBox.left + buttonBox.width / 2
+  const barBox = anchor?.getBoundingClientRect?.() ?? null;
+  const centre = barBox
+    ? barBox.left + barBox.width / 2
     : window.innerWidth / 2;
   const left = Math.min(
     Math.max(viewportMargin, centre - width / 2),
     Math.max(viewportMargin, window.innerWidth - width - viewportMargin),
   );
-  const bottom = buttonBox
-    ? Math.max(viewportMargin, window.innerHeight - buttonBox.top + panelGap)
+  const bottom = barBox
+    ? Math.max(viewportMargin, window.innerHeight - barBox.top + panelGap)
     : 82;
-  const available = buttonBox
-    ? buttonBox.top - panelGap - viewportMargin
+  const available = barBox
+    ? barBox.top - panelGap - viewportMargin
     : window.innerHeight - bottom - viewportMargin;
 
   return {

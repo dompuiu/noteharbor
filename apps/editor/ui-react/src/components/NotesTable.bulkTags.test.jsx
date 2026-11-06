@@ -192,6 +192,31 @@ describe("bulk Tag editing from the selection bar", () => {
     unmount();
   });
 
+  test("the panel centres over the selection bar, not its Tags button", async () => {
+    const user = userEvent.setup();
+    renderTable();
+    await selectRows(user, ["AAAA"]);
+
+    const bar = screen.getByRole("region", { name: "Selection actions" });
+    vi.spyOn(bar, "getBoundingClientRect").mockReturnValue({
+      bottom: 540,
+      height: 40,
+      left: 100,
+      right: 700,
+      top: 500,
+      width: 600,
+      x: 100,
+      y: 500,
+      toJSON: () => ({}),
+    });
+
+    const panel = await openTagsPanel(user);
+
+    // A 600px bar at x=100 has its centre at 400; the 440px panel starts at
+    // 180. Centring on the 1000px-wide Tags button would put it at 280.
+    expect(panel).toHaveStyle({ left: "180px" });
+  });
+
   test("shows coverage counts and the all-notes pill", async () => {
     const user = userEvent.setup();
     renderTable();
