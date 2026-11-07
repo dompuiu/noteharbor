@@ -4,6 +4,13 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.10.1] - 2026-11-07
+
+### Fixed
+
+- Image preview: cached images show before the first paint, so the thumbnail no longer flickers when the popover opens.
+- Image preview and slideshow: the warm glow behind the plates fades out inside the image well instead of ending in hard edges, and the plate shadow is softened for the Light room.
+
 ## [2.10.0] - 2026-11-07
 
 ### Added
