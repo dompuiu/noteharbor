@@ -48,6 +48,45 @@ async fn images_serve_managed_files_with_mime() {
     );
 }
 
+async fn cache_control_for(state: AppState, path: &str) -> Option<String> {
+    let request = Request::builder()
+        .uri(path)
+        .body(Body::from(()))
+        .expect("request builds");
+    let response = create_app(state)
+        .oneshot(request)
+        .await
+        .expect("service answers");
+    response
+        .headers()
+        .get("cache-control")
+        .map(|value| value.to_str().expect("ascii").to_owned())
+}
+
+#[tokio::test]
+async fn versioned_images_are_immutable_in_the_browser_cache() {
+    let (_dir, state, _) = state_with_images();
+    let cache_control = cache_control_for(
+        state,
+        "/api/images/notes/1/front-full.jpg?v=2026-01-01%2000:00:00",
+    )
+    .await;
+
+    assert_eq!(
+        cache_control.as_deref(),
+        Some("public, max-age=31536000, immutable")
+    );
+}
+
+#[tokio::test]
+async fn unversioned_images_keep_revalidating() {
+    let (_dir, state, _) = state_with_images();
+    let cache_control =
+        cache_control_for(state, "/api/images/notes/1/front-full.jpg").await;
+
+    assert_eq!(cache_control.as_deref(), Some("no-cache"));
+}
+
 #[tokio::test]
 async fn images_missing_file_answers_json_404() {
     let (_dir, state, _) = state_with_images();

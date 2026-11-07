@@ -41,6 +41,12 @@ function fullSrc(note, type) {
   );
 }
 
+function thumbSrc(note, type) {
+  return (
+    pickNoteImage(note, type, "thumbnail") || pickNoteImage(note, type, "full")
+  );
+}
+
 // Flattened front/back items over the whole showcase. Missing sides are
 // skipped (no `includeMissingSides`): imageless notes yield zero items.
 function getShowcasePreviewItems(nodes) {
@@ -49,6 +55,8 @@ function getShowcasePreviewItems(nodes) {
   for (const { nodeId, note } of collectShowcasePreviewNotes(nodes)) {
     const frontSrc = fullSrc(note, "front");
     const backSrc = fullSrc(note, "back");
+    const frontThumb = thumbSrc(note, "front");
+    const backThumb = thumbSrc(note, "back");
     const denomination = String(note?.denomination ?? "").trim() || "note";
 
     if (frontSrc) {
@@ -60,6 +68,7 @@ function getShowcasePreviewItems(nodes) {
         note,
         noteId: note.id,
         src: frontSrc,
+        thumb: frontThumb,
       });
     }
 
@@ -72,6 +81,7 @@ function getShowcasePreviewItems(nodes) {
         note,
         noteId: note.id,
         src: backSrc,
+        thumb: backThumb,
       });
     }
   }

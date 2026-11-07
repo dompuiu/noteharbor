@@ -9,6 +9,10 @@ import {
   updateNode,
 } from "../lib/api.js";
 import { isEditableElement } from "../lib/editableElement.js";
+import {
+  neighbouringImageSources,
+  useImagePreload,
+} from "../lib/imagePreload.js";
 import { usePhotoSize } from "../lib/photoSize.js";
 import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 import {
@@ -565,6 +569,14 @@ function ShowcaseScreen({ mode }) {
     : -1;
   const previewOpen = !editMode && previewRequest != null && previewIndex >= 0;
   const activePreviewItem = previewOpen ? previewItems[previewIndex] : null;
+  const neighbouringPreviewImages = useMemo(
+    () =>
+      previewOpen
+        ? neighbouringImageSources(previewItems, previewIndex)
+        : [],
+    [previewIndex, previewItems, previewOpen],
+  );
+  useImagePreload(neighbouringPreviewImages, { delay: 120 });
   const restorePreviewFocusNodeIdRef = useRef(null);
   const wasPreviewOpenRef = useRef(false);
 
@@ -1884,6 +1896,7 @@ function ShowcaseScreen({ mode }) {
           onPreviewEnd={endShowcasePreview}
           onPreviewStart={startShowcasePreview}
           src={activePreviewItem.src}
+          thumb={activePreviewItem.thumb}
         />
       ) : null}
 

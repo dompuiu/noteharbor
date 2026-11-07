@@ -205,10 +205,21 @@ async fn operation_status(State(state): State<AppState>) -> Response {
 // Images (static passthrough)
 // ---------------------------------------------------------------------------
 
+/// Query for an image request. The editor app appends `?v=<updated_at>` to
+/// every managed image URL, so a present `v` marks the bytes as immutable.
+#[derive(Deserialize, Default)]
+struct ImageQuery {
+    v: Option<String>,
+}
+
 /// Serves one managed image file from `<data_dir>/images`. Unknown paths
 /// answer the same JSON 404 as every other `/api/*` route; traversal
 /// attempts that escape the images root are confined, never served.
-async fn serve_image(State(state): State<AppState>, Path(tail): Path<String>) -> Response {
+async fn serve_image(
+    State(state): State<AppState>,
+    Path(tail): Path<String>,
+    Query(query): Query<ImageQuery>,
+) -> Response {
     let images_root = state.data_dir.join("images");
     // Reuse the managed-path resolver so the traversal rule lives in one
     // place (`images.rs`): anything that does not map inside the images root
@@ -223,12 +234,23 @@ async fn serve_image(State(state): State<AppState>, Path(tail): Path<String>) ->
             match tokio::fs::read(&path).await {
                 Ok(bytes) => {
                     let mime = mime_guess::from_path(&path).first_or_octet_stream();
+                    // Versioned URLs can never go stale: the app rebuilds the
+                    // URL from `updated_at` whenever a plate is replaced. An
+                    // unversioned request keeps the old revalidate-every-time
+                    // contract so a stale bookmark cannot pin old bytes.
+                    let cache_control = match query.v.as_deref() {
+                        Some(version) if !version.is_empty() => {
+                            "public, max-age=31536000, immutable"
+                        }
+                        _ => "no-cache",
+                    };
                     axum::response::Response::builder()
                         .status(StatusCode::OK)
                         .header(
                             axum::http::header::CONTENT_TYPE,
                             mime.essence_str().to_owned(),
                         )
+                        .header(axum::http::header::CACHE_CONTROL, cache_control)
                         .body(axum::body::Body::from(bytes))
                         .expect("image response builds")
                         .into_response()

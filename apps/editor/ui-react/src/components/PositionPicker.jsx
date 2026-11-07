@@ -1,12 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-
-function pickFrontThumbnail(images) {
-  return (
-    images.find((img) => img.type === "front" && img.variant === "thumbnail") ??
-    images.find((img) => img.type === "front" && img.variant === "full") ??
-    null
-  );
-}
+import { noteThumbnailPath } from "../lib/tableCells.jsx";
 
 function PositionPicker({ notes, onSelect, selectedId }) {
   const [filter, setFilter] = useState("");
@@ -58,7 +51,7 @@ function PositionPicker({ notes, onSelect, selectedId }) {
           <p className="muted position-picker-empty">No notes match.</p>
         ) : (
           filteredNotes.map((note) => {
-            const thumb = pickFrontThumbnail(note.images ?? []);
+            const thumb = noteThumbnailPath(note);
             const isSelected = note.id === selectedId;
             return (
               <button
@@ -70,7 +63,7 @@ function PositionPicker({ notes, onSelect, selectedId }) {
               >
                 <div className="position-picker-thumb">
                   {thumb ? (
-                    <img alt="" src={thumb.localPath} />
+                    <img alt="" src={thumb} />
                   ) : (
                     <span aria-hidden="true">—</span>
                   )}

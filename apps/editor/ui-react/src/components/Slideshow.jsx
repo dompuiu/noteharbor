@@ -1,9 +1,20 @@
-import { useEffect, useLayoutEffect, useRef, useState } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   copyTextToClipboard,
   formatNoteAsTsvRow,
 } from "../lib/noteClipboard.js";
 import { isEditableElement } from "../lib/editableElement.js";
+import {
+  neighbouringImageSources,
+  preloadImage,
+  useImagePreload,
+} from "../lib/imagePreload.js";
 import { NoteCounter } from "./NoteCounter.jsx";
 
 function formatScrapedLabel(label) {
@@ -162,16 +173,19 @@ function ImagePopover({
   onPreviewStart,
   placeholderText,
   src,
+  thumb,
 }) {
   const imageRef = useRef(null);
   const imageWrapRef = useRef(null);
   const dragRef = useRef(null);
   const zoomAnchorRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
+  const [loadedSrc, setLoadedSrc] = useState(null);
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [zoomScale, setZoomScale] = useState(0);
+  const fullLoaded = Boolean(src) && loadedSrc === src;
 
   const zoomed = zoomScale > 0;
   const scaledSize = {
@@ -196,6 +210,11 @@ function ImagePopover({
 
   function clampOffset(nextOffset, scale = zoomScale) {
     return clampOffsetForViewport(nextOffset, scale, viewportSize);
+  }
+
+  function handleImageLoad() {
+    setLoadedSrc(src);
+    measureImage();
   }
 
   function measureImage() {
@@ -611,20 +630,37 @@ function ImagePopover({
 
           <div className={imageWrapClassName} ref={imageWrapRef}>
             {src ? (
-              <img
-                alt={alt}
-                onDoubleClick={toggleZoom}
-                onDragStart={(e) => e.preventDefault()}
-                onLoad={measureImage}
-                onPointerCancel={onImagePointerUp}
-                onPointerDown={onImagePointerDown}
-                onPointerMove={onImagePointerMove}
-                onPointerUp={onImagePointerUp}
-                onWheel={onImageWheel}
-                ref={imageRef}
-                src={src}
-                style={imageStyle}
-              />
+              <>
+                <img
+                  alt={alt}
+                  className="image-popover-full"
+                  decoding="async"
+                  fetchPriority="high"
+                  onDoubleClick={toggleZoom}
+                  onDragStart={(e) => e.preventDefault()}
+                  onLoad={handleImageLoad}
+                  onPointerCancel={onImagePointerUp}
+                  onPointerDown={onImagePointerDown}
+                  onPointerMove={onImagePointerMove}
+                  onPointerUp={onImagePointerUp}
+                  onWheel={onImageWheel}
+                  ref={imageRef}
+                  src={src}
+                  style={{
+                    ...imageStyle,
+                    opacity: fullLoaded ? undefined : 0,
+                  }}
+                />
+                {thumb && thumb !== src && !fullLoaded && !zoomed ? (
+                  <img
+                    alt=""
+                    aria-hidden="true"
+                    className="image-popover-thumb"
+                    decoding="async"
+                    src={thumb}
+                  />
+                ) : null}
+              </>
             ) : (
               <div className="image-popover-empty-state">
                 <p className="eyebrow">No preview</p>
@@ -669,6 +705,91 @@ function Slideshow({
 }) {
   const note = notes[currentIndex];
   const screenRef = useRef(null);
+
+  // The open note's two faces, used by the slide plates, the popover, and the
+  // keyboard hand-off. One derivation per note change.
+  const previewItems = useMemo(
+    () => (note ? getPreviewItems(note, { includeMissingSides: true }) : []),
+    [note],
+  );
+
+  // The flattened image sequence the popover pages through: front/back for
+  // every note, in slide order. One memo drives the counters and the
+  // neighbour prefetches instead of recomputing the walk per render.
+  const previewSequence = useMemo(() => {
+    const sequence = [];
+
+    notes.forEach((entry) => {
+      getPreviewItems(entry, { includeMissingSides: true }).forEach((item) => {
+        sequence.push({ ...item, note: entry });
+      });
+    });
+
+    return sequence;
+  }, [notes]);
+  const previewIndex =
+    previewKind && note
+      ? previewSequence.findIndex(
+          (item) => item.note.id === note.id && item.kind === previewKind,
+        )
+      : -1;
+  const previewItem = previewIndex >= 0 ? previewSequence[previewIndex] : null;
+
+  // The next/previous slides are what a held arrow key reaches for. Preload
+  // their 500px thumbnails at idle: cheap enough that a walk is instant, and
+  // the visible slide never waits behind them.
+  const neighbouringThumbs = useMemo(() => {
+    const count = notes.length;
+
+    if (count < 2) {
+      return [];
+    }
+
+    const urls = [];
+    const neighbours = new Set([
+      notes[(currentIndex + 1) % count],
+      notes[(currentIndex - 1 + count) % count],
+    ]);
+
+    neighbours.forEach((entry) => {
+      if (!entry) {
+        return;
+      }
+
+      getPreviewItems(entry).forEach((item) => {
+        if (item.thumb) {
+          urls.push(item.thumb);
+        }
+      });
+    });
+
+    return urls;
+  }, [currentIndex, notes]);
+  useImagePreload(neighbouringThumbs, { cache: "thumbnail" });
+
+  // The current note's full plates are what Enter opens. Let the slide paint
+  // first, then warm them so keyboard users get the same instant popover as a
+  // pointer hovering a thumbnail.
+  const currentFullImages = useMemo(
+    () => previewItems.flatMap((item) => (item.src ? [item.src] : [])),
+    [previewItems],
+  );
+  useImagePreload(currentFullImages, { delay: 300 });
+
+  // While the popover is open, warm the previous/next plate in its sequence.
+  // The current plate is already loading, so one step either way covers a
+  // normal arrow press without fetching the whole collection.
+  const neighbouringPreviewImages = useMemo(
+    () => neighbouringImageSources(previewSequence, previewIndex),
+    [previewIndex, previewSequence],
+  );
+  useImagePreload(neighbouringPreviewImages, { delay: 120 });
+
+  function preloadPreviewItem(item) {
+    if (item?.src) {
+      preloadImage(item.src, { priority: "high" });
+    }
+  }
 
   function moveSlideshow(offset) {
     onChangeIndex(
@@ -768,9 +889,9 @@ function Slideshow({
 
       if ((event.key === "Enter" || event.key === " ") && note) {
         event.preventDefault();
-        const openableItem = getPreviewItems(note, {
-          includeMissingSides: true,
-        }).find((item) => item.kind === "front" || item.kind === "back");
+        const openableItem = previewItems.find(
+          (item) => item.kind === "front" || item.kind === "back",
+        );
 
         if (openableItem) {
           onOpenPreview?.(note.id, openableItem.kind);
@@ -790,6 +911,7 @@ function Slideshow({
     onClose,
     onEdit,
     onOpenPreview,
+    previewItems,
     previewKind,
     readOnly,
   ]);
@@ -798,32 +920,9 @@ function Slideshow({
     return null;
   }
 
-  const previewItems = getPreviewItems(note, { includeMissingSides: true });
   const scrapedDetailEntries = getScrapedDetailEntries(note);
-  const previewNote = previewKind ? note : null;
-  const previewNoteItems = previewNote
-    ? getPreviewItems(previewNote, { includeMissingSides: true })
-    : [];
-  const previewItem = previewNoteItems.find(
-    (item) => item.kind === previewKind,
-  );
-  const totalPreviewCount = notes.reduce(
-    (count, entry) =>
-      count + getPreviewItems(entry, { includeMissingSides: true }).length,
-    0,
-  );
-  const previewSequenceIndex = previewKind
-    ? notes
-        .slice(0, currentIndex)
-        .reduce(
-          (count, entry) =>
-            count +
-            getPreviewItems(entry, { includeMissingSides: true }).length,
-          0,
-        ) +
-      previewNoteItems.findIndex((item) => item.kind === previewKind) +
-      1
-    : 0;
+  const totalPreviewCount = previewSequence.length;
+  const previewSequenceIndex = previewItem ? previewIndex + 1 : 0;
   const scrapePanelTitle = getScrapePanelTitle(note);
 
   // While an editor overlay is open the slideshow is a backdrop: it keeps
@@ -836,14 +935,14 @@ function Slideshow({
       inert={keyboardDisabled}
       ref={screenRef}
     >
-      {previewItem && previewNote && (
+      {previewItem && note && (
         <ImagePopover
           alt={previewItem.alt}
           canGoNext={totalPreviewCount > 1}
           canGoPrevious={totalPreviewCount > 1}
           counterPosition={previewSequenceIndex}
           counterTotal={totalPreviewCount}
-          noteLabel={`${getNoteDisplayLabel(previewNote)} - ${previewItem.label}`}
+          noteLabel={`${getNoteDisplayLabel(note)} - ${previewItem.label}`}
           onClose={() => onClosePreview?.(note.id)}
           onJump={onJumpPreview}
           onNext={() => onMovePreview?.(1)}
@@ -852,6 +951,7 @@ function Slideshow({
           onPreviewStart={onPreviewStart}
           placeholderText={`No scraped ${previewItem.label.toLowerCase()} image exists for this note yet.`}
           src={previewItem.src}
+          thumb={previewItem.thumb}
         />
       )}
 
@@ -944,17 +1044,19 @@ function Slideshow({
   
           <div className="slide-card">
             <div className="slide-images">
-              {previewItems.map((item, itemIndex) => (
+              {previewItems.map((item) => (
                 <button
                   key={item.kind}
                   aria-label={`Enlarge ${item.label.toLowerCase()} image`}
                   className="slide-thumb-btn"
                   onClick={() => onOpenPreview?.(note.id, item.kind)}
+                  onFocus={() => preloadPreviewItem(item)}
+                  onMouseEnter={() => preloadPreviewItem(item)}
                   title="Click to enlarge"
                   type="button"
                 >
                   {item.thumb ? (
-                    <img alt={item.alt} src={item.thumb} />
+                    <img alt={item.alt} decoding="async" src={item.thumb} />
                   ) : (
                     <div className="slide-thumb-placeholder">
                       No scraped image yet

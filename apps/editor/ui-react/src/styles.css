@@ -6891,6 +6891,22 @@ button.tag {
   user-select: none;
 }
 
+/* The thumbnail holds the frame while the full plate arrives, so the popover
+   never shows an empty well. Both images share the same grid cell. */
+.image-popover-image-wrap .image-popover-thumb,
+.image-popover-image-wrap .image-popover-full {
+  grid-area: 1 / 1;
+}
+
+.image-popover-image-wrap .image-popover-thumb {
+  width: 100%;
+  pointer-events: none;
+}
+
+.image-popover-image-wrap .image-popover-full {
+  transition: opacity 0.15s ease;
+}
+
 .image-popover-image-wrap--zoomed {
   height: 100%;
   width: 100%;
