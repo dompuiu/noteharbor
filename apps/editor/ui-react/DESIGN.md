@@ -296,7 +296,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Scrim:** ink at 50–88% opacity. The note editor keeps a light grey scrim with a white panel; every ordinary overlay keeps the deep ink panel with white text.
 - **Light room (the exception):** the Note slideshow and the Image popover alone flip to a warm paper panel (`#f7f3ea`) and a brighter card (`#fffdf7`) with ink type. The scrim outside stays the same near-black `rgba(0, 0, 0, 0.88)`, so the room floats over the dimmed app instead of flooding it with white.
 - **Panel:** 6px radius, 1px hairline, floating shadow. The paper room keeps one lower-alpha offset shadow so it reads as a room rather than a white cut-out. Note images sit on white mats; the popover keeps its own plate shadow for depth.
-- **Types and tags:** type derives from the room's ink and muted values; the ochre tag family uses its ordinary paper values in the slideshow, the same as the Table. Red stays the action and focus colour, and a single soft warm radial sits behind the image plates only.
+- **Types and tags:** type derives from the room's ink and muted values; the ochre tag family uses its ordinary paper values in the slideshow, the same as the Table. Red stays the action and focus colour, except on the large slide plates: their focus ring takes the label ochre so it reads as a focused image rather than an alarm border. A single soft warm radial sits behind the image plates only.
 
 **The Presentation Room Rule.** Exactly one overlay may be light: the Note slideshow and its Image popover. They share one scoped token remap; every other overlay stays ink with white type.
 
