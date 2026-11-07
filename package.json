@@ -13,7 +13,7 @@
     "build:viewer:flutter:ios": "cd apps/viewer/flutter && flutter pub get && flutter build ios",
     "test:editor:ui-react": "pnpm --filter editor_ui_react test",
     "layout": "tsps --layout layout.yml",
-    "prepare": "sh scripts/install-hooks.sh"
+    "prepare": "node scripts/install-hooks.mjs"
   },
   "devDependencies": {}
 }
