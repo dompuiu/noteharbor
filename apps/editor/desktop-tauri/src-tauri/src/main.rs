@@ -29,7 +29,20 @@ use tauri_plugin_opener::OpenerExt;
 /// `photoSize.js`, `NoteEditForm.jsx`), backed by Tauri `invoke`.
 /// `showNoteEditorTextMenu` is intentionally absent: without it
 /// the UI keeps the WebView's native context menu (see ticket resolution).
+/// A solitary Alt press is cancelled because the shell has no menu bar: on
+/// Windows it would otherwise enter system-menu mode and pull keyboard focus
+/// out of the WebView. Alt combinations still reach the page.
 const DESKTOP_BRIDGE_JS: &str = r#"
+if (window.__TAURI__ && !window.noteHarborDesktopAltGuard) {
+  window.noteHarborDesktopAltGuard = true;
+  const cancelLoneAlt = (event) => {
+    if (event.key === 'Alt' && !event.ctrlKey && !event.shiftKey && !event.metaKey) {
+      event.preventDefault();
+    }
+  };
+  window.addEventListener('keydown', cancelLoneAlt, true);
+  window.addEventListener('keyup', cancelLoneAlt, true);
+}
 if (window.__TAURI__ && !window.noteHarborDesktop) {
   const invoke = window.__TAURI__.core.invoke;
   window.noteHarborDesktop = {
