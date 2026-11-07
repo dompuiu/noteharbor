@@ -4,6 +4,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.9.0] - 2026-11-06
+
 ### Added
 
 - Table screen: the filter field accepts ranges (`22-25`, `M1-M8`, `M1-8`) and commits them as one chip per value, exactly like a comma list; a range wider than 100 values is refused with a short note while the draft stays in the field.
@@ -11,6 +13,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 ### Changed
 
 - Table screen: pressing `⏎` in the filter field replaces that field's chips by default, so swapping Catalog `22` for `23` no longer leaves both. `Shift+Enter` or the field's own mode control latches Add without committing, and the choice is remembered across reloads.
+- All notes screen: the list requests only the fields the table paints, so the scraped details and note text no longer travel with every row; opening a note still shows them from the full note. Sorting and filtering now paint the controls first and land the new rows in a deferred render, so a large library no longer stalls the screen.
+- Showcase note picker: loads its notes with the same lean projection, so opening the picker no longer transfers every note's scraped details.
 
 ### Fixed
 
