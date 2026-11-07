@@ -180,20 +180,13 @@ function ImagePopover({
   const dragRef = useRef(null);
   const zoomAnchorRef = useRef(null);
   const [isDragging, setIsDragging] = useState(false);
-  const [loadedSrc, setLoadedSrc] = useState(null);
+  const [displayedSrc, setDisplayedSrc] = useState(null);
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [zoomScale, setZoomScale] = useState(0);
-  const fullLoaded = Boolean(src) && loadedSrc === src;
-  const srcRef = useRef(src);
-  srcRef.current = src;
-  // Until the new full image is ready, hold the last full image on screen;
-  // fall back to the thumbnail when nothing has loaded yet.
-  const placeholderSrc =
-    fullLoaded || !src
-      ? null
-      : (loadedSrc ?? (thumb && thumb !== src ? thumb : null));
+  const fullLoaded = Boolean(src) && displayedSrc === src;
+  const showThumb = !displayedSrc && Boolean(thumb) && thumb !== src;
 
   const zoomed = zoomScale > 0;
   const scaledSize = {
@@ -218,26 +211,6 @@ function ImagePopover({
 
   function clampOffset(nextOffset, scale = zoomScale) {
     return clampOffsetForViewport(nextOffset, scale, viewportSize);
-  }
-
-  function handleImageLoad() {
-    const image = imageRef.current;
-    const loaded = src;
-    const reveal = () => {
-      if (srcRef.current !== loaded) {
-        return;
-      }
-      setLoadedSrc(loaded);
-      measureImage();
-    };
-
-    // Wait for decode so the swap from the held image lands in one frame.
-    if (image && typeof image.decode === "function") {
-      image.decode().then(reveal, reveal);
-      return;
-    }
-
-    reveal();
   }
 
   function measureImage() {
@@ -330,7 +303,7 @@ function ImagePopover({
   }
 
   function changeZoom(direction, anchor = null) {
-    if (!src) {
+    if (!fullLoaded) {
       return;
     }
 
@@ -445,7 +418,7 @@ function ImagePopover({
   }
 
   function onImageWheel(e) {
-    if (!src) {
+    if (!fullLoaded) {
       return;
     }
 
@@ -469,18 +442,45 @@ function ImagePopover({
     resetZoom();
   }, [src]);
 
-  // A cached image is already decoded before onLoad fires; marking it loaded
-  // before paint avoids flashing the thumbnail between images.
+  // The visible image only ever switches to a source that is already decoded,
+  // so holding an arrow key never paints an empty frame. Sources that finish
+  // after the user has moved on are dropped.
   useLayoutEffect(() => {
-    const image = imageRef.current;
-
-    if (src && image?.complete && image.naturalWidth > 0) {
-      setLoadedSrc(src);
+    if (!src) {
+      setDisplayedSrc(null);
+      return undefined;
     }
+
+    const probe = new Image();
+    probe.fetchPriority = "high";
+    probe.src = src;
+
+    if (probe.complete && probe.naturalWidth > 0) {
+      setDisplayedSrc(src);
+      return undefined;
+    }
+
+    let current = true;
+    const show = () => {
+      if (current) {
+        setDisplayedSrc(src);
+      }
+    };
+
+    if (typeof probe.decode === "function") {
+      probe.decode().then(show, show);
+    } else {
+      probe.onload = show;
+      probe.onerror = show;
+    }
+
+    return () => {
+      current = false;
+    };
   }, [src]);
 
   useLayoutEffect(() => {
-    if (!src) {
+    if (!displayedSrc) {
       return undefined;
     }
 
@@ -497,7 +497,7 @@ function ImagePopover({
     resizeObserver.observe(target);
 
     return () => resizeObserver.disconnect();
-  }, [src, zoomScale]);
+  }, [displayedSrc, zoomScale]);
 
   useEffect(() => {
     if (!zoomScale) {
@@ -664,33 +664,30 @@ function ImagePopover({
           <div className={imageWrapClassName} ref={imageWrapRef}>
             {src ? (
               <>
-                <img
-                  alt={alt}
-                  className="image-popover-full"
-                  decoding="async"
-                  fetchPriority="high"
-                  onDoubleClick={toggleZoom}
-                  onDragStart={(e) => e.preventDefault()}
-                  onLoad={handleImageLoad}
-                  onPointerCancel={onImagePointerUp}
-                  onPointerDown={onImagePointerDown}
-                  onPointerMove={onImagePointerMove}
-                  onPointerUp={onImagePointerUp}
-                  onWheel={onImageWheel}
-                  ref={imageRef}
-                  src={src}
-                  style={{
-                    ...imageStyle,
-                    opacity: fullLoaded ? undefined : 0,
-                  }}
-                />
-                {placeholderSrc && !zoomed ? (
+                {displayedSrc ? (
+                  <img
+                    alt={alt}
+                    className="image-popover-full"
+                    decoding="sync"
+                    onDoubleClick={toggleZoom}
+                    onDragStart={(e) => e.preventDefault()}
+                    onLoad={measureImage}
+                    onPointerCancel={onImagePointerUp}
+                    onPointerDown={onImagePointerDown}
+                    onPointerMove={onImagePointerMove}
+                    onPointerUp={onImagePointerUp}
+                    onWheel={onImageWheel}
+                    ref={imageRef}
+                    src={displayedSrc}
+                    style={imageStyle}
+                  />
+                ) : null}
+                {showThumb ? (
                   <img
                     alt=""
                     aria-hidden="true"
                     className="image-popover-thumb"
-                    decoding="async"
-                    src={placeholderSrc}
+                    src={thumb}
                   />
                 ) : null}
               </>

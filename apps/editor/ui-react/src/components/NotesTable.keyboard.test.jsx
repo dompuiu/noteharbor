@@ -8,7 +8,7 @@ import {
   within,
 } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { beforeEach, describe, expect, onTestFinished, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
 
 vi.mock("../lib/api.js", () => ({
@@ -1079,6 +1079,11 @@ describe("Arrow modifiers and h/j/k/l aliases", () => {
   });
 
   test("modified arrows pan the zoomed image while Alt stays inert", async () => {
+    // jsdom never loads images; let the popover's off-screen decode settle.
+    window.HTMLImageElement.prototype.decode = () => Promise.resolve();
+    onTestFinished(() => {
+      delete window.HTMLImageElement.prototype.decode;
+    });
     const user = userEvent.setup();
     const imageNote = notePayload(1, "AAAA", [
       { type: "front", variant: "full", localPath: "/api/notes/1/front" },
@@ -1100,7 +1105,11 @@ describe("Arrow modifiers and h/j/k/l aliases", () => {
     });
 
     const overlay = document.querySelector(".image-popover-overlay");
-    const image = within(overlay).getByRole("img");
+    const image = await waitFor(() => {
+      const full = overlay.querySelector(".image-popover-full");
+      expect(full).not.toBeNull();
+      return full;
+    });
     Object.defineProperty(image, "naturalWidth", {
       configurable: true,
       value: 1200,
