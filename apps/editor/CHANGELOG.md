@@ -4,6 +4,13 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.10.2] - 2026-11-07
+
+### Fixed
+
+- Image preview: holding an arrow key pages through the plates without blank frames, and paging stops as soon as the key is released (previously it kept going for a moment on Windows).
+- Desktop (Windows): pressing Alt alone no longer takes keyboard focus away from the app.
+
 ## [2.10.1] - 2026-11-07
 
 ### Fixed
