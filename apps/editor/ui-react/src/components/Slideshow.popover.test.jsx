@@ -1,5 +1,5 @@
 import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, test } from "vitest";
+import { describe, expect, test, vi } from "vitest";
 import { ImagePopover } from "./Slideshow.jsx";
 
 function renderPopover(overrides = {}) {
@@ -47,5 +47,23 @@ describe("ImagePopover image loading", () => {
     renderPopover({ thumb: "/api/images/notes/1/front-full.jpg?v=1" });
 
     expect(document.querySelector(".image-popover-thumb")).toBeNull();
+  });
+
+  test("shows a cached full image straight away without flashing the thumbnail", () => {
+    const proto = window.HTMLImageElement.prototype;
+    const completeSpy = vi.spyOn(proto, "complete", "get").mockReturnValue(true);
+    const widthSpy = vi
+      .spyOn(proto, "naturalWidth", "get")
+      .mockReturnValue(800);
+
+    try {
+      renderPopover();
+
+      expect(document.querySelector(".image-popover-thumb")).toBeNull();
+      expect(screen.getByAltText("1 leu front").style.opacity).toBe("");
+    } finally {
+      completeSpy.mockRestore();
+      widthSpy.mockRestore();
+    }
   });
 });

@@ -446,6 +446,16 @@ function ImagePopover({
     resetZoom();
   }, [src]);
 
+  // A cached image is already decoded before onLoad fires; marking it loaded
+  // before paint avoids flashing the thumbnail between images.
+  useLayoutEffect(() => {
+    const image = imageRef.current;
+
+    if (src && image?.complete && image.naturalWidth > 0) {
+      setLoadedSrc(src);
+    }
+  }, [src]);
+
   useLayoutEffect(() => {
     if (!src) {
       return undefined;
