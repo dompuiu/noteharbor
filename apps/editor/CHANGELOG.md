@@ -4,6 +4,21 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.10.0] - 2026-11-07
+
+### Added
+
+- Slideshow and image preview: the next and previous plates preload in the background, and the popover holds the cached thumbnail while the full image decodes, so paging and enlarging no longer wait on a blank image well.
+
+### Changed
+
+- Note slideshow and image preview: both screens now wear the Light room palette — a warm paper panel, ink type, white image mats, ordinary ochre tags and warm chrome — instead of the neutral ink lightbox.
+- Server: image URLs carrying a version (`?v=<updated_at>`) are served with a one-year immutable cache, while unversioned requests keep revalidating every time.
+
+### Fixed
+
+- Slideshow: the focused image plate draws a warm ochre ring instead of the room's red focus ring, which read as an error border on the white mat.
+
 ## [2.9.0] - 2026-11-06
 
 ### Added
