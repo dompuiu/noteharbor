@@ -1809,6 +1809,12 @@ describe("app viewport width", () => {
 });
 
 describe("slideshow overlay styles", () => {
+  function roomPalette() {
+    return styles.match(
+      /\.slideshow-screen--overlay,\s*\n\.image-popover-overlay\s*\{([^}]*)\}/,
+    );
+  }
+
   // The slideshow floats over the app like the image preview: a full-viewport
   // scrim with the slideshow panel on top, so the sidebar stays visible and
   // hoverable behind it instead of being covered by an opaque panel.
@@ -1903,6 +1909,297 @@ describe("slideshow overlay styles", () => {
     const content = styles.match(/\.image-popover-content\s*\{([^}]*)\}/);
     expect(content).not.toBeNull();
     expect(content[1]).toMatch(/color:\s*var\(--on-dark-text\)/);
+  });
+
+  // Light room: both overlay roots remap the same on-dark roles, so the two
+  // presentation screens share one palette and the rest of the Editor stays
+  // in the ink room. The values are the spec's Light room table.
+  test("both overlay roots remap the on-dark roles to the Light room palette", () => {
+    const palette = roomPalette();
+    expect(palette).not.toBeNull();
+    expect(palette[1]).toMatch(/--on-dark-bg:\s*#f7f3ea/);
+    expect(palette[1]).toMatch(
+      /--on-dark-bg-translucent:\s*rgba\(247,\s*243,\s*234,\s*0\.96\)/,
+    );
+    expect(palette[1]).toMatch(/--on-dark-surface:\s*#fffdf7/);
+    expect(palette[1]).toMatch(/--on-dark-text:\s*#23262a/);
+    expect(palette[1]).toMatch(/--on-dark-muted:\s*#5d6165/);
+    expect(palette[1]).toMatch(/--on-dark-label:\s*#8a4a12/);
+    expect(palette[1]).toMatch(
+      /--on-dark-border:\s*rgba\(35,\s*38,\s*42,\s*0\.14\)/,
+    );
+    expect(palette[1]).toMatch(
+      /--on-dark-border-strong:\s*rgba\(35,\s*38,\s*42,\s*0\.26\)/,
+    );
+    expect(palette[1]).toMatch(/--on-dark-link:\s*#a30000/);
+  });
+
+  // The room tokens are new names shared by both directions, so the seam is
+  // the same whichever palette wins.
+  test("the room defines its wash, plate, glow and focus tokens", () => {
+    const palette = roomPalette();
+    expect(palette).not.toBeNull();
+    expect(palette[1]).toMatch(
+      /--on-dark-wash:\s*rgba\(35,\s*38,\s*42,\s*0\.05\)/,
+    );
+    expect(palette[1]).toMatch(
+      /--on-dark-wash-strong:\s*rgba\(35,\s*38,\s*42,\s*0\.1\)/,
+    );
+    expect(palette[1]).toMatch(/--on-dark-plate:\s*#ffffff/);
+    expect(palette[1]).toMatch(
+      /--on-dark-glow:\s*rgba\(200,\s*160,\s*90,\s*0\.16\)/,
+    );
+    expect(palette[1]).toMatch(/--on-dark-focus:\s*#a30000/);
+  });
+
+  // On paper a tag is just a tag: the slideshow takes the ordinary Ochre
+  // family instead of a dark-room wash.
+  test("the slideshow tags wear the ordinary tag family", () => {
+    const tag = styles.match(/\.slideshow-screen \.tag\s*\{([^}]*)\}/);
+    expect(tag).not.toBeNull();
+    expect(tag[1]).toMatch(/background:\s*var\(--tag-bg\)/);
+    expect(tag[1]).toMatch(/border:\s*1px solid var\(--tag-border\)/);
+    expect(tag[1]).toMatch(/color:\s*var\(--tag-text\)/);
+    expect(tag[1]).not.toMatch(/rgba\(247,\s*185,\s*40/);
+  });
+
+  // The shared chrome moves off literal white washes onto the room tokens.
+  test("the overlay chrome reads the room wash and plate tokens", () => {
+    const rules = [
+      [/\.counter-pill\s*\{([^}]*)\}/, /background:\s*var\(--on-dark-wash\)/],
+      [
+        /\.slideshow-exit-button\s*\{([^}]*)\}/,
+        /background:\s*var\(--on-dark-wash\)/,
+      ],
+      [/\.arrow-button\s*\{([^}]*)\}/, /background:\s*var\(--on-dark-wash\)/],
+      [
+        /\.slide-thumb-btn\s*\{([^}]*background:[^}]*)\}/,
+        /background:\s*var\(--on-dark-plate\)/,
+      ],
+      [
+        /\.slide-thumb-placeholder\s*\{([^}]*)\}/,
+        /background:\s*var\(--on-dark-wash\)/,
+      ],
+      [
+        /\.image-popover-empty-state\s*\{([^}]*)\}/,
+        /background:\s*var\(--on-dark-wash\)/,
+      ],
+      [
+        /\.scraped-details-panel\s*\{([^}]*)\}/,
+        /background:\s*var\(--on-dark-wash\)/,
+      ],
+      [
+        /\.slideshow-screen kbd,\s*\n\.image-popover-content kbd\s*\{([^}]*)\}/,
+        /background:\s*var\(--on-dark-wash\)/,
+      ],
+      [
+        /\.icon-link--on-dark\s*\{([^}]*)\}/,
+        /background:\s*var\(--on-dark-wash\)/,
+      ],
+    ];
+
+    for (const [pattern, assertion] of rules) {
+      const rule = styles.match(pattern);
+      expect(rule, String(pattern)).not.toBeNull();
+      expect(rule[1], String(pattern)).toMatch(assertion);
+    }
+  });
+
+  test("the overlay hover states read the strong wash", () => {
+    const rules = [
+      /\.icon-link--on-dark:hover,\s*\n\.icon-link--on-dark:focus-visible\s*\{([^}]*)\}/,
+      /\.slideshow-exit-button:hover,\s*\n\.slideshow-exit-button:focus-visible\s*\{([^}]*)\}/,
+      /\.arrow-button:hover:not\(:disabled\)\s*\{([^}]*)\}/,
+    ];
+
+    for (const pattern of rules) {
+      const rule = styles.match(pattern);
+      expect(rule, String(pattern)).not.toBeNull();
+      expect(rule[1], String(pattern)).toMatch(
+        /background:\s*var\(--on-dark-wash-strong\)/,
+      );
+    }
+  });
+
+  test("no hardcoded neutral white wash remains in the two screens", () => {
+    const start = styles.indexOf(".slideshow-screen--overlay {");
+    const end = styles.indexOf(".url-field-row {");
+    expect(start).toBeGreaterThan(-1);
+    expect(end).toBeGreaterThan(start);
+    expect(styles.slice(start, end)).not.toMatch(
+      /rgba\(\s*255,\s*255,\s*255/,
+    );
+  });
+
+  test("the paper room uses its lower-alpha shadow tokens", () => {
+    expect(styles).toMatch(
+      /--shadow-room:\s*0 30px 80px rgba\(0,\s*0,\s*0,\s*0\.36\)/,
+    );
+
+    const panel = styles.match(
+      /\.slideshow-screen--overlay \.slideshow-panel\s*\{([^}]*)\}/,
+    );
+    expect(panel).not.toBeNull();
+    expect(panel[1]).toMatch(/box-shadow:\s*var\(--shadow-room\)/);
+
+    const content = styles.match(/\.image-popover-content\s*\{([^}]*)\}/);
+    expect(content).not.toBeNull();
+    expect(content[1]).toMatch(
+      /box-shadow:\s*var\(--shadow-room-content\)/,
+    );
+  });
+
+  test("the light-room remap stays scoped and leaves the global room alone", () => {
+    expect(styles).toMatch(/--on-dark-bg:\s*#25282b/);
+    expect(styles).toMatch(/--on-dark-text:\s*#ffffff/);
+
+    const palette = roomPalette();
+    expect(palette).not.toBeNull();
+    // Accent stays the global brand red; the room only remaps roles.
+    expect(palette[1]).not.toMatch(/--on-dark-accent/);
+  });
+
+  // One light source, clipped by the plate's container: no glow behind type
+  // or a control label.
+  test("one soft radial glow sits behind the image plates", () => {
+    const glow = styles.match(
+      /\.slide-images::before,\s*\n\.image-popover-image-wrap::before\s*\{([^}]*)\}/,
+    );
+    expect(glow).not.toBeNull();
+    expect(glow[1]).toMatch(/position:\s*absolute/);
+    expect(glow[1]).toMatch(/inset:\s*0/);
+    expect(glow[1]).toMatch(
+      /background:\s*radial-gradient\([\s\S]*var\(--on-dark-glow\)/,
+    );
+    expect(glow[1]).toMatch(/pointer-events:\s*none/);
+  });
+
+  test("focus inside the overlays uses the room focus token", () => {
+    const focus = styles.match(
+      /\.slideshow-screen--overlay :focus-visible,\s*\n\.image-popover-overlay :focus-visible\s*\{([^}]*)\}/,
+    );
+    expect(focus).not.toBeNull();
+    // The global rule keeps the ring geometry; only the colour changes, so
+    // the counter's own `outline: none` stays in force.
+    expect(focus[1]).toMatch(
+      /outline-color:\s*var\(--on-dark-focus\)/,
+    );
+    expect(focus[1]).not.toMatch(/outline:/);
+  });
+
+  // The shortcut bubble keeps its own dark ground; its label must stay white
+  // rather than inheriting the room's ink.
+  test("the shortcut bubble stays white inside the paper room", () => {
+    const bubble = styles.match(
+      /\.slideshow-screen--overlay \[data-shortcut\]::after,\s*\n\.image-popover-overlay \[data-shortcut\]::after\s*\{([^}]*)\}/,
+    );
+    expect(bubble).not.toBeNull();
+    expect(bubble[1]).toMatch(/color:\s*#ffffff/);
+  });
+
+  // The prototype's catalogue-page details are part of the look: a large
+  // uppercase title, muted issue and notes, and rules around the data grid.
+  test("the slideshow metadata keeps the prototype hierarchy", () => {
+    const title = styles.match(/\.slide-meta h1\s*\{([^}]*)\}/);
+    expect(title).not.toBeNull();
+    expect(title[1]).toMatch(/font-size:\s*2\.1rem/);
+    expect(title[1]).toMatch(/line-height:\s*1\.12/);
+
+    const issue = styles.match(/\.slide-issue\s*\{([^}]*)\}/);
+    expect(issue).not.toBeNull();
+    expect(issue[1]).toMatch(/color:\s*var\(--on-dark-muted\)/);
+    expect(issue[1]).toMatch(/font-size:\s*0\.94rem/);
+
+    const notes = styles.match(/\.slide-notes\s*\{([^}]*)\}/);
+    expect(notes).not.toBeNull();
+    expect(notes[1]).toMatch(/color:\s*var\(--on-dark-muted\)/);
+    expect(notes[1]).toMatch(/max-width:\s*68ch/);
+  });
+
+  test("the detail grid is framed by room hairlines", () => {
+    const grid = styles.match(/\.detail-grid\s*\{([^}]*)\}/);
+    expect(grid).not.toBeNull();
+    expect(grid[1]).toMatch(
+      /border-top:\s*1px solid var\(--on-dark-border\)/,
+    );
+    expect(grid[1]).toMatch(
+      /border-bottom:\s*1px solid var\(--on-dark-border\)/,
+    );
+    expect(grid[1]).toMatch(/padding:\s*14px 0/);
+    expect(grid[1]).toMatch(/gap:\s*9px 16px/);
+
+    const strong = styles.match(/\.detail-grid strong\s*\{([^}]*)\}/);
+    expect(strong).not.toBeNull();
+    expect(strong[1]).toMatch(/color:\s*var\(--on-dark-muted\)/);
+    expect(strong[1]).toMatch(/font-weight:\s*600/);
+  });
+
+  test("the scraped details keep their muted and ink hierarchy", () => {
+    const copy = styles.match(/\.scraped-details-grid p\s*\{([^}]*)\}/);
+    expect(copy).not.toBeNull();
+    expect(copy[1]).toMatch(/color:\s*var\(--on-dark-muted\)/);
+    expect(copy[1]).toMatch(/font-size:\s*0\.86rem/);
+
+    const strong = styles.match(
+      /\.scraped-details-grid strong\s*\{([^}]*)\}/,
+    );
+    expect(strong).not.toBeNull();
+    expect(strong[1]).toMatch(/color:\s*var\(--on-dark-text\)/);
+    expect(strong[1]).toMatch(/font-weight:\s*600/);
+  });
+
+  test("the slideshow tags keep the prototype chip type", () => {
+    const tag = styles.match(/\.slideshow-screen \.tag\s*\{([^}]*)\}/);
+    expect(tag).not.toBeNull();
+    expect(tag[1]).toMatch(/padding:\s*3px 11px/);
+    expect(tag[1]).toMatch(/font-size:\s*0\.78rem/);
+    expect(tag[1]).toMatch(/letter-spacing:\s*0\.01em/);
+
+    const list = styles.match(/\.slideshow-screen \.tag-list\s*\{([^}]*)\}/);
+    expect(list).not.toBeNull();
+    expect(list[1]).toMatch(/gap:\s*7px/);
+  });
+
+  // The room has a distinct ochre label role in the prototype (6.2:1 on the
+  // paper panel), so eyebrows and plate labels are not the grey muted text.
+  test("the room label roles use the ochre label token", () => {
+    const eyebrow = styles.match(
+      /\.slideshow-screen \.eyebrow,\s*\n\.image-popover-content \.eyebrow\s*\{([^}]*)\}/,
+    );
+    expect(eyebrow).not.toBeNull();
+    expect(eyebrow[1]).toMatch(/color:\s*var\(--on-dark-label\)/);
+
+    const label = styles.match(/\.slide-thumb-label\s*\{([^}]*)\}/);
+    expect(label).not.toBeNull();
+    expect(label[1]).toMatch(/color:\s*var\(--on-dark-label\)/);
+  });
+
+  test("the slide label and popover meta keep the prototype type", () => {
+    const label = styles.match(/\.slide-thumb-label\s*\{([^}]*)\}/);
+    expect(label).not.toBeNull();
+    expect(label[1]).toMatch(/font-size:\s*0\.68rem/);
+    expect(label[1]).toMatch(/font-weight:\s*600/);
+    expect(label[1]).toMatch(/letter-spacing:\s*0\.12em/);
+
+    const noteLabel = styles.match(
+      /\.image-popover-note-label\s*\{([^}]*color:\s*var\(--on-dark-text\)[^}]*)\}/,
+    );
+    expect(noteLabel).not.toBeNull();
+    expect(noteLabel[1]).toMatch(/font-weight:\s*650/);
+    expect(noteLabel[1]).toMatch(/letter-spacing:\s*-0\.01em/);
+  });
+
+  // On paper the hover edge is the room's structural hairline, not the brand
+  // red the dark room used.
+  test("the thumbnail hover edge follows the room hairline", () => {
+    const hover = styles.match(
+      /\.slide-thumb-btn:hover\s*\{([^}]*border-color:[^}]*)\}/,
+    );
+    expect(hover).not.toBeNull();
+    expect(hover[1]).toMatch(
+      /border-color:\s*var\(--on-dark-border-strong\)/,
+    );
+    expect(hover[1]).not.toMatch(/var\(--on-dark-accent\)/);
   });
 
   test("the showcase panel scrolls vertically instead of cropping", () => {

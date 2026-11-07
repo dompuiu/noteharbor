@@ -136,13 +136,13 @@ components:
 
 The Editor takes a poster-scale brand language — red, near-black ink, white content bands, uppercase weight-800 display type, and pill controls — and turns it into a dense working surface for cataloguing banknotes. It is not a marketing page, so the poster voice appears where the app speaks to the user (screen titles, eyebrows, primary actions) and then gives way to white data bands, hairline grids, and quiet grey chrome.
 
-Three materials carry the whole system: **slate ink** (#2c3a45) as the navigation rail, **ink** (#25282b) as the overlay world, **white** (#ffffff) as the content and table surface, and **deep red** (#b80000) as the single accent. Red never becomes a background wash on the page; it marks the primary action, the active navigation edge, selection, focus, and the tags that need attention. The rail keeps the brighter **brand red** (#e60000), where the deep step would go muddy on slate. Everything else is a neutral step on the white-to-grey ladder.
+Three materials carry the whole system: **slate ink** (#2c3a45) as the navigation rail, **ink** (#25282b) as the default overlay world, **white** (#ffffff) as the content and table surface, and **deep red** (#b80000) as the single accent. The Note slideshow and Image popover are the one sanctioned **Light room**: a warm paper panel on the same near-black scrim, so the presentation moment reads as a print room rather than a lightbox. Red never becomes a background wash on the page; it marks the primary action, the active navigation edge, selection, focus, and the tags that need attention. The rail keeps the brighter **brand red** (#e60000), where the deep step would go muddy on slate. Everything else is a neutral step on the white-to-grey ladder.
 
 Structure stays dense and quiet. The Table screen is the centre of gravity: one bordered white card filling the viewport, a fixed 64px slate rail that expands on hover, compact 40px headers, and 12px cell padding tuned for scanning hundreds of rows. Capture, Import, and Showcase screens reuse the same card, field, and pill vocabulary at a lower density.
 
 **Key Characteristics:**
 - One accent: `{colors.brand-red-deep}` (#b80000). Filled pills, focus rings, selection, search and the bulk bar all wear it; the rail keeps the brighter `{colors.brand-red}`, and outline pills stay neutral. Red text for links and active state.
-- Settled chrome, loud content: the slate rail holds the same dark band the layout is built around, a step off pure ink so overlays stay the darkest surface. White bands and the red accent carry all the contrast. No warm greys, no pure black, no second accent hue.
+- Settled chrome, loud content: the slate rail holds the same dark band the layout is built around, a step off pure ink so ordinary overlays stay the darkest surface. White bands and the red accent carry all the contrast. No warm greys on the page, no pure black, no second accent hue; the warm paper belongs to the two presentation screens alone.
 - Uppercase weight-800 display type with tight tracking for screen titles and eyebrows; sentence case for the calm secondary voice.
 - Pill geometry on every button and counter (100px), a 10px step on fields and selects, and a 7px rounded rectangle on filter chips and tags. Cards stay flat at 6px.
 - Flat at rest: cards carry no shadow; only floating chrome (menus, dialogs, the expanded rail) lifts.
@@ -159,13 +159,14 @@ Structure stays dense and quiet. The Table screen is the centre of gravity: one 
 - **Canvas Mist** (`{colors.canvas-mist}` — `#f7f7f7`): The filter rail and secondary panel fills.
 - **Canvas Step** (`{colors.canvas-step}` — `#e6e6e6`): The deepest neutral step, used for the drag handle's hover.
 - **Rail Slate** (`{colors.rail}` — `#2c3a45`): The navigation rail, and only the rail. A cool slate, not warm; it stays dark for contrast but reads as structure rather than a void.
-- **Ink** (`{colors.ink}` — `#25282b`): The overlay world and double-height bands. Doubles as the primary text colour.
+- **Ink** (`{colors.ink}` — `#25282b`): The default overlay world and double-height bands; the Note slideshow and Image popover are the one exception, wearing warm paper instead. Doubles as the primary text colour.
+- **Paper Room** (`#f7f3ea` panel, `#fffdf7` card): The Light room surfaces of the Note slideshow and Image popover. Scoped to those two overlay roots; never a page or card ground elsewhere.
 
 ### Text
 - **Ink** (`{colors.ink}` — `#25282b`): Headings, table cells, field values.
 - **Body** (`{colors.body}` — `#5f6367`): Secondary copy, labels, captions; clears 4.5:1 on every surface it sits on.
 - **Body Faint** (`{colors.body-faint}` — `#6e7276`): Tertiary metadata — row numbers, empty dashes, captions.
-- **On Dark** (`{colors.on-dark}` — `#ffffff`): Navigation labels, overlay content, and text on red.
+- **On Dark** (`{colors.on-dark}` — `#ffffff`): Navigation labels, ink-room overlay content, and text on red. The Light room remaps its `--on-dark-*` roles to ink on paper inside the two presentation overlay roots.
 
 ### Semantic
 The brand has no separate semantic palette, but the Editor needs status. These three muted hues are the only exceptions to the red/ink/neutral rule, and each appears only inside a status chip or inline message:
@@ -201,13 +202,15 @@ Tags are labels, not state, so they left the accent family for their own warm Oc
 
 ### Hierarchy
 - **Display** (800, 1.3125rem/1.5, `-0.01em`, uppercase): the collection / page title in the Table screen. The brand's billboard voice at the smallest size that still fits a dense header.
-- **Title** (800, 1.4rem/1.3, uppercase): Showcase Category titles and screen headings. Every top-level `h1` in a panel or screen body takes this voice.
+- **Title** (800, 1.4rem/1.3, uppercase): Showcase Category titles and screen headings. Every top-level `h1` in a panel or screen body takes this voice, except the Note slideshow's denomination.
+- **Presentation room title** (800, 2.1rem/1.12, `-0.02em`, uppercase): the Note slideshow's denomination, one step above Title so the note reads as the catalogue page.
 - **Panel heading** (700, ~1.05–1.15rem): card and panel headings that introduce a block rather than a screen.
 - **Body** (400, 0.86–0.9rem/1.5): field values and running copy.
 - **Data** (400, 13.5px): table cell values in a 45px row. Weight, not size, separates roles — Catalog # and Denomination at 600, the rest at 400.
 - **Code** (500, 13px, 0.045em tracking): serial numbers, one step under Data.
 - **Control** (600, 0.84rem/1.2): buttons, links, and tabs.
 - **Label** (700, 0.6875rem, 0.08em, uppercase): table and menu headers, in Body, so 11px caps clear 4.5:1 on the header band.
+- **Presentation room label** (600, 0.68rem, 0.12em, uppercase): the slideshow's Front/Back plate labels; its eyebrows take the same ochre label tone (`#8a4a12`).
 - **Meta** (400, 0.75rem/1.5, tabular): the table's summary and status lines.
 
 ### Named Rules
@@ -230,7 +233,8 @@ Tonal layering, not shadow. Structure is carried by ink/white polarity and the w
 ### Shadow Vocabulary
 - **Ambient rest:** none. Cards, panels, and controls are flat.
 - **Lifted** (`0 12px 32px rgba(37, 40, 43, 0.16)`): menus, dropdowns, the expanded rail, and the bulk pill.
-- **Overlay** (`0 24px 64px rgba(37, 40, 43, 0.22)`): dialogs, the note editor panel, the slideshow panel, and other modals.
+- **Overlay** (`0 24px 64px rgba(37, 40, 43, 0.22)`): dialogs, the note editor panel, and other modals.
+- **Room** (`0 30px 80px rgba(0, 0, 0, 0.36)`): the slideshow's paper panel. The popover content takes a smaller `0 24px 48px rgba(0, 0, 0, 0.36)` step on the same lower-alpha ladder.
 
 ### Named Rules
 **The Flat-At-Rest Rule.** A flat card is the default. A shadow is earned by openness or floating above the page — never used as decoration.
@@ -289,8 +293,12 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Inline message:** a message owned by a panel or field wears the same geometry on its own ground: a 3px semantic edge, the tone's wash, an 8px radius, and the tone's dark text. Errors, warnings, and showcase validation all use it; bare coloured text is not a message style.
 
 ### Overlays
-- **Scrim:** ink at 50–88% opacity. The slideshow and image popover keep the deep ink surfaces with white text; the note editor uses a light grey scrim with a white panel.
-- **Panel:** 6px radius, 1px ink hairline, floating shadow. Slideshow tags use an Ochre wash on dark with white text.
+- **Scrim:** ink at 50–88% opacity. The note editor keeps a light grey scrim with a white panel; every ordinary overlay keeps the deep ink panel with white text.
+- **Light room (the exception):** the Note slideshow and the Image popover alone flip to a warm paper panel (`#f7f3ea`) and a brighter card (`#fffdf7`) with ink type. The scrim outside stays the same near-black `rgba(0, 0, 0, 0.88)`, so the room floats over the dimmed app instead of flooding it with white.
+- **Panel:** 6px radius, 1px hairline, floating shadow. The paper room keeps one lower-alpha offset shadow so it reads as a room rather than a white cut-out. Note images sit on white mats; the popover keeps its own plate shadow for depth.
+- **Types and tags:** type derives from the room's ink and muted values; the ochre tag family uses its ordinary paper values in the slideshow, the same as the Table. Red stays the action and focus colour, and a single soft warm radial sits behind the image plates only.
+
+**The Presentation Room Rule.** Exactly one overlay may be light: the Note slideshow and its Image popover. They share one scoped token remap; every other overlay stays ink with white type.
 
 ## Do's and Don'ts
 
@@ -298,7 +306,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Do** give every primary pill the same Deep Red ramp (`#b80000` rest → `#cc0000` hover → `#990000` active), and keep the app's focus rings, selection, search and bulk bar in that same deep red; Brand Red is the rail's and the dark surfaces' alone. The tag family carries values, in rows and in the filter rail.
 - **Do** set screen titles and eyebrows in uppercase weight 800 with tight tracking; that stencil contrast is the brand voice.
 - **Do** use pills for buttons and counters, 10px corners for fields and selects, 7px for chips, and 6px for cards and panels.
-- **Do** cycle the page: slate rail → white content → ink only for overlays. Polarity is the depth cue.
+- **Do** cycle the page: slate rail → white content → ink for overlays, except the Light room of the Note slideshow and Image popover. Polarity is the depth cue, and the single sanctioned exception is named above.
 - **Do** keep the Table compact (40px headers, 45px rows, 12px cell padding, truncation) and let Showcases be the looser surface.
 - **Do** write status feedback as a named title plus one detail line, with the recovery action adjacent.
 - **Do** float transient feedback as the bottom-right toast and keep panel- or field-level messages inline, both wearing the same semantic edge.

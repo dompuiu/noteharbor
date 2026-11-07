@@ -971,7 +971,7 @@ function Slideshow({
                   {note.grading_company || "Collection note"}
                 </p>
                 <h1>{note.denomination}</h1>
-                <p>{note.issue_date}</p>
+                <p className="slide-issue">{note.issue_date}</p>
               </div>
               <div className="detail-grid">
                 <p>
@@ -1010,7 +1010,7 @@ function Slideshow({
                   </div>
                 </div>
               ) : null}
-              <p>{note.notes || "No extra notes."}</p>
+              <p className="slide-notes">{note.notes || "No extra notes."}</p>
               <div className="tag-list">
                 {note.tags.map((tag) => (
                   <span className="tag" key={tag.id || tag.name}>

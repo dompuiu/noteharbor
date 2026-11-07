@@ -122,6 +122,10 @@
   --shadow-sm: none;
   --shadow-md: 0 12px 32px rgba(37, 40, 43, 0.16);
   --shadow-lg: 0 24px 64px rgba(37, 40, 43, 0.22);
+  /* The paper room floats on the same depth ladder, but a black drop shadow
+     at the ink room's weight reads as a cut-out. Lower alpha, same offset. */
+  --shadow-room: 0 30px 80px rgba(0, 0, 0, 0.36);
+  --shadow-room-content: 0 24px 48px rgba(0, 0, 0, 0.36);
   --scroll-track: #ececec;
   --scroll-thumb: #c4c4c4;
   --scroll-thumb-hover: #8a8a8a;
@@ -2306,6 +2310,14 @@ input[type="radio"] {
     transition: none;
   }
 
+  .slide-thumb-btn {
+    transition: none;
+  }
+
+  .slide-thumb-btn:hover {
+    transform: none;
+  }
+
   /* The grip's tone and the dragged row's fade are decoration, not state
      changes: drop the interpolation and let both land in one frame. */
   .drag-handle,
@@ -2482,14 +2494,14 @@ input[type="radio"] {
 
 .icon-link--on-dark {
   border-color: var(--on-dark-border);
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--on-dark-wash);
   color: var(--on-dark-text);
 }
 
 .icon-link--on-dark:hover,
 .icon-link--on-dark:focus-visible {
-  background: rgba(255, 255, 255, 0.18);
-  border-color: rgba(255, 255, 255, 0.4);
+  background: var(--on-dark-wash-strong);
+  border-color: var(--on-dark-border-strong);
   color: var(--on-dark-text);
 }
 
@@ -2866,7 +2878,7 @@ input[type="radio"] {
 
 .slideshow-screen .eyebrow,
 .image-popover-content .eyebrow {
-  color: var(--on-dark-muted);
+  color: var(--on-dark-label);
 }
 
 .panel-heading-copy .eyebrow {
@@ -6261,10 +6273,10 @@ button.tag {
   color: var(--on-dark-text);
 }
 
-/* The panel keeps the dark surface and fills the scrim, so the slideshow uses
-   the same estate the old near-full-viewport panel did. It holds the 1200px
-   app floor (minus the overlay's 16px side padding), so the slide grid never
-   squeezes on smaller windows: the overlay scrolls instead. */
+/* The paper panel fills the scrim, so the slideshow uses the same estate the
+   old near-full-viewport panel did. It holds the 1200px app floor (minus the
+   overlay's 16px side padding), so the slide grid never squeezes on smaller
+   windows: the overlay scrolls instead. */
 .slideshow-screen--overlay .slideshow-panel {
   min-width: calc(1200px - 32px);
   min-height: calc(100vh - 32px);
@@ -6272,6 +6284,7 @@ button.tag {
   border-radius: var(--radius-lg);
   border: 1px solid var(--on-dark-border-strong);
   padding: 24px;
+  box-shadow: var(--shadow-room);
 }
 
 .edit-note-overlay {
@@ -6546,13 +6559,13 @@ button.tag {
   border-radius: var(--radius-pill);
   font-size: 0.82rem;
   font-variant-numeric: tabular-nums;
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--on-dark-wash);
   border: 1px solid var(--on-dark-border);
 }
 
 .slideshow-exit-button {
   border: 1px solid var(--on-dark-border);
-  background: rgba(255, 255, 255, 0.08);
+  background: var(--on-dark-wash);
   color: var(--on-dark-text);
   padding: 6px 16px;
   border-radius: var(--radius-pill);
@@ -6565,8 +6578,8 @@ button.tag {
 
 .slideshow-exit-button:hover,
 .slideshow-exit-button:focus-visible {
-  background: rgba(255, 255, 255, 0.16);
-  border-color: rgba(255, 255, 255, 0.4);
+  background: var(--on-dark-wash-strong);
+  border-color: var(--on-dark-border-strong);
 }
 
 .slideshow-layout {
@@ -6583,7 +6596,7 @@ button.tag {
   height: 56px;
   border-radius: 50%;
   border: 1px solid var(--on-dark-border);
-  background: rgba(255, 255, 255, 0.06);
+  background: var(--on-dark-wash);
   color: inherit;
   font-size: 1.6rem;
   position: sticky;
@@ -6594,7 +6607,7 @@ button.tag {
 }
 
 .arrow-button:hover:not(:disabled) {
-  background: rgba(255, 255, 255, 0.14);
+  background: var(--on-dark-wash-strong);
 }
 
 .arrow-button:disabled {
@@ -6603,6 +6616,7 @@ button.tag {
 }
 
 .slide-card {
+  position: relative;
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
   gap: 24px;
@@ -6615,6 +6629,35 @@ button.tag {
   width: 100%;
   max-width: 1280px;
   margin: 0 auto;
+}
+
+/* One soft light behind the image plates, clipped by the card's image column
+   and by the popover's image well. It never reaches running text or the
+   arrow controls. */
+.slide-images::before,
+.image-popover-image-wrap::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: inherit;
+  background: radial-gradient(
+    80% 120% at 22% 6%,
+    var(--on-dark-glow) 0%,
+    transparent 58%
+  );
+  pointer-events: none;
+}
+
+.slide-images,
+.image-popover-image-wrap {
+  position: relative;
+}
+
+.slide-images > *,
+.image-popover-image-wrap > * {
+  position: relative;
+  z-index: 1;
 }
 
 .slide-images {
@@ -6630,7 +6673,7 @@ button.tag {
 
 .slide-thumb-btn {
   position: relative;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--on-dark-plate);
   border: 1px solid var(--on-dark-border);
   border-radius: var(--radius-lg);
   padding: 10px;
@@ -6641,14 +6684,16 @@ button.tag {
   gap: 8px;
   transition:
     box-shadow 0.15s ease,
-    border-color 0.15s ease;
+    border-color 0.15s ease,
+    transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
   width: 100%;
   max-width: 500px;
 }
 
 .slide-thumb-btn:hover {
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
-  border-color: var(--on-dark-accent);
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.34);
+  border-color: var(--on-dark-border-strong);
+  transform: translateY(-1px);
 }
 
 .slide-thumb-btn img {
@@ -6658,7 +6703,7 @@ button.tag {
   max-height: 220px;
   height: auto;
   object-fit: contain;
-  border-radius: var(--radius-md);
+  border-radius: 3px;
 }
 
 .slide-thumb-placeholder {
@@ -6669,16 +6714,17 @@ button.tag {
   padding: 24px;
   border-radius: var(--radius-md);
   border: 1px dashed var(--on-dark-border);
-  background: rgba(255, 255, 255, 0.03);
+  background: var(--on-dark-wash);
   color: var(--on-dark-muted);
   text-align: center;
 }
 
 .slide-thumb-label {
-  font-size: 0.72rem;
+  font-size: 0.68rem;
+  font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.1em;
-  color: var(--on-dark-muted);
+  letter-spacing: 0.12em;
+  color: var(--on-dark-label);
 }
 
 .placeholder-card {
@@ -6699,6 +6745,36 @@ button.tag {
   overflow: auto;
 }
 
+/* Light room: the one sanctioned light overlay. The Note slideshow and the
+   Image popover share this scoped remap, so the rest of the Editor keeps the
+   ink room and the two presentation screens move together. Only values
+   change here; the scrim, geometry and the popover's own mount do not. */
+.slideshow-screen--overlay,
+.image-popover-overlay {
+  --on-dark-bg: #f7f3ea;
+  --on-dark-bg-translucent: rgba(247, 243, 234, 0.96);
+  --on-dark-surface: #fffdf7;
+  --on-dark-text: #23262a;
+  --on-dark-muted: #5d6165;
+  --on-dark-label: #8a4a12;
+  --on-dark-border: rgba(35, 38, 42, 0.14);
+  --on-dark-border-strong: rgba(35, 38, 42, 0.26);
+  --on-dark-link: #a30000;
+  --on-dark-wash: rgba(35, 38, 42, 0.05);
+  --on-dark-wash-strong: rgba(35, 38, 42, 0.1);
+  --on-dark-plate: #ffffff;
+  --on-dark-glow: rgba(200, 160, 90, 0.16);
+  --on-dark-focus: #a30000;
+}
+
+/* The global ring supplies the geometry; the room only changes its colour.
+   `outline-color` alone leaves the counter's deliberate `outline: none`
+   suppression intact. */
+.slideshow-screen--overlay :focus-visible,
+.image-popover-overlay :focus-visible {
+  outline-color: var(--on-dark-focus);
+}
+
 /* The content holds its width at a 1200px viewport — min(1400px, 96vw) —
    so smaller windows scroll the overlay instead of squeezing the stage. The
    auto margins keep it centred with a reachable start when it overflows. */
@@ -6713,7 +6789,7 @@ button.tag {
   border-radius: var(--radius-lg);
   background: var(--on-dark-bg-translucent);
   border: 1px solid var(--on-dark-border);
-  box-shadow: 0 24px 48px rgba(0, 0, 0, 0.5);
+  box-shadow: var(--shadow-room-content);
   /* The popover is mounted standalone in the showcase (unlike the table
      slideshow, where the scrim owns the text colour), so the content owns
      the on-dark text colour itself: the arrows, counter, and note label
@@ -6736,7 +6812,7 @@ button.tag {
 
 .image-popover-meta {
   display: grid;
-  gap: 4px;
+  gap: 2px;
 }
 
 .image-popover-meta .eyebrow,
@@ -6745,13 +6821,16 @@ button.tag {
 }
 
 .image-popover-note-label {
+  color: var(--on-dark-text);
   font-size: 1.05rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
 }
 
 .image-popover-actions {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
@@ -6780,7 +6859,7 @@ button.tag {
   padding: 32px;
   border: 1px dashed var(--on-dark-border);
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--on-dark-wash);
   color: var(--on-dark-muted);
   text-align: center;
 }
@@ -6797,7 +6876,7 @@ button.tag {
   max-width: 100%;
   max-height: min(72vh, 760px);
   object-fit: contain;
-  border-radius: var(--radius-md);
+  border-radius: 3px;
   box-shadow: 0 32px 80px rgba(0, 0, 0, 0.6);
   touch-action: none;
   user-select: none;
@@ -6836,46 +6915,111 @@ button.tag {
   max-width: 100%;
 }
 
+/* The slide's meta block keeps the prototype's catalogue-page hierarchy: a
+   large uppercase title, a muted issue line, and rules that separate the data
+   grid from the copy around it. */
+.slide-meta h1 {
+  margin: 0 0 4px;
+  font-size: 2.1rem;
+  line-height: 1.12;
+}
+
+.slide-issue {
+  margin: 0;
+  color: var(--on-dark-muted);
+  font-size: 0.94rem;
+}
+
+.slide-notes {
+  margin: 0;
+  max-width: 68ch;
+  color: var(--on-dark-muted);
+  font-size: 0.9rem;
+  line-height: 1.55;
+}
+
+/* On paper a tag is just a tag: the slideshow takes the ordinary Ochre family
+   instead of a dark-room wash, and keeps the prototype's chip type. */
+.slideshow-screen .tag-list {
+  gap: 7px;
+}
+
 .slideshow-screen .tag {
-  background: rgba(247, 185, 40, 0.18);
-  color: var(--on-dark-text);
-  border: 1px solid rgba(247, 185, 40, 0.5);
+  background: var(--tag-bg);
+  border: 1px solid var(--tag-border);
+  color: var(--tag-text);
+  padding: 3px 11px;
+  font-size: 0.78rem;
+  letter-spacing: 0.01em;
 }
 
 .detail-grid {
   display: grid;
   grid-template-columns: 1fr 1fr;
-  gap: 10px 16px;
+  gap: 9px 16px;
   width: 100%;
+  padding: 14px 0;
+  border-top: 1px solid var(--on-dark-border);
+  border-bottom: 1px solid var(--on-dark-border);
   justify-self: stretch;
+}
+
+.detail-grid p {
+  margin: 0;
+  color: var(--on-dark-text);
+  font-size: 0.9rem;
+  line-height: 1.45;
+}
+
+.detail-grid strong {
+  color: var(--on-dark-muted);
+  font-weight: 600;
 }
 
 .scraped-details-panel {
   padding: 16px;
   border: 1px solid var(--on-dark-border);
   border-radius: var(--radius-lg);
-  background: rgba(255, 255, 255, 0.04);
+  background: var(--on-dark-wash);
   width: 100%;
   max-width: 100%;
   justify-self: stretch;
 }
 
+
+
+.scraped-details-panel .eyebrow {
+  margin-bottom: 10px;
+}
+
 .scraped-details-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 10px 16px;
+  gap: 8px 16px;
   justify-items: stretch;
 }
 
 .scraped-details-grid p {
   margin: 0;
+  color: var(--on-dark-muted);
+  font-size: 0.86rem;
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
 
+.scraped-details-grid strong {
+  color: var(--on-dark-text);
+  font-weight: 600;
+}
+
 .scraped-details-grid a {
   color: var(--on-dark-link);
-  text-decoration-color: rgba(184, 0, 0, 0.7);
+  text-underline-offset: 2px;
+  text-decoration-color: color-mix(
+    in srgb,
+    var(--on-dark-link) 70%,
+    transparent
+  );
 }
 
 .scraped-details-grid a:hover,
@@ -7051,6 +7195,9 @@ button.tag {
   margin-top: 24px;
   padding-top: 20px;
   border-top: 1px solid var(--border);
+  /* The note editor mounts this panel outside the paper room, where the room
+     wash token is not defined: keep its old faint white ground. */
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .scraped-details-title {
@@ -7117,7 +7264,7 @@ kbd {
 
 .slideshow-screen kbd,
 .image-popover-content kbd {
-  background: rgba(255, 255, 255, 0.1);
+  background: var(--on-dark-wash);
   border-color: var(--on-dark-border);
   box-shadow: none;
   color: var(--on-dark-text);
@@ -7153,6 +7300,13 @@ kbd {
 [data-shortcut]:focus-visible::after {
   opacity: 1;
   transform: translateX(-50%) translateY(0);
+}
+
+/* The shortcut bubble keeps its own dark ground inside the paper room, so its
+   label stays white rather than inheriting the room's ink. */
+.slideshow-screen--overlay [data-shortcut]::after,
+.image-popover-overlay [data-shortcut]::after {
+  color: #ffffff;
 }
 
 /* ── Keyboard shortcuts help overlay ────────────────────────────────────── */
