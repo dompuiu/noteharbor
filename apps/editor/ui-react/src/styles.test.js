@@ -2087,6 +2087,16 @@ describe("slideshow overlay styles", () => {
     expect(focus[1]).not.toMatch(/outline:/);
   });
 
+  // The slide plates are large enough that the room's red ring reads as an
+  // alarm border on the white mat, so they take the label ochre instead.
+  test("the slide thumbnails focus in the room label colour", () => {
+    const focus = styles.match(
+      /\.slideshow-screen--overlay \.slide-thumb-btn:focus-visible\s*\{([^}]*)\}/,
+    );
+    expect(focus).not.toBeNull();
+    expect(focus[1]).toMatch(/outline-color:\s*var\(--on-dark-label\)/);
+  });
+
   // The shortcut bubble keeps its own dark ground; its label must stay white
   // rather than inheriting the room's ink.
   test("the shortcut bubble stays white inside the paper room", () => {

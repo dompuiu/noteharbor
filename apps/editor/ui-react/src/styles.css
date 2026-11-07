@@ -6775,6 +6775,14 @@ button.tag {
   outline-color: var(--on-dark-focus);
 }
 
+/* The slide plates are large enough that the room's red ring reads as an
+   alarm border on the white mat. They take the label ochre instead, matching
+   the Front/Back captions and the warm room; the rest of the chrome keeps the
+   red focus colour. */
+.slideshow-screen--overlay .slide-thumb-btn:focus-visible {
+  outline-color: var(--on-dark-label);
+}
+
 /* The content holds its width at a 1200px viewport — min(1400px, 96vw) —
    so smaller windows scroll the overlay instead of squeezing the stage. The
    auto margins keep it centred with a reachable start when it overflows. */
