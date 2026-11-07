@@ -92,7 +92,7 @@ describe("ImagePopover image loading", () => {
     expect(element).toHaveAttribute("src", FRONT_2);
   });
 
-  test("skips images that finish decoding after the user has moved on", async () => {
+  test("keeps showing images that finish while the user is still moving", async () => {
     const { rerender } = render(popover());
     await finishDecode(FRONT_1);
 
@@ -100,9 +100,21 @@ describe("ImagePopover image loading", () => {
     rerender(popover({ src: FRONT_3 }));
     await finishDecode(FRONT_2);
 
-    expect(fullImage()).toHaveAttribute("src", FRONT_1);
+    expect(fullImage()).toHaveAttribute("src", FRONT_2);
 
     await finishDecode(FRONT_3);
+
+    expect(fullImage()).toHaveAttribute("src", FRONT_3);
+  });
+
+  test("never steps back to an older image that finishes late", async () => {
+    const { rerender } = render(popover());
+    await finishDecode(FRONT_1);
+
+    rerender(popover({ src: FRONT_2 }));
+    rerender(popover({ src: FRONT_3 }));
+    await finishDecode(FRONT_3);
+    await finishDecode(FRONT_2);
 
     expect(fullImage()).toHaveAttribute("src", FRONT_3);
   });

@@ -179,6 +179,8 @@ function ImagePopover({
   const imageWrapRef = useRef(null);
   const dragRef = useRef(null);
   const zoomAnchorRef = useRef(null);
+  const requestSeqRef = useRef(0);
+  const shownSeqRef = useRef(0);
   const [isDragging, setIsDragging] = useState(false);
   const [displayedSrc, setDisplayedSrc] = useState(null);
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
@@ -443,12 +445,22 @@ function ImagePopover({
   }, [src]);
 
   // The visible image only ever switches to a source that is already decoded,
-  // so holding an arrow key never paints an empty frame. Sources that finish
-  // after the user has moved on are dropped.
+  // so holding an arrow key never paints an empty frame. Earlier sources that
+  // finish while the user keeps moving still show, so the plates keep
+  // flowing, but an older one never replaces a newer one.
   useLayoutEffect(() => {
+    requestSeqRef.current += 1;
+    const seq = requestSeqRef.current;
+    const show = () => {
+      if (seq > shownSeqRef.current) {
+        shownSeqRef.current = seq;
+        setDisplayedSrc(src || null);
+      }
+    };
+
     if (!src) {
-      setDisplayedSrc(null);
-      return undefined;
+      show();
+      return;
     }
 
     const probe = new Image();
@@ -456,27 +468,13 @@ function ImagePopover({
     probe.src = src;
 
     if (probe.complete && probe.naturalWidth > 0) {
-      setDisplayedSrc(src);
-      return undefined;
-    }
-
-    let current = true;
-    const show = () => {
-      if (current) {
-        setDisplayedSrc(src);
-      }
-    };
-
-    if (typeof probe.decode === "function") {
+      show();
+    } else if (typeof probe.decode === "function") {
       probe.decode().then(show, show);
     } else {
       probe.onload = show;
       probe.onerror = show;
     }
-
-    return () => {
-      current = false;
-    };
   }, [src]);
 
   useLayoutEffect(() => {
