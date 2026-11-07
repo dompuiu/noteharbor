@@ -1,4 +1,4 @@
-import { act, render } from "@testing-library/react";
+import { act, fireEvent, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { ImagePopover } from "./Slideshow.jsx";
 
@@ -96,6 +96,7 @@ describe("ImagePopover image loading", () => {
     const { rerender } = render(popover());
     await finishDecode(FRONT_1);
 
+    fireEvent.keyDown(window, { key: "ArrowRight" });
     rerender(popover({ src: FRONT_2 }));
     rerender(popover({ src: FRONT_3 }));
     await finishDecode(FRONT_2);
@@ -117,6 +118,40 @@ describe("ImagePopover image loading", () => {
     await finishDecode(FRONT_2);
 
     expect(fullImage()).toHaveAttribute("src", FRONT_3);
+  });
+
+  test("drops images still decoding when the arrow key is released", async () => {
+    const { rerender } = render(popover());
+    await finishDecode(FRONT_1);
+
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    rerender(popover({ src: FRONT_2 }));
+    rerender(popover({ src: FRONT_3 }));
+    fireEvent.keyUp(window, { key: "ArrowRight" });
+    await finishDecode(FRONT_2);
+
+    expect(fullImage()).toHaveAttribute("src", FRONT_1);
+
+    await finishDecode(FRONT_3);
+
+    expect(fullImage()).toHaveAttribute("src", FRONT_3);
+  });
+
+  test("holds key repeats until the current image is decoded", async () => {
+    const onNext = vi.fn();
+    const { rerender } = render(popover({ onNext }));
+    await finishDecode(FRONT_1);
+
+    fireEvent.keyDown(window, { key: "ArrowRight" });
+    expect(onNext).toHaveBeenCalledTimes(1);
+    rerender(popover({ onNext, src: FRONT_2 }));
+
+    fireEvent.keyDown(window, { key: "ArrowRight", repeat: true });
+    expect(onNext).toHaveBeenCalledTimes(1);
+
+    await finishDecode(FRONT_2);
+    fireEvent.keyDown(window, { key: "ArrowRight", repeat: true });
+    expect(onNext).toHaveBeenCalledTimes(2);
   });
 
   test("shows a cached full image straight away", () => {

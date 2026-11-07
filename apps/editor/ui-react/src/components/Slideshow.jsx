@@ -181,6 +181,7 @@ function ImagePopover({
   const zoomAnchorRef = useRef(null);
   const requestSeqRef = useRef(0);
   const shownSeqRef = useRef(0);
+  const keyHeldRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const [displayedSrc, setDisplayedSrc] = useState(null);
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
@@ -361,6 +362,21 @@ function ImagePopover({
     onPrevious();
   }
 
+  // A held key repeats faster than slow machines decode, so repeats wait for
+  // the current image. Otherwise the queued repeats keep paging after release.
+  function stillDecoding(e) {
+    return e.repeat && shownSeqRef.current < requestSeqRef.current;
+  }
+
+  function pageWithKey(e, move) {
+    if (stillDecoding(e)) {
+      e.preventDefault();
+      return;
+    }
+
+    move();
+  }
+
   function panBy(deltaX, deltaY) {
     if (!pannable) {
       return;
@@ -445,14 +461,17 @@ function ImagePopover({
   }, [src]);
 
   // The visible image only ever switches to a source that is already decoded,
-  // so holding an arrow key never paints an empty frame. Earlier sources that
-  // finish while the user keeps moving still show, so the plates keep
-  // flowing, but an older one never replaces a newer one.
+  // so holding an arrow key never paints an empty frame. While the key is
+  // held, earlier sources that finish still show, so the plates keep flowing,
+  // but an older one never replaces a newer one. Once the key is released only
+  // the latest source may paint, so the plates stop where the user let go.
   useLayoutEffect(() => {
     requestSeqRef.current += 1;
     const seq = requestSeqRef.current;
     const show = () => {
-      if (seq > shownSeqRef.current) {
+      const latest = seq === requestSeqRef.current;
+
+      if (seq > shownSeqRef.current && (latest || keyHeldRef.current)) {
         shownSeqRef.current = seq;
         setDisplayedSrc(src || null);
       }
@@ -506,9 +525,27 @@ function ImagePopover({
   }, [overflowX, overflowY, zoomScale]);
 
   useEffect(() => {
+    function release() {
+      keyHeldRef.current = false;
+    }
+
+    window.addEventListener("keyup", release);
+    window.addEventListener("blur", release);
+
+    return () => {
+      window.removeEventListener("keyup", release);
+      window.removeEventListener("blur", release);
+    };
+  }, []);
+
+  useEffect(() => {
     function onKeyDown(e) {
       const direction = directionOf(e);
       const modified = e.shiftKey || e.ctrlKey || e.metaKey;
+
+      if (direction) {
+        keyHeldRef.current = true;
+      }
 
       // Ctrl, Cmd and Shift are interchangeable for the arrow intents. Handled
       // before the modifier guard below so the presses are not swallowed.
@@ -530,9 +567,9 @@ function ImagePopover({
         // Not pannable: horizontal presses fall back to paging, vertical ones
         // are inert.
         if (direction === "left") {
-          moveToPreviousImage();
+          pageWithKey(e, moveToPreviousImage);
         } else if (direction === "right") {
-          moveToNextImage();
+          pageWithKey(e, moveToNextImage);
         }
         return;
       }
@@ -564,12 +601,12 @@ function ImagePopover({
       }
 
       if (direction === "right") {
-        moveToNextImage();
+        pageWithKey(e, moveToNextImage);
         return;
       }
 
       if (direction === "left") {
-        moveToPreviousImage();
+        pageWithKey(e, moveToPreviousImage);
         return;
       }
 
