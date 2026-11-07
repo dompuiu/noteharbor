@@ -6765,6 +6765,9 @@ button.tag {
   --on-dark-plate: #ffffff;
   --on-dark-glow: rgba(200, 160, 90, 0.16);
   --on-dark-focus: #a30000;
+  /* The large slide plates are the one focus exception: the red ring reads as
+     an alarm border on the white mat, so they take the label ochre instead. */
+  --on-dark-focus-plate: var(--on-dark-label);
 }
 
 /* The global ring supplies the geometry; the room only changes its colour.
@@ -6775,12 +6778,10 @@ button.tag {
   outline-color: var(--on-dark-focus);
 }
 
-/* The slide plates are large enough that the room's red ring reads as an
-   alarm border on the white mat. They take the label ochre instead, matching
-   the Front/Back captions and the warm room; the rest of the chrome keeps the
-   red focus colour. */
+/* The slide plates take the room's label ochre rather than its red ring; see
+   `--on-dark-focus-plate` for why. The rest of the chrome keeps red focus. */
 .slideshow-screen--overlay .slide-thumb-btn:focus-visible {
-  outline-color: var(--on-dark-label);
+  outline-color: var(--on-dark-focus-plate);
 }
 
 /* The content holds its width at a 1200px viewport — min(1400px, 96vw) —

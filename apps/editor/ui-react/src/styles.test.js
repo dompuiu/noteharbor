@@ -1950,6 +1950,9 @@ describe("slideshow overlay styles", () => {
       /--on-dark-glow:\s*rgba\(200,\s*160,\s*90,\s*0\.16\)/,
     );
     expect(palette[1]).toMatch(/--on-dark-focus:\s*#a30000/);
+    expect(palette[1]).toMatch(
+      /--on-dark-focus-plate:\s*var\(--on-dark-label\)/,
+    );
   });
 
   // On paper a tag is just a tag: the slideshow takes the ordinary Ochre
@@ -2087,14 +2090,14 @@ describe("slideshow overlay styles", () => {
     expect(focus[1]).not.toMatch(/outline:/);
   });
 
-  // The slide plates are large enough that the room's red ring reads as an
-  // alarm border on the white mat, so they take the label ochre instead.
-  test("the slide thumbnails focus in the room label colour", () => {
+  // The slide plates take the room's label ochre rather than its red ring; the
+  // dedicated token names the exception so `--on-dark-focus` keeps its role.
+  test("the slide thumbnails focus in the room plate colour", () => {
     const focus = styles.match(
       /\.slideshow-screen--overlay \.slide-thumb-btn:focus-visible\s*\{([^}]*)\}/,
     );
     expect(focus).not.toBeNull();
-    expect(focus[1]).toMatch(/outline-color:\s*var\(--on-dark-label\)/);
+    expect(focus[1]).toMatch(/outline-color:\s*var\(--on-dark-focus-plate\)/);
   });
 
   // The shortcut bubble keeps its own dark ground; its label must stay white

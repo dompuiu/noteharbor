@@ -141,7 +141,7 @@ Three materials carry the whole system: **slate ink** (#2c3a45) as the navigatio
 Structure stays dense and quiet. The Table screen is the centre of gravity: one bordered white card filling the viewport, a fixed 64px slate rail that expands on hover, compact 40px headers, and 12px cell padding tuned for scanning hundreds of rows. Capture, Import, and Showcase screens reuse the same card, field, and pill vocabulary at a lower density.
 
 **Key Characteristics:**
-- One accent: `{colors.brand-red-deep}` (#b80000). Filled pills, focus rings, selection, search and the bulk bar all wear it; the rail keeps the brighter `{colors.brand-red}`, and outline pills stay neutral. Red text for links and active state.
+- One accent: `{colors.brand-red-deep}` (#b80000). Filled pills, focus rings, selection, search and the bulk bar all wear it; the rail keeps the brighter `{colors.brand-red}`, and outline pills stay neutral. Red text for links and active state. The slideshow's plate ring is the one focus exception, in the room's label ochre.
 - Settled chrome, loud content: the slate rail holds the same dark band the layout is built around, a step off pure ink so ordinary overlays stay the darkest surface. White bands and the red accent carry all the contrast. No warm greys on the page, no pure black, no second accent hue; the warm paper belongs to the two presentation screens alone.
 - Uppercase weight-800 display type with tight tracking for screen titles and eyebrows; sentence case for the calm secondary voice.
 - Pill geometry on every button and counter (100px), a 10px step on fields and selects, and a 7px rounded rectangle on filter chips and tags. Cards stay flat at 6px.
@@ -151,7 +151,7 @@ Structure stays dense and quiet. The Table screen is the centre of gravity: one 
 
 ### Brand & Accent
 - **Brand Red** (`{colors.brand-red}` — `#e60000`): The rail's red, and the red on dark surfaces. It draws the sidebar's active edge, cursor rings and drop lines, fills the brand mark, and borders a hovered slide thumbnail. On slate the deep step loses its edge, so the rail keeps the brighter tone.
-- **Deep Red** (`{colors.brand-red-deep}` — `#b80000`): The app accent. Red type on white — links, active filter values, sort labels — and every primary button's fill at rest. It also paints the global focus ring, selected-row edges and tint, active filter chips, the search caret, drop lines, and the bulk-action bar. It brightens to `{colors.brand-red-deep-hover}` (`#cc0000`) on hover and darkens to `{colors.brand-red-deep-active}` (`#990000`) while pressed.
+- **Deep Red** (`{colors.brand-red-deep}` — `#b80000`): The app accent. Red type on white — links, active filter values, sort labels — and every primary button's fill at rest. It also paints the global focus ring (the slideshow's plate ring is the exception, in label ochre), selected-row edges and tint, active filter chips, the search caret, drop lines, and the bulk-action bar. It brightens to `{colors.brand-red-deep-hover}` (`#cc0000`) on hover and darkens to `{colors.brand-red-deep-active}` (`#990000`) while pressed.
 
 ### Surface
 - **Canvas** (`{colors.canvas}` — `#ffffff`): Cards, inputs, menus, and the table surface.
@@ -184,7 +184,7 @@ Tags are labels, not state, so they left the accent family for their own warm Oc
 ### Named Rules
 **The One Red Rule.** Red is state and action, never decoration. It covers at most about a tenth of any screen; its rarity is what makes the deep-red primary pill and the active edge read instantly.
 
-**The Tag Family Rule.** Ochre belongs to values: tag chips in the table, the overflow popover, the slideshow and showcase tooltips, the editor's Tags field, and every value chip in the filter rail — ground, hairline, label, hover, the round remove cross, and the ring the chip draws when focused. Red still owns what an action does outside a chip — the primary pill, row selection, the global focus ring, and `Clear all` — and a negated filter keeps the danger ground. Nothing else borrows ochre for a fill or a border.
+**The Tag Family Rule.** Ochre belongs to values: tag chips in the table, the overflow popover, the slideshow and showcase tooltips, the editor's Tags field, and every value chip in the filter rail — ground, hairline, label, hover, the round remove cross, and the ring the chip draws when focused. Red still owns what an action does outside a chip — the primary pill, row selection, the global focus ring, and `Clear all` — and a negated filter keeps the danger ground. Nothing else borrows ochre for a fill or a border, except the slideshow plate's focus ring, which takes the label ochre so focus reads as a focused image rather than an alarm border.
 
 **The White Room Rule.** Content lives on white or on a grey step of the same neutral family. No warm cream, blue-grey, or second tinted neutral enters the page, with one sanctioned exception: the Ochre tag chips above.
 
@@ -250,7 +250,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Default:** white ground, 1px control border, ink text. Hover tints the ground with the red wash and turns the border red.
 - **Primary:** Deep Red ground and border with white text; the only filled button at rest. Brightens to `#cc0000` on hover and darkens to `#990000` while pressed.
 - **Danger:** `#a30000` fill with white text; the soft variant uses a red wash, red text, and a red hairline.
-- **Focus:** a 2px red outline at 2px offset. Transitions are 0.15s on background, border, and colour.
+- **Focus:** a 2px red outline at 2px offset, except the slideshow's plate ring, which takes the room's label ochre. Transitions are 0.15s on background, border, and colour.
 
 ### Inputs / Fields
 - **Style:** white ground, 1px control border, 10px radius, 34px minimum height, 0.86rem text.
@@ -303,7 +303,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 ## Do's and Don'ts
 
 ### Do:
-- **Do** give every primary pill the same Deep Red ramp (`#b80000` rest → `#cc0000` hover → `#990000` active), and keep the app's focus rings, selection, search and bulk bar in that same deep red; Brand Red is the rail's and the dark surfaces' alone. The tag family carries values, in rows and in the filter rail.
+- **Do** give every primary pill the same Deep Red ramp (`#b80000` rest → `#cc0000` hover → `#990000` active), and keep the app's focus rings, selection, search and bulk bar in that same deep red (the slideshow plate ring takes the room's label ochre); Brand Red is the rail's and the dark surfaces' alone. The tag family carries values, in rows and in the filter rail.
 - **Do** set screen titles and eyebrows in uppercase weight 800 with tight tracking; that stencil contrast is the brand voice.
 - **Do** use pills for buttons and counters, 10px corners for fields and selects, 7px for chips, and 6px for cards and panels.
 - **Do** cycle the page: slate rail → white content → ink for overlays, except the Light room of the Note slideshow and Image popover. Polarity is the depth cue, and the single sanctioned exception is named above.
