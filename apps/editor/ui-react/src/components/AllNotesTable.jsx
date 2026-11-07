@@ -41,6 +41,8 @@ export function AllNotesTable({
   onSearchAll,
   onSort,
   onToggleColumn,
+  paintedConditions: paintedConditionsProp,
+  rowsPending = false,
   searchColumns,
   selectedCollectionId,
   showToolbar = true,
@@ -51,6 +53,9 @@ export function AllNotesTable({
   totalCount,
   visibleColumnKeys,
 }) {
+  // The filter bar keeps the urgent conditions; the rows and their marks land
+  // one deferred step later. Without a deferred copy the two are the same.
+  const paintedConditions = paintedConditionsProp ?? conditions;
   const filterBarRef = useRef(null);
   const tableFocusAnchorRef = useRef(null);
   const previousSlideshowActiveRef = useRef(slideshowActive);
@@ -61,7 +66,7 @@ export function AllNotesTable({
   const table = useNotesTable({
     allRows: allNotes,
     columns,
-    conditions,
+    conditions: paintedConditions,
     hasActiveFilters,
     onFocusAnchor: () =>
       tableFocusAnchorRef.current?.focus({ preventScroll: true }),
@@ -143,10 +148,10 @@ export function AllNotesTable({
   useEffect(() => {
     // A filter, sort or column change produces a new row order: drop a
     // not-yet-landed virtualized focus so the next arrow starts from the new
-    // first row.
+    // first row. The painted conditions land with the rows they mark.
     cursor.cancelPendingFocus();
     cursor.clearRowCursor();
-  }, [conditions, sortDirection, sortKey, visibleColumnKeys]);
+  }, [paintedConditions, sortDirection, sortKey, visibleColumnKeys]);
 
   useEffect(() => {
     // Focus moving out of a row and the table's own chrome drops the painted
@@ -362,7 +367,7 @@ export function AllNotesTable({
       canResetView={canResetView}
       columns={columns}
       emptyContent={emptyContent}
-      emptyView={notes.length === 0}
+      emptyView={notes.length === 0 && !rowsPending}
       filterBar={{
         conditions,
         defaultField: "all",
@@ -387,6 +392,7 @@ export function AllNotesTable({
       showToolbar={showToolbar}
       surface={{
         allVisibleSelected: false,
+        ariaBusy: rowsPending,
         canMove: false,
         canReorder: false,
         dragStateRef,

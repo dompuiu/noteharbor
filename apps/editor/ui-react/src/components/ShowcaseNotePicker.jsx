@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useVirtualizer } from "@tanstack/react-virtual";
 import { getAllNotes } from "../lib/api.js";
 import { matchesCatalogFamily } from "../lib/catalogFamily.js";
+import { showcasePickerFields } from "../lib/noteFields.js";
 import {
   firstAvailableNoteImage,
   pickNoteImage,
@@ -148,7 +149,7 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
     setLoading(true);
     setLoadError("");
 
-    getAllNotes(collections)
+    getAllNotes(collections, showcasePickerFields)
       .then((payload) => {
         if (active) {
           setNotes(payload.notes);

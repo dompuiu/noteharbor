@@ -38,7 +38,7 @@ use std::collections::{HashMap, HashSet};
 
 use axum::{
     Json, Router,
-    extract::{FromRequest, Multipart, Path, Request, State},
+    extract::{FromRequest, Multipart, Path, Query, Request, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -57,7 +57,7 @@ use crate::{
         image_slot_key, parse_boolean_flag,
     },
     js_number,
-    routes::{bad_request, created, not_found, ok},
+    routes::{bad_request, created, not_found, ok, query_values},
 };
 
 /// Per-file and per-download cap (15 MB). The message denominators render as
@@ -211,6 +211,215 @@ fn list_notes(conn: &Connection, collection_id: i64) -> Result<Vec<Note>, DbErro
         .collect::<Result<Vec<_>, _>>()
         .map_err(classify)?;
     Ok(attach_tags(notes, &tag_map(conn, Some(collection_id))?))
+}
+
+// ---------------------------------------------------------------------------
+// Field projection
+// ---------------------------------------------------------------------------
+
+/// The fields `GET .../notes?fields=` accepts. Every one is a `NOTE_FIELDS`
+/// column except `tags`, which comes from the tag join. A projected list omits
+/// the unrequested columns from the SELECT itself, so a screen that paints
+/// nine cells never reads (or transfers) the scraped payload or the full image
+/// arrays unless it asks for them.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum ProjectedField {
+    Id,
+    CollectionId,
+    DisplayOrder,
+    Denomination,
+    IssueDate,
+    CatalogNumber,
+    GradingCompany,
+    Grade,
+    Watermark,
+    Serial,
+    Url,
+    Notes,
+    ScrapedData,
+    Images,
+    CreatedAt,
+    UpdatedAt,
+    Tags,
+}
+
+impl ProjectedField {
+    fn parse(name: &str) -> Option<Self> {
+        Some(match name {
+            "id" => Self::Id,
+            "collection_id" => Self::CollectionId,
+            "display_order" => Self::DisplayOrder,
+            "denomination" => Self::Denomination,
+            "issue_date" => Self::IssueDate,
+            "catalog_number" => Self::CatalogNumber,
+            "grading_company" => Self::GradingCompany,
+            "grade" => Self::Grade,
+            "watermark" => Self::Watermark,
+            "serial" => Self::Serial,
+            "url" => Self::Url,
+            "notes" => Self::Notes,
+            "scraped_data" => Self::ScrapedData,
+            "images" => Self::Images,
+            "created_at" => Self::CreatedAt,
+            "updated_at" => Self::UpdatedAt,
+            "tags" => Self::Tags,
+            _ => return None,
+        })
+    }
+
+    /// The JSON key, which is also the column name for every field but `tags`.
+    fn name(self) -> &'static str {
+        match self {
+            Self::Id => "id",
+            Self::CollectionId => "collection_id",
+            Self::DisplayOrder => "display_order",
+            Self::Denomination => "denomination",
+            Self::IssueDate => "issue_date",
+            Self::CatalogNumber => "catalog_number",
+            Self::GradingCompany => "grading_company",
+            Self::Grade => "grade",
+            Self::Watermark => "watermark",
+            Self::Serial => "serial",
+            Self::Url => "url",
+            Self::Notes => "notes",
+            Self::ScrapedData => "scraped_data",
+            Self::Images => "images",
+            Self::CreatedAt => "created_at",
+            Self::UpdatedAt => "updated_at",
+            Self::Tags => "tags",
+        }
+    }
+
+    fn column(self) -> Option<&'static str> {
+        match self {
+            Self::Tags => None,
+            _ => Some(self.name()),
+        }
+    }
+}
+
+/// One parsed `fields` value: the output fields in request order, the SELECT
+/// columns they need, and each field's column index.
+struct Projection {
+    fields: Vec<ProjectedField>,
+    columns: Vec<&'static str>,
+    indexes: Vec<usize>,
+}
+
+impl Projection {
+    fn parse(raw: &str) -> Result<Self, String> {
+        let mut fields: Vec<ProjectedField> = Vec::new();
+        for name in raw.split(',') {
+            let name = name.trim();
+            if name.is_empty() {
+                continue;
+            }
+            let field = ProjectedField::parse(name)
+                .ok_or_else(|| format!("Unknown note field: {name}."))?;
+            if !fields.contains(&field) {
+                fields.push(field);
+            }
+        }
+        if fields.is_empty() {
+            return Err("The fields query names no note fields.".to_owned());
+        }
+        // `id` is always selected: it is the row identity the tag join answers
+        // by, whether or not the caller asked to see it.
+        let mut columns = vec!["id"];
+        for field in &fields {
+            if let Some(column) = field.column() {
+                if !columns.contains(&column) {
+                    columns.push(column);
+                }
+            }
+        }
+        let indexes = fields
+            .iter()
+            .map(|field| {
+                // `tags` has no column: its slot is never read (the tags arm
+                // of `projected_note` continues before it gets there).
+                field
+                    .column()
+                    .and_then(|column| columns.iter().position(|entry| *entry == column))
+                    .unwrap_or(0)
+            })
+            .collect();
+        Ok(Self { fields, columns, indexes })
+    }
+}
+
+/// One projected row: the requested keys in request order. `scraped_data` and
+/// `images` keep their parsed/normalized shapes so a projection changes only
+/// which fields travel, never how one of them looks.
+fn projected_note(
+    row: &rusqlite::Row<'_>,
+    projection: &Projection,
+) -> rusqlite::Result<(i64, Value)> {
+    let id: i64 = row.get(0)?;
+    let mut map = serde_json::Map::new();
+    for (field, index) in projection.fields.iter().zip(&projection.indexes) {
+        let value = match field {
+            ProjectedField::Id => json!(id),
+            ProjectedField::CollectionId => json!(row.get::<_, i64>(*index)?),
+            ProjectedField::DisplayOrder => json!(row.get::<_, Option<i64>>(*index)?),
+            ProjectedField::ScrapedData => {
+                let parsed = parse_json_text(row.get(*index)?);
+                if parsed.is_null() { Value::Null } else { parsed }
+            }
+            ProjectedField::Images => {
+                json!(images::normalize_images(&parse_json_text(row.get(*index)?)))
+            }
+            ProjectedField::Tags => continue,
+            ProjectedField::Denomination
+            | ProjectedField::IssueDate
+            | ProjectedField::CatalogNumber
+            | ProjectedField::GradingCompany
+            | ProjectedField::Grade
+            | ProjectedField::Watermark
+            | ProjectedField::Serial
+            | ProjectedField::Url
+            | ProjectedField::Notes
+            | ProjectedField::CreatedAt
+            | ProjectedField::UpdatedAt => json!(row.get::<_, Option<String>>(*index)?),
+        };
+        map.insert(field.name().to_owned(), value);
+    }
+    Ok((id, Value::Object(map)))
+}
+
+fn list_notes_projected(
+    conn: &Connection,
+    collection_id: i64,
+    projection: &Projection,
+) -> Result<Vec<Value>, DbError> {
+    let sql = format!(
+        "SELECT {} FROM banknotes
+         WHERE collection_id = ?1
+         ORDER BY display_order ASC, id ASC",
+        projection.columns.join(", ")
+    );
+    let mut stmt = conn.prepare(&sql).map_err(classify)?;
+    let rows = stmt
+        .query_map(params![collection_id], |row| projected_note(row, projection))
+        .map_err(classify)?
+        .collect::<Result<Vec<_>, _>>()
+        .map_err(classify)?;
+    if !projection.fields.contains(&ProjectedField::Tags) {
+        return Ok(rows.into_iter().map(|(_, value)| value).collect());
+    }
+    let tags = tag_map(conn, Some(collection_id))?;
+    Ok(rows
+        .into_iter()
+        .map(|(id, mut value)| {
+            if let Value::Object(map) = &mut value {
+                map.insert(
+                    "tags".to_owned(),
+                    json!(tags.get(&id).cloned().unwrap_or_default()),
+                );
+            }
+            value
+        })
+        .collect())
 }
 
 /// Unscoped lookup (mirrors `getNoteById(id)` without a collection).
@@ -1307,11 +1516,26 @@ fn images_json(images: &[ImageRecord]) -> String {
 async fn list_notes_handler(
     State(state): State<AppState>,
     collection: Option<Path<Vec<String>>>,
+    Query(params): Query<Vec<(String, String)>>,
 ) -> Result<Response, crate::AppError> {
     let raw = captures(collection);
     let collection_id = resolve_collection_id(&state.pool, raw.first().cloned()).await?;
-    let notes = db::with_conn(&state.pool, move |conn| list_notes(conn, collection_id)).await?;
-    Ok(ok(json!({ "notes": notes })))
+    let projection = match query_values(&params, "fields") {
+        None => None,
+        Some(raw_fields) => match Projection::parse(&raw_fields) {
+            Ok(projection) => Some(projection),
+            Err(message) => return Ok(bad_request(&message)),
+        },
+    };
+    let body = db::with_conn(&state.pool, move |conn| match projection {
+        Some(projection) => {
+            list_notes_projected(conn, collection_id, &projection)
+                .map(|notes| json!({ "notes": notes }))
+        }
+        None => list_notes(conn, collection_id).map(|notes| json!({ "notes": notes })),
+    })
+    .await?;
+    Ok(ok(body))
 }
 
 async fn get_note_handler(

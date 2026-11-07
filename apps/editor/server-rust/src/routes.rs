@@ -248,7 +248,7 @@ pub fn images_router() -> Router<AppState> {
 // Archive (export / import / delete, each under its exclusive operation)
 // ---------------------------------------------------------------------------
 
-fn query_values(params: &[(String, String)], key: &str) -> Option<String> {
+pub(crate) fn query_values(params: &[(String, String)], key: &str) -> Option<String> {
     let mut found = false;
     let mut joined = String::new();
     for (name, value) in params {

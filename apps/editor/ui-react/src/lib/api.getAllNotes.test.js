@@ -91,4 +91,22 @@ describe("getAllNotes", () => {
     await expect(getAllNotes([])).resolves.toEqual({ notes: [] });
     expect(fetchMock).not.toHaveBeenCalled();
   });
+
+  test("a field projection narrows every per-collection request", async () => {
+    const fetchMock = vi.fn(async () => jsonResponse(200, { notes: [] }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await getAllNotes(
+      [
+        { id: 1, name: "One" },
+        { id: 2, name: "Two" },
+      ],
+      ["id", "catalog_number"],
+    );
+
+    expect(fetchMock.mock.calls.map(([url]) => url)).toEqual([
+      "/api/collections/1/notes?fields=id,catalog_number",
+      "/api/collections/2/notes?fields=id,catalog_number",
+    ]);
+  });
 });

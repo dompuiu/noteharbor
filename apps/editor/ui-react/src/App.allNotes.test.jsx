@@ -7,6 +7,7 @@ vi.mock("./lib/api.js", () => ({
   getAllNotes: vi.fn(),
   getCollections: vi.fn(),
   getHealth: vi.fn(),
+  getNote: vi.fn(),
   getNotes: vi.fn(),
   getShowcases: vi.fn(),
 }));
@@ -29,9 +30,11 @@ import {
   getAllNotes,
   getCollections,
   getHealth,
+  getNote,
   getNotes,
   getShowcases,
 } from "./lib/api.js";
+import { allNotesListFields } from "./lib/noteFields.js";
 import { chooseFilterField, filterFieldButton } from "./test/filterBar.js";
 
 const COLLECTIONS = [
@@ -153,6 +156,9 @@ beforeEach(() => {
   getNotes.mockImplementation(async (collectionId) => ({
     notes: NOTES.filter((entry) => entry.collection_id === collectionId),
   }));
+  getNote.mockImplementation(async (id) => ({
+    note: NOTES.find((entry) => entry.id === id),
+  }));
   getShowcases.mockResolvedValue({ showcases: [] });
   getAllNotes.mockResolvedValue({ notes: NOTES });
 });
@@ -175,6 +181,8 @@ describe("All notes screen", () => {
     expect(
       screen.getByText("Showing 3 of 3 notes across 2 collections"),
     ).toBeInTheDocument();
+    // The list asks for the lean projection, not the whole note row.
+    expect(getAllNotes).toHaveBeenCalledWith(COLLECTIONS, allNotesListFields);
   });
 
   test("All fields is the default and finds a note by catalog, serial and tag", async () => {
@@ -279,6 +287,11 @@ describe("All notes screen", () => {
     expect(screen.getByTestId("pathname")).toHaveTextContent(
       "/catalog/all-notes#slideshow/3",
     );
+    // The projected list carries no scraped details, so the slideshow asks for
+    // the full note of the row it opens.
+    await waitFor(() => {
+      expect(getNote).toHaveBeenCalledWith(3, 2);
+    });
   });
 
   test("clicking a row opens the note, but a tag click filters the page instead", async () => {

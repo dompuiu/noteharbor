@@ -199,6 +199,98 @@ async fn notes_invalid_collection_is_400_and_unknown_is_404() {
     assert_eq!(body, json!({ "error": "Collection not found." }));
 }
 
+// --- field projection --------------------------------------------------------
+
+#[tokio::test]
+async fn list_projection_returns_only_the_requested_fields() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let collection = create_collection(app.clone(), "Projection Fields").await;
+    let id = collection["id"].as_i64().unwrap();
+    create_note(
+        app.clone(),
+        id,
+        json!({
+            "denomination": "5 Lei",
+            "catalog_number": "Fr. 1",
+            "notes": "hidden text",
+            "tags": ["paper"],
+            "scraped_data": { "details": { "grade": "66" } },
+        }),
+    )
+    .await;
+
+    let (status, body) =
+        call(app, "GET", &format!("/api/collections/{id}/notes?fields=id,catalog_number,tags"), None)
+            .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+
+    let note = &body["notes"][0];
+    let mut keys: Vec<&str> = note.as_object().unwrap().keys().map(String::as_str).collect();
+    keys.sort();
+    assert_eq!(keys, vec!["catalog_number", "id", "tags"]);
+    assert_eq!(note["catalog_number"], json!("Fr. 1"));
+    assert_eq!(note["tags"], json!([{ "id": 1, "name": "paper" }]));
+}
+
+#[tokio::test]
+async fn list_projection_keeps_the_parsed_scraped_data_shape() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let collection = create_collection(app.clone(), "Projection Shapes").await;
+    let id = collection["id"].as_i64().unwrap();
+    create_note(
+        app.clone(),
+        id,
+        json!({ "denomination": "5 Lei", "scraped_data": { "details": { "grade": "66" } } }),
+    )
+    .await;
+
+    let (_, body) =
+        call(app, "GET", &format!("/api/collections/{id}/notes?fields=id,scraped_data,images"), None)
+            .await;
+    assert_eq!(body["notes"][0]["scraped_data"], json!({ "details": { "grade": "66" } }));
+    assert_eq!(body["notes"][0]["images"], json!([]));
+}
+
+#[tokio::test]
+async fn list_without_fields_keeps_the_full_note() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let collection = create_collection(app.clone(), "Projection Full").await;
+    let id = collection["id"].as_i64().unwrap();
+    create_note(
+        app.clone(),
+        id,
+        json!({ "denomination": "5 Lei", "notes": "kept", "scraped_data": { "details": {} } }),
+    )
+    .await;
+
+    let (_, body) = call(app, "GET", &format!("/api/collections/{id}/notes"), None).await;
+    assert_eq!(body["notes"][0]["notes"], json!("kept"));
+    assert_eq!(body["notes"][0]["scraped_data"], json!({ "details": {} }));
+    assert_eq!(body["notes"][0]["images"], json!([]));
+}
+
+#[tokio::test]
+async fn list_projection_rejects_unknown_and_empty_fields() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let collection = create_collection(app.clone(), "Projection Errors").await;
+    let id = collection["id"].as_i64().unwrap();
+
+    let (status, body) =
+        call(app.clone(), "GET", &format!("/api/collections/{id}/notes?fields=id,secret"), None)
+            .await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body, json!({ "error": "Unknown note field: secret." }));
+
+    let (status, body) =
+        call(app, "GET", &format!("/api/collections/{id}/notes?fields=,"), None).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert_eq!(body, json!({ "error": "The fields query names no note fields." }));
+}
+
 #[tokio::test]
 async fn note_update_persists_through_reread() {
     let (_dir, state) = fresh_state();

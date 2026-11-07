@@ -29,6 +29,7 @@ vi.mock("@tanstack/react-virtual", () => ({
 
 import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
 import { getAllNotes } from "../lib/api.js";
+import { showcasePickerFields } from "../lib/noteFields.js";
 
 function note(id, overrides = {}) {
   return {
@@ -86,6 +87,10 @@ describe("ShowcaseNotePicker thumbnails and virtualization", () => {
     expect(
       dialog.querySelector(".showcase-note-row-thumb-empty")?.textContent,
     ).toBe("No image");
+    expect(getAllNotes).toHaveBeenCalledWith(
+      collections,
+      showcasePickerFields,
+    );
   });
 
   test("only mounts the virtual window for a large list", async () => {

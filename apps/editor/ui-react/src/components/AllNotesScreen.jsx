@@ -1,6 +1,6 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useSearchParams } from "react-router-dom";
-import { getAllNotes } from "../lib/api.js";
+import { getAllNotes, getNote } from "../lib/api.js";
 import {
   allNotesColumns,
   allNotesDefaultSortKey,
@@ -12,6 +12,7 @@ import {
 } from "../lib/allNotesColumns.js";
 import { useCollections } from "../lib/collections.jsx";
 import { reportConnectionFailure } from "../lib/connection.js";
+import { allNotesListFields } from "../lib/noteFields.js";
 import {
   addTagCondition,
   applyNoteView,
@@ -26,6 +27,9 @@ import { Slideshow } from "./Slideshow.jsx";
 const slideshowHashPattern =
   /^#slideshow\/(\d+)(?:\/preview\/(front|back))?$/;
 const previewKinds = ["front", "back"];
+// The slideshow prefetches the open note and its two neighbours; a small
+// cache keeps a walk from re-fetching a row the collector steps back to.
+const noteDetailCacheLimit = 12;
 
 function noteCountLabel(count) {
   return `${count} ${count === 1 ? "note" : "notes"}`;
@@ -73,6 +77,11 @@ export function AllNotesScreen() {
   const [visibleColumnKeys, setVisibleColumnKeys] = useState(
     loadAllNotesVisibleColumnKeys,
   );
+  // The All notes list projects away the scraped details and the note text,
+  // so the slideshow reads them from a full note fetched when it opens.
+  const [noteDetails, setNoteDetails] = useState(() => new Map());
+  const detailRequestsRef = useRef(new Set());
+  const detailMountedRef = useRef(true);
   const savedVisibleColumnKeysRef = useRef(visibleColumnKeys);
 
   const conditionsParam = searchParams.get("fc") ?? "";
@@ -116,8 +125,12 @@ export function AllNotesScreen() {
 
     setNotesLoading(true);
     setLoadError("");
+    // A reload replaces every row, so a detail cached from the old list may be
+    // stale and its request marker would suppress the new one.
+    setNoteDetails(new Map());
+    detailRequestsRef.current = new Set();
 
-    getAllNotes(collections)
+    getAllNotes(collections, allNotesListFields)
       .then((payload) => {
         if (!cancelled) {
           setNotes(payload.notes ?? []);
@@ -161,23 +174,35 @@ export function AllNotesScreen() {
       ),
     [visibleColumnKeys],
   );
-  const visibleNotes = useMemo(() => {
-    return applyNoteView(notes, {
+  // The sort/filter pass over the whole library is the expensive part of a
+  // commit, so it runs against deferred inputs: the chip, sort and collection
+  // controls paint first, and the new row set lands in a background render.
+  const viewInputs = useMemo(
+    () => ({
       collectionId: selectedCollectionId,
       collectionSortKey: allNotesDefaultSortKey,
       conditions,
+      notes,
       searchColumns,
       sortDirection,
       sortKey,
-    });
-  }, [
-    conditions,
-    notes,
-    searchColumns,
-    selectedCollectionId,
-    sortDirection,
-    sortKey,
-  ]);
+    }),
+    [
+      conditions,
+      notes,
+      searchColumns,
+      selectedCollectionId,
+      sortDirection,
+      sortKey,
+    ],
+  );
+  const deferredView = useDeferredValue(viewInputs);
+  const visibleNotes = useMemo(
+    () => applyNoteView(deferredView.notes, deferredView),
+    [deferredView],
+  );
+  const deferredConditions = deferredView.conditions;
+  const rowsPending = deferredView !== viewInputs;
 
   const tagNames = useMemo(() => {
     const seen = new Map();
@@ -256,6 +281,77 @@ export function AllNotesScreen() {
       : visibleNotes.findIndex((note) => note.id === slideshowNoteId);
   const slideshowActive = slideshowNoteId != null;
 
+  useEffect(() => {
+    detailMountedRef.current = true;
+
+    return () => {
+      detailMountedRef.current = false;
+    };
+  }, []);
+
+  useEffect(() => {
+    if (!slideshowActive || slideshowIndex < 0) {
+      return;
+    }
+
+    // The slideshow wraps, so the neighbours on both edges are the row at the
+    // other end of the filtered list.
+    const count = visibleNotes.length;
+    const targets = [
+      visibleNotes[slideshowIndex],
+      visibleNotes[(slideshowIndex + 1) % count],
+      visibleNotes[(slideshowIndex - 1 + count) % count],
+    ].filter(Boolean);
+
+    targets.forEach((target) => {
+      if (
+        noteDetails.has(target.id) ||
+        detailRequestsRef.current.has(target.id)
+      ) {
+        return;
+      }
+
+      detailRequestsRef.current.add(target.id);
+
+      getNote(target.id, target.collection_id)
+        .then((payload) => {
+          detailRequestsRef.current.delete(target.id);
+
+          if (!detailMountedRef.current || !payload?.note) {
+            return;
+          }
+
+          setNoteDetails((current) => {
+            const next = new Map(current).set(target.id, payload.note);
+
+            // Bound the cache: only the open note and its neighbours are
+            // needed, so a long slideshow walk cannot hold the whole library.
+            while (next.size > noteDetailCacheLimit) {
+              next.delete(next.keys().next().value);
+            }
+
+            return next;
+          });
+        })
+        .catch(() => {
+          // The projected note still paints; a later open retries.
+          detailRequestsRef.current.delete(target.id);
+        });
+    });
+  }, [noteDetails, slideshowActive, slideshowIndex, visibleNotes]);
+
+  const slideshowNotes = useMemo(() => {
+    if (!noteDetails.size) {
+      return visibleNotes;
+    }
+
+    return visibleNotes.map((note) => {
+      const detail = noteDetails.get(note.id);
+
+      return detail ? { ...note, ...detail } : note;
+    });
+  }, [noteDetails, visibleNotes]);
+
   function allNotesUrl(hash = "") {
     return {
       pathname: location.pathname,
@@ -265,14 +361,23 @@ export function AllNotesScreen() {
   }
 
   useEffect(() => {
-    if (!slideshowActive || loading) {
+    // The deferred view can still be one render behind the hash: wait for it
+    // to land before deciding a deep link names no row.
+    if (!slideshowActive || loading || rowsPending) {
       return;
     }
 
     if (slideshowIndex < 0) {
       navigate(allNotesUrl(), { replace: true });
     }
-  }, [loading, navigate, slideshowActive, slideshowIndex, location.search]);
+  }, [
+    loading,
+    navigate,
+    rowsPending,
+    slideshowActive,
+    slideshowIndex,
+    location.search,
+  ]);
 
   function updateParam(name, value) {
     setSearchParams(
@@ -637,10 +742,12 @@ export function AllNotesScreen() {
             collectionOptions={collectionOptions}
             columns={visibleColumns}
             conditions={conditions}
+            paintedConditions={deferredConditions}
             emptyContent={renderEmptyContent()}
             hasActiveFilters={hasActiveFilters}
             hideableColumns={hideableAllNotesColumns}
             notes={visibleNotes}
+            rowsPending={rowsPending}
             onApplyTagFilter={handleApplyTagFilter}
             onClearFilters={handleClearFilters}
             onCollectionChange={handleCollectionChange}
@@ -666,7 +773,7 @@ export function AllNotesScreen() {
         {slideshowActive && slideshowIndex >= 0 ? (
           <Slideshow
             currentIndex={slideshowIndex}
-            notes={visibleNotes}
+            notes={slideshowNotes}
             onChangeIndex={handleChangeSlideshowIndex}
             onClose={handleCloseSlideshow}
             onClosePreview={handleClosePreview}

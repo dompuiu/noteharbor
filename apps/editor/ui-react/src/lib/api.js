@@ -177,6 +177,16 @@ function notesBasePath(collectionId) {
     : '/api/notes';
 }
 
+// A projected list asks for just the fields a screen paints. The server builds
+// its SELECT from this list, so an omitted field is never read or transferred.
+function fieldsQuery(fields) {
+  const names = (fields ?? []).filter(Boolean);
+
+  // Field names are a fixed `[a-z_]` set, so a plain comma list needs no
+  // encoding and matches the server's `fields=a,b` parsing exactly.
+  return names.length ? `?fields=${names.join(',')}` : '';
+}
+
 function tagsBasePath(collectionId) {
   return Number.isInteger(collectionId)
     ? `/api/collections/${collectionId}/tags`
@@ -248,20 +258,21 @@ async function reorderCollections(ids) {
   return handleResponse(response);
 }
 
-async function getNotes(collectionId) {
-  const response = await request(notesBasePath(collectionId));
+async function getNotes(collectionId, fields) {
+  const response = await request(`${notesBasePath(collectionId)}${fieldsQuery(fields)}`);
   return handleResponse(response);
 }
 
 // The All notes screen's single data seam. There is no cross-collection server
 // endpoint yet, so this fans out one request per collection and flattens the
 // results in sidebar order. Each note carries the collection it came from, so
-// the screen never has to join the two lists itself. A future
+// the screen never has to join the two lists itself. `fields` narrows every
+// per-collection request (see `allNotesListFields`). A future
 // `GET /api/notes?scope=all` replaces only this function.
-async function getAllNotes(collections) {
+async function getAllNotes(collections, fields) {
   const perCollection = await Promise.all(
     (collections ?? []).map(async (collection, index) => {
-      const payload = await getNotes(collection.id);
+      const payload = await getNotes(collection.id, fields);
 
       return (payload.notes ?? []).map((note) => ({
         ...note,
