@@ -186,6 +186,14 @@ function ImagePopover({
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [zoomScale, setZoomScale] = useState(0);
   const fullLoaded = Boolean(src) && loadedSrc === src;
+  const srcRef = useRef(src);
+  srcRef.current = src;
+  // Until the new full image is ready, hold the last full image on screen;
+  // fall back to the thumbnail when nothing has loaded yet.
+  const placeholderSrc =
+    fullLoaded || !src
+      ? null
+      : (loadedSrc ?? (thumb && thumb !== src ? thumb : null));
 
   const zoomed = zoomScale > 0;
   const scaledSize = {
@@ -213,8 +221,23 @@ function ImagePopover({
   }
 
   function handleImageLoad() {
-    setLoadedSrc(src);
-    measureImage();
+    const image = imageRef.current;
+    const loaded = src;
+    const reveal = () => {
+      if (srcRef.current !== loaded) {
+        return;
+      }
+      setLoadedSrc(loaded);
+      measureImage();
+    };
+
+    // Wait for decode so the swap from the held image lands in one frame.
+    if (image && typeof image.decode === "function") {
+      image.decode().then(reveal, reveal);
+      return;
+    }
+
+    reveal();
   }
 
   function measureImage() {
@@ -661,13 +684,13 @@ function ImagePopover({
                     opacity: fullLoaded ? undefined : 0,
                   }}
                 />
-                {thumb && thumb !== src && !fullLoaded && !zoomed ? (
+                {placeholderSrc && !zoomed ? (
                   <img
                     alt=""
                     aria-hidden="true"
                     className="image-popover-thumb"
                     decoding="async"
-                    src={thumb}
+                    src={placeholderSrc}
                   />
                 ) : null}
               </>

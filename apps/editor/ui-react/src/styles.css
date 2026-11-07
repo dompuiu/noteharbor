@@ -6891,8 +6891,10 @@ button.tag {
   user-select: none;
 }
 
-/* The thumbnail holds the frame while the full plate arrives, so the popover
-   never shows an empty well. Both images share the same grid cell. */
+/* The last full plate (or the thumbnail on first open) holds the frame while
+   the next full plate arrives, so the popover never shows an empty well. Both
+   images share the same grid cell; the swap is instant, a fade would expose
+   the backdrop between them. */
 .image-popover-image-wrap .image-popover-thumb,
 .image-popover-image-wrap .image-popover-full {
   grid-area: 1 / 1;
@@ -6901,10 +6903,6 @@ button.tag {
 .image-popover-image-wrap .image-popover-thumb {
   width: 100%;
   pointer-events: none;
-}
-
-.image-popover-image-wrap .image-popover-full {
-  transition: opacity 0.15s ease;
 }
 
 .image-popover-image-wrap--zoomed {
