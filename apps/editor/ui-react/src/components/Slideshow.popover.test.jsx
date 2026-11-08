@@ -358,6 +358,31 @@ describe("ImagePopover zoom", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
+  test("wheel zoom cancels the wheel event so the overlay stays put", async () => {
+    render(popover());
+    await finishDecode(FRONT_1);
+
+    const image = fullImage();
+
+    measureImageBox(image, {
+      naturalWidth: 2000,
+      naturalHeight: 1000,
+      fitWidth: 500,
+      fitHeight: 250,
+    });
+    measurePopoverWrap({ width: 800, height: 600 });
+
+    // dispatchEvent returns false only when a listener prevented the default;
+    // React's delegated wheel listener is passive, so it cannot.
+    const notCanceled = fireEvent.wheel(image, {
+      deltaY: -100,
+      clientX: 400,
+      clientY: 300,
+    });
+
+    expect(notCanceled).toBe(false);
+  });
+
   test("keeps 100% as the top stop when the ladder ends below it", async () => {
     render(popover());
     await finishDecode(FRONT_1);

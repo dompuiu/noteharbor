@@ -711,6 +711,32 @@ function ImagePopover({
     changeZoom(e.deltaY < 0 ? 1 : -1, anchorInViewport(e));
   }
 
+  // React delegates `wheel` through a passive root listener, where
+  // `preventDefault()` is a no-op (and warns). The image owns a native,
+  // non-passive listener instead so zooming does not also scroll the overlay.
+  // The listener is attached once per painted image and reads the handler
+  // through a ref, so it is never torn down and re-added while zooming.
+  const onImageWheelRef = useRef(onImageWheel);
+  useLayoutEffect(() => {
+    onImageWheelRef.current = onImageWheel;
+  }, [onImageWheel]);
+
+  useEffect(() => {
+    const image = imageRef.current;
+
+    if (!image) {
+      return undefined;
+    }
+
+    function handleWheel(e) {
+      onImageWheelRef.current(e);
+    }
+
+    image.addEventListener("wheel", handleWheel, { passive: false });
+
+    return () => image.removeEventListener("wheel", handleWheel);
+  }, [displayedSrc]);
+
   useEffect(() => {
     resetZoom();
   }, [src]);
@@ -1082,7 +1108,6 @@ function ImagePopover({
                     onPointerDown={onImagePointerDown}
                     onPointerMove={onImagePointerMove}
                     onPointerUp={onImagePointerUp}
-                    onWheel={onImageWheel}
                     ref={imageRef}
                     src={displayedSrc}
                     style={imageStyle}
