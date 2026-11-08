@@ -4,6 +4,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.10.3] - 2026-11-07
+
 ### Added
 
 - Image preview: a visible zoom control (Fit, 100%, −, +) with the current level shown; wheel and double-click zoom now share the same ladder.
