@@ -2,6 +2,18 @@
 
 All notable changes to the Note Harbor Viewer (Flutter app) are documented in this file.
 
+## [Unreleased]
+
+## [1.13.0] - 2026-11-07
+
+### Changed
+
+- The whole app now wears the editor's neutral ink-and-red theme: a white-to-grey surface ladder, charcoal ink, one deep-red accent, and the Ochre tag family replace the warm paper palette. Cards and chrome are flat, buttons are pills, and the slideshow room and lightbox sit on light surfaces over a near-black scrim.
+
+### Fixed
+
+- Windows viewer icon: the ICO now carries 256/128/64/48/32/24/16 frames generated from the 1024px master, so the shell no longer downscales a single 256px frame for smaller sizes.
+
 ## [1.12.0] - 2026-10-16
 
 ### Changed
