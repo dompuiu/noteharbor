@@ -312,285 +312,286 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       child: PopScope(
         canPop: !_isImporting,
         child: Stack(
-        children: [
-          Scaffold(
-            appBar: AppBar(
-              automaticallyImplyLeading:
-                  !_isImporting && (widget.controller.dataset?.collections.isNotEmpty ?? false),
-              title: const Text('Import Dataset'),
-            ),
-            body: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              ViewerPalette.pageBackgroundTop,
-              ViewerPalette.pageBackground,
-              ViewerPalette.pageBackgroundBottom,
-            ],
-            stops: [0.0, 0.55, 1.0],
-          ),
-        ),
-        child: SafeArea(
-          child: AnimatedBuilder(
-            animation: widget.controller,
-            builder: (context, _) {
-              final dataset = widget.controller.dataset;
-              final generatedAt = dataset?.generatedAt?.trim();
-              final collections = dataset?.collections ?? const [];
-              final activeCollection = widget.controller.activeCollection;
-              final isBusy = widget.controller.isMutating || _isPicking || _isImporting;
-              final isInitialEmptyState = dataset == null;
+          children: [
+            Scaffold(
+              appBar: AppBar(
+                automaticallyImplyLeading: !_isImporting &&
+                    (widget.controller.dataset?.collections.isNotEmpty ??
+                        false),
+                title: const Text('IMPORT DATASET'),
+              ),
+              body: ColoredBox(
+                color: ViewerPalette.pageBackground,
+                child: SafeArea(
+                  child: AnimatedBuilder(
+                    animation: widget.controller,
+                    builder: (context, _) {
+                      final dataset = widget.controller.dataset;
+                      final generatedAt = dataset?.generatedAt?.trim();
+                      final collections = dataset?.collections ?? const [];
+                      final activeCollection = widget.controller.activeCollection;
+                      final isBusy = widget.controller.isMutating || _isPicking || _isImporting;
+                      final isInitialEmptyState = dataset == null;
 
-              return ListView(
-                controller: _scrollController,
-                padding: const EdgeInsets.all(20),
-                children: [
-                  if (isInitialEmptyState) ...[
-                    _Panel(
-                      child: Row(
-                        crossAxisAlignment: CrossAxisAlignment.start,
+                      return ListView(
+                        controller: _scrollController,
+                        padding: const EdgeInsets.all(20),
                         children: [
-                          const Icon(
-                            Icons.info_outline_rounded,
-                            color: ViewerPalette.accent,
-                            size: 28,
-                          ),
-                          const SizedBox(width: 14),
-                          Expanded(
+                          if (isInitialEmptyState) ...[
+                            _Panel(
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Icon(
+                                    Icons.info_outline_rounded,
+                                    color: ViewerPalette.info,
+                                    size: 28,
+                                  ),
+                                  const SizedBox(width: 14),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'IMPORT DATA TO GET STARTED',
+                                          style: Theme.of(context)
+                                              .textTheme
+                                              .titleLarge
+                                              ?.copyWith(
+                                                fontWeight: FontWeight.w800,
+                                                letterSpacing: -0.2,
+                                              ),
+                                        ),
+                                        const SizedBox(height: 8),
+                                        const Text(
+                                          'This viewer no longer ships with a bundled dataset. Choose a Note Harbor archive exported from the editor to install your notes, pictures, and SQLite database on this device.',
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 18),
+                          ],
+                          _Panel(
+                            icon: Icons.inventory_2_outlined,
+                            title: 'Manage viewer data',
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                Text(
-                                  'Import data to get started',
-                                  style: Theme.of(context)
-                                      .textTheme
-                                      .titleLarge
-                                      ?.copyWith(fontWeight: FontWeight.w800),
-                                ),
-                                const SizedBox(height: 8),
                                 const Text(
-                                  'This viewer no longer ships with a bundled dataset. Choose a Note Harbor archive exported from the editor to install your notes, pictures, and SQLite database on this device.',
+                                  'Import a Note Harbor archive exported from the editor. Imported data stays on this device. Collections present in the archive replace matching local collections by name; other local collections stay untouched.',
+                                ),
+                                const SizedBox(height: 18),
+                                Wrap(
+                                  spacing: 12,
+                                  runSpacing: 12,
+                                  children: [
+                                    _InfoPill(
+                                      label: 'Dataset built',
+                                      value: generatedAt == null || generatedAt.isEmpty
+                                          ? 'Not available yet'
+                                          : formatFriendlyDatasetBuiltAt(generatedAt),
+                                    ),
+                                    _InfoPill(
+                                      label: 'Collections',
+                                      value: '${collections.length}',
+                                    ),
+                                    _InfoPill(
+                                      label: 'Notes',
+                                      value: '${activeCollection?.noteCount ?? 0}',
+                                    ),
+                                  ],
                                 ),
                               ],
                             ),
                           ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                  ],
-                  _Panel(
-                    icon: Icons.inventory_2_outlined,
-                    title: 'Manage viewer data',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Import a Note Harbor archive exported from the editor. Imported data stays on this device. Collections present in the archive replace matching local collections by name; other local collections stay untouched.',
-                        ),
-                        const SizedBox(height: 18),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            _InfoPill(
-                              label: 'Dataset built',
-                              value: generatedAt == null || generatedAt.isEmpty
-                                  ? 'Not available yet'
-                                  : formatFriendlyDatasetBuiltAt(generatedAt),
-                            ),
-                            _InfoPill(
-                              label: 'Collections',
-                              value: '${collections.length}',
-                            ),
-                            _InfoPill(
-                              label: 'Notes',
-                              value: '${activeCollection?.noteCount ?? 0}',
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  if (collections.isNotEmpty) ...[
-                    _Panel(
-                      icon: Icons.collections_bookmark_outlined,
-                      title: 'Active collection',
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Select which collection is shown in the table and slideshow screens.',
-                          ),
-                          const SizedBox(height: 14),
-                          DropdownButtonFormField<int>(
-                            key: ValueKey('collection-${activeCollection?.id}'),
-                            initialValue: activeCollection?.id,
-                            decoration: const InputDecoration(
-                              border: OutlineInputBorder(),
-                            ),
-                            items: collections
-                                .map(
-                                  (collection) => DropdownMenuItem<int>(
-                                    value: collection.id,
-                                    child: Text(
-                                      '${collection.name} (${collection.noteCount})',
-                                    ),
+                          const SizedBox(height: 18),
+                          if (collections.isNotEmpty) ...[
+                            _Panel(
+                              icon: Icons.collections_bookmark_outlined,
+                              title: 'Active collection',
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Select which collection is shown in the table and slideshow screens.',
                                   ),
-                                )
-                                .toList(growable: false),
-                            onChanged: isBusy
-                                ? null
-                                : (collectionId) {
-                                    if (collectionId == null) {
-                                      return;
-                                    }
-                                    widget.controller.selectCollection(collectionId);
-                                    setState(() {
-                                      _message = null;
-                                      _collectionMessage = null;
-                                      _collectionMessageIsError = false;
-                                    });
-                                  },
-                          ),
-                          const SizedBox(height: 14),
-                          FilledButton.tonal(
-                            onPressed: isBusy || activeCollection == null
-                                ? null
-                                : _deleteActiveCollection,
-                            style: FilledButton.styleFrom(
-                              backgroundColor: ViewerPalette.dangerSoft,
-                              foregroundColor: ViewerPalette.danger,
-                            ),
-                            child: const Text('Delete collection'),
-                          ),
-                          if (_collectionMessage != null) ...[
-                            const SizedBox(height: 12),
-                            Text(
-                              _collectionMessage!,
-                              style: TextStyle(
-                                color: _collectionMessageIsError
-                                    ? ViewerPalette.danger
-                                    : ViewerPalette.textMuted,
-                                fontWeight: FontWeight.w600,
+                                  const SizedBox(height: 14),
+                                  DropdownButtonFormField<int>(
+                                    key: ValueKey('collection-${activeCollection?.id}'),
+                                    initialValue: activeCollection?.id,
+                                    decoration: const InputDecoration(
+                                      border: OutlineInputBorder(),
+                                    ),
+                                    items: collections
+                                        .map(
+                                          (collection) => DropdownMenuItem<int>(
+                                            value: collection.id,
+                                            child: Text(
+                                              '${collection.name} (${collection.noteCount})',
+                                            ),
+                                          ),
+                                        )
+                                        .toList(growable: false),
+                                    onChanged: isBusy
+                                        ? null
+                                        : (collectionId) {
+                                            if (collectionId == null) {
+                                              return;
+                                            }
+                                            widget.controller.selectCollection(collectionId);
+                                            setState(() {
+                                              _message = null;
+                                              _collectionMessage = null;
+                                              _collectionMessageIsError = false;
+                                            });
+                                          },
+                                  ),
+                                  const SizedBox(height: 14),
+                                  FilledButton.tonal(
+                                    onPressed: isBusy || activeCollection == null
+                                        ? null
+                                        : _deleteActiveCollection,
+                                    style: FilledButton.styleFrom(
+                                      backgroundColor: ViewerPalette.dangerSoft,
+                                      foregroundColor: ViewerPalette.danger,
+                                      side: BorderSide(
+                                        color: ViewerPalette.danger
+                                            .withValues(alpha: 0.3),
+                                      ),
+                                    ),
+                                    child: const Text('Delete collection'),
+                                  ),
+                                  if (_collectionMessage != null) ...[
+                                    const SizedBox(height: 12),
+                                    Text(
+                                      _collectionMessage!,
+                                      style: TextStyle(
+                                        color: _collectionMessageIsError
+                                            ? ViewerPalette.danger
+                                            : ViewerPalette.textMuted,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ),
+                            const SizedBox(height: 18),
                           ],
-                        ],
-                      ),
-                    ),
-                    const SizedBox(height: 18),
-                  ],
-                  _Panel(
-                    icon: Icons.archive_outlined,
-                    title: 'Archive import',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Choose a `.zip` archive with `banknotes.db` and `images/`, then import it into the native viewer app.',
-                        ),
-                        const SizedBox(height: 18),
-                        _ArchiveDropZone(
-                          fileName: _selectedArchiveName,
-                          onTap: isBusy ? null : _pickArchive,
-                        ),
-                        const SizedBox(height: 16),
-                        Wrap(
-                          spacing: 12,
-                          runSpacing: 12,
-                          children: [
-                            OutlinedButton.icon(
-                              onPressed: isBusy ? null : _pickArchive,
-                              icon: const Icon(Icons.folder_open_rounded),
-                              label: Text(_isPicking
-                                  ? 'Choosing...'
-                                  : 'Choose archive'),
+                          _Panel(
+                            icon: Icons.archive_outlined,
+                            title: 'Archive import',
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Choose a `.zip` archive with `banknotes.db` and `images/`, then import it into the native viewer app.',
+                                ),
+                                const SizedBox(height: 18),
+                                _ArchiveDropZone(
+                                  fileName: _selectedArchiveName,
+                                  onTap: isBusy ? null : _pickArchive,
+                                ),
+                                const SizedBox(height: 16),
+                                Wrap(
+                                  spacing: 12,
+                                  runSpacing: 12,
+                                  children: [
+                                    OutlinedButton.icon(
+                                      onPressed: isBusy ? null : _pickArchive,
+                                      icon: const Icon(Icons.folder_open_rounded),
+                                      label: Text(_isPicking
+                                          ? 'Choosing...'
+                                          : 'Choose archive'),
+                                    ),
+                                    FilledButton.icon(
+                                      onPressed: isBusy || _selectedArchivePath == null
+                                          ? null
+                                          : _importArchive,
+                                      icon: const Icon(Icons.file_upload_outlined),
+                                      label: Text(widget.controller.isMutating
+                                          ? 'Importing...'
+                                          : 'Import archive'),
+                                    ),
+                                  ],
+                                ),
+                                const SizedBox(height: 12),
+                                const Text(
+                                  'Import is destructive for collections present in the archive: matching local collections are replaced from archive data.',
+                                  style: TextStyle(
+                                      color: ViewerPalette.danger,
+                                      fontWeight: FontWeight.w600),
+                                ),
+                              ],
                             ),
-                            FilledButton.icon(
-                              onPressed: isBusy || _selectedArchivePath == null
-                                  ? null
-                                  : _importArchive,
-                              icon: const Icon(Icons.file_upload_outlined),
-                              label: Text(widget.controller.isMutating
-                                  ? 'Importing...'
-                                  : 'Import archive'),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        const Text(
-                          'Import is destructive for collections present in the archive: matching local collections are replaced from archive data.',
-                          style: TextStyle(
-                              color: ViewerPalette.danger,
-                              fontWeight: FontWeight.w600),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 18),
-                  if (_message != null) ...[
-                    _StatusBanner(
-                      key: _statusKey,
-                      message: _message!,
-                      isError: _messageIsError,
-                    ),
-                    const SizedBox(height: 18),
-                  ],
-                  _Panel(
-                    icon: Icons.delete_forever_outlined,
-                    iconColor: ViewerPalette.danger,
-                    title: 'Delete imported data',
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        const Text(
-                          'Delete the imported archive data from this device and return the app to its import-first state.',
-                        ),
-                        const SizedBox(height: 16),
-                        FilledButton.tonalIcon(
-                          onPressed: isBusy || dataset == null
-                              ? null
-                              : _deleteImportedData,
-                          style: FilledButton.styleFrom(
-                            backgroundColor: ViewerPalette.dangerSoft,
-                            foregroundColor: ViewerPalette.danger,
                           ),
-                          icon: const Icon(Icons.delete_outline_rounded),
-                          label: const Text('Delete imported data'),
-                        ),
-                      ],
-                    ),
+                          const SizedBox(height: 18),
+                          if (_message != null) ...[
+                            _StatusBanner(
+                              key: _statusKey,
+                              message: _message!,
+                              isError: _messageIsError,
+                            ),
+                            const SizedBox(height: 18),
+                          ],
+                          _Panel(
+                            icon: Icons.delete_forever_outlined,
+                            iconColor: ViewerPalette.danger,
+                            title: 'Delete imported data',
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Delete the imported archive data from this device and return the app to its import-first state.',
+                                ),
+                                const SizedBox(height: 16),
+                                FilledButton.tonalIcon(
+                                  onPressed: isBusy || dataset == null
+                                      ? null
+                                      : _deleteImportedData,
+                                  style: FilledButton.styleFrom(
+                                    backgroundColor: ViewerPalette.dangerSoft,
+                                    foregroundColor: ViewerPalette.danger,
+                                    side: BorderSide(
+                                      color:
+                                          ViewerPalette.danger.withValues(alpha: 0.3),
+                                    ),
+                                  ),
+                                  icon: const Icon(Icons.delete_outline_rounded),
+                                  label: const Text('Delete imported data'),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 24),
+                          const Center(
+                            child: Text(
+                              'Note Harbor Viewer v${AppInfo.version}',
+                              style: TextStyle(
+                                color: ViewerPalette.textMuted,
+                                fontSize: 12,
+                              ),
+                            ),
+                          ),
+                        ],
+                      );
+                    },
                   ),
-                  const SizedBox(height: 24),
-                  const Center(
-                    child: Text(
-                      'Note Harbor Viewer v${AppInfo.version}',
-                      style: TextStyle(
-                        color: ViewerPalette.textMuted,
-                        fontSize: 12,
-                      ),
-                    ),
-                  ),
-                ],
-              );
-            },
-          ),
-        ),
-      ),
-          ),
-          if (_isImporting)
-            const ModalBarrier(
-              dismissible: false,
-              color: Colors.black54,
+                ),
+              ),
             ),
-          if (_isImporting)
-            _ImportProgressOverlay(archiveName: _selectedArchiveName),
-        ],
-      ),
+            if (_isImporting)
+              const ModalBarrier(
+                dismissible: false,
+                color: Color(0x8C000000),
+              ),
+            if (_isImporting)
+              _ImportProgressOverlay(archiveName: _selectedArchiveName),
+          ],
+        ),
       ),
     );
   }
@@ -611,9 +612,8 @@ class _Panel extends StatelessWidget {
       decoration: BoxDecoration(
         color: ViewerPalette.surface,
         borderRadius:
-            BorderRadius.circular(ViewerPalette.radiusXl),
+            BorderRadius.circular(ViewerPalette.radiusMd),
         border: Border.all(color: ViewerPalette.border, width: 1),
-        boxShadow: ViewerPalette.shadowMid,
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -626,7 +626,7 @@ class _Panel extends StatelessWidget {
                 children: [
                   DecoratedBox(
                     decoration: BoxDecoration(
-                      color: ViewerPalette.accentSoft,
+                      color: ViewerPalette.surfaceMist,
                       borderRadius: BorderRadius.circular(
                           ViewerPalette.radiusSm),
                     ),
@@ -642,24 +642,20 @@ class _Panel extends StatelessWidget {
                   const SizedBox(width: 12),
                   Expanded(
                     child: Text(
-                      resolvedTitle,
+                      resolvedTitle.toUpperCase(),
                       style: Theme.of(context)
                           .textTheme
                           .headlineSmall
-                          ?.copyWith(fontSize: 21),
+                          ?.copyWith(
+                            fontSize: 20,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: -0.3,
+                          ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              DecoratedBox(
-                decoration: BoxDecoration(
-                  color: ViewerPalette.accent,
-                  borderRadius: BorderRadius.circular(2),
-                ),
-                child: const SizedBox(height: 3, width: 40),
-              ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
             ],
             child,
           ],
@@ -690,7 +686,7 @@ class _ImportProgressOverlay extends StatelessWidget {
               decoration: BoxDecoration(
                 color: ViewerPalette.surface,
                 borderRadius: BorderRadius.circular(
-                    ViewerPalette.radiusXl),
+                    ViewerPalette.radiusMd),
                 border: Border.all(color: ViewerPalette.border),
                 boxShadow: ViewerPalette.shadowHigh,
               ),
@@ -701,27 +697,31 @@ class _ImportProgressOverlay extends StatelessWidget {
                   children: [
                     DecoratedBox(
                       decoration: BoxDecoration(
-                        color: ViewerPalette.accentSoft,
+                        color: ViewerPalette.surfaceMist,
                         borderRadius: BorderRadius.circular(
-                            ViewerPalette.radiusMd),
+                            ViewerPalette.radiusControl),
                       ),
                       child: const SizedBox(
                         width: 64,
                         height: 64,
                         child: Padding(
                           padding: EdgeInsets.all(18),
-                          child: CircularProgressIndicator(strokeWidth: 3),
+                          child: CircularProgressIndicator(
+                            strokeWidth: 3,
+                            color: ViewerPalette.accent,
+                          ),
                         ),
                       ),
                     ),
                     const SizedBox(height: 20),
                     const Text(
-                      'Importing archive…',
+                      'IMPORTING ARCHIVE…',
                       textAlign: TextAlign.center,
                       style: TextStyle(
                         fontFamily: 'Inter',
                         fontWeight: FontWeight.w800,
                         fontSize: 18,
+                        letterSpacing: -0.2,
                         color: ViewerPalette.text,
                       ),
                     ),
@@ -759,13 +759,17 @@ class _StatusBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final accent = isError ? ViewerPalette.danger : ViewerPalette.success;
+    final wash =
+        isError ? ViewerPalette.dangerSoft : ViewerPalette.successSoft;
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: ViewerPalette.surface,
+        color: wash,
         borderRadius:
-            BorderRadius.circular(ViewerPalette.radiusLg),
-        border: Border.all(color: ViewerPalette.border, width: 1),
-        boxShadow: ViewerPalette.shadowLow,
+            BorderRadius.circular(ViewerPalette.radiusSm),
+        border: Border.all(
+          color: accent.withValues(alpha: 0.3),
+          width: 1,
+        ),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -774,11 +778,11 @@ class _StatusBanner extends StatelessWidget {
             decoration: BoxDecoration(
               color: accent,
               borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(ViewerPalette.radiusLg - 1),
-                bottomLeft: Radius.circular(ViewerPalette.radiusLg - 1),
+                topLeft: Radius.circular(ViewerPalette.radiusSm - 1),
+                bottomLeft: Radius.circular(ViewerPalette.radiusSm - 1),
               ),
             ),
-            child: const SizedBox(width: 5),
+            child: const SizedBox(width: 3),
           ),
           Padding(
             padding: const EdgeInsets.all(14),
@@ -795,9 +799,10 @@ class _StatusBanner extends StatelessWidget {
               padding: const EdgeInsets.fromLTRB(0, 14, 16, 14),
               child: Text(
                 message,
-                style: const TextStyle(
+                style: TextStyle(
                   fontFamily: 'Inter',
                   fontWeight: FontWeight.w600,
+                  color: accent,
                 ),
               ),
             ),
@@ -828,16 +833,15 @@ class _ArchiveDropZone extends StatelessWidget {
             color: selected
                 ? ViewerPalette.accent
                 : ViewerPalette.borderControl,
-            radius: ViewerPalette.radiusLg,
+            radius: ViewerPalette.radiusControl,
           ),
           child: DecoratedBox(
             decoration: BoxDecoration(
               color: selected
-                  ? ViewerPalette.accentSoft.withValues(alpha: 0.5)
-                  : ViewerPalette.surfaceContainer
-                      .withValues(alpha: 0.45),
+                  ? ViewerPalette.accentSoft
+                  : ViewerPalette.surfaceMist,
               borderRadius:
-                  BorderRadius.circular(ViewerPalette.radiusLg),
+                  BorderRadius.circular(ViewerPalette.radiusControl),
             ),
             child: Padding(
               padding: const EdgeInsets.all(16),
@@ -973,14 +977,13 @@ class _InfoPill extends StatelessWidget {
   Widget build(BuildContext context) {
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: ViewerPalette.surfaceContainer.withValues(alpha: 0.6),
+        color: ViewerPalette.surface,
         borderRadius:
-            BorderRadius.circular(ViewerPalette.radiusLg),
-        border: Border.all(color: ViewerPalette.border),
-        boxShadow: ViewerPalette.shadowLow,
+            BorderRadius.circular(ViewerPalette.radiusPill),
+        border: Border.all(color: ViewerPalette.borderControl),
       ),
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
@@ -989,10 +992,10 @@ class _InfoPill extends StatelessWidget {
               label.toUpperCase(),
               style: const TextStyle(
                 fontFamily: 'Inter',
-                fontSize: 10,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.1,
-                color: ViewerPalette.accentStrong,
+                fontSize: 11,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.9,
+                color: ViewerPalette.textMuted,
                 height: 1,
               ),
             ),
@@ -1001,7 +1004,7 @@ class _InfoPill extends StatelessWidget {
               value,
               style: const TextStyle(
                 fontFamily: 'Inter',
-                fontWeight: FontWeight.w700,
+                fontWeight: FontWeight.w600,
                 color: ViewerPalette.text,
                 fontFeatures: [FontFeature.tabularFigures()],
               ),

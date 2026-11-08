@@ -1,136 +1,156 @@
 import 'package:flutter/material.dart';
 
-/// Warm professional palette shared by every Viewer screen.
+/// Neutral ink-and-red palette shared by every Viewer screen.
 ///
 /// Mirrors the Editor web theme tokens (`apps/editor/ui-react/src/styles.css`):
-/// flat warm surfaces, warm charcoal text, and a single honey-bronze
-/// accent. All screens reference these values instead of hardcoding
-/// colors, so a future palette tweak only touches this file.
+/// a white-to-grey surface ladder, warm charcoal ink, a single deep-red accent,
+/// the Ochre tag family, and flat cards that only lift when they float.
+/// All screens reference these values instead of hardcoding colors, so a
+/// future palette tweak only touches this file.
 abstract final class ViewerPalette {
   // ── Light surfaces ────────────────────────────────────────────────
-  static const Color pageBackground = Color(0xFFF3ECDF);
-  static const Color surface = Color(0xFFFFFAF1);
-  static const Color surfaceContainer = Color(0xFFEFE5D2);
+  /// The application ground (`--bg` / `--surface-3`).
+  static const Color pageBackground = Color(0xFFF2F2F2);
+  static const Color surface = Color(0xFFFFFFFF);
 
-  /// `rgba(120, 86, 50, 0.20)` pre-blended onto [surface].
-  static const Color border = Color(0xFFE4D9CB);
+  /// Secondary panel fill (`--surface-2`).
+  static const Color surfaceMist = Color(0xFFF7F7F7);
 
-  /// `rgba(120, 86, 50, 0.12)` pre-blended onto [surface].
-  static const Color borderSoft = Color(0xFFEFE6DA);
+  /// Deepest neutral step (`--surface-4`).
+  static const Color surfaceStep = Color(0xFFE6E6E6);
 
-  /// `rgba(120, 86, 50, 0.32)` pre-blended onto [surface].
-  static const Color borderControl = Color(0xFFD4C6B4);
+  /// Legacy name for the quiet panel fill.
+  static const Color surfaceContainer = surfaceMist;
 
-  /// Table header band (C+2 Subtle Plus): half-step darker than
-  /// [surfaceContainer] so the card-top edge survives on iPhone
-  /// (~1.32 vs [surface], ~1.16 vs [pageBackground]).
-  /// Keeps [text] and [accentStrong] AAA.
-  static const Color tableHeaderBackground = Color(0xFFE6D9BE);
+  /// `rgba(37, 40, 43, 0.18)`.
+  static const Color border = Color(0x2E25282B);
+
+  /// `rgba(37, 40, 43, 0.10)`.
+  static const Color borderSoft = Color(0x1A25282B);
+
+  /// `rgba(37, 40, 43, 0.32)`.
+  static const Color borderControl = Color(0x5225282B);
+
+  /// Table header band: one quiet step inside the white card, so the
+  /// column row reads as part of the table instead of floating on the page.
+  static const Color tableHeaderBackground = surfaceMist;
 
   // ── Light text ────────────────────────────────────────────────────
-  static const Color text = Color(0xFF2E2318);
-  static const Color textMuted = Color(0xFF8A755A);
-  static const Color textFaint = Color(0xFFB5A488);
+  static const Color text = Color(0xFF25282B);
+  static const Color textMuted = Color(0xFF5F6367);
+  static const Color textFaint = Color(0xFF6E7276);
 
   // ── Brand ─────────────────────────────────────────────────────────
-  static const Color accent = Color(0xFF96622F);
-  static const Color accentStrong = Color(0xFF71461F);
+  /// Deep red at rest (`--accent-strong`).
+  static const Color accent = Color(0xFFB80000);
+  static const Color accentStrong = accent;
 
-  /// `rgba(150, 98, 47, 0.12)` (opaque form).
-  static const Color accentSoft = Color(0x1F96622F);
+  /// The primary pill's state ramp.
+  static const Color accentHover = Color(0xFFCC0000);
+  static const Color accentActive = Color(0xFF990000);
+
+  /// `rgba(184, 0, 0, 0.07)`.
+  static const Color accentSoft = Color(0x12B80000);
+
+  /// Text and icons on a filled red surface.
+  static const Color onAccent = Color(0xFFFFFFFF);
+
+  /// `rgba(184, 0, 0, 0.09)` for a selected row.
+  static const Color rowSelected = Color(0x17B80000);
+
+  /// `rgba(37, 40, 43, 0.035)` for the table's neutral zebra stripe.
+  static const Color rowZebra = Color(0x0925282B);
 
   // ── Status ────────────────────────────────────────────────────────
-  static const Color success = Color(0xFF2F6B3C);
-  static const Color danger = Color(0xFFA02A22);
+  static const Color success = Color(0xFF157A3A);
 
-  /// `rgba(160, 42, 34, 0.10)` pre-blended onto [surface].
-  static const Color dangerSoft = Color(0xFFF6E5DC);
-  static const Color onDanger = Color(0xFFFFFAF1);
-  static const Color warning = Color(0xFF8A5A00);
-  static const Color info = Color(0xFF40667C);
+  /// `rgba(49, 162, 76, 0.12)`.
+  static const Color successSoft = Color(0x1F31A24C);
+  static const Color danger = Color(0xFFA30000);
 
-  /// `rgba(62, 44, 20, 0.12)` (opaque form).
-  static const Color shadow = Color(0x1F3E2C14);
+  /// `rgba(163, 0, 0, 0.08)`.
+  static const Color dangerSoft = Color(0x14A30000);
+  static const Color onDanger = surface;
+  static const Color warning = Color(0xFF7A4F00);
 
-  // ── Tag chips (light chips, used on light and dark screens) ───────
-  static const Color tagBackground = surfaceContainer;
-  static const Color tagBorder = border;
-  static const Color tagText = text;
+  /// `rgba(247, 185, 40, 0.16)`.
+  static const Color warningSoft = Color(0x29F7B928);
+  static const Color info = Color(0xFF29597A);
 
-  // ── Dark (Note slideshow + Image lightbox, always dark) ───────────
-  static const Color darkBackground = Color(0xFF201913);
-  static const Color darkSurface = Color(0xFF2A2118);
-  static const Color darkRaised = Color(0xFF352A1E);
+  /// `rgba(41, 89, 122, 0.12)`.
+  static const Color infoSoft = Color(0x1F29597A);
 
-  /// Warm-white at 16% (opaque form).
-  static const Color darkBorder = Color(0x29F5F0E8);
-  static const Color darkText = Color(0xFFF7ECDC);
+  /// `rgba(37, 40, 43, 0.12)`.
+  static const Color shadow = Color(0x1F25282B);
 
-  /// Warm-white at 66% (opaque form).
-  static const Color darkMuted = Color(0xA8F5F0E8);
-  static const Color darkAccent = Color(0xFFE0AA62);
+  // ── Tag chips (Ochre family) ──────────────────────────────────────
+  /// Opaque, because a chip sits over rows that repaint on hover/selection.
+  static const Color tagBackground = Color(0xFFFDF3DA);
+  static const Color tagBackgroundHover = Color(0xFFF6EAB0);
+  static const Color tagBorder = Color(0xFFAF8134);
+  static const Color tagBorderHover = Color(0xFF9C8418);
+  static const Color tagText = Color(0xFF7A4F00);
+  static const Color tagTextMuted = Color(0xFF8A6A2C);
 
-  /// Warm-white at 8% (opaque form), for pills and buttons on dark.
-  static const Color darkScrim = Color(0x14F7ECDC);
+  // ── Presentation room (Note slideshow + Image lightbox) ────────────
+  /// Near-black scrim the room floats on.
+  static const Color roomScrim = Color(0xE0000000);
 
-  // ── Refresh tokens (prototype): background lift, depth, shape ─────
-  /// Top stop of the warm paper gradient behind light screens.
-  static const Color pageBackgroundTop = Color(0xFFF7F0E2);
+  /// Canvas Soft: the room's ground and the slideshow panel.
+  static const Color roomBackground = pageBackground;
 
-  /// Bottom stop of the warm paper gradient behind light screens.
-  static const Color pageBackgroundBottom = Color(0xFFEEE2CC);
+  /// White slide card / image mat.
+  static const Color roomSurface = surface;
 
-  /// Low lift: pills, chips, small badges.
-  static const List<BoxShadow> shadowLow = [
-    BoxShadow(
-      blurRadius: 10,
-      offset: Offset(0, 3),
-      color: Color(0x143E2C14),
-    ),
-    BoxShadow(
-      blurRadius: 2,
-      offset: Offset(0, 1),
-      color: Color(0x0F3E2C14),
-    ),
-  ];
+  /// One step inside the white card (details, raw scrape).
+  static const Color roomInset = surfaceMist;
+  static const Color roomBorder = border;
+  static const Color roomBorderControl = borderControl;
+  static const Color roomText = text;
+  static const Color roomMuted = textMuted;
+  static const Color roomAccent = accentStrong;
 
-  /// Mid lift: table card, panels.
-  static const List<BoxShadow> shadowMid = [
-    BoxShadow(
-      blurRadius: 22,
-      offset: Offset(0, 10),
-      color: Color(0x1A3E2C14),
-    ),
-    BoxShadow(
-      blurRadius: 3,
-      offset: Offset(0, 1),
-      color: Color(0x143E2C14),
-    ),
-  ];
+  /// `rgba(37, 40, 43, 0.04)`.
+  static const Color roomWash = Color(0x0A25282B);
 
-  /// High lift: dialogs, blocking overlays, popovers.
+  /// `rgba(37, 40, 43, 0.08)`.
+  static const Color roomWashStrong = Color(0x1425282B);
+
+  /// `rgba(184, 0, 0, 0.14)` for a selected value in the room.
+  static const Color roomSelection = Color(0x24B80000);
+
+  // ── Elevation ─────────────────────────────────────────────────────
+  /// Cards are flat at rest: no shadow on panels, tables, or controls.
+  static const List<BoxShadow> shadowLow = <BoxShadow>[];
+  static const List<BoxShadow> shadowMid = <BoxShadow>[];
+
+  /// Lifted chrome: menus, dialogs, popovers.
   static const List<BoxShadow> shadowHigh = [
-    BoxShadow(
-      blurRadius: 36,
-      offset: Offset(0, 18),
-      color: Color(0x243E2C14),
-    ),
-    BoxShadow(
-      blurRadius: 4,
-      offset: Offset(0, 2),
-      color: Color(0x143E2C14),
-    ),
+    BoxShadow(blurRadius: 32, offset: Offset(0, 12), color: Color(0x2925282B)),
   ];
 
-  /// Hairline highlight drawn inside a card edge for a lit-paper feel.
-  static const Color edgeHighlight = Color(0x80FFFBF2);
+  /// The slideshow panel floats above the scrim on its own depth ladder.
+  static const List<BoxShadow> shadowRoom = [
+    BoxShadow(blurRadius: 80, offset: Offset(0, 30), color: Color(0x5C000000)),
+  ];
 
   // ── Shape scale ───────────────────────────────────────────────────
-  static const double radiusXs = 8;
-  static const double radiusSm = 12;
-  static const double radiusMd = 16;
-  static const double radiusLg = 20;
-  static const double radiusXl = 24;
+  static const double radiusXs = 4;
+  static const double radiusSm = 8;
+
+  /// Cards, menus, and panels (the Editor's 6px step).
+  static const double radiusMd = 6;
+  static const double radiusLg = 6;
+  static const double radiusXl = 6;
+
+  /// Fields and selects.
+  static const double radiusControl = 10;
+
+  /// Tag and filter chips.
+  static const double radiusChip = 7;
+
+  /// Buttons, counters, segmented controls.
+  static const double radiusPill = 100;
 
   // ── Spacing scale ─────────────────────────────────────────────────
   static const double spaceXs = 4;

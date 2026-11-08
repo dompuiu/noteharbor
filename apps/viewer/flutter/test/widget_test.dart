@@ -19,7 +19,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Note\nHarbor'), findsOneWidget);
+    expect(find.text('NOTE HARBOR'), findsOneWidget);
     expect(find.text('5 Lei'), findsOneWidget);
     expect(find.byIcon(Icons.file_upload_outlined), findsOneWidget);
   });
@@ -36,7 +36,7 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('Import data to get started'), findsOneWidget);
+    expect(find.text('IMPORT DATA TO GET STARTED'), findsOneWidget);
     expect(find.text('No dataset imported'), findsNothing);
     // The Active source pill was removed; Dataset built covers the header.
     // The archive picker sits below the fold on first run; the lazy ListView

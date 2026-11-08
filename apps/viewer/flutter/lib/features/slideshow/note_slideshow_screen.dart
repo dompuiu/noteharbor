@@ -9,16 +9,19 @@ import '../../widgets/mouse_drag_scroll_behavior.dart';
 import '../../widgets/note_image_provider.dart';
 import 'image_lightbox.dart';
 
-const _kBg = ViewerPalette.darkBackground;
-const _kCardBg = ViewerPalette.darkSurface;
-const _kDetailsBg = ViewerPalette.darkRaised;
-const _kBorder = ViewerPalette.darkBorder;
-const _kTextPrimary = ViewerPalette.darkText;
-const _kTextAccent = ViewerPalette.darkAccent;
-const _kTextLabel = ViewerPalette.darkMuted;
+const _kBg = ViewerPalette.roomBackground;
+const _kCardBg = ViewerPalette.roomSurface;
+const _kDetailsBg = ViewerPalette.roomInset;
+const _kBorder = ViewerPalette.roomBorder;
+const _kTextPrimary = ViewerPalette.roomText;
+const _kTextAccent = ViewerPalette.roomAccent;
+const _kTextLabel = ViewerPalette.roomMuted;
 const _kTagChipBg = ViewerPalette.tagBackground;
 const _kTagChipBorder = ViewerPalette.tagBorder;
 const _kTagChipText = ViewerPalette.tagText;
+
+/// Fixed height shared by the slideshow's counter pill and Back control.
+const double _kRoomControlHeight = 36;
 
 /// Keyboard scroll step for the slide content, in logical pixels.
 const _kArrowScrollOffset = 120.0;
@@ -241,6 +244,9 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final compact = MediaQuery.sizeOf(context).shortestSide < 600;
+    final roomInset = compact ? 0.0 : 16.0;
+    final roomRadius = compact ? 0.0 : ViewerPalette.radiusMd;
     return Shortcuts(
       // h/j/k/l alias the arrows. The activators stay plain (no modifiers), so
       // any modified arrow or letter is left for the platform and stays inert.
@@ -324,110 +330,106 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
               _close();
             },
             child: Scaffold(
-              backgroundColor: _kBg,
-              body: DecoratedBox(
-                decoration: const BoxDecoration(
-                  gradient: RadialGradient(
-                    center: Alignment(0.0, -0.45),
-                    radius: 1.25,
-                    colors: [
-                      Color(0xFF2E251B),
-                      ViewerPalette.darkBackground,
-                    ],
-                    stops: [0.0, 1.0],
+              backgroundColor: ViewerPalette.roomScrim,
+              body: Padding(
+                padding: EdgeInsets.all(roomInset),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: _kBg,
+                    borderRadius: BorderRadius.circular(roomRadius),
+                    border: compact
+                        ? null
+                        : Border.all(color: ViewerPalette.roomBorderControl),
+                    boxShadow: compact ? const [] : ViewerPalette.shadowRoom,
                   ),
-                ),
-                child: SafeArea(
-                  minimum: const EdgeInsets.only(bottom: 12),
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                        // Stretch the row so the index pill matches the Back
-                        // button height instead of sizing to its own text.
-                        child: IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              const Spacer(),
-                              Container(
-                                alignment: Alignment.center,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: ViewerPalette.darkScrim,
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(
-                                      color: ViewerPalette.darkBorder),
-                                ),
-                                child: Text(
-                                  '${_currentIndex + 1} / ${widget.notes.length}',
-                                  style: const TextStyle(
-                                    fontFamily: 'Inter',
-                                    color: _kTextPrimary,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 15,
-                                    fontFeatures: [
-                                      FontFeature.tabularFigures()
-                                    ],
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(roomRadius),
+                    child: SafeArea(
+                      minimum: const EdgeInsets.only(bottom: 12),
+                      child: Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                const Spacer(),
+                                Container(
+                                  height: _kRoomControlHeight,
+                                  alignment: Alignment.center,
+                                  padding: const EdgeInsets.symmetric(
+                                    horizontal: 12,
+                                  ),
+                                  decoration: BoxDecoration(
+                                    color: ViewerPalette.roomSurface,
+                                    borderRadius: BorderRadius.circular(
+                                      ViewerPalette.radiusPill,
+                                    ),
+                                    border: Border.all(
+                                      color: ViewerPalette.roomBorderControl,
+                                    ),
+                                  ),
+                                  child: Text(
+                                    '${_currentIndex + 1} / ${widget.notes.length}',
+                                    style: const TextStyle(
+                                      fontFamily: 'Inter',
+                                      color: _kTextPrimary,
+                                      fontWeight: FontWeight.w600,
+                                      fontSize: 13,
+                                      fontFeatures: [
+                                        FontFeature.tabularFigures(),
+                                      ],
+                                    ),
                                   ),
                                 ),
-                              ),
-                              const SizedBox(width: 10),
-                              FilledButton.tonal(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: ViewerPalette.darkScrim,
-                                  foregroundColor: _kTextPrimary,
-                                  side: const BorderSide(
-                                      color: ViewerPalette.darkBorder),
+                                const SizedBox(width: 10),
+                                SizedBox(
+                                  height: _kRoomControlHeight,
+                                  child: OutlinedButton(
+                                    onPressed: _close,
+                                    child: const Text('Back'),
+                                  ),
                                 ),
-                                onPressed: _close,
-                                child: const Text('Back'),
-                              ),
-                            ],
+                              ],
+                            ),
                           ),
-                        ),
+                          Expanded(
+                            child: Stack(
+                              children: [
+                                ScrollConfiguration(
+                                  // A mouse drag pages the slide; the note card
+                                  // opts back out below so it does not also
+                                  // drag-scroll.
+                                  behavior: const MouseDragScrollBehavior(),
+                                  child: PageView.builder(
+                                    controller: _pageController,
+                                    itemCount: widget.notes.isEmpty ? 0 : null,
+                                    onPageChanged: (i) =>
+                                        setState(() => _virtualIndex = i),
+                                    itemBuilder: (context, index) {
+                                      return _NoteSlide(
+                                        index: index,
+                                        note:
+                                            widget.notes[(index -
+                                                    _kVirtualPageOrigin) %
+                                                widget.notes.length],
+                                        onTapImage: _openImageViewer,
+                                        onTagTap: (tagName) =>
+                                            _close(tagName: tagName),
+                                        onAttached: _registerSlide,
+                                        onDetached: _unregisterSlide,
+                                      );
+                                    },
+                                  ),
+                                ),
+                                _EdgeChevron(left: true, onTap: _goPrevious),
+                                _EdgeChevron(left: false, onTap: _goNext),
+                              ],
+                            ),
+                          ),
+                        ],
                       ),
-                      Expanded(
-                        child: Stack(
-                          children: [
-                            ScrollConfiguration(
-                              // A mouse drag pages the slide; the note card
-                              // opts back out below so it does not also
-                              // drag-scroll.
-                              behavior: const MouseDragScrollBehavior(),
-                              child: PageView.builder(
-                                controller: _pageController,
-                                itemCount: widget.notes.isEmpty ? 0 : null,
-                                onPageChanged: (i) =>
-                                    setState(() => _virtualIndex = i),
-                                itemBuilder: (context, index) {
-                                  return _NoteSlide(
-                                    index: index,
-                                    note: widget.notes[
-                                        (index - _kVirtualPageOrigin) %
-                                            widget.notes.length],
-                                    onTapImage: _openImageViewer,
-                                    onTagTap: (tagName) =>
-                                        _close(tagName: tagName),
-                                    onAttached: _registerSlide,
-                                    onDetached: _unregisterSlide,
-                                  );
-                                },
-                              ),
-                            ),
-                            _EdgeChevron(
-                              left: true,
-                              onTap: _goPrevious,
-                            ),
-                            _EdgeChevron(
-                              left: false,
-                              onTap: _goNext,
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -524,14 +526,7 @@ class _NoteSlideState extends State<_NoteSlide> {
               margin: const EdgeInsets.all(1),
               decoration: BoxDecoration(
                 color: _kCardBg,
-                borderRadius: BorderRadius.circular(20),
-                boxShadow: const [
-                  BoxShadow(
-                    blurRadius: 32,
-                    offset: Offset(0, 16),
-                    color: Color(0x66000000),
-                  ),
-                ],
+                borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
               ),
               clipBehavior: Clip.antiAlias,
               child: Stack(
@@ -546,35 +541,50 @@ class _NoteSlideState extends State<_NoteSlide> {
                     ),
                     child: SingleChildScrollView(
                       controller: _scrollController,
-                      padding: const EdgeInsets.all(16),
+                      padding: const EdgeInsets.all(20),
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Text(
-                            widget.note.title,
+                            (widget.note.gradingCompany.trim().isEmpty
+                                    ? 'Collection note'
+                                    : widget.note.gradingCompany)
+                                .toUpperCase(),
                             style: const TextStyle(
                               fontFamily: 'Inter',
-                              color: _kTextPrimary,
-                              fontSize: 22,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.3,
+                              color: _kTextLabel,
+                              fontSize: 11,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0.9,
                             ),
                             textAlign: TextAlign.center,
                           ),
-                          if (widget.note.gradingCompany.isNotEmpty) ...[
-                            const SizedBox(height: 4),
+                          const SizedBox(height: 6),
+                          Text(
+                            widget.note.title.toUpperCase(),
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              color: _kTextPrimary,
+                              fontSize: 28,
+                              fontWeight: FontWeight.w800,
+                              letterSpacing: -0.6,
+                              height: 1.12,
+                            ),
+                            textAlign: TextAlign.center,
+                          ),
+                          if (widget.note.issueDate.trim().isNotEmpty) ...[
+                            const SizedBox(height: 6),
                             Text(
-                              widget.note.gradingCompany,
+                              widget.note.issueDate,
                               style: const TextStyle(
                                 fontFamily: 'Inter',
-                                color: _kTextAccent,
-                                fontSize: 15,
-                                letterSpacing: 0.2,
+                                color: _kTextLabel,
+                                fontSize: 14,
                               ),
                               textAlign: TextAlign.center,
                             ),
                           ],
-                          const SizedBox(height: 12),
+                          const SizedBox(height: 14),
                           Container(
                             height: 1,
                             margin: const EdgeInsets.symmetric(horizontal: 48),
@@ -609,15 +619,18 @@ class _NoteSlideState extends State<_NoteSlide> {
                       duration: const Duration(milliseconds: 250),
                       child: IgnorePointer(
                         child: Container(
-                          height: 72,
+                          height: 104,
                           decoration: BoxDecoration(
                             gradient: LinearGradient(
                               begin: Alignment.topCenter,
                               end: Alignment.bottomCenter,
                               colors: [
                                 _kCardBg.withValues(alpha: 0),
+                                _kCardBg.withValues(alpha: 0.82),
+                                _kCardBg,
                                 _kCardBg,
                               ],
+                              stops: const [0.0, 0.45, 0.75, 1.0],
                             ),
                           ),
                         ),
@@ -633,7 +646,8 @@ class _NoteSlideState extends State<_NoteSlide> {
             child: IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(20),
+                  borderRadius:
+                      BorderRadius.circular(ViewerPalette.radiusMd),
                   border: Border.all(color: _kBorder),
                 ),
               ),
@@ -659,11 +673,12 @@ class _NoteImage extends StatelessWidget {
       child: AspectRatio(
         aspectRatio: _kImageStageAspectRatio,
         child: Container(
-          // Recessed well: darker than the card so it reads as an inset.
-          // The picture sits on a thin dark matte inside it.
+          // A plate on the white card: white ground, hairline control border,
+          // and the picture fitted inside. The room carries no second tint.
           decoration: BoxDecoration(
-            color: ViewerPalette.darkBackground,
-            borderRadius: BorderRadius.circular(14),
+            color: ViewerPalette.roomSurface,
+            borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
+            border: Border.all(color: ViewerPalette.roomBorderControl),
           ),
           clipBehavior: Clip.antiAlias,
           padding: const EdgeInsets.all(8),
@@ -673,7 +688,7 @@ class _NoteImage extends StatelessWidget {
                     'No image',
                     style: TextStyle(
                       fontFamily: 'Inter',
-                      color: ViewerPalette.darkMuted,
+                      color: ViewerPalette.roomMuted,
                     ),
                   ),
                 )
@@ -685,7 +700,7 @@ class _NoteImage extends StatelessWidget {
                       'Missing image',
                       style: TextStyle(
                         fontFamily: 'Inter',
-                        color: ViewerPalette.darkMuted,
+                        color: ViewerPalette.roomMuted,
                       ),
                     ),
                   ),
@@ -719,7 +734,6 @@ class _MetaPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final detailEntries = <MapEntry<String, String>>[
-      MapEntry('Date', note.issueDate),
       MapEntry('Catalog', note.catalogNumber),
       MapEntry('Grade', note.grade),
       MapEntry('Serial', note.serial),
@@ -729,7 +743,7 @@ class _MetaPanel extends StatelessWidget {
     return Container(
       decoration: BoxDecoration(
         color: _kDetailsBg,
-        borderRadius: BorderRadius.circular(20),
+        borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
         border: Border.all(color: _kBorder),
       ),
       padding: const EdgeInsets.all(20),
@@ -783,25 +797,19 @@ class _MetaPanel extends StatelessWidget {
                       cursor: SystemMouseCursors.click,
                       child: Container(
                         padding: const EdgeInsets.symmetric(
-                            horizontal: 12, vertical: 6),
+                            horizontal: 11, vertical: 4),
                         decoration: BoxDecoration(
                           color: _kTagChipBg,
-                          borderRadius: BorderRadius.circular(20),
+                          borderRadius: BorderRadius.circular(
+                              ViewerPalette.radiusChip),
                           border: Border.all(color: _kTagChipBorder),
-                          boxShadow: const [
-                            BoxShadow(
-                              blurRadius: 8,
-                              offset: Offset(0, 2),
-                              color: Color(0x40000000),
-                            ),
-                          ],
                         ),
                         child: Text(
                           tag.name,
                           style: const TextStyle(
                             fontFamily: 'Inter',
                             color: _kTagChipText,
-                            fontSize: 14,
+                            fontSize: 13,
                             fontWeight: FontWeight.w600,
                           ),
                         ),
@@ -900,9 +908,16 @@ class _EdgeChevronState extends State<_EdgeChevron> {
                 onTap: widget.onTap,
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    color: ViewerPalette.darkScrim,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: ViewerPalette.darkBorder),
+                    color: _hovered
+                        ? ViewerPalette.accentSoft
+                        : ViewerPalette.roomSurface,
+                    borderRadius:
+                        BorderRadius.circular(ViewerPalette.radiusPill),
+                    border: Border.all(
+                      color: _hovered
+                          ? ViewerPalette.accent
+                          : ViewerPalette.roomBorderControl,
+                    ),
                   ),
                   child: Padding(
                     padding: const EdgeInsets.all(10),
@@ -910,7 +925,9 @@ class _EdgeChevronState extends State<_EdgeChevron> {
                       widget.left
                           ? Icons.chevron_left_rounded
                           : Icons.chevron_right_rounded,
-                      color: ViewerPalette.darkText,
+                      color: _hovered
+                          ? ViewerPalette.roomAccent
+                          : ViewerPalette.roomText,
                       size: 26,
                     ),
                   ),

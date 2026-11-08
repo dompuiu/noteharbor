@@ -83,9 +83,9 @@ class _ViewerAppState extends State<ViewerApp> {
 
     final scheme = const ColorScheme.light(
       primary: primaryColor,
-      onPrimary: ViewerPalette.surface,
+      onPrimary: ViewerPalette.onAccent,
       secondary: secondaryColor,
-      onSecondary: ViewerPalette.surface,
+      onSecondary: ViewerPalette.onAccent,
       surface: ViewerPalette.surface,
       onSurface: ViewerPalette.text,
       surfaceContainerHighest: ViewerPalette.surfaceContainer,
@@ -116,32 +116,56 @@ class _ViewerAppState extends State<ViewerApp> {
         ),
         filledButtonTheme: FilledButtonThemeData(
           style: FilledButton.styleFrom(
-            backgroundColor: primaryColor,
-            foregroundColor: ViewerPalette.surface,
+            foregroundColor: ViewerPalette.onAccent,
             textStyle: const TextStyle(
               fontFamily: 'Inter',
-              fontWeight: FontWeight.w700,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
             ),
             shape: RoundedRectangleBorder(
-              borderRadius:
-                  BorderRadius.circular(ViewerPalette.radiusLg),
+              borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            minimumSize: const Size(0, 36),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+          ).copyWith(
+            backgroundColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.pressed)) {
+                return ViewerPalette.accentActive;
+              }
+              if (states.contains(WidgetState.hovered)) {
+                return ViewerPalette.accentHover;
+              }
+              return primaryColor;
+            }),
+            overlayColor: WidgetStateProperty.all(Colors.transparent),
           ),
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
           style: OutlinedButton.styleFrom(
-            foregroundColor: primaryColor,
-            side: const BorderSide(color: ViewerPalette.borderControl),
+            foregroundColor: ViewerPalette.text,
+            backgroundColor: ViewerPalette.surface,
             textStyle: const TextStyle(
               fontFamily: 'Inter',
-              fontWeight: FontWeight.w700,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
             ),
             shape: RoundedRectangleBorder(
-              borderRadius:
-                  BorderRadius.circular(ViewerPalette.radiusLg),
+              borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
             ),
-            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 14),
+            minimumSize: const Size(0, 36),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+          ).copyWith(
+            side: WidgetStateProperty.resolveWith((states) {
+              final active = states.contains(WidgetState.hovered) ||
+                  states.contains(WidgetState.focused) ||
+                  states.contains(WidgetState.pressed);
+              return BorderSide(
+                color: active
+                    ? ViewerPalette.accent
+                    : ViewerPalette.borderControl,
+              );
+            }),
+            overlayColor: WidgetStateProperty.all(ViewerPalette.accentSoft),
           ),
         ),
         textButtonTheme: TextButtonThemeData(
@@ -149,35 +173,44 @@ class _ViewerAppState extends State<ViewerApp> {
             foregroundColor: ViewerPalette.accentStrong,
             textStyle: const TextStyle(
               fontFamily: 'Inter',
-              fontWeight: FontWeight.w700,
+              fontSize: 13.5,
+              fontWeight: FontWeight.w600,
             ),
             shape: RoundedRectangleBorder(
-              borderRadius:
-                  BorderRadius.circular(ViewerPalette.radiusMd),
+              borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
             ),
+            minimumSize: const Size(0, 36),
+            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
+          ).copyWith(
+            overlayColor: WidgetStateProperty.all(ViewerPalette.accentSoft),
+          ),
+        ),
+        iconButtonTheme: IconButtonThemeData(
+          style: IconButton.styleFrom(
+            foregroundColor: ViewerPalette.textMuted,
+            highlightColor: ViewerPalette.accentSoft,
           ),
         ),
         inputDecorationTheme: InputDecorationTheme(
           filled: true,
           fillColor: ViewerPalette.surface,
-          hintStyle: const TextStyle(color: ViewerPalette.textFaint),
+          hintStyle: const TextStyle(color: ViewerPalette.textMuted),
           prefixIconColor: ViewerPalette.textMuted,
           suffixIconColor: ViewerPalette.textMuted,
-          contentPadding:
-              const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          contentPadding: const EdgeInsets.symmetric(
+            horizontal: 12,
+            vertical: 10,
+          ),
           border: OutlineInputBorder(
-            borderRadius:
-                BorderRadius.circular(ViewerPalette.radiusLg),
-            borderSide: const BorderSide(color: ViewerPalette.border),
+            borderRadius: BorderRadius.circular(ViewerPalette.radiusControl),
+            borderSide: const BorderSide(color: ViewerPalette.borderControl),
           ),
           enabledBorder: OutlineInputBorder(
-            borderRadius:
-                BorderRadius.circular(ViewerPalette.radiusLg),
-            borderSide: const BorderSide(color: ViewerPalette.border),
+            borderRadius: BorderRadius.circular(ViewerPalette.radiusControl),
+            borderSide: const BorderSide(color: ViewerPalette.borderControl),
           ),
           focusedBorder: OutlineInputBorder(
-            borderRadius:
-                BorderRadius.circular(ViewerPalette.radiusLg),
+            borderRadius: BorderRadius.circular(ViewerPalette.radiusControl),
             borderSide: const BorderSide(
               color: ViewerPalette.accent,
               width: 1.5,
@@ -191,18 +224,19 @@ class _ViewerAppState extends State<ViewerApp> {
         ),
         dialogTheme: DialogThemeData(
           backgroundColor: ViewerPalette.surface,
+          elevation: 24,
+          shadowColor: ViewerPalette.shadow,
           shape: RoundedRectangleBorder(
-            borderRadius:
-                BorderRadius.circular(ViewerPalette.radiusXl),
+            borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
             side: const BorderSide(color: ViewerPalette.border),
           ),
         ),
         scrollbarTheme: ScrollbarThemeData(
           thumbColor: WidgetStateProperty.resolveWith((states) {
             if (states.contains(WidgetState.hovered)) {
-              return ViewerPalette.textMuted;
+              return const Color(0xFF8A8A8A);
             }
-            return ViewerPalette.textFaint;
+            return const Color(0xFFC4C4C4);
           }),
           trackColor: WidgetStateProperty.all(Colors.transparent),
           thickness: WidgetStateProperty.all(8),
@@ -212,8 +246,7 @@ class _ViewerAppState extends State<ViewerApp> {
         tooltipTheme: TooltipThemeData(
           decoration: BoxDecoration(
             color: ViewerPalette.text,
-            borderRadius:
-                BorderRadius.circular(ViewerPalette.radiusSm),
+            borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
           ),
           textStyle: const TextStyle(
             fontFamily: 'Inter',

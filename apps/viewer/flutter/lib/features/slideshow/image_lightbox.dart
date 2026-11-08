@@ -17,6 +17,10 @@ import 'image_zoom_levels.dart';
 /// never runs out of pages.
 const int _kVirtualPageOrigin = 1 << 20;
 
+/// Fixed height shared by the popover's counter pill and Back control, matching
+/// the Note slideshow's top bar.
+const double _kRoomControlHeight = 36;
+
 class ImageSequenceItem {
   const ImageSequenceItem({
     required this.note,
@@ -134,6 +138,9 @@ class _ImageLightboxState extends State<ImageLightbox> {
   @override
   Widget build(BuildContext context) {
     final item = widget.items[_currentIndex];
+    final compact = MediaQuery.sizeOf(context).shortestSide < 600;
+    final roomInset = compact ? 0.0 : 16.0;
+    final roomRadius = compact ? 0.0 : ViewerPalette.radiusMd;
 
     return Shortcuts(
       shortcuts: _kImageLightboxShortcuts,
@@ -214,178 +221,180 @@ class _ImageLightboxState extends State<ImageLightbox> {
               _closeWithCurrentNote();
             },
             child: Scaffold(
-              backgroundColor: ViewerPalette.darkBackground,
-              body: DecoratedBox(
-                decoration: const BoxDecoration(
-                  gradient: RadialGradient(
-                    center: Alignment(0.0, -0.45),
-                    radius: 1.25,
-                    colors: [
-                      Color(0xFF2E251B),
-                      ViewerPalette.darkBackground,
-                    ],
-                    stops: [0.0, 1.0],
+              backgroundColor: ViewerPalette.roomScrim,
+              body: Padding(
+                padding: EdgeInsets.all(roomInset),
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: ViewerPalette.roomBackground,
+                    borderRadius: BorderRadius.circular(roomRadius),
+                    border: compact
+                        ? null
+                        : Border.all(color: ViewerPalette.roomBorderControl),
+                    boxShadow: compact ? const [] : ViewerPalette.shadowRoom,
                   ),
-                ),
-                child: SafeArea(
-                  minimum: const EdgeInsets.only(bottom: 12),
-                  child: Column(
-                    children: [
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                        // Stretch the row so the index pill matches the Back
-                        // button height instead of sizing to its own text.
-                        child: IntrinsicHeight(
-                          child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              Expanded(
-                                child: Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Column(
-                                    mainAxisSize: MainAxisSize.min,
-                                    crossAxisAlignment:
-                                        CrossAxisAlignment.start,
-                                    children: [
-                                      Text(
-                                        item.label,
-                                        style: const TextStyle(
-                                          fontFamily: 'Inter',
-                                          color: ViewerPalette.darkText,
-                                          fontSize: 17,
-                                          fontWeight: FontWeight.w800,
-                                          letterSpacing: -0.2,
-                                        ),
-                                        overflow: TextOverflow.ellipsis,
-                                      ),
-                                      if (item.note.issueDate
-                                          .trim()
-                                          .isNotEmpty) ...[
-                                        const SizedBox(height: 2),
-                                        Text(
-                                          item.note.issueDate,
-                                          style: const TextStyle(
-                                            fontFamily: 'Inter',
-                                            color: ViewerPalette.darkMuted,
-                                            fontSize: 13,
-                                            fontWeight: FontWeight.w600,
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(roomRadius),
+                    child: SafeArea(
+                      minimum: const EdgeInsets.only(bottom: 12),
+                      child: Column(
+                        children: [
+                          Padding(
+                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+                            child: Row(
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                  Expanded(
+                                    child: Align(
+                                      alignment: Alignment.centerLeft,
+                                      child: Column(
+                                        mainAxisSize: MainAxisSize.min,
+                                        crossAxisAlignment:
+                                            CrossAxisAlignment.start,
+                                        children: [
+                                          Text(
+                                            item.label,
+                                            style: const TextStyle(
+                                              fontFamily: 'Inter',
+                                              color: ViewerPalette.roomText,
+                                              fontSize: 17,
+                                              fontWeight: FontWeight.w800,
+                                              letterSpacing: -0.2,
+                                            ),
+                                            overflow: TextOverflow.ellipsis,
                                           ),
-                                          overflow: TextOverflow.ellipsis,
-                                        ),
-                                      ],
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 12),
-                              Container(
-                                alignment: Alignment.center,
-                                padding: const EdgeInsets.symmetric(
-                                    horizontal: 12, vertical: 8),
-                                decoration: BoxDecoration(
-                                  color: ViewerPalette.darkScrim,
-                                  borderRadius: BorderRadius.circular(18),
-                                  border: Border.all(
-                                      color: ViewerPalette.darkBorder),
-                                ),
-                                child: Text(
-                                  '${_currentIndex + 1} / ${widget.items.length}',
-                                  style: const TextStyle(
-                                    fontFamily: 'Inter',
-                                    color: ViewerPalette.darkText,
-                                    fontWeight: FontWeight.w600,
-                                    fontSize: 15,
-                                    fontFeatures: [
-                                      FontFeature.tabularFigures()
-                                    ],
-                                  ),
-                                ),
-                              ),
-                              const SizedBox(width: 10),
-                              FilledButton.tonal(
-                                style: FilledButton.styleFrom(
-                                  backgroundColor: ViewerPalette.darkScrim,
-                                  foregroundColor: ViewerPalette.darkText,
-                                  side: const BorderSide(
-                                      color: ViewerPalette.darkBorder),
-                                ),
-                                onPressed: _closeWithCurrentNote,
-                                child: const Text('Back'),
-                              ),
-                            ],
-                          ),
-                        ),
-                      ),
-                      Expanded(
-                        child: ScrollConfiguration(
-                          // A mouse drag pages the sequence at fit scale; while
-                          // zoomed the physics below are disabled so the drag
-                          // pans the image instead.
-                          behavior: const MouseDragScrollBehavior(),
-                          child: PageView.builder(
-                            controller: _controller,
-                            physics: _pageScrollEnabled
-                                ? const PageScrollPhysics()
-                                : const NeverScrollableScrollPhysics(),
-                            itemCount: widget.items.isEmpty ? 0 : null,
-                            onPageChanged: (value) => setState(() {
-                              _virtualIndex = value;
-                              _pageGeneration += 1;
-                              _pageScrollEnabled = true;
-                            }),
-                            itemBuilder: (context, index) {
-                              final imageItem = widget.items[
-                                  (index - _kVirtualPageOrigin) %
-                                      widget.items.length];
-                              return Padding(
-                                padding:
-                                    const EdgeInsets.fromLTRB(12, 4, 12, 0),
-                                child: Container(
-                                  decoration: BoxDecoration(
-                                    color: ViewerPalette.darkSurface,
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(
-                                      color: ViewerPalette.darkBorder,
-                                    ),
-                                    boxShadow: const [
-                                      BoxShadow(
-                                        blurRadius: 32,
-                                        offset: Offset(0, 16),
-                                        color: Color(0x66000000),
-                                      ),
-                                    ],
-                                  ),
-                                  clipBehavior: Clip.antiAlias,
-                                  child: Padding(
-                                    padding: const EdgeInsets.all(16),
-                                    child: imageItem.image == null
-                                        ? const Center(
-                                            child: Text(
-                                              'No image',
-                                              style: TextStyle(
+                                          if (item.note.issueDate
+                                              .trim()
+                                              .isNotEmpty) ...[
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              item.note.issueDate,
+                                              style: const TextStyle(
                                                 fontFamily: 'Inter',
-                                                color: ViewerPalette.darkMuted,
-                                                fontSize: 16,
+                                                color: ViewerPalette.roomMuted,
+                                                fontSize: 13,
+                                                fontWeight: FontWeight.w600,
                                               ),
+                                              overflow: TextOverflow.ellipsis,
                                             ),
-                                          )
-                                        : _ZoomableImagePage(
-                                            key: ValueKey(
-                                              '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
-                                            ),
-                                            image: imageItem.image!,
-                                            controller: _zoomController,
-                                            onPageScrollEnabledChanged:
-                                                _setPageScrollEnabled,
-                                          ),
+                                          ],
+                                        ],
+                                      ),
+                                    ),
                                   ),
-                                ),
-                              );
-                            },
+                                  const SizedBox(width: 12),
+                                  Container(
+                                    height: _kRoomControlHeight,
+                                    alignment: Alignment.center,
+                                    padding: const EdgeInsets.symmetric(
+                                      horizontal: 12,
+                                    ),
+                                    decoration: BoxDecoration(
+                                      color: ViewerPalette.roomSurface,
+                                      borderRadius: BorderRadius.circular(
+                                        ViewerPalette.radiusPill,
+                                      ),
+                                      border: Border.all(
+                                        color: ViewerPalette.roomBorderControl,
+                                      ),
+                                    ),
+                                    child: Text(
+                                      '${_currentIndex + 1} / ${widget.items.length}',
+                                      style: const TextStyle(
+                                        fontFamily: 'Inter',
+                                        color: ViewerPalette.roomText,
+                                        fontWeight: FontWeight.w600,
+                                        fontSize: 13,
+                                        fontFeatures: [
+                                          FontFeature.tabularFigures(),
+                                        ],
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  SizedBox(
+                                    height: _kRoomControlHeight,
+                                    child: OutlinedButton(
+                                      onPressed: _closeWithCurrentNote,
+                                      child: const Text('Back'),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          Expanded(
+                            child: ScrollConfiguration(
+                              // A mouse drag pages the sequence at fit scale;
+                              // while zoomed the physics below are disabled so
+                              // the drag pans the image instead.
+                              behavior: const MouseDragScrollBehavior(),
+                              child: PageView.builder(
+                                controller: _controller,
+                                physics: _pageScrollEnabled
+                                    ? const PageScrollPhysics()
+                                    : const NeverScrollableScrollPhysics(),
+                                itemCount: widget.items.isEmpty ? 0 : null,
+                                onPageChanged: (value) => setState(() {
+                                  _virtualIndex = value;
+                                  _pageGeneration += 1;
+                                  _pageScrollEnabled = true;
+                                }),
+                                itemBuilder: (context, index) {
+                                  final imageItem =
+                                      widget.items[(index -
+                                              _kVirtualPageOrigin) %
+                                          widget.items.length];
+                                  return Padding(
+                                    padding: const EdgeInsets.fromLTRB(
+                                      12,
+                                      4,
+                                      12,
+                                      0,
+                                    ),
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        color: ViewerPalette.roomSurface,
+                                        borderRadius: BorderRadius.circular(
+                                          ViewerPalette.radiusMd,
+                                        ),
+                                        border: Border.all(
+                                          color: ViewerPalette.roomBorder,
+                                        ),
+                                      ),
+                                      clipBehavior: Clip.antiAlias,
+                                      child: Padding(
+                                        padding: const EdgeInsets.all(16),
+                                        child: imageItem.image == null
+                                            ? const Center(
+                                                child: Text(
+                                                  'No image',
+                                                  style: TextStyle(
+                                                    fontFamily: 'Inter',
+                                                    color:
+                                                        ViewerPalette.roomMuted,
+                                                    fontSize: 16,
+                                                  ),
+                                                ),
+                                              )
+                                            : _ZoomableImagePage(
+                                                key: ValueKey(
+                                                  '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
+                                                ),
+                                                image: imageItem.image!,
+                                                controller: _zoomController,
+                                                onPageScrollEnabledChanged:
+                                                    _setPageScrollEnabled,
+                                              ),
+                                      ),
+                                    ),
+                                  );
+                                },
+                              ),
+                            ),
                           ),
-                        ),
+                        ],
                       ),
-                    ],
+                    ),
                   ),
                 ),
               ),
@@ -1087,7 +1096,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
                           padding: EdgeInsets.all(32),
                           child: Text(
                             'This image file is missing from the current dataset.',
-                            style: TextStyle(color: ViewerPalette.darkMuted),
+                            style: TextStyle(color: ViewerPalette.roomMuted),
                             textAlign: TextAlign.center,
                           ),
                         );

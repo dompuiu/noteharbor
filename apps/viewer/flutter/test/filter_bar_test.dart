@@ -106,7 +106,7 @@ void main() {
     await mouse.moveTo(tester.getCenter(optionFinder));
     await tester.pumpAndSettle();
 
-    // The hovered option carries the warm wash (the keyboard-focused
+    // The hovered option carries the red wash (the keyboard-focused
     // option may carry one too, so link the wash to its label).
     expect(
       find.descendant(of: _washFinder, matching: find.text('Denomination')),

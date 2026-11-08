@@ -34,8 +34,9 @@ const double _kFixedColumnsWidth = _kOrderColumnWidth +
 const double _kTableHorizontalPadding = 14;
 const Color _kTableSurface = ViewerPalette.surface;
 const Color _kTableBorder = ViewerPalette.border;
+const Color _kTableCardBorder = ViewerPalette.borderControl;
 const Color _kTableHeaderBg = ViewerPalette.tableHeaderBackground;
-const Color _kTableHeaderDivider = ViewerPalette.borderControl;
+const Color _kTableHeaderDivider = ViewerPalette.border;
 const Color _kTableDivider = ViewerPalette.borderSoft;
 const Color _kTableText = ViewerPalette.text;
 const Color _kTableSortableHeaderText = ViewerPalette.accentStrong;
@@ -43,6 +44,7 @@ const Color _kTagChipBg = ViewerPalette.tagBackground;
 const Color _kTagChipBorder = ViewerPalette.tagBorder;
 const Color _kTagChipText = ViewerPalette.tagText;
 const double _kHeaderBadgeHeight = 48;
+const double _kHeaderControlHeight = 40;
 const double _kTagChipHorizontalPadding = 10;
 const double _kTagChipHorizontalGap = 6;
 const double _kTagsColumnSafetyPadding = 24;
@@ -54,7 +56,7 @@ const Color _kTableThumbnailPlaceholderBg = ViewerPalette.surfaceContainer;
 const Color _kTableThumbnailPlaceholderBorder = ViewerPalette.border;
 const Color _kTableThumbnailPlaceholderIcon = ViewerPalette.textMuted;
 const double _kCardRadius = ViewerPalette.radiusXl;
-const Color _kZebraTint = Color(0x0D96622F);
+const Color _kZebraTint = ViewerPalette.rowZebra;
 
 /// How far one Left/Right arrow press pans the table's hidden columns.
 const double _kColumnScrollStep = 200;
@@ -109,15 +111,15 @@ const TextStyle _kTagChipTextStyle = TextStyle(
 const TextStyle _kDataCellTextStyle = TextStyle(
   fontFamily: 'Inter',
   color: _kTableText,
-  fontWeight: FontWeight.w600,
+  fontWeight: FontWeight.w400,
   fontFeatures: [FontFeature.tabularFigures()],
 );
 
 const TextStyle _kHeaderLabelTextStyle = TextStyle(
   fontFamily: 'Inter',
-  fontWeight: FontWeight.w800,
-  fontSize: 12,
-  letterSpacing: 1.1,
+  fontWeight: FontWeight.w700,
+  fontSize: 11,
+  letterSpacing: 0.9,
   height: 1,
 );
 
@@ -1368,19 +1370,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
             FocusScope.of(context).unfocus();
           }
         },
-        child: DecoratedBox(
-          decoration: const BoxDecoration(
-            gradient: LinearGradient(
-              begin: Alignment.topCenter,
-              end: Alignment.bottomCenter,
-              colors: [
-                ViewerPalette.pageBackgroundTop,
-                ViewerPalette.pageBackground,
-                ViewerPalette.pageBackgroundBottom,
-              ],
-              stops: [0.0, 0.55, 1.0],
-            ),
-          ),
+        child: ColoredBox(
+          color: ViewerPalette.pageBackground,
           child: SafeArea(
             bottom: false,
             child: AnimatedBuilder(
@@ -1422,6 +1413,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _Header(
+                        collectionName:
+                            widget.controller.activeCollection?.name ??
+                                'Collection',
                         totalCount: scopedNotes.length,
                         visibleCount: notes.length,
                         onOpenImports:
@@ -1449,11 +1443,11 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                               clipBehavior: Clip.antiAlias,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(
-                                    ViewerPalette.radiusLg),
+                                    ViewerPalette.radiusControl),
                                 side: BorderSide(
                                   color: filterFocused
                                       ? ViewerPalette.accent
-                                      : _kTableBorder,
+                                      : ViewerPalette.borderControl,
                                   width: filterBorderWidth,
                                 ),
                               ),
@@ -1595,7 +1589,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                           hintText: _filterHint,
                                           hintStyle: const TextStyle(
                                             fontFamily: 'Inter',
-                                            color: ViewerPalette.textFaint,
+                                            color: ViewerPalette.textMuted,
                                             fontSize: 13,
                                           ),
                                           // Unfilled: the bar behind owns the
@@ -1641,12 +1635,20 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                   borderRadius:
                                       BorderRadius.circular(_kCardRadius),
                                   border: Border.all(
-                                      color: _kTableBorder, width: 1),
+                                      color: _kTableCardBorder, width: 1),
                                   boxShadow: ViewerPalette.shadowMid,
                                 ),
-                                child: notes.isEmpty
-                                    ? const _TableEmptyState()
-                                    : ClipRRect(
+                                child: DecoratedBox(
+                                  position: DecorationPosition.foreground,
+                                  decoration: BoxDecoration(
+                                    borderRadius:
+                                        BorderRadius.circular(_kCardRadius),
+                                    border: Border.all(
+                                        color: _kTableCardBorder, width: 1),
+                                  ),
+                                  child: notes.isEmpty
+                                      ? const _TableEmptyState()
+                                      : ClipRRect(
                                         borderRadius:
                                             BorderRadius.circular(_kCardRadius),
                                         child: NotificationListener<
@@ -1676,8 +1678,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                           _headerFocusNodes,
                                                     ),
                                                     const Divider(
-                                                      height: 2,
-                                                      thickness: 2,
+                                                      height: 1,
+                                                      thickness: 1,
                                                       color:
                                                           _kTableHeaderDivider,
                                                     ),
@@ -1747,6 +1749,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                           ),
                                         ),
                                       ),
+                                  ),
                               ),
                             );
                             return table;
@@ -1766,7 +1769,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
 }
 
 /// One row of the open filter-scope menu. The label fills the item width and
-/// lifts to a warm wash on mouse hover and on keyboard focus, so the
+/// lifts to a red wash on mouse hover and on keyboard focus, so the
 /// arrow-keyed option reads exactly like a hovered one; the text style is
 /// inherited from the scope select.
 class _FilterScopeOption extends StatefulWidget {
@@ -1808,12 +1811,14 @@ class _FilterScopeOptionState extends State<_FilterScopeOption> {
 
 class _Header extends StatelessWidget {
   const _Header({
+    required this.collectionName,
     required this.totalCount,
     required this.visibleCount,
     required this.onOpenImports,
     required this.importButtonFocusNode,
   });
 
+  final String collectionName;
   final int totalCount;
   final int visibleCount;
   final VoidCallback? onOpenImports;
@@ -1821,58 +1826,56 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final title = collectionName.trim().isEmpty ? 'Collection' : collectionName;
     return Row(
       children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: _kTableSurface,
-            borderRadius: BorderRadius.circular(ViewerPalette.radiusLg),
-            border: Border.all(color: _kTableBorder),
-            boxShadow: ViewerPalette.shadowLow,
-          ),
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(minHeight: _kHeaderBadgeHeight),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 6, 16, 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(9),
-                    child: Image.asset(
-                      'web/icons/Icon-192.png',
-                      width: 30,
-                      height: 30,
-                      fit: BoxFit.cover,
-                    ),
-                  ),
-                  const SizedBox(width: 12),
-                  Column(
-                    mainAxisSize: MainAxisSize.min,
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Note\nHarbor',
-                        style:
-                            Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  fontFamily: 'Inter',
-                                  fontWeight: FontWeight.w800,
-                                  color: _kTableText,
-                                  height: 0.95,
-                                  letterSpacing: -0.3,
-                                ),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
-            ),
+        ClipRRect(
+          borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
+          child: Image.asset(
+            'web/icons/Icon-192.png',
+            width: 34,
+            height: 34,
+            fit: BoxFit.cover,
           ),
         ),
-        const Spacer(),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'NOTE HARBOR',
+                style: TextStyle(
+                  fontFamily: 'Inter',
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  letterSpacing: 0.9,
+                  height: 1,
+                  color: ViewerPalette.textMuted,
+                ),
+              ),
+              const SizedBox(height: 3),
+              Text(
+                title.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                      fontFamily: 'Inter',
+                      fontWeight: FontWeight.w800,
+                      fontSize: 20,
+                      letterSpacing: -0.3,
+                      height: 1.1,
+                      color: _kTableText,
+                    ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(width: 16),
         _StatPill(label: 'Notes', value: '$visibleCount / $totalCount'),
         if (onOpenImports != null) ...[
-          const SizedBox(width: 16),
+          const SizedBox(width: 12),
           _ImportButton(
             onPressed: onOpenImports!,
             focusNode: importButtonFocusNode,
@@ -1907,23 +1910,22 @@ class _ImportButtonState extends State<_ImportButton> {
         curve: Curves.easeOut,
         decoration: BoxDecoration(
           color: _hovered ? ViewerPalette.accentSoft : _kTableSurface,
-          borderRadius: BorderRadius.circular(ViewerPalette.radiusLg),
+          borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
           border: Border.all(
             color: _hovered ? ViewerPalette.accent : _kTableBorder,
           ),
-          boxShadow: ViewerPalette.shadowLow,
         ),
         child: SizedBox(
-          height: _kHeaderBadgeHeight,
-          width: _kHeaderBadgeHeight,
+          height: _kHeaderControlHeight,
+          width: _kHeaderControlHeight,
           child: IconButton(
             focusNode: widget.focusNode,
             tooltip: 'Manage imported archives',
             onPressed: widget.onPressed,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints.tightFor(
-              width: _kHeaderBadgeHeight,
-              height: _kHeaderBadgeHeight,
+              width: _kHeaderControlHeight,
+              height: _kHeaderControlHeight,
             ),
             icon: const Icon(
               Icons.file_upload_outlined,
@@ -1948,12 +1950,11 @@ class _StatPill extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: _kTableSurface,
-        borderRadius: BorderRadius.circular(ViewerPalette.radiusLg),
+        borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
         border: Border.all(color: _kTableBorder),
-        boxShadow: ViewerPalette.shadowLow,
       ),
       child: SizedBox(
-        height: _kHeaderBadgeHeight,
+        height: _kHeaderControlHeight,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 16),
           child: Row(
@@ -2013,17 +2014,8 @@ class _TableHeader extends StatelessWidget {
     return MouseRegion(
       key: const ValueKey('tableHeader'),
       cursor: draggingColumns ? _draggingCursor : MouseCursor.defer,
-      child: DecoratedBox(
-        decoration: const BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              Color(0xFFECE0C6),
-              _kTableHeaderBg,
-            ],
-          ),
-        ),
+      child: ColoredBox(
+        color: _kTableHeaderBg,
         child: Padding(
           padding: const EdgeInsets.symmetric(
               horizontal: _kTableHorizontalPadding, vertical: 4),
@@ -2237,8 +2229,10 @@ class _TableRow extends StatelessWidget {
             const Positioned.fill(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  color: ViewerPalette.accentSoft,
-                  borderRadius: BorderRadius.all(Radius.circular(12)),
+                  color: ViewerPalette.rowSelected,
+                  borderRadius: BorderRadius.all(
+                    Radius.circular(ViewerPalette.radiusMd),
+                  ),
                 ),
               ),
             ),
@@ -2257,14 +2251,13 @@ class _TableRow extends StatelessWidget {
                       : DecoratedBox(
                           decoration: BoxDecoration(
                             borderRadius:
-                                BorderRadius.circular(ViewerPalette.radiusSm),
+                                BorderRadius.circular(ViewerPalette.radiusXs),
                             border:
                                 Border.all(color: ViewerPalette.borderControl),
-                            boxShadow: ViewerPalette.shadowLow,
                           ),
                           child: ClipRRect(
                             borderRadius: BorderRadius.circular(
-                                ViewerPalette.radiusSm - 1),
+                                ViewerPalette.radiusXs),
                             child: Image(
                               image: createNoteImageProvider(image),
                               width: _kTableThumbnailWidth,
@@ -2285,12 +2278,14 @@ class _TableRow extends StatelessWidget {
                 ),
                 _DataCell(
                     width: _kDenominationColumnWidth,
+                    emphasized: true,
                     child: Text(note.denomination)),
                 _DataCell(
                     width: _kDateColumnWidth,
                     child: Text(note.issueDate.isEmpty ? '-' : note.issueDate)),
                 _DataCell(
                     width: _kCatalogColumnWidth,
+                    emphasized: true,
                     child: Text(
                         note.catalogNumber.isEmpty ? '-' : note.catalogNumber)),
                 _DataCell(
@@ -2315,9 +2310,11 @@ class _TableRow extends StatelessWidget {
               child: IgnorePointer(
                 child: DecoratedBox(
                   decoration: BoxDecoration(
-                    borderRadius: BorderRadius.all(Radius.circular(12)),
+                    borderRadius: BorderRadius.all(
+                      Radius.circular(ViewerPalette.radiusMd),
+                    ),
                     border: Border.fromBorderSide(
-                      BorderSide(color: ViewerPalette.accent, width: 2),
+                      BorderSide(color: ViewerPalette.accent, width: 1.5),
                     ),
                   ),
                 ),
@@ -2338,15 +2335,8 @@ class _TableThumbnailPlaceholder extends StatelessWidget {
       width: _kTableThumbnailWidth,
       height: _kTableThumbnailHeight,
       decoration: BoxDecoration(
-        gradient: const LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            Color(0xFFF4EBD8),
-            _kTableThumbnailPlaceholderBg,
-          ],
-        ),
-        borderRadius: BorderRadius.circular(ViewerPalette.radiusSm),
+        color: _kTableThumbnailPlaceholderBg,
+        borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
         border: Border.all(color: _kTableThumbnailPlaceholderBorder),
       ),
       child: const Center(
@@ -2417,10 +2407,14 @@ class _TagChipState extends State<_TagChip> {
           duration: const Duration(milliseconds: 150),
           curve: Curves.easeOut,
           decoration: BoxDecoration(
-            color: _hovered ? ViewerPalette.accentSoft : _kTagChipBg,
-            borderRadius: BorderRadius.circular(20),
+            color: _hovered
+                ? ViewerPalette.tagBackgroundHover
+                : _kTagChipBg,
+            borderRadius: BorderRadius.circular(ViewerPalette.radiusChip),
             border: Border.all(
-              color: _hovered ? ViewerPalette.accent : _kTagChipBorder,
+              color: _hovered
+                  ? ViewerPalette.tagBorderHover
+                  : _kTagChipBorder,
             ),
           ),
           child: Padding(
@@ -2443,17 +2437,24 @@ class _TagChipState extends State<_TagChip> {
 }
 
 class _DataCell extends StatelessWidget {
-  const _DataCell({required this.width, required this.child});
+  const _DataCell({
+    required this.width,
+    required this.child,
+    this.emphasized = false,
+  });
 
   final double width;
   final Widget child;
+  final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: width,
       child: DefaultTextStyle.merge(
-        style: _kDataCellTextStyle,
+        style: emphasized
+            ? _kDataCellTextStyle.copyWith(fontWeight: FontWeight.w600)
+            : _kDataCellTextStyle,
         child: Center(child: child),
       ),
     );

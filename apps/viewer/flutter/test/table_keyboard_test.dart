@@ -56,8 +56,8 @@ void main() {
   Finder tableRow(int id) => find.byKey(ValueKey('tableRow-$id'));
 
   // The keyboard selection ring is a paint-only overlay and the only accent
-  // border on the table screen with a 12px radius (the unified filter bar
-  // also highlights in accent while focused, but with radiusLg).
+  // border on the table screen with a card radius (the unified filter bar
+  // also highlights in accent while focused, but with a control radius).
   Finder selectedRing() => find.byWidgetPredicate((widget) {
         if (widget is! DecoratedBox) return false;
         final decoration = widget.decoration;
@@ -65,7 +65,8 @@ void main() {
         final border = decoration.border;
         if (border is! Border) return false;
         if (border.top.color != ViewerPalette.accent) return false;
-        return decoration.borderRadius == BorderRadius.circular(12);
+        return decoration.borderRadius ==
+            BorderRadius.circular(ViewerPalette.radiusMd);
       });
 
   Finder selectedRow(int id) => find.descendant(
@@ -1022,7 +1023,7 @@ void main() {
         buildHome(ImportDatasetScreen(controller: controller)),
       );
       await tester.pumpAndSettle();
-      expect(find.text('Import Dataset'), findsOneWidget);
+      expect(find.text('IMPORT DATASET'), findsOneWidget);
 
       await tester.pumpWidget(
         buildHome(NotesTableScreen(controller: controller)),
