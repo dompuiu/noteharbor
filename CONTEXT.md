@@ -49,7 +49,7 @@ The enlarged, single-image view opened from a note's image in the Note slideshow
 _Avoid_: Lightbox, 2nd level slideshow
 
 **Zoom view**:
-The Image popover's rendering of a note image at its natural pixel size (1:1), only when that size exceeds the available space; the image is pannable within the stage but never shown smaller than the fit view.
+The Image popover's stepped view above the fit view, walking a ladder of 1.25×, 1.5×, 2×, 3× and 4× the fitted image, with 100% showing natural pixels; the image is pannable within the stage but never shown smaller than the fit view.
 _Avoid_: Full size, 100% zoom, lightbox zoom
 
 ## Editor navigation

@@ -1124,27 +1124,29 @@ describe("Arrow modifiers and h/j/k/l aliases", () => {
     expect(image.style.transform).toBe("translate(0px, 0px)");
 
     await user.keyboard("{Shift>}{ArrowRight}{/Shift}");
-    expect(image.style.transform).toBe("translate(-10px, 0px)");
+    expect(image.style.transform).toBe("translate(-12.5px, 0px)");
 
     await user.keyboard("{Control>}{ArrowRight}{/Control}");
-    expect(image.style.transform).toBe("translate(-20px, 0px)");
+    expect(image.style.transform).toBe("translate(-25px, 0px)");
 
     await user.keyboard("{Meta>}{ArrowLeft}{/Meta}");
-    expect(image.style.transform).toBe("translate(-10px, 0px)");
+    expect(image.style.transform).toBe("translate(-12.5px, 0px)");
 
     // h/j/k/l alias the arrows, including the Shift-held spelling.
     await user.keyboard("{Shift>}l{/Shift}");
-    expect(image.style.transform).toBe("translate(-20px, 0px)");
+    expect(image.style.transform).toBe("translate(-25px, 0px)");
 
     await user.keyboard("{Control>}{ArrowDown}{/Control}");
-    expect(image.style.transform).toBe("translate(-20px, -10px)");
+    expect(image.style.transform).toMatch(
+      /^translate\(-25px, -11\.66\d*px\)$/,
+    );
 
     await user.keyboard("{Shift>}k{/Shift}");
-    expect(image.style.transform).toBe("translate(-20px, 0px)");
+    expect(image.style.transform).toBe("translate(-25px, 0px)");
 
     // Alt+arrow is inert even while the image is pannable.
     await user.keyboard("{Alt>}{ArrowRight}{/Alt}");
-    expect(image.style.transform).toBe("translate(-20px, 0px)");
+    expect(image.style.transform).toBe("translate(-25px, 0px)");
   });
 
   test("the shortcut help lists the new modifiers and aliases", async () => {
@@ -1189,6 +1191,21 @@ describe("Arrow modifiers and h/j/k/l aliases", () => {
     expect(keysOf("Add a note before the one being edited")).toEqual([
       "Ctrl/Cmd",
       "A",
+    ]);
+
+    // The image preview advertises its zoom, pan, wheel and double-click
+    // controls.
+    expect(keysOf("Zoom in / out")).toEqual(["+", "−"]);
+    expect(keysOf("Pan the zoomed image")).toEqual([
+      "Ctrl/Cmd/Shift",
+      "←",
+      "↑",
+      "→",
+      "↓",
+    ]);
+    expect(keysOf("Zoom in / out at the pointer")).toEqual(["Wheel"]);
+    expect(keysOf("Zoom in, or fit the image again")).toEqual([
+      "Double-click",
     ]);
   });
 

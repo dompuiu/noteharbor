@@ -156,7 +156,11 @@ function getPreviewItems(note, { includeMissingSides = false } = {}) {
   return items;
 }
 
+// Zoom stops as multiples of the fitted image, not of its natural pixels. A
+// scan that arrives much larger than the plate therefore steps up from the
+// size the reader already sees instead of jumping straight to 100%.
 const POPOVER_ZOOM_LEVELS = [1, 1.25, 1.5, 2, 3, 4];
+const ZOOM_EPSILON = 0.001;
 
 function ImagePopover({
   alt,
@@ -184,6 +188,7 @@ function ImagePopover({
   const keyHeldRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const [displayedSrc, setDisplayedSrc] = useState(null);
+  const [fitSize, setFitSize] = useState({ width: 0, height: 0 });
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
@@ -192,6 +197,11 @@ function ImagePopover({
   const showThumb = !displayedSrc && Boolean(thumb) && thumb !== src;
 
   const zoomed = zoomScale > 0;
+  const fitScale =
+    naturalSize.width > 0 && fitSize.width > 0
+      ? fitSize.width / naturalSize.width
+      : 0;
+  const shownScale = zoomed ? zoomScale : fitScale;
   const scaledSize = {
     width: naturalSize.width * zoomScale,
     height: naturalSize.height * zoomScale,
@@ -199,21 +209,30 @@ function ImagePopover({
   const overflowX = Math.max(0, scaledSize.width - viewportSize.width);
   const overflowY = Math.max(0, scaledSize.height - viewportSize.height);
   const pannable = zoomed && (overflowX > 0 || overflowY > 0);
+  const maxZoomScale = fitScale * POPOVER_ZOOM_LEVELS.at(-1);
+  const canZoomIn =
+    fullLoaded && fitScale > 0 && (!zoomed || zoomScale < maxZoomScale);
+  const canZoomOut = fullLoaded && zoomed;
 
-  function clampOffsetForViewport(nextOffset, scale, size) {
+  // An axis with no overflow has nothing to pan, so it keeps the image
+  // centred. Without this a zoomed plate smaller than the well would snap to
+  // the top-left corner on its first step.
+  function clampOffset(nextOffset, scale = zoomScale, size = viewportSize) {
     const scaledWidth = naturalSize.width * scale;
     const scaledHeight = naturalSize.height * scale;
-    const maxX = Math.max(0, scaledWidth - size.width);
-    const maxY = Math.max(0, scaledHeight - size.height);
+    const minX = Math.min(0, size.width - scaledWidth);
+    const minY = Math.min(0, size.height - scaledHeight);
 
     return {
-      x: Math.min(0, Math.max(-maxX, nextOffset.x)),
-      y: Math.min(0, Math.max(-maxY, nextOffset.y)),
+      x:
+        scaledWidth <= size.width
+          ? (size.width - scaledWidth) / 2
+          : Math.min(0, Math.max(minX, nextOffset.x)),
+      y:
+        scaledHeight <= size.height
+          ? (size.height - scaledHeight) / 2
+          : Math.min(0, Math.max(minY, nextOffset.y)),
     };
-  }
-
-  function clampOffset(nextOffset, scale = zoomScale) {
-    return clampOffsetForViewport(nextOffset, scale, viewportSize);
   }
 
   function measureImage() {
@@ -223,63 +242,75 @@ function ImagePopover({
       return;
     }
 
-    const imageRect = image.getBoundingClientRect();
     setNaturalSize({
       width: image.naturalWidth || 0,
       height: image.naturalHeight || 0,
     });
 
-    if (!zoomScale && imageRect.width && imageRect.height) {
-      setViewportSize({ width: imageRect.width, height: imageRect.height });
-    }
-  }
+    if (!zoomed) {
+      const imageRect = image.getBoundingClientRect();
 
-  function measureViewport() {
-    const imageWrap = imageWrapRef.current;
-
-    if (!imageWrap) {
-      return;
-    }
-
-    const imageWrapRect = imageWrap.getBoundingClientRect();
-
-    if (imageWrapRect.width && imageWrapRect.height) {
-      const nextViewportSize = {
-        width: imageWrapRect.width,
-        height: imageWrapRect.height,
-      };
-      const zoomAnchor = zoomAnchorRef.current;
-
-      setViewportSize(nextViewportSize);
-
-      if (zoomAnchor) {
-        zoomAnchorRef.current = null;
-        setOffset(
-          clampOffsetForViewport(
-            {
-              x: nextViewportSize.width / 2 - zoomAnchor.x * zoomScale,
-              y: nextViewportSize.height / 2 - zoomAnchor.y * zoomScale,
-            },
-            zoomScale,
-            nextViewportSize,
-          ),
-        );
+      if (imageRect.width && imageRect.height) {
+        setFitSize({ width: imageRect.width, height: imageRect.height });
       }
     }
   }
 
-  function rememberZoomAnchor(e) {
-    const image = e.currentTarget;
-    const imageRect = image.getBoundingClientRect();
+  function wrapRect() {
+    const rect = imageWrapRef.current?.getBoundingClientRect();
 
-    if (!imageRect.width || !imageRect.height) {
+    return rect?.width && rect?.height ? rect : null;
+  }
+
+  function measureViewport() {
+    const imageWrapRect = wrapRect();
+
+    if (!imageWrapRect) {
       return;
     }
 
-    zoomAnchorRef.current = {
-      x: ((e.clientX - imageRect.left) / imageRect.width) * image.naturalWidth,
-      y: ((e.clientY - imageRect.top) / imageRect.height) * image.naturalHeight,
+    const nextViewportSize = {
+      width: imageWrapRect.width,
+      height: imageWrapRect.height,
     };
+    const zoomAnchor = zoomAnchorRef.current;
+
+    setViewportSize(nextViewportSize);
+
+    if (zoomAnchor) {
+      zoomAnchorRef.current = null;
+      setOffset(
+        clampOffset(
+          {
+            x: nextViewportSize.width / 2 - zoomAnchor.x * zoomScale,
+            y: nextViewportSize.height / 2 - zoomAnchor.y * zoomScale,
+          },
+          zoomScale,
+          nextViewportSize,
+        ),
+      );
+    }
+  }
+
+  function anchorInViewport(e) {
+    const imageWrapRect = wrapRect();
+
+    if (!imageWrapRect) {
+      return null;
+    }
+
+    return {
+      x: e.clientX - imageWrapRect.left,
+      y: e.clientY - imageWrapRect.top,
+    };
+  }
+
+  function liveViewportSize() {
+    const imageWrapRect = wrapRect();
+
+    return imageWrapRect
+      ? { width: imageWrapRect.width, height: imageWrapRect.height }
+      : viewportSize;
   }
 
   function resetZoom() {
@@ -291,47 +322,76 @@ function ImagePopover({
   }
 
   function getNextZoomScale(direction) {
+    const ladder = POPOVER_ZOOM_LEVELS.map((level) => fitScale * level);
+    const currentScale = zoomed ? zoomScale : fitScale;
+
     if (direction > 0) {
       return (
-        POPOVER_ZOOM_LEVELS.find((scale) => scale > zoomScale) ??
-        POPOVER_ZOOM_LEVELS[POPOVER_ZOOM_LEVELS.length - 1]
+        ladder.find((scale) => scale > currentScale + ZOOM_EPSILON) ??
+        currentScale
       );
     }
 
-    const lowerScale = [...POPOVER_ZOOM_LEVELS]
+    const lowerScale = [...ladder]
       .reverse()
-      .find((scale) => scale < zoomScale);
+      .find((scale) => scale < currentScale - ZOOM_EPSILON);
 
     return lowerScale ?? 0;
   }
 
-  function changeZoom(direction, anchor = null) {
-    if (!fullLoaded) {
+  function zoomTo(nextScale, anchor = null) {
+    if (!fullLoaded || !fitScale) {
       return;
     }
 
-    measureImage();
-    const nextScale = getNextZoomScale(direction);
-
-    if (!nextScale) {
+    if (!nextScale || nextScale <= fitScale + ZOOM_EPSILON) {
       resetZoom();
       return;
     }
 
-    if (!zoomScale || !anchor) {
+    const viewport = liveViewportSize();
+    const point = anchor ?? {
+      x: viewport.width / 2,
+      y: viewport.height / 2,
+    };
+
+    if (!zoomed) {
+      // The zoomed plate has its own viewport, so remember the anchor in image
+      // pixels and centre it after the layout settles, rather than pinning it
+      // to the top-left corner.
+      const fitOrigin = {
+        x: (viewport.width - fitSize.width) / 2,
+        y: (viewport.height - fitSize.height) / 2,
+      };
+
+      zoomAnchorRef.current = {
+        x: (point.x - fitOrigin.x) / fitScale,
+        y: (point.y - fitOrigin.y) / fitScale,
+      };
       setZoomScale(nextScale);
-      setOffset((currentOffset) => clampOffset(currentOffset, nextScale));
       return;
     }
 
-    const scaleRatio = nextScale / zoomScale;
-    const nextOffset = {
-      x: anchor.x - (anchor.x - offset.x) * scaleRatio,
-      y: anchor.y - (anchor.y - offset.y) * scaleRatio,
+    const naturalPoint = {
+      x: (point.x - offset.x) / zoomScale,
+      y: (point.y - offset.y) / zoomScale,
     };
 
     setZoomScale(nextScale);
-    setOffset(clampOffset(nextOffset, nextScale));
+    setOffset(
+      clampOffset(
+        {
+          x: point.x - naturalPoint.x * nextScale,
+          y: point.y - naturalPoint.y * nextScale,
+        },
+        nextScale,
+        viewport,
+      ),
+    );
+  }
+
+  function changeZoom(direction, anchor = null) {
+    zoomTo(getNextZoomScale(direction), anchor);
   }
 
   function zoomIn() {
@@ -348,8 +408,7 @@ function ImagePopover({
       return;
     }
 
-    rememberZoomAnchor(e);
-    changeZoom(1);
+    changeZoom(1, anchorInViewport(e));
   }
 
   function moveToNextImage() {
@@ -441,19 +500,7 @@ function ImagePopover({
     }
 
     e.preventDefault();
-
-    if (!zoomScale) {
-      rememberZoomAnchor(e);
-      changeZoom(e.deltaY < 0 ? 1 : -1);
-      return;
-    }
-
-    const wrapRect = e.currentTarget.parentElement.getBoundingClientRect();
-    const anchor = {
-      x: e.clientX - wrapRect.left,
-      y: e.clientY - wrapRect.top,
-    };
-    changeZoom(e.deltaY < 0 ? 1 : -1, anchor);
+    changeZoom(e.deltaY < 0 ? 1 : -1, anchorInViewport(e));
   }
 
   useEffect(() => {
@@ -501,17 +548,25 @@ function ImagePopover({
       return undefined;
     }
 
-    const target = zoomScale ? imageWrapRef.current : imageRef.current;
+    const imageWrap = imageWrapRef.current;
 
-    if (!target || typeof ResizeObserver === "undefined") {
+    if (!imageWrap) {
       return undefined;
     }
 
-    const measure = zoomScale ? measureViewport : measureImage;
+    function measure() {
+      measureViewport();
+      measureImage();
+    }
+
     measure();
 
+    if (typeof ResizeObserver === "undefined") {
+      return undefined;
+    }
+
     const resizeObserver = new ResizeObserver(measure);
-    resizeObserver.observe(target);
+    resizeObserver.observe(imageWrap);
 
     return () => resizeObserver.disconnect();
   }, [displayedSrc, zoomScale]);
@@ -624,6 +679,11 @@ function ImagePopover({
 
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
+    fitScale,
+    fitSize,
+    fullLoaded,
+    naturalSize,
+    offset,
     onClose,
     onNext,
     onPreviewEnd,
@@ -632,6 +692,7 @@ function ImagePopover({
     overflowX,
     overflowY,
     pannable,
+    viewportSize,
     zoomScale,
   ]);
 
@@ -651,6 +712,9 @@ function ImagePopover({
           width: `${scaledSize.width}px`,
         }
       : undefined;
+  const zoomPercent =
+    fullLoaded && shownScale ? Math.round(shownScale * 100) : 0;
+  const atActualSize = zoomed && Math.abs(zoomScale - 1) < ZOOM_EPSILON;
 
   return (
     <div className="image-popover-overlay" onClick={onClose}>
@@ -664,6 +728,64 @@ function ImagePopover({
             <p className="image-popover-note-label">{noteLabel}</p>
           </div>
           <div className="image-popover-actions">
+            <div
+              aria-label="Image zoom"
+              className="image-popover-zoom"
+              role="group"
+            >
+              <button
+                aria-pressed={!zoomed}
+                className="image-popover-zoom-button"
+                disabled={!fullLoaded || !zoomed}
+                onClick={resetZoom}
+                title="Fit the image to the plate"
+                type="button"
+              >
+                Fit
+              </button>
+              <button
+                aria-pressed={atActualSize}
+                className="image-popover-zoom-button"
+                disabled={
+                  !fullLoaded ||
+                  !fitScale ||
+                  fitScale >= 1 - ZOOM_EPSILON
+                }
+                onClick={() => zoomTo(1)}
+                title="Show the image at 100%"
+                type="button"
+              >
+                100%
+              </button>
+              <button
+                aria-label="Zoom out"
+                className="image-popover-zoom-button image-popover-zoom-step"
+                disabled={!canZoomOut}
+                onClick={zoomOut}
+                title="Zoom out (-)"
+                type="button"
+              >
+                &minus;
+              </button>
+              <output
+                aria-label="Zoom level"
+                aria-live="polite"
+                className="image-popover-zoom-level"
+                title="Current zoom level"
+              >
+                {zoomPercent ? `${zoomPercent}%` : "Fit"}
+              </output>
+              <button
+                aria-label="Zoom in"
+                className="image-popover-zoom-button image-popover-zoom-step"
+                disabled={!canZoomIn}
+                onClick={zoomIn}
+                title="Zoom in (+)"
+                type="button"
+              >
+                +
+              </button>
+            </div>
             <NoteCounter
               jumpLabel="Image position"
               onJump={onJump}

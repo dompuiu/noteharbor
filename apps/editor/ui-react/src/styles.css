@@ -6843,6 +6843,65 @@ button.tag {
   flex-wrap: wrap;
 }
 
+/* The zoom cluster stays visible in both views: Fit and 100% jump to a known
+   scale, the steps walk the fitted-size ladder, and the level reads the
+   current scale against the image's natural pixels. */
+.image-popover-zoom {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  border: 1px solid var(--on-dark-border);
+  border-radius: var(--radius-control);
+  background: var(--on-dark-wash);
+}
+
+.image-popover-zoom-button {
+  min-height: 28px;
+  padding: 0 9px;
+  border: 0;
+  border-radius: calc(var(--radius-control) - 3px);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.76rem;
+  font-weight: 650;
+  cursor: pointer;
+  transition:
+    background 0.15s ease,
+    color 0.15s ease;
+}
+
+.image-popover-zoom-button:hover:not(:disabled) {
+  background: var(--on-dark-wash-strong);
+}
+
+.image-popover-zoom-button[aria-pressed="true"] {
+  background: var(--on-dark-text);
+  color: var(--on-dark-bg);
+}
+
+.image-popover-zoom-button:disabled {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.image-popover-zoom-step {
+  min-width: 28px;
+  padding: 0;
+  font-size: 1rem;
+  line-height: 1;
+}
+
+.image-popover-zoom-level {
+  min-width: 4.5ch;
+  color: var(--on-dark-muted);
+  font-size: 0.76rem;
+  font-variant-numeric: tabular-nums;
+  font-weight: 650;
+  text-align: center;
+}
+
 .image-popover-stage {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;

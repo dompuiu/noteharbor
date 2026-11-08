@@ -104,6 +104,16 @@ const shortcutGroups = [
     items: [
       { keys: ["←", "→"], description: "Go to the previous / next image" },
       { keys: ["Home", "End"], description: "Go to the first / last image" },
+      { keys: ["+", "−"], description: "Zoom in / out" },
+      {
+        keys: ["Ctrl/Cmd/Shift", "←", "↑", "→", "↓"],
+        description: "Pan the zoomed image",
+      },
+      { keys: ["Wheel"], description: "Zoom in / out at the pointer" },
+      {
+        keys: ["Double-click"],
+        description: "Zoom in, or fit the image again",
+      },
       { keys: ["Esc"], description: "Back to the slideshow" },
     ],
   },

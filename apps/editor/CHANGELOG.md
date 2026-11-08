@@ -4,6 +4,14 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+### Added
+
+- Image preview: a visible zoom control (Fit, 100%, −, +) with the current level shown; wheel and double-click zoom now share the same ladder.
+
+### Fixed
+
+- Image preview: zooming steps up from the fitted image size instead of jumping to 100% of the scan's natural pixels, and the first zoom centres the double-clicked point instead of landing top-left.
+
 ## [2.10.2] - 2026-11-07
 
 ### Fixed

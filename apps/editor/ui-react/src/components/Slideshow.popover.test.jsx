@@ -1,4 +1,4 @@
-import { act, fireEvent, render } from "@testing-library/react";
+import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { ImagePopover } from "./Slideshow.jsx";
 
@@ -54,6 +54,50 @@ function fullImage() {
 
 function thumbImage() {
   return document.querySelector(".image-popover-thumb");
+}
+
+function zoomLevel() {
+  return document.querySelector(".image-popover-zoom-level");
+}
+
+function zoomButton(label) {
+  return document.querySelector(`[aria-label="${label}"]`);
+}
+
+function box({ width, height, left = 0, top = 0 }) {
+  return {
+    width,
+    height,
+    left,
+    top,
+    right: left + width,
+    bottom: top + height,
+    x: left,
+    y: top,
+    toJSON: () => ({}),
+  };
+}
+
+function measureImageBox(
+  image,
+  { naturalWidth, naturalHeight, fitWidth, fitHeight },
+) {
+  Object.defineProperty(image, "naturalWidth", {
+    configurable: true,
+    value: naturalWidth,
+  });
+  Object.defineProperty(image, "naturalHeight", {
+    configurable: true,
+    value: naturalHeight,
+  });
+  image.getBoundingClientRect = () =>
+    box({ width: fitWidth, height: fitHeight });
+  fireEvent.load(image);
+}
+
+function measurePopoverWrap({ width, height, left = 0, top = 0 }) {
+  document.querySelector(".image-popover-image-wrap").getBoundingClientRect =
+    () => box({ width, height, left, top });
 }
 
 describe("ImagePopover image loading", () => {
@@ -168,5 +212,148 @@ describe("ImagePopover image loading", () => {
       completeSpy.mockRestore();
       widthSpy.mockRestore();
     }
+  });
+});
+
+describe("ImagePopover zoom", () => {
+  test("steps from the fitted size and reports the level", async () => {
+    render(popover());
+    await finishDecode(FRONT_1);
+
+    const image = fullImage();
+
+    measureImageBox(image, {
+      naturalWidth: 2000,
+      naturalHeight: 1000,
+      fitWidth: 500,
+      fitHeight: 250,
+    });
+    measurePopoverWrap({ width: 800, height: 600 });
+
+    // The first press is 1.25x the fitted plate (625px), not 100% of the
+    // 2000px scan.
+    fireEvent.click(zoomButton("Zoom in"));
+
+    expect(image.style.width).toBe("625px");
+    expect(image.style.height).toBe("312.5px");
+    expect(zoomLevel()).toHaveTextContent("31%");
+
+    fireEvent.click(screen.getByRole("button", { name: "Fit" }));
+
+    expect(image.style.width).toBe("");
+    expect(zoomLevel()).toHaveTextContent("25%");
+
+    fireEvent.click(screen.getByRole("button", { name: "100%" }));
+
+    expect(image.style.width).toBe("2000px");
+    expect(image.style.height).toBe("1000px");
+    expect(zoomLevel()).toHaveTextContent("100%");
+  });
+
+  test("centres the double-clicked point on the first zoom", async () => {
+    render(popover());
+    await finishDecode(FRONT_1);
+
+    const image = fullImage();
+
+    measureImageBox(image, {
+      naturalWidth: 2000,
+      naturalHeight: 1000,
+      fitWidth: 700,
+      fitHeight: 350,
+    });
+    measurePopoverWrap({ width: 800, height: 600 });
+
+    // Click the centre of the fitted image. The first zoom is 1.25x fit, so
+    // the image is 875px wide and its centre must sit at the plate centre.
+    fireEvent.doubleClick(image, { clientX: 400, clientY: 300 });
+
+    expect(image.style.width).toBe("875px");
+    expect(image.style.transform).toMatch(
+      /^translate\(-37\.5\d*px, 81\.25px\)$/,
+    );
+  });
+
+  test("does not shrink a scan that already fits the plate", async () => {
+    render(popover());
+    await finishDecode(FRONT_1);
+
+    const image = fullImage();
+
+    measureImageBox(image, {
+      naturalWidth: 400,
+      naturalHeight: 200,
+      fitWidth: 400,
+      fitHeight: 200,
+    });
+    measurePopoverWrap({ width: 800, height: 600 });
+
+    expect(screen.getByRole("button", { name: "100%" })).toBeDisabled();
+
+    fireEvent.click(zoomButton("Zoom in"));
+
+    expect(image.style.width).toBe("500px");
+    expect(image.style.height).toBe("250px");
+    expect(image.style.transform).toBe("translate(150px, 175px)");
+    expect(zoomLevel()).toHaveTextContent("125%");
+  });
+
+  test("wheel zooms in, and Escape unwinds the zoom before closing", async () => {
+    const onClose = vi.fn();
+
+    render(popover({ onClose }));
+    await finishDecode(FRONT_1);
+
+    const image = fullImage();
+
+    measureImageBox(image, {
+      naturalWidth: 2000,
+      naturalHeight: 1000,
+      fitWidth: 500,
+      fitHeight: 250,
+    });
+    measurePopoverWrap({ width: 800, height: 600 });
+
+    fireEvent.wheel(image, { deltaY: -100, clientX: 400, clientY: 300 });
+
+    expect(image.style.width).toBe("625px");
+    expect(zoomLevel()).toHaveTextContent("31%");
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(image.style.width).toBe("");
+    expect(zoomLevel()).toHaveTextContent("25%");
+    expect(onClose).not.toHaveBeenCalled();
+
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+
+  test("keeps 100% as the top stop when the ladder ends below it", async () => {
+    render(popover());
+    await finishDecode(FRONT_1);
+
+    const image = fullImage();
+
+    measureImageBox(image, {
+      naturalWidth: 5000,
+      naturalHeight: 2500,
+      fitWidth: 1000,
+      fitHeight: 500,
+    });
+    measurePopoverWrap({ width: 1000, height: 600 });
+
+    fireEvent.click(screen.getByRole("button", { name: "100%" }));
+
+    expect(image.style.width).toBe("5000px");
+    expect(zoomButton("Zoom in")).toBeDisabled();
+
+    // At 100% the ladder's top rung (4x fit, 80%) is below the current scale;
+    // a further zoom-in must hold still rather than step backwards.
+    fireEvent.keyDown(window, { key: "+" });
+
+    expect(image.style.width).toBe("5000px");
+    expect(zoomLevel()).toHaveTextContent("100%");
   });
 });
