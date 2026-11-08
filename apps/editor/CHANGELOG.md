@@ -4,6 +4,16 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.12.0] - 2026-11-08
+
+### Changed
+
+- Every editor select now uses the tag field's searchable combobox: the collection picker, the move-to-collection dialog, and the showcase filter share one `SelectField`. Floating option lists flip and clamp to the space available, and the tag field always shows its suggestions chevron.
+
+### Fixed
+
+- Image preview: the warming thumbnail now paints its veil behind the incoming image, so the previous note can no longer peek around it, and a drop shadow hugs the bitmap instead of its letterboxed element box.
+
 ## [2.11.0] - 2026-11-07
 
 ### Added
