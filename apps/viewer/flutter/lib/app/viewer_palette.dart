@@ -35,6 +35,13 @@ abstract final class ViewerPalette {
   /// column row reads as part of the table instead of floating on the page.
   static const Color tableHeaderBackground = surfaceMist;
 
+  // ── Disabled controls ─────────────────────────────────────────────
+  /// A disabled button reads as a quiet control, never as a dimmed accent:
+  /// neutral fill, soft edge, muted ink that still clears contrast.
+  static const Color controlDisabled = surfaceMist;
+  static const Color controlDisabledBorder = borderSoft;
+  static const Color controlDisabledText = textFaint;
+
   // ── Light text ────────────────────────────────────────────────────
   static const Color text = Color(0xFF25282B);
   static const Color textMuted = Color(0xFF5F6367);

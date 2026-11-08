@@ -21,7 +21,7 @@ const _kTagChipBorder = ViewerPalette.tagBorder;
 const _kTagChipText = ViewerPalette.tagText;
 
 /// Fixed height shared by the slideshow's counter pill and Back control.
-const double _kRoomControlHeight = 36;
+const double _kRoomControlHeight = 40;
 
 /// Keyboard scroll step for the slide content, in logical pixels.
 const _kArrowScrollOffset = 120.0;

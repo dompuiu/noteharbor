@@ -6,6 +6,7 @@ import '../../app/app_info.dart';
 import '../../app/viewer_palette.dart';
 import '../../data/dataset_controller.dart';
 import '../../utils/dataset_date_format.dart';
+import '../../widgets/viewer_button_styles.dart';
 
 class ImportDatasetScreen extends StatefulWidget {
   const ImportDatasetScreen({required this.controller, super.key});
@@ -454,14 +455,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                     onPressed: isBusy || activeCollection == null
                                         ? null
                                         : _deleteActiveCollection,
-                                    style: FilledButton.styleFrom(
-                                      backgroundColor: ViewerPalette.dangerSoft,
-                                      foregroundColor: ViewerPalette.danger,
-                                      side: BorderSide(
-                                        color: ViewerPalette.danger
-                                            .withValues(alpha: 0.3),
-                                      ),
-                                    ),
+                                    style: ViewerButtonStyles.dangerTonal(),
                                     child: const Text('Delete collection'),
                                   ),
                                   if (_collectionMessage != null) ...[
@@ -552,14 +546,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                   onPressed: isBusy || dataset == null
                                       ? null
                                       : _deleteImportedData,
-                                  style: FilledButton.styleFrom(
-                                    backgroundColor: ViewerPalette.dangerSoft,
-                                    foregroundColor: ViewerPalette.danger,
-                                    side: BorderSide(
-                                      color:
-                                          ViewerPalette.danger.withValues(alpha: 0.3),
-                                    ),
-                                  ),
+                                  style: ViewerButtonStyles.dangerTonal(),
                                   icon: const Icon(Icons.delete_outline_rounded),
                                   label: const Text('Delete imported data'),
                                 ),
@@ -813,119 +800,148 @@ class _StatusBanner extends StatelessWidget {
   }
 }
 
-class _ArchiveDropZone extends StatelessWidget {
+class _ArchiveDropZone extends StatefulWidget {
   const _ArchiveDropZone({required this.fileName, required this.onTap});
 
   final String? fileName;
   final VoidCallback? onTap;
 
   @override
+  State<_ArchiveDropZone> createState() => _ArchiveDropZoneState();
+}
+
+class _ArchiveDropZoneState extends State<_ArchiveDropZone> {
+  bool _hovered = false;
+
+  @override
   Widget build(BuildContext context) {
+    final fileName = widget.fileName;
+    final onTap = widget.onTap;
     final selected = fileName != null;
-    return GestureDetector(
-      onTap: onTap,
-      child: MouseRegion(
-        cursor: onTap == null
-            ? MouseCursor.defer
-            : SystemMouseCursors.click,
-        child: CustomPaint(
-          painter: _DashedBorderPainter(
-            color: selected
-                ? ViewerPalette.accent
-                : ViewerPalette.borderControl,
-            radius: ViewerPalette.radiusControl,
-          ),
-          child: DecoratedBox(
+    final interactive = onTap != null;
+    final hovered = interactive && _hovered;
+
+    final borderColor = selected
+        ? ViewerPalette.accent
+        : hovered
+            ? ViewerPalette.accent.withValues(alpha: 0.55)
+            : ViewerPalette.borderControl;
+    final fillColor = selected
+        ? ViewerPalette.accentSoft
+        : hovered
+            ? ViewerPalette.surfaceStep
+            : ViewerPalette.surfaceMist;
+
+    return Semantics(
+      button: true,
+      label: selected
+          ? 'Selected archive $fileName. Choose a different archive'
+          : 'Choose a .zip archive',
+      child: GestureDetector(
+        onTap: onTap,
+        child: MouseRegion(
+          cursor: interactive
+              ? SystemMouseCursors.click
+              : MouseCursor.defer,
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 140),
+            curve: Curves.easeOut,
             decoration: BoxDecoration(
-              color: selected
-                  ? ViewerPalette.accentSoft
-                  : ViewerPalette.surfaceMist,
+              color: fillColor,
               borderRadius:
                   BorderRadius.circular(ViewerPalette.radiusControl),
             ),
-            child: Padding(
-              padding: const EdgeInsets.all(16),
-              child: Row(
-                children: [
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: ViewerPalette.surface,
-                      borderRadius: BorderRadius.circular(
-                          ViewerPalette.radiusSm),
-                      border:
-                          Border.all(color: ViewerPalette.border),
-                    ),
-                    child: const Padding(
-                      padding: EdgeInsets.all(10),
-                      child: Icon(
-                        Icons.archive_outlined,
-                        color: ViewerPalette.accent,
-                        size: 22,
+            child: CustomPaint(
+              painter: _DashedBorderPainter(
+                color: borderColor,
+                radius: ViewerPalette.radiusControl,
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: ViewerPalette.surface,
+                        borderRadius: BorderRadius.circular(
+                            ViewerPalette.radiusSm),
+                        border:
+                            Border.all(color: ViewerPalette.border),
+                      ),
+                      child: const Padding(
+                        padding: EdgeInsets.all(10),
+                        child: Icon(
+                          Icons.archive_outlined,
+                          color: ViewerPalette.accent,
+                          size: 22,
+                        ),
                       ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          fileName ?? 'No archive selected',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontWeight: FontWeight.w700,
-                            color: selected
-                                ? ViewerPalette.text
-                                : ViewerPalette.textMuted,
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            fileName ?? 'No archive selected',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              fontWeight: FontWeight.w700,
+                              color: selected
+                                  ? ViewerPalette.text
+                                  : ViewerPalette.textMuted,
+                            ),
+                            overflow: TextOverflow.ellipsis,
                           ),
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 4),
-                        Text(
-                          selected
-                              ? 'Ready to import'
-                              : 'Tap to choose a .zip archive',
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 12,
-                            color: ViewerPalette.textMuted,
+                          const SizedBox(height: 4),
+                          Text(
+                            selected
+                                ? 'Ready to import'
+                                : 'Tap to choose a .zip archive',
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              fontSize: 12,
+                              color: ViewerPalette.textMuted,
+                            ),
                           ),
-                        ),
-                      ],
+                        ],
+                      ),
                     ),
-                  ),
-                  const SizedBox(width: 12),
-                  DecoratedBox(
-                    decoration: BoxDecoration(
-                      color: selected
-                          ? ViewerPalette.accentStrong
-                          : ViewerPalette.surfaceContainer,
-                      borderRadius: BorderRadius.circular(8),
-                      border: Border.all(
+                    const SizedBox(width: 12),
+                    DecoratedBox(
+                      decoration: BoxDecoration(
                         color: selected
                             ? ViewerPalette.accentStrong
-                            : ViewerPalette.border,
-                      ),
-                    ),
-                    child: Padding(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 4),
-                      child: Text(
-                        'ZIP',
-                        style: TextStyle(
-                          fontFamily: 'Inter',
-                          fontSize: 11,
-                          fontWeight: FontWeight.w800,
-                          letterSpacing: 1.0,
+                            : ViewerPalette.surface,
+                        borderRadius: BorderRadius.circular(8),
+                        border: Border.all(
                           color: selected
-                              ? ViewerPalette.surface
-                              : ViewerPalette.textMuted,
+                              ? ViewerPalette.accentStrong
+                              : ViewerPalette.border,
+                        ),
+                      ),
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 8, vertical: 4),
+                        child: Text(
+                          'ZIP',
+                          style: TextStyle(
+                            fontFamily: 'Inter',
+                            fontSize: 11,
+                            fontWeight: FontWeight.w800,
+                            letterSpacing: 1.0,
+                            color: selected
+                                ? ViewerPalette.onAccent
+                                : ViewerPalette.textMuted,
+                          ),
                         ),
                       ),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
             ),
           ),

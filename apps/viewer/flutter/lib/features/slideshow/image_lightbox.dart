@@ -19,7 +19,7 @@ const int _kVirtualPageOrigin = 1 << 20;
 
 /// Fixed height shared by the popover's counter pill and Back control, matching
 /// the Note slideshow's top bar.
-const double _kRoomControlHeight = 36;
+const double _kRoomControlHeight = 40;
 
 class ImageSequenceItem {
   const ImageSequenceItem({

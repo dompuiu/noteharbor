@@ -115,20 +115,17 @@ class _ViewerAppState extends State<ViewerApp> {
           ),
         ),
         filledButtonTheme: FilledButtonThemeData(
-          style: FilledButton.styleFrom(
-            foregroundColor: ViewerPalette.onAccent,
-            textStyle: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 13.5,
-              fontWeight: FontWeight.w600,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
-            ),
-            minimumSize: const Size(0, 36),
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-          ).copyWith(
+          style: ButtonStyle(
+            foregroundColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.disabled)) {
+                return ViewerPalette.controlDisabledText;
+              }
+              return ViewerPalette.onAccent;
+            }),
             backgroundColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.disabled)) {
+                return ViewerPalette.controlDisabled;
+              }
               if (states.contains(WidgetState.pressed)) {
                 return ViewerPalette.accentActive;
               }
@@ -137,26 +134,58 @@ class _ViewerAppState extends State<ViewerApp> {
               }
               return primaryColor;
             }),
+            side: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.disabled)) {
+                return const BorderSide(
+                  color: ViewerPalette.controlDisabledBorder,
+                );
+              }
+              return BorderSide.none;
+            }),
             overlayColor: WidgetStateProperty.all(Colors.transparent),
+            textStyle: WidgetStateProperty.all(
+              const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            shape: WidgetStateProperty.all(
+              const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(
+                  Radius.circular(ViewerPalette.radiusPill),
+                ),
+              ),
+            ),
+            minimumSize: WidgetStateProperty.all(const Size(0, 40)),
+            padding: WidgetStateProperty.all(
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
+            elevation: WidgetStateProperty.all(0),
           ),
         ),
         outlinedButtonTheme: OutlinedButtonThemeData(
-          style: OutlinedButton.styleFrom(
-            foregroundColor: ViewerPalette.text,
-            backgroundColor: ViewerPalette.surface,
-            textStyle: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 13.5,
-              fontWeight: FontWeight.w600,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
-            ),
-            minimumSize: const Size(0, 36),
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-          ).copyWith(
+          style: ButtonStyle(
+            foregroundColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.disabled)) {
+                return ViewerPalette.controlDisabledText;
+              }
+              return ViewerPalette.text;
+            }),
+            backgroundColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.disabled)) {
+                return ViewerPalette.controlDisabled;
+              }
+              return ViewerPalette.surface;
+            }),
             side: WidgetStateProperty.resolveWith((states) {
-              final active = states.contains(WidgetState.hovered) ||
+              if (states.contains(WidgetState.disabled)) {
+                return const BorderSide(
+                  color: ViewerPalette.controlDisabledBorder,
+                );
+              }
+              final active =
+                  states.contains(WidgetState.hovered) ||
                   states.contains(WidgetState.focused) ||
                   states.contains(WidgetState.pressed);
               return BorderSide(
@@ -166,23 +195,53 @@ class _ViewerAppState extends State<ViewerApp> {
               );
             }),
             overlayColor: WidgetStateProperty.all(ViewerPalette.accentSoft),
+            textStyle: WidgetStateProperty.all(
+              const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            shape: WidgetStateProperty.all(
+              const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(
+                  Radius.circular(ViewerPalette.radiusPill),
+                ),
+              ),
+            ),
+            minimumSize: WidgetStateProperty.all(const Size(0, 40)),
+            padding: WidgetStateProperty.all(
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
           ),
         ),
         textButtonTheme: TextButtonThemeData(
-          style: TextButton.styleFrom(
-            foregroundColor: ViewerPalette.accentStrong,
-            textStyle: const TextStyle(
-              fontFamily: 'Inter',
-              fontSize: 13.5,
-              fontWeight: FontWeight.w600,
-            ),
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
-            ),
-            minimumSize: const Size(0, 36),
-            padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 6),
-          ).copyWith(
+          style: ButtonStyle(
+            foregroundColor: WidgetStateProperty.resolveWith((states) {
+              if (states.contains(WidgetState.disabled)) {
+                return ViewerPalette.controlDisabledText;
+              }
+              return ViewerPalette.accentStrong;
+            }),
             overlayColor: WidgetStateProperty.all(ViewerPalette.accentSoft),
+            textStyle: WidgetStateProperty.all(
+              const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 13.5,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            shape: WidgetStateProperty.all(
+              const RoundedRectangleBorder(
+                borderRadius: BorderRadius.all(
+                  Radius.circular(ViewerPalette.radiusPill),
+                ),
+              ),
+            ),
+            minimumSize: WidgetStateProperty.all(const Size(0, 40)),
+            padding: WidgetStateProperty.all(
+              const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+            ),
           ),
         ),
         iconButtonTheme: IconButtonThemeData(
