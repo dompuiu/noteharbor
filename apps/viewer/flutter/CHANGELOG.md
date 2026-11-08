@@ -4,12 +4,17 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ## [Unreleased]
 
+### Added
+
+- Table screen: the collection title is now a collection switcher. It stays a plain uppercase heading at rest, with a small chevron fading in on hover or keyboard focus. The menu lists every collection with its note count, filters as you type, and switches on click, Enter, or the arrow keys. Libraries with a single collection keep the plain title.
+
 ### Changed
 
 - The app now requires Flutter 3.47 / Dart 3.13, matching `window_manager` 0.6 and `screen_retriever` 0.3.
 
 ### Fixed
 
+- Windows desktop: the built executable is `note_harbor_viewer.exe` again, so `flutter run -d windows` (and `pnpm dev:viewer:flutter`) can launch it. The `Note Harbor Viewer.exe` OUTPUT_NAME override is gone; the window title and file metadata still carry the pretty name.
 - Desktop window persistence, after moving to the nativeapi-based `window_manager` 0.6 and `screen_retriever` 0.3 packages: the desktop build compiles again, and position, size and the Windows maximized state still restore on launch.
 
 ## [1.13.0] - 2026-11-07

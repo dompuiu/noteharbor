@@ -16,7 +16,9 @@ add_executable(${BINARY_NAME} WIN32
   "runner.exe.manifest"
 )
 
-set_target_properties(${BINARY_NAME} PROPERTIES OUTPUT_NAME "Note Harbor Viewer")
+# Keep the executable at ${BINARY_NAME}.exe: `flutter run` launches that exact
+# name, so an OUTPUT_NAME override here breaks dev runs. The window title and
+# file metadata carry the pretty "Note Harbor Viewer" name instead.
 
 # Apply the standard set of build settings. This can be removed for applications
 # that need different build settings.

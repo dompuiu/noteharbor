@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/foundation.dart';
@@ -9,6 +10,7 @@ import '../../app/viewer_palette.dart';
 import '../../data/dataset_controller.dart';
 import '../../models/note_record.dart';
 import '../../models/tag.dart';
+import '../../models/viewer_collection.dart';
 import '../../widgets/mouse_drag_scroll_behavior.dart';
 import '../../widgets/note_image_provider.dart';
 import '../import/import_dataset_screen.dart';
@@ -113,6 +115,15 @@ const TextStyle _kDataCellTextStyle = TextStyle(
   color: _kTableText,
   fontWeight: FontWeight.w400,
   fontFeatures: [FontFeature.tabularFigures()],
+);
+
+const TextStyle _kCollectionTitleTextStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: _kTableText,
+  fontWeight: FontWeight.w800,
+  fontSize: 20,
+  letterSpacing: -0.3,
+  height: 1.1,
 );
 
 const TextStyle _kHeaderLabelTextStyle = TextStyle(
@@ -772,9 +783,16 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     _tableFocusNode.requestFocus();
   }
 
+  /// Switching from the title menu hands keyboard control back to the table,
+  /// so arrows browse the new collection immediately instead of staying on the
+  /// heading.
+  void _selectCollectionFromTitle(int collectionId) {
+    unawaited(widget.controller.selectCollection(collectionId));
+    _tableFocusNode.requestFocus();
+  }
+
   void _handleControllerChange() {
     final currentCollectionId = widget.controller.activeCollectionId;
-
     if (_lastActiveCollectionId == currentCollectionId) {
       return;
     }
@@ -1416,6 +1434,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                         collectionName:
                             widget.controller.activeCollection?.name ??
                                 'Collection',
+                        collections: dataset.collections,
+                        activeCollectionId:
+                            widget.controller.activeCollection?.id,
+                        onSelectCollection: _selectCollectionFromTitle,
                         totalCount: scopedNotes.length,
                         visibleCount: notes.length,
                         onOpenImports:
@@ -1812,6 +1834,9 @@ class _FilterScopeOptionState extends State<_FilterScopeOption> {
 class _Header extends StatelessWidget {
   const _Header({
     required this.collectionName,
+    required this.collections,
+    required this.activeCollectionId,
+    required this.onSelectCollection,
     required this.totalCount,
     required this.visibleCount,
     required this.onOpenImports,
@@ -1819,6 +1844,9 @@ class _Header extends StatelessWidget {
   });
 
   final String collectionName;
+  final List<ViewerCollection> collections;
+  final int? activeCollectionId;
+  final ValueChanged<int> onSelectCollection;
   final int totalCount;
   final int visibleCount;
   final VoidCallback? onOpenImports;
@@ -1856,18 +1884,11 @@ class _Header extends StatelessWidget {
                 ),
               ),
               const SizedBox(height: 3),
-              Text(
-                title.toUpperCase(),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-                style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                      fontFamily: 'Inter',
-                      fontWeight: FontWeight.w800,
-                      fontSize: 20,
-                      letterSpacing: -0.3,
-                      height: 1.1,
-                      color: _kTableText,
-                    ),
+              _CollectionTitle(
+                activeCollectionId: activeCollectionId,
+                collections: collections,
+                onSelected: onSelectCollection,
+                title: title,
               ),
             ],
           ),
@@ -1882,6 +1903,583 @@ class _Header extends StatelessWidget {
           ),
         ],
       ],
+    );
+  }
+}
+
+/// The collection name, doubling as a collection switcher.
+///
+/// It stays a heading at rest: no field, border, or pill. A small chevron
+/// fades in on hover or keyboard focus, the pointer becomes a hand, and the
+/// tooltip names the action. A library with a single collection keeps the
+/// plain title — there is nothing to switch to, so no affordance is shown.
+class _CollectionTitle extends StatefulWidget {
+  const _CollectionTitle({
+    required this.title,
+    required this.collections,
+    required this.activeCollectionId,
+    required this.onSelected,
+  });
+
+  final String title;
+  final List<ViewerCollection> collections;
+  final int? activeCollectionId;
+  final ValueChanged<int> onSelected;
+
+  @override
+  State<_CollectionTitle> createState() => _CollectionTitleState();
+}
+
+class _CollectionTitleState extends State<_CollectionTitle> {
+  final LayerLink _link = LayerLink();
+  final OverlayPortalController _overlay = OverlayPortalController();
+  final FocusNode _triggerFocus = FocusNode(debugLabel: 'collectionTitle');
+  final Object _tapGroup = Object();
+
+  bool _hovered = false;
+  bool _open = false;
+
+  bool get _hasChoices => widget.collections.length > 1;
+
+  @override
+  void initState() {
+    super.initState();
+    _triggerFocus.addListener(_handleFocusChange);
+  }
+
+  @override
+  void dispose() {
+    _triggerFocus.removeListener(_handleFocusChange);
+    _triggerFocus.dispose();
+    super.dispose();
+  }
+
+  void _handleFocusChange() {
+    if (mounted) {
+      setState(() {});
+    }
+  }
+
+  void _openMenu() {
+    if (_open || !_hasChoices) {
+      return;
+    }
+
+    setState(() => _open = true);
+    _overlay.show();
+  }
+
+  void _closeMenu({bool returnFocus = true}) {
+    if (!_open) {
+      return;
+    }
+
+    _overlay.hide();
+    setState(() => _open = false);
+
+    if (returnFocus && mounted) {
+      _triggerFocus.requestFocus();
+    }
+  }
+
+  KeyEventResult _handleTriggerKey(KeyEvent event) {
+    if (event is! KeyDownEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    final key = event.logicalKey;
+
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter ||
+        key == LogicalKeyboardKey.space ||
+        key == LogicalKeyboardKey.arrowDown ||
+        key == LogicalKeyboardKey.arrowUp) {
+      _openMenu();
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.escape && _open) {
+      _closeMenu();
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  void _handleSelected(int collectionId) {
+    _closeMenu();
+    widget.onSelected(collectionId);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final title = Text(
+      widget.title.toUpperCase(),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+      style: _kCollectionTitleTextStyle,
+    );
+
+    if (!_hasChoices) {
+      return title;
+    }
+
+    final showChevron = _hovered || _triggerFocus.hasFocus || _open;
+
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: CompositedTransformTarget(
+        link: _link,
+        child: TapRegion(
+          groupId: _tapGroup,
+          child: OverlayPortal(
+            controller: _overlay,
+            overlayChildBuilder: (context) => CompositedTransformFollower(
+              link: _link,
+              showWhenUnlinked: false,
+              targetAnchor: Alignment.bottomLeft,
+              followerAnchor: Alignment.topLeft,
+              offset: const Offset(-3, 6),
+              child: Align(
+                alignment: Alignment.topLeft,
+                child: TapRegion(
+                  groupId: _tapGroup,
+                  onTapOutside: (_) => _closeMenu(returnFocus: false),
+                  child: _CollectionMenu(
+                    activeCollectionId: widget.activeCollectionId,
+                    collections: widget.collections,
+                    onClose: _closeMenu,
+                    onSelected: _handleSelected,
+                  ),
+                ),
+              ),
+            ),
+            child: Focus(
+              focusNode: _triggerFocus,
+              onKeyEvent: (_, event) => _handleTriggerKey(event),
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                onEnter: (_) => setState(() => _hovered = true),
+                onExit: (_) => setState(() => _hovered = false),
+                child: Tooltip(
+                  message: 'Switch collection',
+                  waitDuration: const Duration(milliseconds: 500),
+                  child: GestureDetector(
+                    key: const ValueKey('collectionTitle'),
+                    behavior: HitTestBehavior.opaque,
+                    onTap: () {
+                      if (_open) {
+                        _closeMenu();
+                        return;
+                      }
+
+                      _triggerFocus.requestFocus();
+                      _openMenu();
+                    },
+                    child: Semantics(
+                      button: true,
+                      excludeSemantics: true,
+                      label:
+                          'Collection: ${widget.title}. Activate to switch collection.',
+                      child: Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 3),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            Flexible(child: title),
+                            ClipRect(
+                              child: AnimatedSize(
+                                duration: const Duration(milliseconds: 150),
+                                curve: Curves.easeOut,
+                                child: showChevron
+                                    ? Padding(
+                                        padding: const EdgeInsets.only(left: 5),
+                                        child: AnimatedRotation(
+                                          duration: const Duration(
+                                            milliseconds: 150,
+                                          ),
+                                          turns: _open ? 0.5 : 0,
+                                          child: Icon(
+                                            Icons.expand_more,
+                                            size: 16,
+                                            color: _triggerFocus.hasFocus
+                                                ? ViewerPalette.accent
+                                                : ViewerPalette.textFaint,
+                                          ),
+                                        ),
+                                      )
+                                    : const SizedBox.shrink(),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _CollectionMenu extends StatefulWidget {
+  const _CollectionMenu({
+    required this.collections,
+    required this.activeCollectionId,
+    required this.onSelected,
+    required this.onClose,
+  });
+
+  final List<ViewerCollection> collections;
+  final int? activeCollectionId;
+  final ValueChanged<int> onSelected;
+  final VoidCallback onClose;
+
+  @override
+  State<_CollectionMenu> createState() => _CollectionMenuState();
+}
+
+class _CollectionMenuState extends State<_CollectionMenu> {
+  final TextEditingController _filter = TextEditingController();
+  late final FocusNode _filterFocus = FocusNode(
+    debugLabel: 'collectionMenuFilter',
+    onKeyEvent: (_, event) => _handleFilterKey(event),
+  );
+
+  int _highlighted = 0;
+
+  @override
+  void initState() {
+    super.initState();
+    _highlighted = _activeRowIndex();
+    // The overlay child is not attached during initState; focus it once the
+    // first frame has laid it out so typing always lands in the filter.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _filterFocus.requestFocus();
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _filter.dispose();
+    _filterFocus.dispose();
+    super.dispose();
+  }
+
+  List<ViewerCollection> get _filtered {
+    final query = _filter.text.trim().toLowerCase();
+
+    if (query.isEmpty) {
+      return widget.collections;
+    }
+
+    return widget.collections
+        .where((collection) => collection.name.toLowerCase().contains(query))
+        .toList(growable: false);
+  }
+
+  int _activeRowIndex() {
+    final index = widget.collections.indexWhere(
+      (collection) => collection.id == widget.activeCollectionId,
+    );
+    return index < 0 ? 0 : index;
+  }
+
+  void _handleQueryChanged(String _) {
+    setState(() {
+      _highlighted = _filtered.isEmpty ? -1 : 0;
+    });
+  }
+
+  void _moveHighlight(int delta) {
+    final count = _filtered.length;
+
+    if (count == 0) {
+      return;
+    }
+
+    setState(() {
+      _highlighted = (_highlighted + delta) % count;
+      if (_highlighted < 0) {
+        _highlighted += count;
+      }
+    });
+  }
+
+  void _activateHighlighted() {
+    final rows = _filtered;
+
+    if (rows.isEmpty) {
+      return;
+    }
+
+    final index = _highlighted.clamp(0, rows.length - 1);
+    widget.onSelected(rows[index].id);
+  }
+
+  KeyEventResult _handleFilterKey(KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+
+    final key = event.logicalKey;
+
+    if (key == LogicalKeyboardKey.arrowDown) {
+      _moveHighlight(1);
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.arrowUp) {
+      _moveHighlight(-1);
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.enter ||
+        key == LogicalKeyboardKey.numpadEnter) {
+      _activateHighlighted();
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.escape) {
+      widget.onClose();
+      return KeyEventResult.handled;
+    }
+
+    if (key == LogicalKeyboardKey.tab) {
+      // The filter is the menu's only control. Leaving it closes the menu and
+      // hands focus back to the title, so Tab never strands an open popover.
+      widget.onClose();
+      return KeyEventResult.handled;
+    }
+
+    return KeyEventResult.ignored;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final rows = _filtered;
+    final highlighted =
+        rows.isEmpty ? -1 : _highlighted.clamp(0, rows.length - 1);
+
+    return Container(
+      key: const ValueKey('collectionMenu'),
+      width: 300,
+      constraints: const BoxConstraints(maxHeight: 380),
+      clipBehavior: Clip.antiAlias,
+      decoration: BoxDecoration(
+        color: ViewerPalette.surface,
+        borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
+        border: Border.all(color: ViewerPalette.border),
+        boxShadow: ViewerPalette.shadowHigh,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            padding: const EdgeInsets.fromLTRB(10, 2, 10, 2),
+            decoration: const BoxDecoration(
+              border: Border(
+                bottom: BorderSide(color: ViewerPalette.borderSoft),
+              ),
+            ),
+            child: Row(
+              children: [
+                const Icon(
+                  Icons.search,
+                  size: 14,
+                  color: ViewerPalette.textFaint,
+                ),
+                const SizedBox(width: 7),
+                Expanded(
+                  child: TextField(
+                    key: const ValueKey('collectionMenuFilter'),
+                    controller: _filter,
+                    cursorColor: ViewerPalette.accent,
+                    focusNode: _filterFocus,
+                    onChanged: _handleQueryChanged,
+                    onSubmitted: (_) => _activateHighlighted(),
+                    style: const TextStyle(
+                      fontFamily: 'Inter',
+                      fontSize: 12,
+                      color: ViewerPalette.text,
+                    ),
+                    decoration: const InputDecoration(
+                      border: InputBorder.none,
+                      contentPadding: EdgeInsets.symmetric(vertical: 9),
+                      hintStyle: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 12,
+                        color: ViewerPalette.textFaint,
+                      ),
+                      hintText: 'Jump to collection…',
+                      isDense: true,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const Padding(
+            padding: EdgeInsets.fromLTRB(14, 8, 14, 4),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                'COLLECTIONS',
+                style: TextStyle(
+                  color: ViewerPalette.textMuted,
+                  fontFamily: 'Inter',
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w800,
+                  letterSpacing: 1.2,
+                ),
+              ),
+            ),
+          ),
+          Flexible(
+            child: rows.isEmpty
+                ? const Padding(
+                    padding: EdgeInsets.fromLTRB(14, 8, 14, 14),
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        'No collections match.',
+                        style: TextStyle(
+                          color: ViewerPalette.textMuted,
+                          fontFamily: 'Inter',
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  )
+                : ListView.builder(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
+                    itemCount: rows.length,
+                    itemBuilder: (context, index) {
+                      final collection = rows[index];
+
+                      return _CollectionMenuRow(
+                        active: collection.id == widget.activeCollectionId,
+                        highlighted: index == highlighted,
+                        name: collection.name,
+                        noteCount: collection.noteCount,
+                        onHover: () {
+                          if (_highlighted != index) {
+                            setState(() => _highlighted = index);
+                          }
+                        },
+                        onTap: () => widget.onSelected(collection.id),
+                      );
+                    },
+                  ),
+          ),
+          Container(
+            padding: const EdgeInsets.fromLTRB(14, 6, 14, 8),
+            decoration: const BoxDecoration(
+              border: Border(top: BorderSide(color: ViewerPalette.borderSoft)),
+            ),
+            child: const Align(
+              alignment: Alignment.centerLeft,
+              child: Text(
+                '↑ ↓ move · Enter switch · Esc close',
+                style: TextStyle(
+                  color: ViewerPalette.textFaint,
+                  fontFamily: 'Inter',
+                  fontSize: 10.5,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _CollectionMenuRow extends StatelessWidget {
+  const _CollectionMenuRow({
+    required this.active,
+    required this.highlighted,
+    required this.name,
+    required this.noteCount,
+    required this.onHover,
+    required this.onTap,
+  });
+
+  final bool active;
+  final bool highlighted;
+  final String name;
+  final int noteCount;
+  final VoidCallback onHover;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return Semantics(
+      button: true,
+      selected: active,
+      child: MouseRegion(
+        onEnter: (_) => onHover(),
+        child: GestureDetector(
+          behavior: HitTestBehavior.opaque,
+          onTap: onTap,
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 100),
+            curve: Curves.easeOut,
+            margin: const EdgeInsets.symmetric(vertical: 1),
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+            decoration: BoxDecoration(
+              color:
+                  highlighted ? ViewerPalette.accentSoft : Colors.transparent,
+              borderRadius: BorderRadius.circular(5),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(
+                      color: ViewerPalette.text,
+                      fontFamily: 'Inter',
+                      fontSize: 13,
+                      fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '$noteCount',
+                  style: const TextStyle(
+                    color: ViewerPalette.textFaint,
+                    fontFamily: 'Inter',
+                    fontSize: 11,
+                    fontFeatures: [FontFeature.tabularFigures()],
+                  ),
+                ),
+                const SizedBox(width: 10),
+                SizedBox(
+                  width: 14,
+                  child: active
+                      ? const Icon(
+                          Icons.check,
+                          color: ViewerPalette.accent,
+                          size: 14,
+                        )
+                      : null,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }
