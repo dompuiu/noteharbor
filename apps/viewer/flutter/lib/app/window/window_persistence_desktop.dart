@@ -36,19 +36,16 @@ Future<void> setupWindowPersistence() async {
     ).toNative();
     window.bounds = geometry.bounds.toNative();
 
+    if (geometry.maximized) {
+      // The runner shows the window itself on the first frame. Marking it
+      // maximized here makes nativeapi answer that show with a maximized one,
+      // instead of the runner's plain `SW_SHOWNORMAL` restoring it.
+      window.maximize();
+    }
+
     // Registered after the restored bounds are in place: restoring them must
     // not schedule a save of the geometry that was just written.
-    final listener = _WindowGeometryListener(store, window, initial: geometry);
-    window.addListener(listener._onWindowEvent);
-
-    if (geometry.maximized) {
-      // Applied when the runner shows the window on the first frame: showing
-      // it here would let the runner's own show restore it.
-      window.maximize();
-    } else {
-      window.show();
-      window.focus();
-    }
+    _WindowGeometryListener(store, window, initial: geometry).listen();
   } catch (error, stackTrace) {
     debugPrint('Window persistence is unavailable: $error\n$stackTrace');
   }
@@ -110,6 +107,10 @@ class _WindowGeometryListener {
   bool _saving = false;
   bool _pending = false;
 
+  /// Starts listening to [Window] events. The app keeps this listener for its
+  /// whole lifetime, so its [ListenerId] is not retained.
+  void listen() => _window.addListener(_onWindowEvent);
+
   void _onWindowEvent(WindowEvent event) {
     switch (event) {
       case WindowResizedEvent():
@@ -124,7 +125,15 @@ class _WindowGeometryListener {
         // window was moved and resized. Keep the close path trivial so
         // shutdown stays instant.
         _debounce?.cancel();
-      default:
+      case WindowFocusedEvent():
+      case WindowBlurredEvent():
+      case WindowCreatedEvent():
+      case WindowEnteredFullScreenEvent():
+      case WindowExitedFullScreenEvent():
+      case WindowDockedEvent():
+      case WindowUndockedEvent():
+      case WindowOcclusionChangedEvent():
+      case WindowPropertyChangedEvent():
         break;
     }
   }

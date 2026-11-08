@@ -10,7 +10,7 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ### Fixed
 
-- Desktop window persistence, after moving to the nativeapi-based `window_manager` 0.6 and `screen_retriever` 0.3: the Windows and macOS builds compile again, and position, size and the Windows maximized state still restore on launch.
+- Desktop window persistence, after moving to the nativeapi-based `window_manager` 0.6 and `screen_retriever` 0.3 packages: the desktop build compiles again, and position, size and the Windows maximized state still restore on launch.
 
 ## [1.13.0] - 2026-11-07
 
