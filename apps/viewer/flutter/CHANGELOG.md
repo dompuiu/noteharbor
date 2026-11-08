@@ -4,6 +4,14 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ## [Unreleased]
 
+### Changed
+
+- The app now requires Flutter 3.47 / Dart 3.13, matching `window_manager` 0.6 and `screen_retriever` 0.3.
+
+### Fixed
+
+- Desktop window persistence, after moving to the nativeapi-based `window_manager` 0.6 and `screen_retriever` 0.3: the Windows and macOS builds compile again, and position, size and the Windows maximized state still restore on launch.
+
 ## [1.13.0] - 2026-11-07
 
 ### Changed

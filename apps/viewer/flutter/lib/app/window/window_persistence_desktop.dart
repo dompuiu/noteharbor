@@ -19,45 +19,36 @@ Future<void> setupWindowPersistence() async {
   }
 
   try {
-    await windowManager.ensureInitialized();
+    final window = WindowManager.instance.getCurrent();
+    if (window == null) {
+      debugPrint('Window persistence is unavailable: no window to restore.');
+      return;
+    }
 
     final store = createWindowGeometryStore();
-    final displays = await _displayAreas();
+    final displays = _displayAreas();
     final geometry = (await store.load() ?? WindowGeometry.defaults)
         .clampToDisplays(displays);
 
-    final minimumSize = const Size(
+    window.minimumSize = const Size(
       WindowGeometry.minimumWidth,
       WindowGeometry.minimumHeight,
-    );
-    await windowManager.setMinimumSize(minimumSize);
+    ).toNative();
+    window.bounds = geometry.bounds.toNative();
 
-    windowManager.addListener(
-      _WindowGeometryListener(store: store, initial: geometry),
-    );
+    // Registered after the restored bounds are in place: restoring them must
+    // not schedule a save of the geometry that was just written.
+    final listener = _WindowGeometryListener(store, window, initial: geometry);
+    window.addListener(listener._onWindowEvent);
 
-    final options = WindowOptions(
-      size: Size(geometry.width, geometry.height),
-      minimumSize: minimumSize,
-      center: false,
-    );
-
-    // Not awaited: the app renders while the native window is still hidden,
-    // and the callback shows it once the restored bounds are in place.
-    unawaited(
-      windowManager.waitUntilReadyToShow(options, () async {
-        try {
-          await windowManager.setBounds(geometry.bounds);
-          if (geometry.maximized) {
-            await windowManager.maximize();
-          }
-          await windowManager.show();
-          await windowManager.focus();
-        } catch (error) {
-          debugPrint('Failed to apply the saved window geometry: $error');
-        }
-      }),
-    );
+    if (geometry.maximized) {
+      // Applied when the runner shows the window on the first frame: showing
+      // it here would let the runner's own show restore it.
+      window.maximize();
+    } else {
+      window.show();
+      window.focus();
+    }
   } catch (error, stackTrace) {
     debugPrint('Window persistence is unavailable: $error\n$stackTrace');
   }
@@ -68,18 +59,21 @@ bool get _isDesktop =>
 
 /// The visible area of every display, primary first, so off-screen windows
 /// have a sensible place to land.
-Future<List<Rect>> _displayAreas() async {
+List<Rect> _displayAreas() {
   final areas = <Rect>[];
 
   try {
-    areas.add(_visibleArea(await screenRetriever.getPrimaryDisplay()));
+    final primary = DisplayManager.instance.getPrimary();
+    if (primary != null) {
+      areas.add(primary.workArea.toRect());
+    }
   } catch (error) {
     debugPrint('Could not read the primary display: $error');
   }
 
   try {
-    for (final display in await screenRetriever.getAllDisplays()) {
-      final area = _visibleArea(display);
+    for (final display in DisplayManager.instance.getAll()) {
+      final area = display.workArea.toRect();
       if (!areas.contains(area)) {
         areas.add(area);
       }
@@ -91,60 +85,48 @@ Future<List<Rect>> _displayAreas() async {
   return areas;
 }
 
-Rect _visibleArea(Display display) {
-  final position = display.visiblePosition ?? Offset.zero;
-  final size = display.visibleSize ?? display.size;
-  return Rect.fromLTWH(position.dx, position.dy, size.width, size.height);
-}
-
 /// Debounces move/resize events into occasional writes, and never records the
 /// bounds of a maximized, fullscreen or minimized window: the file always
 /// holds the last *normal* geometry.
 ///
 /// Everything is saved while the window is live, so closing is not part of the
-/// save path: [onWindowClose] never intercepts the close or delays it.
-class _WindowGeometryListener with WindowListener {
-  _WindowGeometryListener({
-    required WindowGeometryStore store,
+/// save path: the listener never intercepts the close or delays it.
+class _WindowGeometryListener {
+  _WindowGeometryListener(
+    this._store,
+    this._window, {
     required WindowGeometry initial,
-  })  : _store = store,
-        _lastNormal = initial;
+  }) : _lastNormal = initial;
 
   static const Duration _debounceDelay = Duration(milliseconds: 500);
 
+  final WindowGeometryStore _store;
+  final Window _window;
+
   /// Bounds of the last window state worth remembering. Used when the window
   /// is minimized and the live bounds mean nothing.
-  final WindowGeometryStore _store;
   WindowGeometry _lastNormal;
   Timer? _debounce;
   bool _saving = false;
   bool _pending = false;
 
-  @override
-  void onWindowResized() => _scheduleSave();
-
-  @override
-  void onWindowMoved() => _scheduleSave();
-
-  @override
-  void onWindowMaximize() => _scheduleSave();
-
-  @override
-  void onWindowUnmaximize() => _scheduleSave();
-
-  @override
-  void onWindowRestore() => _scheduleSave();
-
-  @override
-  void onWindowMinimize() => _scheduleSave();
-
-  @override
-  void onWindowClose() {
-    // The close is never held: the geometry was already saved as the window
-    // was moved and resized, and this listener does not call setPreventClose.
-    // Keep the close callback trivial so shutdown stays instant; the window
-    // must never be destroyed from here.
-    _debounce?.cancel();
+  void _onWindowEvent(WindowEvent event) {
+    switch (event) {
+      case WindowResizedEvent():
+      case WindowMovedEvent():
+      case WindowMaximizedEvent():
+      case WindowRestoredEvent():
+      case WindowMinimizedEvent():
+        _scheduleSave();
+      case WindowCloseRequestedEvent():
+      case WindowClosedEvent():
+        // The close is never held: the geometry was already saved as the
+        // window was moved and resized. Keep the close path trivial so
+        // shutdown stays instant.
+        _debounce?.cancel();
+      default:
+        break;
+    }
   }
 
   void _scheduleSave() {
@@ -160,8 +142,7 @@ class _WindowGeometryListener with WindowListener {
 
     _saving = true;
     try {
-      final geometry = await _capture();
-      await _store.save(geometry);
+      await _store.save(_capture());
     } catch (error) {
       debugPrint('Could not save the window geometry: $error');
     } finally {
@@ -175,15 +156,15 @@ class _WindowGeometryListener with WindowListener {
 
   /// Reads the geometry worth remembering, updating the cached normal bounds
   /// only while the window is in its normal state.
-  Future<WindowGeometry> _capture() async {
-    if (await windowManager.isMinimized()) {
+  WindowGeometry _capture() {
+    if (_window.isMinimized) {
       return _lastNormal;
     }
 
-    final maximized = await windowManager.isMaximized();
-    final fullScreen = await windowManager.isFullScreen();
+    final maximized = _window.isMaximized;
+    final fullScreen = _window.isFullScreen;
     if (!maximized && !fullScreen) {
-      final bounds = await windowManager.getBounds();
+      final bounds = _window.bounds.toRect();
       if (bounds.width > 0 && bounds.height > 0) {
         _lastNormal = WindowGeometry(
           x: bounds.left,
