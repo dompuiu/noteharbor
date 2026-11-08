@@ -15,6 +15,7 @@ import {
   preloadImage,
   useImagePreload,
 } from "../lib/imagePreload.js";
+import { gradeTier } from "../lib/tableColumns.js";
 import { NoteCounter } from "./NoteCounter.jsx";
 
 function formatScrapedLabel(label) {
@@ -1514,7 +1515,16 @@ function Slideshow({
                   <strong>Catalog:</strong> {note.catalog_number || "-"}
                 </p>
                 <p>
-                  <strong>Grade:</strong> {note.grade || "-"}
+                  <strong>Grade:</strong>{" "}
+                  {note.grade ? (
+                    <span
+                      className={`slide-grade slide-grade--${gradeTier(note.grade)}`}
+                    >
+                      {note.grade}
+                    </span>
+                  ) : (
+                    "-"
+                  )}
                 </p>
                 <p>
                   <strong>Serial:</strong> {note.serial || "-"}

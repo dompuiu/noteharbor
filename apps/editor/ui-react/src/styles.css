@@ -6704,7 +6704,8 @@ button.tag {
 }
 
 .slide-thumb-btn:hover {
-  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.34);
+  box-shadow: 0 10px 26px
+    color-mix(in srgb, var(--on-dark-text) 26%, transparent);
   border-color: var(--on-dark-border-strong);
   transform: translateY(-1px);
 }
@@ -6790,15 +6791,21 @@ button.tag {
   --on-dark-bg: #f7f3ea;
   --on-dark-bg-translucent: rgba(247, 243, 234, 0.96);
   --on-dark-surface: #fffdf7;
-  --on-dark-text: #23262a;
-  --on-dark-muted: #5d6165;
+  /* Ink, muted type, hairlines and washes all derive from the paper's warm
+     brown, never a neutral grey: a cool grey line on cream reads as pencil
+     rubbed over a warm room. The values still clear AA on the card. */
+  --on-dark-text: #241f19;
+  --on-dark-muted: #6b6052;
   --on-dark-label: #8a4a12;
-  --on-dark-border: rgba(35, 38, 42, 0.14);
-  --on-dark-border-strong: rgba(35, 38, 42, 0.26);
+  --on-dark-border: rgba(93, 70, 38, 0.16);
+  --on-dark-border-strong: rgba(93, 70, 38, 0.3);
   --on-dark-link: #a30000;
-  --on-dark-wash: rgba(35, 38, 42, 0.05);
-  --on-dark-wash-strong: rgba(35, 38, 42, 0.1);
+  --on-dark-wash: rgba(93, 70, 38, 0.06);
+  --on-dark-wash-strong: rgba(93, 70, 38, 0.12);
   --on-dark-plate: #ffffff;
+  /* One step below the card: the scraped-details sub-panel sits in the paper
+     rather than on a grey wash. */
+  --on-dark-inset: #f7f0e2;
   --on-dark-glow: rgba(200, 160, 90, 0.16);
   --on-dark-focus: #a30000;
   /* The large slide plates are the one focus exception: the red ring reads as
@@ -6818,6 +6825,28 @@ button.tag {
    `--on-dark-focus-plate` for why. The rest of the chrome keeps red focus. */
 .slideshow-screen--overlay .slide-thumb-btn:focus-visible {
   outline-color: var(--on-dark-focus-plate);
+}
+
+/* The browser's own blue belongs to no room. Selecting a serial or a scraped
+   value takes the room's red wash, as the Table already does. */
+.slideshow-screen--overlay ::selection,
+.image-popover-overlay ::selection {
+  background: color-mix(in srgb, var(--on-dark-focus) 22%, transparent);
+  color: var(--on-dark-text);
+}
+
+/* The position counter turns into a field while it is being edited, so its
+   caret belongs to the room too. */
+.slideshow-screen--overlay input,
+.image-popover-overlay input {
+  caret-color: var(--on-dark-link);
+}
+
+/* The overlay's own scrollbar is part of the room, not the host platform. */
+.slideshow-screen--overlay,
+.image-popover-overlay {
+  scrollbar-width: thin;
+  scrollbar-color: var(--on-dark-border-strong) transparent;
 }
 
 /* The content holds its width at a 1200px viewport — min(1400px, 96vw) —
@@ -6981,7 +7010,8 @@ button.tag {
   max-height: min(72vh, 760px);
   object-fit: contain;
   border-radius: 3px;
-  box-shadow: 0 18px 48px rgba(35, 38, 42, 0.22);
+  box-shadow: 0 18px 48px
+    color-mix(in srgb, var(--on-dark-text) 20%, transparent);
   touch-action: none;
   user-select: none;
 }
@@ -7095,11 +7125,52 @@ button.tag {
   font-weight: 600;
 }
 
+/* The curated grade keeps the Table's three catalogue bands, so the same note
+   reads as the same grade in both surfaces. The tint is the one semantic hue
+   the room spends; the value itself still carries the meaning. */
+.slide-grade {
+  display: inline-flex;
+  align-items: baseline;
+  padding: 0 7px;
+  border-radius: var(--radius-pill);
+  font-size: 0.86rem;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.4;
+  white-space: nowrap;
+  box-shadow: inset 0 0 0 1px var(--on-dark-border);
+}
+
+.slide-grade--unc {
+  color: var(--success);
+  background: var(--success-bg);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--success) 24%, transparent);
+}
+
+.slide-grade--choice {
+  color: var(--warning);
+  background: var(--warning-bg);
+  box-shadow: inset 0 0 0 1px
+    color-mix(in srgb, var(--warning) 30%, transparent);
+}
+
+.slide-grade--circulated {
+  color: var(--on-dark-muted);
+  background: var(--on-dark-wash);
+}
+
+.slide-grade--none {
+  color: var(--on-dark-muted);
+}
+
 .scraped-details-panel {
   padding: 14px 16px;
   border: 1px solid var(--on-dark-border);
   border-radius: var(--radius-lg);
-  background: var(--on-dark-wash);
+  /* Recessed paper, not a grey wash: the raw scrape reads as an inset in the
+     catalogue page instead of a second card. */
+  background: var(--on-dark-inset);
   width: 100%;
   max-width: 100%;
   justify-self: stretch;

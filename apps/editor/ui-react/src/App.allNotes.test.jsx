@@ -595,6 +595,19 @@ describe("All notes screen", () => {
     expect(screen.getByTestId("search").textContent).toContain("collection=2");
   });
 
+  test("the slideshow grade wears the Table's catalogue band", async () => {
+    const user = userEvent.setup();
+    renderAllNotes();
+    await screen.findByText("Fr. 2300");
+
+    await user.click(screen.getByText("1 Leu"));
+
+    const grade = document.querySelector(".slide-grade");
+    expect(grade).not.toBeNull();
+    expect(grade).toHaveTextContent("66 EPQ");
+    expect(grade).toHaveClass("slide-grade--unc");
+  });
+
   test("the image preview opens from the All notes slideshow and Esc steps back", async () => {
     const user = userEvent.setup();
     renderAllNotes();

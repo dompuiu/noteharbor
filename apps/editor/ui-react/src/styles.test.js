@@ -1913,7 +1913,9 @@ describe("slideshow overlay styles", () => {
 
   // Light room: both overlay roots remap the same on-dark roles, so the two
   // presentation screens share one palette and the rest of the Editor stays
-  // in the ink room. The values are the spec's Light room table.
+  // in the ink room. The paper and mats are the spec's Light room table; the
+  // type and hairline values are the colour pass that pulled every neutral
+  // into the paper's warm brown instead of leaving cool greys on cream.
   test("both overlay roots remap the on-dark roles to the Light room palette", () => {
     const palette = roomPalette();
     expect(palette).not.toBeNull();
@@ -1922,14 +1924,14 @@ describe("slideshow overlay styles", () => {
       /--on-dark-bg-translucent:\s*rgba\(247,\s*243,\s*234,\s*0\.96\)/,
     );
     expect(palette[1]).toMatch(/--on-dark-surface:\s*#fffdf7/);
-    expect(palette[1]).toMatch(/--on-dark-text:\s*#23262a/);
-    expect(palette[1]).toMatch(/--on-dark-muted:\s*#5d6165/);
+    expect(palette[1]).toMatch(/--on-dark-text:\s*#241f19/);
+    expect(palette[1]).toMatch(/--on-dark-muted:\s*#6b6052/);
     expect(palette[1]).toMatch(/--on-dark-label:\s*#8a4a12/);
     expect(palette[1]).toMatch(
-      /--on-dark-border:\s*rgba\(35,\s*38,\s*42,\s*0\.14\)/,
+      /--on-dark-border:\s*rgba\(93,\s*70,\s*38,\s*0\.16\)/,
     );
     expect(palette[1]).toMatch(
-      /--on-dark-border-strong:\s*rgba\(35,\s*38,\s*42,\s*0\.26\)/,
+      /--on-dark-border-strong:\s*rgba\(93,\s*70,\s*38,\s*0\.3\)/,
     );
     expect(palette[1]).toMatch(/--on-dark-link:\s*#a30000/);
   });
@@ -1940,12 +1942,13 @@ describe("slideshow overlay styles", () => {
     const palette = roomPalette();
     expect(palette).not.toBeNull();
     expect(palette[1]).toMatch(
-      /--on-dark-wash:\s*rgba\(35,\s*38,\s*42,\s*0\.05\)/,
+      /--on-dark-wash:\s*rgba\(93,\s*70,\s*38,\s*0\.06\)/,
     );
     expect(palette[1]).toMatch(
-      /--on-dark-wash-strong:\s*rgba\(35,\s*38,\s*42,\s*0\.1\)/,
+      /--on-dark-wash-strong:\s*rgba\(93,\s*70,\s*38,\s*0\.12\)/,
     );
     expect(palette[1]).toMatch(/--on-dark-plate:\s*#ffffff/);
+    expect(palette[1]).toMatch(/--on-dark-inset:\s*#f7f0e2/);
     expect(palette[1]).toMatch(
       /--on-dark-glow:\s*rgba\(200,\s*160,\s*90,\s*0\.16\)/,
     );
@@ -1953,6 +1956,58 @@ describe("slideshow overlay styles", () => {
     expect(palette[1]).toMatch(
       /--on-dark-focus-plate:\s*var\(--on-dark-label\)/,
     );
+  });
+
+  // The room's browser surfaces belong to the palette: selection takes the
+  // room's red rather than the platform blue, and the caret follows the link
+  // red. The overlay's scrollbar is inked from the room hairline too.
+  test("the room owns selection, caret and scrollbar colour", () => {
+    const selection = styles.match(
+      /\.slideshow-screen--overlay ::selection,\s*\n\.image-popover-overlay ::selection\s*\{([^}]*)\}/,
+    );
+    expect(selection).not.toBeNull();
+    expect(selection[1]).toMatch(/--on-dark-focus/);
+    expect(selection[1]).toMatch(/color:\s*var\(--on-dark-text\)/);
+
+    const caret = styles.match(
+      /\.slideshow-screen--overlay input,\s*\n\.image-popover-overlay input\s*\{([^}]*)\}/,
+    );
+    expect(caret).not.toBeNull();
+    expect(caret[1]).toMatch(/caret-color:\s*var\(--on-dark-link\)/);
+
+    const scrollbar = styles.match(
+      /\.slideshow-screen--overlay,\s*\n\.image-popover-overlay\s*\{\s*scrollbar-width:\s*thin;\s*\n\s*scrollbar-color:([^}]*)\}/,
+    );
+    expect(scrollbar).not.toBeNull();
+    expect(scrollbar[1]).toMatch(
+      /var\(--on-dark-border-strong\)\s*transparent/,
+    );
+  });
+
+  // The curated grade keeps the Table's catalogue bands in the room, so a 66
+  // reads as uncirculated in both surfaces. The tints are the same semantic
+  // pair, not a new room hue.
+  test("the slideshow grade wears the Table's catalogue bands", () => {
+    const base = styles.match(/\.slide-grade\s*\{([^}]*)\}/);
+    expect(base).not.toBeNull();
+    expect(base[1]).toMatch(/border-radius:\s*var\(--radius-pill\)/);
+    expect(base[1]).toMatch(/font-variant-numeric:\s*tabular-nums/);
+
+    const unc = styles.match(/\.slide-grade--unc\s*\{([^}]*)\}/);
+    expect(unc).not.toBeNull();
+    expect(unc[1]).toMatch(/color:\s*var\(--success\)/);
+    expect(unc[1]).toMatch(/background:\s*var\(--success-bg\)/);
+
+    const choice = styles.match(/\.slide-grade--choice\s*\{([^}]*)\}/);
+    expect(choice).not.toBeNull();
+    expect(choice[1]).toMatch(/color:\s*var\(--warning\)/);
+    expect(choice[1]).toMatch(/background:\s*var\(--warning-bg\)/);
+
+    const circulated = styles.match(
+      /\.slide-grade--circulated\s*\{([^}]*)\}/,
+    );
+    expect(circulated).not.toBeNull();
+    expect(circulated[1]).toMatch(/color:\s*var\(--on-dark-muted\)/);
   });
 
   // On paper a tag is just a tag: the slideshow takes the ordinary Ochre
@@ -1989,7 +2044,7 @@ describe("slideshow overlay styles", () => {
       ],
       [
         /\.scraped-details-panel\s*\{([^}]*)\}/,
-        /background:\s*var\(--on-dark-wash\)/,
+        /background:\s*var\(--on-dark-inset\)/,
       ],
       [
         /\.slideshow-screen kbd,\s*\n\.image-popover-content kbd\s*\{([^}]*)\}/,
