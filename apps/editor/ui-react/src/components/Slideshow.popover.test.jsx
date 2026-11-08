@@ -1,9 +1,11 @@
 import { act, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
+import { preloadImage } from "../lib/imagePreload.js";
 import { ImagePopover } from "./Slideshow.jsx";
 
 const FRONT_1 = "/api/images/notes/1/front-full.jpg?v=1";
 const THUMB_1 = "/api/images/notes/1/front-thumbnail.jpg?v=1";
+const THUMB_2 = "/api/images/notes/2/front-thumbnail.jpg?v=1";
 const FRONT_2 = "/api/images/notes/2/front-full.jpg?v=1";
 const FRONT_3 = "/api/images/notes/3/front-full.jpg?v=1";
 
@@ -119,21 +121,24 @@ describe("ImagePopover image loading", () => {
     expect(thumbImage()).toBeNull();
   });
 
-  test("keeps the previous image on the same element until the next is decoded", async () => {
+  test("shows the next thumbnail while the previous full plate is held", async () => {
     const { rerender } = render(popover());
     await finishDecode(FRONT_1);
     const element = fullImage();
 
-    rerender(popover({ alt: "5 lei front", src: FRONT_2 }));
+    rerender(
+      popover({ alt: "5 lei front", src: FRONT_2, thumb: THUMB_2 }),
+    );
 
     expect(fullImage()).toBe(element);
     expect(element).toHaveAttribute("src", FRONT_1);
-    expect(thumbImage()).toBeNull();
+    expect(thumbImage()).toHaveAttribute("src", THUMB_2);
 
     await finishDecode(FRONT_2);
 
     expect(fullImage()).toBe(element);
     expect(element).toHaveAttribute("src", FRONT_2);
+    expect(thumbImage()).toBeNull();
   });
 
   test("keeps showing images that finish while the user is still moving", async () => {
@@ -212,6 +217,29 @@ describe("ImagePopover image loading", () => {
       completeSpy.mockRestore();
       widthSpy.mockRestore();
     }
+  });
+
+  test("reuses a warmed full image instead of probing it again", () => {
+    const src = "/api/images/notes/9/front-full.jpg?v=1";
+    const warmed = preloadImage(src);
+    Object.defineProperty(warmed, "complete", {
+      configurable: true,
+      value: true,
+    });
+    Object.defineProperty(warmed, "naturalWidth", {
+      configurable: true,
+      value: 900,
+    });
+
+    render(
+      popover({
+        src,
+        thumb: "/api/images/notes/9/front-thumbnail.jpg?v=1",
+      }),
+    );
+
+    expect(fullImage()).toHaveAttribute("src", src);
+    expect(thumbImage()).toBeNull();
   });
 });
 

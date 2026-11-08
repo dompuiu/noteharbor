@@ -38,7 +38,16 @@ function rememberImage(src, image, kind) {
   }
 }
 
-function preloadImage(src, { cache = "full", priority = "low" } = {}) {
+function decodeInBackground(image) {
+  if (typeof image?.decode === "function") {
+    image.decode().catch(() => {});
+  }
+}
+
+function preloadImage(
+  src,
+  { cache = "full", decode = false, priority = "low" } = {},
+) {
   if (!src || typeof src !== "string" || typeof Image === "undefined") {
     return null;
   }
@@ -49,6 +58,11 @@ function preloadImage(src, { cache = "full", priority = "low" } = {}) {
 
   if (cached) {
     rememberImage(src, cached, kind);
+
+    if (decode) {
+      decodeInBackground(cached);
+    }
+
     return cached;
   }
 
@@ -70,11 +84,33 @@ function preloadImage(src, { cache = "full", priority = "low" } = {}) {
   image.src = src;
   rememberImage(src, image, kind);
 
+  if (decode) {
+    decodeInBackground(image);
+  }
+
   return image;
 }
 
 function preloadImages(srcs, options) {
   (srcs ?? []).forEach((src) => preloadImage(src, options));
+}
+
+// The live element for an already-warmed URL, so a caller can skip a second
+// probe and decode when the frame is ready to paint.
+function getPreloadedImage(src, { cache = "full" } = {}) {
+  if (!src || typeof src !== "string") {
+    return null;
+  }
+
+  const kind = cache === "thumbnail" ? "thumbnail" : "full";
+  const images = cacheFor(kind);
+  const image = images.get(src);
+
+  if (image) {
+    rememberImage(src, image, kind);
+  }
+
+  return image ?? null;
 }
 
 // The previous/next sources in a wrapping image sequence, skipping a
@@ -103,7 +139,10 @@ function neighbouringImageSources(items, index) {
 // Preloads a changing set of URLs after the current paint. A non-zero `delay`
 // waits that long before asking for an idle slot, so a held arrow key does not
 // queue a fetch for every note it skips past.
-function useImagePreload(srcs, { cache = "full", delay = 0 } = {}) {
+function useImagePreload(
+  srcs,
+  { cache = "full", decode = false, delay = 0, priority = "low" } = {},
+) {
   const urls = (srcs ?? []).filter(
     (src) => typeof src === "string" && src.length > 0,
   );
@@ -121,7 +160,7 @@ function useImagePreload(srcs, { cache = "full", delay = 0 } = {}) {
     let timer = null;
     const run = () => {
       if (!cancelled) {
-        preloadImages(urls, { cache });
+        preloadImages(urls, { cache, decode, priority });
       }
     };
     const runWhenIdle = () => {
@@ -153,10 +192,11 @@ function useImagePreload(srcs, { cache = "full", delay = 0 } = {}) {
         clearTimeout(timer);
       }
     };
-  }, [cache, delay, key]);
+  }, [cache, decode, delay, key, priority]);
 }
 
 export {
+  getPreloadedImage,
   neighbouringImageSources,
   preloadImage,
   preloadImages,

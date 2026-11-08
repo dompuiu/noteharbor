@@ -17,6 +17,7 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 - Image preview: zooming steps up from the fitted image size instead of jumping to 100% of the scan's natural pixels, and the first zoom centres the double-clicked point instead of landing top-left.
 - Note slideshow: a note with no images shows one empty state with a next step instead of two Front/Back placeholders, an empty denomination reads as "Untitled note", and long denominations and scraped values wrap without moving the arrows.
+- Note slideshow and image preview: slide plates paint their thumbnail first and lay the full scan over it once loaded, while the preview shows the next thumbnail immediately, warms and decodes the neighbouring frames, and reuses a warmed frame, so walking notes and paging no longer wait on multi-MB decodes.
 
 ## [2.10.2] - 2026-11-07
 

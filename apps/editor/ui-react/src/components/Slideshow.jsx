@@ -11,6 +11,7 @@ import {
 } from "../lib/noteClipboard.js";
 import { isEditableElement } from "../lib/editableElement.js";
 import {
+  getPreloadedImage,
   neighbouringImageSources,
   preloadImage,
   useImagePreload,
@@ -297,11 +298,55 @@ function getPreviewItems(note, { includeMissingSides = false } = {}) {
   return items;
 }
 
+// The slide paints the 500px thumbnail immediately and only reveals the full
+// scan once it has loaded. A note walk therefore never waits on a multi-MB
+// decode, but the settled plate is still the crisp full image. The loaded
+// source is stored rather than a boolean, so a new note resets the layer
+// without an effect and a late load from the previous note cannot win.
+function SlidePlate({ alt, paused = false, src, thumb }) {
+  const [loadedFullSrc, setLoadedFullSrc] = useState(null);
+  const fullSrc = src && src !== thumb ? src : null;
+  const fullLoaded = Boolean(fullSrc) && loadedFullSrc === fullSrc;
+  // The popover covers the room, so a full scan still in flight behind it only
+  // competes with the plate the reader opened. Once loaded, keep the layer so
+  // closing the preview returns to a settled plate.
+  const showFull = Boolean(fullSrc) && (!paused || fullLoaded);
+
+  return (
+    <span className="slide-plate">
+      <img
+        alt={alt}
+        className="slide-plate-thumb"
+        decoding="async"
+        src={thumb}
+      />
+      {showFull ? (
+        <img
+          alt=""
+          aria-hidden="true"
+          className={`slide-plate-full${fullLoaded ? " slide-plate-full--loaded" : ""}`}
+          decoding="async"
+          fetchPriority="low"
+          key={fullSrc}
+          onLoad={() => setLoadedFullSrc(fullSrc)}
+          src={fullSrc}
+        />
+      ) : null}
+    </span>
+  );
+}
+
 // Zoom stops as multiples of the fitted image, not of its natural pixels. A
 // scan that arrives much larger than the plate therefore steps up from the
 // size the reader already sees instead of jumping straight to 100%.
 const POPOVER_ZOOM_LEVELS = [1, 1.25, 1.5, 2, 3, 4];
 const ZOOM_EPSILON = 0.001;
+
+// Measurements mostly repeat the size already in state, so returning the
+// current object keeps React from re-rendering for an unchanged rect.
+function sameSize(left, right) {
+  return left.width === right.width && left.height === right.height;
+}
 
 function ImagePopover({
   alt,
@@ -325,6 +370,7 @@ function ImagePopover({
   const imageWrapRef = useRef(null);
   const dragRef = useRef(null);
   const zoomAnchorRef = useRef(null);
+  const offsetRef = useRef({ x: 0, y: 0 });
   const requestSeqRef = useRef(0);
   const shownSeqRef = useRef(0);
   const keyHeldRef = useRef(false);
@@ -335,10 +381,20 @@ function ImagePopover({
   const [offset, setOffset] = useState({ x: 0, y: 0 });
   const [viewportSize, setViewportSize] = useState({ width: 0, height: 0 });
   const [zoomScale, setZoomScale] = useState(0);
+  // Panning updates the offset on every pointer move; the key handler reads
+  // it through a ref so its window listener is not torn down and re-added for
+  // each of those renders.
+  useLayoutEffect(() => {
+    offsetRef.current = offset;
+  }, [offset]);
   const fullLoaded = Boolean(src) && displayedSrc === src;
-  const showThumb = !displayedSrc && Boolean(thumb) && thumb !== src;
-
   const zoomed = zoomScale > 0;
+  // Until the target full scan is ready, show its thumbnail over the plate
+  // already on screen. Paging then answers the key immediately instead of
+  // holding a stale image while a multi-MB decode runs.
+  const showThumb =
+    !fullLoaded && !zoomed && Boolean(thumb) && thumb !== src;
+
   const fitScale =
     naturalSize.width > 0 && fitSize.width > 0
       ? fitSize.width / naturalSize.width
@@ -384,16 +440,23 @@ function ImagePopover({
       return;
     }
 
-    setNaturalSize({
+    const natural = {
       width: image.naturalWidth || 0,
       height: image.naturalHeight || 0,
-    });
+    };
+    setNaturalSize((current) =>
+      sameSize(current, natural) ? current : natural,
+    );
 
     if (!zoomed) {
       const imageRect = image.getBoundingClientRect();
 
       if (imageRect.width && imageRect.height) {
-        setFitSize({ width: imageRect.width, height: imageRect.height });
+        const fitted = {
+          width: imageRect.width,
+          height: imageRect.height,
+        };
+        setFitSize((current) => (sameSize(current, fitted) ? current : fitted));
       }
     }
   }
@@ -417,7 +480,9 @@ function ImagePopover({
     };
     const zoomAnchor = zoomAnchorRef.current;
 
-    setViewportSize(nextViewportSize);
+    setViewportSize((current) =>
+      sameSize(current, nextViewportSize) ? current : nextViewportSize,
+    );
 
     if (zoomAnchor) {
       zoomAnchorRef.current = null;
@@ -514,9 +579,10 @@ function ImagePopover({
       return;
     }
 
+    const currentOffset = offsetRef.current;
     const naturalPoint = {
-      x: (point.x - offset.x) / zoomScale,
-      y: (point.y - offset.y) / zoomScale,
+      x: (point.x - currentOffset.x) / zoomScale,
+      y: (point.y - currentOffset.y) / zoomScale,
     };
 
     setZoomScale(nextScale);
@@ -677,9 +743,26 @@ function ImagePopover({
       return;
     }
 
-    const probe = new Image();
+    // The neighbour prefetch may already hold this URL. Reuse its element so
+    // paging waits on the one load already in flight instead of starting a
+    // second probe, and paint immediately when it has finished.
+    const warmed = getPreloadedImage(src);
+
+    if (warmed?.complete && warmed.naturalWidth > 0) {
+      show();
+      return;
+    }
+
+    const probe =
+      warmed && (warmed.complete || typeof warmed.decode === "function")
+        ? warmed
+        : new Image();
+
     probe.fetchPriority = "high";
-    probe.src = src;
+
+    if (probe !== warmed) {
+      probe.src = src;
+    }
 
     if (probe.complete && probe.naturalWidth > 0) {
       show();
@@ -691,7 +774,10 @@ function ImagePopover({
     }
   }, [src]);
 
-  useLayoutEffect(() => {
+  // Measuring is only needed for zoom and the level readout, so let the new
+  // plate paint first. A layout effect here forced a rect read and a second
+  // synchronous render before every page could appear.
+  useEffect(() => {
     if (!displayedSrc) {
       return undefined;
     }
@@ -839,7 +925,6 @@ function ImagePopover({
     fitSize,
     fullLoaded,
     naturalSize,
-    offset,
     onClose,
     onNext,
     onPreviewEnd,
@@ -1122,23 +1207,23 @@ function Slideshow({
   }, [currentIndex, notes]);
   useImagePreload(neighbouringThumbs, { cache: "thumbnail" });
 
-  // The current note's full plates are what Enter opens. Let the slide paint
-  // first, then warm them so keyboard users get the same instant popover as a
-  // pointer hovering a thumbnail.
-  const currentFullImages = useMemo(
-    () => previewItems.flatMap((item) => (item.src ? [item.src] : [])),
-    [previewItems],
-  );
-  useImagePreload(currentFullImages, { delay: 300 });
+  // The slide plates warm their own full scans after the thumbnails paint, so
+  // there is no separate full-plate prefetch here: it would decode the same
+  // two images a second time and compete with the plate the reader is looking
+  // at. Hovering or focusing a plate still warms the face Enter will open.
 
-  // While the popover is open, warm the previous/next plate in its sequence.
-  // The current plate is already loading, so one step either way covers a
-  // normal arrow press without fetching the whole collection.
+  // While the popover is open, warm and decode the previous/next plate in its
+  // sequence. The idle decode is the part that matters: an arrow press then
+  // swaps a frame that is ready, instead of probing a multi-MB scan while the
+  // reader waits.
   const neighbouringPreviewImages = useMemo(
     () => neighbouringImageSources(previewSequence, previewIndex),
     [previewIndex, previewSequence],
   );
-  useImagePreload(neighbouringPreviewImages, { delay: 120 });
+  useImagePreload(neighbouringPreviewImages, {
+    decode: true,
+    priority: "high",
+  });
 
   function preloadPreviewItem(item) {
     if (item?.src) {
@@ -1481,7 +1566,12 @@ function Slideshow({
                     type="button"
                   >
                     {item.thumb ? (
-                      <img alt={item.alt} decoding="async" src={item.src} />
+                      <SlidePlate
+                        alt={item.alt}
+                        paused={Boolean(previewItem)}
+                        src={item.src}
+                        thumb={item.thumb}
+                      />
                     ) : (
                       <div className="slide-thumb-placeholder">
                         No scraped image yet

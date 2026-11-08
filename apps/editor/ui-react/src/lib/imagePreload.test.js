@@ -5,10 +5,16 @@ let module;
 
 class FakeImage {
   constructor() {
+    this.decodeCalls = 0;
     this.decoding = "";
     this.fetchPriority = "";
     this.src = "";
     createdImages.push(this);
+  }
+
+  decode() {
+    this.decodeCalls += 1;
+    return Promise.resolve();
   }
 }
 
@@ -51,6 +57,16 @@ describe("preloadImage", () => {
     expect(createdImages).toHaveLength(0);
   });
 
+  test("decodes a warmed image in the background when asked", () => {
+    const src = "/api/images/notes/1/front-full.jpg?v=1";
+    const image = module.preloadImage(src, { decode: true });
+
+    expect(image.decodeCalls).toBe(1);
+
+    module.preloadImage(src, { decode: true });
+    expect(image.decodeCalls).toBe(2);
+  });
+
   test("drops a failed speculative load so a later open retries", () => {
     const src = "/api/images/notes/1/front-full.jpg?v=1";
 
@@ -61,6 +77,17 @@ describe("preloadImage", () => {
 
     module.preloadImage(src);
     expect(createdImages).toHaveLength(2);
+  });
+});
+
+describe("getPreloadedImage", () => {
+  test("returns the warmed element only for its own cache and URL", () => {
+    const src = "/api/images/notes/1/front-full.jpg?v=1";
+    const image = module.preloadImage(src);
+
+    expect(module.getPreloadedImage(src)).toBe(image);
+    expect(module.getPreloadedImage(src, { cache: "thumbnail" })).toBeNull();
+    expect(module.getPreloadedImage(null)).toBeNull();
   });
 });
 

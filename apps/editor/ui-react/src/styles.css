@@ -6723,6 +6723,27 @@ button.tag {
   border-radius: 3px;
 }
 
+/* The thumbnail paints at once and the full scan covers it when loaded. Both
+   layers share one grid cell so the full scan adds no second block. */
+.slide-plate {
+  display: grid;
+  width: 100%;
+}
+
+.slide-plate-thumb,
+.slide-plate-full {
+  grid-area: 1 / 1;
+}
+
+.slide-plate-full {
+  opacity: 0;
+  pointer-events: none;
+}
+
+.slide-plate-full--loaded {
+  opacity: 1;
+}
+
 .slide-thumb-placeholder {
   display: grid;
   place-items: center;
