@@ -6672,7 +6672,6 @@ button.tag {
 /* The thumbnail paints at once and the full scan covers it when loaded. Both
    layers share one grid cell so the full scan adds no second block. */
 .slide-plate {
-  position: relative;
   display: grid;
   width: 100%;
 }
@@ -6695,8 +6694,8 @@ button.tag {
    thumbnail stays visible underneath, so this only reports progress. */
 .image-loading-spinner {
   position: absolute;
-  right: 10px;
-  bottom: 10px;
+  top: 8px;
+  right: 8px;
   z-index: 2;
   width: 16px;
   height: 16px;
@@ -6950,6 +6949,7 @@ button.tag {
 }
 
 .image-popover-stage {
+  position: relative;
   display: grid;
   grid-template-columns: auto minmax(0, 1fr) auto;
   gap: 20px;

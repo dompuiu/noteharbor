@@ -1154,9 +1154,6 @@ function ImagePopover({
                     src={thumb}
                   />
                 ) : null}
-                {fullLoaded ? null : (
-                  <span aria-hidden="true" className="image-loading-spinner" />
-                )}
               </>
             ) : (
               <div className="image-popover-empty-state">
@@ -1165,6 +1162,10 @@ function ImagePopover({
               </div>
             )}
           </div>
+
+          {src && !fullLoaded ? (
+            <span aria-hidden="true" className="image-loading-spinner" />
+          ) : null}
 
           <button
             aria-label="Show next image"
