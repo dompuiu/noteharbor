@@ -6672,6 +6672,7 @@ button.tag {
 /* The thumbnail paints at once and the full scan covers it when loaded. Both
    layers share one grid cell so the full scan adds no second block. */
 .slide-plate {
+  position: relative;
   display: grid;
   width: 100%;
 }
@@ -6688,6 +6689,36 @@ button.tag {
 
 .slide-plate-full--loaded {
   opacity: 1;
+}
+
+/* A small corner spinner while a plate's crisp layer is still loading. The
+   thumbnail stays visible underneath, so this only reports progress. */
+.image-loading-spinner {
+  position: absolute;
+  right: 10px;
+  bottom: 10px;
+  z-index: 2;
+  width: 16px;
+  height: 16px;
+  border: 2px solid var(--on-dark-border);
+  border-top-color: var(--on-dark-accent);
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.35);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+  pointer-events: none;
+  animation: image-loading-spin 0.8s linear infinite;
+}
+
+@keyframes image-loading-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .image-loading-spinner {
+    animation-duration: 2.4s;
+  }
 }
 
 .slide-thumb-placeholder {

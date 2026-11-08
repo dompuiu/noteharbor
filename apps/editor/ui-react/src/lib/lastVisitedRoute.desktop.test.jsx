@@ -1,5 +1,5 @@
-import { MemoryRouter, Route, Routes, useLocation } from "react-router-dom";
-import { render, screen, waitFor } from "@testing-library/react";
+import { MemoryRouter, Route, Routes, useLocation, useNavigate } from "react-router-dom";
+import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
   LAST_VISITED_ROUTE_STORAGE_KEY,
@@ -15,10 +15,26 @@ function LocationProbe() {
   );
 }
 
+function HashNavigator() {
+  const navigate = useNavigate();
+
+  return (
+    <>
+      <button onClick={() => navigate("/catalog/all-notes#slideshow/2")} type="button">
+        note 2
+      </button>
+      <button onClick={() => navigate("/catalog/all-notes#slideshow/3")} type="button">
+        note 3
+      </button>
+    </>
+  );
+}
+
 function renderWithSync(initialEntries) {
   return render(
     <MemoryRouter initialEntries={initialEntries}>
       <LastVisitedRouteSync />
+      <HashNavigator />
       <Routes>
         <Route element={<LocationProbe />} path="*" />
       </Routes>
@@ -54,6 +70,31 @@ describe("LastVisitedRouteSync in the desktop app", () => {
         "/catalog/collections/1/view",
       ),
     );
+  });
+
+  test("a hash-only walk does not rewrite the persisted route", async () => {
+    const setLastVisitedRoute = vi.fn().mockResolvedValue(null);
+    window.noteHarborDesktop = {
+      getLastVisitedRoute: vi.fn().mockResolvedValue(null),
+      setLastVisitedRoute,
+    };
+
+    renderWithSync(["/catalog/all-notes"]);
+
+    await waitFor(() =>
+      expect(setLastVisitedRoute).toHaveBeenCalledWith("/catalog/all-notes"),
+    );
+    expect(setLastVisitedRoute).toHaveBeenCalledTimes(1);
+
+    fireEvent.click(screen.getByRole("button", { name: "note 2" }));
+    fireEvent.click(screen.getByRole("button", { name: "note 3" }));
+
+    await waitFor(() =>
+      expect(screen.getByTestId("location").textContent).toBe(
+        "/catalog/all-notes#slideshow/3",
+      ),
+    );
+    expect(setLastVisitedRoute).toHaveBeenCalledTimes(1);
   });
 
   test("restores the remembered page when booting on /", async () => {

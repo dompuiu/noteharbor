@@ -133,12 +133,22 @@ function LastVisitedRouteSync() {
   const location = useLocation();
   const navigate = useNavigate();
   const restoredRef = useRef(false);
+  const lastWrittenRouteRef = useRef(null);
 
   useEffect(() => {
     const route = routeFromLocation(location);
     if (route === null) {
       return;
     }
+
+    // A slideshow hash changes on every note, but the persisted route only
+    // keeps the first-level pathname. Skip the localStorage write and the
+    // desktop IPC round-trip when the stored value would not change.
+    if (lastWrittenRouteRef.current === route) {
+      return;
+    }
+
+    lastWrittenRouteRef.current = route;
     writeStoredLastVisitedRoute(route);
     getDesktopLastVisitedRouteBridge()?.setLastVisitedRoute(route)?.catch(() => {});
   }, [location.pathname, location.search, location.hash]); // eslint-disable-line react-hooks/exhaustive-deps

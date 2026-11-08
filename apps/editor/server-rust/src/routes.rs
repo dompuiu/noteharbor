@@ -12,6 +12,11 @@ use axum::{
 };
 use serde::Deserialize;
 use serde_json::{Value, json};
+use sha2::{Digest, Sha256};
+use std::collections::HashSet;
+use std::path::{Path as FsPath, PathBuf};
+use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::{Mutex, OnceLock};
 
 use crate::{
     AppState,
@@ -207,14 +212,147 @@ async fn operation_status(State(state): State<AppState>) -> Response {
 
 /// Query for an image request. The editor app appends `?v=<updated_at>` to
 /// every managed image URL, so a present `v` marks the bytes as immutable.
+/// `w` asks for an on-demand slide preview no wider than that many pixels.
 #[derive(Deserialize, Default)]
 struct ImageQuery {
     v: Option<String>,
+    w: Option<String>,
+}
+
+const MIN_PREVIEW_WIDTH: u32 = 64;
+const MAX_PREVIEW_WIDTH: u32 = 4096;
+const IMMUTABLE_IMAGE_CACHE: &str = "public, max-age=31536000, immutable";
+const REVALIDATE_IMAGE_CACHE: &str = "no-cache";
+
+static PREVIEW_TEMP_SEQUENCE: AtomicU64 = AtomicU64::new(0);
+
+/// Cache keys whose source is already narrow enough (or is a GIF). Re-decoding
+/// them on every `?w=` request would burn the blocking pool for no output.
+fn skipped_previews() -> &'static Mutex<HashSet<PathBuf>> {
+    static SKIPPED: OnceLock<Mutex<HashSet<PathBuf>>> = OnceLock::new();
+    SKIPPED.get_or_init(|| Mutex::new(HashSet::new()))
+}
+
+fn image_response(bytes: Vec<u8>, content_type: &str, cache_control: &str) -> Response {
+    axum::response::Response::builder()
+        .status(StatusCode::OK)
+        .header(axum::http::header::CONTENT_TYPE, content_type)
+        .header(axum::http::header::CACHE_CONTROL, cache_control)
+        .body(axum::body::Body::from(bytes))
+        .expect("image response builds")
+        .into_response()
+}
+
+/// Cache key for a resized preview. The source path, requested width, URL
+/// version, length and mtime all participate, so replacing a plate or asking
+/// for another width never reuses stale pixels. `v` alone would be enough for
+/// app-written plates, but the length/mtime pair also covers files edited on
+/// disk while the URL stayed the same.
+fn preview_cache_path(
+    data_dir: &FsPath,
+    source: &FsPath,
+    width: u32,
+    version: Option<&str>,
+) -> PathBuf {
+    let mut hasher = Sha256::new();
+    hasher.update(source.to_string_lossy().as_bytes());
+    hasher.update([0]);
+    hasher.update(width.to_le_bytes());
+    hasher.update([0]);
+
+    if let Some(version) = version {
+        hasher.update(version.as_bytes());
+    }
+
+    if let Ok(metadata) = std::fs::metadata(source) {
+        hasher.update(metadata.len().to_le_bytes());
+
+        if let Ok(modified) = metadata.modified() {
+            if let Ok(age) = modified.duration_since(std::time::UNIX_EPOCH) {
+                hasher.update(age.as_nanos().to_le_bytes());
+            }
+        }
+    }
+
+    let digest = hasher.finalize();
+    let mut name = String::with_capacity(digest.len() * 2 + 5);
+
+    for byte in digest {
+        use std::fmt::Write;
+        let _ = write!(name, "{byte:02x}");
+    }
+
+    data_dir.join("cache").join("images").join(format!("{name}.webp"))
+}
+
+/// Reads a cached preview or builds one from the source. Returns `None` when
+/// the source is already narrow enough, is a GIF, or cannot be decoded: the
+/// caller then serves the original bytes, so a preview request never breaks an
+/// image that used to work.
+async fn read_or_build_preview(
+    data_dir: &FsPath,
+    source: &FsPath,
+    width: u32,
+    version: Option<&str>,
+) -> Option<Vec<u8>> {
+    let cache_path = preview_cache_path(data_dir, source, width, version);
+
+    if skipped_previews()
+        .lock()
+        .ok()
+        .is_some_and(|skipped| skipped.contains(&cache_path))
+    {
+        return None;
+    }
+
+    if let Ok(cached) = tokio::fs::read(&cache_path).await {
+        return Some(cached);
+    }
+
+    let input = tokio::fs::read(source).await.ok()?;
+    let preview = tokio::task::spawn_blocking(move || {
+        crate::images::resize_to_webp(&input, width, crate::images::PREVIEW_WEBP_QUALITY)
+    })
+    .await
+    .ok()?
+    .ok();
+
+    let Some(preview) = preview else {
+        if let Ok(mut skipped) = skipped_previews().lock() {
+            skipped.insert(cache_path);
+        }
+
+        return None;
+    };
+
+    if let Some(parent) = cache_path.parent() {
+        let _ = tokio::fs::create_dir_all(parent).await;
+    }
+
+    // Two requests for the same key can race; a unique temp name keeps both
+    // writes whole and the rename is atomic on the same filesystem.
+    let sequence = PREVIEW_TEMP_SEQUENCE.fetch_add(1, Ordering::Relaxed);
+    let temp_path = cache_path.with_extension(format!(
+        "tmp-{}-{sequence}",
+        std::process::id()
+    ));
+
+    if tokio::fs::write(&temp_path, &preview).await.is_ok()
+        && tokio::fs::rename(&temp_path, &cache_path).await.is_err()
+    {
+        let _ = tokio::fs::remove_file(&temp_path).await;
+    }
+
+    Some(preview)
 }
 
 /// Serves one managed image file from `<data_dir>/images`. Unknown paths
 /// answer the same JSON 404 as every other `/api/*` route; traversal
 /// attempts that escape the images root are confined, never served.
+///
+/// A valid `?w=<pixels>` asks for a cached WebP preview. When the source is
+/// already narrow (or cannot be resized) the original file is served instead,
+/// so the URL works against every image the editor has stored.
 async fn serve_image(
     State(state): State<AppState>,
     Path(tail): Path<String>,
@@ -231,29 +369,32 @@ async fn serve_image(
     let canonical = tokio::fs::canonicalize(&candidate).await.ok();
     match (canonical_root, canonical) {
         (Some(root), Some(path)) if path.starts_with(&root) && path.is_file() => {
+            // Versioned URLs can never go stale: the app rebuilds the URL
+            // from `updated_at` whenever a plate is replaced. An unversioned
+            // request keeps the old revalidate-every-time contract so a stale
+            // bookmark cannot pin old bytes.
+            let cache_control = match query.v.as_deref() {
+                Some(version) if !version.is_empty() => IMMUTABLE_IMAGE_CACHE,
+                _ => REVALIDATE_IMAGE_CACHE,
+            };
+            let width = query
+                .w
+                .as_deref()
+                .and_then(|raw| raw.trim().parse::<u32>().ok())
+                .filter(|width| (MIN_PREVIEW_WIDTH..=MAX_PREVIEW_WIDTH).contains(width));
+
+            if let Some(width) = width {
+                if let Some(preview) =
+                    read_or_build_preview(&state.data_dir, &path, width, query.v.as_deref()).await
+                {
+                    return image_response(preview, "image/webp", cache_control);
+                }
+            }
+
             match tokio::fs::read(&path).await {
                 Ok(bytes) => {
                     let mime = mime_guess::from_path(&path).first_or_octet_stream();
-                    // Versioned URLs can never go stale: the app rebuilds the
-                    // URL from `updated_at` whenever a plate is replaced. An
-                    // unversioned request keeps the old revalidate-every-time
-                    // contract so a stale bookmark cannot pin old bytes.
-                    let cache_control = match query.v.as_deref() {
-                        Some(version) if !version.is_empty() => {
-                            "public, max-age=31536000, immutable"
-                        }
-                        _ => "no-cache",
-                    };
-                    axum::response::Response::builder()
-                        .status(StatusCode::OK)
-                        .header(
-                            axum::http::header::CONTENT_TYPE,
-                            mime.essence_str().to_owned(),
-                        )
-                        .header(axum::http::header::CACHE_CONTROL, cache_control)
-                        .body(axum::body::Body::from(bytes))
-                        .expect("image response builds")
-                        .into_response()
+                    image_response(bytes, mime.essence_str(), cache_control)
                 }
                 Err(_) => not_found("Not found."),
             }

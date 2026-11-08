@@ -103,6 +103,158 @@ async fn images_missing_file_answers_json_404() {
     );
 }
 
+fn state_with_generated_image(
+    width: u32,
+    height: u32,
+    format: image::ImageFormat,
+    name: &str,
+) -> (tempfile::TempDir, AppState, Vec<u8>) {
+    let dir = tempfile::tempdir().expect("tempdir");
+    let pool = db::open_pool(&dir.path().join("banknotes.db")).expect("pool opens");
+    let state = AppState::test(pool, dir.path().to_path_buf());
+    let pixels = image::RgbImage::from_pixel(width, height, image::Rgb([180, 40, 60]));
+    let mut bytes = Vec::new();
+    image::DynamicImage::ImageRgb8(pixels)
+        .write_to(&mut std::io::Cursor::new(&mut bytes), format)
+        .expect("image encodes");
+    let note_dir = dir.path().join("images").join("notes").join("1");
+    std::fs::create_dir_all(&note_dir).expect("note images dir");
+    std::fs::write(note_dir.join(name), &bytes).expect("write image");
+    (dir, state, bytes)
+}
+
+fn cached_preview_count(dir: &tempfile::TempDir) -> usize {
+    std::fs::read_dir(dir.path().join("cache").join("images"))
+        .map(|entries| {
+            entries
+                .filter_map(Result::ok)
+                .filter(|entry| entry.path().extension().is_some_and(|ext| ext == "webp"))
+                .count()
+        })
+        .unwrap_or(0)
+}
+
+#[tokio::test]
+async fn width_query_serves_a_cached_webp_preview() {
+    let (dir, state, _) = state_with_generated_image(
+        1200,
+        800,
+        image::ImageFormat::Jpeg,
+        "front-full.jpg",
+    );
+    let app = create_app(state);
+    let path = "/api/images/notes/1/front-full.jpg?w=500&v=1";
+
+    let (status, body, content_type) = raw(app.clone(), path).await;
+    assert_eq!(status, StatusCode::OK);
+    assert!(
+        content_type.as_deref().unwrap_or("").starts_with("image/webp"),
+        "unexpected content-type: {content_type:?}"
+    );
+
+    let decoded = image::load_from_memory(&body).expect("preview decodes");
+    assert_eq!(decoded.width(), 500);
+    assert!(decoded.height() <= 334, "{}", decoded.height());
+    assert_eq!(cached_preview_count(&dir), 1);
+
+    let (status, cached_body, _) = raw(app, path).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(cached_body, body);
+}
+
+#[tokio::test]
+async fn preview_request_serves_a_narrow_source_unchanged() {
+    let (_dir, state, source) = state_with_generated_image(
+        320,
+        240,
+        image::ImageFormat::Jpeg,
+        "front-full.jpg",
+    );
+
+    let (status, body, content_type) =
+        raw(create_app(state), "/api/images/notes/1/front-full.jpg?w=500").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, source);
+    assert!(
+        content_type.as_deref().unwrap_or("").starts_with("image/jpeg"),
+        "unexpected content-type: {content_type:?}"
+    );
+}
+
+#[tokio::test]
+async fn preview_request_keeps_a_gif_verbatim() {
+    let (dir, state, _) = state_with_generated_image(
+        800,
+        400,
+        image::ImageFormat::Gif,
+        "front-full.gif",
+    );
+    let source = std::fs::read(dir.path().join("images/notes/1/front-full.gif"))
+        .expect("gif reads");
+
+    let (status, body, content_type) =
+        raw(create_app(state), "/api/images/notes/1/front-full.gif?w=500").await;
+
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(body, source);
+    assert!(
+        content_type.as_deref().unwrap_or("").starts_with("image/gif"),
+        "unexpected content-type: {content_type:?}"
+    );
+    assert_eq!(cached_preview_count(&dir), 0);
+}
+
+#[tokio::test]
+async fn invalid_preview_widths_serve_the_original() {
+    let (_dir, state, source) = state_with_generated_image(
+        1200,
+        800,
+        image::ImageFormat::Jpeg,
+        "front-full.jpg",
+    );
+    let app = create_app(state);
+
+    for width in ["abc", "0", "32", "99999"] {
+        let (status, body, _) = raw(
+            app.clone(),
+            &format!("/api/images/notes/1/front-full.jpg?w={width}"),
+        )
+        .await;
+        assert_eq!(status, StatusCode::OK, "width {width}");
+        assert_eq!(body, source, "width {width}");
+    }
+}
+
+#[tokio::test]
+async fn replacing_the_source_invalidates_the_preview_cache() {
+    let (dir, state, _) = state_with_generated_image(
+        1200,
+        800,
+        image::ImageFormat::Jpeg,
+        "front-full.jpg",
+    );
+    let app = create_app(state);
+    let path = "/api/images/notes/1/front-full.jpg?w=500&v=1";
+
+    let (_, first, _) = raw(app.clone(), path).await;
+
+    let pixels = image::RgbImage::from_pixel(900, 900, image::Rgb([20, 160, 220]));
+    let mut replacement = Vec::new();
+    image::DynamicImage::ImageRgb8(pixels)
+        .write_to(&mut std::io::Cursor::new(&mut replacement), image::ImageFormat::Jpeg)
+        .expect("replacement encodes");
+    std::fs::write(
+        dir.path().join("images/notes/1/front-full.jpg"),
+        &replacement,
+    )
+    .expect("replace image");
+
+    let (_, second, _) = raw(app, path).await;
+    assert_ne!(first, second);
+    assert_eq!(cached_preview_count(&dir), 2);
+}
+
 #[tokio::test]
 async fn images_path_cannot_escape_images_root() {
     let (dir, state, _) = state_with_images();

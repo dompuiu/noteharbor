@@ -1,3 +1,4 @@
+import { act, render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 let createdImages;
@@ -135,5 +136,65 @@ describe("neighbouringImageSources", () => {
   test("returns nothing for a single image or a missing index", () => {
     expect(module.neighbouringImageSources([{ src: "/only" }], 0)).toEqual([]);
     expect(module.neighbouringImageSources(items, -1)).toEqual([]);
+  });
+});
+
+describe("useImagePreload", () => {
+  function PreloadHarness({ srcs, options }) {
+    module.useImagePreload(srcs, options);
+    return null;
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.stubGlobal("requestIdleCallback", (callback) => setTimeout(callback, 0));
+    vi.stubGlobal("cancelIdleCallback", (handle) => clearTimeout(handle));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
+  test("a delayed preload waits before starting a speculative load", () => {
+    render(
+      <PreloadHarness
+        srcs={["/api/images/notes/1/front-full.jpg?v=1"]}
+        options={{ delay: 200 }}
+      />,
+    );
+
+    expect(createdImages).toHaveLength(0);
+
+    act(() => {
+      vi.advanceTimersByTime(199);
+    });
+    expect(createdImages).toHaveLength(0);
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+
+    expect(createdImages).toHaveLength(1);
+  });
+
+  test("passes the requested priority to the speculative load", () => {
+    render(
+      <PreloadHarness
+        srcs={["/api/images/notes/1/front-full.jpg?v=1"]}
+        options={{ priority: "high" }}
+      />,
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+
+    expect(createdImages[0].fetchPriority).toBe("high");
   });
 });

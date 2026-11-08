@@ -595,6 +595,69 @@ describe("All notes screen", () => {
     expect(screen.getByTestId("search").textContent).toContain("collection=2");
   });
 
+  test("walking the slideshow replaces the URL entry instead of stacking history", async () => {
+    const user = userEvent.setup();
+    renderAllNotes();
+    await screen.findByText("Fr. 2300");
+
+    await user.click(screen.getByText("1 Leu"));
+    expect(screen.getByTestId("pathname")).toHaveTextContent(
+      "/catalog/all-notes#slideshow/1",
+    );
+
+    await user.keyboard("{ArrowRight}");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("pathname")).toHaveTextContent(
+        "/catalog/all-notes#slideshow/2",
+      );
+    });
+    expect(screen.getByTestId("navigation-type")).toHaveTextContent("REPLACE");
+  });
+
+  test("a fast walk does not fetch details for notes it passes through", async () => {
+    const many = Array.from({ length: 6 }, (_, index) =>
+      note(index + 1, COLLECTIONS[0]),
+    );
+    getAllNotes.mockResolvedValue({ notes: many });
+    getNotes.mockImplementation(async () => ({ notes: many }));
+
+    renderAllNotes();
+    await screen.findByText("NOTE-1");
+
+    vi.useFakeTimers();
+
+    try {
+      fireEvent.click(screen.getByText("NOTE-1"));
+      expect(screen.getByTestId("pathname")).toHaveTextContent(
+        "/catalog/all-notes#slideshow/1",
+      );
+
+      for (let step = 0; step < 4; step += 1) {
+        fireEvent.keyDown(window, { key: "ArrowRight" });
+        act(() => {
+          vi.advanceTimersByTime(210);
+        });
+      }
+
+      expect(screen.getByTestId("pathname")).toHaveTextContent(
+        "/catalog/all-notes#slideshow/5",
+      );
+      // The walk settled only a moment ago; the detail fetch waits 250ms.
+      expect(getNote).not.toHaveBeenCalled();
+
+      await act(async () => {
+        vi.advanceTimersByTime(250);
+      });
+
+      expect(getNote).toHaveBeenCalledWith(5, 1);
+      expect(getNote).not.toHaveBeenCalledWith(2, 1);
+      expect(getNote).not.toHaveBeenCalledWith(3, 1);
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   test("the slideshow grade wears the Table's catalogue band", async () => {
     const user = userEvent.setup();
     renderAllNotes();

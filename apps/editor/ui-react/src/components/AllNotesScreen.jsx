@@ -28,8 +28,11 @@ const slideshowHashPattern =
   /^#slideshow\/(\d+)(?:\/preview\/(front|back))?$/;
 const previewKinds = ["front", "back"];
 // The slideshow prefetches the open note and its two neighbours; a small
-// cache keeps a walk from re-fetching a row the collector steps back to.
+// cache keeps a walk from re-fetching a row the collector steps back to. The
+// fetch waits for the last move: the projected list already carries the
+// images, and only the scraped details are missing.
 const noteDetailCacheLimit = 12;
+const noteDetailPrefetchDelayMs = 250;
 
 function noteCountLabel(count) {
   return `${count} ${count === 1 ? "note" : "notes"}`;
@@ -81,8 +84,13 @@ export function AllNotesScreen() {
   // so the slideshow reads them from a full note fetched when it opens.
   const [noteDetails, setNoteDetails] = useState(() => new Map());
   const detailRequestsRef = useRef(new Set());
+  const noteDetailsRef = useRef(noteDetails);
   const detailMountedRef = useRef(true);
   const savedVisibleColumnKeysRef = useRef(visibleColumnKeys);
+
+  useEffect(() => {
+    noteDetailsRef.current = noteDetails;
+  }, [noteDetails]);
 
   const conditionsParam = searchParams.get("fc") ?? "";
   const conditions = useMemo(
@@ -295,54 +303,62 @@ export function AllNotesScreen() {
 
   useEffect(() => {
     if (!slideshowActive || slideshowIndex < 0) {
-      return;
+      return undefined;
     }
 
-    // The slideshow wraps, so the neighbours on both edges are the row at the
-    // other end of the filtered list.
-    const count = visibleNotes.length;
-    const targets = [
-      visibleNotes[slideshowIndex],
-      visibleNotes[(slideshowIndex + 1) % count],
-      visibleNotes[(slideshowIndex - 1 + count) % count],
-    ].filter(Boolean);
+    // A held arrow key changes the index faster than the full note can
+    // arrive. Wait for the walk to settle; the projected row already has the
+    // images, so only the scraped details are delayed.
+    const timer = setTimeout(() => {
+      // The slideshow wraps, so the neighbours on both edges are the row at
+      // the other end of the filtered list.
+      const count = visibleNotes.length;
+      const targets = [
+        visibleNotes[slideshowIndex],
+        visibleNotes[(slideshowIndex + 1) % count],
+        visibleNotes[(slideshowIndex - 1 + count) % count],
+      ].filter(Boolean);
 
-    targets.forEach((target) => {
-      if (
-        noteDetails.has(target.id) ||
-        detailRequestsRef.current.has(target.id)
-      ) {
-        return;
-      }
+      targets.forEach((target) => {
+        if (
+          noteDetailsRef.current.has(target.id) ||
+          detailRequestsRef.current.has(target.id)
+        ) {
+          return;
+        }
 
-      detailRequestsRef.current.add(target.id);
+        detailRequestsRef.current.add(target.id);
 
-      getNote(target.id, target.collection_id)
-        .then((payload) => {
-          detailRequestsRef.current.delete(target.id);
+        getNote(target.id, target.collection_id)
+          .then((payload) => {
+            detailRequestsRef.current.delete(target.id);
 
-          if (!detailMountedRef.current || !payload?.note) {
-            return;
-          }
-
-          setNoteDetails((current) => {
-            const next = new Map(current).set(target.id, payload.note);
-
-            // Bound the cache: only the open note and its neighbours are
-            // needed, so a long slideshow walk cannot hold the whole library.
-            while (next.size > noteDetailCacheLimit) {
-              next.delete(next.keys().next().value);
+            if (!detailMountedRef.current || !payload?.note) {
+              return;
             }
 
-            return next;
+            setNoteDetails((current) => {
+              const next = new Map(current).set(target.id, payload.note);
+
+              // Bound the cache: only the open note and its neighbours are
+              // needed, so a long slideshow walk cannot hold the whole
+              // library.
+              while (next.size > noteDetailCacheLimit) {
+                next.delete(next.keys().next().value);
+              }
+
+              return next;
+            });
+          })
+          .catch(() => {
+            // The projected note still paints; a later open retries.
+            detailRequestsRef.current.delete(target.id);
           });
-        })
-        .catch(() => {
-          // The projected note still paints; a later open retries.
-          detailRequestsRef.current.delete(target.id);
-        });
-    });
-  }, [noteDetails, slideshowActive, slideshowIndex, visibleNotes]);
+      });
+    }, noteDetailPrefetchDelayMs);
+
+    return () => clearTimeout(timer);
+  }, [slideshowActive, slideshowIndex, visibleNotes]);
 
   const slideshowNotes = useMemo(() => {
     if (!noteDetails.size) {
@@ -550,7 +566,9 @@ export function AllNotesScreen() {
     const nextNote = visibleNotes[boundedIndex];
 
     if (nextNote) {
-      navigate(allNotesUrl(`#slideshow/${nextNote.id}`));
+      // Walking the room replaces the slideshow entry: Back still returns to
+      // the list instead of replaying every note the reader passed.
+      navigate(allNotesUrl(`#slideshow/${nextNote.id}`), { replace: true });
     }
   }
 
@@ -602,6 +620,7 @@ export function AllNotesScreen() {
       allNotesUrl(
         `#slideshow/${visibleNotes[nextNoteIndex].id}/preview/${previewKinds[nextItemIndex]}`,
       ),
+      { replace: true },
     );
   }
 
@@ -624,6 +643,7 @@ export function AllNotesScreen() {
         allNotesUrl(
           `#slideshow/${nextNote.id}/preview/${previewKinds[nextItemIndex]}`,
         ),
+        { replace: true },
       );
     }
   }
@@ -645,7 +665,9 @@ export function AllNotesScreen() {
       return false;
     }
 
-    navigate(allNotesUrl(`#slideshow/${nextNote.id}/preview/${nextKind}`));
+    navigate(allNotesUrl(`#slideshow/${nextNote.id}/preview/${nextKind}`), {
+      replace: true,
+    });
 
     return true;
   }

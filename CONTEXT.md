@@ -116,7 +116,7 @@ A short label attached to notes, scoped to a collection.
 _Avoid_: Label, category
 
 **Note image**:
-An image of a note's face or reverse, stored in full and thumbnail variants, either uploaded or fetched by scraping.
+An image of a note's face or reverse, stored in full and thumbnail variants, either uploaded or fetched by scraping. The slideshow also asks the server for a cache-only preview derived from the full scan.
 _Avoid_: Picture, photo, front/back (as the whole image)
 
 **Scrape**:

@@ -17,6 +17,7 @@ import {
   useImagePreload,
 } from "../lib/imagePreload.js";
 import { gradeTier } from "../lib/tableColumns.js";
+import { usePacedMove } from "../lib/usePacedMove.js";
 import { NoteCounter } from "./NoteCounter.jsx";
 
 function formatScrapedLabel(label) {
@@ -138,13 +139,28 @@ function getScrapedDetailEntries(note) {
   });
 }
 
-function versionedImagePath(path, version) {
+// The slide asks for a right-sized WebP preview (the server caches it), not
+// the multi-MB original the popover opens. The width also makes the preview a
+// distinct cache entry from the full scan.
+const SLIDE_PREVIEW_WIDTH = 1600;
+
+function versionedImagePath(path, version, width = null) {
   if (!path) {
     return null;
   }
 
   const separator = path.includes("?") ? "&" : "?";
-  return version ? `${path}${separator}v=${encodeURIComponent(version)}` : path;
+  const params = [];
+
+  if (version) {
+    params.push(`v=${encodeURIComponent(version)}`);
+  }
+
+  if (width) {
+    params.push(`w=${width}`);
+  }
+
+  return params.length ? `${path}${separator}${params.join("&")}` : path;
 }
 
 function hasModifierPressed(event) {
@@ -245,13 +261,13 @@ function directionOf(event) {
   return arrowDirections[key];
 }
 
-function pickImage(note, type, variant = "full") {
+function pickImage(note, type, variant = "full", width = null) {
   const imagePath =
     note.images.find(
       (image) => image.type === type && image.variant === variant,
     )?.localPath ?? null;
 
-  return versionedImagePath(imagePath, note.updated_at);
+  return versionedImagePath(imagePath, note.updated_at, width);
 }
 
 function getPreviewItems(note, { includeMissingSides = false } = {}) {
@@ -260,13 +276,20 @@ function getPreviewItems(note, { includeMissingSides = false } = {}) {
   const backFull = pickImage(note, "back", "full");
   const frontThumb = pickImage(note, "front", "thumbnail") || frontFull;
   const backThumb = pickImage(note, "back", "thumbnail") || backFull;
+  const frontSlide =
+    pickImage(note, "front", "full", SLIDE_PREVIEW_WIDTH) || frontThumb;
+  const backSlide =
+    pickImage(note, "back", "full", SLIDE_PREVIEW_WIDTH) || backThumb;
 
   const noteLabel = getNoteDisplayLabel(note);
   const frontItem = {
     alt: `${noteLabel} front`,
     kind: "front",
     label: "Front",
+    // `src` stays the full scan for the popover; `slide` is the right-sized
+    // plate the room paints.
     src: frontFull || frontThumb,
+    slide: frontSlide || frontFull,
     thumb: frontThumb || frontFull,
   };
   const backItem = {
@@ -274,6 +297,7 @@ function getPreviewItems(note, { includeMissingSides = false } = {}) {
     kind: "back",
     label: "Back",
     src: backFull || backThumb,
+    slide: backSlide || backFull,
     thumb: backThumb || backFull,
   };
 
@@ -290,6 +314,7 @@ function getPreviewItems(note, { includeMissingSides = false } = {}) {
       alt: `${note.denomination} preview unavailable`,
       kind: "missing",
       label: "No image",
+      slide: null,
       src: null,
       thumb: null,
     });
@@ -298,19 +323,22 @@ function getPreviewItems(note, { includeMissingSides = false } = {}) {
   return items;
 }
 
-// The slide paints the 500px thumbnail immediately and only reveals the full
-// scan once it has loaded. A note walk therefore never waits on a multi-MB
-// decode, but the settled plate is still the crisp full image. The loaded
+// The slide paints the 500px thumbnail immediately and only reveals the crisp
+// preview once it has loaded. A note walk therefore never waits on a large
+// decode, but the settled plate is still sharp. While the walk is moving the
+// crisp layer is not even mounted: every transient note would otherwise start
+// two preview downloads that the next key press throws away. The loaded
 // source is stored rather than a boolean, so a new note resets the layer
 // without an effect and a late load from the previous note cannot win.
-function SlidePlate({ alt, paused = false, src, thumb }) {
+function SlidePlate({ alt, deferFull = false, paused = false, src, thumb }) {
   const [loadedFullSrc, setLoadedFullSrc] = useState(null);
   const fullSrc = src && src !== thumb ? src : null;
   const fullLoaded = Boolean(fullSrc) && loadedFullSrc === fullSrc;
   // The popover covers the room, so a full scan still in flight behind it only
   // competes with the plate the reader opened. Once loaded, keep the layer so
   // closing the preview returns to a settled plate.
-  const showFull = Boolean(fullSrc) && (!paused || fullLoaded);
+  const showFull =
+    Boolean(fullSrc) && (fullLoaded || (!deferFull && !paused));
 
   return (
     <span className="slide-plate">
@@ -321,16 +349,21 @@ function SlidePlate({ alt, paused = false, src, thumb }) {
         src={thumb}
       />
       {showFull ? (
-        <img
-          alt=""
-          aria-hidden="true"
-          className={`slide-plate-full${fullLoaded ? " slide-plate-full--loaded" : ""}`}
-          decoding="async"
-          fetchPriority="low"
-          key={fullSrc}
-          onLoad={() => setLoadedFullSrc(fullSrc)}
-          src={fullSrc}
-        />
+        <>
+          <img
+            alt=""
+            aria-hidden="true"
+            className={`slide-plate-full${fullLoaded ? " slide-plate-full--loaded" : ""}`}
+            decoding="async"
+            fetchPriority="low"
+            key={fullSrc}
+            onLoad={() => setLoadedFullSrc(fullSrc)}
+            src={fullSrc}
+          />
+          {fullLoaded ? null : (
+            <span aria-hidden="true" className="image-loading-spinner" />
+          )}
+        </>
       ) : null}
     </span>
   );
@@ -1121,6 +1154,9 @@ function ImagePopover({
                     src={thumb}
                   />
                 ) : null}
+                {fullLoaded ? null : (
+                  <span aria-hidden="true" className="image-loading-spinner" />
+                )}
               </>
             ) : (
               <div className="image-popover-empty-state">
@@ -1170,6 +1206,17 @@ function Slideshow({
   // keyboard to that control rather than the room's section.
   const previewTriggerRef = useRef(null);
   const wasPreviewRef = useRef(Boolean(previewKind));
+  // The room walk and the popover paging keep separate budgets: opening the
+  // preview right after a note move must not defer the first page.
+  const {
+    cancelPendingMove: cancelRoomMove,
+    requestMove: requestRoomMove,
+    walking,
+  } = usePacedMove();
+  const {
+    cancelPendingMove: cancelPreviewMove,
+    requestMove: requestPreviewMove,
+  } = usePacedMove();
 
   // The open note's two faces, used by the slide plates, the popover, and the
   // keyboard hand-off. One derivation per note change.
@@ -1180,8 +1227,14 @@ function Slideshow({
 
   // The flattened image sequence the popover pages through: front/back for
   // every note, in slide order. One memo drives the counters and the
-  // neighbour prefetches instead of recomputing the walk per render.
+  // neighbour prefetches instead of recomputing the walk per render. It is
+  // only built while a preview is open: a walk over the room must not rebuild
+  // an entry for every note each time a note detail arrives.
   const previewSequence = useMemo(() => {
+    if (!previewKind) {
+      return [];
+    }
+
     const sequence = [];
 
     notes.forEach((entry) => {
@@ -1191,7 +1244,7 @@ function Slideshow({
     });
 
     return sequence;
-  }, [notes]);
+  }, [notes, previewKind]);
   const previewIndex =
     previewKind && note
       ? previewSequence.findIndex(
@@ -1238,16 +1291,18 @@ function Slideshow({
   // at. Hovering or focusing a plate still warms the face Enter will open.
 
   // While the popover is open, warm and decode the previous/next plate in its
-  // sequence. The idle decode is the part that matters: an arrow press then
-  // swaps a frame that is ready, instead of probing a multi-MB scan while the
-  // reader waits.
+  // sequence. The delay outlasts the paging interval, so a held arrow key
+  // never queues a download for a page it is about to skip; the current page
+  // still probes at high priority. The idle decode is what makes a normal
+  // arrow press swap a frame that is ready.
   const neighbouringPreviewImages = useMemo(
     () => neighbouringImageSources(previewSequence, previewIndex),
     [previewIndex, previewSequence],
   );
   useImagePreload(neighbouringPreviewImages, {
     decode: true,
-    priority: "high",
+    delay: 250,
+    priority: "low",
   });
 
   function preloadPreviewItem(item) {
@@ -1257,8 +1312,10 @@ function Slideshow({
   }
 
   function moveSlideshow(offset) {
-    onChangeIndex(
-      (current) => (current + offset + notes.length) % notes.length,
+    requestRoomMove(() =>
+      onChangeIndex(
+        (current) => (current + offset + notes.length) % notes.length,
+      ),
     );
   }
 
@@ -1342,6 +1399,7 @@ function Slideshow({
       }
 
       if (event.key === "Escape") {
+        cancelRoomMove();
         onClose();
         return;
       }
@@ -1384,6 +1442,7 @@ function Slideshow({
           return;
         }
 
+        cancelRoomMove();
         event.preventDefault();
         onChangeIndex(targetIndex);
         return;
@@ -1407,6 +1466,7 @@ function Slideshow({
         );
 
         if (openableItem) {
+          cancelRoomMove();
           event.preventDefault();
           onOpenPreview?.(note.id, openableItem.kind);
         }
@@ -1417,6 +1477,7 @@ function Slideshow({
 
     return () => window.removeEventListener("keydown", onKeyDown);
   }, [
+    cancelRoomMove,
     currentIndex,
     keyboardDisabled,
     note,
@@ -1474,12 +1535,24 @@ function Slideshow({
           counterPosition={previewSequenceIndex}
           counterTotal={totalPreviewCount}
           noteLabel={`${getNoteDisplayLabel(note)} - ${previewItem.label}`}
-          onClose={() => onClosePreview?.(note.id)}
-          onJump={onJumpPreview}
-          onNext={() => onMovePreview?.(1)}
-          onPrevious={() => onMovePreview?.(-1)}
-          onPreviewEnd={onPreviewEnd}
-          onPreviewStart={onPreviewStart}
+          onClose={() => {
+            cancelPreviewMove();
+            onClosePreview?.(note.id);
+          }}
+          onJump={(position) => {
+            cancelPreviewMove();
+            onJumpPreview?.(position);
+          }}
+          onNext={() => requestPreviewMove(() => onMovePreview?.(1))}
+          onPrevious={() => requestPreviewMove(() => onMovePreview?.(-1))}
+          onPreviewEnd={() => {
+            cancelPreviewMove();
+            return onPreviewEnd?.();
+          }}
+          onPreviewStart={() => {
+            cancelPreviewMove();
+            return onPreviewStart?.();
+          }}
           placeholderText={`No scraped ${previewItem.label.toLowerCase()} image exists for this note yet.`}
           src={previewItem.src}
           thumb={previewItem.thumb}
@@ -1491,7 +1564,10 @@ function Slideshow({
           <div className="slideshow-topbar-actions">
             <NoteCounter
               jumpLabel="Note position"
-              onJump={onJump}
+              onJump={(position) => {
+                cancelRoomMove();
+                onJump?.(position);
+              }}
               position={currentIndex + 1}
               showArrows={false}
               total={notes.length}
@@ -1583,6 +1659,7 @@ function Slideshow({
                     className="slide-thumb-btn"
                     onClick={(event) => {
                       previewTriggerRef.current = event.currentTarget;
+                      cancelRoomMove();
                       onOpenPreview?.(note.id, item.kind);
                     }}
                     onFocus={() => preloadPreviewItem(item)}
@@ -1593,8 +1670,9 @@ function Slideshow({
                     {item.thumb ? (
                       <SlidePlate
                         alt={item.alt}
+                        deferFull={walking}
                         paused={Boolean(previewItem)}
-                        src={item.src}
+                        src={item.slide}
                         thumb={item.thumb}
                       />
                     ) : (

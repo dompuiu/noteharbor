@@ -1,5 +1,5 @@
-import { fireEvent, render, screen } from "@testing-library/react";
-import { describe, expect, test, vi } from "vitest";
+import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { afterEach, describe, expect, test, vi } from "vitest";
 import { Slideshow } from "./Slideshow.jsx";
 
 function note(overrides = {}) {
@@ -34,6 +34,10 @@ function slideshow(noteOverrides = {}, props = {}) {
     />,
   );
 }
+
+afterEach(() => {
+  vi.useRealTimers();
+});
 
 describe("Slideshow slide card", () => {
   test("a note without images gets one empty state, not two placeholders", () => {
@@ -147,12 +151,14 @@ describe("Slideshow slide card", () => {
     const full = document.querySelector(".slide-plate-full");
     expect(full).toHaveAttribute(
       "src",
-      "/front-full.jpg?v=2026-01-01T00%3A00%3A00Z",
+      "/front-full.jpg?v=2026-01-01T00%3A00%3A00Z&w=1600",
     );
     expect(full).not.toHaveClass("slide-plate-full--loaded");
+    expect(document.querySelector(".image-loading-spinner")).not.toBeNull();
 
     fireEvent.load(full);
     expect(full).toHaveClass("slide-plate-full--loaded");
+    expect(document.querySelector(".image-loading-spinner")).toBeNull();
 
     expect(document.querySelectorAll(".slide-thumb-btn")).toHaveLength(2);
     expect(document.querySelector(".slide-empty-state")).toBeNull();
@@ -199,12 +205,42 @@ describe("Slideshow slide card", () => {
     expect(nextFull).not.toBe(firstFull);
     expect(nextFull).toHaveAttribute(
       "src",
-      "/next-full.jpg?v=2026-01-01T00%3A00%3A00Z",
+      "/next-full.jpg?v=2026-01-01T00%3A00%3A00Z&w=1600",
     );
     expect(nextFull).not.toHaveClass("slide-plate-full--loaded");
 
     fireEvent.load(nextFull);
     expect(nextFull).toHaveClass("slide-plate-full--loaded");
+  });
+
+  test("the popover keeps the full scan while the room paints a preview", async () => {
+    const decode = vi.fn(() => Promise.resolve());
+    window.HTMLImageElement.prototype.decode = decode;
+
+    try {
+      slideshow(
+        {
+          images: [
+            {
+              type: "front",
+              variant: "thumbnail",
+              localPath: "/front-thumb.jpg",
+            },
+            { type: "front", variant: "full", localPath: "/front-full.jpg" },
+          ],
+        },
+        { previewKind: "front" },
+      );
+
+      await waitFor(() => {
+        expect(document.querySelector(".image-popover-full")).toHaveAttribute(
+          "src",
+          "/front-full.jpg?v=2026-01-01T00%3A00%3A00Z",
+        );
+      });
+    } finally {
+      delete window.HTMLImageElement.prototype.decode;
+    }
   });
 
   test("an unloaded full plate pauses while the preview covers the room", () => {
@@ -245,5 +281,134 @@ describe("Slideshow slide card", () => {
     fireEvent.keyDown(summary, { key: "Enter" });
 
     expect(onOpenPreview).not.toHaveBeenCalled();
+  });
+});
+
+describe("Slideshow walking", () => {
+  test("a held arrow key moves at most once per pacing interval", () => {
+    vi.useFakeTimers();
+    const onChangeIndex = vi.fn();
+
+    slideshow({}, { onChangeIndex });
+
+    act(() => {
+      for (let press = 0; press < 5; press += 1) {
+        fireEvent.keyDown(window, { key: "ArrowRight" });
+      }
+    });
+
+    expect(onChangeIndex).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      vi.advanceTimersByTime(199);
+    });
+    expect(onChangeIndex).toHaveBeenCalledTimes(1);
+
+    act(() => {
+      vi.advanceTimersByTime(1);
+    });
+    // The newest press in the window still runs.
+    expect(onChangeIndex).toHaveBeenCalledTimes(2);
+  });
+
+  test("Home cancels a pending walk move", () => {
+    vi.useFakeTimers();
+    const onChangeIndex = vi.fn();
+    const entries = [
+      note({ id: 1 }),
+      note({ id: 2 }),
+      note({ id: 3 }),
+    ];
+    const { rerender } = render(
+      <Slideshow
+        currentIndex={0}
+        notes={entries}
+        onChangeIndex={onChangeIndex}
+        onClose={() => {}}
+      />,
+    );
+
+    act(() => {
+      fireEvent.keyDown(window, { key: "ArrowRight" });
+    });
+    rerender(
+      <Slideshow
+        currentIndex={1}
+        notes={entries}
+        onChangeIndex={onChangeIndex}
+        onClose={() => {}}
+      />,
+    );
+
+    act(() => {
+      fireEvent.keyDown(window, { key: "ArrowRight" });
+      fireEvent.keyDown(window, { key: "Home" });
+    });
+
+    expect(onChangeIndex).toHaveBeenLastCalledWith(0);
+
+    act(() => {
+      vi.advanceTimersByTime(200);
+    });
+
+    // The pending ArrowRight must not undo Home.
+    expect(onChangeIndex).toHaveBeenCalledTimes(2);
+  });
+
+  test("a full plate waits for the walk to settle", () => {
+    vi.useFakeTimers();
+    const first = note({
+      id: 1,
+      images: [
+        { type: "front", variant: "thumbnail", localPath: "/front-thumb.jpg" },
+        { type: "front", variant: "full", localPath: "/front-full.jpg" },
+      ],
+    });
+    const second = note({
+      id: 2,
+      denomination: "5 Lei",
+      images: [
+        { type: "front", variant: "thumbnail", localPath: "/next-thumb.jpg" },
+        { type: "front", variant: "full", localPath: "/next-full.jpg" },
+      ],
+    });
+    const { rerender } = render(
+      <Slideshow
+        currentIndex={0}
+        notes={[first, second]}
+        onChangeIndex={() => {}}
+        onClose={() => {}}
+      />,
+    );
+
+    expect(document.querySelector(".slide-plate-full")).not.toBeNull();
+
+    act(() => {
+      fireEvent.keyDown(window, { key: "ArrowRight" });
+    });
+    rerender(
+      <Slideshow
+        currentIndex={1}
+        notes={[first, second]}
+        onChangeIndex={() => {}}
+        onClose={() => {}}
+      />,
+    );
+
+    expect(document.querySelector(".slide-plate-full")).toBeNull();
+    expect(document.querySelector(".image-loading-spinner")).toBeNull();
+    expect(document.querySelector(".slide-plate-thumb")).toHaveAttribute(
+      "src",
+      "/next-thumb.jpg?v=2026-01-01T00%3A00%3A00Z",
+    );
+
+    act(() => {
+      vi.advanceTimersByTime(120);
+    });
+
+    expect(document.querySelector(".slide-plate-full")).toHaveAttribute(
+      "src",
+      "/next-full.jpg?v=2026-01-01T00%3A00%3A00Z&w=1600",
+    );
   });
 });

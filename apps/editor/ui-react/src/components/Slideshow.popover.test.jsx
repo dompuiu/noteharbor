@@ -108,11 +108,13 @@ describe("ImagePopover image loading", () => {
 
     expect(thumbImage()).toHaveAttribute("src", THUMB_1);
     expect(fullImage()).toBeNull();
+    expect(document.querySelector(".image-loading-spinner")).not.toBeNull();
 
     await finishDecode(FRONT_1);
 
     expect(fullImage()).toHaveAttribute("src", FRONT_1);
     expect(thumbImage()).toBeNull();
+    expect(document.querySelector(".image-loading-spinner")).toBeNull();
   });
 
   test("does not paint a thumbnail when it is the full image", () => {

@@ -4,9 +4,21 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+### Added
+
+- Server: managed image URLs accept `?w=<pixels>` and answer a cached WebP preview generated from the full scan (EXIF-oriented, never upscaled, GIFs and narrow sources served verbatim). The Note slideshow asks for a 1600px preview while the image preview keeps the full scan.
+
 ### Changed
 
+- Note slideshow: a held arrow key moves at most once per 200ms and only the newest press in a window survives; the crisp plate is deferred until the walk settles (120ms after a single tap, 300ms after a continuous walk), so a fast walk no longer starts two large downloads per transient note. Note details are fetched 250ms after the last move, and note-to-note moves replace the URL entry instead of stacking history.
+- Image preview: neighbour prefetches wait 250ms and run at low priority so they never compete with the plate being opened.
+- Note slideshow and image preview: a small corner spinner reports progress while the crisp layer is still loading; the thumbnail stays visible underneath.
+- Last-visited route: hash-only changes (every slideshow note) no longer rewrite localStorage or call the desktop preference bridge.
 - Note slideshow and image preview: both screens now wear the Table screen's own theme — the grey app ground, white cards and image mats, ink type, the ordinary white outline buttons with the red hover, and the standard red focus ring — instead of the separate warm paper room, so the overlays read as part of the same app.
+
+### Fixed
+
+- Note slideshow: fast switching no longer starts a preview download for every transient note. A burst of taps keeps the crisp layer deferred until the walk stops, so the screen cannot sit on an old picture while a queue of previews is generated; a single tap still settles in 120ms.
 
 ## [2.10.3] - 2026-11-07
 

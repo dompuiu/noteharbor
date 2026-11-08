@@ -349,11 +349,13 @@ describe("bulk Tag editing from the selection bar", () => {
       screen.getByRole("checkbox", { name: "Select CCCC" }),
     ).toBeChecked();
 
-    const row = Array.from(
-      container.querySelectorAll("tbody tr.table-row-link"),
-    ).find((entry) => entry.textContent.includes("AAAA"));
-    expect(row.textContent).toContain("Gold");
-    expect(row.textContent).not.toContain("Silver");
+    await waitFor(() => {
+      const row = Array.from(
+        container.querySelectorAll("tbody tr.table-row-link"),
+      ).find((entry) => entry.textContent.includes("AAAA"));
+      expect(row.textContent).toContain("Gold");
+      expect(row.textContent).not.toContain("Silver");
+    });
 
     await waitFor(() => {
       expect(screen.getByRole("button", { name: "Tags…" })).toHaveFocus();

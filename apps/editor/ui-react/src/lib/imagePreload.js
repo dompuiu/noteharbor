@@ -184,7 +184,7 @@ function useImagePreload(
     return () => {
       cancelled = true;
 
-      if (idleHandle != null) {
+      if (idleHandle != null && typeof cancelIdleCallback === "function") {
         cancelIdleCallback(idleHandle);
       }
 

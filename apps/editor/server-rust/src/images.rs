@@ -401,6 +401,41 @@ pub fn transcode_to_webp(input: &[u8], quality: f32) -> Option<Vec<u8>> {
     )
 }
 
+/// Quality for on-demand slide previews. The preview is a downscaled WebP
+/// generated from the full scan, so a 1600px plate costs a few hundred KB
+/// instead of the multi-MB original.
+pub const PREVIEW_WEBP_QUALITY: f32 = 80.0;
+
+/// Downscales `input` to `max_width` and encodes it as WebP. Returns an error
+/// when the source is already narrow enough (the caller should serve the
+/// original), when it is a GIF (re-encoding would flatten animation), or when
+/// the bytes cannot be decoded. EXIF orientation is applied before measuring,
+/// so a rotated phone photo is not scaled by its stored width.
+pub fn resize_to_webp(input: &[u8], max_width: u32, quality: f32) -> Result<Vec<u8>, String> {
+    if max_width == 0 {
+        return Err("preview width must be positive".to_owned());
+    }
+
+    if image::guess_format(input).ok() == Some(image::ImageFormat::Gif) {
+        return Err("gif stays verbatim".to_owned());
+    }
+
+    let decoded = decode_oriented(input)?;
+
+    if decoded.width() <= max_width {
+        return Err("source is not wider than the preview".to_owned());
+    }
+
+    let resized = decoded.thumbnail(max_width, u32::MAX);
+    let rgb = flatten_to_rgb8(&resized);
+
+    Ok(
+        webp::Encoder::from_rgb(&rgb.as_raw()[..], rgb.width(), rgb.height())
+            .encode(quality.clamp(1.0, 100.0))
+            .to_vec(),
+    )
+}
+
 /// Quality for full-size note images stored on ingest (visually lossless).
 pub const INGEST_FULL_WEBP_QUALITY: f32 = 80.0;
 /// Quality for thumbnail note images stored on ingest.
@@ -759,6 +794,56 @@ mod tests {
             migrated_local_path_with_extension("/api/images/notes/7/x.gif", ".webp"),
             "/api/images/notes/7/x.gif"
         );
+    }
+
+    #[test]
+    fn resize_to_webp_downscales_a_wide_photo() {
+        let wide = image::RgbImage::from_pixel(1200, 800, image::Rgb([200, 100, 50]));
+        let mut input = Vec::new();
+        image::DynamicImage::ImageRgb8(wide)
+            .write_to(&mut std::io::Cursor::new(&mut input), image::ImageFormat::Jpeg)
+            .expect("encode");
+
+        let preview = resize_to_webp(&input, 500, PREVIEW_WEBP_QUALITY).expect("preview");
+        let decoded = webp::Decoder::new(&preview).decode().expect("webp decodes");
+
+        assert_eq!(decoded.width(), 500);
+        assert!(decoded.height() <= 334, "{}", decoded.height());
+        assert!(preview.len() < input.len());
+    }
+
+    #[test]
+    fn resize_to_webp_leaves_narrow_sources_to_the_caller() {
+        let small = image::RgbImage::from_pixel(320, 240, image::Rgb([10, 20, 30]));
+        let mut input = Vec::new();
+        image::DynamicImage::ImageRgb8(small)
+            .write_to(&mut std::io::Cursor::new(&mut input), image::ImageFormat::Jpeg)
+            .expect("encode");
+
+        assert!(resize_to_webp(&input, 500, PREVIEW_WEBP_QUALITY).is_err());
+    }
+
+    #[test]
+    fn resize_to_webp_keeps_gifs_verbatim() {
+        let frame = image::RgbaImage::from_pixel(800, 400, image::Rgba([1, 2, 3, 255]));
+        let mut gif = Vec::new();
+        image::codecs::gif::GifEncoder::new(&mut gif)
+            .encode(&frame, 800, 400, image::ExtendedColorType::Rgba8)
+            .expect("gif encodes");
+
+        assert!(resize_to_webp(&gif, 500, PREVIEW_WEBP_QUALITY).is_err());
+    }
+
+    #[test]
+    fn resize_to_webp_applies_exif_orientation_before_scaling() {
+        // Stored 1200x800 with orientation 6 displays as 800x1200: the
+        // preview must be 500 wide and 750 tall, not scaled by stored width.
+        let source = jpeg_with_exif_orientation(1200, 800, 6);
+        let preview = resize_to_webp(&source, 500, PREVIEW_WEBP_QUALITY).expect("preview");
+        let decoded = webp::Decoder::new(&preview).decode().expect("webp decodes");
+
+        assert_eq!(decoded.width(), 500);
+        assert_eq!(decoded.height(), 750);
     }
 
     #[test]

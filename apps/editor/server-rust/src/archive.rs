@@ -1463,6 +1463,17 @@ pub fn wipe_live_data(conn: &Connection) -> Result<(), ArchiveError> {
 
 /// Clears the whole workspace in one transaction and resets the image store
 /// — the in-place counterpart of swapping in a freshly initialized data dir.
+/// Slide previews are derived copies of the note images. Every path that
+/// replaces the live image store clears them so a wiped note cannot leave its
+/// preview behind.
+fn clear_preview_cache(data_dir: &Path) -> Result<(), ArchiveError> {
+    let previews_dir = data_dir.join("cache").join("images");
+    if previews_dir.exists() {
+        std::fs::remove_dir_all(&previews_dir).map_err(io_failed)?;
+    }
+    Ok(())
+}
+
 pub fn clear_live_data(conn: &mut Connection, data_dir: &Path) -> Result<(), ArchiveError> {
     let tx = conn.transaction().map_err(db_failed)?;
     tx.execute_batch(WIPE_SQL).map_err(db_failed)?;
@@ -1471,6 +1482,7 @@ pub fn clear_live_data(conn: &mut Connection, data_dir: &Path) -> Result<(), Arc
     if notes_dir.exists() {
         std::fs::remove_dir_all(&notes_dir).map_err(io_failed)?;
     }
+    clear_preview_cache(data_dir)?;
     std::fs::create_dir_all(data_dir.join("images")).map_err(io_failed)?;
     std::fs::create_dir_all(&notes_dir).map_err(io_failed)?;
     Ok(())
@@ -1654,6 +1666,12 @@ pub fn merge_archive_into_live(
     }
     tx.commit().map_err(db_failed)?;
     drop(archive);
+
+    // The import replaced or removed note images; any cached preview is now
+    // derived from bytes that are no longer live.
+    if let Some(data_dir) = live_images_dir.parent() {
+        clear_preview_cache(data_dir)?;
+    }
 
     if mode == "replace" {
         let notes_dir = live_images_dir.join("notes");
@@ -1922,6 +1940,24 @@ mod tests {
                 "notes/2/front-thumbnail.jpg",
             ]
         );
+    }
+
+    #[test]
+    fn clear_live_data_removes_derived_preview_cache() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let pool = crate::db::open_pool(&dir.path().join("banknotes.db")).expect("pool opens");
+        let mut conn = pool.get().expect("connection");
+        let previews = dir.path().join("cache").join("images");
+        std::fs::create_dir_all(&previews).expect("preview dir");
+        std::fs::write(previews.join("plate.webp"), b"preview").expect("preview file");
+        let note_images = dir.path().join("images").join("notes").join("1");
+        std::fs::create_dir_all(&note_images).expect("note dir");
+        std::fs::write(note_images.join("front-full.jpg"), b"image").expect("image file");
+
+        clear_live_data(&mut conn, dir.path()).expect("clears");
+
+        assert!(!previews.exists());
+        assert!(dir.path().join("images").join("notes").exists());
     }
 
     #[test]
