@@ -4,6 +4,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.11.0] - 2026-11-07
+
 ### Added
 
 - Server: managed image URLs accept `?w=<pixels>` and answer a cached WebP preview generated from the full scan (EXIF-oriented, never upscaled, GIFs and narrow sources served verbatim). The Note slideshow asks for a 1600px preview while the image preview keeps the full scan.
