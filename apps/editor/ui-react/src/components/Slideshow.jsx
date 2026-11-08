@@ -84,6 +84,80 @@ function hasModifierPressed(event) {
   return event.metaKey || event.ctrlKey || event.altKey;
 }
 
+// The controls that already activate on Enter/Space must receive those
+// presses instead of the room's global shortcuts.
+const NATIVE_CONTROL_SELECTOR =
+  "button, a[href], input, select, textarea, summary, [role='button']";
+
+function isNativeControl(target) {
+  return (
+    target instanceof Element &&
+    target.closest(NATIVE_CONTROL_SELECTOR) !== null
+  );
+}
+
+// The elements the browser's own Tab walk would visit, in document order.
+const FOCUSABLE_SELECTOR = [
+  "a[href]",
+  "button:not([disabled])",
+  "input:not([disabled])",
+  "select:not([disabled])",
+  "textarea:not([disabled])",
+  "summary",
+  "[tabindex]:not([tabindex='-1'])",
+].join(",");
+
+function focusableWithin(container) {
+  if (!container) {
+    return [];
+  }
+
+  return Array.from(container.querySelectorAll(FOCUSABLE_SELECTOR)).filter(
+    (element) =>
+      element.closest("[hidden], [aria-hidden='true'], [inert]") === null,
+  );
+}
+
+// Keep Tab inside an open dialog. A control elsewhere on the page (a sibling
+// dialog, for instance) keeps its own Tab walk; the app behind the room is
+// inert, so focus only needs pulling back when it fell to <body> or when the
+// walk reached the room's own first/last control.
+function trapTabKey(event, container) {
+  if (event.key !== "Tab") {
+    return false;
+  }
+
+  const focusable = focusableWithin(container);
+
+  if (!focusable.length) {
+    event.preventDefault();
+    container?.focus({ preventScroll: true });
+    return true;
+  }
+
+  const active = document.activeElement;
+  const first = focusable[0];
+  const last = focusable[focusable.length - 1];
+  const atRoom = active === container;
+  const inside =
+    atRoom || (active instanceof Node && container?.contains(active));
+
+  if (!inside && active !== document.body) {
+    return false;
+  }
+
+  const wrapBackward = event.shiftKey && (atRoom || !inside || active === first);
+  const wrapForward = !event.shiftKey && (atRoom || !inside || active === last);
+
+  if (!wrapBackward && !wrapForward) {
+    return false;
+  }
+
+  event.preventDefault();
+  (wrapBackward ? last : first).focus({ preventScroll: true });
+  return true;
+}
+
 // The arrow keys with h/j/k/l aliased onto them. A held Shift (or Caps Lock)
 // spells the letters uppercase ("H", "L", …), so callers resolve the key
 // through directionOf, which lowercases a single-character key before the
@@ -179,6 +253,7 @@ function ImagePopover({
   src,
   thumb,
 }) {
+  const overlayRef = useRef(null);
   const imageRef = useRef(null);
   const imageWrapRef = useRef(null);
   const dragRef = useRef(null);
@@ -507,6 +582,12 @@ function ImagePopover({
     resetZoom();
   }, [src]);
 
+  // The popover is the nested dialog: focus moves into it on open, and the
+  // slideshow behind it is inert (see the panel in Slideshow).
+  useLayoutEffect(() => {
+    overlayRef.current?.focus({ preventScroll: true });
+  }, []);
+
   // The visible image only ever switches to a source that is already decoded,
   // so holding an arrow key never paints an empty frame. While the key is
   // held, earlier sources that finish still show, so the plates keep flowing,
@@ -595,6 +676,14 @@ function ImagePopover({
 
   useEffect(() => {
     function onKeyDown(e) {
+      if (e.defaultPrevented) {
+        return;
+      }
+
+      if (trapTabKey(e, overlayRef.current)) {
+        return;
+      }
+
       const direction = directionOf(e);
       const modified = e.shiftKey || e.ctrlKey || e.metaKey;
 
@@ -717,7 +806,15 @@ function ImagePopover({
   const atActualSize = zoomed && Math.abs(zoomScale - 1) < ZOOM_EPSILON;
 
   return (
-    <div className="image-popover-overlay" onClick={onClose}>
+    <div
+      aria-label="Image preview"
+      aria-modal="true"
+      className="image-popover-overlay"
+      onClick={onClose}
+      ref={overlayRef}
+      role="dialog"
+      tabIndex={-1}
+    >
       <div
         className={`image-popover-content${zoomed ? " image-popover-content--zoomed" : ""}`}
         onClick={(e) => e.stopPropagation()}
@@ -892,6 +989,10 @@ function Slideshow({
 }) {
   const note = notes[currentIndex];
   const screenRef = useRef(null);
+  // The thumbnail the popover was opened from, so closing it returns the
+  // keyboard to that control rather than the room's section.
+  const previewTriggerRef = useRef(null);
+  const wasPreviewRef = useRef(Boolean(previewKind));
 
   // The open note's two faces, used by the slide plates, the popover, and the
   // keyboard hand-off. One derivation per note change.
@@ -996,12 +1097,52 @@ function Slideshow({
   }
 
   useEffect(() => {
+    const wasPreview = wasPreviewRef.current;
+    wasPreviewRef.current = Boolean(previewKind);
+
+    if (keyboardDisabled || previewKind) {
+      return undefined;
+    }
+
+    // Focus moves into the room when it opens, and again when a nested layer
+    // (the Image popover or the Note editor) hands the keyboard back. Closing
+    // the popover returns to the thumbnail that opened it when that control is
+    // still on screen.
+    const screen = screenRef.current;
+    const active = document.activeElement;
+
+    if (!screen || (active instanceof HTMLElement && screen.contains(active))) {
+      return undefined;
+    }
+
+    const trigger = wasPreview ? previewTriggerRef.current : null;
+    previewTriggerRef.current = null;
+
+    if (trigger?.isConnected) {
+      trigger.focus({ preventScroll: true });
+      return undefined;
+    }
+
+    screen.focus({ preventScroll: true });
+    return undefined;
+  }, [keyboardDisabled, previewKind]);
+
+  useEffect(() => {
     if (keyboardDisabled) {
       return undefined;
     }
 
     function onKeyDown(event) {
       if (previewKind) {
+        return;
+      }
+
+      if (event.defaultPrevented) {
+        return;
+      }
+
+      // Tab stays in the room; a sibling dialog keeps its own walk.
+      if (trapTabKey(event, screenRef.current)) {
         return;
       }
 
@@ -1025,6 +1166,15 @@ function Slideshow({
 
       if (event.key === "Escape") {
         onClose();
+        return;
+      }
+
+      // A focused control owns Enter/Space: the browser activates it instead
+      // of the slideshow opening the preview.
+      if (
+        (event.key === "Enter" || event.key === " ") &&
+        isNativeControl(event.target)
+      ) {
         return;
       }
 
@@ -1111,17 +1261,31 @@ function Slideshow({
   const totalPreviewCount = previewSequence.length;
   const previewSequenceIndex = previewItem ? previewIndex + 1 : 0;
   const scrapePanelTitle = getScrapePanelTitle(note);
+  const denomination = String(note?.denomination ?? "").trim();
+  const noteAnnouncement = note
+    ? `note ${currentIndex + 1} of ${notes.length}, ${denomination || "Untitled note"}`
+    : "";
 
   // While an editor overlay is open the slideshow is a backdrop: it keeps
   // rendering, but `inert` takes its controls out of the tab order and stops
   // clicks, so a stray Tab cannot reach behind the modal and act (closing the
   // slideshow or typing a counter jump) while the editor holds unsaved work.
+  // The section is the room's dialog; the panel steps aside (but the nested
+  // Image popover does not) while a plate is enlarged.
   return (
     <section
+      aria-label="Note slideshow"
+      aria-modal={previewItem ? undefined : "true"}
       className="slideshow-screen slideshow-screen--overlay"
       inert={keyboardDisabled}
       ref={screenRef}
+      role="dialog"
+      tabIndex={-1}
     >
+      <span aria-live="polite" className="slideshow-announcer">
+        {noteAnnouncement}
+      </span>
+
       {previewItem && note && (
         <ImagePopover
           alt={previewItem.alt}
@@ -1142,7 +1306,7 @@ function Slideshow({
         />
       )}
 
-      <div className="slideshow-panel">
+      <div className="slideshow-panel" inert={Boolean(previewItem)}>
         <div className="slideshow-topbar">
           <div className="slideshow-topbar-actions">
             <NoteCounter
@@ -1236,7 +1400,10 @@ function Slideshow({
                   key={item.kind}
                   aria-label={`Enlarge ${item.label.toLowerCase()} image`}
                   className="slide-thumb-btn"
-                  onClick={() => onOpenPreview?.(note.id, item.kind)}
+                  onClick={(event) => {
+                    previewTriggerRef.current = event.currentTarget;
+                    onOpenPreview?.(note.id, item.kind);
+                  }}
                   onFocus={() => preloadPreviewItem(item)}
                   onMouseEnter={() => preloadPreviewItem(item)}
                   title="Click to enlarge"

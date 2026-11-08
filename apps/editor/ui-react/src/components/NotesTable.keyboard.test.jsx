@@ -1741,3 +1741,128 @@ describe("Escape clears the selection before the row cursor", () => {
     expect(row).toHaveClass("table-row-link--active");
   });
 });
+
+describe("The slideshow as a modal room", () => {
+  async function openSlideshow(user) {
+    getNotes.mockResolvedValue({ notes: threeNotes });
+    renderTable();
+
+    const first = await screen.findByText("AAAA");
+    await user.click(first.closest("tr"));
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/1");
+    });
+
+    return screen.getByRole("dialog", { name: "Note slideshow" });
+  }
+
+  test("is a named modal dialog, takes focus, and makes the table inert", async () => {
+    const user = userEvent.setup();
+    const dialog = await openSlideshow(user);
+
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(document.querySelector(".screen-body")).toHaveAttribute("inert");
+
+    await waitFor(() => {
+      expect(dialog).toHaveFocus();
+    });
+  });
+
+  test("Tab stays inside the room and wraps at both ends", async () => {
+    const user = userEvent.setup();
+    const dialog = await openSlideshow(user);
+
+    await user.tab({ shift: true });
+
+    const next = screen.getByRole("button", { name: "Next note" });
+    expect(next).toHaveFocus();
+
+    await user.tab();
+
+    expect(dialog.contains(document.activeElement)).toBe(true);
+    expect(document.activeElement).not.toBe(next);
+  });
+
+  test("Space on a focused control activates it instead of scrolling on", async () => {
+    const user = userEvent.setup();
+    await openSlideshow(user);
+
+    const next = screen.getByRole("button", { name: "Next note" });
+    next.focus();
+    await user.keyboard(" ");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/2");
+    });
+    expect(currentHash()).not.toContain("preview");
+  });
+
+  test("Enter on a focused control activates it instead of opening the preview", async () => {
+    const user = userEvent.setup();
+    await openSlideshow(user);
+
+    const next = screen.getByRole("button", { name: "Next note" });
+    next.focus();
+    await user.keyboard("{Enter}");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/2");
+    });
+    expect(currentHash()).not.toContain("preview");
+  });
+
+  test("arrow navigation still works while a control has focus", async () => {
+    const user = userEvent.setup();
+    await openSlideshow(user);
+
+    screen.getByRole("button", { name: "Next note" }).focus();
+    await user.keyboard("{ArrowRight}");
+
+    await waitFor(() => {
+      expect(currentHash()).toContain("slideshow/2");
+    });
+  });
+
+  test("the image popover is a nested dialog that returns focus to its thumbnail", async () => {
+    const user = userEvent.setup();
+    await openSlideshow(user);
+
+    const thumbnail = screen.getByRole("button", {
+      name: "Enlarge front image",
+    });
+    await user.click(thumbnail);
+
+    const popover = await screen.findByRole("dialog", {
+      name: "Image preview",
+    });
+
+    expect(popover).toHaveAttribute("aria-modal", "true");
+    await waitFor(() => {
+      expect(popover).toHaveFocus();
+    });
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(currentHash()).not.toContain("preview");
+    });
+    await waitFor(() => {
+      expect(thumbnail).toHaveFocus();
+    });
+  });
+
+  test("announces the note number and denomination on each index change", async () => {
+    const user = userEvent.setup();
+    const dialog = await openSlideshow(user);
+    const firstAnnouncement = within(dialog).getByText("note 1 of 3, AAAA");
+
+    expect(firstAnnouncement).toHaveAttribute("aria-live", "polite");
+
+    await user.keyboard("{ArrowRight}");
+
+    await waitFor(() => {
+      expect(within(dialog).getByText("note 2 of 3, BBBB")).toBeInTheDocument();
+    });
+  });
+});

@@ -567,7 +567,9 @@ describe("All notes screen", () => {
     expect(screen.getByTestId("pathname")).toHaveTextContent(
       "/catalog/all-notes",
     );
-    expect(screen.getByText("Fr. 500").closest("tr")).toHaveFocus();
+    await waitFor(() => {
+      expect(screen.getByText("Fr. 500").closest("tr")).toHaveFocus();
+    });
   });
 
   test("the slideshow walks the filtered All notes list, not a collection", async () => {
@@ -618,5 +620,35 @@ describe("All notes screen", () => {
     expect(screen.getByTestId("pathname")).toHaveTextContent(
       "/catalog/all-notes",
     );
+  });
+});
+
+describe("All notes slideshow modal", () => {
+  test("is a named dialog that focuses itself and makes the table inert", async () => {
+    const user = userEvent.setup();
+    renderAllNotes();
+    await screen.findByText("Fr. 2300");
+
+    await user.click(screen.getByText("1 Leu"));
+
+    const dialog = screen.getByRole("dialog", { name: "Note slideshow" });
+    const screenBody = document.querySelector(
+      ".all-notes-screen > .screen-body",
+    );
+
+    expect(dialog).toHaveAttribute("aria-modal", "true");
+    expect(screenBody).toHaveAttribute("inert");
+    await waitFor(() => {
+      expect(dialog).toHaveFocus();
+    });
+
+    await user.keyboard("{Escape}");
+
+    await waitFor(() => {
+      expect(screen.getByTestId("pathname")).toHaveTextContent(
+        "/catalog/all-notes",
+      );
+    });
+    expect(screenBody).not.toHaveAttribute("inert");
   });
 });

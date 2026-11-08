@@ -280,6 +280,10 @@ export function AllNotesScreen() {
       ? -1
       : visibleNotes.findIndex((note) => note.id === slideshowNoteId);
   const slideshowActive = slideshowNoteId != null;
+  // The room only exists once the note resolves in the visible list. The page
+  // behind it is inert on the same condition, so a cold link or a list still
+  // loading can never leave a dead, inert screen.
+  const slideshowOpen = slideshowActive && slideshowIndex >= 0;
 
   useEffect(() => {
     detailMountedRef.current = true;
@@ -693,7 +697,7 @@ export function AllNotesScreen() {
 
   return (
     <section className="screen-stack all-notes-screen">
-      <div className="screen-body">
+      <div className="screen-body" inert={slideshowOpen}>
         <div className="panel-heading panel-heading--compact">
           <div className="panel-heading-copy">
             <p className="eyebrow collection-eyebrow">Catalog</p>
@@ -769,25 +773,25 @@ export function AllNotesScreen() {
             lastVisibleDataColumnKey={lastVisibleDataColumnKey}
           />
         )}
-
-        {slideshowActive && slideshowIndex >= 0 ? (
-          <Slideshow
-            currentIndex={slideshowIndex}
-            notes={slideshowNotes}
-            onChangeIndex={handleChangeSlideshowIndex}
-            onClose={handleCloseSlideshow}
-            onClosePreview={handleClosePreview}
-            onJump={(position) => handleChangeSlideshowIndex(position - 1)}
-            onJumpPreview={jumpToPreview}
-            onMovePreview={movePreview}
-            onOpenPreview={handleOpenPreview}
-            onPreviewEnd={() => jumpPreview("end")}
-            onPreviewStart={() => jumpPreview("start")}
-            previewKind={previewKind}
-            readOnly
-          />
-        ) : null}
       </div>
+
+      {slideshowOpen ? (
+        <Slideshow
+          currentIndex={slideshowIndex}
+          notes={slideshowNotes}
+          onChangeIndex={handleChangeSlideshowIndex}
+          onClose={handleCloseSlideshow}
+          onClosePreview={handleClosePreview}
+          onJump={(position) => handleChangeSlideshowIndex(position - 1)}
+          onJumpPreview={jumpToPreview}
+          onMovePreview={movePreview}
+          onOpenPreview={handleOpenPreview}
+          onPreviewEnd={() => jumpPreview("end")}
+          onPreviewStart={() => jumpPreview("start")}
+          previewKind={previewKind}
+          readOnly
+        />
+      ) : null}
     </section>
   );
 }

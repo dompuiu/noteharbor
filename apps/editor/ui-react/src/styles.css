@@ -6273,6 +6273,19 @@ button.tag {
   color: var(--on-dark-text);
 }
 
+/* The note announcement is for assistive tech only. */
+.slideshow-announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 /* The paper panel fills the scrim, so the slideshow uses the same estate the
    old near-full-viewport panel did. It holds the 1200px app floor (minus the
    overlay's 16px side padding), so the slide grid never squeezes on smaller

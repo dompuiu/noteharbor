@@ -26,8 +26,8 @@ const NON_TEXT_INPUT_TYPES = new Set([
 ]);
 
 // Full-screen or modal surfaces that own their keys until dismissed. The Note
-// editor and the Note slideshow are overlays rather than role="dialog", so
-// list their classes alongside the roles.
+// editor is an overlay without a dialog role; the slideshow is both, but its
+// class is kept because some callers build it without the role.
 const MODAL_SURFACE_SELECTOR =
   "[role='dialog'], [role='alertdialog'], .edit-note-overlay, .slideshow-screen--overlay";
 

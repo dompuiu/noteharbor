@@ -1160,6 +1160,11 @@ function NotesTable({
   const slideshowIndex = slideshowRouteActive
     ? slideshowNotes.findIndex((note) => note.id === currentRoute.noteId)
     : -1;
+  // The room only exists once both the route and its frozen list have landed.
+  // Everything that hides the page behind it keys off the same condition, so a
+  // cold link or a list still settling can never leave a dead, inert screen.
+  const slideshowOpen =
+    slideshowRouteActive && slideshowNotes.length > 0 && slideshowIndex >= 0;
   // The Note editor counts and navigates within the list it was opened from:
   // the slideshow's frozen list when opened over it, the current table view
   // otherwise. This is what makes "5" mean the same thing in both places.
@@ -4279,7 +4284,7 @@ function NotesTable({
           )
         : null}
 
-      {slideshowRouteActive && slideshowNotes.length && slideshowIndex >= 0 ? (
+      {slideshowOpen ? (
         <Slideshow
           currentIndex={slideshowIndex}
           keyboardDisabled={editorOverlayOpen}
@@ -4338,7 +4343,10 @@ function NotesTable({
         </section>
       ) : null}
 
-      <div className="screen-body" inert={editorOverlayOpen}>
+      <div
+        className="screen-body"
+        inert={editorOverlayOpen || slideshowOpen}
+      >
         <div className="panel-heading panel-heading--compact">
           <div className="panel-heading-copy">
             <p className="eyebrow collection-eyebrow">Catalog</p>

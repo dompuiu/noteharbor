@@ -875,7 +875,9 @@ describe("Two save actions", () => {
       expect(currentHash()).toContain("overlay=edit");
     });
     expect(await screen.findByLabelText("Denomination")).toHaveValue("AAAA!");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Discard changes?" }),
+    ).not.toBeInTheDocument();
   });
 
   test("Save & close returns to the slideshow on the edited Note", async () => {
@@ -892,7 +894,9 @@ describe("Two save actions", () => {
       expect(currentHash()).toContain("slideshow/1");
     });
     expect(currentHash()).not.toContain("overlay");
-    expect(screen.queryByRole("dialog")).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("dialog", { name: "Discard changes?" }),
+    ).not.toBeInTheDocument();
   });
 
   test("Ctrl+S keeps the editor open on the edited Note", async () => {
@@ -1073,7 +1077,7 @@ describe("Deleting the Note being edited from the slideshow", () => {
     await user.click(screen.getByRole("button", { name: "Edit note" }));
     await screen.findByLabelText("Denomination");
     await user.click(screen.getByRole("button", { name: "Delete" }));
-    const dialog = await screen.findByRole("dialog");
+    const dialog = await screen.findByRole("dialog", { name: /^Delete .+\?$/ });
     await user.click(within(dialog).getByRole("button", { name: "Delete" }));
   }
 
