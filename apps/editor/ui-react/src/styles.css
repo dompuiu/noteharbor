@@ -7008,6 +7008,9 @@ button.tag {
 
 .image-popover-image-wrap .image-popover-thumb {
   width: 100%;
+  /* A progressive JPEG paints its not-yet-decoded area white. Match the
+     popover panel so the placeholder reads as the well, not a white card. */
+  background: var(--on-dark-bg-translucent);
   pointer-events: none;
 }
 

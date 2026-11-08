@@ -2489,3 +2489,17 @@ describe("message styles", () => {
     );
   });
 });
+
+describe("image popover styles", () => {
+  test("the thumbnail placeholder matches the popover panel", () => {
+    const rule = [
+      ...styles.matchAll(
+        /\.image-popover-image-wrap \.image-popover-thumb\s*\{([^}]*)\}/g,
+      ),
+    ]
+      .map((match) => match[1])
+      .find((body) => body.includes("background"));
+
+    expect(rule).toMatch(/background:\s*var\(--on-dark-bg-translucent\)/);
+  });
+});
