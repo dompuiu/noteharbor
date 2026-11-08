@@ -136,13 +136,13 @@ components:
 
 The Editor takes a poster-scale brand language — red, near-black ink, white content bands, uppercase weight-800 display type, and pill controls — and turns it into a dense working surface for cataloguing banknotes. It is not a marketing page, so the poster voice appears where the app speaks to the user (screen titles, eyebrows, primary actions) and then gives way to white data bands, hairline grids, and quiet grey chrome.
 
-Three materials carry the whole system: **slate ink** (#2c3a45) as the navigation rail, **ink** (#25282b) as the default overlay world, **white** (#ffffff) as the content and table surface, and **deep red** (#b80000) as the single accent. The Note slideshow and Image popover are the one sanctioned **Light room**: a warm paper panel on the same near-black scrim, so the presentation moment reads as a print room rather than a lightbox. Red never becomes a background wash on the page; it marks the primary action, the active navigation edge, selection, focus, and the tags that need attention. The rail keeps the brighter **brand red** (#e60000), where the deep step would go muddy on slate. Everything else is a neutral step on the white-to-grey ladder.
+Three materials carry the whole system: **slate ink** (#2c3a45) as the navigation rail, **ink** (#25282b) as the default overlay world, **white** (#ffffff) as the content and table surface, and **deep red** (#b80000) as the single accent. The Note slideshow and Image popover are the one **presentation room**: they float a light panel on the same near-black scrim, wearing the app's own Canvas Soft ground, white cards and mats, ink type and deep-red actions, so the presentation moment reads as a room in the app rather than a second product. Red never becomes a background wash on the page; it marks the primary action, the active navigation edge, selection, focus, and the tags that need attention. The rail keeps the brighter **brand red** (#e60000), where the deep step would go muddy on slate. Everything else is a neutral step on the white-to-grey ladder.
 
 Structure stays dense and quiet. The Table screen is the centre of gravity: one bordered white card filling the viewport, a fixed 64px slate rail that expands on hover, compact 40px headers, and 12px cell padding tuned for scanning hundreds of rows. Capture, Import, and Showcase screens reuse the same card, field, and pill vocabulary at a lower density.
 
 **Key Characteristics:**
-- One accent: `{colors.brand-red-deep}` (#b80000). Filled pills, focus rings, selection, search and the bulk bar all wear it; the rail keeps the brighter `{colors.brand-red}`, and outline pills stay neutral. Red text for links and active state. The slideshow's plate ring is the one focus exception, in the room's label ochre.
-- Settled chrome, loud content: the slate rail holds the same dark band the layout is built around, a step off pure ink so ordinary overlays stay the darkest surface. White bands and the red accent carry all the contrast. No warm greys on the page, no pure black, no second accent hue; the warm paper belongs to the two presentation screens alone.
+- One accent: `{colors.brand-red-deep}` (#b80000). Filled pills, focus rings, selection, search and the bulk bar all wear it; the rail keeps the brighter `{colors.brand-red}`, and outline pills stay neutral. Red text for links and active state, including the slideshow's image plates.
+- Settled chrome, loud content: the slate rail holds the same dark band the layout is built around, a step off pure ink so ordinary overlays stay the darkest surface. White bands and the red accent carry all the contrast. No warm greys, no pure black, no second accent hue; the presentation screens take the same neutral ladder.
 - Uppercase weight-800 display type with tight tracking for screen titles and eyebrows; sentence case for the calm secondary voice.
 - Pill geometry on every button and counter (100px), a 10px step on fields and selects, and a 7px rounded rectangle on filter chips and tags. Cards stay flat at 6px.
 - Flat at rest: cards carry no shadow; only floating chrome (menus, dialogs, the expanded rail) lifts.
@@ -151,7 +151,7 @@ Structure stays dense and quiet. The Table screen is the centre of gravity: one 
 
 ### Brand & Accent
 - **Brand Red** (`{colors.brand-red}` — `#e60000`): The rail's red, and the red on dark surfaces. It draws the sidebar's active edge, cursor rings and drop lines, fills the brand mark, and borders a hovered slide thumbnail. On slate the deep step loses its edge, so the rail keeps the brighter tone.
-- **Deep Red** (`{colors.brand-red-deep}` — `#b80000`): The app accent. Red type on white — links, active filter values, sort labels — and every primary button's fill at rest. It also paints the global focus ring (the slideshow's plate ring is the exception, in label ochre), selected-row edges and tint, active filter chips, the search caret, drop lines, and the bulk-action bar. It brightens to `{colors.brand-red-deep-hover}` (`#cc0000`) on hover and darkens to `{colors.brand-red-deep-active}` (`#990000`) while pressed.
+- **Deep Red** (`{colors.brand-red-deep}` — `#b80000`): The app accent. Red type on white — links, active filter values, sort labels — and every primary button's fill at rest. It also paints the global focus ring, selected-row edges and tint, active filter chips, the search caret, drop lines, and the bulk-action bar. It brightens to `{colors.brand-red-deep-hover}` (`#cc0000`) on hover and darkens to `{colors.brand-red-deep-active}` (`#990000`) while pressed.
 
 ### Surface
 - **Canvas** (`{colors.canvas}` — `#ffffff`): Cards, inputs, menus, and the table surface.
@@ -159,14 +159,14 @@ Structure stays dense and quiet. The Table screen is the centre of gravity: one 
 - **Canvas Mist** (`{colors.canvas-mist}` — `#f7f7f7`): The filter rail and secondary panel fills.
 - **Canvas Step** (`{colors.canvas-step}` — `#e6e6e6`): The deepest neutral step, used for the drag handle's hover.
 - **Rail Slate** (`{colors.rail}` — `#2c3a45`): The navigation rail, and only the rail. A cool slate, not warm; it stays dark for contrast but reads as structure rather than a void.
-- **Ink** (`{colors.ink}` — `#25282b`): The default overlay world and double-height bands; the Note slideshow and Image popover are the one exception, wearing warm paper instead. Doubles as the primary text colour.
-- **Paper Room** (`#f7f3ea` panel, `#fffdf7` card): The Light room surfaces of the Note slideshow and Image popover. Scoped to those two overlay roots; never a page or card ground elsewhere.
+- **Ink** (`{colors.ink}` — `#25282b`): The default overlay world and double-height bands. Doubles as the primary text colour.
+- **Presentation Room** (`{colors.canvas-soft}` panel, `{colors.canvas}` card): The Note slideshow and Image popover. Scoped to those two overlay roots; the same neutral ladder as the Table, never a warm or tinted ground.
 
 ### Text
 - **Ink** (`{colors.ink}` — `#25282b`): Headings, table cells, field values.
 - **Body** (`{colors.body}` — `#5f6367`): Secondary copy, labels, captions; clears 4.5:1 on every surface it sits on.
 - **Body Faint** (`{colors.body-faint}` — `#6e7276`): Tertiary metadata — row numbers, empty dashes, captions.
-- **On Dark** (`{colors.on-dark}` — `#ffffff`): Navigation labels, ink-room overlay content, and text on red. The Light room remaps its `--on-dark-*` roles to ink on paper inside the two presentation overlay roots.
+- **On Dark** (`{colors.on-dark}` — `#ffffff`): Navigation labels, ink-room overlay content, and text on red. The two presentation overlay roots remap their `--on-dark-*` roles to the app's ink, muted type, hairlines and white card.
 
 ### Semantic
 The brand has no separate semantic palette, but the Editor needs status. These three muted hues are the only exceptions to the red/ink/neutral rule, and each appears only inside a status chip or inline message:
@@ -184,9 +184,9 @@ Tags are labels, not state, so they left the accent family for their own warm Oc
 ### Named Rules
 **The One Red Rule.** Red is state and action, never decoration. It covers at most about a tenth of any screen; its rarity is what makes the deep-red primary pill and the active edge read instantly.
 
-**The Tag Family Rule.** Ochre belongs to values: tag chips in the table, the overflow popover, the slideshow and showcase tooltips, the editor's Tags field, and every value chip in the filter rail — ground, hairline, label, hover, the round remove cross, and the ring the chip draws when focused. Red still owns what an action does outside a chip — the primary pill, row selection, the global focus ring, and `Clear all` — and a negated filter keeps the danger ground. Nothing else borrows ochre for a fill or a border, except the slideshow plate's focus ring, which takes the label ochre so focus reads as a focused image rather than an alarm border.
+**The Tag Family Rule.** Ochre belongs to values: tag chips in the table, the overflow popover, the slideshow and showcase tooltips, the editor's Tags field, and every value chip in the filter rail — ground, hairline, label, hover, the round remove cross, and the ring the chip draws when focused. Red still owns what an action does outside a chip — the primary pill, row selection, the global focus ring, and `Clear all` — and a negated filter keeps the danger ground. Nothing else borrows ochre for a fill or a border; focus rings stay red everywhere.
 
-**The White Room Rule.** Content lives on white or on a grey step of the same neutral family. No warm cream, blue-grey, or second tinted neutral enters the page, with one sanctioned exception: the Ochre tag chips above.
+**The White Room Rule.** Content lives on white or on a grey step of the same neutral family. No warm cream, blue-grey, or second tinted neutral enters the page, with one sanctioned label exception: the Ochre tag chips above.
 
 **The One Message Rule.** Feedback has one shape and two homes. Transient confirmation and failure float in the bottom-right toast; a message owned by a panel or field sits inline with the same semantic edge and wash. Semantic hues appear only inside those messages, never as a ground for content or a button.
 
@@ -210,7 +210,7 @@ Tags are labels, not state, so they left the accent family for their own warm Oc
 - **Code** (500, 13px, 0.045em tracking): serial numbers, one step under Data.
 - **Control** (600, 0.84rem/1.2): buttons, links, and tabs.
 - **Label** (700, 0.6875rem, 0.08em, uppercase): table and menu headers, in Body, so 11px caps clear 4.5:1 on the header band.
-- **Presentation room label** (600, 0.68rem, 0.12em, uppercase): the slideshow's Front/Back plate labels; its eyebrows take the same ochre label tone (`#8a4a12`).
+- **Presentation room label** (600, 0.68rem, 0.12em, uppercase): the slideshow's Front/Back plate labels; its eyebrows and plate labels take the table header's muted Body tone (`{colors.body}`).
 - **Meta** (400, 0.75rem/1.5, tabular): the table's summary and status lines.
 
 ### Named Rules
@@ -234,7 +234,7 @@ Tonal layering, not shadow. Structure is carried by ink/white polarity and the w
 - **Ambient rest:** none. Cards, panels, and controls are flat.
 - **Lifted** (`0 12px 32px rgba(37, 40, 43, 0.16)`): menus, dropdowns, the expanded rail, and the bulk pill.
 - **Overlay** (`0 24px 64px rgba(37, 40, 43, 0.22)`): dialogs, the note editor panel, and other modals.
-- **Room** (`0 30px 80px rgba(0, 0, 0, 0.36)`): the slideshow's paper panel. The popover content takes a smaller `0 24px 48px rgba(0, 0, 0, 0.36)` step on the same lower-alpha ladder.
+- **Room** (`0 30px 80px rgba(0, 0, 0, 0.36)`): the slideshow panel. The popover content takes a smaller `0 24px 48px rgba(0, 0, 0, 0.36)` step on the same lower-alpha ladder.
 
 ### Named Rules
 **The Flat-At-Rest Rule.** A flat card is the default. A shadow is earned by openness or floating above the page — never used as decoration.
@@ -250,7 +250,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Default:** white ground, 1px control border, ink text. Hover tints the ground with the red wash and turns the border red.
 - **Primary:** Deep Red ground and border with white text; the only filled button at rest. Brightens to `#cc0000` on hover and darkens to `#990000` while pressed.
 - **Danger:** `#a30000` fill with white text; the soft variant uses a red wash, red text, and a red hairline.
-- **Focus:** a 2px red outline at 2px offset, except the slideshow's plate ring, which takes the room's label ochre. Transitions are 0.15s on background, border, and colour.
+- **Focus:** a 2px red outline at 2px offset, including the slideshow's image plates. Transitions are 0.15s on background, border, and colour.
 
 ### Inputs / Fields
 - **Style:** white ground, 1px control border, 10px radius, 34px minimum height, 0.86rem text.
@@ -294,19 +294,19 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 
 ### Overlays
 - **Scrim:** ink at 50–88% opacity. The note editor keeps a light grey scrim with a white panel; every ordinary overlay keeps the deep ink panel with white text.
-- **Light room (the exception):** the Note slideshow and the Image popover alone flip to a warm paper panel (`#f7f3ea`) and a brighter card (`#fffdf7`) with ink type. The scrim outside stays the same near-black `rgba(0, 0, 0, 0.88)`, so the room floats over the dimmed app instead of flooding it with white.
-- **Panel:** 6px radius, 1px hairline, floating shadow. The paper room keeps one lower-alpha offset shadow so it reads as a room rather than a white cut-out. Note images sit on white mats; the popover keeps its own plate shadow for depth.
-- **Types and tags:** type derives from the room's ink and muted values, both tinted from the paper's warm brown rather than a neutral grey; hairlines and control washes follow the same hue. The ochre tag family uses its ordinary paper values in the slideshow, the same as the Table. The raw scrape sits on one recessed paper inset, and the curated grade reuses the Table's three catalogue bands (uncirculated, choice, circulated), the room's only semantic tint. Red stays the action and focus colour, except on the large slide plates: their focus ring takes the label ochre so it reads as a focused image rather than an alarm border. A single soft warm radial sits behind the image plates only.
+- **Presentation room:** the Note slideshow and the Image popover alone float a light panel on the near-black `rgba(0, 0, 0, 0.88)` scrim. They wear the app's own neutral ladder — Canvas Soft (`#f2f2f2`) as the room ground, white slide cards and image mats, ink type, Body-muted labels and hairlines — so they read as the same app as the Table, not a second product. Buttons are the ordinary white outline pill with the red hover, and the counter is the white pill.
+- **Panel:** 6px radius, 1px hairline, floating shadow. Note images sit on white mats; the popover keeps its own plate shadow for depth.
+- **Types and tags:** type derives from the same ink, Body-muted and hairline values as the Table; no warm brown or second neutral. The ochre tag family is unchanged from the Table. The raw scrape sits on one recessed neutral inset (`#f7f7f7`), and the curated grade reuses the Table's three catalogue bands (uncirculated, choice, circulated), the room's only semantic tint. Red stays the action and focus colour on every control, including the large slide plates. No glow or tint sits behind the plates: the room is flat like the rest of the app.
 
-**The Presentation Room Rule.** Exactly one overlay may be light: the Note slideshow and its Image popover. They share one scoped token remap; every other overlay stays ink with white type.
+**The Presentation Room Rule.** The Note slideshow and its Image popover share one scoped remap onto the app's neutral ladder; every other overlay stays ink with white type. The room may be light, but it is never a second palette.
 
 ## Do's and Don'ts
 
 ### Do:
-- **Do** give every primary pill the same Deep Red ramp (`#b80000` rest → `#cc0000` hover → `#990000` active), and keep the app's focus rings, selection, search and bulk bar in that same deep red (the slideshow plate ring takes the room's label ochre); Brand Red is the rail's and the dark surfaces' alone. The tag family carries values, in rows and in the filter rail.
+- **Do** give every primary pill the same Deep Red ramp (`#b80000` rest → `#cc0000` hover → `#990000` active), and keep the app's focus rings, selection, search and bulk bar in that same deep red, including the slideshow's image plates. Brand Red is the rail's and the dark surfaces' alone. The tag family carries values, in rows and in the filter rail.
 - **Do** set screen titles and eyebrows in uppercase weight 800 with tight tracking; that stencil contrast is the brand voice.
 - **Do** use pills for buttons and counters, 10px corners for fields and selects, 7px for chips, and 6px for cards and panels.
-- **Do** cycle the page: slate rail → white content → ink for overlays, except the Light room of the Note slideshow and Image popover. Polarity is the depth cue, and the single sanctioned exception is named above.
+- **Do** cycle the page: slate rail → white content → ink for overlays. The Note slideshow and Image popover float a light neutral room on the scrim instead; its grey ground and white cards are the same ladder, so polarity still reads.
 - **Do** keep the Table compact (40px headers, 45px rows, 12px cell padding, truncation) and let Showcases be the looser surface.
 - **Do** write status feedback as a named title plus one detail line, with the recovery action adjacent.
 - **Do** float transient feedback as the bottom-right toast and keep panel- or field-level messages inline, both wearing the same semantic edge.

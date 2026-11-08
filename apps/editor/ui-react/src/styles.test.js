@@ -1911,69 +1911,69 @@ describe("slideshow overlay styles", () => {
     expect(content[1]).toMatch(/color:\s*var\(--on-dark-text\)/);
   });
 
-  // Light room: both overlay roots remap the same on-dark roles, so the two
-  // presentation screens share one palette and the rest of the Editor stays
-  // in the ink room. The paper and mats are the spec's Light room table; the
-  // type and hairline values are the colour pass that pulled every neutral
-  // into the paper's warm brown instead of leaving cool greys on cream.
-  test("both overlay roots remap the on-dark roles to the Light room palette", () => {
+  // One room: both overlay roots map their on-dark roles onto the Editor's own
+  // neutral ladder and deep-red action ramp, so the two presentation screens
+  // read as the same app as the Table and the rest of the Editor is untouched.
+  test("both overlay roots map the room to the app's neutral ladder", () => {
     const palette = roomPalette();
     expect(palette).not.toBeNull();
-    expect(palette[1]).toMatch(/--on-dark-bg:\s*#f7f3ea/);
+    expect(palette[1]).toMatch(/--on-dark-bg:\s*var\(--surface-3\)/);
     expect(palette[1]).toMatch(
-      /--on-dark-bg-translucent:\s*rgba\(247,\s*243,\s*234,\s*0\.96\)/,
+      /--on-dark-bg-translucent:\s*var\(--surface-3\)/,
     );
-    expect(palette[1]).toMatch(/--on-dark-surface:\s*#fffdf7/);
-    expect(palette[1]).toMatch(/--on-dark-text:\s*#241f19/);
-    expect(palette[1]).toMatch(/--on-dark-muted:\s*#6b6052/);
-    expect(palette[1]).toMatch(/--on-dark-label:\s*#8a4a12/);
+    expect(palette[1]).toMatch(/--on-dark-surface:\s*var\(--surface\)/);
+    expect(palette[1]).toMatch(/--on-dark-text:\s*var\(--text\)/);
+    expect(palette[1]).toMatch(/--on-dark-muted:\s*var\(--text-muted\)/);
+    expect(palette[1]).toMatch(/--on-dark-label:\s*var\(--text-muted\)/);
+    expect(palette[1]).toMatch(/--on-dark-border:\s*var\(--border\)/);
     expect(palette[1]).toMatch(
-      /--on-dark-border:\s*rgba\(93,\s*70,\s*38,\s*0\.16\)/,
+      /--on-dark-border-strong:\s*var\(--border-control\)/,
     );
-    expect(palette[1]).toMatch(
-      /--on-dark-border-strong:\s*rgba\(93,\s*70,\s*38,\s*0\.3\)/,
-    );
-    expect(palette[1]).toMatch(/--on-dark-link:\s*#a30000/);
+    expect(palette[1]).toMatch(/--on-dark-link:\s*var\(--accent-strong\)/);
   });
 
   // The room tokens are new names shared by both directions, so the seam is
   // the same whichever palette wins.
-  test("the room defines its wash, plate, glow and focus tokens", () => {
+  test("the room defines its wash, plate and inset tokens", () => {
     const palette = roomPalette();
     expect(palette).not.toBeNull();
     expect(palette[1]).toMatch(
-      /--on-dark-wash:\s*rgba\(93,\s*70,\s*38,\s*0\.06\)/,
+      /--on-dark-wash:\s*rgba\(37,\s*40,\s*43,\s*0\.04\)/,
     );
     expect(palette[1]).toMatch(
-      /--on-dark-wash-strong:\s*rgba\(93,\s*70,\s*38,\s*0\.12\)/,
+      /--on-dark-wash-strong:\s*rgba\(37,\s*40,\s*43,\s*0\.08\)/,
     );
-    expect(palette[1]).toMatch(/--on-dark-plate:\s*#ffffff/);
-    expect(palette[1]).toMatch(/--on-dark-inset:\s*#f7f0e2/);
-    expect(palette[1]).toMatch(
-      /--on-dark-glow:\s*rgba\(200,\s*160,\s*90,\s*0\.16\)/,
-    );
-    expect(palette[1]).toMatch(/--on-dark-focus:\s*#a30000/);
-    expect(palette[1]).toMatch(
-      /--on-dark-focus-plate:\s*var\(--on-dark-label\)/,
+    expect(palette[1]).toMatch(/--on-dark-plate:\s*var\(--surface\)/);
+    expect(palette[1]).toMatch(/--on-dark-inset:\s*var\(--surface-2\)/);
+  });
+
+  // The warm paper world is gone: no glow token, no warm focus exception, and
+  // no separate plate ring. The overlays use the app's standard red ring.
+  test("the room carries no warm glow or separate focus colour", () => {
+    expect(styles).not.toMatch(/--on-dark-glow/);
+    expect(styles).not.toMatch(/--on-dark-focus/);
+    expect(styles).not.toMatch(/\.slide-images::before/);
+    expect(styles).not.toMatch(
+      /\.slideshow-screen--overlay \.slide-thumb-btn:focus-visible/,
     );
   });
 
-  // The room's browser surfaces belong to the palette: selection takes the
-  // room's red rather than the platform blue, and the caret follows the link
-  // red. The overlay's scrollbar is inked from the room hairline too.
+  // The room's browser surfaces belong to the app: selection takes the Table's
+  // red wash rather than the platform blue, and the caret follows the app's
+  // accent. The overlay's scrollbar is inked from the neutral hairline too.
   test("the room owns selection, caret and scrollbar colour", () => {
     const selection = styles.match(
       /\.slideshow-screen--overlay ::selection,\s*\n\.image-popover-overlay ::selection\s*\{([^}]*)\}/,
     );
     expect(selection).not.toBeNull();
-    expect(selection[1]).toMatch(/--on-dark-focus/);
-    expect(selection[1]).toMatch(/color:\s*var\(--on-dark-text\)/);
+    expect(selection[1]).toMatch(/background:\s*rgba\(184,\s*0,\s*0,\s*0\.14\)/);
+    expect(selection[1]).toMatch(/color:\s*var\(--text\)/);
 
     const caret = styles.match(
       /\.slideshow-screen--overlay input,\s*\n\.image-popover-overlay input\s*\{([^}]*)\}/,
     );
     expect(caret).not.toBeNull();
-    expect(caret[1]).toMatch(/caret-color:\s*var\(--on-dark-link\)/);
+    expect(caret[1]).toMatch(/caret-color:\s*var\(--accent\)/);
 
     const scrollbar = styles.match(
       /\.slideshow-screen--overlay,\s*\n\.image-popover-overlay\s*\{\s*scrollbar-width:\s*thin;\s*\n\s*scrollbar-color:([^}]*)\}/,
@@ -2021,15 +2021,12 @@ describe("slideshow overlay styles", () => {
     expect(tag[1]).not.toMatch(/rgba\(247,\s*185,\s*40/);
   });
 
-  // The shared chrome moves off literal white washes onto the room tokens.
-  test("the overlay chrome reads the room wash and plate tokens", () => {
+  // The shared chrome uses the app's own control surfaces: white buttons on the
+  // grey ground, a white image mat, and neutral washes for empty states.
+  test("the overlay chrome uses the app's control surfaces", () => {
     const rules = [
-      [/\.counter-pill\s*\{([^}]*)\}/, /background:\s*var\(--on-dark-wash\)/],
-      [
-        /\.slideshow-exit-button\s*\{([^}]*)\}/,
-        /background:\s*var\(--on-dark-wash\)/,
-      ],
-      [/\.arrow-button\s*\{([^}]*)\}/, /background:\s*var\(--on-dark-wash\)/],
+      [/\.counter-pill\s*\{([^}]*)\}/, /background:\s*var\(--surface\)/],
+      [/\.arrow-button\s*\{([^}]*)\}/, /background:\s*var\(--surface\)/],
       [
         /\.slide-thumb-btn\s*\{([^}]*background:[^}]*)\}/,
         /background:\s*var\(--on-dark-plate\)/,
@@ -2046,14 +2043,6 @@ describe("slideshow overlay styles", () => {
         /\.scraped-details-panel\s*\{([^}]*)\}/,
         /background:\s*var\(--on-dark-inset\)/,
       ],
-      [
-        /\.slideshow-screen kbd,\s*\n\.image-popover-content kbd\s*\{([^}]*)\}/,
-        /background:\s*var\(--on-dark-wash\)/,
-      ],
-      [
-        /\.icon-link--on-dark\s*\{([^}]*)\}/,
-        /background:\s*var\(--on-dark-wash\)/,
-      ],
     ];
 
     for (const [pattern, assertion] of rules) {
@@ -2063,19 +2052,26 @@ describe("slideshow overlay styles", () => {
     }
   });
 
-  test("the overlay hover states read the strong wash", () => {
+  test("the overlay hover states use the red action wash", () => {
     const rules = [
-      /\.icon-link--on-dark:hover,\s*\n\.icon-link--on-dark:focus-visible\s*\{([^}]*)\}/,
-      /\.slideshow-exit-button:hover,\s*\n\.slideshow-exit-button:focus-visible\s*\{([^}]*)\}/,
-      /\.arrow-button:hover:not\(:disabled\)\s*\{([^}]*)\}/,
+      [
+        /\.arrow-button:hover:not\(:disabled\)\s*\{([^}]*)\}/,
+        /background:\s*var\(--accent-soft\)/,
+      ],
+      [
+        /\.slide-thumb-btn:hover\s*\{\s*(background:[^}]*)\}/,
+        /background:\s*var\(--accent-soft\)/,
+      ],
+      [
+        /\.image-popover-zoom-button:hover:not\(:disabled\)\s*\{([^}]*)\}/,
+        /background:\s*var\(--accent-soft\)/,
+      ],
     ];
 
-    for (const pattern of rules) {
+    for (const [pattern, assertion] of rules) {
       const rule = styles.match(pattern);
       expect(rule, String(pattern)).not.toBeNull();
-      expect(rule[1], String(pattern)).toMatch(
-        /background:\s*var\(--on-dark-wash-strong\)/,
-      );
+      expect(rule[1], String(pattern)).toMatch(assertion);
     }
   });
 
@@ -2089,7 +2085,7 @@ describe("slideshow overlay styles", () => {
     );
   });
 
-  test("the paper room uses its lower-alpha shadow tokens", () => {
+  test("the slideshow panel keeps its deep floating shadow tokens", () => {
     expect(styles).toMatch(
       /--shadow-room:\s*0 30px 80px rgba\(0,\s*0,\s*0,\s*0\.36\)/,
     );
@@ -2107,7 +2103,7 @@ describe("slideshow overlay styles", () => {
     );
   });
 
-  test("the light-room remap stays scoped and leaves the global room alone", () => {
+  test("the room remap stays scoped and leaves the global ink room alone", () => {
     expect(styles).toMatch(/--on-dark-bg:\s*#25282b/);
     expect(styles).toMatch(/--on-dark-text:\s*#ffffff/);
 
@@ -2117,47 +2113,21 @@ describe("slideshow overlay styles", () => {
     expect(palette[1]).not.toMatch(/--on-dark-accent/);
   });
 
-  // One light source, clipped by the plate's container: no glow behind type
-  // or a control label.
-  test("one soft radial glow sits behind the image plates", () => {
-    const glow = styles.match(
-      /\.slide-images::before,\s*\n\.image-popover-image-wrap::before\s*\{([^}]*)\}/,
+  test("focus inside the overlays uses the app's red ring", () => {
+    // The overlays no longer carry their own focus colour: the global 2px red
+    // ring applies, so focus reads the same as the table, menus and fields.
+    expect(styles).not.toMatch(
+      /\.slideshow-screen--overlay :focus-visible,\s*\n\.image-popover-overlay :focus-visible/,
     );
-    expect(glow).not.toBeNull();
-    expect(glow[1]).toMatch(/position:\s*absolute/);
-    expect(glow[1]).toMatch(/inset:\s*0/);
-    expect(glow[1]).toMatch(
-      /background:\s*radial-gradient\([\s\S]*var\(--on-dark-glow\)/,
-    );
-    expect(glow[1]).toMatch(/pointer-events:\s*none/);
-  });
 
-  test("focus inside the overlays uses the room focus token", () => {
-    const focus = styles.match(
-      /\.slideshow-screen--overlay :focus-visible,\s*\n\.image-popover-overlay :focus-visible\s*\{([^}]*)\}/,
-    );
-    expect(focus).not.toBeNull();
-    // The global rule keeps the ring geometry; only the colour changes, so
-    // the counter's own `outline: none` stays in force.
-    expect(focus[1]).toMatch(
-      /outline-color:\s*var\(--on-dark-focus\)/,
-    );
-    expect(focus[1]).not.toMatch(/outline:/);
-  });
-
-  // The slide plates take the room's label ochre rather than its red ring; the
-  // dedicated token names the exception so `--on-dark-focus` keeps its role.
-  test("the slide thumbnails focus in the room plate colour", () => {
-    const focus = styles.match(
-      /\.slideshow-screen--overlay \.slide-thumb-btn:focus-visible\s*\{([^}]*)\}/,
-    );
-    expect(focus).not.toBeNull();
-    expect(focus[1]).toMatch(/outline-color:\s*var\(--on-dark-focus-plate\)/);
+    const global = styles.match(/:focus-visible\s*\{([^}]*)\}/);
+    expect(global).not.toBeNull();
+    expect(global[1]).toMatch(/outline:\s*2px solid var\(--accent\)/);
   });
 
   // The shortcut bubble keeps its own dark ground; its label must stay white
-  // rather than inheriting the room's ink.
-  test("the shortcut bubble stays white inside the paper room", () => {
+  // rather than inheriting the app's ink.
+  test("the shortcut bubble stays white inside the light overlays", () => {
     const bubble = styles.match(
       /\.slideshow-screen--overlay \[data-shortcut\]::after,\s*\n\.image-popover-overlay \[data-shortcut\]::after\s*\{([^}]*)\}/,
     );
@@ -2290,17 +2260,15 @@ describe("slideshow overlay styles", () => {
     expect(noteLabel[1]).toMatch(/letter-spacing:\s*-0\.01em/);
   });
 
-  // On paper the hover edge is the room's structural hairline, not the brand
-  // red the dark room used.
-  test("the thumbnail hover edge follows the room hairline", () => {
+  // The plate hover is the app's red interaction edge, the same wash and
+  // hairline a table row or an outline pill takes.
+  test("the thumbnail hover edge follows the app's red action colour", () => {
     const hover = styles.match(
       /\.slide-thumb-btn:hover\s*\{([^}]*border-color:[^}]*)\}/,
     );
     expect(hover).not.toBeNull();
-    expect(hover[1]).toMatch(
-      /border-color:\s*var\(--on-dark-border-strong\)/,
-    );
-    expect(hover[1]).not.toMatch(/var\(--on-dark-accent\)/);
+    expect(hover[1]).toMatch(/border-color:\s*var\(--accent\)/);
+    expect(hover[1]).toMatch(/background:\s*var\(--accent-soft\)/);
   });
 
   test("the showcase panel scrolls vertically instead of cropping", () => {

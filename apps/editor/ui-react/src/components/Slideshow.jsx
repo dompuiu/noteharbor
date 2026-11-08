@@ -1071,7 +1071,7 @@ function ImagePopover({
             />
             <button
               aria-label="Close preview"
-              className="icon-link icon-link--on-dark image-popover-close"
+              className="icon-link image-popover-close"
               data-shortcut="Esc"
               onClick={onClose}
               title="Close preview"
@@ -1499,7 +1499,7 @@ function Slideshow({
             />
             <button
               aria-label="Copy note details"
-              className="icon-link icon-link--on-dark"
+              className="icon-link"
               onClick={handleCopyNoteDetails}
               title="Copy note details"
               type="button"
@@ -1531,7 +1531,7 @@ function Slideshow({
               <>
                 <button
                   aria-label="Add note"
-                  className="icon-link icon-link--on-dark"
+                  className="icon-link"
                   onClick={() => onAdd?.(note.id)}
                   title="Add note before this one (a)"
                   type="button"
@@ -1540,7 +1540,7 @@ function Slideshow({
                 </button>
                 <button
                   aria-label="Edit note"
-                  className="icon-link icon-link--on-dark"
+                  className="icon-link"
                   onClick={() => onEdit?.(note.id)}
                   title="Edit note (e)"
                   type="button"
@@ -1551,7 +1551,7 @@ function Slideshow({
             )}
             <button
               aria-label="Close slideshow"
-              className="icon-link icon-link--on-dark"
+              className="icon-link"
               data-shortcut="Esc"
               onClick={onClose}
               title="Close slideshow"

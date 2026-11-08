@@ -122,8 +122,7 @@
   --shadow-sm: none;
   --shadow-md: 0 12px 32px rgba(37, 40, 43, 0.16);
   --shadow-lg: 0 24px 64px rgba(37, 40, 43, 0.22);
-  /* The paper room floats on the same depth ladder, but a black drop shadow
-     at the ink room's weight reads as a cut-out. Lower alpha, same offset. */
+  /* The slideshow panel floats above the scrim on the same depth ladder. */
   --shadow-room: 0 30px 80px rgba(0, 0, 0, 0.36);
   --shadow-room-content: 0 24px 48px rgba(0, 0, 0, 0.36);
   --scroll-track: #ececec;
@@ -2490,19 +2489,6 @@ input[type="radio"] {
   background: var(--accent-soft);
   color: var(--accent-strong);
   box-shadow: none;
-}
-
-.icon-link--on-dark {
-  border-color: var(--on-dark-border);
-  background: var(--on-dark-wash);
-  color: var(--on-dark-text);
-}
-
-.icon-link--on-dark:hover,
-.icon-link--on-dark:focus-visible {
-  background: var(--on-dark-wash-strong);
-  border-color: var(--on-dark-border-strong);
-  color: var(--on-dark-text);
 }
 
 .nav-link.active {
@@ -6286,7 +6272,7 @@ button.tag {
   border: 0;
 }
 
-/* The paper panel fills the scrim, so the slideshow uses the same estate the
+/* The slideshow panel fills the scrim, so the slideshow uses the same estate the
    old near-full-viewport panel did. It holds the 1200px app floor (minus the
    overlay's 16px side padding), so the slide grid never squeezes on smaller
    windows: the overlay scrolls instead. */
@@ -6572,27 +6558,36 @@ button.tag {
   border-radius: var(--radius-pill);
   font-size: 0.82rem;
   font-variant-numeric: tabular-nums;
-  background: var(--on-dark-wash);
-  border: 1px solid var(--on-dark-border);
+  background: var(--surface);
+  border: 1px solid var(--border-control);
+  color: var(--text);
 }
 
-.slideshow-exit-button {
-  border: 1px solid var(--on-dark-border);
-  background: var(--on-dark-wash);
-  color: var(--on-dark-text);
-  padding: 6px 16px;
-  border-radius: var(--radius-pill);
-  font-size: 0.82rem;
-  font-weight: 600;
+.arrow-button {
+  width: 56px;
+  height: 56px;
+  border-radius: 50%;
+  border: 1px solid var(--border-control);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 1.6rem;
+  position: sticky;
+  top: 320px;
   transition:
     background 0.15s ease,
-    border-color 0.15s ease;
+    border-color 0.15s ease,
+    color 0.15s ease;
 }
 
-.slideshow-exit-button:hover,
-.slideshow-exit-button:focus-visible {
-  background: var(--on-dark-wash-strong);
-  border-color: var(--on-dark-border-strong);
+.arrow-button:hover:not(:disabled) {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.arrow-button:disabled {
+  cursor: default;
+  opacity: 0.45;
 }
 
 .slideshow-layout {
@@ -6604,30 +6599,6 @@ button.tag {
   width: 100%;
 }
 
-.arrow-button {
-  width: 56px;
-  height: 56px;
-  border-radius: 50%;
-  border: 1px solid var(--on-dark-border);
-  background: var(--on-dark-wash);
-  color: inherit;
-  font-size: 1.6rem;
-  position: sticky;
-  top: 320px;
-  transition:
-    background 0.15s ease,
-    border-color 0.15s ease;
-}
-
-.arrow-button:hover:not(:disabled) {
-  background: var(--on-dark-wash-strong);
-}
-
-.arrow-button:disabled {
-  cursor: default;
-  opacity: 0.45;
-}
-
 .slide-card {
   position: relative;
   display: grid;
@@ -6636,7 +6607,7 @@ button.tag {
   padding: 24px;
   border-radius: var(--radius-lg);
   background: var(--on-dark-surface);
-  border: 1px solid var(--on-dark-border-strong);
+  border: 1px solid var(--on-dark-border);
   justify-content: center;
   align-items: start;
   width: 100%;
@@ -6644,33 +6615,9 @@ button.tag {
   margin: 0 auto;
 }
 
-/* One soft light behind the image plates, clipped by the card's image column
-   and by the popover's image well. It never reaches running text or the
-   arrow controls. */
-.slide-images::before,
-.image-popover-image-wrap::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  border-radius: inherit;
-  background: radial-gradient(
-    closest-side at 50% 45%,
-    var(--on-dark-glow) 0%,
-    transparent 100%
-  );
-  pointer-events: none;
-}
-
 .slide-images,
 .image-popover-image-wrap {
   position: relative;
-}
-
-.slide-images > *,
-.image-popover-image-wrap > * {
-  position: relative;
-  z-index: 1;
 }
 
 .slide-images {
@@ -6696,18 +6643,17 @@ button.tag {
   align-items: center;
   gap: 8px;
   transition:
-    box-shadow 0.15s ease,
-    border-color 0.15s ease,
-    transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    background 0.15s ease,
+    border-color 0.15s ease;
   width: 100%;
   max-width: 100%;
 }
 
+/* A plate is a control like a table row or an outline pill: the red wash and
+   hairline mark the hover, and nothing lifts off the page. */
 .slide-thumb-btn:hover {
-  box-shadow: 0 10px 26px
-    color-mix(in srgb, var(--on-dark-text) 26%, transparent);
-  border-color: var(--on-dark-border-strong);
-  transform: translateY(-1px);
+  background: var(--accent-soft);
+  border-color: var(--accent);
 }
 
 /* The plates take their height from the room, not a fixed 220px cap: two
@@ -6803,67 +6749,50 @@ button.tag {
   overflow: auto;
 }
 
-/* Light room: the one sanctioned light overlay. The Note slideshow and the
-   Image popover share this scoped remap, so the rest of the Editor keeps the
-   ink room and the two presentation screens move together. Only values
-   change here; the scrim, geometry and the popover's own mount do not. */
+/* One room with the app: the Note slideshow and the Image popover wear the
+   Editor's own neutral ladder and red action ramp instead of a separate paper
+   world. The two overlay roots share this scoped remap, so the rest of the
+   Editor is untouched; only values change here, the scrim, geometry and the
+   popover's own mount do not. */
 .slideshow-screen--overlay,
 .image-popover-overlay {
-  --on-dark-bg: #f7f3ea;
-  --on-dark-bg-translucent: rgba(247, 243, 234, 0.96);
-  --on-dark-surface: #fffdf7;
-  /* Ink, muted type, hairlines and washes all derive from the paper's warm
-     brown, never a neutral grey: a cool grey line on cream reads as pencil
-     rubbed over a warm room. The values still clear AA on the card. */
-  --on-dark-text: #241f19;
-  --on-dark-muted: #6b6052;
-  --on-dark-label: #8a4a12;
-  --on-dark-border: rgba(93, 70, 38, 0.16);
-  --on-dark-border-strong: rgba(93, 70, 38, 0.3);
-  --on-dark-link: #a30000;
-  --on-dark-wash: rgba(93, 70, 38, 0.06);
-  --on-dark-wash-strong: rgba(93, 70, 38, 0.12);
-  --on-dark-plate: #ffffff;
-  /* One step below the card: the scraped-details sub-panel sits in the paper
-     rather than on a grey wash. */
-  --on-dark-inset: #f7f0e2;
-  --on-dark-glow: rgba(200, 160, 90, 0.16);
-  --on-dark-focus: #a30000;
-  /* The large slide plates are the one focus exception: the red ring reads as
-     an alarm border on the white mat, so they take the label ochre instead. */
-  --on-dark-focus-plate: var(--on-dark-label);
+  /* Canvas Soft is the application ground; the slide card is the white table
+     surface that sits on it. */
+  --on-dark-bg: var(--surface-3);
+  --on-dark-bg-translucent: var(--surface-3);
+  --on-dark-surface: var(--surface);
+  --on-dark-text: var(--text);
+  --on-dark-muted: var(--text-muted);
+  /* Eyebrows and plate labels take the table header's tone, not the tags'
+     ochre: ochre stays with the tag chips, as it does in the table. */
+  --on-dark-label: var(--text-muted);
+  --on-dark-border: var(--border);
+  --on-dark-border-strong: var(--border-control);
+  --on-dark-link: var(--accent-strong);
+  --on-dark-wash: rgba(37, 40, 43, 0.04);
+  --on-dark-wash-strong: rgba(37, 40, 43, 0.08);
+  --on-dark-plate: var(--surface);
+  /* The scraped details sit one neutral step inside the white card, exactly
+     like the table's own inset panels. */
+  --on-dark-inset: var(--surface-2);
 }
 
-/* The global ring supplies the geometry; the room only changes its colour.
-   `outline-color` alone leaves the counter's deliberate `outline: none`
-   suppression intact. */
-.slideshow-screen--overlay :focus-visible,
-.image-popover-overlay :focus-visible {
-  outline-color: var(--on-dark-focus);
-}
-
-/* The slide plates take the room's label ochre rather than its red ring; see
-   `--on-dark-focus-plate` for why. The rest of the chrome keeps red focus. */
-.slideshow-screen--overlay .slide-thumb-btn:focus-visible {
-  outline-color: var(--on-dark-focus-plate);
-}
-
-/* The browser's own blue belongs to no room. Selecting a serial or a scraped
-   value takes the room's red wash, as the Table already does. */
+/* Selecting a serial or a scraped value takes the table's red wash rather
+   than the platform blue. */
 .slideshow-screen--overlay ::selection,
 .image-popover-overlay ::selection {
-  background: color-mix(in srgb, var(--on-dark-focus) 22%, transparent);
-  color: var(--on-dark-text);
+  background: rgba(184, 0, 0, 0.14);
+  color: var(--text);
 }
 
 /* The position counter turns into a field while it is being edited, so its
-   caret belongs to the room too. */
+   caret follows the table's search caret. */
 .slideshow-screen--overlay input,
 .image-popover-overlay input {
-  caret-color: var(--on-dark-link);
+  caret-color: var(--accent);
 }
 
-/* The overlay's own scrollbar is part of the room, not the host platform. */
+/* The overlay's own scrollbar belongs to the app, not the host platform. */
 .slideshow-screen--overlay,
 .image-popover-overlay {
   scrollbar-width: thin;
@@ -6887,8 +6816,8 @@ button.tag {
   box-shadow: var(--shadow-room-content);
   /* The popover is mounted standalone in the showcase (unlike the table
      slideshow, where the scrim owns the text colour), so the content owns
-     the on-dark text colour itself: the arrows, counter, and note label
-     all inherit it. */
+     the text colour itself: the arrows, counter, and note label all inherit
+     it. */
   color: var(--on-dark-text);
 }
 
@@ -6937,9 +6866,9 @@ button.tag {
   align-items: center;
   gap: 2px;
   padding: 3px;
-  border: 1px solid var(--on-dark-border);
+  border: 1px solid var(--border-control);
   border-radius: var(--radius-control);
-  background: var(--on-dark-wash);
+  background: var(--surface);
 }
 
 .image-popover-zoom-button {
@@ -6959,12 +6888,13 @@ button.tag {
 }
 
 .image-popover-zoom-button:hover:not(:disabled) {
-  background: var(--on-dark-wash-strong);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 .image-popover-zoom-button[aria-pressed="true"] {
-  background: var(--on-dark-text);
-  color: var(--on-dark-bg);
+  background: var(--accent-soft);
+  color: var(--accent-strong);
 }
 
 .image-popover-zoom-button:disabled {
@@ -7108,8 +7038,8 @@ button.tag {
   line-height: 1.55;
 }
 
-/* On paper a tag is just a tag: the slideshow takes the ordinary Ochre family
-   instead of a dark-room wash, and keeps the prototype's chip type. */
+/* In the slideshow a tag is the same chip as in the table: the ordinary Ochre
+   family, not a dark-room wash. */
 .slideshow-screen .tag-list {
   gap: 7px;
 }
@@ -7189,8 +7119,8 @@ button.tag {
   padding: 14px 16px;
   border: 1px solid var(--on-dark-border);
   border-radius: var(--radius-lg);
-  /* Recessed paper, not a grey wash: the raw scrape reads as an inset in the
-     catalogue page instead of a second card. */
+  /* One neutral step inside the white card: the raw scrape reads as an inset
+     panel in the catalogue page, exactly as it would in the table. */
   background: var(--on-dark-inset);
   width: 100%;
   max-width: 100%;
@@ -7462,8 +7392,8 @@ button.tag {
   margin-top: 24px;
   padding-top: 20px;
   border-top: 1px solid var(--border);
-  /* The note editor mounts this panel outside the paper room, where the room
-     wash token is not defined: keep its old faint white ground. */
+  /* The note editor mounts this panel outside the slideshow overlays, where
+     the inset token is not defined: keep its old faint white ground. */
   background: rgba(255, 255, 255, 0.04);
 }
 
@@ -7529,14 +7459,6 @@ kbd {
   line-height: 1;
 }
 
-.slideshow-screen kbd,
-.image-popover-content kbd {
-  background: var(--on-dark-wash);
-  border-color: var(--on-dark-border);
-  box-shadow: none;
-  color: var(--on-dark-text);
-}
-
 .table-helper-text kbd,
 .table-footer-hint kbd {
   margin: 0 1px;
@@ -7569,8 +7491,8 @@ kbd {
   transform: translateX(-50%) translateY(0);
 }
 
-/* The shortcut bubble keeps its own dark ground inside the paper room, so its
-   label stays white rather than inheriting the room's ink. */
+/* The shortcut bubble keeps its dark ink ground inside the light overlays, so
+   its label stays white rather than inheriting the app's ink. */
 .slideshow-screen--overlay [data-shortcut]::after,
 .image-popover-overlay [data-shortcut]::after {
   color: #ffffff;

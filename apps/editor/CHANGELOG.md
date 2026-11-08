@@ -4,6 +4,10 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+### Changed
+
+- Note slideshow and image preview: both screens now wear the Table screen's own theme — the grey app ground, white cards and image mats, ink type, the ordinary white outline buttons with the red hover, and the standard red focus ring — instead of the separate warm paper room, so the overlays read as part of the same app.
+
 ## [2.10.3] - 2026-11-07
 
 ### Added
