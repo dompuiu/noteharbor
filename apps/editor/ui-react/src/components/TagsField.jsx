@@ -10,6 +10,7 @@ import {
 } from "react";
 import { createPortal } from "react-dom";
 import { normalizeTag, splitTagInput, tagKey } from "../lib/tags.js";
+import { useFloatingList } from "../lib/useFloatingList.js";
 import { ChipRemoveButton } from "./ChipRemoveButton.jsx";
 import { TagSuggestionsToggle } from "./TagSuggestionsToggle.jsx";
 
@@ -82,7 +83,6 @@ export const TagsField = forwardRef(function TagsField(
     onSearch,
     placeholder = "Type a tag and press Enter",
     showClearAll = true,
-    showSuggestionsToggle = false,
     suggestionCounts = null,
     suggestionTotal = null,
     value = [],
@@ -93,7 +93,6 @@ export const TagsField = forwardRef(function TagsField(
   const [input, setInput] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [highlighted, setHighlighted] = useState(-1);
-  const [position, setPosition] = useState(null);
   const [notice, setNotice] = useState(null);
   const containerRef = useRef(null);
   const dropdownRef = useRef(null);
@@ -143,36 +142,15 @@ export const TagsField = forwardRef(function TagsField(
     !selectedKeys.has(trimmed.toLowerCase()) &&
     !vocabularyKeys.has(trimmed.toLowerCase());
   const navList = showCreate ? [...filtered, `__create:${trimmed}`] : filtered;
+  const position = useFloatingList(
+    isOpen,
+    containerRef,
+    Math.max(1, navList.length) * 32 + 12,
+  );
 
   useEffect(() => {
     setHighlighted(-1);
   }, [input]);
-
-  useEffect(() => {
-    if (!isOpen) {
-      setPosition(null);
-      return undefined;
-    }
-    const updatePosition = () => {
-      const element = containerRef.current;
-      if (!element) {
-        return;
-      }
-      const bounds = element.getBoundingClientRect();
-      setPosition({
-        top: bounds.bottom + 4,
-        left: bounds.left,
-        width: bounds.width,
-      });
-    };
-    updatePosition();
-    window.addEventListener("scroll", updatePosition, true);
-    window.addEventListener("resize", updatePosition);
-    return () => {
-      window.removeEventListener("scroll", updatePosition, true);
-      window.removeEventListener("resize", updatePosition);
-    };
-  }, [isOpen]);
 
   useEffect(() => {
     if (!isOpen) {
@@ -406,17 +384,15 @@ export const TagsField = forwardRef(function TagsField(
             value={input}
           />
         </div>
-        {showSuggestionsToggle ? (
-          <TagSuggestionsToggle
-            className="tags-filter-toggle"
-            controlsId={dropdownId}
-            expanded={isOpen}
-            onClick={() => {
-              toggleSuggestions();
-              focusInput();
-            }}
-          />
-        ) : null}
+        <TagSuggestionsToggle
+          className="tags-filter-toggle"
+          controlsId={dropdownId}
+          expanded={isOpen}
+          onClick={() => {
+            toggleSuggestions();
+            focusInput();
+          }}
+        />
       </div>
       {isOpen && position
         ? createPortal(
@@ -426,11 +402,7 @@ export const TagsField = forwardRef(function TagsField(
               id={dropdownId}
               ref={dropdownRef}
               role="listbox"
-              style={{
-                top: position.top,
-                left: position.left,
-                width: position.width,
-              }}
+              style={position}
             >
               {filtered.map((tag) => {
                 const index = navList.indexOf(tag);

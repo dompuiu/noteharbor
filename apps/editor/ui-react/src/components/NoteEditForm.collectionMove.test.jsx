@@ -3,6 +3,7 @@ import { render, screen, waitFor } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NoteEditForm } from "./NoteEditForm.jsx";
+import { chooseSelectOption } from "../test/selectField.js";
 
 vi.mock("../lib/api.js", () => ({
   createNote: vi.fn(),
@@ -82,10 +83,7 @@ function renderEditor(props = {}) {
 
 async function chooseOther(user) {
   await screen.findByLabelText("Denomination");
-  await user.selectOptions(
-    screen.getByRole("combobox", { name: "Collection" }),
-    "2",
-  );
+  await chooseSelectOption(user, "Collection", "Other");
 }
 
 beforeEach(() => {
@@ -155,10 +153,7 @@ describe("changing a note's collection in the editor", () => {
 
     await screen.findByLabelText("Denomination");
     await user.type(screen.getByLabelText("Denomination"), "NEW");
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: "Collection" }),
-      "2",
-    );
+    await chooseSelectOption(user, "Collection", "Other");
     await user.click(await screen.findByRole("button", { name: "Add & close" }));
 
     await waitFor(() => {

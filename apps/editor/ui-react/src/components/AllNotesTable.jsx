@@ -4,6 +4,7 @@ import { isEditableElement } from "../lib/editableElement.js";
 import { useNotesTable } from "../lib/useNotesTable.js";
 import { getTableColumn } from "../lib/tableColumns.js";
 import { NotesTableView } from "./NotesTableView.jsx";
+import { SelectField } from "./SelectField.jsx";
 
 function noteCountLabel(count) {
   return `${count} ${count === 1 ? "note" : "notes"}`;
@@ -347,18 +348,13 @@ export function AllNotesTable({
 
   const selectedIdSet = useMemo(() => new Set(), []);
   const collectionPicker = (
-    <select
-      aria-label="Collection"
-      className="all-notes-collection-picker"
-      onChange={(event) => onCollectionChange(event.target.value)}
+    <SelectField
+      ariaLabel="Collection"
+      onChange={onCollectionChange}
+      options={collectionOptions}
       value={selectedCollectionId ?? ""}
-    >
-      {collectionOptions.map((option) => (
-        <option key={option.value} value={option.value}>
-          {option.label}
-        </option>
-      ))}
-    </select>
+      wrapperClassName="all-notes-collection-picker"
+    />
   );
 
   return (

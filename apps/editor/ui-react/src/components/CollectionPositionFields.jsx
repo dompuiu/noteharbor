@@ -1,5 +1,6 @@
 import { useId } from "react";
 import { PositionPicker } from "./PositionPicker.jsx";
+import { SelectField } from "./SelectField.jsx";
 
 // The destination Collection, the position inside it, and the "show it after
 // saving/moving" choice. Both surfaces that put a note somewhere else — the
@@ -40,36 +41,33 @@ function CollectionPositionFields({
     <>
       <div className="field-block full-span">
         <span>Collection</span>
-        <select
-          aria-label="Collection"
-          className="select-input"
-          onChange={(event) => onCollectionChange(Number(event.target.value))}
-          value={selectedCollectionId ?? ""}
-        >
-          {collections.map((collection) => (
-            <option key={collection.id} value={collection.id}>
-              {collection.name}
-            </option>
-          ))}
-        </select>
+        <SelectField
+          ariaLabel="Collection"
+          onChange={onCollectionChange}
+          options={collections.map((collection) => ({
+            label: collection.name,
+            value: collection.id,
+          }))}
+          value={selectedCollectionId}
+        />
       </div>
       {positionNotes.length > 0 ? (
         <div className="field-block full-span">
           <span>Position in collection</span>
-          <select
-            aria-label="Position in collection"
-            className="select-input"
-            onChange={(event) => onPositionModeChange(event.target.value)}
+          <SelectField
+            ariaLabel="Position in collection"
+            onChange={onPositionModeChange}
+            options={[
+              ...(showKeepPosition
+                ? [{ label: "Keep current position", value: "keep" }]
+                : []),
+              { label: "Start of collection", value: "start" },
+              { label: "End of collection", value: "end" },
+              { label: "Before a note...", value: "before" },
+              { label: "After a note...", value: "after" },
+            ]}
             value={positionMode}
-          >
-            {showKeepPosition ? (
-              <option value="keep">Keep current position</option>
-            ) : null}
-            <option value="start">Start of collection</option>
-            <option value="end">End of collection</option>
-            <option value="before">Before a note...</option>
-            <option value="after">After a note...</option>
-          </select>
+          />
           {positionNeedsReference && positionReferenceId === null ? (
             <p className="error-text">
               Select a reference note from the list below.

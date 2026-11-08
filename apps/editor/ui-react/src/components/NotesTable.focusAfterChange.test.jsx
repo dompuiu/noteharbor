@@ -3,6 +3,7 @@ import { act, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
+import { chooseSelectOption } from "../test/selectField.js";
 
 vi.mock("../lib/api.js", () => ({
   createNote: vi.fn(),
@@ -338,17 +339,14 @@ describe("The note editor hands the cursor back", () => {
   test("a save that leaves the note out of view is a no-op", async () => {
     notesDb = [note(1, "AAAA"), note(2, "BBBB")];
     const user = userEvent.setup();
-    const { container } = renderTable();
+    renderTable();
 
     await screen.findByText("AAAA");
     await chooseRowAction(user, "AAAA", "Edit");
 
     // Move the edited note away while other rows remain: the target is gone
     // but the view is not empty, so the cursor must not jump to another row.
-    const collectionSelect = container.querySelector(
-      ".edit-note-overlay select",
-    );
-    await user.selectOptions(collectionSelect, "2");
+    await chooseSelectOption(user, "Collection", "Archive");
     // Redirecting to the destination is the default now; staying is the
     // deliberate opt-out these tests are about.
     await user.click(
@@ -377,10 +375,7 @@ describe("The note editor hands the cursor back", () => {
 
     // Move the only note to the other collection: the save takes the last
     // visible row with it, leaving nothing to focus.
-    const collectionSelect = container.querySelector(
-      ".edit-note-overlay select",
-    );
-    await user.selectOptions(collectionSelect, "2");
+    await chooseSelectOption(user, "Collection", "Archive");
     // Redirecting to the destination is the default now; staying is the
     // deliberate opt-out these tests are about.
     await user.click(

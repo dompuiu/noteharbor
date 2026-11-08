@@ -101,10 +101,18 @@ async function rowFor(denomination) {
   return cell.closest("tr");
 }
 
+const POSITION_LABELS = {
+  after: "After a note...",
+  before: "Before a note...",
+  end: "End of collection",
+  keep: "Keep current position",
+  start: "Start of collection",
+};
+
 function expectCreateAfter(mode, denomination) {
   expect(
     screen.getByRole("combobox", { name: "Position in collection" }),
-  ).toHaveValue(mode);
+  ).toHaveValue(POSITION_LABELS[mode]);
   expect(
     document.querySelector(".position-picker-item.is-selected"),
   ).toHaveTextContent(denomination);
@@ -892,8 +900,8 @@ describe("Two save actions", () => {
 
     await waitFor(() => {
       expect(currentHash()).toContain("slideshow/1");
+      expect(currentHash()).not.toContain("overlay");
     });
-    expect(currentHash()).not.toContain("overlay");
     expect(
       screen.queryByRole("dialog", { name: "Discard changes?" }),
     ).not.toBeInTheDocument();

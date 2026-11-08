@@ -73,7 +73,7 @@ describe("Note editor create mode over the table", () => {
     // editing one.
     expect(
       screen.getByRole("combobox", { name: "Collection" }),
-    ).toHaveValue("1");
+    ).toHaveValue("Test");
   });
 
   test("an explicit note id still edits that note under a collection route", async () => {

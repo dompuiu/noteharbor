@@ -7,6 +7,7 @@ import {
   firstAvailableNoteImage,
   pickNoteImage,
 } from "../lib/showcaseImages.js";
+import { SelectField } from "./SelectField.jsx";
 
 // The note picker popup (ticket 10). A filter bar over a virtualized thumbnail
 // list; each row is a checkbox with the note's first available image, and
@@ -437,18 +438,13 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
         </div>
 
         <div className="showcase-picker-filter">
-          <select
-            aria-label="Filter column"
-            className="showcase-picker-column"
-            onChange={(event) => setColumn(event.target.value)}
+          <SelectField
+            ariaLabel="Filter column"
+            onChange={setColumn}
+            options={COLUMNS}
             value={column}
-          >
-            {COLUMNS.map((entry) => (
-              <option key={entry.value} value={entry.value}>
-                {entry.label}
-              </option>
-            ))}
-          </select>
+            wrapperClassName="showcase-picker-column"
+          />
           <input
             aria-label="Filter value"
             autoFocus

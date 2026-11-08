@@ -403,6 +403,32 @@ describe("table styles", () => {
     expect(tagsInput[1]).toMatch(/min-height:\s*0/);
   });
 
+  // Every select is the "Add a tag" combobox, so the four selects across the
+  // Editor share one box, one chevron and one option list — never a native
+  // control or a second, drifting menu style.
+  test("every select wears the tag field's combobox chrome", () => {
+    const wrap = styles.match(/^\.select-wrap\s*\{([^}]*)\}/m);
+    expect(wrap).not.toBeNull();
+    expect(wrap[1]).toMatch(/display:\s*flex/);
+    expect(wrap[1]).toMatch(/min-height:\s*36px/);
+    expect(wrap[1]).toMatch(/border:\s*1px solid var\(--border-control\)/);
+    expect(wrap[1]).toMatch(/border-radius:\s*var\(--radius-control\)/);
+    expect(wrap[1]).toMatch(/background:\s*var\(--surface\)/);
+
+    const input = styles.match(/^\.select-wrap \.select-input\s*\{([^}]*)\}/m);
+    expect(input).not.toBeNull();
+    expect(input[1]).toMatch(/border:\s*0/);
+    expect(input[1]).toMatch(/background:\s*transparent/);
+    expect(input[1]).toMatch(/padding:\s*3px 2px 3px 10px/);
+
+    // The chevron is the tag field's own toggle, so hover, focus and the
+    // open-state rotation cannot drift between the two.
+    expect(styles).toMatch(/\.select-toggle\s*\{\s*margin-right:\s*6px/);
+    expect(styles).toMatch(
+      /\.tag-suggestions-toggle:hover\s*\{\s*background:\s*var\(--accent-soft\)/,
+    );
+  });
+
   // The placeholder takes the same AA tone as every other quiet field. The
   // prototype's lighter hint tone measured 2.34:1 on this ground.
   test("the filter input placeholder uses the AA-safe tone", () => {

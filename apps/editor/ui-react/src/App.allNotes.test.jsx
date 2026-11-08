@@ -36,6 +36,7 @@ import {
 } from "./lib/api.js";
 import { allNotesListFields } from "./lib/noteFields.js";
 import { chooseFilterField, filterFieldButton } from "./test/filterBar.js";
+import { chooseSelectOption, openSelect } from "./test/selectField.js";
 
 const COLLECTIONS = [
   { id: 1, is_default: 1, name: "Serban's Notes" },
@@ -226,26 +227,29 @@ describe("All notes screen", () => {
     await screen.findByText("Fr. 2300");
 
     const picker = screen.getByRole("combobox", { name: "Collection" });
-    expect(within(picker).getByRole("option", { name: "All collections (3)" }))
-      .toBeInTheDocument();
-    expect(within(picker).getByRole("option", { name: "Vault (1)" }))
-      .toBeInTheDocument();
+    const listbox = await openSelect(user, "Collection");
+    expect(
+      within(listbox).getByRole("option", { name: "All collections (3)" }),
+    ).toBeInTheDocument();
+    expect(
+      within(listbox).getByRole("option", { name: "Vault (1)" }),
+    ).toBeInTheDocument();
 
-    await user.selectOptions(picker, "2");
+    await user.click(within(listbox).getByRole("option", { name: "Vault (1)" }));
     expect(catalogLinks()).toEqual(["P-22a"]);
     expect(screen.getByText("1 of 3 notes across 2 collections")).toBeInTheDocument();
 
     await commitFilter(user, "P-22a");
     expect(catalogLinks()).toEqual(["P-22a"]);
 
-    await user.selectOptions(picker, "1");
+    await chooseSelectOption(user, "Collection", "Serban's Notes (2)");
     expect(screen.getByText("No notes match these filters.")).toBeInTheDocument();
 
     await user.click(
       screen.getAllByRole("button", { name: "Clear filters" })[0],
     );
     expect(catalogLinks()).toEqual(["Fr. 2300", "Fr. 500", "P-22a"]);
-    expect(picker).toHaveValue("");
+    expect(picker).toHaveValue("All collections (3)");
     expect(
       screen.getByRole("searchbox", { name: "Filter All fields" }),
     ).toHaveValue("");
@@ -326,7 +330,7 @@ describe("All notes screen", () => {
     await screen.findByText("P-22a");
 
     expect(screen.getByRole("combobox", { name: "Collection" })).toHaveValue(
-      "2",
+      "Vault (1)",
     );
     expect(catalogLinks()).toEqual(["P-22a"]);
     expect(screen.getByRole("button", { name: "Serial" }).closest("th"))
@@ -339,7 +343,9 @@ describe("All notes screen", () => {
     );
 
     expect(await screen.findByText("Fr. 2300")).toBeInTheDocument();
-    expect(screen.getByRole("combobox", { name: "Collection" })).toHaveValue("");
+    expect(screen.getByRole("combobox", { name: "Collection" })).toHaveValue(
+      "All collections (3)",
+    );
     expect(catalogLinks()).toEqual(["Fr. 2300", "Fr. 500", "P-22a"]);
   });
 
@@ -451,6 +457,7 @@ describe("All notes screen", () => {
   });
 
   test("a one-collection library still offers the All collections choice and says so", async () => {
+    const user = userEvent.setup();
     getCollections.mockResolvedValue({ collections: [COLLECTIONS[0]] });
     getAllNotes.mockResolvedValue({
       notes: NOTES.filter((entry) => entry.collection_id === 1),
@@ -458,12 +465,12 @@ describe("All notes screen", () => {
     renderAllNotes();
 
     expect(await screen.findByText("2 notes in 1 collection")).toBeInTheDocument();
-    const picker = screen.getByRole("combobox", { name: "Collection" });
+    const listbox = await openSelect(user, "Collection");
     expect(
-      within(picker).getByRole("option", { name: "All collections (2)" }),
+      within(listbox).getByRole("option", { name: "All collections (2)" }),
     ).toBeInTheDocument();
     expect(
-      within(picker).getByRole("option", { name: "Serban's Notes (2)" }),
+      within(listbox).getByRole("option", { name: "Serban's Notes (2)" }),
     ).toBeInTheDocument();
   });
 
@@ -577,10 +584,7 @@ describe("All notes screen", () => {
     renderAllNotes();
     await screen.findByText("Fr. 2300");
 
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: "Collection" }),
-      "2",
-    );
+    await chooseSelectOption(user, "Collection", "Vault (1)");
     await user.click(screen.getByText("25 Bani"));
 
     expect(screen.getByTestId("pathname")).toHaveTextContent(

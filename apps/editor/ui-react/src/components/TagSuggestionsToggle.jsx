@@ -4,6 +4,7 @@ export function TagSuggestionsToggle({
   className = "",
   controlsId,
   expanded,
+  label = "Show tag suggestions",
   onClick,
   strokeWidth = 2,
 }) {
@@ -12,7 +13,7 @@ export function TagSuggestionsToggle({
       aria-controls={expanded ? controlsId : undefined}
       aria-expanded={expanded}
       aria-haspopup="listbox"
-      aria-label="Show tag suggestions"
+      aria-label={label}
       className={`tag-suggestions-toggle${expanded ? " is-open" : ""}${
         className ? ` ${className}` : ""
       }`}

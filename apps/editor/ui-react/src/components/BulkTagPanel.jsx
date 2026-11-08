@@ -284,7 +284,6 @@ export function BulkTagPanel({
             placeholder="Type a tag and press Enter"
             ref={tagsFieldRef}
             showClearAll={false}
-            showSuggestionsToggle
             suggestionCounts={suggestionCounts}
             suggestionTotal={selectedCount}
             value={stagedAdd}

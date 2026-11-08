@@ -2119,19 +2119,21 @@ input[type="radio"] {
   flex-wrap: wrap;
 }
 
-.showcase-picker-column,
-.showcase-picker-value {
-  padding: 8px 10px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-sm);
-  background: var(--surface);
-  color: var(--text);
-  font: inherit;
+.showcase-picker-column {
+  flex: 0 0 auto;
+  width: 160px;
 }
 
 .showcase-picker-value {
   flex: 1 1 200px;
   min-width: 160px;
+  min-height: 36px;
+  padding: 0 10px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  color: var(--text);
+  font-size: 0.86rem;
 }
 
 .showcase-picker-hint {
@@ -4406,8 +4408,7 @@ th[aria-sort="descending"] .sort-chevron {
 .field-block input,
 .field-block textarea,
 .inline-field input,
-.tag-editor input,
-.select-input {
+.tag-editor input {
   width: 100%;
   min-height: 34px;
   border-radius: var(--radius-control);
@@ -4424,8 +4425,8 @@ th[aria-sort="descending"] .sort-chevron {
 .field-block textarea:focus,
 .inline-field input:focus,
 .tag-editor input:focus,
-.select-input:focus,
-.tags-filter-combobox:focus-within {
+.tags-filter-combobox:focus-within,
+.select-wrap:focus-within {
   border-color: var(--accent);
   outline: 2px solid var(--accent-soft);
   outline-offset: 0;
@@ -4439,6 +4440,66 @@ th[aria-sort="descending"] .sort-chevron {
   padding: 0 10px;
   line-height: normal;
   text-align: center;
+}
+
+/* Every select is the "Add a tag" combobox: one 36px box with the same
+   hairline, surface, 10px radius, accent focus ring and accent chevron, and
+   the same floating option list. Only the value differs — a single choice
+   from a closed list, never a free-typed tag. */
+.select-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  max-width: 100%;
+  min-height: 36px;
+  border-radius: var(--radius-control);
+  border: 1px solid var(--border-control);
+  background: var(--surface);
+}
+
+/* The borderless input inside the box: same 10px text inset as the tag
+   field, and scoped so `.field-block input` cannot repaint it as a second
+   box. */
+.select-wrap .select-input {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  min-height: 0;
+  border: 0;
+  background: transparent;
+  padding: 3px 2px 3px 10px;
+  font-size: 0.86rem;
+  line-height: normal;
+  color: var(--text);
+  text-align: left;
+}
+
+.select-wrap .select-input:focus,
+.select-wrap .select-input:focus-visible {
+  border: 0;
+  outline: none;
+}
+
+.select-toggle {
+  margin-right: 6px;
+}
+
+.select-input::placeholder {
+  color: var(--text-faint);
+}
+
+.tags-filter-option.is-selected {
+  color: var(--accent-strong);
+  font-weight: 600;
+}
+
+.showcase-picker-value:focus,
+.showcase-picker-value:focus-visible {
+  border-color: var(--accent);
+  outline: 2px solid var(--accent-soft);
+  outline-offset: 0;
 }
 
 /* A column filter carrying a value stands out with the accent border alone.
@@ -4571,6 +4632,13 @@ th[aria-sort="descending"] .sort-chevron {
   box-shadow: var(--shadow-md);
 }
 
+/* A select can open inside a dialog (the Move dialog sits at 200), so its list
+   needs to clear every surface it can appear on while keeping the tag field's
+   own list below the scrape-conflict and shortcuts overlays. */
+.tags-filter-dropdown.select-dropdown {
+  z-index: 250;
+}
+
 /* The default bar is chunky against the small option rows: draw a slim,
    rounded thumb that keeps the track clear. */
 .tags-filter-dropdown::-webkit-scrollbar {
@@ -4637,17 +4705,6 @@ th[aria-sort="descending"] .sort-chevron {
   border-top: 1px dashed var(--border-control);
   content: "";
   pointer-events: none;
-}
-
-.inline-select-group {
-  display: inline-flex;
-  gap: 10px;
-  align-items: center;
-}
-
-.inline-select-group .select-input {
-  width: auto;
-  min-width: 88px;
 }
 
 /* The filters belong to the table, not to a band above it: the rail is the
@@ -7930,20 +7987,7 @@ kbd {
 }
 
 .all-notes-collection-picker {
-  height: 34px;
   max-width: 230px;
-  padding: 0 30px 0 10px;
-  border: 1px solid var(--border-control);
-  border-radius: var(--radius-control);
-  background: var(--surface);
-  color: var(--text);
-  font-size: 0.82rem;
-}
-
-.all-notes-collection-picker:focus {
-  border-color: var(--accent);
-  outline: 2px solid var(--accent-soft);
-  outline-offset: 0;
 }
 
 /* The table keeps the Table screen's 1200px floor. The data columns flex to

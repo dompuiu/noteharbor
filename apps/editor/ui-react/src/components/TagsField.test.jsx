@@ -69,17 +69,17 @@ describe("TagsField chips", () => {
 });
 
 describe("TagsField suggestions toggle", () => {
-  test("the chevron stays absent unless the field asks for it", () => {
+  test("the chevron is always offered", () => {
     renderField();
 
     expect(
-      screen.queryByRole("button", { name: "Show tag suggestions" }),
-    ).toBeNull();
+      screen.getByRole("button", { name: "Show tag suggestions" }),
+    ).toBeInTheDocument();
   });
 
   test("the chevron opens and closes the suggestion list in place", async () => {
     const user = userEvent.setup();
-    renderField({ showSuggestionsToggle: true, vocabulary: ["alpha", "gamma"] });
+    renderField({ vocabulary: ["alpha", "gamma"] });
 
     const toggle = screen.getByRole("button", {
       name: "Show tag suggestions",

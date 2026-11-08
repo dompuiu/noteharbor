@@ -3,6 +3,7 @@ import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
+import { chooseSelectOption } from "../test/selectField.js";
 
 vi.mock("../lib/api.js", () => ({
   createNote: vi.fn(),
@@ -224,10 +225,10 @@ describe("moving notes from the table", () => {
     const dialog = await screen.findByRole("dialog", { name: "Move 2 notes" });
     expect(
       within(dialog).getByRole("combobox", { name: "Collection" }),
-    ).toHaveValue("2");
+    ).toHaveValue("Other");
     expect(
       within(dialog).getByRole("combobox", { name: "Position in collection" }),
-    ).toHaveValue("end");
+    ).toHaveValue("End of collection");
 
     await user.click(within(dialog).getByRole("button", { name: "Move" }));
 
@@ -238,8 +239,8 @@ describe("moving notes from the table", () => {
         2,
         { mode: "end", referenceId: null },
       );
+      expect(currentRoute()).toBe("/catalog/collections/2/view");
     });
-    expect(currentRoute()).toBe("/catalog/collections/2/view");
     expect(await screen.findByRole("status")).toHaveTextContent(
       "Moved 2 notes to Other.",
     );
@@ -297,9 +298,10 @@ describe("moving notes from the table", () => {
     renderTable();
 
     const dialog = await openBulkMove(user);
-    await user.selectOptions(
-      within(dialog).getByRole("combobox", { name: "Position in collection" }),
-      "before",
+    await chooseSelectOption(
+      user,
+      "Position in collection",
+      "Before a note...",
     );
 
     const picker = await within(dialog).findByText("TARGET-1");
@@ -321,9 +323,10 @@ describe("moving notes from the table", () => {
     renderTable();
 
     const dialog = await openBulkMove(user);
-    await user.selectOptions(
-      within(dialog).getByRole("combobox", { name: "Position in collection" }),
-      "before",
+    await chooseSelectOption(
+      user,
+      "Position in collection",
+      "Before a note...",
     );
 
     expect(within(dialog).getByRole("button", { name: "Move" })).toBeDisabled();
@@ -341,10 +344,7 @@ describe("moving notes from the table", () => {
     renderTable();
 
     const dialog = await openBulkMove(user);
-    await user.selectOptions(
-      within(dialog).getByRole("combobox", { name: "Collection" }),
-      "1",
-    );
+    await chooseSelectOption(user, "Collection", "Test");
     await user.click(within(dialog).getByRole("button", { name: "Move" }));
 
     await waitFor(() => {

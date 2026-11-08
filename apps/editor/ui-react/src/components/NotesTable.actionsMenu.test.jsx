@@ -111,10 +111,18 @@ async function openMenu(user, denomination) {
   });
 }
 
+const POSITION_LABELS = {
+  after: "After a note...",
+  before: "Before a note...",
+  end: "End of collection",
+  keep: "Keep current position",
+  start: "Start of collection",
+};
+
 function expectCreateAfter(mode, denomination) {
   expect(
     screen.getByRole("combobox", { name: "Position in collection" }),
-  ).toHaveValue(mode);
+  ).toHaveValue(POSITION_LABELS[mode]);
   expect(
     document.querySelector(".position-picker-item.is-selected"),
   ).toHaveTextContent(denomination);

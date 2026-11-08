@@ -3,6 +3,7 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
+import { chooseSelectOption } from "../test/selectField.js";
 import {
   noteRowRenderCount,
   resetNoteRowRenders,
@@ -203,12 +204,13 @@ describe("moving a note to another collection", () => {
     await screen.findByLabelText("Denomination");
 
     // The Collection field is the select that starts on this collection.
-    const destination = screen.getByDisplayValue("Test");
-    await user.selectOptions(destination, "2");
+    expect(screen.getByDisplayValue("Test")).toBeInTheDocument();
+    await chooseSelectOption(user, "Collection", "Other");
     // A move has to say where the note lands in the destination collection.
-    await user.selectOptions(
-      screen.getByRole("combobox", { name: "Position in collection" }),
-      "start",
+    await chooseSelectOption(
+      user,
+      "Position in collection",
+      "Start of collection",
     );
     await user.click(screen.getByRole("button", { name: "Save & close" }));
 
