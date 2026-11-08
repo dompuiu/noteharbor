@@ -58,6 +58,10 @@ function thumbImage() {
   return document.querySelector(".image-popover-thumb");
 }
 
+function imageWrap() {
+  return document.querySelector(".image-popover-image-wrap");
+}
+
 function zoomLevel() {
   return document.querySelector(".image-popover-zoom-level");
 }
@@ -107,6 +111,7 @@ describe("ImagePopover image loading", () => {
     render(popover());
 
     expect(thumbImage()).toHaveAttribute("src", THUMB_1);
+    expect(imageWrap()).toHaveClass("image-popover-image-wrap--warming");
     expect(fullImage()).toBeNull();
     expect(document.querySelector(".image-loading-spinner")).not.toBeNull();
 
@@ -114,6 +119,7 @@ describe("ImagePopover image loading", () => {
 
     expect(fullImage()).toHaveAttribute("src", FRONT_1);
     expect(thumbImage()).toBeNull();
+    expect(imageWrap()).not.toHaveClass("image-popover-image-wrap--warming");
     expect(document.querySelector(".image-loading-spinner")).toBeNull();
   });
 
@@ -135,12 +141,14 @@ describe("ImagePopover image loading", () => {
     expect(fullImage()).toBe(element);
     expect(element).toHaveAttribute("src", FRONT_1);
     expect(thumbImage()).toHaveAttribute("src", THUMB_2);
+    expect(imageWrap()).toHaveClass("image-popover-image-wrap--warming");
 
     await finishDecode(FRONT_2);
 
     expect(fullImage()).toBe(element);
     expect(element).toHaveAttribute("src", FRONT_2);
     expect(thumbImage()).toBeNull();
+    expect(imageWrap()).not.toHaveClass("image-popover-image-wrap--warming");
   });
 
   test("keeps showing images that finish while the user is still moving", async () => {

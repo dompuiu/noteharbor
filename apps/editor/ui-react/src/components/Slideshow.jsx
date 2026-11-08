@@ -998,6 +998,7 @@ function ImagePopover({
 
   const imageWrapClassName = [
     "image-popover-image-wrap",
+    showThumb ? "image-popover-image-wrap--warming" : null,
     zoomed ? "image-popover-image-wrap--zoomed" : null,
     pannable ? "image-popover-image-wrap--pannable" : null,
     isDragging ? "image-popover-image-wrap--dragging" : null,

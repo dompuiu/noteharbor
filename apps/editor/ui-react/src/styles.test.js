@@ -2491,15 +2491,28 @@ describe("message styles", () => {
 });
 
 describe("image popover styles", () => {
-  test("the thumbnail placeholder matches the popover panel", () => {
-    const rule = [
-      ...styles.matchAll(
-        /\.image-popover-image-wrap \.image-popover-thumb\s*\{([^}]*)\}/g,
-      ),
-    ]
-      .map((match) => match[1])
-      .find((body) => body.includes("background"));
+  // The thumbnail's own letterbox is transparent, so a veil over the held
+  // plate paints the well in the panel colour instead of showing the previous
+  // note around the incoming image.
+  test("the thumbnail's veil matches the popover panel", () => {
+    const veil = styles.match(
+      /\.image-popover-image-wrap--warming::after\s*\{([^}]*)\}/,
+    );
 
-    expect(rule).toMatch(/background:\s*var\(--on-dark-bg-translucent\)/);
+    expect(veil).not.toBeNull();
+    expect(veil[1]).toMatch(/background:\s*var\(--on-dark-bg-translucent\)/);
+  });
+
+  // The thumbnail fills the well's width and can be letterboxed by the height
+  // cap, so its element box is wider than the bitmap. A box shadow drew a grey
+  // card around the image; the drop shadow follows the drawn pixels instead, so
+  // the thumbnail and the settled plate wear the same shadow and it does not
+  // blink on every switch.
+  test("the plate shadow follows the drawn image, not the element box", () => {
+    const rule = styles.match(/\.image-popover-image-wrap img\s*\{([^}]*)\}/);
+
+    expect(rule).not.toBeNull();
+    expect(rule[1]).toMatch(/filter:\s*drop-shadow\(/);
+    expect(rule[1]).not.toMatch(/box-shadow:/);
   });
 });

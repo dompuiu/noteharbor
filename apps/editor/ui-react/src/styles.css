@@ -6992,8 +6992,13 @@ button.tag {
   max-height: min(72vh, 760px);
   object-fit: contain;
   border-radius: 3px;
-  box-shadow: 0 18px 48px
-    color-mix(in srgb, var(--on-dark-text) 20%, transparent);
+  /* The plate shadow follows the drawn pixels rather than the element box: a
+     thumbnail can be letterboxed inside a wider box while it stands in for the
+     plate, and a box shadow would trace that box as a card around the image.
+     The settled plate and its thumbnail therefore wear the same shadow. */
+  filter: drop-shadow(
+    0 18px 48px color-mix(in srgb, var(--on-dark-text) 20%, transparent)
+  );
   touch-action: none;
   user-select: none;
 }
@@ -7006,11 +7011,26 @@ button.tag {
   grid-area: 1 / 1;
 }
 
-.image-popover-image-wrap .image-popover-thumb {
-  width: 100%;
-  /* A progressive JPEG paints its not-yet-decoded area white. Match the
-     popover panel so the placeholder reads as the well, not a white card. */
+/* The incoming thumbnail sits above the plate already on screen. Its own
+   letterbox is transparent, so this veil paints the well behind it and hides
+   the previous note rather than letting it peek around the new image. */
+.image-popover-image-wrap--warming::after {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
   background: var(--on-dark-bg-translucent);
+  content: "";
+  pointer-events: none;
+}
+
+/* The placeholder stretches to the well's width, so a height cap letterboxes
+   the bitmap. It stays transparent: the drop shadow then hugs the bitmap rather
+   than the wider element box, and the veil behind it paints the well. */
+.image-popover-image-wrap .image-popover-thumb {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  background: transparent;
   pointer-events: none;
 }
 
