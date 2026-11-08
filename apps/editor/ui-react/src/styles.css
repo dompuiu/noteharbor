@@ -6631,7 +6631,7 @@ button.tag {
 .slide-card {
   position: relative;
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 2fr);
+  grid-template-columns: minmax(0, 3fr) minmax(0, 2fr);
   gap: 24px;
   padding: 24px;
   border-radius: var(--radius-lg);
@@ -6700,7 +6700,7 @@ button.tag {
     border-color 0.15s ease,
     transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
   width: 100%;
-  max-width: 500px;
+  max-width: 100%;
 }
 
 .slide-thumb-btn:hover {
@@ -6709,11 +6709,14 @@ button.tag {
   transform: translateY(-1px);
 }
 
+/* The plates take their height from the room, not a fixed 220px cap: two
+   stacked faces split the space below the top bar, so a 900px-tall window
+   still leaves the meta column and its tags in view. */
 .slide-thumb-btn img {
   display: block;
   width: 100%;
   max-width: 100%;
-  max-height: 220px;
+  max-height: clamp(180px, calc((100vh - 330px) / 2), 520px);
   height: auto;
   object-fit: contain;
   border-radius: 3px;
@@ -6730,6 +6733,26 @@ button.tag {
   background: var(--on-dark-wash);
   color: var(--on-dark-muted);
   text-align: center;
+}
+
+.slide-empty-state {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 8px;
+  width: 100%;
+  min-height: clamp(220px, calc(100vh - 420px), 520px);
+  padding: 32px;
+  border: 1px dashed var(--on-dark-border);
+  border-radius: var(--radius-lg);
+  background: var(--on-dark-wash);
+  color: var(--on-dark-muted);
+  text-align: center;
+}
+
+.slide-empty-state p {
+  margin: 0;
+  max-width: 36ch;
 }
 
 .slide-thumb-label {
@@ -7007,6 +7030,8 @@ button.tag {
   text-align: left;
   width: 100%;
   max-width: 100%;
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 /* The slide's meta block keeps the prototype's catalogue-page hierarchy: a
@@ -7071,7 +7096,7 @@ button.tag {
 }
 
 .scraped-details-panel {
-  padding: 16px;
+  padding: 14px 16px;
   border: 1px solid var(--on-dark-border);
   border-radius: var(--radius-lg);
   background: var(--on-dark-wash);
@@ -7080,10 +7105,8 @@ button.tag {
   justify-self: stretch;
 }
 
-
-
 .scraped-details-panel .eyebrow {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
 }
 
 .scraped-details-grid {
@@ -7091,6 +7114,27 @@ button.tag {
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 8px 16px;
   justify-items: stretch;
+}
+
+/* The slide's meta column is narrow, so its grids pack into narrow columns
+   instead of the editor form's wide one. */
+.slide-meta .scraped-details-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.slide-meta .scraped-details-grid--curated {
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 6px 14px;
+}
+
+/* A long page comment is clipped to three lines so it cannot push notes and
+   tags below the fold; the title carries the full text. */
+.slide-meta .scraped-detail-comment {
+  grid-column: 1 / -1;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
 }
 
 .scraped-details-grid p {
@@ -7120,6 +7164,43 @@ button.tag {
 .scraped-details-grid a:focus-visible {
   color: var(--on-dark-text);
   text-decoration-color: currentColor;
+}
+
+/* The rest of the scrape sits one click away: a compact summary keeps the
+   slide's meta column at the same height whether a note is bare or heavily
+   scraped. */
+.scraped-details-more {
+  width: 100%;
+  padding-top: 10px;
+  border-top: 1px solid var(--on-dark-border);
+}
+
+.scraped-details-grid--curated + .scraped-details-more {
+  margin-top: 12px;
+}
+
+.scraped-details-more summary {
+  color: var(--on-dark-label);
+  cursor: pointer;
+  font-size: 0.78rem;
+  font-weight: 600;
+}
+
+.scraped-details-more summary:hover,
+.scraped-details-more summary:focus-visible {
+  color: var(--on-dark-text);
+}
+
+.scraped-details-more[open] summary {
+  margin-bottom: 10px;
+}
+
+/* A source URL is a link, not a pasted paragraph: the host keeps it to one
+   line and the full address lives in the title. */
+.scraped-detail-source {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .scraped-details-empty {

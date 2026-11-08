@@ -1743,8 +1743,8 @@ describe("Escape clears the selection before the row cursor", () => {
 });
 
 describe("The slideshow as a modal room", () => {
-  async function openSlideshow(user) {
-    getNotes.mockResolvedValue({ notes: threeNotes });
+  async function openSlideshow(user, notes = threeNotes) {
+    getNotes.mockResolvedValue({ notes });
     renderTable();
 
     const first = await screen.findByText("AAAA");
@@ -1826,7 +1826,22 @@ describe("The slideshow as a modal room", () => {
 
   test("the image popover is a nested dialog that returns focus to its thumbnail", async () => {
     const user = userEvent.setup();
-    await openSlideshow(user);
+    const notesWithImages = threeNotes.map((entry) => ({
+      ...entry,
+      images: [
+        {
+          type: "front",
+          variant: "thumbnail",
+          localPath: `/notes/${entry.id}/front-thumb.jpg`,
+        },
+        {
+          type: "back",
+          variant: "thumbnail",
+          localPath: `/notes/${entry.id}/back-thumb.jpg`,
+        },
+      ],
+    }));
+    await openSlideshow(user, notesWithImages);
 
     const thumbnail = screen.getByRole("button", {
       name: "Enlarge front image",

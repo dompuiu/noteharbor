@@ -45,6 +45,71 @@ function getNoteDisplayLabel(note) {
   return denomination || catalogNumber || "Untitled note";
 }
 
+function getNoteTitle(note) {
+  return String(note?.denomination ?? "").trim() || "Untitled note";
+}
+
+// The scraped labels that are worth a place on the slide itself. Each group
+// lists the spellings the three graders use so one value is shown once, never
+// repeated under two labels.
+const scrapedDetailCuration = [
+  { label: "Country", keys: ["country", "region"] },
+  {
+    label: "Catalog",
+    keys: ["catalog", "catalog_number", "catalog_no", "world_pick"],
+  },
+  {
+    label: "Date",
+    keys: ["date", "issue_date", "currency_date", "year", "years"],
+  },
+  { label: "Grade", keys: ["grade", "display_grade", "grade_desc"] },
+  {
+    label: "Comment",
+    keys: ["comment", "comments", "page_comments", "banknote_details"],
+  },
+];
+
+function getScrapedDetailSections(entries) {
+  const values = new Map(entries);
+  const curated = [];
+  const consumed = new Set();
+
+  scrapedDetailCuration.forEach(({ label, keys }) => {
+    const key = keys.find((candidate) => values.has(candidate));
+
+    if (!key) {
+      return;
+    }
+
+    const value = values.get(key);
+    curated.push([label, value]);
+
+    // Hide the spellings that repeat the chosen value, but keep a synonym
+    // that carries something different for the disclosure.
+    keys.forEach((candidate) => {
+      if (
+        values.has(candidate) &&
+        String(values.get(candidate)) === String(value)
+      ) {
+        consumed.add(candidate);
+      }
+    });
+  });
+
+  return {
+    curated,
+    more: entries.filter(([key]) => !consumed.has(key)),
+  };
+}
+
+function getSourceHost(value) {
+  try {
+    return new URL(String(value)).host || "View source page";
+  } catch {
+    return "View source page";
+  }
+}
+
 function getScrapedDetailEntries(note) {
   const scrapedData = note.scraped_data;
   const details =
@@ -194,15 +259,16 @@ function getPreviewItems(note, { includeMissingSides = false } = {}) {
   const frontThumb = pickImage(note, "front", "thumbnail") || frontFull;
   const backThumb = pickImage(note, "back", "thumbnail") || backFull;
 
+  const noteLabel = getNoteDisplayLabel(note);
   const frontItem = {
-    alt: `${note.denomination} front`,
+    alt: `${noteLabel} front`,
     kind: "front",
     label: "Front",
     src: frontFull || frontThumb,
     thumb: frontThumb || frontFull,
   };
   const backItem = {
-    alt: `${note.denomination} back`,
+    alt: `${noteLabel} back`,
     kind: "back",
     label: "Back",
     src: backFull || backThumb,
@@ -1225,12 +1291,12 @@ function Slideshow({
       }
 
       if ((event.key === "Enter" || event.key === " ") && note) {
-        event.preventDefault();
         const openableItem = previewItems.find(
           (item) => item.kind === "front" || item.kind === "back",
         );
 
         if (openableItem) {
+          event.preventDefault();
           onOpenPreview?.(note.id, openableItem.kind);
         }
       }
@@ -1258,6 +1324,9 @@ function Slideshow({
   }
 
   const scrapedDetailEntries = getScrapedDetailEntries(note);
+  const { curated: curatedScrapedDetails, more: moreScrapedDetails } =
+    getScrapedDetailSections(scrapedDetailEntries);
+  const hasSlideImages = previewItems.some((item) => item.thumb);
   const totalPreviewCount = previewSequence.length;
   const previewSequenceIndex = previewItem ? previewIndex + 1 : 0;
   const scrapePanelTitle = getScrapePanelTitle(note);
@@ -1395,30 +1464,41 @@ function Slideshow({
   
           <div className="slide-card">
             <div className="slide-images">
-              {previewItems.map((item) => (
-                <button
-                  key={item.kind}
-                  aria-label={`Enlarge ${item.label.toLowerCase()} image`}
-                  className="slide-thumb-btn"
-                  onClick={(event) => {
-                    previewTriggerRef.current = event.currentTarget;
-                    onOpenPreview?.(note.id, item.kind);
-                  }}
-                  onFocus={() => preloadPreviewItem(item)}
-                  onMouseEnter={() => preloadPreviewItem(item)}
-                  title="Click to enlarge"
-                  type="button"
-                >
-                  {item.thumb ? (
-                    <img alt={item.alt} decoding="async" src={item.thumb} />
-                  ) : (
-                    <div className="slide-thumb-placeholder">
-                      No scraped image yet
-                    </div>
-                  )}
-                  <span className="slide-thumb-label">{item.label}</span>
-                </button>
-              ))}
+              {hasSlideImages ? (
+                previewItems.map((item) => (
+                  <button
+                    key={item.kind}
+                    aria-label={`Enlarge ${item.label.toLowerCase()} image`}
+                    className="slide-thumb-btn"
+                    onClick={(event) => {
+                      previewTriggerRef.current = event.currentTarget;
+                      onOpenPreview?.(note.id, item.kind);
+                    }}
+                    onFocus={() => preloadPreviewItem(item)}
+                    onMouseEnter={() => preloadPreviewItem(item)}
+                    title="Click to enlarge"
+                    type="button"
+                  >
+                    {item.thumb ? (
+                      <img alt={item.alt} decoding="async" src={item.src} />
+                    ) : (
+                      <div className="slide-thumb-placeholder">
+                        No scraped image yet
+                      </div>
+                    )}
+                    <span className="slide-thumb-label">{item.label}</span>
+                  </button>
+                ))
+              ) : (
+                <div className="slide-empty-state">
+                  <p className="eyebrow">No images</p>
+                  <p>
+                    {readOnly
+                      ? "This note has no images."
+                      : "No images yet. Press E to edit this note and add the front and back."}
+                  </p>
+                </div>
+              )}
             </div>
   
             <div className="slide-meta">
@@ -1426,7 +1506,7 @@ function Slideshow({
                 <p className="eyebrow">
                   {note.grading_company || "Collection note"}
                 </p>
-                <h1>{note.denomination}</h1>
+                <h1>{getNoteTitle(note)}</h1>
                 <p className="slide-issue">{note.issue_date}</p>
               </div>
               <div className="detail-grid">
@@ -1446,24 +1526,62 @@ function Slideshow({
               {scrapedDetailEntries.length ? (
                 <div className="scraped-details-panel">
                   <p className="eyebrow">{scrapePanelTitle}</p>
-                  <div className="scraped-details-grid">
-                    {scrapedDetailEntries.map(([key, value]) => (
-                      <p key={key}>
-                        <strong>{formatScrapedLabel(key)}:</strong>{" "}
-                        {key === "source_url" && isHttpUrl(value) ? (
-                          <a
-                            href={String(value)}
-                            rel="noreferrer"
-                            target="_blank"
+                  {curatedScrapedDetails.length ? (
+                    <div className="scraped-details-grid scraped-details-grid--curated">
+                      {curatedScrapedDetails.map(([label, value]) => {
+                        const isComment = label === "Comment";
+
+                        return (
+                          <p
+                            className={
+                              isComment ? "scraped-detail-comment" : undefined
+                            }
+                            key={label}
+                            title={isComment ? String(value) : undefined}
                           >
-                            {String(value)}
-                          </a>
-                        ) : (
-                          String(value)
-                        )}
-                      </p>
-                    ))}
-                  </div>
+                            <strong>{label}:</strong> {String(value)}
+                          </p>
+                        );
+                      })}
+                    </div>
+                  ) : null}
+                  {moreScrapedDetails.length ? (
+                    <details className="scraped-details-more">
+                      <summary>
+                        Scraped details · {moreScrapedDetails.length}
+                      </summary>
+                      <div className="scraped-details-grid">
+                        {moreScrapedDetails.map(([key, value]) => {
+                          const isSource = key === "source_url";
+
+                          return (
+                            <p
+                              className={
+                                isSource ? "scraped-detail-source" : undefined
+                              }
+                              key={key}
+                            >
+                              <strong>
+                                {isSource ? "Source" : formatScrapedLabel(key)}:
+                              </strong>{" "}
+                              {isSource && isHttpUrl(value) ? (
+                                <a
+                                  href={String(value)}
+                                  rel="noreferrer"
+                                  target="_blank"
+                                  title={String(value)}
+                                >
+                                  {getSourceHost(value)}
+                                </a>
+                              ) : (
+                                String(value)
+                              )}
+                            </p>
+                          );
+                        })}
+                      </div>
+                    </details>
+                  ) : null}
                 </div>
               ) : null}
               <p className="slide-notes">{note.notes || "No extra notes."}</p>

@@ -7,10 +7,16 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 ### Added
 
 - Image preview: a visible zoom control (Fit, 100%, −, +) with the current level shown; wheel and double-click zoom now share the same ladder.
+- Note slideshow: scraped details now show country, catalog, date, grade and comment, with the remaining fields behind a "Scraped details · N" disclosure and the source page reduced to one host link.
+
+### Changed
+
+- Note slideshow: the note dominates the room — the image plates take the larger share and scale with the window height, so the metadata column and its notes and tags stay in view at 1440x900.
 
 ### Fixed
 
 - Image preview: zooming steps up from the fitted image size instead of jumping to 100% of the scan's natural pixels, and the first zoom centres the double-clicked point instead of landing top-left.
+- Note slideshow: a note with no images shows one empty state with a next step instead of two Front/Back placeholders, an empty denomination reads as "Untitled note", and long denominations and scraped values wrap without moving the arrows.
 
 ## [2.10.2] - 2026-11-07
 

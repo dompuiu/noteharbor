@@ -2161,6 +2161,39 @@ describe("slideshow overlay styles", () => {
     expect(strong[1]).toMatch(/font-weight:\s*600/);
   });
 
+  // The plates are the room now: the image column takes three fifths, the
+  // meta column two, and a plate scales with the viewport instead of the old
+  // 220px cap.
+  test("the slide card gives the plates the larger share and the room's height", () => {
+    const card = styles.match(/\.slide-card\s*\{([^}]*)\}/);
+    expect(card).not.toBeNull();
+    expect(card[1]).toMatch(
+      /grid-template-columns:\s*minmax\(0,\s*3fr\)\s*minmax\(0,\s*2fr\)/,
+    );
+
+    const plate = styles.match(/\.slide-thumb-btn img\s*\{([^}]*)\}/);
+    expect(plate).not.toBeNull();
+    expect(plate[1]).toMatch(
+      /max-height:\s*clamp\(180px,\s*calc\(\(100vh - 330px\) \/ 2\),\s*520px\)/,
+    );
+    expect(plate[1]).not.toMatch(/max-height:\s*220px/);
+  });
+
+  // The curated scrape keeps its narrow two-column grid, and the source URL
+  // stays on one line as a host link rather than wrapping as a raw address.
+  test("the curated scrape keeps a compact grid and a one-line source", () => {
+    const curated = styles.match(
+      /\.slide-meta \.scraped-details-grid--curated\s*\{([^}]*)\}/,
+    );
+    expect(curated).not.toBeNull();
+    expect(curated[1]).toMatch(/minmax\(140px,\s*1fr\)/);
+
+    const source = styles.match(/\.scraped-detail-source\s*\{([^}]*)\}/);
+    expect(source).not.toBeNull();
+    expect(source[1]).toMatch(/white-space:\s*nowrap/);
+    expect(source[1]).toMatch(/text-overflow:\s*ellipsis/);
+  });
+
   test("the slideshow tags keep the prototype chip type", () => {
     const tag = styles.match(/\.slideshow-screen \.tag\s*\{([^}]*)\}/);
     expect(tag).not.toBeNull();
