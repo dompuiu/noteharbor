@@ -8,6 +8,7 @@ import 'package:flutter/services.dart';
 
 import '../../app/viewer_palette.dart';
 import '../../data/dataset_controller.dart';
+import '../../models/note_image.dart';
 import '../../models/note_record.dart';
 import '../../models/tag.dart';
 import '../../models/viewer_collection.dart';
@@ -62,6 +63,16 @@ const Color _kZebraTint = ViewerPalette.rowZebra;
 
 /// How far one Left/Right arrow press pans the table's hidden columns.
 const double _kColumnScrollStep = 200;
+
+/// Below this available width the nine-column grid is replaced by a vertical
+/// note-card list. The grid needs ~1,200 px to show every column, so a window
+/// between this breakpoint and that width still pans; the card layout takes
+/// over only where the grid starts cutting columns mid-value.
+const double _kCardLayoutBreakpoint = 700;
+
+/// Approximate card pitch, used only when a keyboard jump targets a card the
+/// lazy list has not built yet. The exact card is aligned once it exists.
+const double _kCardEstimatedExtent = 112;
 
 /// Sortable column headers in visual order. `Front` has no sort button and is
 /// skipped by the explicit Tab order: filter -> headers -> rows.
@@ -427,6 +438,13 @@ double _tagChipWidth(String tagName) {
       2;
 }
 
+List<String> _tagNames(List<Tag> tags) {
+  return tags
+      .map((tag) => tag.name.trim())
+      .where((name) => name.isNotEmpty)
+      .toList(growable: false);
+}
+
 double _calculateTagsColumnWidth(List<NoteRecord> notes) {
   final headerWidth = _measureTextWidth(
         'Tags',
@@ -492,6 +510,31 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   };
   late final FocusNode _importButtonFocusNode =
       FocusNode(debugLabel: 'tableImport');
+  late final FocusNode _cardSortFocusNode = FocusNode(
+    debugLabel: 'cardSort',
+    onKeyEvent: (_, event) => _handleCardSortKey(event),
+  );
+  late final FocusNode _cardSortDirectionFocusNode = FocusNode(
+    debugLabel: 'cardSortDirection',
+    onKeyEvent: (_, event) => _handleCardSortDirectionKey(event),
+  );
+
+  /// Measures the area the table body occupies, so keyboard handlers can tell
+  /// which layout is on screen without recording it during build.
+  final GlobalKey _tableAreaKey = GlobalKey();
+  final Map<int, GlobalKey> _cardKeys = <int, GlobalKey>{};
+
+  GlobalKey _cardKeyFor(int noteId) => _cardKeys.putIfAbsent(
+        noteId,
+        () => GlobalKey(debugLabel: 'noteCard-$noteId'),
+      );
+
+  bool get _cardLayout {
+    final box = _tableAreaKey.currentContext?.findRenderObject();
+    return box is RenderBox &&
+        box.hasSize &&
+        box.size.width < _kCardLayoutBreakpoint;
+  }
 
   // Keyboard selection is a desktop affordance (Windows/macOS/Linux/Web).
   // It stays inert on touch-first platforms so tap behavior is unchanged.
@@ -718,6 +761,76 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     return KeyEventResult.handled;
   }
 
+  /// Tab order after the filter: the first sortable header in grid mode, the
+  /// sort menu in card mode.
+  void _focusFirstControlAfterFilter() {
+    if (_cardLayout) {
+      _cardSortFocusNode.requestFocus();
+      return;
+    }
+    _focusHeader(_kSortableHeaderKeys.first);
+  }
+
+  /// Tab order before the rows, in reverse: the last sortable header in grid
+  /// mode, the sort direction button in card mode.
+  void _focusLastControlBeforeRows() {
+    if (_cardLayout) {
+      _cardSortDirectionFocusNode.requestFocus();
+      return;
+    }
+    _focusHeader(_kSortableHeaderKeys.last);
+  }
+
+  /// Tab order within card mode's sort controls: field -> direction -> rows,
+  /// mirroring the header chain the grid presents at the same point.
+  KeyEventResult _handleCardSortKey(KeyEvent event) {
+    if (!_keyboardNavEnabled) {
+      return KeyEventResult.ignored;
+    }
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey != LogicalKeyboardKey.tab) {
+      return KeyEventResult.ignored;
+    }
+    if (HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isAltPressed) {
+      return KeyEventResult.ignored;
+    }
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      _scopeFocusNode.requestFocus();
+      return KeyEventResult.handled;
+    }
+    _cardSortDirectionFocusNode.requestFocus();
+    return KeyEventResult.handled;
+  }
+
+  KeyEventResult _handleCardSortDirectionKey(KeyEvent event) {
+    if (!_keyboardNavEnabled) {
+      return KeyEventResult.ignored;
+    }
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    if (event.logicalKey != LogicalKeyboardKey.tab) {
+      return KeyEventResult.ignored;
+    }
+    if (HardwareKeyboard.instance.isControlPressed ||
+        HardwareKeyboard.instance.isMetaPressed ||
+        HardwareKeyboard.instance.isAltPressed) {
+      return KeyEventResult.ignored;
+    }
+    if (HardwareKeyboard.instance.isShiftPressed) {
+      _cardSortFocusNode.requestFocus();
+      return KeyEventResult.handled;
+    }
+    if (_currentVisibleNotes().isNotEmpty) {
+      _focusRowFromTab(0);
+    }
+    return KeyEventResult.handled;
+  }
+
   @override
   void initState() {
     super.initState();
@@ -754,6 +867,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     _searchFocusNode.dispose();
     _scopeFocusNode.dispose();
     _importButtonFocusNode.dispose();
+    _cardSortFocusNode.dispose();
+    _cardSortDirectionFocusNode.dispose();
     for (final node in _headerFocusNodes.values) {
       node.dispose();
     }
@@ -876,6 +991,26 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     });
   }
 
+  /// Card mode's sort menu names the field in one control and leaves the
+  /// direction to the arrow button beside it.
+  void _setSortKey(String key) {
+    if (key == _sortKey) {
+      return;
+    }
+    setState(() {
+      _sortKey = key;
+      _ascending = true;
+      _selectedIndex = null;
+    });
+  }
+
+  void _toggleSortDirection() {
+    setState(() {
+      _ascending = !_ascending;
+      _selectedIndex = null;
+    });
+  }
+
   void _applyTagFilter(String tagName) {
     _searchController.text = tagName;
     setState(() {
@@ -993,21 +1128,39 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     }
     var pageSize = 10;
     var firstVisibleIndex = 0;
+    final rowExtent = _cardLayout ? _kCardEstimatedExtent : _rowExtent;
     if (_verticalScrollController.hasClients) {
       final position = _verticalScrollController.position;
-      pageSize = math.max(1, (position.viewportDimension / _rowExtent).floor());
+      pageSize = math.max(1, (position.viewportDimension / rowExtent).floor());
       firstVisibleIndex =
-          (position.pixels / _rowExtent).floor().clamp(0, notes.length - 1);
+          (position.pixels / rowExtent).floor().clamp(0, notes.length - 1);
     }
     final base = _selectedIndex ?? firstVisibleIndex;
     final target = (base + direction * pageSize).clamp(0, notes.length - 1);
     _focusSelection(target);
-    _scrollToOffset(target * _rowExtent);
+    _ensureIndexVisible(target);
+  }
+
+  /// Scrolls [index] to the top of the current layout. The grid has a fixed
+  /// row pitch; cards are measured after they are built.
+  void _ensureIndexVisible(int index) {
+    if (_cardLayout) {
+      _ensureCardVisible(index);
+      return;
+    }
+    _scrollToOffset(index * _rowExtent);
   }
 
   void _ensureSelectedVisible() {
     final index = _selectedIndex;
-    if (index == null || !_verticalScrollController.hasClients) {
+    if (index == null) {
+      return;
+    }
+    if (_cardLayout) {
+      _ensureCardVisible(index);
+      return;
+    }
+    if (!_verticalScrollController.hasClients) {
       return;
     }
     final position = _verticalScrollController.position;
@@ -1025,6 +1178,54 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       return;
     }
     _scrollToOffset(target);
+  }
+
+  /// Brings the card at [index] fully into view with the smallest scroll.
+  /// Cards vary in height (tags wrap, text scales), so the target is measured
+  /// from the built widget instead of assumed from a fixed pitch. A card the
+  /// lazy list has not built yet is reached by estimating its pitch and
+  /// aligning it on the next frame.
+  void _ensureCardVisible(int index) {
+    final notes = _currentVisibleNotes();
+    if (index < 0 || index >= notes.length) {
+      return;
+    }
+    final key = _cardKeyFor(notes[index].id);
+    if (key.currentContext == null) {
+      _scrollToOffset(index * _kCardEstimatedExtent);
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted || !_cardLayout) {
+          return;
+        }
+        _alignCardInViewport(key);
+      });
+      return;
+    }
+    _alignCardInViewport(key);
+  }
+
+  void _alignCardInViewport(GlobalKey key) {
+    if (!_verticalScrollController.hasClients) {
+      return;
+    }
+    final box = key.currentContext?.findRenderObject();
+    if (box is! RenderBox || !box.attached) {
+      return;
+    }
+    final viewport = RenderAbstractViewport.maybeOf(box);
+    if (viewport == null) {
+      return;
+    }
+    final position = _verticalScrollController.position;
+    final target = RevealedOffset.clampOffset(
+      leadingEdgeOffset: viewport.getOffsetToReveal(box, 0.0),
+      trailingEdgeOffset: viewport.getOffsetToReveal(box, 1.0),
+      currentOffset: position.pixels,
+    );
+    if (target == null) {
+      return;
+    }
+    _scrollToOffset(target.offset);
   }
 
   KeyEventResult _handleTableKey(KeyEvent event) {
@@ -1074,7 +1275,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
           return KeyEventResult.handled;
         }
         if (current <= 0) {
-          _focusHeader(_kSortableHeaderKeys.last);
+          _focusLastControlBeforeRows();
           return KeyEventResult.handled;
         }
         _focusRowFromTab(current - 1);
@@ -1082,7 +1283,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       }
       final current = _selectedIndex;
       if (current == null) {
-        _focusHeader(_kSortableHeaderKeys.first);
+        _focusFirstControlAfterFilter();
         return KeyEventResult.handled;
       }
       if (current >= notes.length - 1) {
@@ -1247,7 +1448,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         _scopeFocusNode.requestFocus();
         return KeyEventResult.handled;
       }
-      _focusHeader(_kSortableHeaderKeys.first);
+      _focusFirstControlAfterFilter();
       return KeyEventResult.handled;
     }
     if (key == LogicalKeyboardKey.escape) {
@@ -1372,8 +1573,83 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         _focusSelection(noteIndex);
       }
 
-      _scrollToOffset(noteIndex * _rowExtent);
+      _ensureIndexVisible(noteIndex);
     });
+  }
+
+  /// The nine-column desktop grid, kept at its full minimum width and panned
+  /// horizontally whenever the window is narrower than it.
+  Widget _buildGrid(List<NoteRecord> notes, double availableWidth) {
+    final tagsColumnWidth = _calculateTagsColumnWidth(notes);
+    final minTableWidth = _kFixedColumnsWidth +
+        tagsColumnWidth +
+        (_kTableHorizontalPadding * 2);
+    final tableWidth = math.max(minTableWidth, availableWidth);
+
+    return NotificationListener<ScrollNotification>(
+      onNotification: _handleTableScrollNotification,
+      child: ScrollConfiguration(
+        behavior: const MouseDragScrollBehavior(),
+        child: SingleChildScrollView(
+          controller: _horizontalScrollController,
+          scrollDirection: Axis.horizontal,
+          child: SizedBox(
+            width: tableWidth,
+            child: Column(
+              children: [
+                _TableHeader(
+                  sortKey: _sortKey,
+                  ascending: _ascending,
+                  onSort: _toggleSort,
+                  tagsColumnWidth: tagsColumnWidth,
+                  draggingColumns: _columnsDragging,
+                  headerFocusNodes: _headerFocusNodes,
+                ),
+                const Divider(
+                  height: 1,
+                  thickness: 1,
+                  color: _kTableHeaderDivider,
+                ),
+                Expanded(
+                  child: ScrollConfiguration(
+                    behavior: const MaterialScrollBehavior(),
+                    child: Scrollbar(
+                      controller: _verticalScrollController,
+                      thumbVisibility: true,
+                      child: ListView.separated(
+                        controller: _verticalScrollController,
+                        itemCount: notes.length,
+                        separatorBuilder: (context, index) => const Divider(
+                          height: 1,
+                          color: _kTableDivider,
+                        ),
+                        itemBuilder: (context, index) {
+                          final note = notes[index];
+
+                          final row = _TableRow(
+                            note: note,
+                            tagsColumnWidth: tagsColumnWidth,
+                            draggingColumns: _columnsDragging,
+                            selected:
+                                _keyboardNavEnabled && _selectedIndex == index,
+                            onTagTap: _applyTagFilter,
+                            onTap: () => _openNoteAtIndex(notes, index),
+                          );
+                          if (index.isOdd) {
+                            return ColoredBox(color: _kZebraTint, child: row);
+                          }
+                          return row;
+                        },
+                      ),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
   }
 
   @override
@@ -1419,11 +1695,6 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
 
                 final scopedNotes = widget.controller.activeCollectionNotes;
                 final notes = _sortedNotes(scopedNotes);
-
-                final tagsColumnWidth = _calculateTagsColumnWidth(notes);
-                final minTableWidth = _kFixedColumnsWidth +
-                    tagsColumnWidth +
-                    (_kTableHorizontalPadding * 2);
 
                 return Padding(
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
@@ -1642,11 +1913,49 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                       const SizedBox(height: 20),
                       Expanded(
                         child: LayoutBuilder(
+                          key: _tableAreaKey,
                           builder: (context, constraints) {
-                            final tableWidth =
-                                math.max(minTableWidth, constraints.maxWidth);
+                            final Widget body;
+                            if (notes.isEmpty) {
+                              body = const _TableEmptyState();
+                            } else if (constraints.maxWidth <
+                                _kCardLayoutBreakpoint) {
+                              body = ClipRRect(
+                                borderRadius:
+                                    BorderRadius.circular(_kCardRadius),
+                                child: _NoteCardList(
+                                  notes: notes,
+                                  selectedIndex: _selectedIndex,
+                                  keyboardNavEnabled: _keyboardNavEnabled,
+                                  sortKey: _sortKey,
+                                  ascending: _ascending,
+                                  onSortKey: _setSortKey,
+                                  onToggleSortDirection:
+                                      _toggleSortDirection,
+                                  onTagTap: _applyTagFilter,
+                                  onOpenNote: _openNoteAtIndex,
+                                  cardKeyFor: _cardKeyFor,
+                                  scrollController:
+                                      _verticalScrollController,
+                                  sortFocusNode: _cardSortFocusNode,
+                                  directionFocusNode:
+                                      _cardSortDirectionFocusNode,
+                                  onScrollNotification:
+                                      _handleTableScrollNotification,
+                                ),
+                              );
+                            } else {
+                              body = ClipRRect(
+                                borderRadius:
+                                    BorderRadius.circular(_kCardRadius),
+                                child: _buildGrid(
+                                  notes,
+                                  constraints.maxWidth,
+                                ),
+                              );
+                            }
 
-                            final Widget table = Focus(
+                            return Focus(
                               focusNode: _tableFocusNode,
                               autofocus: _keyboardNavEnabled,
                               onKeyEvent: (node, event) =>
@@ -1668,113 +1977,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                     border: Border.all(
                                         color: _kTableCardBorder, width: 1),
                                   ),
-                                  child: notes.isEmpty
-                                      ? const _TableEmptyState()
-                                      : ClipRRect(
-                                        borderRadius:
-                                            BorderRadius.circular(_kCardRadius),
-                                        child: NotificationListener<
-                                            ScrollNotification>(
-                                          onNotification:
-                                              _handleTableScrollNotification,
-                                          child: ScrollConfiguration(
-                                            behavior:
-                                                const MouseDragScrollBehavior(),
-                                            child: SingleChildScrollView(
-                                              controller:
-                                                  _horizontalScrollController,
-                                              scrollDirection: Axis.horizontal,
-                                              child: SizedBox(
-                                                width: tableWidth,
-                                                child: Column(
-                                                  children: [
-                                                    _TableHeader(
-                                                      sortKey: _sortKey,
-                                                      ascending: _ascending,
-                                                      onSort: _toggleSort,
-                                                      tagsColumnWidth:
-                                                          tagsColumnWidth,
-                                                      draggingColumns:
-                                                          _columnsDragging,
-                                                      headerFocusNodes:
-                                                          _headerFocusNodes,
-                                                    ),
-                                                    const Divider(
-                                                      height: 1,
-                                                      thickness: 1,
-                                                      color:
-                                                          _kTableHeaderDivider,
-                                                    ),
-                                                    Expanded(
-                                                      child:
-                                                          ScrollConfiguration(
-                                                        behavior:
-                                                            const MaterialScrollBehavior(),
-                                                        child: Scrollbar(
-                                                          controller:
-                                                              _verticalScrollController,
-                                                          thumbVisibility: true,
-                                                          child: ListView
-                                                              .separated(
-                                                            controller:
-                                                                _verticalScrollController,
-                                                            itemCount:
-                                                                notes.length,
-                                                            separatorBuilder:
-                                                                (context,
-                                                                        index) =>
-                                                                    const Divider(
-                                                              height: 1,
-                                                              color:
-                                                                  _kTableDivider,
-                                                            ),
-                                                            itemBuilder:
-                                                                (context,
-                                                                    index) {
-                                                              final note =
-                                                                  notes[index];
-
-                                                              final row =
-                                                                  _TableRow(
-                                                                note: note,
-                                                                tagsColumnWidth:
-                                                                    tagsColumnWidth,
-                                                                draggingColumns:
-                                                                    _columnsDragging,
-                                                                selected: _keyboardNavEnabled &&
-                                                                    _selectedIndex ==
-                                                                        index,
-                                                                onTagTap:
-                                                                    _applyTagFilter,
-                                                                onTap: () =>
-                                                                    _openNoteAtIndex(
-                                                                        notes,
-                                                                        index),
-                                                              );
-                                                              if (index.isOdd) {
-                                                                return ColoredBox(
-                                                                  color:
-                                                                      _kZebraTint,
-                                                                  child: row,
-                                                                );
-                                                              }
-                                                              return row;
-                                                            },
-                                                          ),
-                                                        ),
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                  ),
+                                  child: body,
+                                ),
                               ),
                             );
-                            return table;
                           },
                         ),
                       ),
@@ -1855,54 +2061,91 @@ class _Header extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final title = collectionName.trim().isEmpty ? 'Collection' : collectionName;
-    return Row(
-      children: [
-        ClipRRect(
-          borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
-          child: Image.asset(
-            'web/icons/Icon-192.png',
-            width: 34,
-            height: 34,
-            fit: BoxFit.cover,
+
+    // The identity block (mark + collection title) and the trailing controls
+    // share one line on wide windows. Card-width windows stack them: at 400 px,
+    // especially at 200% text scale, the stat pill and import action would
+    // otherwise squeeze the title to nothing.
+    Widget identity() {
+      return Row(
+        children: [
+          ClipRRect(
+            borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
+            child: Image.asset(
+              'web/icons/Icon-192.png',
+              width: 34,
+              height: 34,
+              fit: BoxFit.cover,
+            ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'NOTE HARBOR',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w700,
-                  letterSpacing: 0.9,
-                  height: 1,
-                  color: ViewerPalette.textMuted,
-                ),
-              ),
-              const SizedBox(height: 3),
-              _CollectionTitle(
-                activeCollectionId: activeCollectionId,
-                collections: collections,
-                onSelected: onSelectCollection,
-                title: title,
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(width: 16),
-        _StatPill(label: 'Notes', value: '$visibleCount / $totalCount'),
-        if (onOpenImports != null) ...[
           const SizedBox(width: 12),
-          _ImportButton(
-            onPressed: onOpenImports!,
-            focusNode: importButtonFocusNode,
+          Expanded(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                const Text(
+                  'NOTE HARBOR',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.9,
+                    height: 1,
+                    color: ViewerPalette.textMuted,
+                  ),
+                ),
+                const SizedBox(height: 3),
+                _CollectionTitle(
+                  activeCollectionId: activeCollectionId,
+                  collections: collections,
+                  onSelected: onSelectCollection,
+                  title: title,
+                ),
+              ],
+            ),
           ),
         ],
+      );
+    }
+
+    final trailing = <Widget>[
+      _StatPill(label: 'Notes', value: '$visibleCount / $totalCount'),
+      if (onOpenImports != null) ...[
+        const SizedBox(width: 12),
+        _ImportButton(
+          onPressed: onOpenImports!,
+          focusNode: importButtonFocusNode,
+        ),
       ],
+    ];
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        if (constraints.maxWidth < _kCardLayoutBreakpoint) {
+          return Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              identity(),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Spacer(),
+                  ...trailing,
+                ],
+              ),
+            ],
+          );
+        }
+
+        return Row(
+          children: [
+            Expanded(child: identity()),
+            const SizedBox(width: 16),
+            ...trailing,
+          ],
+        );
+      },
     );
   }
 }
@@ -2844,35 +3087,7 @@ class _TableRow extends StatelessWidget {
                     child: Text('${note.displayOrder}')),
                 _DataCell(
                   width: _kFrontColumnWidth,
-                  child: image == null
-                      ? const _TableThumbnailPlaceholder()
-                      : DecoratedBox(
-                          decoration: BoxDecoration(
-                            borderRadius:
-                                BorderRadius.circular(ViewerPalette.radiusXs),
-                            border:
-                                Border.all(color: ViewerPalette.borderControl),
-                          ),
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(
-                                ViewerPalette.radiusXs),
-                            child: Image(
-                              image: createNoteImageProvider(image),
-                              width: _kTableThumbnailWidth,
-                              height: _kTableThumbnailHeight,
-                              fit: BoxFit.cover,
-                              frameBuilder: (context, child, frame,
-                                  wasSynchronouslyLoaded) {
-                                if (wasSynchronouslyLoaded || frame != null) {
-                                  return child;
-                                }
-                                return const _TableThumbnailPlaceholder();
-                              },
-                              errorBuilder: (context, error, stackTrace) =>
-                                  const _TableThumbnailPlaceholder(),
-                            ),
-                          ),
-                        ),
+                  child: _NoteThumbnail(image: image),
                 ),
                 _DataCell(
                     width: _kDenominationColumnWidth,
@@ -2924,6 +3139,442 @@ class _TableRow extends StatelessWidget {
   }
 }
 
+/// Below the grid breakpoint the notes become a vertical card list: a fixed
+/// thumbnail on the left, denomination as the primary line, the remaining
+/// columns as labelled metadata, and tags in the card footer. Sorting moves
+/// from the column headers into a compact bar; tapping a card opens the same
+/// slideshow the rows do.
+class _NoteCardList extends StatelessWidget {
+  const _NoteCardList({
+    required this.notes,
+    required this.selectedIndex,
+    required this.keyboardNavEnabled,
+    required this.sortKey,
+    required this.ascending,
+    required this.onSortKey,
+    required this.onToggleSortDirection,
+    required this.onTagTap,
+    required this.onOpenNote,
+    required this.cardKeyFor,
+    required this.scrollController,
+    required this.sortFocusNode,
+    required this.directionFocusNode,
+    required this.onScrollNotification,
+  });
+
+  final List<NoteRecord> notes;
+  final int? selectedIndex;
+  final bool keyboardNavEnabled;
+  final String sortKey;
+  final bool ascending;
+  final ValueChanged<String> onSortKey;
+  final VoidCallback onToggleSortDirection;
+  final ValueChanged<String> onTagTap;
+  final void Function(List<NoteRecord> notes, int index) onOpenNote;
+  final GlobalKey Function(int noteId) cardKeyFor;
+  final ScrollController scrollController;
+  final FocusNode sortFocusNode;
+  final FocusNode directionFocusNode;
+  final NotificationListenerCallback<ScrollNotification> onScrollNotification;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _CardSortBar(
+          sortKey: sortKey,
+          ascending: ascending,
+          onSortKey: onSortKey,
+          onToggleSortDirection: onToggleSortDirection,
+          sortFocusNode: sortFocusNode,
+          directionFocusNode: directionFocusNode,
+        ),
+        Expanded(
+          child: NotificationListener<ScrollNotification>(
+            onNotification: onScrollNotification,
+            child: ScrollConfiguration(
+              behavior: const MaterialScrollBehavior(),
+              child: Scrollbar(
+                controller: scrollController,
+                thumbVisibility: true,
+                child: ListView.builder(
+                  key: const ValueKey('noteCardList'),
+                  controller: scrollController,
+                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
+                  itemCount: notes.length,
+                  itemBuilder: (context, index) {
+                    final note = notes[index];
+                    return Padding(
+                      padding: const EdgeInsets.only(bottom: 8),
+                      child: _NoteCard(
+                        key: cardKeyFor(note.id),
+                        note: note,
+                        selected:
+                            keyboardNavEnabled && selectedIndex == index,
+                        onTagTap: onTagTap,
+                        onTap: () => onOpenNote(notes, index),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// Card mode's sorting affordance: the field in a select, the direction in
+/// the arrow button beside it. It takes the place of the grid's header row.
+class _CardSortBar extends StatelessWidget {
+  const _CardSortBar({
+    required this.sortKey,
+    required this.ascending,
+    required this.onSortKey,
+    required this.onToggleSortDirection,
+    required this.sortFocusNode,
+    required this.directionFocusNode,
+  });
+
+  static const List<({String value, String label})> _sortOptions = [
+    (value: 'displayOrder', label: 'ID'),
+    (value: 'denomination', label: 'Denomination'),
+    (value: 'issueDate', label: 'Date'),
+    (value: 'catalogNumber', label: 'Catalog'),
+    (value: 'gradingCompany', label: 'Company'),
+    (value: 'grade', label: 'Grade'),
+    (value: 'serial', label: 'Serial'),
+    (value: 'tags', label: 'Tags'),
+  ];
+
+  final String sortKey;
+  final bool ascending;
+  final ValueChanged<String> onSortKey;
+  final VoidCallback onToggleSortDirection;
+  final FocusNode sortFocusNode;
+  final FocusNode directionFocusNode;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      decoration: const BoxDecoration(
+        color: _kTableHeaderBg,
+        border: Border(bottom: BorderSide(color: _kTableDivider)),
+      ),
+      padding: const EdgeInsets.fromLTRB(12, 2, 8, 2),
+      child: Row(
+        children: [
+          const Text(
+            'SORT',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontWeight: FontWeight.w700,
+              fontSize: 11,
+              letterSpacing: 0.9,
+              height: 1,
+              color: ViewerPalette.textMuted,
+            ),
+          ),
+          const SizedBox(width: 10),
+          Expanded(
+            child: DropdownButtonHideUnderline(
+              child: DropdownButton<String>(
+                key: const ValueKey('cardSortKey'),
+                value: sortKey,
+                focusNode: sortFocusNode,
+                isExpanded: true,
+                isDense: true,
+                focusColor: Colors.transparent,
+                borderRadius: BorderRadius.zero,
+                padding: EdgeInsets.zero,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: _kTableText,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                ),
+                selectedItemBuilder: (context) => [
+                  for (final option in _sortOptions)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: Text(
+                        option.label,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ),
+                ],
+                items: [
+                  for (final option in _sortOptions)
+                    DropdownMenuItem<String>(
+                      value: option.value,
+                      child: Text(option.label),
+                    ),
+                ],
+                onChanged: (value) {
+                  if (value != null) {
+                    onSortKey(value);
+                  }
+                },
+              ),
+            ),
+          ),
+          const SizedBox(width: 4),
+          IconButton(
+            key: const ValueKey('cardSortDirection'),
+            focusNode: directionFocusNode,
+            tooltip: ascending ? 'Sort descending' : 'Sort ascending',
+            onPressed: onToggleSortDirection,
+            iconSize: 18,
+            padding: const EdgeInsets.all(7),
+            constraints: const BoxConstraints(minWidth: 34, minHeight: 34),
+            style: IconButton.styleFrom(
+              foregroundColor: ViewerPalette.accent,
+              hoverColor: ViewerPalette.accentSoft,
+              focusColor: ViewerPalette.accentSoft,
+              highlightColor: ViewerPalette.accentSoft,
+            ),
+            icon: Icon(
+              ascending
+                  ? Icons.arrow_upward_rounded
+                  : Icons.arrow_downward_rounded,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// One note as a card. Every grid column stays reachable: the order, catalog,
+/// date, grading company/grade, and serial sit on the labelled metadata line,
+/// and the tags keep their chips (and their filter action) on a third line.
+class _NoteCard extends StatelessWidget {
+  const _NoteCard({
+    required this.note,
+    required this.selected,
+    required this.onTagTap,
+    required this.onTap,
+    super.key,
+  });
+
+  final NoteRecord note;
+  final bool selected;
+  final ValueChanged<String> onTagTap;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = note.previewFor('front');
+    final tagNames = _tagNames(note.tags);
+    final title = note.denomination.trim().isEmpty
+        ? 'Untitled note'
+        : note.denomination;
+
+    return Semantics(
+      button: true,
+      label: title,
+      child: InkWell(
+        onTap: onTap,
+        hoverColor: ViewerPalette.accentSoft,
+        highlightColor: ViewerPalette.accentSoft,
+        child: Stack(
+          key: ValueKey('noteCard-${note.id}'),
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: selected ? ViewerPalette.rowSelected : _kTableSurface,
+                borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
+                border: Border.all(color: ViewerPalette.border),
+              ),
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    _NoteThumbnail(image: image),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            title,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(
+                              fontFamily: 'Inter',
+                              color: _kTableText,
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              height: 1.2,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Wrap(
+                            spacing: 12,
+                            runSpacing: 3,
+                            children: [
+                              _CardMeta(
+                                label: 'ID',
+                                value: '${note.displayOrder}',
+                              ),
+                              _CardMeta(
+                                label: 'CAT',
+                                value: _valueOrDash(note.catalogNumber),
+                              ),
+                              _CardMeta(
+                                label: 'DATE',
+                                value: _valueOrDash(note.issueDate),
+                              ),
+                              _CardMeta(
+                                label: 'GRADE',
+                                value: _gradeLabel(note),
+                              ),
+                              _CardMeta(
+                                label: 'S/N',
+                                value: _valueOrDash(note.serial),
+                              ),
+                            ],
+                          ),
+                          if (tagNames.isNotEmpty) ...[
+                            const SizedBox(height: 8),
+                            Wrap(
+                              spacing: _kTagChipHorizontalGap,
+                              runSpacing: _kTagChipHorizontalGap,
+                              children: [
+                                for (final tagName in tagNames)
+                                  _TagChip(
+                                    label: tagName,
+                                    multiline: true,
+                                    onTap: () => onTagTap(tagName),
+                                  ),
+                              ],
+                            ),
+                          ],
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            // Paint-only selection ring, so selecting a card cannot shift it
+            // (same idea as the grid rows and the Editor's focus ring).
+            if (selected)
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.all(
+                        Radius.circular(ViewerPalette.radiusMd),
+                      ),
+                      border: Border.fromBorderSide(
+                        BorderSide(color: ViewerPalette.accent, width: 1.5),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// One labelled field on a card's metadata line. The label is quiet and the
+/// value carries the ink, so the row stays scannable while every column is
+/// still named.
+class _CardMeta extends StatelessWidget {
+  const _CardMeta({required this.label, required this.value});
+
+  final String label;
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Text.rich(
+      TextSpan(
+        children: [
+          TextSpan(
+            text: '$label ',
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              color: ViewerPalette.textMuted,
+              fontSize: 9.5,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 0.8,
+            ),
+          ),
+          TextSpan(
+            text: value,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              color: _kTableText,
+              fontSize: 12.5,
+              fontWeight: FontWeight.w500,
+              fontFeatures: [FontFeature.tabularFigures()],
+            ),
+          ),
+        ],
+      ),
+      maxLines: 1,
+      overflow: TextOverflow.ellipsis,
+    );
+  }
+}
+
+String _valueOrDash(String value) => value.trim().isEmpty ? '-' : value;
+
+String _gradeLabel(NoteRecord note) {
+  final label = [
+    note.gradingCompany.trim(),
+    note.grade.trim(),
+  ].where((value) => value.isNotEmpty).join(' ');
+  return label.isEmpty ? '-' : label;
+}
+
+class _NoteThumbnail extends StatelessWidget {
+  const _NoteThumbnail({required this.image});
+
+  final NoteImage? image;
+
+  @override
+  Widget build(BuildContext context) {
+    final image = this.image;
+    if (image == null) {
+      return const _TableThumbnailPlaceholder();
+    }
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        borderRadius: BorderRadius.circular(ViewerPalette.radiusXs),
+        border: Border.all(color: ViewerPalette.borderControl),
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(ViewerPalette.radiusXs),
+        child: Image(
+          image: createNoteImageProvider(image),
+          width: _kTableThumbnailWidth,
+          height: _kTableThumbnailHeight,
+          fit: BoxFit.cover,
+          frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
+            if (wasSynchronouslyLoaded || frame != null) {
+              return child;
+            }
+            return const _TableThumbnailPlaceholder();
+          },
+          errorBuilder: (context, error, stackTrace) =>
+              const _TableThumbnailPlaceholder(),
+        ),
+      ),
+    );
+  }
+}
+
 class _TableThumbnailPlaceholder extends StatelessWidget {
   const _TableThumbnailPlaceholder();
 
@@ -2956,10 +3607,7 @@ class _NoteTagsCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final tagNames = tags
-        .map((tag) => tag.name.toString().trim())
-        .where((name) => name.isNotEmpty)
-        .toList(growable: false);
+    final tagNames = _tagNames(tags);
 
     if (tagNames.isEmpty) {
       return const Text('-');
@@ -2981,10 +3629,18 @@ class _NoteTagsCell extends StatelessWidget {
 }
 
 class _TagChip extends StatefulWidget {
-  const _TagChip({required this.label, required this.onTap});
+  const _TagChip({
+    required this.label,
+    required this.onTap,
+    this.multiline = false,
+  });
 
   final String label;
   final VoidCallback onTap;
+
+  /// Card mode lets a long tag wrap inside the chip instead of running past
+  /// the card edge. Grid chips are measured to fit their column.
+  final bool multiline;
 
   @override
   State<_TagChip> createState() => _TagChipState();
@@ -3022,9 +3678,11 @@ class _TagChipState extends State<_TagChip> {
             ),
             child: Text(
               widget.label,
-              maxLines: 1,
-              overflow: TextOverflow.visible,
-              softWrap: false,
+              maxLines: widget.multiline ? null : 1,
+              overflow: widget.multiline
+                  ? TextOverflow.clip
+                  : TextOverflow.visible,
+              softWrap: widget.multiline,
               style: _kTagChipTextStyle,
             ),
           ),
