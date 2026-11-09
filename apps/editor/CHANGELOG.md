@@ -4,6 +4,12 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.12.1] - 2026-11-09
+
+### Changed
+
+- Note editor: the add/edit panel is a wider workspace — 1120px instead of 900px — so the toolbar's Save & close action clears the panel padding, and its fields stand 44px tall at 0.95rem so the two-column grid keeps its proportions.
+
 ## [2.12.0] - 2026-11-08
 
 ### Changed
