@@ -1888,7 +1888,7 @@ describe("slideshow overlay styles", () => {
   test("the edit-note frame holds the 1200px floor with the form centred", () => {
     const frame = styles.match(/\.edit-note-overlay-frame\s*\{([^}]*)\}/);
     expect(frame).not.toBeNull();
-    // 1200px minus the overlay's 24px side padding; the 900px form stays
+    // 1200px minus the overlay's 24px side padding; the 1120px form stays
     // centred in that canvas via the frame's flex centering.
     expect(frame[1]).toMatch(/min-width:\s*calc\(1200px - 48px\)/);
     expect(frame[1]).toMatch(/justify-content:\s*center/);
@@ -1897,12 +1897,41 @@ describe("slideshow overlay styles", () => {
     expect(frame[1]).toMatch(/margin-inline:\s*auto/);
   });
 
-  test("the edit-note content stays 900px centred in the floor", () => {
+  test("the edit-note content fills the note editor's column", () => {
     const content = styles.match(
       /\.edit-note-overlay-content\s*\{([^}]*)\}/,
     );
     expect(content).not.toBeNull();
-    expect(content[1]).toMatch(/width:\s*min\(100%,\s*900px\)/);
+    expect(content[1]).toMatch(
+      /width:\s*min\(100%,\s*var\(--note-editor-width\)\)/,
+    );
+  });
+
+  test("the note editor's routed screen matches the overlay width", () => {
+    const screen = styles.match(/\.note-editor-screen\s*\{([^}]*)\}/);
+    expect(screen).not.toBeNull();
+    expect(screen[1]).toMatch(
+      /width:\s*min\(100%,\s*var\(--note-editor-width\)\)/,
+    );
+    expect(screen[1]).toMatch(/margin:\s*0 auto/);
+  });
+
+  test("the note editor's fields grow with the wider panel", () => {
+    const fields = styles.match(
+      /#edit-note-form \.field-block > input,\s*#edit-note-form \.url-field-row > input\s*\{([^}]*)\}/,
+    );
+    expect(fields).not.toBeNull();
+    expect(fields[1]).toMatch(/min-height:\s*44px/);
+    expect(fields[1]).toMatch(/font-size:\s*0\.95rem/);
+  });
+
+  test("the note editor's textarea keeps its taller floor", () => {
+    const textarea = styles.match(
+      /#edit-note-form \.field-block > textarea\s*\{([^}]*)\}/,
+    );
+    expect(textarea).not.toBeNull();
+    expect(textarea[1]).toMatch(/min-height:\s*96px/);
+    expect(textarea[1]).toMatch(/font-size:\s*0\.95rem/);
   });
 
   test("the scrape-conflict frame holds the 1200px floor", () => {

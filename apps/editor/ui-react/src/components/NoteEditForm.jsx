@@ -346,7 +346,7 @@ function NoteEditForm({
 
   const wrapperClassName = overlay
     ? "edit-note-overlay-content"
-    : "screen-stack narrow-stack";
+    : "screen-stack note-editor-screen";
 
   const positionNeedsReference = needsPositionReference(positionMode);
   const positionInvalid =
@@ -1323,7 +1323,7 @@ function NoteEditForm({
 
   if (loading) {
     return (
-      <section className="panel narrow-stack">
+      <section className="panel narrow-stack note-editor-screen">
         <p>{isCreateMode ? "Preparing form..." : "Loading note..."}</p>
       </section>
     );

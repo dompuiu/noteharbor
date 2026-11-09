@@ -117,6 +117,9 @@
   --rail-accent-text: #ffffff;
   --sidebar-rail-width: 64px;
   --sidebar-expanded-width: 288px;
+  /* The note editor's working column: wide enough for the toolbar to clear the
+     panel padding and for the two-column field grid to breathe. */
+  --note-editor-width: 1120px;
   /* The brand has no soft drop shadows: cards are flat and only floating
      chrome (menus, dialogs) lifts off the page. */
   --shadow-sm: none;
@@ -5782,6 +5785,55 @@ td.drag-cell {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+/* The note editor reads as a workspace rather than a form card: its 900px
+   column left the toolbar flush against the panel's right edge and squeezed
+   the two-column fields. The dedicated width keeps the toolbar clear of the
+   padding and gives the fields room without changing other narrow screens. */
+.note-editor-screen {
+  width: min(100%, var(--note-editor-width));
+  margin: 0 auto;
+}
+
+#edit-note-form .field-block {
+  gap: 12px;
+}
+
+#edit-note-form .field-block > input,
+#edit-note-form .url-field-row > input {
+  min-height: 44px;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+}
+
+#edit-note-form .field-block > textarea {
+  min-height: 96px;
+  padding: 10px 14px;
+  font-size: 0.95rem;
+}
+
+#edit-note-form .select-wrap {
+  min-height: 44px;
+}
+
+#edit-note-form .select-wrap .select-input {
+  font-size: 0.95rem;
+}
+
+#edit-note-form .position-picker .filter-input {
+  min-height: 44px;
+  font-size: 0.95rem;
+}
+
+#edit-note-form .tags-filter-chips-scroll {
+  min-height: 42px;
+  padding: 7px 10px;
+}
+
+#edit-note-form .tags-filter-combobox .tags-filter-input {
+  font-size: 0.95rem;
+  padding: 4px 2px;
+}
+
 .field-block {
   display: grid;
   gap: 8px;
@@ -6357,7 +6409,7 @@ button.tag {
 
 /* The frame holds the 1200px app floor (minus the overlay's 24px side
    padding) at every viewport size: smaller windows scroll the overlay
-   instead of squeezing the form, and the 900px form stays centred in that
+   instead of squeezing the form, and the 1120px form stays centred in that
    1200px canvas. The auto inline margins keep it centred with a reachable
    start when it overflows, unlike the overlay's plain center placement,
    which would strand the left edge. */
@@ -6372,7 +6424,7 @@ button.tag {
 }
 
 .edit-note-overlay-content {
-  width: min(100%, 900px);
+  width: min(100%, var(--note-editor-width));
   overflow: visible;
   margin: 0 auto;
 }
