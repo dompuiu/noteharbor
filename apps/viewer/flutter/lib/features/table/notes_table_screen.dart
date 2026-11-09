@@ -74,17 +74,23 @@ const double _kCardLayoutBreakpoint = 700;
 /// lazy list has not built yet. The exact card is aligned once it exists.
 const double _kCardEstimatedExtent = 112;
 
+/// Sortable columns in visual order, shared by the grid header chain, the
+/// card sort menu, and the explicit Tab order.
+const List<({String value, String label})> _kSortableColumns = [
+  (value: 'displayOrder', label: 'ID'),
+  (value: 'denomination', label: 'Denomination'),
+  (value: 'issueDate', label: 'Date'),
+  (value: 'catalogNumber', label: 'Catalog'),
+  (value: 'gradingCompany', label: 'Company'),
+  (value: 'grade', label: 'Grade'),
+  (value: 'serial', label: 'Serial'),
+  (value: 'tags', label: 'Tags'),
+];
+
 /// Sortable column headers in visual order. `Front` has no sort button and is
 /// skipped by the explicit Tab order: filter -> headers -> rows.
-const List<String> _kSortableHeaderKeys = [
-  'displayOrder',
-  'denomination',
-  'issueDate',
-  'catalogNumber',
-  'gradingCompany',
-  'grade',
-  'serial',
-  'tags',
+final List<String> _kSortableHeaderKeys = [
+  for (final column in _kSortableColumns) column.value,
 ];
 
 /// Filter scopes for the unified filter bar. The select holds the field and
@@ -677,33 +683,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   /// whichever edge needs revealing), instead of [Scrollable.ensureVisible]'s
   /// one-sided policies, which only ever scroll a single direction.
   void _revealHeaderIfNeeded(FocusNode node) {
-    final scroller = _horizontalScrollController;
-    if (!scroller.hasClients) {
-      return;
-    }
     final box = node.context?.findRenderObject();
-    final viewport = box == null ? null : RenderAbstractViewport.maybeOf(box);
-    if (box is! RenderBox || viewport == null) {
-      return;
+    if (box is RenderBox) {
+      _revealBox(_horizontalScrollController, box);
     }
-    final target = RevealedOffset.clampOffset(
-      leadingEdgeOffset: viewport.getOffsetToReveal(box, 0.0),
-      trailingEdgeOffset: viewport.getOffsetToReveal(box, 1.0),
-      currentOffset: scroller.position.pixels,
-    );
-    if (target == null) {
-      return;
-    }
-    scroller.animateTo(
-      target.offset
-          .clamp(
-            scroller.position.minScrollExtent,
-            scroller.position.maxScrollExtent,
-          )
-          .toDouble(),
-      duration: const Duration(milliseconds: 220),
-      curve: Curves.easeOut,
-    );
   }
 
   /// Tab-driven row selection always presents rows from the left: entering or
@@ -722,18 +705,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   /// handler owns row Tab; this owns header-to-header (and header-to-edge)
   /// moves so propagation stops here once handled.
   KeyEventResult _handleHeaderKey(KeyEvent event, String sortKey) {
-    if (!_keyboardNavEnabled) {
-      return KeyEventResult.ignored;
-    }
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-      return KeyEventResult.ignored;
-    }
-    if (event.logicalKey != LogicalKeyboardKey.tab) {
-      return KeyEventResult.ignored;
-    }
-    if (HardwareKeyboard.instance.isControlPressed ||
-        HardwareKeyboard.instance.isMetaPressed ||
-        HardwareKeyboard.instance.isAltPressed) {
+    if (!_isPlainTab(event)) {
       return KeyEventResult.ignored;
     }
     final index = _kSortableHeaderKeys.indexOf(sortKey);
@@ -761,9 +733,27 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     return KeyEventResult.handled;
   }
 
+  /// Whether [event] is a plain Tab press: the keyboard-navigation gate, the
+  /// event-kind and key checks, and the modifier screen every Tab chain shares.
+  bool _isPlainTab(KeyEvent event) {
+    if (!_keyboardNavEnabled) {
+      return false;
+    }
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return false;
+    }
+    if (event.logicalKey != LogicalKeyboardKey.tab) {
+      return false;
+    }
+    return !HardwareKeyboard.instance.isControlPressed &&
+        !HardwareKeyboard.instance.isMetaPressed &&
+        !HardwareKeyboard.instance.isAltPressed;
+  }
+
   /// Tab order after the filter: the first sortable header in grid mode, the
   /// sort menu in card mode.
   void _focusFirstControlAfterFilter() {
+    _dropRowSelection();
     if (_cardLayout) {
       _cardSortFocusNode.requestFocus();
       return;
@@ -774,6 +764,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   /// Tab order before the rows, in reverse: the last sortable header in grid
   /// mode, the sort direction button in card mode.
   void _focusLastControlBeforeRows() {
+    _dropRowSelection();
     if (_cardLayout) {
       _cardSortDirectionFocusNode.requestFocus();
       return;
@@ -781,25 +772,20 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     _focusHeader(_kSortableHeaderKeys.last);
   }
 
+  void _dropRowSelection() {
+    if (_selectedIndex != null) {
+      setState(() => _selectedIndex = null);
+    }
+  }
+
   /// Tab order within card mode's sort controls: field -> direction -> rows,
   /// mirroring the header chain the grid presents at the same point.
   KeyEventResult _handleCardSortKey(KeyEvent event) {
-    if (!_keyboardNavEnabled) {
-      return KeyEventResult.ignored;
-    }
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-      return KeyEventResult.ignored;
-    }
-    if (event.logicalKey != LogicalKeyboardKey.tab) {
-      return KeyEventResult.ignored;
-    }
-    if (HardwareKeyboard.instance.isControlPressed ||
-        HardwareKeyboard.instance.isMetaPressed ||
-        HardwareKeyboard.instance.isAltPressed) {
+    if (!_isPlainTab(event)) {
       return KeyEventResult.ignored;
     }
     if (HardwareKeyboard.instance.isShiftPressed) {
-      _scopeFocusNode.requestFocus();
+      _focusSearchField();
       return KeyEventResult.handled;
     }
     _cardSortDirectionFocusNode.requestFocus();
@@ -807,18 +793,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   }
 
   KeyEventResult _handleCardSortDirectionKey(KeyEvent event) {
-    if (!_keyboardNavEnabled) {
-      return KeyEventResult.ignored;
-    }
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-      return KeyEventResult.ignored;
-    }
-    if (event.logicalKey != LogicalKeyboardKey.tab) {
-      return KeyEventResult.ignored;
-    }
-    if (HardwareKeyboard.instance.isControlPressed ||
-        HardwareKeyboard.instance.isMetaPressed ||
-        HardwareKeyboard.instance.isAltPressed) {
+    if (!_isPlainTab(event)) {
       return KeyEventResult.ignored;
     }
     if (HardwareKeyboard.instance.isShiftPressed) {
@@ -924,6 +899,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       _searchController.clear();
       _selectedIndex = null;
     });
+    _cardKeys.clear();
 
     if (_horizontalScrollController.hasClients) {
       _horizontalScrollController.jumpTo(0);
@@ -994,21 +970,13 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   /// Card mode's sort menu names the field in one control and leaves the
   /// direction to the arrow button beside it.
   void _setSortKey(String key) {
-    if (key == _sortKey) {
-      return;
+    if (key != _sortKey) {
+      _toggleSort(key);
     }
-    setState(() {
-      _sortKey = key;
-      _ascending = true;
-      _selectedIndex = null;
-    });
   }
 
   void _toggleSortDirection() {
-    setState(() {
-      _ascending = !_ascending;
-      _selectedIndex = null;
-    });
+    _toggleSort(_sortKey);
   }
 
   void _applyTagFilter(String tagName) {
@@ -1145,7 +1113,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   /// row pitch; cards are measured after they are built.
   void _ensureIndexVisible(int index) {
     if (_cardLayout) {
-      _ensureCardVisible(index);
+      unawaited(_ensureCardVisible(index));
       return;
     }
     _scrollToOffset(index * _rowExtent);
@@ -1157,7 +1125,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       return;
     }
     if (_cardLayout) {
-      _ensureCardVisible(index);
+      unawaited(_ensureCardVisible(index));
       return;
     }
     if (!_verticalScrollController.hasClients) {
@@ -1183,40 +1151,55 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   /// Brings the card at [index] fully into view with the smallest scroll.
   /// Cards vary in height (tags wrap, text scales), so the target is measured
   /// from the built widget instead of assumed from a fixed pitch. A card the
-  /// lazy list has not built yet is reached by estimating its pitch and
-  /// aligning it on the next frame.
-  void _ensureCardVisible(int index) {
+  /// lazy list has not built yet is reached by jumping to an estimated share
+  /// of the scrollable range first, then aligning it once it exists.
+  Future<void> _ensureCardVisible(int index) async {
     final notes = _currentVisibleNotes();
-    if (index < 0 || index >= notes.length) {
+    if (index < 0 || index >= notes.length || !_cardLayout) {
       return;
     }
     final key = _cardKeyFor(notes[index].id);
-    if (key.currentContext == null) {
-      _scrollToOffset(index * _kCardEstimatedExtent);
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted || !_cardLayout) {
-          return;
-        }
-        _alignCardInViewport(key);
-      });
+    if (key.currentContext != null) {
+      _alignCardInViewport(key);
+      return;
+    }
+    if (!_verticalScrollController.hasClients) {
+      return;
+    }
+    final position = _verticalScrollController.position;
+    final fraction = notes.length <= 1 ? 0.0 : index / (notes.length - 1);
+    final target = (fraction * position.maxScrollExtent)
+        .clamp(position.minScrollExtent, position.maxScrollExtent)
+        .toDouble();
+    // Jump rather than animate: an animated target settles after the frame in
+    // which the card would have been built and measured.
+    position.jumpTo(target);
+    await WidgetsBinding.instance.endOfFrame;
+    if (!mounted || !_cardLayout) {
       return;
     }
     _alignCardInViewport(key);
   }
 
   void _alignCardInViewport(GlobalKey key) {
-    if (!_verticalScrollController.hasClients) {
-      return;
-    }
     final box = key.currentContext?.findRenderObject();
     if (box is! RenderBox || !box.attached) {
+      return;
+    }
+    _revealBox(_verticalScrollController, box);
+  }
+
+  /// Scrolls [box] into view with the smallest move on [scroller], on either
+  /// axis. Does nothing when the box is already fully visible.
+  void _revealBox(ScrollController scroller, RenderBox box) {
+    if (!scroller.hasClients) {
       return;
     }
     final viewport = RenderAbstractViewport.maybeOf(box);
     if (viewport == null) {
       return;
     }
-    final position = _verticalScrollController.position;
+    final position = scroller.position;
     final target = RevealedOffset.clampOffset(
       leadingEdgeOffset: viewport.getOffsetToReveal(box, 0.0),
       trailingEdgeOffset: viewport.getOffsetToReveal(box, 1.0),
@@ -1225,7 +1208,13 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     if (target == null) {
       return;
     }
-    _scrollToOffset(target.offset);
+    scroller.animateTo(
+      target.offset
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble(),
+      duration: const Duration(milliseconds: 220),
+      curve: Curves.easeOut,
+    );
   }
 
   KeyEventResult _handleTableKey(KeyEvent event) {
@@ -1493,18 +1482,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   }
 
   KeyEventResult _handleScopeKey(KeyEvent event) {
-    if (!_keyboardNavEnabled) {
-      return KeyEventResult.ignored;
-    }
-    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
-      return KeyEventResult.ignored;
-    }
-    if (event.logicalKey != LogicalKeyboardKey.tab) {
-      return KeyEventResult.ignored;
-    }
-    if (HardwareKeyboard.instance.isControlPressed ||
-        HardwareKeyboard.instance.isMetaPressed ||
-        HardwareKeyboard.instance.isAltPressed) {
+    if (!_isPlainTab(event)) {
       return KeyEventResult.ignored;
     }
     // Tab order: import button -> scope select -> filter field -> headers.
@@ -1933,7 +1911,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                   onToggleSortDirection:
                                       _toggleSortDirection,
                                   onTagTap: _applyTagFilter,
-                                  onOpenNote: _openNoteAtIndex,
+                                  onOpenNote: (index) =>
+                                      _openNoteAtIndex(notes, index),
                                   cardKeyFor: _cardKeyFor,
                                   scrollController:
                                       _verticalScrollController,
@@ -2109,16 +2088,16 @@ class _Header extends StatelessWidget {
       );
     }
 
-    final trailing = <Widget>[
-      _StatPill(label: 'Notes', value: '$visibleCount / $totalCount'),
-      if (onOpenImports != null) ...[
-        const SizedBox(width: 12),
-        _ImportButton(
-          onPressed: onOpenImports!,
-          focusNode: importButtonFocusNode,
-        ),
-      ],
-    ];
+    final statPill = _StatPill(
+      label: 'Notes',
+      value: '$visibleCount / $totalCount',
+    );
+    final importButton = onOpenImports == null
+        ? null
+        : _ImportButton(
+            onPressed: onOpenImports!,
+            focusNode: importButtonFocusNode,
+          );
 
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -2128,10 +2107,20 @@ class _Header extends StatelessWidget {
             children: [
               identity(),
               const SizedBox(height: 12),
-              Row(
+              // Wrap, so a long counter and the import action can share the
+              // line or split it at 320 px and 200% text scale.
+              Wrap(
+                alignment: WrapAlignment.end,
+                crossAxisAlignment: WrapCrossAlignment.center,
+                spacing: 12,
+                runSpacing: 8,
                 children: [
-                  const Spacer(),
-                  ...trailing,
+                  _StatPill(
+                    label: 'Notes',
+                    value: '$visibleCount / $totalCount',
+                    showLabel: false,
+                  ),
+                  ?importButton,
                 ],
               ),
             ],
@@ -2142,7 +2131,11 @@ class _Header extends StatelessWidget {
           children: [
             Expanded(child: identity()),
             const SizedBox(width: 16),
-            ...trailing,
+            statPill,
+            if (importButton != null) ...[
+              const SizedBox(width: 12),
+              importButton,
+            ],
           ],
         );
       },
@@ -2781,13 +2774,33 @@ class _ImportButtonState extends State<_ImportButton> {
 }
 
 class _StatPill extends StatelessWidget {
-  const _StatPill({required this.label, required this.value});
+  const _StatPill({
+    required this.label,
+    required this.value,
+    this.showLabel = true,
+  });
 
   final String label;
   final String value;
 
+  /// Card-width headers drop the tiny caption: the value alone still reads as
+  /// a counter, and keeping it leaves room for the import action at 320 px and
+  /// 200% text scale.
+  final bool showLabel;
+
   @override
   Widget build(BuildContext context) {
+    final valueText = Text(
+      value,
+      style: const TextStyle(
+        fontFamily: 'Inter',
+        fontSize: 14,
+        fontWeight: FontWeight.w700,
+        color: _kTableText,
+        fontFeatures: [FontFeature.tabularFigures()],
+      ),
+    );
+
     return DecoratedBox(
       decoration: BoxDecoration(
         color: _kTableSurface,
@@ -2801,27 +2814,25 @@ class _StatPill extends StatelessWidget {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              const Text(
-                'NOTES',
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 11,
-                  fontWeight: FontWeight.w800,
-                  letterSpacing: 1.2,
-                  color: ViewerPalette.textMuted,
+              if (showLabel) ...[
+                const Text(
+                  'NOTES',
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontSize: 11,
+                    fontWeight: FontWeight.w800,
+                    letterSpacing: 1.2,
+                    color: ViewerPalette.textMuted,
+                  ),
                 ),
-              ),
-              const SizedBox(width: 8),
-              Text(
-                value,
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  fontSize: 14,
-                  fontWeight: FontWeight.w700,
-                  color: _kTableText,
-                  fontFeatures: [FontFeature.tabularFigures()],
+                const SizedBox(width: 8),
+                valueText,
+              ] else
+                Semantics(
+                  label: '$label $value',
+                  excludeSemantics: true,
+                  child: valueText,
                 ),
-              ),
             ],
           ),
         ),
@@ -3032,6 +3043,31 @@ class _HeaderCell extends StatelessWidget {
   }
 }
 
+/// Paint-only selection ring shared by grid rows and cards. It is a
+/// [Positioned], so painting it never participates in layout: moving the
+/// keyboard cursor cannot shift content.
+class _SelectionRing extends StatelessWidget {
+  const _SelectionRing();
+
+  @override
+  Widget build(BuildContext context) {
+    return const Positioned.fill(
+      child: IgnorePointer(
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.all(
+              Radius.circular(ViewerPalette.radiusMd),
+            ),
+            border: Border.fromBorderSide(
+              BorderSide(color: ViewerPalette.accent, width: 1.5),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class _TableRow extends StatelessWidget {
   const _TableRow({
     required this.note,
@@ -3118,21 +3154,7 @@ class _TableRow extends StatelessWidget {
               ],
             ),
           ),
-          if (selected)
-            const Positioned.fill(
-              child: IgnorePointer(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    borderRadius: BorderRadius.all(
-                      Radius.circular(ViewerPalette.radiusMd),
-                    ),
-                    border: Border.fromBorderSide(
-                      BorderSide(color: ViewerPalette.accent, width: 1.5),
-                    ),
-                  ),
-                ),
-              ),
-            ),
+          if (selected) const _SelectionRing(),
         ],
       ),
     );
@@ -3170,7 +3192,7 @@ class _NoteCardList extends StatelessWidget {
   final ValueChanged<String> onSortKey;
   final VoidCallback onToggleSortDirection;
   final ValueChanged<String> onTagTap;
-  final void Function(List<NoteRecord> notes, int index) onOpenNote;
+  final ValueChanged<int> onOpenNote;
   final GlobalKey Function(int noteId) cardKeyFor;
   final ScrollController scrollController;
   final FocusNode sortFocusNode;
@@ -3212,7 +3234,7 @@ class _NoteCardList extends StatelessWidget {
                         selected:
                             keyboardNavEnabled && selectedIndex == index,
                         onTagTap: onTagTap,
-                        onTap: () => onOpenNote(notes, index),
+                        onTap: () => onOpenNote(index),
                       ),
                     );
                   },
@@ -3238,16 +3260,8 @@ class _CardSortBar extends StatelessWidget {
     required this.directionFocusNode,
   });
 
-  static const List<({String value, String label})> _sortOptions = [
-    (value: 'displayOrder', label: 'ID'),
-    (value: 'denomination', label: 'Denomination'),
-    (value: 'issueDate', label: 'Date'),
-    (value: 'catalogNumber', label: 'Catalog'),
-    (value: 'gradingCompany', label: 'Company'),
-    (value: 'grade', label: 'Grade'),
-    (value: 'serial', label: 'Serial'),
-    (value: 'tags', label: 'Tags'),
-  ];
+  static const List<({String value, String label})> _sortOptions =
+      _kSortableColumns;
 
   final String sortKey;
   final bool ascending;
@@ -3286,7 +3300,7 @@ class _CardSortBar extends StatelessWidget {
                 focusNode: sortFocusNode,
                 isExpanded: true,
                 isDense: true,
-                focusColor: Colors.transparent,
+                focusColor: ViewerPalette.accentSoft,
                 borderRadius: BorderRadius.zero,
                 padding: EdgeInsets.zero,
                 style: const TextStyle(
@@ -3374,6 +3388,7 @@ class _NoteCard extends StatelessWidget {
 
     return Semantics(
       button: true,
+      selected: selected,
       label: title,
       child: InkWell(
         onTap: onTap,
@@ -3463,21 +3478,7 @@ class _NoteCard extends StatelessWidget {
             ),
             // Paint-only selection ring, so selecting a card cannot shift it
             // (same idea as the grid rows and the Editor's focus ring).
-            if (selected)
-              const Positioned.fill(
-                child: IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.all(
-                        Radius.circular(ViewerPalette.radiusMd),
-                      ),
-                      border: Border.fromBorderSide(
-                        BorderSide(color: ViewerPalette.accent, width: 1.5),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+            if (selected) const _SelectionRing(),
           ],
         ),
       ),
@@ -3501,12 +3502,8 @@ class _CardMeta extends StatelessWidget {
         children: [
           TextSpan(
             text: '$label ',
-            style: const TextStyle(
-              fontFamily: 'Inter',
+            style: _kHeaderLabelTextStyle.copyWith(
               color: ViewerPalette.textMuted,
-              fontSize: 9.5,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.8,
             ),
           ),
           TextSpan(
