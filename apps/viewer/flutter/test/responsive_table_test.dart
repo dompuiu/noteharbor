@@ -173,7 +173,8 @@ void main() {
       await tester.pump();
       expect(selectedCard(2), findsOneWidget);
 
-      // Shift+Tab from the first row steps back into the sort controls.
+      // Shift+Tab from the first row steps back into the sort controls and
+      // drops the row cursor, as the grid's header chain does.
       await tester.sendKeyEvent(LogicalKeyboardKey.arrowUp);
       await tester.pump();
       await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
@@ -184,9 +185,68 @@ void main() {
         FocusManager.instance.primaryFocus?.debugLabel,
         'cardSortDirection',
       );
+      expect(selectedCard(1), findsNothing);
+
+      // Shift+Tab from the sort field returns to the filter, not the scope
+      // select the filter itself steps back to.
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+      expect(FocusManager.instance.primaryFocus?.debugLabel, 'cardSort');
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+      await tester.pump();
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).focusNode?.hasFocus,
+        isTrue,
+      );
     } finally {
       debugDefaultTargetPlatformOverride = null;
     }
+  });
+
+  testWidgets('keyboard reveal reaches a card the lazy list has not built', (
+    WidgetTester tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      await pumpTable(
+        tester,
+        size: const Size(400, 600),
+        repository: _CardRepository(noteCount: 40),
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.end);
+      await tester.pumpAndSettle();
+
+      expect(selectedCard(40), findsOneWidget);
+      final rect = tester.getRect(card(40));
+      expect(rect.top, greaterThanOrEqualTo(0));
+      expect(rect.bottom, lessThanOrEqualTo(600));
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('resizing across the breakpoint swaps grid and cards cleanly', (
+    WidgetTester tester,
+  ) async {
+    await pumpTable(tester, size: const Size(1400, 900));
+    expect(find.byKey(const ValueKey('tableHeader')), findsOneWidget);
+    expect(card(1), findsNothing);
+
+    tester.view.physicalSize = const Size(400, 900);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('tableHeader')), findsNothing);
+    expect(card(1), findsOneWidget);
+
+    tester.view.physicalSize = const Size(1400, 900);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('tableHeader')), findsOneWidget);
+    expect(card(1), findsNothing);
+    expect(tester.takeException(), isNull);
   });
 
   testWidgets('the card sort menu and direction button reorder the list', (
@@ -239,6 +299,39 @@ void main() {
     expect(cardRect.right, lessThanOrEqualTo(400));
   });
 
+  testWidgets(
+    '320 px at 200% with many tags keeps the header and cards inside',
+    (WidgetTester tester) async {
+      await pumpTable(
+        tester,
+        size: const Size(320, 700),
+        textScale: 2,
+        repository: _CardRepository(
+          noteCount: 20,
+          longValues: true,
+          manyTags: true,
+        ),
+      );
+
+      expect(card(1), findsOneWidget);
+      expect(find.text('Tag 10'), findsOneWidget);
+      expect(tester.takeException(), isNull);
+
+      final cardRect = tester.getRect(card(1));
+      expect(cardRect.left, greaterThanOrEqualTo(0));
+      expect(cardRect.right, lessThanOrEqualTo(320));
+      // The collection title still has a real line of its own.
+      expect(
+        tester
+            .getRect(
+              find.text('A COLLECTION NAME LONG ENOUGH TO NEED AN ELLIPSIS'),
+            )
+            .height,
+        lessThan(60),
+      );
+    },
+  );
+
   testWidgets('the zero-match and empty states render in card mode', (
     WidgetTester tester,
   ) async {
@@ -284,11 +377,13 @@ class _CardRepository extends ViewerRepository {
     this.noteCount = 3,
     this.empty = false,
     this.longValues = false,
+    this.manyTags = false,
   });
 
   final int noteCount;
   final bool empty;
   final bool longValues;
+  final bool manyTags;
 
   @override
   bool get canManageImportedDatasets => true;
@@ -361,6 +456,8 @@ class _CardRepository extends ViewerRepository {
                 ? 'A very long commemorative tag that must wrap'
                 : 'Silver',
           },
+          for (var tag = 1; tag <= (manyTags ? 10 : 0); tag++)
+            {'name': 'Tag $tag'},
           {'name': 'Romania'},
         ],
         2 => [
