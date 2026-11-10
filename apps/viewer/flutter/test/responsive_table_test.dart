@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -342,17 +343,62 @@ void main() {
       final cardRect = tester.getRect(card(1));
       expect(cardRect.left, greaterThanOrEqualTo(0));
       expect(cardRect.right, lessThanOrEqualTo(320));
-      // The collection title still has a real line of its own.
+
+      final titleFinder = find.text(
+        'A COLLECTION NAME LONG ENOUGH TO NEED AN ELLIPSIS',
+      );
+      // The collection title still has a real line of its own, and the
+      // counter and import action stay level with it at 200% text scale.
+      final titleCenter = tester.getCenter(titleFinder).dy;
+      expect(tester.getRect(titleFinder).height, lessThan(60));
       expect(
-        tester
-            .getRect(
-              find.text('A COLLECTION NAME LONG ENOUGH TO NEED AN ELLIPSIS'),
-            )
-            .height,
-        lessThan(60),
+        (tester.getCenter(find.text('20 / 20')).dy - titleCenter).abs(),
+        lessThan(40),
+      );
+      expect(
+        (tester.getCenter(find.byIcon(Icons.file_upload_outlined)).dy -
+                titleCenter)
+            .abs(),
+        lessThan(40),
       );
     },
   );
+
+  testWidgets('card-width headers keep the counter and import on one line', (
+    WidgetTester tester,
+  ) async {
+    await pumpTable(tester, size: const Size(400, 900));
+
+    final title = find.text('TEST COLLECTION');
+    final counter = find.text('3 / 3');
+    final importIcon = find.byIcon(Icons.file_upload_outlined);
+    expect(title, findsOneWidget);
+    expect(counter, findsOneWidget);
+    expect(importIcon, findsOneWidget);
+
+    final titleCenter = tester.getCenter(title).dy;
+    expect((tester.getCenter(counter).dy - titleCenter).abs(), lessThan(24));
+    expect((tester.getCenter(importIcon).dy - titleCenter).abs(), lessThan(24));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a long collection name ellipsizes on the header line', (
+    WidgetTester tester,
+  ) async {
+    await pumpTable(
+      tester,
+      size: const Size(400, 900),
+      repository: _CardRepository(longValues: true),
+    );
+
+    final titleFinder = find.text(
+      'A COLLECTION NAME LONG ENOUGH TO NEED AN ELLIPSIS',
+    );
+    final paragraph = tester.renderObject<RenderParagraph>(titleFinder);
+    expect(paragraph.didExceedMaxLines, isTrue);
+    expect(tester.getRect(titleFinder).right, lessThanOrEqualTo(400));
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('the zero-match and empty states render in card mode', (
     WidgetTester tester,

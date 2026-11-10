@@ -72,6 +72,10 @@ const double _kColumnScrollStep = 200;
 /// over only where the grid starts cutting columns mid-value.
 const double _kCardLayoutBreakpoint = 700;
 
+/// Share of a card-width header the note counter may occupy. The rest goes to
+/// the title and import action, so the counter shrinks before the row wraps.
+const double _kCompactStatShare = 0.5;
+
 /// Approximate card pitch, used only when a keyboard jump targets a card the
 /// lazy list has not built yet. The exact card is aligned once it exists.
 const double _kCardEstimatedExtent = 128;
@@ -2128,9 +2132,9 @@ class _Header extends StatelessWidget {
     final title = collectionName.trim().isEmpty ? 'Collection' : collectionName;
 
     // The identity block (mark + collection title) and the trailing controls
-    // share one line on wide windows. Card-width windows stack them: at 400 px,
-    // especially at 200% text scale, the stat pill and import action would
-    // otherwise squeeze the title to nothing.
+    // always share one line. The title is the only flexible part, so it
+    // ellipsizes instead of pushing the counter and import action onto a new
+    // row; card-width headers drop the pill's caption to keep that line roomy.
     Widget identity() {
       return Row(
         children: [
@@ -2151,6 +2155,8 @@ class _Header extends StatelessWidget {
               children: [
                 const Text(
                   'NOTE HARBOR',
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
                   style: TextStyle(
                     fontFamily: 'Inter',
                     fontSize: 11,
@@ -2174,10 +2180,6 @@ class _Header extends StatelessWidget {
       );
     }
 
-    final statPill = _StatPill(
-      label: 'Notes',
-      value: '$visibleCount / $totalCount',
-    );
     final importButton = onOpenImports == null
         ? null
         : _ImportButton(
@@ -2187,41 +2189,35 @@ class _Header extends StatelessWidget {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        if (constraints.maxWidth < _kCardLayoutBreakpoint) {
-          return Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              identity(),
-              const SizedBox(height: 12),
-              // Wrap, so a long counter and the import action can share the
-              // line or split it at 320 px and 200% text scale.
-              Wrap(
-                alignment: WrapAlignment.end,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 12,
-                runSpacing: 8,
-                children: [
-                  _StatPill(
-                    label: 'Notes',
-                    value: '$visibleCount / $totalCount',
-                    showLabel: false,
-                  ),
-                  ?importButton,
-                ],
-              ),
-            ],
-          );
-        }
-
-        return Row(
+        final compact = constraints.maxWidth < _kCardLayoutBreakpoint;
+        // The counter shrinks within this share of the header when a narrow
+        // window and a large text scale would otherwise push the import action
+        // onto a second row. The title keeps the rest and ellipsizes.
+        final statMaxWidth = compact
+            ? constraints.maxWidth * _kCompactStatShare
+            : null;
+        final trailing = Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            Expanded(child: identity()),
-            const SizedBox(width: 16),
-            statPill,
+            _StatPill(
+              label: 'Notes',
+              value: '$visibleCount / $totalCount',
+              maxWidth: statMaxWidth,
+              showLabel: !compact,
+            ),
             if (importButton != null) ...[
-              const SizedBox(width: 12),
+              SizedBox(width: compact ? 8 : 12),
               importButton,
             ],
+          ],
+        );
+
+        return Row(
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Expanded(child: identity()),
+            SizedBox(width: compact ? 12 : 16),
+            trailing,
           ],
         );
       },
@@ -2231,10 +2227,11 @@ class _Header extends StatelessWidget {
 
 /// The collection name, doubling as a collection switcher.
 ///
-/// It stays a heading at rest: no field, border, or pill. A small chevron
-/// fades in on hover or keyboard focus, the pointer becomes a hand, and the
-/// tooltip names the action. A library with a single collection keeps the
-/// plain title — there is nothing to switch to, so no affordance is shown.
+/// It stays a heading at rest: no field, border, or pill. A small chevron sits
+/// beside the name so the switcher is visible without hovering, the pointer
+/// becomes a hand, and the tooltip names the action. Long names ellipsize. A
+/// library with a single collection keeps the plain title — there is nothing
+/// to switch to, so no affordance is shown.
 class _CollectionTitle extends StatefulWidget {
   const _CollectionTitle({
     required this.title,
@@ -2258,7 +2255,6 @@ class _CollectionTitleState extends State<_CollectionTitle> {
   final FocusNode _triggerFocus = FocusNode(debugLabel: 'collectionTitle');
   final Object _tapGroup = Object();
 
-  bool _hovered = false;
   bool _open = false;
 
   bool get _hasChoices => widget.collections.length > 1;
@@ -2346,8 +2342,6 @@ class _CollectionTitleState extends State<_CollectionTitle> {
       return title;
     }
 
-    final showChevron = _hovered || _triggerFocus.hasFocus || _open;
-
     return Align(
       alignment: Alignment.centerLeft,
       child: CompositedTransformTarget(
@@ -2381,8 +2375,6 @@ class _CollectionTitleState extends State<_CollectionTitle> {
               onKeyEvent: (_, event) => _handleTriggerKey(event),
               child: MouseRegion(
                 cursor: SystemMouseCursors.click,
-                onEnter: (_) => setState(() => _hovered = true),
-                onExit: (_) => setState(() => _hovered = false),
                 child: Tooltip(
                   message: 'Switch collection',
                   waitDuration: const Duration(milliseconds: 500),
@@ -2409,28 +2401,18 @@ class _CollectionTitleState extends State<_CollectionTitle> {
                           mainAxisSize: MainAxisSize.min,
                           children: [
                             Flexible(child: title),
-                            ClipRect(
-                              child: AnimatedSize(
+                            Padding(
+                              padding: const EdgeInsets.only(left: 5),
+                              child: AnimatedRotation(
                                 duration: const Duration(milliseconds: 150),
-                                curve: Curves.easeOut,
-                                child: showChevron
-                                    ? Padding(
-                                        padding: const EdgeInsets.only(left: 5),
-                                        child: AnimatedRotation(
-                                          duration: const Duration(
-                                            milliseconds: 150,
-                                          ),
-                                          turns: _open ? 0.5 : 0,
-                                          child: Icon(
-                                            Icons.expand_more,
-                                            size: 16,
-                                            color: _triggerFocus.hasFocus
-                                                ? ViewerPalette.accent
-                                                : ViewerPalette.textFaint,
-                                          ),
-                                        ),
-                                      )
-                                    : const SizedBox.shrink(),
+                                turns: _open ? 0.5 : 0,
+                                child: Icon(
+                                  Icons.expand_more,
+                                  size: 16,
+                                  color: _triggerFocus.hasFocus
+                                      ? ViewerPalette.accent
+                                      : ViewerPalette.textFaint,
+                                ),
                               ),
                             ),
                           ],
@@ -2863,15 +2845,20 @@ class _StatPill extends StatelessWidget {
   const _StatPill({
     required this.label,
     required this.value,
+    this.maxWidth,
     this.showLabel = true,
   });
 
   final String label;
   final String value;
 
+  /// Card-width headers cap the pill to a share of the header and shrink its
+  /// contents when a large text scale would otherwise crowd out the title and
+  /// the import action. Wide headers leave it unbounded.
+  final double? maxWidth;
+
   /// Card-width headers drop the tiny caption: the value alone still reads as
-  /// a counter, and keeping it leaves room for the import action at 320 px and
-  /// 200% text scale.
+  /// a counter and leaves room for the title and import action.
   final bool showLabel;
 
   @override
@@ -2887,39 +2874,45 @@ class _StatPill extends StatelessWidget {
       ),
     );
 
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: _kTableSurface,
-        borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
-        border: Border.all(color: _kTableBorder),
-      ),
-      child: SizedBox(
-        height: _kHeaderControlHeight,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              if (showLabel) ...[
-                const Text(
-                  'NOTES',
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontSize: 11,
-                    fontWeight: FontWeight.w800,
-                    letterSpacing: 1.2,
-                    color: ViewerPalette.textMuted,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                valueText,
-              ] else
-                Semantics(
-                  label: '$label $value',
-                  excludeSemantics: true,
-                  child: valueText,
-                ),
-            ],
+    return ConstrainedBox(
+      constraints: BoxConstraints(maxWidth: maxWidth ?? double.infinity),
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: _kTableSurface,
+          borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
+          border: Border.all(color: _kTableBorder),
+        ),
+        child: SizedBox(
+          height: _kHeaderControlHeight,
+          child: Padding(
+            padding: EdgeInsets.symmetric(horizontal: showLabel ? 16 : 12),
+            child: FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (showLabel) ...[
+                    const Text(
+                      'NOTES',
+                      style: TextStyle(
+                        fontFamily: 'Inter',
+                        fontSize: 11,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.2,
+                        color: ViewerPalette.textMuted,
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    valueText,
+                  ] else
+                    Semantics(
+                      label: '$label $value',
+                      excludeSemantics: true,
+                      child: valueText,
+                    ),
+                ],
+              ),
+            ),
           ),
         ),
       ),

@@ -25,6 +25,9 @@ void main() {
 
     expect(find.text("SERBAN'S NOTES"), findsOneWidget);
     expect(find.byKey(const ValueKey('collectionMenu')), findsNothing);
+    // The chevron is always on screen so the title reads as a switcher
+    // without waiting for hover or focus.
+    expect(find.byIcon(Icons.expand_more), findsOneWidget);
 
     await tester.tap(find.byKey(const ValueKey('collectionTitle')));
     await tester.pumpAndSettle();
