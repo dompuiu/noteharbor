@@ -6,10 +6,11 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ### Added
 
-- Table screen: the collection title is now a collection switcher. It stays a plain uppercase heading at rest, with a small chevron fading in on hover or keyboard focus. The menu lists every collection with its note count, filters as you type, and switches on click, Enter, or the arrow keys. Libraries with a single collection keep the plain title.
+- Table screen: the collection title is now a collection switcher. It stays a plain uppercase heading at rest, with a small chevron beside the name. The menu lists every collection with its note count, filters as you type, and switches on click, Enter, or the arrow keys. Libraries with a single collection keep the plain title.
 
 ### Changed
 
+- Table screen: the note counter and import action always share the collection-title line, even on a narrow window; long collection names ellipsize between them.
 - The app now requires Flutter 3.47 / Dart 3.13, matching `window_manager` 0.6 and `screen_retriever` 0.3.
 
 ### Fixed
