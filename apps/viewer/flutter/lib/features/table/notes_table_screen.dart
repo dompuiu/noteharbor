@@ -17,8 +17,11 @@ import '../../widgets/note_image_provider.dart';
 import '../import/import_dataset_screen.dart';
 import '../slideshow/note_slideshow_screen.dart';
 
-const double _kOrderColumnWidth = 72;
-const double _kFrontColumnWidth = 120;
+/// Minimum column widths for the nine-column grid. On a window wider than the
+/// grid needs, [_calculateColumnWidths] spreads the spare width across the
+/// scrolling columns so the row content always reaches the card's right edge.
+const double _kOrderColumnWidth = 56;
+const double _kFrontColumnWidth = 88;
 const double _kDenominationColumnWidth = 190;
 const double _kDateColumnWidth = 120;
 const double _kCatalogColumnWidth = 130;
@@ -26,15 +29,30 @@ const double _kCompanyColumnWidth = 120;
 const double _kGradeColumnWidth = 110;
 const double _kSerialColumnWidth = 140;
 const double _kDefaultTagsColumnWidth = 160;
-const double _kFixedColumnsWidth =
-    _kOrderColumnWidth +
-    _kFrontColumnWidth +
+
+/// Tags may grow into spare width, but only this far: a long tag run keeps a
+/// readable column and the rest of the spare width goes to the text columns.
+const double _kMaxTagsColumnWidth = 320;
+
+/// The scrolling columns' minimum widths, without Tags.
+const double _kTextColumnsMinWidth =
     _kDenominationColumnWidth +
     _kDateColumnWidth +
     _kCatalogColumnWidth +
     _kCompanyColumnWidth +
     _kGradeColumnWidth +
     _kSerialColumnWidth;
+
+/// How spare width is shared once Tags has reached its cap. The weights keep
+/// the identifier columns roomier than the short Date and Grade columns.
+const Map<String, double> _kColumnFlexWeights = {
+  'denomination': 1.3,
+  'issueDate': 0.8,
+  'catalogNumber': 1.0,
+  'gradingCompany': 0.8,
+  'grade': 0.7,
+  'serial': 1.1,
+};
 const double _kTableHorizontalPadding = 14;
 const double _kTableHeaderHeight = 40;
 
@@ -57,7 +75,8 @@ const Color _kTableSortableHeaderText = ViewerPalette.accentStrong;
 const Color _kTagChipBg = ViewerPalette.tagBackground;
 const Color _kTagChipBorder = ViewerPalette.tagBorder;
 const Color _kTagChipText = ViewerPalette.tagText;
-const double _kHeaderBadgeHeight = 48;
+const double _kFilterBarHeight = 40;
+const double _kFilterBarMaxWidth = 560;
 const double _kHeaderControlHeight = 40;
 const double _kTagChipHorizontalPadding = 10;
 const double _kTagChipHorizontalGap = 6;
@@ -65,10 +84,10 @@ const double _kTagChipHorizontalGap = 6;
 /// Horizontal room the Tags cell needs beyond the measured chips: the cell's
 /// own 12px gutters on both sides plus breathing room at the column edge.
 const double _kTagsColumnSafetyPadding = 48;
-const double _kTableRowHeight = 80;
+const double _kTableRowHeight = 56;
 const double _kTableRowSeparatorHeight = 1;
-const double _kTableThumbnailWidth = 96;
-const double _kTableThumbnailHeight = 56;
+const double _kTableThumbnailWidth = 40;
+const double _kTableThumbnailHeight = 24;
 const Color _kTableThumbnailPlaceholderBg = ViewerPalette.surfaceContainer;
 const Color _kTableThumbnailPlaceholderBorder = ViewerPalette.border;
 const Color _kTableThumbnailPlaceholderIcon = ViewerPalette.textMuted;
@@ -543,6 +562,61 @@ double _calculateTagsColumnWidth(List<NoteRecord> notes) {
   });
 
   return math.max(_kDefaultTagsColumnWidth, math.max(headerWidth, notesWidth));
+}
+
+/// The scrolling columns' widths for one layout pass.
+class _TableColumnWidths {
+  const _TableColumnWidths({
+    required this.denomination,
+    required this.issueDate,
+    required this.catalogNumber,
+    required this.gradingCompany,
+    required this.grade,
+    required this.serial,
+    required this.tags,
+  });
+
+  final double denomination;
+  final double issueDate;
+  final double catalogNumber;
+  final double gradingCompany;
+  final double grade;
+  final double serial;
+  final double tags;
+}
+
+/// Distributes the scrolling pane's [tableWidth] across its columns. Tags
+/// grows into spare width up to [_kMaxTagsColumnWidth]; whatever remains is
+/// shared by the text columns, so the row content fills the card instead of
+/// leaving a dead gutter on a wide window.
+_TableColumnWidths _calculateColumnWidths({
+  required double tagsMinWidth,
+  required double tableWidth,
+}) {
+  final scrollingWidth =
+      tableWidth - _kPinnedPaneWidth - _kTableHorizontalPadding;
+
+  var spare = scrollingWidth - (_kTextColumnsMinWidth + tagsMinWidth);
+  final tags =
+      tagsMinWidth +
+      math.max(0.0, math.min(spare, _kMaxTagsColumnWidth - tagsMinWidth));
+  spare -= tags - tagsMinWidth;
+
+  final weightTotal = _kColumnFlexWeights.values.fold<double>(
+    0,
+    (sum, weight) => sum + weight,
+  );
+  double share(String key) => spare * (_kColumnFlexWeights[key]! / weightTotal);
+
+  return _TableColumnWidths(
+    denomination: _kDenominationColumnWidth + share('denomination'),
+    issueDate: _kDateColumnWidth + share('issueDate'),
+    catalogNumber: _kCatalogColumnWidth + share('catalogNumber'),
+    gradingCompany: _kCompanyColumnWidth + share('gradingCompany'),
+    grade: _kGradeColumnWidth + share('grade'),
+    serial: _kSerialColumnWidth + share('serial'),
+    tags: tags,
+  );
 }
 
 class NotesTableScreen extends StatefulWidget {
@@ -1729,10 +1803,18 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   /// the result count, the sort, and how to pan: the scrollbar stays hidden,
   /// but the cut can never read as empty data.
   Widget _buildGrid(List<NoteRecord> notes, double availableWidth) {
-    final tagsColumnWidth = _calculateTagsColumnWidth(notes);
-    final minTableWidth =
-        _kFixedColumnsWidth + tagsColumnWidth + (_kTableHorizontalPadding * 2);
-    final tableWidth = math.max(minTableWidth, availableWidth);
+    final tagsMinWidth = _calculateTagsColumnWidth(notes);
+    final tableWidth = math.max(
+      _kPinnedPaneWidth +
+          _kTextColumnsMinWidth +
+          tagsMinWidth +
+          _kTableHorizontalPadding,
+      availableWidth,
+    );
+    final columnWidths = _calculateColumnWidths(
+      tagsMinWidth: tagsMinWidth,
+      tableWidth: tableWidth,
+    );
     final pinnedPaneWidth = math.min(_kPinnedPaneWidth, availableWidth);
     final rightContentWidth = math.max(0.0, tableWidth - pinnedPaneWidth);
     final columnsNeedPan =
@@ -1750,7 +1832,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
             )
           : _TableRow(
               note: note,
-              tagsColumnWidth: tagsColumnWidth,
+              columnWidths: columnWidths,
               draggingColumns: _columnsDragging,
               selected: selected,
               onTagTap: _applyTagFilter,
@@ -1844,7 +1926,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                         sortKey: _sortKey,
                                         ascending: _ascending,
                                         onSort: _toggleSort,
-                                        tagsColumnWidth: tagsColumnWidth,
+                                        columnWidths: columnWidths,
                                         draggingColumns: _columnsDragging,
                                         headerFocusNodes: _headerFocusNodes,
                                       ),
@@ -1949,6 +2031,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                 final scopedNotes = widget.controller.activeCollectionNotes;
                 final notes = _sortedNotes(scopedNotes);
 
+                // The Viewer keeps a 12px inset rather than the Editor's 24px
+                // horizontal step: the card already owns 14px cell gutters, and
+                // the tighter page keeps the filter and grid roomy at 400px.
                 return Padding(
                   padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
                   child: Column(
@@ -1971,48 +2056,54 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                         importButtonFocusNode: _importButtonFocusNode,
                       ),
                       const SizedBox(height: 20),
-                      ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 560),
-                        child: LayoutBuilder(
-                          builder: (context, barConstraints) {
-                            // The scope select needs enough room for its
-                            // longest common label ("Catalog") at 320 px, but
-                            // never more than a fifth of a wide bar.
-                            final scopeMaxWidth =
-                                (barConstraints.maxWidth * 0.34)
-                                    .clamp(120.0, 200.0)
-                                    .toDouble();
-                            final filterFocused =
-                                _searchFocusNode.hasFocus ||
-                                _scopeFocusNode.hasFocus;
-                            final filterBorderWidth = filterFocused ? 1.5 : 1.0;
-                            return Material(
-                              key: _filterBarKey,
-                              color: ViewerPalette.surface,
-                              clipBehavior: Clip.antiAlias,
-                              shape: RoundedRectangleBorder(
-                                borderRadius: BorderRadius.circular(
-                                  ViewerPalette.radiusControl,
+                      // The bar is capped on wide windows and left-aligned in
+                      // the stretched column, so it never out-shouts the table.
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: ConstrainedBox(
+                          key: const ValueKey('filterBar'),
+                          constraints: const BoxConstraints(
+                            maxWidth: _kFilterBarMaxWidth,
+                          ),
+                          child: LayoutBuilder(
+                            builder: (context, barConstraints) {
+                              // The scope select keeps 180–200px: enough for
+                              // "Denomination" at 400px, capped so the text
+                              // input keeps the rest of the bar.
+                              final scopeWidth =
+                                  (barConstraints.maxWidth * 0.34)
+                                      .clamp(180.0, 200.0)
+                                      .toDouble();
+                              final filterFocused =
+                                  _searchFocusNode.hasFocus ||
+                                  _scopeFocusNode.hasFocus;
+                              final filterBorderWidth = filterFocused
+                                  ? 1.5
+                                  : 1.0;
+                              return Material(
+                                key: _filterBarKey,
+                                color: ViewerPalette.surface,
+                                clipBehavior: Clip.antiAlias,
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(
+                                    ViewerPalette.radiusControl,
+                                  ),
+                                  side: BorderSide(
+                                    color: filterFocused
+                                        ? ViewerPalette.accent
+                                        : ViewerPalette.borderControl,
+                                    width: filterBorderWidth,
+                                  ),
                                 ),
-                                side: BorderSide(
-                                  color: filterFocused
-                                      ? ViewerPalette.accent
-                                      : ViewerPalette.borderControl,
-                                  width: filterBorderWidth,
-                                ),
-                              ),
-                              child: SizedBox(
-                                height: _kHeaderBadgeHeight,
-                                child: Row(
-                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                  children: [
-                                    ConstrainedBox(
-                                      constraints: BoxConstraints(
-                                        maxWidth: scopeMaxWidth,
-                                        minWidth: math.min(120, scopeMaxWidth),
-                                      ),
-                                      child: SizedBox(
-                                        height: _kHeaderBadgeHeight,
+                                child: SizedBox(
+                                  height: _kFilterBarHeight,
+                                  child: Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.center,
+                                    children: [
+                                      SizedBox(
+                                        width: scopeWidth,
+                                        height: _kFilterBarHeight,
                                         // The select highlights as one unit
                                         // (label and arrow together) on hover
                                         // and on keyboard focus; square ink,
@@ -2081,6 +2172,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                               in _kFilterScopes)
                                                             Text(
                                                               scope.label,
+                                                              maxLines: 1,
                                                               overflow:
                                                                   TextOverflow
                                                                       .ellipsis,
@@ -2108,64 +2200,64 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                           ),
                                         ),
                                       ),
-                                    ),
-                                    Container(
-                                      width: 1,
-                                      // Full interior height: the divider
-                                      // touches the bar's top and bottom
-                                      // borders without painting over them.
-                                      height:
-                                          _kHeaderBadgeHeight -
-                                          filterBorderWidth * 2,
-                                      color: _kTableBorder,
-                                    ),
-                                    Expanded(
-                                      child: TextField(
-                                        controller: _searchController,
-                                        focusNode: _searchFocusNode,
-                                        textAlignVertical:
-                                            TextAlignVertical.center,
-                                        // Flutter's default tap-outside behavior
-                                        // drops primary focus to the enclosing
-                                        // route scope. On a drag that never
-                                        // re-fires the table's onTap, so `/` and
-                                        // the arrow keys stop working. Hand
-                                        // keyboard control back to the table
-                                        // instead (taps on the scope select are
-                                        // part of the same bar and ignored).
-                                        onTapOutside: _handleFilterTapOutside,
-                                        decoration: InputDecoration(
-                                          hintText: _filterHint,
-                                          hintStyle: const TextStyle(
-                                            fontFamily: 'Inter',
-                                            color: ViewerPalette.textMuted,
-                                            fontSize: 13,
-                                          ),
-                                          // Unfilled: the bar behind owns the
-                                          // background, so hovering the input
-                                          // cannot wash it with a hover layer.
-                                          filled: false,
-                                          suffixIcon: _clearFilterButton(),
-                                          contentPadding:
-                                              const EdgeInsets.symmetric(
-                                                horizontal: 16,
-                                                vertical: 14,
-                                              ),
-                                          border: InputBorder.none,
-                                          enabledBorder: InputBorder.none,
-                                          focusedBorder: InputBorder.none,
-                                        ),
-                                        onChanged: (value) => setState(() {
-                                          _query = value;
-                                          _selectedIndex = null;
-                                        }),
+                                      Container(
+                                        width: 1,
+                                        // Full interior height: the divider
+                                        // touches the bar's top and bottom
+                                        // borders without painting over them.
+                                        height:
+                                            _kFilterBarHeight -
+                                            filterBorderWidth * 2,
+                                        color: _kTableBorder,
                                       ),
-                                    ),
-                                  ],
+                                      Expanded(
+                                        child: TextField(
+                                          controller: _searchController,
+                                          focusNode: _searchFocusNode,
+                                          textAlignVertical:
+                                              TextAlignVertical.center,
+                                          // Flutter's default tap-outside behavior
+                                          // drops primary focus to the enclosing
+                                          // route scope. On a drag that never
+                                          // re-fires the table's onTap, so `/` and
+                                          // the arrow keys stop working. Hand
+                                          // keyboard control back to the table
+                                          // instead (taps on the scope select are
+                                          // part of the same bar and ignored).
+                                          onTapOutside: _handleFilterTapOutside,
+                                          decoration: InputDecoration(
+                                            hintText: _filterHint,
+                                            hintStyle: const TextStyle(
+                                              fontFamily: 'Inter',
+                                              color: ViewerPalette.textMuted,
+                                              fontSize: 13,
+                                            ),
+                                            // Unfilled: the bar behind owns the
+                                            // background, so hovering the input
+                                            // cannot wash it with a hover layer.
+                                            filled: false,
+                                            suffixIcon: _clearFilterButton(),
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                  horizontal: 16,
+                                                  vertical: 10,
+                                                ),
+                                            border: InputBorder.none,
+                                            enabledBorder: InputBorder.none,
+                                            focusedBorder: InputBorder.none,
+                                          ),
+                                          onChanged: (value) => setState(() {
+                                            _query = value;
+                                            _selectedIndex = null;
+                                          }),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
                                 ),
-                              ),
-                            );
-                          },
+                              );
+                            },
+                          ),
                         ),
                       ),
                       const SizedBox(height: 20),
@@ -3176,7 +3268,7 @@ class _TableHeader extends StatelessWidget {
     required this.sortKey,
     required this.ascending,
     required this.onSort,
-    required this.tagsColumnWidth,
+    required this.columnWidths,
     required this.draggingColumns,
     required this.headerFocusNodes,
   });
@@ -3184,7 +3276,7 @@ class _TableHeader extends StatelessWidget {
   final String sortKey;
   final bool ascending;
   final ValueChanged<String> onSort;
-  final double tagsColumnWidth;
+  final _TableColumnWidths columnWidths;
   final bool draggingColumns;
   final Map<String, FocusNode> headerFocusNodes;
 
@@ -3203,7 +3295,7 @@ class _TableHeader extends StatelessWidget {
           child: Row(
             children: [
               _HeaderCell(
-                width: _kDenominationColumnWidth,
+                width: columnWidths.denomination,
                 label: 'Denomination',
                 alignment: Alignment.centerLeft,
                 sortKey: 'denomination',
@@ -3213,7 +3305,7 @@ class _TableHeader extends StatelessWidget {
                 focusNode: headerFocusNodes['denomination'],
               ),
               _HeaderCell(
-                width: _kDateColumnWidth,
+                width: columnWidths.issueDate,
                 label: 'Date',
                 alignment: Alignment.centerLeft,
                 sortKey: 'issueDate',
@@ -3223,7 +3315,7 @@ class _TableHeader extends StatelessWidget {
                 focusNode: headerFocusNodes['issueDate'],
               ),
               _HeaderCell(
-                width: _kCatalogColumnWidth,
+                width: columnWidths.catalogNumber,
                 label: 'Catalog #',
                 alignment: Alignment.centerLeft,
                 sortKey: 'catalogNumber',
@@ -3233,7 +3325,7 @@ class _TableHeader extends StatelessWidget {
                 focusNode: headerFocusNodes['catalogNumber'],
               ),
               _HeaderCell(
-                width: _kCompanyColumnWidth,
+                width: columnWidths.gradingCompany,
                 label: 'Company',
                 alignment: Alignment.centerLeft,
                 sortKey: 'gradingCompany',
@@ -3243,7 +3335,7 @@ class _TableHeader extends StatelessWidget {
                 focusNode: headerFocusNodes['gradingCompany'],
               ),
               _HeaderCell(
-                width: _kGradeColumnWidth,
+                width: columnWidths.grade,
                 label: 'Grade',
                 alignment: Alignment.centerLeft,
                 sortKey: 'grade',
@@ -3253,7 +3345,7 @@ class _TableHeader extends StatelessWidget {
                 focusNode: headerFocusNodes['grade'],
               ),
               _HeaderCell(
-                width: _kSerialColumnWidth,
+                width: columnWidths.serial,
                 label: 'Serial',
                 alignment: Alignment.centerLeft,
                 sortKey: 'serial',
@@ -3263,7 +3355,7 @@ class _TableHeader extends StatelessWidget {
                 focusNode: headerFocusNodes['serial'],
               ),
               _HeaderCell(
-                width: tagsColumnWidth,
+                width: columnWidths.tags,
                 label: 'Tags',
                 alignment: Alignment.centerLeft,
                 sortKey: 'tags',
@@ -3318,8 +3410,13 @@ class _HeaderCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final cellKey = ValueKey(
+      'tableHeaderCell-${sortKey.isEmpty ? label.toLowerCase() : sortKey}',
+    );
+
     if (!isSortable) {
       return SizedBox(
+        key: cellKey,
         width: width,
         child: Padding(
           padding: _kCellPadding,
@@ -3343,6 +3440,7 @@ class _HeaderCell extends StatelessWidget {
     final active = sortKey == activeSortKey;
 
     return SizedBox(
+      key: cellKey,
       width: width,
       child: Padding(
         padding: _kSortableCellPadding,
@@ -3590,7 +3688,7 @@ class _PinnedTableRow extends StatelessWidget {
 class _TableRow extends StatelessWidget {
   const _TableRow({
     required this.note,
-    required this.tagsColumnWidth,
+    required this.columnWidths,
     required this.draggingColumns,
     required this.onTagTap,
     required this.onTap,
@@ -3598,7 +3696,7 @@ class _TableRow extends StatelessWidget {
   });
 
   final NoteRecord note;
-  final double tagsColumnWidth;
+  final _TableColumnWidths columnWidths;
   final bool draggingColumns;
   final ValueChanged<String> onTagTap;
   final VoidCallback onTap;
@@ -3638,37 +3736,37 @@ class _TableRow extends StatelessWidget {
               child: Row(
                 children: [
                   _DataCell(
-                    width: _kDenominationColumnWidth,
+                    width: columnWidths.denomination,
                     emphasized: true,
                     child: Text(note.denomination),
                   ),
                   _DataCell(
-                    width: _kDateColumnWidth,
+                    width: columnWidths.issueDate,
                     child: Text(note.issueDate.isEmpty ? '-' : note.issueDate),
                   ),
                   _DataCell(
-                    width: _kCatalogColumnWidth,
+                    width: columnWidths.catalogNumber,
                     emphasized: true,
                     child: Text(
                       note.catalogNumber.isEmpty ? '-' : note.catalogNumber,
                     ),
                   ),
                   _DataCell(
-                    width: _kCompanyColumnWidth,
+                    width: columnWidths.gradingCompany,
                     child: Text(
                       note.gradingCompany.isEmpty ? '-' : note.gradingCompany,
                     ),
                   ),
                   _DataCell(
-                    width: _kGradeColumnWidth,
+                    width: columnWidths.grade,
                     child: Text(note.grade.isEmpty ? '-' : note.grade),
                   ),
                   _DataCell(
-                    width: _kSerialColumnWidth,
+                    width: columnWidths.serial,
                     child: Text(note.serial.isEmpty ? '-' : note.serial),
                   ),
                   _DataCell(
-                    width: tagsColumnWidth,
+                    width: columnWidths.tags,
                     child: _NoteTagsCell(tags: note.tags, onTagTap: onTagTap),
                   ),
                 ],
@@ -4437,7 +4535,7 @@ class _TableThumbnailPlaceholder extends StatelessWidget {
       child: const Center(
         child: Icon(
           Icons.image_outlined,
-          size: 22,
+          size: 14,
           color: _kTableThumbnailPlaceholderIcon,
         ),
       ),
@@ -4556,6 +4654,8 @@ class _DataCell extends StatelessWidget {
             style: emphasized
                 ? _kDataCellTextStyle.copyWith(fontWeight: FontWeight.w600)
                 : _kDataCellTextStyle,
+            maxLines: 1,
+            overflow: TextOverflow.ellipsis,
             child: child,
           ),
         ),

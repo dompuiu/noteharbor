@@ -206,7 +206,7 @@ Tags are labels, not state, so they left the accent family for their own warm Oc
 - **Presentation room title** (800, 2.1rem/1.12, `-0.02em`, uppercase): the Note slideshow's denomination, one step above Title so the note reads as the catalogue page.
 - **Panel heading** (700, ~1.05–1.15rem): card and panel headings that introduce a block rather than a screen.
 - **Body** (400, 0.86–0.9rem/1.5): field values and running copy.
-- **Data** (400, 13.5px): table cell values in a 45px row. Weight, not size, separates roles — Catalog # and Denomination at 600, the rest at 400.
+- **Data** (400, 13.5px): table cell values in a 45px row (the Viewer's read-only table uses 56px). Weight, not size, separates roles — Catalog # and Denomination at 600, the rest at 400.
 - **Code** (500, 13px, 0.045em tracking): serial numbers, one step under Data.
 - **Control** (600, 0.84rem/1.2): buttons, links, and tabs.
 - **Label** (700, 0.6875rem, 0.08em, uppercase): table and menu headers, in Body, so 11px caps clear 4.5:1 on the header band.
@@ -220,9 +220,9 @@ Tags are labels, not state, so they left the accent family for their own warm Oc
 
 ## Layout
 
-A fixed, non-scrolling app shell: a slate ink left rail plus a main column that fills the remaining width and height. The dock is a 64px rail whose contents expand over the content to a max of 480px on hover or keyboard focus; it never becomes a drawer and never pushes the main column. Main padding is 16px vertical and 24px horizontal; screens stack with 24px gaps.
+A fixed, non-scrolling app shell: a slate ink left rail plus a main column that fills the remaining width and height. The dock is a 64px rail whose contents expand over the content to a max of 480px on hover or keyboard focus; it never becomes a drawer and never pushes the main column. Main padding is 16px vertical and 24px horizontal; screens stack with 24px gaps. The Viewer's table screen keeps a 12px page inset so the filter and grid stay roomy at 400px.
 
-The Table screen is one card that consumes the whole remaining area: a bordered `.table-shell`, a grey header band, a scrolling viewport, and a floating bulk-action pill. The card is its own query container. Headers are 40px tall with 12px horizontal padding; rows are 45px with 12px cell padding and a faint neutral zebra stripe. Long content truncates; the layout never wraps a row.
+The Table screen is one card that consumes the whole remaining area: a bordered `.table-shell`, a grey header band, a scrolling viewport, and a floating bulk-action pill. The card is its own query container. Headers are 40px tall with 12px horizontal padding; rows are 45px with 12px cell padding and a faint neutral zebra stripe. Long content truncates; the layout never wraps a row. The Viewer's read-only table is the same card at 56px rows with a 40×24 thumbnail, and its text columns share spare width so the row content reaches the card's right edge instead of ending in an empty gutter.
 
 Spacing follows a 4px base with 8/12/16/24/32 as the working steps. Density is deliberate: the Table is tight, Showcases and note editing get 16–32px breathing room, and marketing-style whitespace is never used inside the Editor.
 
@@ -256,7 +256,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Style:** white ground, 1px control border, 10px radius, 34px minimum height, 0.86rem text.
 - **Focus:** border becomes red with the standard 2px red hairline halo; no glow.
 - **Disabled / Error:** errors use the danger text and border; disabled controls keep their shape and drop to Body Faint.
-- **Search and filters:** the same field at 34–36px; the active-filter state adds a red border rather than a fill.
+- **Search and filters:** the same field at 34–36px; the active-filter state adds a red border rather than a fill. The Viewer's unified table filter bar is a 40px field: a 180–200px scope select, a hairline divider, and the text input taking the rest of a 560px cap.
 - **Note editor:** the one larger instance — the wider editing column gives the toolbar room and its fields stand 44px tall at 0.95rem so the two-column grid keeps its proportions.
 
 ### Table
@@ -308,7 +308,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Do** set screen titles and eyebrows in uppercase weight 800 with tight tracking; that stencil contrast is the brand voice.
 - **Do** use pills for buttons and counters, 10px corners for fields and selects, 7px for chips, and 6px for cards and panels.
 - **Do** cycle the page: slate rail → white content → ink for overlays. The Note slideshow and Image popover float a light neutral room on the scrim instead; its grey ground and white cards are the same ladder, so polarity still reads.
-- **Do** keep the Table compact (40px headers, 45px rows, 12px cell padding, truncation) and let Showcases be the looser surface.
+- **Do** keep the Table compact (40px headers, 45px rows, 12px cell padding, truncation) and let Showcases be the looser surface. The Viewer's read-only table keeps the same chrome at 56px rows.
 - **Do** write status feedback as a named title plus one detail line, with the recovery action adjacent.
 - **Do** float transient feedback as the bottom-right toast and keep panel- or field-level messages inline, both wearing the same semantic edge.
 

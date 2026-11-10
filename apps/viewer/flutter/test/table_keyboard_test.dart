@@ -700,6 +700,12 @@ void main() {
   keyboardTestWidgets('pinned rows follow the scrolling pane vertically', (
     WidgetTester tester,
   ) async {
+    // A short window keeps the rows taller than the viewport once the header
+    // and filter chrome are laid out, so the wheel has somewhere to scroll.
+    tester.view.physicalSize = const Size(800, 400);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
     await pumpKeyboardTable(tester);
     final pinnedRow = find.byKey(const ValueKey('pinnedTableRow-3'));
     final scrollingRow = tableRow(3);

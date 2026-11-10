@@ -1,5 +1,6 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -29,12 +30,12 @@ void main() {
     expect(dropdown.borderRadius, BorderRadius.zero);
 
     // The select fills the bar height instead of floating as an inset pill
-    // (one 48px box is the select itself, the other is the outer bar).
+    // (one 40px box is the select itself, the other is the outer bar).
     expect(
       find.ancestor(
         of: dropdownFinder,
         matching: find.byWidgetPredicate(
-          (widget) => widget is SizedBox && widget.height == 48.0,
+          (widget) => widget is SizedBox && widget.height == 40.0,
         ),
       ),
       findsWidgets,
@@ -47,7 +48,9 @@ void main() {
     expect(theme.data.hoverColor, Colors.transparent);
   });
 
-  testWidgets("filter divider touches the bar's top and bottom borders", (tester) async {
+  testWidgets("filter divider touches the bar's top and bottom borders", (
+    tester,
+  ) async {
     final controller = DatasetController(repository: _FakeViewerRepository());
     await controller.load();
 
@@ -57,7 +60,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // The 1px divider between the scope select and the text input spans
-    // the bar's full interior height (48px bar minus the 1px borders),
+    // the bar's full interior height (40px bar minus the 1px borders),
     // touching the top and bottom edges instead of floating as a stub.
     final dividerFinder = find.byWidgetPredicate(
       (widget) =>
@@ -66,7 +69,7 @@ void main() {
           widget.color == ViewerPalette.border,
     );
     expect(dividerFinder, findsOneWidget);
-    expect(tester.getSize(dividerFinder).height, 48.0 - 2 * 1.0);
+    expect(tester.getSize(dividerFinder).height, 40.0 - 2 * 1.0);
   });
 
   testWidgets('filter text input paints no background of its own', (
@@ -252,6 +255,70 @@ void main() {
 
     expect(_filterFieldHasFocus(tester), isTrue);
   });
+
+  testWidgets('filter bar caps at 560px and left-aligns with the card', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(1829, 1000);
+    addTearDown(tester.view.reset);
+
+    final controller = DatasetController(repository: _FakeViewerRepository());
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    final bar = find.byKey(const ValueKey('filterBar'));
+    expect(tester.getSize(bar).width, 560);
+    expect(tester.getSize(bar).height, 40);
+
+    final card = tester.getRect(find.byKey(const ValueKey('tableFooter')));
+    expect(tester.getRect(bar).left, closeTo(card.left, 1));
+  });
+
+  testWidgets('narrow filter bar keeps the scope label and field usable', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(400, 900);
+    addTearDown(tester.view.reset);
+
+    // The test font (Ahem) is much wider than Inter; load the bundled face so
+    // the label-fit assertion reflects the real app.
+    final inter = FontLoader('Inter')
+      ..addFont(rootBundle.load('assets/fonts/InterVariable.ttf'));
+    await inter.load();
+
+    final controller = DatasetController(repository: _FakeViewerRepository());
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    final bar = find.byKey(const ValueKey('filterBar'));
+    expect(tester.getSize(bar).width, 400 - 24);
+
+    final scope = find.byKey(const ValueKey('filterScope'));
+    final scopeRect = tester.getRect(scope);
+    expect(scopeRect.width, inInclusiveRange(180, 200));
+
+    // The longest scope label must fit on one line, not ellipsize.
+    await tester.tap(scope);
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Denomination').last);
+    await tester.pumpAndSettle();
+    final label = tester.renderObject<RenderParagraph>(
+      find.text('Denomination'),
+    );
+    expect(label.didExceedMaxLines, isFalse);
+
+    expect(tester.getSize(find.byType(TextField)).width, greaterThan(180));
+  });
 }
 
 bool _filterFieldHasFocus(WidgetTester tester) {
@@ -259,11 +326,10 @@ bool _filterFieldHasFocus(WidgetTester tester) {
 }
 
 Finder get _washFinder => find.byWidgetPredicate(
-      (widget) =>
-          widget is AnimatedContainer &&
-          (widget.decoration as BoxDecoration?)?.color ==
-              ViewerPalette.accentSoft,
-    );
+  (widget) =>
+      widget is AnimatedContainer &&
+      (widget.decoration as BoxDecoration?)?.color == ViewerPalette.accentSoft,
+);
 
 class _FakeViewerRepository extends ViewerRepository {
   _FakeViewerRepository();
