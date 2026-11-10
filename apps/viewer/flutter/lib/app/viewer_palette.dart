@@ -31,9 +31,10 @@ abstract final class ViewerPalette {
   /// `rgba(37, 40, 43, 0.32)`.
   static const Color borderControl = Color(0x5225282B);
 
-  /// Table header band: one quiet step inside the white card, so the
-  /// column row reads as part of the table instead of floating on the page.
-  static const Color tableHeaderBackground = surfaceMist;
+  /// Table header band: the Canvas Soft step (`--surface-3`) the Editor's
+  /// header uses, so the column row reads as the caption band of the table
+  /// rather than as another zebra row.
+  static const Color tableHeaderBackground = Color(0xFFF2F2F2);
 
   // ── Disabled controls ─────────────────────────────────────────────
   /// A disabled button reads as a quiet control, never as a dimmed accent:

@@ -924,7 +924,7 @@ void main() {
     expect(headerRegion().cursor, MouseCursor.defer);
 
     final gesture = await tester.startGesture(
-      tester.getCenter(find.text('ID')),
+      tester.getCenter(find.text('#')),
       kind: PointerDeviceKind.mouse,
     );
     for (var step = 0; step < 4; step++) {
@@ -948,7 +948,7 @@ void main() {
       expect(headerRegion().cursor, MouseCursor.defer);
 
       final gesture = await tester.startGesture(
-        tester.getCenter(find.text('ID')),
+        tester.getCenter(find.text('#')),
         kind: PointerDeviceKind.mouse,
       );
       for (var step = 0; step < 4; step++) {
@@ -1124,10 +1124,10 @@ void main() {
       ('tableHeader-serial', 'SERIAL'),
       ('tableHeader-grade', 'GRADE'),
       ('tableHeader-gradingCompany', 'COMPANY'),
-      ('tableHeader-catalogNumber', 'CATALOG'),
+      ('tableHeader-catalogNumber', 'CATALOG #'),
       ('tableHeader-issueDate', 'DATE'),
       ('tableHeader-denomination', 'DENOMINATION'),
-      ('tableHeader-displayOrder', 'ID'),
+      ('tableHeader-displayOrder', '#'),
     ];
     for (final (debugLabel, visibleLabel) in reversedHeaders) {
       await shiftTab();
@@ -1216,7 +1216,7 @@ void main() {
     );
     await tester.pumpAndSettle();
     expect(columnsController(tester).offset, lessThan(forwardOffset));
-    expect(tester.getTopLeft(find.text('ID')).dx, greaterThanOrEqualTo(0));
+    expect(tester.getTopLeft(find.text('#')).dx, greaterThanOrEqualTo(0));
   });
 
   keyboardTestWidgets('enter on a focused header sorts the column', (
