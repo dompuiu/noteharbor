@@ -89,6 +89,32 @@ void main() {
     expect(field.decoration?.filled, isFalse);
   });
 
+  testWidgets('filter hint is vertically centered in the bar', (tester) async {
+    final controller = DatasetController(repository: _FakeViewerRepository());
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    final bar = tester.getRect(find.byKey(const ValueKey('filterBar')));
+    final hint = tester.getRect(find.text('Filter catalog…'));
+    final scopeLabel = tester.getRect(
+      find
+          .descendant(
+            of: find.byKey(const ValueKey('filterScope')),
+            matching: find.text('Catalog'),
+          )
+          .first,
+    );
+
+    // The input's text sits on the same line as the scope label, not low in
+    // the field: the decorator's 48px minimum must not push it off-center.
+    expect(hint.center.dy, closeTo(bar.center.dy, 0.5));
+    expect(hint.center.dy, closeTo(scopeLabel.center.dy, 0.5));
+  });
+
   testWidgets('filter scope options highlight on hover', (tester) async {
     final controller = DatasetController(repository: _FakeViewerRepository());
     await controller.load();

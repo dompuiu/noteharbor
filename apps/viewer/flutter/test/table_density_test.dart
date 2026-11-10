@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/rendering.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -81,6 +82,24 @@ void main() {
     );
     expect(paragraph.didExceedMaxLines, isTrue);
     expect(paragraph.size.height, lessThanOrEqualTo(20));
+  });
+
+  testWidgets('grid paints one scrollbar, not one per inner list', (
+    WidgetTester tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      await pumpTable(tester, const Size(1829, 1000));
+
+      // The pinned pane and the scrolling columns are separate lists, but the
+      // card paints a single scrollbar around both. Material's desktop
+      // behavior would add one to each list; the seam copy is the duplicate.
+      final scrollbar = find.byKey(const ValueKey('tableVerticalScrollbar'));
+      expect(scrollbar, findsOneWidget);
+      expect(find.byType(Scrollbar), findsOneWidget);
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
   });
 }
 

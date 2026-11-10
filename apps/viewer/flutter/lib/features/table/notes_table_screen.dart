@@ -97,6 +97,24 @@ const Color _kZebraTint = ViewerPalette.rowZebra;
 /// How far one Left/Right arrow press pans the table's hidden columns.
 const double _kColumnScrollStep = 200;
 
+/// The table card paints one vertical scrollbar around its whole body, so the
+/// lists inside it must not add the Material desktop scrollbar of their own;
+/// otherwise the pinned pane's copy shows up at the seam between the panes.
+/// The card layout's list is covered too: it sits in the same card and carries
+/// the same explicit scrollbar.
+class _NoInnerScrollbarBehavior extends MaterialScrollBehavior {
+  const _NoInnerScrollbarBehavior();
+
+  @override
+  Widget buildScrollbar(
+    BuildContext context,
+    Widget child,
+    ScrollableDetails details,
+  ) {
+    return child;
+  }
+}
+
 /// Below this available width the nine-column grid is replaced by a vertical
 /// note-card list. The grid needs ~1,200 px to show every column, so a window
 /// between this breakpoint and that width still pans; the card layout takes
@@ -220,6 +238,20 @@ const TextStyle _kDataCellTextStyle = TextStyle(
   color: _kTableText,
   fontWeight: FontWeight.w400,
   fontFeatures: [FontFeature.tabularFigures()],
+);
+
+/// The unified filter bar's text: the hint and the typed query share the scope
+/// label's 13px voice so the whole bar sits on one line.
+const TextStyle _kFilterInputTextStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: ViewerPalette.text,
+  fontSize: 13,
+);
+
+const TextStyle _kFilterHintTextStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: ViewerPalette.textMuted,
+  fontSize: 13,
 );
 
 const TextStyle _kCollectionTitleTextStyle = TextStyle(
@@ -1888,7 +1920,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                             ),
                             Expanded(
                               child: ScrollConfiguration(
-                                behavior: const MaterialScrollBehavior(),
+                                behavior: const _NoInnerScrollbarBehavior(),
                                 child: ListView.separated(
                                   controller: _pinnedVerticalScrollController,
                                   itemCount: notes.length,
@@ -1939,7 +1971,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                     Expanded(
                                       child: ScrollConfiguration(
                                         behavior:
-                                            const MaterialScrollBehavior(),
+                                            const _NoInnerScrollbarBehavior(),
                                         child: ListView.separated(
                                           controller: _verticalScrollController,
                                           itemCount: notes.length,
@@ -2216,6 +2248,12 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                           focusNode: _searchFocusNode,
                                           textAlignVertical:
                                               TextAlignVertical.center,
+                                          // The typed query wears the same
+                                          // 13px voice as the scope label and
+                                          // hint; the default 16px body style
+                                          // also lands its baseline below the
+                                          // hint's, so the text reads low.
+                                          style: _kFilterInputTextStyle,
                                           // Flutter's default tap-outside behavior
                                           // drops primary focus to the enclosing
                                           // route scope. On a drag that never
@@ -2227,15 +2265,16 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                           onTapOutside: _handleFilterTapOutside,
                                           decoration: InputDecoration(
                                             hintText: _filterHint,
-                                            hintStyle: const TextStyle(
-                                              fontFamily: 'Inter',
-                                              color: ViewerPalette.textMuted,
-                                              fontSize: 13,
-                                            ),
+                                            hintStyle: _kFilterHintTextStyle,
                                             // Unfilled: the bar behind owns the
                                             // background, so hovering the input
                                             // cannot wash it with a hover layer.
                                             filled: false,
+                                            // Dense keeps the decorator's 48px
+                                            // minimum from clamping against the
+                                            // 40px bar, which would push the
+                                            // text below the field's center.
+                                            isDense: true,
                                             suffixIcon: _clearFilterButton(),
                                             contentPadding:
                                                 const EdgeInsets.symmetric(
@@ -3861,7 +3900,7 @@ class _NoteCardList extends StatelessWidget {
             child: NotificationListener<ScrollNotification>(
               onNotification: onScrollNotification,
               child: ScrollConfiguration(
-                behavior: const MaterialScrollBehavior(),
+                behavior: const _NoInnerScrollbarBehavior(),
                 child: Scrollbar(
                   controller: scrollController,
                   thumbVisibility: true,
