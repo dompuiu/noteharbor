@@ -30,9 +30,7 @@ void main() {
   }
 
   Future<void> pumpKeyboardTable(WidgetTester tester) async {
-    final controller = DatasetController(
-      repository: _KeyboardNavRepository(),
-    );
+    final controller = DatasetController(repository: _KeyboardNavRepository());
     await controller.load();
 
     await tester.pumpWidget(
@@ -55,24 +53,24 @@ void main() {
 
   Finder tableRow(int id) => find.byKey(ValueKey('tableRow-$id'));
 
-  // The keyboard selection ring is a paint-only overlay and the only accent
-  // border on the table screen with a card radius (the unified filter bar
-  // also highlights in accent while focused, but with a control radius).
+  // The keyboard selection ring is a paint-only overlay on the scrolling pane
+  // (the pinned pane draws the matching left half). Its right-only radius is
+  // unique among the accent-bordered boxes on the screen.
   Finder selectedRing() => find.byWidgetPredicate((widget) {
-        if (widget is! DecoratedBox) return false;
-        final decoration = widget.decoration;
-        if (decoration is! BoxDecoration) return false;
-        final border = decoration.border;
-        if (border is! Border) return false;
-        if (border.top.color != ViewerPalette.accent) return false;
-        return decoration.borderRadius ==
-            BorderRadius.circular(ViewerPalette.radiusMd);
-      });
+    if (widget is! DecoratedBox) return false;
+    final decoration = widget.decoration;
+    if (decoration is! BoxDecoration) return false;
+    final border = decoration.border;
+    if (border is! Border) return false;
+    if (border.top.color != ViewerPalette.accent) return false;
+    return decoration.borderRadius ==
+        const BorderRadius.horizontal(
+          right: Radius.circular(ViewerPalette.radiusMd),
+        );
+  });
 
-  Finder selectedRow(int id) => find.descendant(
-        of: tableRow(id),
-        matching: selectedRing(),
-      );
+  Finder selectedRow(int id) =>
+      find.descendant(of: tableRow(id), matching: selectedRing());
 
   // The table's horizontal scroller is the only SingleChildScrollView on the
   // screen (the rows use a ListView).
@@ -81,12 +79,15 @@ void main() {
       .controller!;
 
   // A focused header is only "reached" if it is actually on-screen: its
-  // rect must sit inside the horizontal scroller's viewport.
+  // rect must sit inside its visible pane. ID is pinned outside the horizontal
+  // scroller, so it is checked against the pinned pane; the rest scroll.
   void expectHeaderVisible(WidgetTester tester, String label) {
     final headerRect = tester.getRect(find.text(label));
-    final scrollerRect = tester.getRect(find.byType(SingleChildScrollView));
-    expect(headerRect.left, greaterThanOrEqualTo(scrollerRect.left - 0.5));
-    expect(headerRect.right, lessThanOrEqualTo(scrollerRect.right + 0.5));
+    final paneRect = label == '#'
+        ? tester.getRect(find.byKey(const ValueKey('pinnedTableHeader')))
+        : tester.getRect(find.byType(SingleChildScrollView));
+    expect(headerRect.left, greaterThanOrEqualTo(paneRect.left - 0.5));
+    expect(headerRect.right, lessThanOrEqualTo(paneRect.right + 0.5));
   }
 
   Future<void> selectFilterScope(WidgetTester tester, String label) async {
@@ -309,30 +310,25 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pump();
     expect(selectedRow(1), findsOneWidget);
-    expect(
-      FocusManager.instance.primaryFocus?.debugLabel,
-      'notesTable',
-    );
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'notesTable');
   });
 
-  keyboardTestWidgets('escape from the filter with no matches returns to table',
-      (
-    WidgetTester tester,
-  ) async {
-    await pumpKeyboardTable(tester);
+  keyboardTestWidgets(
+    'escape from the filter with no matches returns to table',
+    (WidgetTester tester) async {
+      await pumpKeyboardTable(tester);
 
-    await tester.enterText(find.byType(TextField), 'zzz');
-    await tester.pumpAndSettle();
-    expect(find.text('No notes match the current filter.'), findsOneWidget);
+      await tester.enterText(find.byType(TextField), 'zzz');
+      await tester.pumpAndSettle();
+      expect(find.text('No notes match the current filter.'), findsOneWidget);
+      expect(find.text('0 notes · Sorted by ID ↑'), findsOneWidget);
 
-    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
-    await tester.pump();
-    expect(selectedRing(), findsNothing);
-    expect(
-      FocusManager.instance.primaryFocus?.debugLabel,
-      'notesTable',
-    );
-  });
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pump();
+      expect(selectedRing(), findsNothing);
+      expect(FocusManager.instance.primaryFocus?.debugLabel, 'notesTable');
+    },
+  );
 
   keyboardTestWidgets('escape on the table clears active filters', (
     WidgetTester tester,
@@ -511,28 +507,26 @@ void main() {
     expect(controller.offset, 0);
   });
 
-  keyboardTestWidgets(
-    'cmd plus left and right jump to the column edges',
-    (WidgetTester tester) async {
-      await pumpKeyboardTable(tester);
-      final controller = columnsController(tester);
-      final maxExtent = controller.position.maxScrollExtent;
+  keyboardTestWidgets('cmd plus left and right jump to the column edges', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    final controller = columnsController(tester);
+    final maxExtent = controller.position.maxScrollExtent;
 
-      Future<void> cmdArrow(LogicalKeyboardKey key) async {
-        await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
-        await tester.sendKeyEvent(key);
-        await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
-        await tester.pumpAndSettle();
-      }
+    Future<void> cmdArrow(LogicalKeyboardKey key) async {
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.metaLeft);
+      await tester.sendKeyEvent(key);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.metaLeft);
+      await tester.pumpAndSettle();
+    }
 
-      await cmdArrow(LogicalKeyboardKey.arrowRight);
-      expect(controller.offset, maxExtent);
+    await cmdArrow(LogicalKeyboardKey.arrowRight);
+    expect(controller.offset, maxExtent);
 
-      await cmdArrow(LogicalKeyboardKey.arrowLeft);
-      expect(controller.offset, 0);
-    },
-    platform: TargetPlatform.macOS,
-  );
+    await cmdArrow(LogicalKeyboardKey.arrowLeft);
+    expect(controller.offset, 0);
+  }, platform: TargetPlatform.macOS);
 
   keyboardTestWidgets('h and l pan the columns one step', (
     WidgetTester tester,
@@ -612,6 +606,165 @@ void main() {
     await tester.pumpAndSettle();
     expect(controller.offset, 0);
     expect(selectedRing(), findsNothing);
+  });
+
+  keyboardTestWidgets('ID and Front stay pinned while the columns pan', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    final columns = columnsController(tester);
+    final pinnedPane = find.byKey(const ValueKey('tablePinnedColumns'));
+    final pins = [find.text('#'), find.text('FRONT')];
+
+    void expectInsidePinned(Finder finder) {
+      final paneRect = tester.getRect(pinnedPane);
+      final rect = tester.getRect(finder);
+      expect(rect.left, greaterThanOrEqualTo(paneRect.left - 0.5));
+      expect(rect.right, lessThanOrEqualTo(paneRect.right + 0.5));
+    }
+
+    for (final pin in pins) {
+      expectInsidePinned(pin);
+    }
+    final pinnedRect = tester.getRect(pinnedPane);
+    expect(
+      find.descendant(
+        of: pinnedPane,
+        matching: find.byIcon(Icons.image_outlined),
+      ),
+      findsWidgets,
+    );
+
+    // Pan to the far end with the keyboard.
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.shiftLeft);
+    await tester.pumpAndSettle();
+    expect(columns.offset, columns.position.maxScrollExtent);
+
+    // The identity columns have not moved, and the thumbnails are still here.
+    expect(tester.getRect(pinnedPane), pinnedRect);
+    for (final pin in pins) {
+      expectInsidePinned(pin);
+    }
+    expect(
+      find.descendant(
+        of: pinnedPane,
+        matching: find.byIcon(Icons.image_outlined),
+      ),
+      findsWidgets,
+    );
+
+    // The vertical scrollbar lives outside the horizontal child, so panning
+    // cannot carry it off-screen.
+    expect(
+      find.descendant(
+        of: find.byType(SingleChildScrollView),
+        matching: find.byKey(const ValueKey('tableVerticalScrollbar')),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.byKey(const ValueKey('tableVerticalScrollbar')),
+      findsOneWidget,
+    );
+  });
+
+  keyboardTestWidgets('dragging the pinned header pans the columns', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    final columns = columnsController(tester);
+    expect(columns.offset, 0);
+
+    final gesture = await tester.startGesture(
+      tester.getCenter(find.text('#')),
+      kind: PointerDeviceKind.mouse,
+    );
+    for (var step = 0; step < 4; step++) {
+      await gesture.moveBy(const Offset(-50, 0));
+      await tester.pump();
+    }
+    await gesture.up();
+    await tester.pumpAndSettle();
+
+    expect(columns.offset, greaterThan(0));
+    final pinnedRect = tester.getRect(
+      find.byKey(const ValueKey('tablePinnedColumns')),
+    );
+    final idRect = tester.getRect(find.text('#'));
+    expect(idRect.left, greaterThanOrEqualTo(pinnedRect.left - 0.5));
+    expect(idRect.right, lessThanOrEqualTo(pinnedRect.right + 0.5));
+  });
+
+  keyboardTestWidgets('pinned rows follow the scrolling pane vertically', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    final pinnedRow = find.byKey(const ValueKey('pinnedTableRow-3'));
+    final scrollingRow = tableRow(3);
+    final startTop = tester.getTopLeft(scrollingRow).dy;
+    expect(tester.getTopLeft(pinnedRow).dy, startTop);
+
+    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    pointer.hover(tester.getCenter(scrollingRow));
+    await tester.sendEventToBinding(pointer.scroll(const Offset(0, 160)));
+    await tester.pumpAndSettle();
+
+    final scrolledTop = tester.getTopLeft(scrollingRow).dy;
+    expect(scrolledTop, lessThan(startTop));
+    expect(tester.getTopLeft(pinnedRow).dy, scrolledTop);
+  });
+
+  keyboardTestWidgets('footer reports the count and sort, with a pan hint', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    expect(find.byKey(const ValueKey('tableFooter')), findsOneWidget);
+    expect(find.text('5 notes · Sorted by ID ↑'), findsOneWidget);
+    expect(find.byKey(const ValueKey('tablePanHint')), findsOneWidget);
+
+    // Sorting by a showing column updates the summary and flips its arrow.
+    await tester.tap(find.text('DENOMINATION'));
+    await tester.pumpAndSettle();
+    expect(find.text('5 notes · Sorted by Denomination ↑'), findsOneWidget);
+
+    await tester.tap(find.text('DENOMINATION'));
+    await tester.pumpAndSettle();
+    expect(find.text('5 notes · Sorted by Denomination ↓'), findsOneWidget);
+  });
+
+  keyboardTestWidgets('footer drops the pan hint when the columns fit', (
+    WidgetTester tester,
+  ) async {
+    tester.view.physicalSize = const Size(4000, 800);
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    await pumpKeyboardTable(tester);
+    expect(find.text('5 notes · Sorted by ID ↑'), findsOneWidget);
+    expect(find.byKey(const ValueKey('tablePanHint')), findsNothing);
+    expect(find.byKey(const ValueKey('tableColumnsFade')), findsNothing);
+  });
+
+  keyboardTestWidgets('the right-edge fade clears at the end of the pan', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
+    final columns = columnsController(tester);
+    expect(find.byKey(const ValueKey('tableColumnsFade')), findsOneWidget);
+
+    await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+    await tester.pumpAndSettle();
+    expect(columns.offset, columns.position.maxScrollExtent);
+    expect(find.byKey(const ValueKey('tableColumnsFade')), findsNothing);
+
+    // Panning back reveals columns again, so the cue comes back.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
+    await tester.pumpAndSettle();
+    expect(find.byKey(const ValueKey('tableColumnsFade')), findsOneWidget);
   });
 
   keyboardTestWidgets('shift up, down, j and k leave row focus alone', (
@@ -867,8 +1020,8 @@ void main() {
     await pumpKeyboardTable(tester);
 
     InkWell rowInk() => tester.widget<InkWell>(
-          find.ancestor(of: tableRow(3), matching: find.byType(InkWell)),
-        );
+      find.ancestor(of: tableRow(3), matching: find.byType(InkWell)),
+    );
     expect(rowInk().mouseCursor, MouseCursor.defer);
 
     final gesture = await tester.startGesture(
@@ -887,32 +1040,30 @@ void main() {
     expect(rowInk().mouseCursor, MouseCursor.defer);
   });
 
-  keyboardTestWidgets(
-    'rows show a closed hand while panning off Windows',
-    (WidgetTester tester) async {
-      await pumpKeyboardTable(tester);
+  keyboardTestWidgets('rows show a closed hand while panning off Windows', (
+    WidgetTester tester,
+  ) async {
+    await pumpKeyboardTable(tester);
 
-      InkWell rowInk() => tester.widget<InkWell>(
-            find.ancestor(of: tableRow(3), matching: find.byType(InkWell)),
-          );
-      expect(rowInk().mouseCursor, MouseCursor.defer);
+    InkWell rowInk() => tester.widget<InkWell>(
+      find.ancestor(of: tableRow(3), matching: find.byType(InkWell)),
+    );
+    expect(rowInk().mouseCursor, MouseCursor.defer);
 
-      final gesture = await tester.startGesture(
-        tester.getCenter(tableRow(3)),
-        kind: PointerDeviceKind.mouse,
-      );
-      for (var step = 0; step < 4; step++) {
-        await gesture.moveBy(const Offset(-50, 0));
-        await tester.pump();
-      }
-      expect(rowInk().mouseCursor, SystemMouseCursors.grabbing);
+    final gesture = await tester.startGesture(
+      tester.getCenter(tableRow(3)),
+      kind: PointerDeviceKind.mouse,
+    );
+    for (var step = 0; step < 4; step++) {
+      await gesture.moveBy(const Offset(-50, 0));
+      await tester.pump();
+    }
+    expect(rowInk().mouseCursor, SystemMouseCursors.grabbing);
 
-      await gesture.up();
-      await tester.pumpAndSettle();
-      expect(rowInk().mouseCursor, MouseCursor.defer);
-    },
-    platform: TargetPlatform.macOS,
-  );
+    await gesture.up();
+    await tester.pumpAndSettle();
+    expect(rowInk().mouseCursor, MouseCursor.defer);
+  }, platform: TargetPlatform.macOS);
 
   keyboardTestWidgets('the header keeps a normal cursor until panning', (
     WidgetTester tester,
@@ -964,39 +1115,32 @@ void main() {
     platform: TargetPlatform.macOS,
   );
 
-  keyboardTestWidgets(
-    'keyboard selection stays inert on iOS',
-    (tester) async {
-      await pumpKeyboardTable(tester);
+  keyboardTestWidgets('keyboard selection stays inert on iOS', (tester) async {
+    await pumpKeyboardTable(tester);
 
-      await tester.tap(find.byType(TextField));
-      await tester.pump();
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-      await tester.pump();
-      expect(selectedRing(), findsNothing);
-    },
-    platform: TargetPlatform.iOS,
-  );
+    await tester.tap(find.byType(TextField));
+    await tester.pump();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(selectedRing(), findsNothing);
+  }, platform: TargetPlatform.iOS);
 
-  keyboardTestWidgets(
-    'mouse wheel scroll keeps the keyboard selection ring',
-    (tester) async {
-      await pumpKeyboardTable(tester);
+  keyboardTestWidgets('mouse wheel scroll keeps the keyboard selection ring', (
+    tester,
+  ) async {
+    await pumpKeyboardTable(tester);
 
-      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
-      await tester.pump();
-      expect(selectedRing(), findsOneWidget);
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+    await tester.pump();
+    expect(selectedRing(), findsOneWidget);
 
-      final pointer = TestPointer(1, PointerDeviceKind.mouse);
-      pointer.hover(tester.getCenter(tableRow(1)));
-      await tester.sendEventToBinding(
-        pointer.scroll(const Offset(0, 120)),
-      );
-      await tester.pumpAndSettle();
+    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    pointer.hover(tester.getCenter(tableRow(1)));
+    await tester.sendEventToBinding(pointer.scroll(const Offset(0, 120)));
+    await tester.pumpAndSettle();
 
-      expect(selectedRow(1), findsOneWidget);
-    },
-  );
+    expect(selectedRow(1), findsOneWidget);
+  });
 
   keyboardTestWidgets(
     'table takes keyboard focus after the import-to-table swap',
@@ -1010,10 +1154,8 @@ void main() {
         return MaterialApp(
           home: AnimatedSwitcher(
             duration: const Duration(milliseconds: 220),
-            transitionBuilder: (widget, animation) => FadeTransition(
-              opacity: animation,
-              child: widget,
-            ),
+            transitionBuilder: (widget, animation) =>
+                FadeTransition(opacity: animation, child: widget),
             child: child,
           ),
         );
@@ -1263,10 +1405,7 @@ void main() {
       await tester.pump();
     }
     await tester.pumpAndSettle();
-    expect(
-      FocusManager.instance.primaryFocus?.debugLabel,
-      'tableHeader-tags',
-    );
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'tableHeader-tags');
     expect(columnsController(tester).offset, greaterThan(0));
 
     // Tabbing onto the row presents it from the left, not still on Tags.
@@ -1333,10 +1472,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
     }
-    expect(
-      FocusManager.instance.primaryFocus?.debugLabel,
-      'tableHeader-tags',
-    );
+    expect(FocusManager.instance.primaryFocus?.debugLabel, 'tableHeader-tags');
     await tester.pumpAndSettle();
     final atTags = columnsController(tester).offset;
     expect(atTags, greaterThan(0));

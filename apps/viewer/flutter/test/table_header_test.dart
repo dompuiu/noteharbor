@@ -49,20 +49,25 @@ void main() {
     handle.dispose();
   });
 
-  testWidgets('the pan hint states the visible range and follows the pan', (
+  testWidgets('the footer reports the count and sort while columns pan', (
     tester,
   ) async {
     await pumpTable(tester, const Size(900, 700));
 
-    expect(find.textContaining('Columns 1–7 of 9'), findsOneWidget);
+    expect(find.byKey(const ValueKey('tableResultSummary')), findsOneWidget);
+    expect(find.byKey(const ValueKey('tablePanHint')), findsOneWidget);
+    expect(find.byKey(const ValueKey('tableColumnsFade')), findsOneWidget);
 
     final scroller = tester.widget<SingleChildScrollView>(
       find.byType(SingleChildScrollView),
     );
-    scroller.controller!.jumpTo(200);
+    scroller.controller!.jumpTo(scroller.controller!.position.maxScrollExtent);
     await tester.pump();
 
-    expect(find.textContaining('Columns 3–8 of 9'), findsOneWidget);
+    // At the end of the pan nothing sits past the edge, so the fade clears;
+    // the pan hint itself stays because the columns still need panning.
+    expect(find.byKey(const ValueKey('tableColumnsFade')), findsNothing);
+    expect(find.byKey(const ValueKey('tablePanHint')), findsOneWidget);
   });
 
   testWidgets('wide windows keep the pan hint out of the layout', (
@@ -70,7 +75,9 @@ void main() {
   ) async {
     await pumpTable(tester, const Size(1400, 900));
 
-    expect(find.textContaining('Columns'), findsNothing);
+    expect(find.byKey(const ValueKey('tableResultSummary')), findsOneWidget);
+    expect(find.byKey(const ValueKey('tablePanHint')), findsNothing);
+    expect(find.byKey(const ValueKey('tableColumnsFade')), findsNothing);
   });
 }
 

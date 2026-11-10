@@ -26,7 +26,8 @@ const double _kCompanyColumnWidth = 120;
 const double _kGradeColumnWidth = 110;
 const double _kSerialColumnWidth = 140;
 const double _kDefaultTagsColumnWidth = 160;
-const double _kFixedColumnsWidth = _kOrderColumnWidth +
+const double _kFixedColumnsWidth =
+    _kOrderColumnWidth +
     _kFrontColumnWidth +
     _kDenominationColumnWidth +
     _kDateColumnWidth +
@@ -35,6 +36,16 @@ const double _kFixedColumnsWidth = _kOrderColumnWidth +
     _kGradeColumnWidth +
     _kSerialColumnWidth;
 const double _kTableHorizontalPadding = 14;
+const double _kTableHeaderHeight = 40;
+
+/// The identity columns (ID and Front) that stay put while the rest pan.
+const double _kPinnedColumnsWidth = _kOrderColumnWidth + _kFrontColumnWidth;
+
+/// The pinned pane owns the table's left padding so the first scrolling column
+/// starts flush against it.
+const double _kPinnedPaneWidth =
+    _kPinnedColumnsWidth + _kTableHorizontalPadding;
+const double _kTableFooterHeight = 34;
 const Color _kTableSurface = ViewerPalette.surface;
 const Color _kTableBorder = ViewerPalette.border;
 const Color _kTableCardBorder = ViewerPalette.border;
@@ -50,6 +61,7 @@ const double _kHeaderBadgeHeight = 48;
 const double _kHeaderControlHeight = 40;
 const double _kTagChipHorizontalPadding = 10;
 const double _kTagChipHorizontalGap = 6;
+
 /// Horizontal room the Tags cell needs beyond the measured chips: the cell's
 /// own 12px gutters on both sides plus breathing room at the column edge.
 const double _kTagsColumnSafetyPadding = 48;
@@ -138,6 +150,18 @@ final List<String> _kSortableHeaderKeys = [
   for (final column in _kSortableColumns) column.value,
 ];
 
+/// Human-readable column names for the table footer's sort summary.
+const Map<String, String> _kColumnLabels = {
+  'displayOrder': 'ID',
+  'denomination': 'Denomination',
+  'issueDate': 'Date',
+  'catalogNumber': 'Catalog',
+  'gradingCompany': 'Company',
+  'grade': 'Grade',
+  'serial': 'Serial',
+  'tags': 'Tags',
+};
+
 /// Filter scopes for the unified filter bar. The select holds the field and
 /// the text input holds the value, so `Catalog + "17"` replaces the removed
 /// `cat: 17` inline syntax.
@@ -161,8 +185,8 @@ const List<({String value, String label, String hint})> _kFilterScopes = [
 /// hand instead. Everywhere else keeps the canonical closed hand.
 MouseCursor get _draggingCursor =>
     defaultTargetPlatform == TargetPlatform.windows
-        ? SystemMouseCursors.click
-        : SystemMouseCursors.grabbing;
+    ? SystemMouseCursors.click
+    : SystemMouseCursors.grabbing;
 
 const TextStyle _kTagChipTextStyle = TextStyle(
   fontFamily: 'Inter',
@@ -255,16 +279,15 @@ bool _matchesDenominationFilterValue(String noteValue, String filterValue) {
     return false;
   }
 
-  final textOnlyFilter =
-      filterValue.replaceAll(RegExp(r'\d(?:[\d,. ]*\d)?'), ' ');
+  final textOnlyFilter = filterValue.replaceAll(
+    RegExp(r'\d(?:[\d,. ]*\d)?'),
+    ' ',
+  );
   final textTerms = _splitSearchTerms(textOnlyFilter);
   return textTerms.every((term) => noteValue.contains(term));
 }
 
-bool _matchesAllFieldsSearch(
-  NoteRecord note,
-  String allFields,
-) {
+bool _matchesAllFieldsSearch(NoteRecord note, String allFields) {
   final searchTerms = _splitSearchTerms(allFields);
   if (searchTerms.isEmpty) {
     return true;
@@ -300,8 +323,9 @@ _FilterToken? _parseFilterToken(
 
   final negated = normalized.startsWith('!');
   final parsedValue = negated ? normalized.substring(1).trim() : normalized;
-  final value =
-      normalizeValue != null ? normalizeValue(parsedValue) : parsedValue;
+  final value = normalizeValue != null
+      ? normalizeValue(parsedValue)
+      : parsedValue;
   if (value.isEmpty) {
     return null;
   }
@@ -418,8 +442,10 @@ bool _matchesCatalogFilterValue(String noteValue, String filterValue) {
     return true;
   }
 
-  final nextCharacter =
-      noteValue.substring(filterValue.length, filterValue.length + 1);
+  final nextCharacter = noteValue.substring(
+    filterValue.length,
+    filterValue.length + 1,
+  );
   return int.tryParse(nextCharacter) == null;
 }
 
@@ -432,9 +458,9 @@ bool _matchesScalarFilter(
 }) {
   final filters = multiple
       ? _parseMultiValueFilter(rawFilterValue, normalizeValue: normalizeValue)
-      : [
-          _parseFilterToken(rawFilterValue, normalizeValue: normalizeValue),
-        ].whereType<_FilterToken>().toList(growable: false);
+      : [_parseFilterToken(rawFilterValue, normalizeValue: normalizeValue)]
+            .whereType<_FilterToken>()
+            .toList(growable: false);
 
   if (filters.isEmpty) {
     return true;
@@ -497,10 +523,8 @@ List<String> _tagNames(List<Tag> tags) {
 }
 
 double _calculateTagsColumnWidth(List<NoteRecord> notes) {
-  final headerWidth = _measureTextWidth(
-        'Tags',
-        const TextStyle(fontWeight: FontWeight.w800),
-      ) +
+  final headerWidth =
+      _measureTextWidth('Tags', const TextStyle(fontWeight: FontWeight.w800)) +
       52;
   final notesWidth = notes.fold<double>(0, (maxWidth, note) {
     if (note.tags.isEmpty) {
@@ -534,6 +558,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   final TextEditingController _searchController = TextEditingController();
   final ScrollController _horizontalScrollController = ScrollController();
   final ScrollController _verticalScrollController = ScrollController();
+  final ScrollController _pinnedVerticalScrollController = ScrollController();
+  bool _syncingVerticalScroll = false;
+  bool _pinnedColumnDragActive = false;
   final GlobalKey _filterBarKey = GlobalKey();
   String _query = '';
   String _filterScope = _kDefaultFilterScope;
@@ -559,8 +586,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         onKeyEvent: (node, event) => _handleHeaderKey(event, key),
       ),
   };
-  late final FocusNode _importButtonFocusNode =
-      FocusNode(debugLabel: 'tableImport');
+  late final FocusNode _importButtonFocusNode = FocusNode(
+    debugLabel: 'tableImport',
+  );
   late final FocusNode _cardSortFocusNode = FocusNode(
     debugLabel: 'cardSort',
     onKeyEvent: (_, event) => _handleCardSortKey(event),
@@ -576,9 +604,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   final Map<int, GlobalKey> _cardKeys = <int, GlobalKey>{};
 
   GlobalKey _cardKeyFor(int noteId) => _cardKeys.putIfAbsent(
-        noteId,
-        () => GlobalKey(debugLabel: 'noteCard-$noteId'),
-      );
+    noteId,
+    () => GlobalKey(debugLabel: 'noteCard-$noteId'),
+  );
 
   bool get _cardLayout {
     final box = _tableAreaKey.currentContext?.findRenderObject();
@@ -662,6 +690,83 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     return true;
   }
 
+  /// Keeps the pinned ID/Front pane on the same row as the scrolling columns.
+  /// Only the scrolling pane owns the vertical scrollbar and keyboard
+  /// calculations; the pinned pane mirrors it, and a drag that starts on the
+  /// pinned pane mirrors back.
+  void _syncVerticalScroll(ScrollController source, ScrollController target) {
+    if (_syncingVerticalScroll ||
+        !source.hasClients ||
+        !target.hasClients ||
+        !source.position.hasContentDimensions ||
+        !target.position.hasContentDimensions) {
+      return;
+    }
+    final targetOffset = source.offset.clamp(
+      target.position.minScrollExtent,
+      target.position.maxScrollExtent,
+    );
+    if ((target.offset - targetOffset).abs() < 0.5) {
+      return;
+    }
+    _syncingVerticalScroll = true;
+    try {
+      target.jumpTo(targetOffset.toDouble());
+    } finally {
+      _syncingVerticalScroll = false;
+    }
+  }
+
+  void _syncMainToPinned() {
+    _syncVerticalScroll(
+      _verticalScrollController,
+      _pinnedVerticalScrollController,
+    );
+  }
+
+  void _syncPinnedToMain() {
+    _syncVerticalScroll(
+      _pinnedVerticalScrollController,
+      _verticalScrollController,
+    );
+  }
+
+  void _setColumnsDragging(bool dragging) {
+    if (_columnsDragging == dragging) {
+      return;
+    }
+    setState(() => _columnsDragging = dragging);
+  }
+
+  void _startPinnedColumnDrag(DragStartDetails _) {
+    if (!_columnsOverflow) {
+      return;
+    }
+    _collapseFilterSelection();
+    _pinnedColumnDragActive = true;
+    _setColumnsDragging(true);
+  }
+
+  void _endPinnedColumnDrag() {
+    _pinnedColumnDragActive = false;
+    _setColumnsDragging(false);
+  }
+
+  /// Pans the columns from a horizontal drag that started on the pinned pane,
+  /// which sits outside the horizontal scroller and so cannot scroll it
+  /// natively.
+  void _panColumnsFromPinnedDrag(DragUpdateDetails details) {
+    if (!_columnsOverflow) {
+      return;
+    }
+    final position = _horizontalScrollController.position;
+    _horizontalScrollController.jumpTo(
+      (position.pixels - details.delta.dx)
+          .clamp(position.minScrollExtent, position.maxScrollExtent)
+          .toDouble(),
+    );
+  }
+
   /// Tracks whether the user is actively dragging the columns, so rows can
   /// show a closed-hand cursor. Vertical notifications are ignored.
   ///
@@ -670,29 +775,35 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   /// table; the row cursor itself survives, matching the Editor.
   /// Programmatic scrolls (keyboard navigation, reveal-after-close) never
   /// trigger this.
+  /// Collapses a select-all left in the filter so its highlight does not sit
+  /// stale behind a table pan. Shared by native scrolling and the pinned-pane
+  /// drag, which pan without emitting a user scroll notification.
+  void _collapseFilterSelection() {
+    if (_searchFocusNode.hasFocus && !_searchController.selection.isCollapsed) {
+      _searchController.selection = TextSelection.collapsed(
+        offset: _searchController.text.length,
+      );
+    }
+  }
+
   bool _handleTableScrollNotification(ScrollNotification notification) {
     // A wheel tick dispatches forward/reverse followed by idle; only the
     // user-driven directions collapse the filter highlight (idle also fires
     // when a programmatic jump settles back through goIdle).
     if (notification is UserScrollNotification &&
         notification.direction != ScrollDirection.idle) {
-      if (_searchFocusNode.hasFocus &&
-          !_searchController.selection.isCollapsed) {
-        _searchController.selection = TextSelection.collapsed(
-          offset: _searchController.text.length,
-        );
-      }
+      _collapseFilterSelection();
     }
     if (notification.metrics.axis != Axis.horizontal) {
       return false;
     }
     if (notification is ScrollStartNotification &&
         notification.dragDetails != null) {
-      if (!_columnsDragging) {
-        setState(() => _columnsDragging = true);
-      }
-    } else if (notification is ScrollEndNotification && _columnsDragging) {
-      setState(() => _columnsDragging = false);
+      _setColumnsDragging(true);
+    } else if (notification is ScrollEndNotification &&
+        _columnsDragging &&
+        !_pinnedColumnDragActive) {
+      _setColumnsDragging(false);
     }
     return false;
   }
@@ -858,6 +969,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     widget.controller.addListener(_handleControllerChange);
     _searchFocusNode.addListener(_handleFilterFocusChange);
     _scopeFocusNode.addListener(_handleFilterFocusChange);
+    _verticalScrollController.addListener(_syncMainToPinned);
+    _pinnedVerticalScrollController.addListener(_syncPinnedToMain);
     FocusManager.instance.addListener(_handleFocusDrain);
   }
 
@@ -883,6 +996,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     _searchController.dispose();
     _horizontalScrollController.dispose();
     _verticalScrollController.dispose();
+    _pinnedVerticalScrollController.dispose();
     _tableFocusNode.dispose();
     _searchFocusNode.dispose();
     _scopeFocusNode.dispose();
@@ -953,37 +1067,44 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     if (_verticalScrollController.hasClients) {
       _verticalScrollController.jumpTo(0);
     }
+
+    if (_pinnedVerticalScrollController.hasClients) {
+      _pinnedVerticalScrollController.jumpTo(0);
+    }
   }
 
   List<NoteRecord> _sortedNotes(List<NoteRecord> notes) {
     final trimmedQuery = _query.trim();
-    final filtered = notes.where((note) {
-      if (trimmedQuery.isEmpty) return true;
+    final filtered = notes
+        .where((note) {
+          if (trimmedQuery.isEmpty) return true;
 
-      if (_filterScope == _kAllFieldsScope) {
-        return _matchesAllFieldsSearch(note, trimmedQuery);
-      }
+          if (_filterScope == _kAllFieldsScope) {
+            return _matchesAllFieldsSearch(note, trimmedQuery);
+          }
 
-      if (_filterScope == 'tags') {
-        return _matchesTagFilter(note, trimmedQuery);
-      }
+          if (_filterScope == 'tags') {
+            return _matchesTagFilter(note, trimmedQuery);
+          }
 
-      final fieldValue = note.valueForColumn(_filterScope).toLowerCase();
-      final supportsMultipleValues = _filterScope == 'catalogNumber' ||
-          _filterScope == 'grade' ||
-          _filterScope == 'issueDate' ||
-          _filterScope == 'denomination';
-      return _matchesScalarFilter(
-        fieldValue,
-        trimmedQuery,
-        multiple: supportsMultipleValues,
-        matcher: switch (_filterScope) {
-          'catalogNumber' => _matchesCatalogFilterValue,
-          'denomination' => _matchesDenominationFilterValue,
-          _ => (noteValue, filterValue) => noteValue.contains(filterValue),
-        },
-      );
-    }).toList(growable: false);
+          final fieldValue = note.valueForColumn(_filterScope).toLowerCase();
+          final supportsMultipleValues =
+              _filterScope == 'catalogNumber' ||
+              _filterScope == 'grade' ||
+              _filterScope == 'issueDate' ||
+              _filterScope == 'denomination';
+          return _matchesScalarFilter(
+            fieldValue,
+            trimmedQuery,
+            multiple: supportsMultipleValues,
+            matcher: switch (_filterScope) {
+              'catalogNumber' => _matchesCatalogFilterValue,
+              'denomination' => _matchesDenominationFilterValue,
+              _ => (noteValue, filterValue) => noteValue.contains(filterValue),
+            },
+          );
+        })
+        .toList(growable: false);
 
     filtered.sort((left, right) {
       final leftValue = left.valueForColumn(_sortKey).toLowerCase();
@@ -1053,10 +1174,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         },
         iconSize: 18,
         padding: const EdgeInsets.all(7),
-        constraints: const BoxConstraints(
-          minWidth: 32,
-          minHeight: 32,
-        ),
+        constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
         style: IconButton.styleFrom(
           foregroundColor: ViewerPalette.textMuted,
           hoverColor: ViewerPalette.accentSoft,
@@ -1076,10 +1194,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     }
     final result = await Navigator.of(context).push<NoteSlideshowResult>(
       MaterialPageRoute<NoteSlideshowResult>(
-        builder: (context) => NoteSlideshowScreen(
-          notes: notes,
-          initialIndex: index,
-        ),
+        builder: (context) =>
+            NoteSlideshowScreen(notes: notes, initialIndex: index),
       ),
     );
     if (!mounted) {
@@ -1119,8 +1235,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     // With nothing selected both directions enter the table at the first row,
     // matching the Editor. Up from the first row then hands off to the filter
     // (see _handleTableKey) rather than wrapping to the last row.
-    final next =
-        current == null ? 0 : (current + offset).clamp(0, notes.length - 1);
+    final next = current == null
+        ? 0
+        : (current + offset).clamp(0, notes.length - 1);
     _focusSelection(next);
     _ensureSelectedVisible();
   }
@@ -1145,8 +1262,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     if (_verticalScrollController.hasClients) {
       final position = _verticalScrollController.position;
       pageSize = math.max(1, (position.viewportDimension / rowExtent).floor());
-      firstVisibleIndex =
-          (position.pixels / rowExtent).floor().clamp(0, notes.length - 1);
+      firstVisibleIndex = (position.pixels / rowExtent).floor().clamp(
+        0,
+        notes.length - 1,
+      );
     }
     final base = _selectedIndex ?? firstVisibleIndex;
     final target = (base + direction * pageSize).clamp(0, notes.length - 1);
@@ -1280,8 +1399,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     // macOS, Ctrl elsewhere.
     final bool primaryModifierPressed =
         defaultTargetPlatform == TargetPlatform.macOS
-            ? HardwareKeyboard.instance.isMetaPressed
-            : HardwareKeyboard.instance.isControlPressed;
+        ? HardwareKeyboard.instance.isMetaPressed
+        : HardwareKeyboard.instance.isControlPressed;
     final bool jumpColumns = primaryModifierPressed || shiftPressed;
     final bool leftKey =
         key == LogicalKeyboardKey.arrowLeft || key == LogicalKeyboardKey.keyH;
@@ -1410,8 +1529,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     _searchFocusNode.requestFocus();
     final text = _searchController.text;
     if (text.isNotEmpty) {
-      _searchController.selection =
-          TextSelection(baseOffset: 0, extentOffset: text.length);
+      _searchController.selection = TextSelection(
+        baseOffset: 0,
+        extentOffset: text.length,
+      );
     }
   }
 
@@ -1583,8 +1704,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         return;
       }
 
-      final visibleNotes =
-          _sortedNotes(widget.controller.activeCollectionNotes);
+      final visibleNotes = _sortedNotes(
+        widget.controller.activeCollectionNotes,
+      );
       final noteIndex = visibleNotes.indexWhere((note) => note.id == noteId);
       if (noteIndex < 0) {
         return;
@@ -1601,39 +1723,43 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   }
 
   /// The nine-column desktop grid, kept at its full minimum width and panned
-  /// horizontally whenever the window is narrower than it. When a column sits
-  /// past the right edge, a slim footer states the visible range and how to
-  /// pan: the scrollbar stays hidden, but the cut can never read as empty data.
+  /// horizontally whenever the window is narrower than it. ID and Front are
+  /// pinned outside the horizontal scroller so the note identity survives a
+  /// pan; when a column still sits past the right edge, a slim footer states
+  /// the result count, the sort, and how to pan: the scrollbar stays hidden,
+  /// but the cut can never read as empty data.
   Widget _buildGrid(List<NoteRecord> notes, double availableWidth) {
     final tagsColumnWidth = _calculateTagsColumnWidth(notes);
-    final minTableWidth = _kFixedColumnsWidth +
-        tagsColumnWidth +
-        (_kTableHorizontalPadding * 2);
+    final minTableWidth =
+        _kFixedColumnsWidth + tagsColumnWidth + (_kTableHorizontalPadding * 2);
     final tableWidth = math.max(minTableWidth, availableWidth);
+    final pinnedPaneWidth = math.min(_kPinnedPaneWidth, availableWidth);
+    final rightContentWidth = math.max(0.0, tableWidth - pinnedPaneWidth);
+    final columnsNeedPan =
+        tableWidth - _kTableHorizontalPadding > availableWidth + 0.5;
 
-    final columnWidths = <double>[
-      _kOrderColumnWidth,
-      _kFrontColumnWidth,
-      _kDenominationColumnWidth,
-      _kDateColumnWidth,
-      _kCatalogColumnWidth,
-      _kCompanyColumnWidth,
-      _kGradeColumnWidth,
-      _kSerialColumnWidth,
-      tagsColumnWidth,
-    ];
-    // Only hint when a whole column's centre sits past the edge: a few px of
-    // slack clipped from the last column's right padding is not a hidden
-    // column, and announcing "1–9 of 9" would be noise.
-    var showPanHint = false;
-    var columnStart = _kTableHorizontalPadding;
-    for (final width in columnWidths) {
-      final center = columnStart + (width / 2);
-      if (center > availableWidth - _kTableHorizontalPadding) {
-        showPanHint = true;
-        break;
+    Widget buildRow(int index, {required bool pinned}) {
+      final note = notes[index];
+      final selected = _keyboardNavEnabled && _selectedIndex == index;
+      final Widget row = pinned
+          ? _PinnedTableRow(
+              note: note,
+              draggingColumns: _columnsDragging,
+              selected: selected,
+              onTap: () => _openNoteAtIndex(notes, index),
+            )
+          : _TableRow(
+              note: note,
+              tagsColumnWidth: tagsColumnWidth,
+              draggingColumns: _columnsDragging,
+              selected: selected,
+              onTagTap: _applyTagFilter,
+              onTap: () => _openNoteAtIndex(notes, index),
+            );
+      if (index.isOdd) {
+        return ColoredBox(color: _kZebraTint, child: row);
       }
-      columnStart += width;
+      return row;
     }
 
     return Column(
@@ -1641,77 +1767,140 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         Expanded(
           child: NotificationListener<ScrollNotification>(
             onNotification: _handleTableScrollNotification,
-            child: ScrollConfiguration(
-              behavior: const MouseDragScrollBehavior(),
-              child: SingleChildScrollView(
-                controller: _horizontalScrollController,
-                scrollDirection: Axis.horizontal,
-                child: SizedBox(
-                  width: tableWidth,
-                  child: Column(
-                    children: [
-                      _TableHeader(
-                        sortKey: _sortKey,
-                        ascending: _ascending,
-                        onSort: _toggleSort,
-                        tagsColumnWidth: tagsColumnWidth,
-                        draggingColumns: _columnsDragging,
-                        headerFocusNodes: _headerFocusNodes,
-                      ),
-                      const Divider(
-                        height: 1,
-                        thickness: 1,
-                        color: _kTableHeaderDivider,
-                      ),
-                      Expanded(
-                        child: ScrollConfiguration(
-                          behavior: const MaterialScrollBehavior(),
-                          child: Scrollbar(
-                            controller: _verticalScrollController,
-                            thumbVisibility: true,
-                            child: ListView.separated(
-                              controller: _verticalScrollController,
-                              itemCount: notes.length,
-                              separatorBuilder: (context, index) =>
-                                  const Divider(
-                                height: 1,
-                                color: _kTableDivider,
+            child: Scrollbar(
+              key: const ValueKey('tableVerticalScrollbar'),
+              controller: _verticalScrollController,
+              thumbVisibility: true,
+              notificationPredicate: (notification) =>
+                  notification.metrics.axis == Axis.vertical,
+              child: Row(
+                children: [
+                  SizedBox(
+                    key: const ValueKey('tablePinnedColumns'),
+                    width: pinnedPaneWidth,
+                    child: MouseRegion(
+                      cursor: _columnsDragging
+                          ? _draggingCursor
+                          : MouseCursor.defer,
+                      child: GestureDetector(
+                        behavior: HitTestBehavior.translucent,
+                        onHorizontalDragStart: _startPinnedColumnDrag,
+                        onHorizontalDragUpdate: _panColumnsFromPinnedDrag,
+                        onHorizontalDragEnd: (_) => _endPinnedColumnDrag(),
+                        onHorizontalDragCancel: _endPinnedColumnDrag,
+                        child: Column(
+                          children: [
+                            SizedBox(
+                              height: _kTableHeaderHeight,
+                              child: _PinnedTableHeader(
+                                sortKey: _sortKey,
+                                ascending: _ascending,
+                                onSort: _toggleSort,
+                                headerFocusNodes: _headerFocusNodes,
                               ),
-                              itemBuilder: (context, index) {
-                                final note = notes[index];
-
-                                final row = _TableRow(
-                                  note: note,
-                                  tagsColumnWidth: tagsColumnWidth,
-                                  draggingColumns: _columnsDragging,
-                                  selected: _keyboardNavEnabled &&
-                                      _selectedIndex == index,
-                                  onTagTap: _applyTagFilter,
-                                  onTap: () => _openNoteAtIndex(notes, index),
-                                );
-                                if (index.isOdd) {
-                                  return ColoredBox(
-                                      color: _kZebraTint, child: row);
-                                }
-                                return row;
-                              },
+                            ),
+                            const Divider(
+                              height: 1,
+                              thickness: 1,
+                              color: _kTableHeaderDivider,
+                            ),
+                            Expanded(
+                              child: ScrollConfiguration(
+                                behavior: const MaterialScrollBehavior(),
+                                child: ListView.separated(
+                                  controller: _pinnedVerticalScrollController,
+                                  itemCount: notes.length,
+                                  separatorBuilder: (context, index) =>
+                                      const Divider(
+                                        height: 1,
+                                        color: _kTableDivider,
+                                      ),
+                                  itemBuilder: (context, index) =>
+                                      buildRow(index, pinned: true),
+                                ),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ),
+                  Expanded(
+                    child: Stack(
+                      children: [
+                        Positioned.fill(
+                          child: ScrollConfiguration(
+                            behavior: const MouseDragScrollBehavior(),
+                            child: SingleChildScrollView(
+                              controller: _horizontalScrollController,
+                              scrollDirection: Axis.horizontal,
+                              child: SizedBox(
+                                width: rightContentWidth,
+                                child: Column(
+                                  children: [
+                                    SizedBox(
+                                      height: _kTableHeaderHeight,
+                                      child: _TableHeader(
+                                        sortKey: _sortKey,
+                                        ascending: _ascending,
+                                        onSort: _toggleSort,
+                                        tagsColumnWidth: tagsColumnWidth,
+                                        draggingColumns: _columnsDragging,
+                                        headerFocusNodes: _headerFocusNodes,
+                                      ),
+                                    ),
+                                    const Divider(
+                                      height: 1,
+                                      thickness: 1,
+                                      color: _kTableHeaderDivider,
+                                    ),
+                                    Expanded(
+                                      child: ScrollConfiguration(
+                                        behavior:
+                                            const MaterialScrollBehavior(),
+                                        child: ListView.separated(
+                                          controller: _verticalScrollController,
+                                          itemCount: notes.length,
+                                          separatorBuilder: (context, index) =>
+                                              const Divider(
+                                                height: 1,
+                                                color: _kTableDivider,
+                                              ),
+                                          itemBuilder: (context, index) =>
+                                              buildRow(index, pinned: false),
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                             ),
                           ),
                         ),
-                      ),
-                    ],
+                        Positioned(
+                          top: _kTableHeaderHeight + 1,
+                          right: 0,
+                          bottom: 0,
+                          width: 44,
+                          child: _ColumnsEdgeFade(
+                            controller: _horizontalScrollController,
+                            overflow: columnsNeedPan,
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
-                ),
+                ],
               ),
             ),
           ),
         ),
-        if (showPanHint)
-          _PanHint(
-            columnWidths: columnWidths,
-            availableWidth: availableWidth,
-            controller: _horizontalScrollController,
-          ),
+        _TableFooter(
+          visibleCount: notes.length,
+          sortKey: _sortKey,
+          ascending: _ascending,
+          showPanHint: columnsNeedPan,
+        ),
       ],
     );
   }
@@ -1768,7 +1957,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                       _Header(
                         collectionName:
                             widget.controller.activeCollection?.name ??
-                                'Collection',
+                            'Collection',
                         collections: dataset.collections,
                         activeCollectionId:
                             widget.controller.activeCollection?.id,
@@ -1777,8 +1966,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                         visibleCount: notes.length,
                         onOpenImports:
                             widget.controller.canManageImportedDatasets
-                                ? _openImportScreen
-                                : null,
+                            ? _openImportScreen
+                            : null,
                         importButtonFocusNode: _importButtonFocusNode,
                       ),
                       const SizedBox(height: 20),
@@ -1793,17 +1982,18 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                 (barConstraints.maxWidth * 0.34)
                                     .clamp(120.0, 200.0)
                                     .toDouble();
-                            final filterFocused = _searchFocusNode.hasFocus ||
+                            final filterFocused =
+                                _searchFocusNode.hasFocus ||
                                 _scopeFocusNode.hasFocus;
-                            final filterBorderWidth =
-                                filterFocused ? 1.5 : 1.0;
+                            final filterBorderWidth = filterFocused ? 1.5 : 1.0;
                             return Material(
                               key: _filterBarKey,
                               color: ViewerPalette.surface,
                               clipBehavior: Clip.antiAlias,
                               shape: RoundedRectangleBorder(
                                 borderRadius: BorderRadius.circular(
-                                    ViewerPalette.radiusControl),
+                                  ViewerPalette.radiusControl,
+                                ),
                                 side: BorderSide(
                                   color: filterFocused
                                       ? ViewerPalette.accent
@@ -1819,10 +2009,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                     ConstrainedBox(
                                       constraints: BoxConstraints(
                                         maxWidth: scopeMaxWidth,
-                                        minWidth: math.min(
-                                          120,
-                                          scopeMaxWidth,
-                                        ),
+                                        minWidth: math.min(120, scopeMaxWidth),
                                       ),
                                       child: SizedBox(
                                         height: _kHeaderBadgeHeight,
@@ -1843,22 +2030,20 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                             ),
                                             curve: Curves.easeOut,
                                             width: double.infinity,
-                                            color: _scopeHovered ||
+                                            color:
+                                                _scopeHovered ||
                                                     _scopeFocusNode.hasFocus
                                                 ? ViewerPalette.accentSoft
                                                 : Colors.transparent,
                                             child: Theme(
-                                              data: Theme.of(
-                                                context,
-                                              ).copyWith(
+                                              data: Theme.of(context).copyWith(
                                                 hoverColor: Colors.transparent,
                                                 highlightColor:
                                                     Colors.transparent,
                                                 splashColor: Colors.transparent,
                                                 focusColor: Colors.transparent,
                                               ),
-                                              child:
-                                                  DropdownButtonHideUnderline(
+                                              child: DropdownButtonHideUnderline(
                                                 child: Tooltip(
                                                   message: 'Filter field',
                                                   child: DropdownButton<String>(
@@ -1873,10 +2058,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                         Colors.transparent,
                                                     borderRadius:
                                                         BorderRadius.zero,
-                                                    padding: const EdgeInsets
-                                                        .symmetric(
-                                                      horizontal: 12,
-                                                    ),
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 12,
+                                                        ),
                                                     style: const TextStyle(
                                                       fontFamily: 'Inter',
                                                       color: ViewerPalette.text,
@@ -1892,24 +2077,27 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                     // one.
                                                     selectedItemBuilder:
                                                         (context) => [
-                                                      for (final scope
-                                                          in _kFilterScopes)
-                                                        Text(
-                                                          scope.label,
-                                                          overflow: TextOverflow
-                                                              .ellipsis,
-                                                        ),
-                                                    ],
+                                                          for (final scope
+                                                              in _kFilterScopes)
+                                                            Text(
+                                                              scope.label,
+                                                              overflow:
+                                                                  TextOverflow
+                                                                      .ellipsis,
+                                                            ),
+                                                        ],
                                                     items: [
                                                       for (final scope
                                                           in _kFilterScopes)
                                                         DropdownMenuItem<
-                                                            String>(
+                                                          String
+                                                        >(
                                                           value: scope.value,
                                                           child:
                                                               _FilterScopeOption(
-                                                            label: scope.label,
-                                                          ),
+                                                                label:
+                                                                    scope.label,
+                                                              ),
                                                         ),
                                                     ],
                                                     onChanged: _setFilterScope,
@@ -1926,7 +2114,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                       // Full interior height: the divider
                                       // touches the bar's top and bottom
                                       // borders without painting over them.
-                                      height: _kHeaderBadgeHeight -
+                                      height:
+                                          _kHeaderBadgeHeight -
                                           filterBorderWidth * 2,
                                       color: _kTableBorder,
                                     ),
@@ -1959,7 +2148,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                           suffixIcon: _clearFilterButton(),
                                           contentPadding:
                                               const EdgeInsets.symmetric(
-                                                  horizontal: 16, vertical: 14),
+                                                horizontal: 16,
+                                                vertical: 14,
+                                              ),
                                           border: InputBorder.none,
                                           enabledBorder: InputBorder.none,
                                           focusedBorder: InputBorder.none,
@@ -1984,12 +2175,23 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                           builder: (context, constraints) {
                             final Widget body;
                             if (notes.isEmpty) {
-                              body = const _TableEmptyState();
+                              body = Column(
+                                children: [
+                                  const Expanded(child: _TableEmptyState()),
+                                  _TableFooter(
+                                    visibleCount: 0,
+                                    sortKey: _sortKey,
+                                    ascending: _ascending,
+                                    showPanHint: false,
+                                  ),
+                                ],
+                              );
                             } else if (constraints.maxWidth <
                                 _kCardLayoutBreakpoint) {
                               body = ClipRRect(
-                                borderRadius:
-                                    BorderRadius.circular(_kCardRadius),
+                                borderRadius: BorderRadius.circular(
+                                  _kCardRadius,
+                                ),
                                 child: _NoteCardList(
                                   notes: notes,
                                   selectedIndex: _selectedIndex,
@@ -1997,14 +2199,12 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                   sortKey: _sortKey,
                                   ascending: _ascending,
                                   onSortKey: _setSortKey,
-                                  onToggleSortDirection:
-                                      _toggleSortDirection,
+                                  onToggleSortDirection: _toggleSortDirection,
                                   onTagTap: _applyTagFilter,
                                   onOpenNote: (index) =>
                                       _openNoteAtIndex(notes, index),
                                   cardKeyFor: _cardKeyFor,
-                                  scrollController:
-                                      _verticalScrollController,
+                                  scrollController: _verticalScrollController,
                                   sortFocusNode: _cardSortFocusNode,
                                   directionFocusNode:
                                       _cardSortDirectionFocusNode,
@@ -2014,12 +2214,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                               );
                             } else {
                               body = ClipRRect(
-                                borderRadius:
-                                    BorderRadius.circular(_kCardRadius),
-                                child: _buildGrid(
-                                  notes,
-                                  constraints.maxWidth,
+                                borderRadius: BorderRadius.circular(
+                                  _kCardRadius,
                                 ),
+                                child: _buildGrid(notes, constraints.maxWidth),
                               );
                             }
 
@@ -2031,8 +2229,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                               child: DecoratedBox(
                                 decoration: BoxDecoration(
                                   color: _kTableSurface,
-                                  borderRadius:
-                                      BorderRadius.circular(_kCardRadius),
+                                  borderRadius: BorderRadius.circular(
+                                    _kCardRadius,
+                                  ),
                                   // The 1px frame is painted by the foreground
                                   // layer below so content cannot cover it; a
                                   // background border would double its alpha.
@@ -2041,10 +2240,13 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                 child: DecoratedBox(
                                   position: DecorationPosition.foreground,
                                   decoration: BoxDecoration(
-                                    borderRadius:
-                                        BorderRadius.circular(_kCardRadius),
+                                    borderRadius: BorderRadius.circular(
+                                      _kCardRadius,
+                                    ),
                                     border: Border.all(
-                                        color: _kTableCardBorder, width: 1),
+                                      color: _kTableCardBorder,
+                                      width: 1,
+                                    ),
                                   ),
                                   child: body,
                                 ),
@@ -2565,8 +2767,9 @@ class _CollectionMenuState extends State<_CollectionMenu> {
   @override
   Widget build(BuildContext context) {
     final rows = _filtered;
-    final highlighted =
-        rows.isEmpty ? -1 : _highlighted.clamp(0, rows.length - 1);
+    final highlighted = rows.isEmpty
+        ? -1
+        : _highlighted.clamp(0, rows.length - 1);
 
     return Container(
       key: const ValueKey('collectionMenu'),
@@ -2736,8 +2939,9 @@ class _CollectionMenuRow extends StatelessWidget {
             margin: const EdgeInsets.symmetric(vertical: 1),
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
             decoration: BoxDecoration(
-              color:
-                  highlighted ? ViewerPalette.accentSoft : Colors.transparent,
+              color: highlighted
+                  ? ViewerPalette.accentSoft
+                  : Colors.transparent,
               borderRadius: BorderRadius.circular(5),
             ),
             child: Row(
@@ -2917,6 +3121,56 @@ class _StatPill extends StatelessWidget {
   }
 }
 
+class _PinnedTableHeader extends StatelessWidget {
+  const _PinnedTableHeader({
+    required this.sortKey,
+    required this.ascending,
+    required this.onSort,
+    required this.headerFocusNodes,
+  });
+
+  final String sortKey;
+  final bool ascending;
+  final ValueChanged<String> onSort;
+  final Map<String, FocusNode> headerFocusNodes;
+
+  @override
+  Widget build(BuildContext context) {
+    return ColoredBox(
+      key: const ValueKey('pinnedTableHeader'),
+      color: _kTableHeaderBg,
+      child: Padding(
+        padding: const EdgeInsets.only(left: _kTableHorizontalPadding),
+        child: Row(
+          children: [
+            _HeaderCell(
+              width: _kOrderColumnWidth,
+              label: '#',
+              alignment: Alignment.centerRight,
+              sortKey: 'displayOrder',
+              activeSortKey: sortKey,
+              ascending: ascending,
+              onSort: onSort,
+              semanticLabel: 'Order',
+              focusNode: headerFocusNodes['displayOrder'],
+            ),
+            _HeaderCell(
+              width: _kFrontColumnWidth,
+              label: 'Front',
+              alignment: Alignment.center,
+              isSortable: false,
+              sortKey: '',
+              activeSortKey: sortKey,
+              ascending: ascending,
+              onSort: onSort,
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _TableHeader extends StatelessWidget {
   const _TableHeader({
     required this.sortKey,
@@ -2945,171 +3199,82 @@ class _TableHeader extends StatelessWidget {
       child: ColoredBox(
         color: _kTableHeaderBg,
         child: Padding(
-          padding: const EdgeInsets.symmetric(
-              horizontal: _kTableHorizontalPadding, vertical: 4),
+          padding: const EdgeInsets.only(right: _kTableHorizontalPadding),
           child: Row(
             children: [
               _HeaderCell(
-                  width: _kOrderColumnWidth,
-                  label: '#',
-                  alignment: Alignment.centerRight,
-                  sortKey: 'displayOrder',
-                  activeSortKey: sortKey,
-                  ascending: ascending,
-                  onSort: onSort,
-                  semanticLabel: 'Order',
-                  focusNode: headerFocusNodes['displayOrder']),
+                width: _kDenominationColumnWidth,
+                label: 'Denomination',
+                alignment: Alignment.centerLeft,
+                sortKey: 'denomination',
+                activeSortKey: sortKey,
+                ascending: ascending,
+                onSort: onSort,
+                focusNode: headerFocusNodes['denomination'],
+              ),
               _HeaderCell(
-                  width: _kFrontColumnWidth,
-                  label: 'Front',
-                  alignment: Alignment.center,
-                  isSortable: false,
-                  sortKey: '',
-                  activeSortKey: sortKey,
-                  ascending: ascending,
-                  onSort: onSort),
+                width: _kDateColumnWidth,
+                label: 'Date',
+                alignment: Alignment.centerLeft,
+                sortKey: 'issueDate',
+                activeSortKey: sortKey,
+                ascending: ascending,
+                onSort: onSort,
+                focusNode: headerFocusNodes['issueDate'],
+              ),
               _HeaderCell(
-                  width: _kDenominationColumnWidth,
-                  label: 'Denomination',
-                  alignment: Alignment.centerLeft,
-                  sortKey: 'denomination',
-                  activeSortKey: sortKey,
-                  ascending: ascending,
-                  onSort: onSort,
-                  focusNode: headerFocusNodes['denomination']),
+                width: _kCatalogColumnWidth,
+                label: 'Catalog #',
+                alignment: Alignment.centerLeft,
+                sortKey: 'catalogNumber',
+                activeSortKey: sortKey,
+                ascending: ascending,
+                onSort: onSort,
+                focusNode: headerFocusNodes['catalogNumber'],
+              ),
               _HeaderCell(
-                  width: _kDateColumnWidth,
-                  label: 'Date',
-                  alignment: Alignment.centerLeft,
-                  sortKey: 'issueDate',
-                  activeSortKey: sortKey,
-                  ascending: ascending,
-                  onSort: onSort,
-                  focusNode: headerFocusNodes['issueDate']),
+                width: _kCompanyColumnWidth,
+                label: 'Company',
+                alignment: Alignment.centerLeft,
+                sortKey: 'gradingCompany',
+                activeSortKey: sortKey,
+                ascending: ascending,
+                onSort: onSort,
+                focusNode: headerFocusNodes['gradingCompany'],
+              ),
               _HeaderCell(
-                  width: _kCatalogColumnWidth,
-                  label: 'Catalog #',
-                  alignment: Alignment.centerLeft,
-                  sortKey: 'catalogNumber',
-                  activeSortKey: sortKey,
-                  ascending: ascending,
-                  onSort: onSort,
-                  focusNode: headerFocusNodes['catalogNumber']),
+                width: _kGradeColumnWidth,
+                label: 'Grade',
+                alignment: Alignment.centerLeft,
+                sortKey: 'grade',
+                activeSortKey: sortKey,
+                ascending: ascending,
+                onSort: onSort,
+                focusNode: headerFocusNodes['grade'],
+              ),
               _HeaderCell(
-                  width: _kCompanyColumnWidth,
-                  label: 'Company',
-                  alignment: Alignment.centerLeft,
-                  sortKey: 'gradingCompany',
-                  activeSortKey: sortKey,
-                  ascending: ascending,
-                  onSort: onSort,
-                  focusNode: headerFocusNodes['gradingCompany']),
+                width: _kSerialColumnWidth,
+                label: 'Serial',
+                alignment: Alignment.centerLeft,
+                sortKey: 'serial',
+                activeSortKey: sortKey,
+                ascending: ascending,
+                onSort: onSort,
+                focusNode: headerFocusNodes['serial'],
+              ),
               _HeaderCell(
-                  width: _kGradeColumnWidth,
-                  label: 'Grade',
-                  alignment: Alignment.centerLeft,
-                  sortKey: 'grade',
-                  activeSortKey: sortKey,
-                  ascending: ascending,
-                  onSort: onSort,
-                  focusNode: headerFocusNodes['grade']),
-              _HeaderCell(
-                  width: _kSerialColumnWidth,
-                  label: 'Serial',
-                  alignment: Alignment.centerLeft,
-                  sortKey: 'serial',
-                  activeSortKey: sortKey,
-                  ascending: ascending,
-                  onSort: onSort,
-                  focusNode: headerFocusNodes['serial']),
-              _HeaderCell(
-                  width: tagsColumnWidth,
-                  label: 'Tags',
-                  alignment: Alignment.centerLeft,
-                  sortKey: 'tags',
-                  activeSortKey: sortKey,
-                  ascending: ascending,
-                  onSort: onSort,
-                  focusNode: headerFocusNodes['tags']),
+                width: tagsColumnWidth,
+                label: 'Tags',
+                alignment: Alignment.centerLeft,
+                sortKey: 'tags',
+                activeSortKey: sortKey,
+                ascending: ascending,
+                onSort: onSort,
+                focusNode: headerFocusNodes['tags'],
+              ),
             ],
           ),
         ),
-      ),
-    );
-  }
-}
-
-/// The table's pan hint. DESIGN keeps the horizontal scrollbar hidden, so when
-/// the grid is wider than the card this one line states the visible column
-/// range and how to pan. It sits outside the horizontal viewport and listens to
-/// the controller, so the range stays true as the columns move.
-class _PanHint extends StatelessWidget {
-  const _PanHint({
-    required this.columnWidths,
-    required this.availableWidth,
-    required this.controller,
-  });
-
-  final List<double> columnWidths;
-  final double availableWidth;
-  final ScrollController controller;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      height: 28,
-      alignment: Alignment.centerLeft,
-      padding: const EdgeInsets.symmetric(
-        horizontal: _kTableHorizontalPadding,
-      ),
-      decoration: const BoxDecoration(
-        color: ViewerPalette.surface,
-        border: Border(top: BorderSide(color: _kTableDivider)),
-      ),
-      child: AnimatedBuilder(
-        animation: controller,
-        builder: (context, _) {
-          final offset = controller.hasClients ? controller.offset : 0.0;
-          var first = 0;
-          var last = columnWidths.length - 1;
-          var found = false;
-          var start = _kTableHorizontalPadding;
-          for (var index = 0; index < columnWidths.length; index++) {
-            final center = start + (columnWidths[index] / 2);
-            final visible = center >= offset + _kTableHorizontalPadding &&
-                center <= offset + availableWidth - _kTableHorizontalPadding;
-            if (visible && !found) {
-              first = index;
-              found = true;
-            }
-            if (visible) {
-              last = index;
-            }
-            start += columnWidths[index];
-          }
-
-          final range = 'Columns ${first + 1}–${last + 1} '
-              'of ${columnWidths.length}';
-
-          return Semantics(
-            container: true,
-            excludeSemantics: true,
-            label: '$range. Drag the header or use the left and right arrow '
-                'keys to pan the columns.',
-            child: Text(
-              '$range · drag the header or use ← →',
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 11,
-                fontWeight: FontWeight.w500,
-                letterSpacing: 0.2,
-                color: ViewerPalette.textFaint,
-              ),
-            ),
-          );
-        },
       ),
     );
   }
@@ -3147,8 +3312,9 @@ class _HeaderCell extends StatelessWidget {
   // The sort button carries 6px of its own padding for the hover wash, so the
   // cell gives back 6px; the label then lands on the same 12px line as the
   // data cells instead of floating 6px inside them.
-  static const EdgeInsets _kSortableCellPadding =
-      EdgeInsets.symmetric(horizontal: 6);
+  static const EdgeInsets _kSortableCellPadding = EdgeInsets.symmetric(
+    horizontal: 6,
+  );
 
   @override
   Widget build(BuildContext context) {
@@ -3192,15 +3358,15 @@ class _HeaderCell extends StatelessWidget {
               final indicator = Icon(
                 active
                     ? (ascending
-                        ? Icons.arrow_upward_rounded
-                        : Icons.arrow_downward_rounded)
+                          ? Icons.arrow_upward_rounded
+                          : Icons.arrow_downward_rounded)
                     : Icons.unfold_more_rounded,
                 size: _kIndicatorSize,
                 color: active
                     ? _kTableSortableHeaderText
                     : focused
-                        ? ViewerPalette.accent
-                        : ViewerPalette.textFaint.withValues(alpha: 0.5),
+                    ? ViewerPalette.accent
+                    : ViewerPalette.textFaint.withValues(alpha: 0.5),
               );
 
               // The indicator always occupies its slot, so the label never
@@ -3222,7 +3388,7 @@ class _HeaderCell extends StatelessWidget {
                 excludeSemantics: true,
                 label: active
                     ? '$accessibleName, sorted '
-                        '${ascending ? 'ascending' : 'descending'}'
+                          '${ascending ? 'ascending' : 'descending'}'
                     : '$accessibleName, not sorted',
                 onTap: () => onSort(sortKey),
                 child: Stack(
@@ -3231,27 +3397,32 @@ class _HeaderCell extends StatelessWidget {
                     TextButton(
                       focusNode: node,
                       onPressed: () => onSort(sortKey),
-                      style: TextButton.styleFrom(
-                        foregroundColor: labelColor,
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 6, vertical: 4),
-                        shape: RoundedRectangleBorder(
-                          borderRadius:
-                              BorderRadius.circular(ViewerPalette.radiusChip),
-                        ),
-                      ).copyWith(
-                        overlayColor:
-                            WidgetStateProperty.resolveWith((states) {
-                          if (states.contains(WidgetState.focused)) {
-                            return Colors.transparent;
-                          }
-                          if (states.contains(WidgetState.hovered) ||
-                              states.contains(WidgetState.pressed)) {
-                            return ViewerPalette.accentSoft;
-                          }
-                          return null;
-                        }),
-                      ),
+                      style:
+                          TextButton.styleFrom(
+                            foregroundColor: labelColor,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 6,
+                              vertical: 4,
+                            ),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(
+                                ViewerPalette.radiusChip,
+                              ),
+                            ),
+                          ).copyWith(
+                            overlayColor: WidgetStateProperty.resolveWith((
+                              states,
+                            ) {
+                              if (states.contains(WidgetState.focused)) {
+                                return Colors.transparent;
+                              }
+                              if (states.contains(WidgetState.hovered) ||
+                                  states.contains(WidgetState.pressed)) {
+                                return ViewerPalette.accentSoft;
+                              }
+                              return null;
+                            }),
+                          ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
@@ -3277,7 +3448,8 @@ class _HeaderCell extends StatelessWidget {
                           child: DecoratedBox(
                             decoration: BoxDecoration(
                               borderRadius: BorderRadius.circular(
-                                  ViewerPalette.radiusChip + 4),
+                                ViewerPalette.radiusChip + 4,
+                              ),
                               border: Border.all(
                                 color: ViewerPalette.accent,
                                 width: 2,
@@ -3322,6 +3494,99 @@ class _SelectionRing extends StatelessWidget {
   }
 }
 
+class _PinnedTableRow extends StatelessWidget {
+  const _PinnedTableRow({
+    required this.note,
+    required this.draggingColumns,
+    required this.selected,
+    required this.onTap,
+  });
+
+  final NoteRecord note;
+  final bool draggingColumns;
+  final bool selected;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return InkWell(
+      onTap: onTap,
+      // Rows keep the normal cursor on hover (no click hand) and only show the
+      // drag hand while the table is being panned.
+      mouseCursor: draggingColumns ? _draggingCursor : MouseCursor.defer,
+      hoverColor: ViewerPalette.accentSoft,
+      highlightColor: ViewerPalette.accentSoft,
+      // The selection ring is a paint-only overlay: it never participates in
+      // layout, so moving keyboard selection cannot shift rows (same idea as
+      // the editor's box-shadow focus ring). The pinned pane owns the ring's
+      // left half; the scrolling pane draws the rest so the two panes read as
+      // one continuous row.
+      child: SizedBox(
+        height: _kTableRowHeight,
+        child: Stack(
+          key: ValueKey('pinnedTableRow-${note.id}'),
+          children: [
+            if (selected)
+              const Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: ViewerPalette.rowSelected,
+                    borderRadius: BorderRadius.horizontal(
+                      left: Radius.circular(ViewerPalette.radiusMd),
+                    ),
+                  ),
+                ),
+              ),
+            Padding(
+              padding: const EdgeInsets.only(left: _kTableHorizontalPadding),
+              child: Row(
+                children: [
+                  _DataCell(
+                    width: _kOrderColumnWidth,
+                    alignment: Alignment.centerRight,
+                    child: Text('${note.displayOrder}'),
+                  ),
+                  _DataCell(
+                    width: _kFrontColumnWidth,
+                    alignment: Alignment.center,
+                    child: _NoteThumbnail(image: note.previewFor('front')),
+                  ),
+                ],
+              ),
+            ),
+            if (selected)
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.horizontal(
+                        left: Radius.circular(ViewerPalette.radiusMd),
+                      ),
+                      border: Border(
+                        top: BorderSide(
+                          color: ViewerPalette.accent,
+                          width: 1.5,
+                        ),
+                        bottom: BorderSide(
+                          color: ViewerPalette.accent,
+                          width: 1.5,
+                        ),
+                        left: BorderSide(
+                          color: ViewerPalette.accent,
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
 class _TableRow extends StatelessWidget {
   const _TableRow({
     required this.note,
@@ -3341,8 +3606,6 @@ class _TableRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final image = note.previewFor('front');
-
     return InkWell(
       onTap: onTap,
       // Rows keep the normal cursor on hover (no click hand) and only show the
@@ -3352,66 +3615,93 @@ class _TableRow extends StatelessWidget {
       highlightColor: ViewerPalette.accentSoft,
       // The selection ring is a paint-only overlay: it never participates in
       // layout, so moving keyboard selection cannot shift rows (same idea as
-      // the editor's box-shadow focus ring).
-      child: Stack(
-        key: ValueKey('tableRow-${note.id}'),
-        children: [
-          if (selected)
-            const Positioned.fill(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  color: ViewerPalette.rowSelected,
-                  borderRadius: BorderRadius.all(
-                    Radius.circular(ViewerPalette.radiusMd),
+      // the editor's box-shadow focus ring). The scrolling pane draws the
+      // ring's right half; the pinned pane owns the rest.
+      child: SizedBox(
+        height: _kTableRowHeight,
+        child: Stack(
+          key: ValueKey('tableRow-${note.id}'),
+          children: [
+            if (selected)
+              const Positioned.fill(
+                child: DecoratedBox(
+                  decoration: BoxDecoration(
+                    color: ViewerPalette.rowSelected,
+                    borderRadius: BorderRadius.horizontal(
+                      right: Radius.circular(ViewerPalette.radiusMd),
+                    ),
                   ),
                 ),
               ),
-            ),
-          Padding(
-            padding: const EdgeInsets.symmetric(
-                horizontal: _kTableHorizontalPadding, vertical: 12),
-            child: Row(
-              children: [
-                _DataCell(
-                    width: _kOrderColumnWidth,
-                    alignment: Alignment.centerRight,
-                    child: Text('${note.displayOrder}')),
-                _DataCell(
-                  width: _kFrontColumnWidth,
-                  alignment: Alignment.center,
-                  child: _NoteThumbnail(image: image),
-                ),
-                _DataCell(
+            Padding(
+              padding: const EdgeInsets.only(right: _kTableHorizontalPadding),
+              child: Row(
+                children: [
+                  _DataCell(
                     width: _kDenominationColumnWidth,
                     emphasized: true,
-                    child: Text(note.denomination)),
-                _DataCell(
+                    child: Text(note.denomination),
+                  ),
+                  _DataCell(
                     width: _kDateColumnWidth,
-                    child: Text(note.issueDate.isEmpty ? '-' : note.issueDate)),
-                _DataCell(
+                    child: Text(note.issueDate.isEmpty ? '-' : note.issueDate),
+                  ),
+                  _DataCell(
                     width: _kCatalogColumnWidth,
                     emphasized: true,
                     child: Text(
-                        note.catalogNumber.isEmpty ? '-' : note.catalogNumber)),
-                _DataCell(
+                      note.catalogNumber.isEmpty ? '-' : note.catalogNumber,
+                    ),
+                  ),
+                  _DataCell(
                     width: _kCompanyColumnWidth,
-                    child: Text(note.gradingCompany.isEmpty
-                        ? '-'
-                        : note.gradingCompany)),
-                _DataCell(
+                    child: Text(
+                      note.gradingCompany.isEmpty ? '-' : note.gradingCompany,
+                    ),
+                  ),
+                  _DataCell(
                     width: _kGradeColumnWidth,
-                    child: Text(note.grade.isEmpty ? '-' : note.grade)),
-                _DataCell(
+                    child: Text(note.grade.isEmpty ? '-' : note.grade),
+                  ),
+                  _DataCell(
                     width: _kSerialColumnWidth,
-                    child: Text(note.serial.isEmpty ? '-' : note.serial)),
-                _DataCell(
+                    child: Text(note.serial.isEmpty ? '-' : note.serial),
+                  ),
+                  _DataCell(
                     width: tagsColumnWidth,
-                    child: _NoteTagsCell(tags: note.tags, onTagTap: onTagTap)),
-              ],
+                    child: _NoteTagsCell(tags: note.tags, onTagTap: onTagTap),
+                  ),
+                ],
+              ),
             ),
-          ),
-          if (selected) const _SelectionRing(),
-        ],
+            if (selected)
+              const Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.horizontal(
+                        right: Radius.circular(ViewerPalette.radiusMd),
+                      ),
+                      border: Border(
+                        top: BorderSide(
+                          color: ViewerPalette.accent,
+                          width: 1.5,
+                        ),
+                        bottom: BorderSide(
+                          color: ViewerPalette.accent,
+                          width: 1.5,
+                        ),
+                        right: BorderSide(
+                          color: ViewerPalette.accent,
+                          width: 1.5,
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+              ),
+          ],
+        ),
       ),
     );
   }
@@ -4174,10 +4464,7 @@ class _NoteTagsCell extends StatelessWidget {
       children: [
         for (var i = 0; i < tagNames.length; i++) ...[
           if (i > 0) const SizedBox(width: _kTagChipHorizontalGap),
-          _TagChip(
-            label: tagNames[i],
-            onTap: () => onTagTap(tagNames[i]),
-          ),
+          _TagChip(label: tagNames[i], onTap: () => onTagTap(tagNames[i])),
         ],
       ],
     );
@@ -4217,14 +4504,10 @@ class _TagChipState extends State<_TagChip> {
           duration: const Duration(milliseconds: 150),
           curve: Curves.easeOut,
           decoration: BoxDecoration(
-            color: _hovered
-                ? ViewerPalette.tagBackgroundHover
-                : _kTagChipBg,
+            color: _hovered ? ViewerPalette.tagBackgroundHover : _kTagChipBg,
             borderRadius: BorderRadius.circular(ViewerPalette.radiusChip),
             border: Border.all(
-              color: _hovered
-                  ? ViewerPalette.tagBorderHover
-                  : _kTagChipBorder,
+              color: _hovered ? ViewerPalette.tagBorderHover : _kTagChipBorder,
             ),
           ),
           child: Padding(
@@ -4276,6 +4559,107 @@ class _DataCell extends StatelessWidget {
             child: child,
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A quiet fade at the right edge of the scrolling pane while columns remain
+/// beyond it. It sits outside the horizontal scroller so it stays at the card
+/// edge however far the columns have panned.
+class _ColumnsEdgeFade extends StatelessWidget {
+  const _ColumnsEdgeFade({required this.controller, required this.overflow});
+
+  final ScrollController controller;
+  final bool overflow;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!overflow) {
+      return const SizedBox.shrink();
+    }
+    return AnimatedBuilder(
+      animation: controller,
+      builder: (context, _) {
+        final position = controller.hasClients ? controller.position : null;
+        final atEnd =
+            position != null &&
+            position.hasContentDimensions &&
+            position.pixels >= position.maxScrollExtent - 0.5;
+        if (atEnd) {
+          return const SizedBox.shrink();
+        }
+        return IgnorePointer(
+          child: DecoratedBox(
+            key: const ValueKey('tableColumnsFade'),
+            decoration: BoxDecoration(
+              gradient: LinearGradient(
+                begin: Alignment.centerLeft,
+                end: Alignment.centerRight,
+                colors: [_kTableSurface.withValues(alpha: 0), _kTableSurface],
+              ),
+            ),
+          ),
+        );
+      },
+    );
+  }
+}
+
+/// The table's meta line: how many notes the current filter leaves, which
+/// column sorts them, and the pan pair when the columns overflow. The
+/// horizontal scrollbar stays hidden; this line is the pan affordance.
+class _TableFooter extends StatelessWidget {
+  const _TableFooter({
+    required this.visibleCount,
+    required this.sortKey,
+    required this.ascending,
+    required this.showPanHint,
+  });
+
+  final int visibleCount;
+  final String sortKey;
+  final bool ascending;
+  final bool showPanHint;
+
+  @override
+  Widget build(BuildContext context) {
+    const metaStyle = TextStyle(
+      fontFamily: 'Inter',
+      fontSize: 12,
+      color: ViewerPalette.textFaint,
+      fontFeatures: [FontFeature.tabularFigures()],
+    );
+    final countLabel = visibleCount == 1 ? '1 note' : '$visibleCount notes';
+    final sortLabel = _kColumnLabels[sortKey] ?? sortKey;
+
+    return Container(
+      key: const ValueKey('tableFooter'),
+      height: _kTableFooterHeight,
+      padding: const EdgeInsets.symmetric(horizontal: _kTableHorizontalPadding),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(color: _kTableDivider)),
+      ),
+      child: Row(
+        children: [
+          Flexible(
+            child: Text(
+              '$countLabel · Sorted by $sortLabel ${ascending ? '↑' : '↓'}',
+              key: const ValueKey('tableResultSummary'),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: metaStyle,
+            ),
+          ),
+          if (showPanHint) ...[
+            const SizedBox(width: 12),
+            const Text(
+              '← → pan',
+              key: ValueKey('tablePanHint'),
+              style: metaStyle,
+            ),
+          ],
+        ],
       ),
     );
   }
@@ -4407,8 +4791,9 @@ class _SkeletonLine extends StatelessWidget {
       alignment: Alignment.centerLeft,
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color:
-              ViewerPalette.textFaint.withValues(alpha: alpha.clamp(0.0, 1.0)),
+          color: ViewerPalette.textFaint.withValues(
+            alpha: alpha.clamp(0.0, 1.0),
+          ),
           borderRadius: BorderRadius.circular(ViewerPalette.radiusSm),
         ),
         child: const SizedBox(height: 16),
