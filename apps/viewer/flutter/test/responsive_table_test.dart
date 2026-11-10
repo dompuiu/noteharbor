@@ -53,6 +53,9 @@ void main() {
       if (decoration is! BoxDecoration) return false;
       final border = decoration.border;
       if (border is! Border) return false;
+      // The mounted image plate also carries an accent border when selected;
+      // the selection ring is the paint-only border with no fill.
+      if (decoration.color != null) return false;
       if (border.top.color != ViewerPalette.accent) return false;
       return decoration.borderRadius ==
           BorderRadius.circular(ViewerPalette.radiusMd);
@@ -82,19 +85,14 @@ void main() {
     // Card mode never scrolls horizontally.
     expect(find.byType(SingleChildScrollView), findsNothing);
 
-    // Denomination is the primary line; every other column is named on the
-    // metadata line or the tag footer.
+    // Denomination is the primary line; the collection position, catalogue
+    // number, date, company, grade, and serial stay reachable around it.
     expect(find.text('5 Lei'), findsOneWidget);
-    expect(find.textContaining('ID 1', findRichText: true), findsOneWidget);
+    expect(find.text('No. 1'), findsOneWidget);
     expect(find.textContaining('CAT P-88', findRichText: true), findsOneWidget);
-    expect(
-      find.textContaining('DATE 1966', findRichText: true),
-      findsOneWidget,
-    );
-    expect(
-      find.textContaining('GRADE PMG 66', findRichText: true),
-      findsOneWidget,
-    );
+    expect(find.text('1966'), findsOneWidget);
+    expect(find.text('PMG'), findsOneWidget);
+    expect(find.text('66'), findsOneWidget);
     expect(
       find.textContaining('S/N 123456', findRichText: true),
       findsOneWidget,
@@ -102,6 +100,30 @@ void main() {
     expect(find.text('Silver'), findsOneWidget);
     expect(find.text('Romania'), findsOneWidget);
 
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('card grades wear the catalogue bands', (
+    WidgetTester tester,
+  ) async {
+    await pumpTable(
+      tester,
+      size: const Size(400, 1200),
+      repository: _CardRepository(noteCount: 4),
+    );
+
+    BoxDecoration pillDecoration(String grade) {
+      final pill = tester.widget<Container>(
+        find
+            .ancestor(of: find.text(grade), matching: find.byType(Container))
+            .first,
+      );
+      return pill.decoration! as BoxDecoration;
+    }
+
+    // 66 is uncirculated, 64 is choice.
+    expect(pillDecoration('66').color, ViewerPalette.successSoft);
+    expect(pillDecoration('64').color, ViewerPalette.warningSoft);
     expect(tester.takeException(), isNull);
   });
 
@@ -287,7 +309,7 @@ void main() {
     );
 
     expect(card(1), findsOneWidget);
-    expect(find.textContaining('ID 1', findRichText: true), findsOneWidget);
+    expect(find.text('No. 1'), findsOneWidget);
     expect(
       find.text('A very long commemorative tag that must wrap'),
       findsOneWidget,

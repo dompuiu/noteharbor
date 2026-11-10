@@ -72,7 +72,46 @@ const double _kCardLayoutBreakpoint = 700;
 
 /// Approximate card pitch, used only when a keyboard jump targets a card the
 /// lazy list has not built yet. The exact card is aligned once it exists.
-const double _kCardEstimatedExtent = 112;
+const double _kCardEstimatedExtent = 128;
+
+/// The card's mounted image plate. Compact cards keep the note large enough to
+/// recognise without crowding the text column on a 320 px phone.
+const double _kCardImageWidth = 120;
+const double _kCardImageHeight = 72;
+const double _kCardCompactImageWidth = 88;
+const double _kCardCompactImageHeight = 52;
+const double _kCardCompactBreakpoint = 340;
+
+/// The card list sits on the same quiet grey step as the table header, so the
+/// white cards read as mounted plates rather than as one more white band.
+const Color _kCardTray = ViewerPalette.surfaceMist;
+
+const TextStyle _kCardLabelTextStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: ViewerPalette.textMuted,
+  fontSize: 9.5,
+  fontWeight: FontWeight.w800,
+  letterSpacing: 0.9,
+  height: 1,
+);
+
+const TextStyle _kCardMetaTextStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: ViewerPalette.textMuted,
+  fontSize: 12,
+  fontWeight: FontWeight.w500,
+  height: 1.3,
+);
+
+const TextStyle _kCardCodeTextStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: ViewerPalette.textMuted,
+  fontSize: 11.5,
+  fontWeight: FontWeight.w500,
+  letterSpacing: 0.045,
+  height: 1.3,
+  fontFeatures: [FontFeature.tabularFigures()],
+);
 
 /// Sortable columns in visual order, shared by the grid header chain, the
 /// card sort menu, and the explicit Tab order.
@@ -1700,10 +1739,13 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                         constraints: const BoxConstraints(maxWidth: 560),
                         child: LayoutBuilder(
                           builder: (context, barConstraints) {
-                            // The scope select takes at most 25% of the filter
-                            // bar; the text field takes the rest.
+                            // The scope select needs enough room for its
+                            // longest common label ("Catalog") at 320 px, but
+                            // never more than a fifth of a wide bar.
                             final scopeMaxWidth =
-                                barConstraints.maxWidth * 0.25;
+                                (barConstraints.maxWidth * 0.34)
+                                    .clamp(120.0, 200.0)
+                                    .toDouble();
                             final filterFocused = _searchFocusNode.hasFocus ||
                                 _scopeFocusNode.hasFocus;
                             final filterBorderWidth =
@@ -3201,49 +3243,52 @@ class _NoteCardList extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Column(
-      children: [
-        _CardSortBar(
-          sortKey: sortKey,
-          ascending: ascending,
-          onSortKey: onSortKey,
-          onToggleSortDirection: onToggleSortDirection,
-          sortFocusNode: sortFocusNode,
-          directionFocusNode: directionFocusNode,
-        ),
-        Expanded(
-          child: NotificationListener<ScrollNotification>(
-            onNotification: onScrollNotification,
-            child: ScrollConfiguration(
-              behavior: const MaterialScrollBehavior(),
-              child: Scrollbar(
-                controller: scrollController,
-                thumbVisibility: true,
-                child: ListView.builder(
-                  key: const ValueKey('noteCardList'),
+    return ColoredBox(
+      color: _kCardTray,
+      child: Column(
+        children: [
+          _CardSortBar(
+            sortKey: sortKey,
+            ascending: ascending,
+            onSortKey: onSortKey,
+            onToggleSortDirection: onToggleSortDirection,
+            sortFocusNode: sortFocusNode,
+            directionFocusNode: directionFocusNode,
+          ),
+          Expanded(
+            child: NotificationListener<ScrollNotification>(
+              onNotification: onScrollNotification,
+              child: ScrollConfiguration(
+                behavior: const MaterialScrollBehavior(),
+                child: Scrollbar(
                   controller: scrollController,
-                  padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
-                  itemCount: notes.length,
-                  itemBuilder: (context, index) {
-                    final note = notes[index];
-                    return Padding(
-                      padding: const EdgeInsets.only(bottom: 8),
-                      child: _NoteCard(
-                        key: cardKeyFor(note.id),
-                        note: note,
-                        selected:
-                            keyboardNavEnabled && selectedIndex == index,
-                        onTagTap: onTagTap,
-                        onTap: () => onOpenNote(index),
-                      ),
-                    );
-                  },
+                  thumbVisibility: true,
+                  child: ListView.builder(
+                    key: const ValueKey('noteCardList'),
+                    controller: scrollController,
+                    padding: const EdgeInsets.fromLTRB(10, 10, 10, 6),
+                    itemCount: notes.length,
+                    itemBuilder: (context, index) {
+                      final note = notes[index];
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: _NoteCard(
+                          key: cardKeyFor(note.id),
+                          note: note,
+                          selected:
+                              keyboardNavEnabled && selectedIndex == index,
+                          onTagTap: onTagTap,
+                          onTap: () => onOpenNote(index),
+                        ),
+                      );
+                    },
+                  ),
                 ),
               ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -3361,9 +3406,10 @@ class _CardSortBar extends StatelessWidget {
   }
 }
 
-/// One note as a card. Every grid column stays reachable: the order, catalog,
-/// date, grading company/grade, and serial sit on the labelled metadata line,
-/// and the tags keep their chips (and their filter action) on a third line.
+/// One note as a catalogue plate. The image is mounted on a quiet mat, the
+/// denomination is the plate's title, and the catalogue number, date, company,
+/// grade, and serial read as a single spec line. Tags keep their filter action
+/// on a footer behind a hairline. Tapping the plate opens the slideshow.
 class _NoteCard extends StatelessWidget {
   const _NoteCard({
     required this.note,
@@ -3380,16 +3426,24 @@ class _NoteCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final image = note.previewFor('front');
+    final front = note.previewFor('front');
+    final back = note.previewFor('back');
     final tagNames = _tagNames(note.tags);
     final title = note.denomination.trim().isEmpty
         ? 'Untitled note'
         : note.denomination;
+    final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
 
     return Semantics(
       button: true,
       selected: selected,
-      label: title,
+      label: [
+        title,
+        if (note.catalogNumber.trim().isNotEmpty)
+          'catalog ${note.catalogNumber}',
+        if (note.issueDate.trim().isNotEmpty) note.issueDate,
+        if (note.grade.trim().isNotEmpty) 'grade ${note.grade}',
+      ].join(', '),
       child: InkWell(
         onTap: onTap,
         hoverColor: ViewerPalette.accentSoft,
@@ -3403,77 +3457,119 @@ class _NoteCard extends StatelessWidget {
                 borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
                 border: Border.all(color: ViewerPalette.border),
               ),
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: Row(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    _NoteThumbnail(image: image),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            title,
-                            maxLines: 2,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontFamily: 'Inter',
-                              color: _kTableText,
-                              fontSize: 16,
-                              fontWeight: FontWeight.w700,
-                              height: 1.2,
-                            ),
-                          ),
-                          const SizedBox(height: 6),
-                          Wrap(
-                            spacing: 12,
-                            runSpacing: 3,
+              child: LayoutBuilder(
+                builder: (context, constraints) {
+                  final compact =
+                      constraints.maxWidth < _kCardCompactBreakpoint ||
+                      textScale > 1.3;
+                  final imageWidth = compact
+                      ? _kCardCompactImageWidth
+                      : _kCardImageWidth;
+                  final imageHeight = compact
+                      ? _kCardCompactImageHeight
+                      : _kCardImageHeight;
+
+                  return Padding(
+                    padding: EdgeInsets.fromLTRB(
+                      compact ? 10 : 12,
+                      compact ? 10 : 12,
+                      8,
+                      compact ? 10 : 12,
+                    ),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _NotePlate(
+                          front: front,
+                          back: back,
+                          width: imageWidth,
+                          height: imageHeight,
+                          selected: selected,
+                        ),
+                        SizedBox(width: compact ? 10 : 14),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            mainAxisSize: MainAxisSize.min,
                             children: [
-                              _CardMeta(
-                                label: 'ID',
-                                value: '${note.displayOrder}',
+                              _CardTopLine(note: note, compact: compact),
+                              SizedBox(height: compact ? 3 : 4),
+                              Row(
+                                crossAxisAlignment: CrossAxisAlignment.baseline,
+                                textBaseline: TextBaseline.alphabetic,
+                                children: [
+                                  Expanded(
+                                    flex: 3,
+                                    child: Text(
+                                      title,
+                                      maxLines: 2,
+                                      overflow: TextOverflow.ellipsis,
+                                      style: TextStyle(
+                                        fontFamily: 'Inter',
+                                        color: _kTableText,
+                                        fontSize: compact ? 18 : 20,
+                                        fontWeight: FontWeight.w800,
+                                        height: 1.12,
+                                        letterSpacing: -0.3,
+                                      ),
+                                    ),
+                                  ),
+                                  if (compact) ...[
+                                    const SizedBox(width: 8),
+                                    Flexible(
+                                      child: Text(
+                                        _valueOrDash(note.issueDate),
+                                        maxLines: 1,
+                                        overflow: TextOverflow.ellipsis,
+                                        textAlign: TextAlign.right,
+                                        style: _kCardMetaTextStyle.copyWith(
+                                          fontSize: 11,
+                                          fontFeatures: const [
+                                            FontFeature.tabularFigures(),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
-                              _CardMeta(
-                                label: 'CAT',
-                                value: _valueOrDash(note.catalogNumber),
-                              ),
-                              _CardMeta(
-                                label: 'DATE',
-                                value: _valueOrDash(note.issueDate),
-                              ),
-                              _CardMeta(
-                                label: 'GRADE',
-                                value: _gradeLabel(note),
-                              ),
-                              _CardMeta(
-                                label: 'S/N',
-                                value: _valueOrDash(note.serial),
-                              ),
+                              SizedBox(height: compact ? 5 : 6),
+                              _CardSpecLine(note: note),
+                              if (tagNames.isNotEmpty) ...[
+                                SizedBox(height: compact ? 6 : 8),
+                                Container(height: 1, color: _kTableDivider),
+                                SizedBox(height: compact ? 6 : 8),
+                                Wrap(
+                                  spacing: _kTagChipHorizontalGap,
+                                  runSpacing: _kTagChipHorizontalGap,
+                                  children: [
+                                    for (final tagName in tagNames)
+                                      _TagChip(
+                                        label: tagName,
+                                        multiline: true,
+                                        onTap: () => onTagTap(tagName),
+                                      ),
+                                  ],
+                                ),
+                              ],
                             ],
                           ),
-                          if (tagNames.isNotEmpty) ...[
-                            const SizedBox(height: 8),
-                            Wrap(
-                              spacing: _kTagChipHorizontalGap,
-                              runSpacing: _kTagChipHorizontalGap,
-                              children: [
-                                for (final tagName in tagNames)
-                                  _TagChip(
-                                    label: tagName,
-                                    multiline: true,
-                                    onTap: () => onTagTap(tagName),
-                                  ),
-                              ],
-                            ),
-                          ],
-                        ],
-                      ),
+                        ),
+                        const SizedBox(width: 4),
+                        Padding(
+                          padding: EdgeInsets.only(top: compact ? 2 : 4),
+                          child: Icon(
+                            Icons.chevron_right_rounded,
+                            size: compact ? 16 : 18,
+                            color: selected
+                                ? ViewerPalette.accent
+                                : ViewerPalette.textFaint,
+                          ),
+                        ),
+                      ],
                     ),
-                  ],
-                ),
+                  );
+                },
               ),
             ),
             // Paint-only selection ring, so selecting a card cannot shift it
@@ -3486,11 +3582,98 @@ class _NoteCard extends StatelessWidget {
   }
 }
 
-/// One labelled field on a card's metadata line. The label is quiet and the
-/// value carries the ink, so the row stays scannable while every column is
-/// still named.
-class _CardMeta extends StatelessWidget {
-  const _CardMeta({required this.label, required this.value});
+/// The card's top line: the collection position, the catalogue number, and the
+/// issue date. `No.` is quiet; the catalogue number keeps the ink because it is
+/// the identifier a collector scans first.
+class _CardTopLine extends StatelessWidget {
+  const _CardTopLine({required this.note, required this.compact});
+
+  final NoteRecord note;
+  final bool compact;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Text(
+          'No. ${note.displayOrder}',
+          style: TextStyle(
+            fontFamily: 'Inter',
+            color: ViewerPalette.textFaint,
+            fontSize: compact ? 9.5 : 10.5,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.04,
+            height: 1,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
+        const SizedBox(width: 8),
+        Expanded(
+          child: _LabeledValue(
+            label: 'CAT',
+            value: _valueOrDash(note.catalogNumber),
+          ),
+        ),
+        if (!compact) ...[
+          const SizedBox(width: 8),
+          Flexible(
+            child: Text(
+              _valueOrDash(note.issueDate),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              textAlign: TextAlign.right,
+              style: _kCardMetaTextStyle.copyWith(
+                fontSize: 12,
+                fontFeatures: const [FontFeature.tabularFigures()],
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+}
+
+/// The card's spec line: company, the banded grade pill, and the serial in the
+/// code role. It wraps on narrow cards and at large text scales.
+class _CardSpecLine extends StatelessWidget {
+  const _CardSpecLine({required this.note});
+
+  final NoteRecord note;
+
+  @override
+  Widget build(BuildContext context) {
+    final company = note.gradingCompany.trim();
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (company.isNotEmpty) Text(company, style: _kCardMetaTextStyle),
+            _GradePill(grade: note.grade),
+            ConstrainedBox(
+              constraints: BoxConstraints(maxWidth: constraints.maxWidth),
+              child: Text(
+                'S/N ${_valueOrDash(note.serial)}',
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _kCardCodeTextStyle,
+              ),
+            ),
+          ],
+        );
+      },
+    );
+  }
+}
+
+/// A small label and value on one line, used for `CAT` and the collection
+/// position. The label stays quiet; the value carries the ink.
+class _LabeledValue extends StatelessWidget {
+  const _LabeledValue({required this.label, required this.value});
 
   final String label;
   final String value;
@@ -3500,19 +3683,15 @@ class _CardMeta extends StatelessWidget {
     return Text.rich(
       TextSpan(
         children: [
-          TextSpan(
-            text: '$label ',
-            style: _kHeaderLabelTextStyle.copyWith(
-              color: ViewerPalette.textMuted,
-            ),
-          ),
+          TextSpan(text: '$label ', style: _kCardLabelTextStyle),
           TextSpan(
             text: value,
             style: const TextStyle(
               fontFamily: 'Inter',
               color: _kTableText,
               fontSize: 12.5,
-              fontWeight: FontWeight.w500,
+              fontWeight: FontWeight.w700,
+              height: 1.2,
               fontFeatures: [FontFeature.tabularFigures()],
             ),
           ),
@@ -3524,15 +3703,181 @@ class _CardMeta extends StatelessWidget {
   }
 }
 
-String _valueOrDash(String value) => value.trim().isEmpty ? '-' : value;
+/// The catalogue grade bands used by the Editor table: uncirculated (65+),
+/// choice (50-64), and circulated below that. An unreadable grade reads as a
+/// neutral pill, not as a second accent.
+enum _GradeTier { uncirculated, choice, circulated, none }
 
-String _gradeLabel(NoteRecord note) {
-  final label = [
-    note.gradingCompany.trim(),
-    note.grade.trim(),
-  ].where((value) => value.isNotEmpty).join(' ');
-  return label.isEmpty ? '-' : label;
+_GradeTier _gradeTier(String value) {
+  final match = RegExp(r'\d+(?:\.\d+)?').firstMatch(value);
+  final numeric = match == null ? null : double.tryParse(match.group(0)!);
+  if (numeric == null) {
+    return _GradeTier.none;
+  }
+  if (numeric >= 65) {
+    return _GradeTier.uncirculated;
+  }
+  return numeric >= 50 ? _GradeTier.choice : _GradeTier.circulated;
 }
+
+class _GradePill extends StatelessWidget {
+  const _GradePill({required this.grade});
+
+  final String grade;
+
+  @override
+  Widget build(BuildContext context) {
+    final text = grade.trim();
+    if (text.isEmpty) {
+      return Text('-', style: _kCardMetaTextStyle);
+    }
+
+    final (background, foreground, border) = switch (_gradeTier(text)) {
+      _GradeTier.uncirculated => (
+        ViewerPalette.successSoft,
+        ViewerPalette.success,
+        const Color(0x3D31A24C),
+      ),
+      _GradeTier.choice => (
+        ViewerPalette.warningSoft,
+        ViewerPalette.warning,
+        const Color(0x4DF7B928),
+      ),
+      _GradeTier.circulated || _GradeTier.none => (
+        ViewerPalette.surfaceMist,
+        ViewerPalette.textMuted,
+        ViewerPalette.borderSoft,
+      ),
+    };
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
+        border: Border.all(color: border),
+      ),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontFamily: 'Inter',
+          color: foreground,
+          fontSize: 12,
+          fontWeight: FontWeight.w600,
+          height: 1.2,
+          fontFeatures: const [FontFeature.tabularFigures()],
+        ),
+      ),
+    );
+  }
+}
+
+/// The note image mounted on its mat. The front is shown whole with
+/// `BoxFit.contain`, and the reverse peeks out from the corner when the archive
+/// has one, so the plate reads as a note with two sides rather than a photo
+/// crop.
+class _NotePlate extends StatelessWidget {
+  const _NotePlate({
+    required this.front,
+    required this.back,
+    required this.width,
+    required this.height,
+    required this.selected,
+  });
+
+  final NoteImage? front;
+  final NoteImage? back;
+  final double width;
+  final double height;
+  final bool selected;
+
+  @override
+  Widget build(BuildContext context) {
+    final frontImage = front;
+    final backImage = back;
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Container(
+          width: width,
+          height: height,
+          padding: const EdgeInsets.all(4),
+          decoration: BoxDecoration(
+            color: _kTableThumbnailPlaceholderBg,
+            borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
+            border: Border.all(
+              color: selected ? ViewerPalette.accent : ViewerPalette.borderSoft,
+            ),
+          ),
+          child: frontImage == null
+              ? const Center(
+                  child: Icon(
+                    Icons.image_outlined,
+                    size: 20,
+                    color: _kTableThumbnailPlaceholderIcon,
+                  ),
+                )
+              : ClipRRect(
+                  borderRadius: BorderRadius.circular(2),
+                  child: Image(
+                    image: createNoteImageProvider(frontImage),
+                    width: width,
+                    height: height,
+                    fit: BoxFit.contain,
+                    frameBuilder:
+                        (context, child, frame, wasSynchronouslyLoaded) {
+                          if (wasSynchronouslyLoaded || frame != null) {
+                            return child;
+                          }
+                          return const Center(
+                            child: Icon(
+                              Icons.image_outlined,
+                              size: 20,
+                              color: _kTableThumbnailPlaceholderIcon,
+                            ),
+                          );
+                        },
+                    errorBuilder: (context, error, stackTrace) => const Center(
+                      child: Icon(
+                        Icons.image_outlined,
+                        size: 20,
+                        color: _kTableThumbnailPlaceholderIcon,
+                      ),
+                    ),
+                  ),
+                ),
+        ),
+        if (backImage != null)
+          Positioned(
+            right: -3,
+            bottom: -3,
+            child: Container(
+              width: (width * 0.3).clamp(20.0, 38.0),
+              height: (height * 0.3).clamp(12.0, 22.0),
+              padding: const EdgeInsets.all(1),
+              decoration: BoxDecoration(
+                color: ViewerPalette.surface,
+                borderRadius: BorderRadius.circular(3),
+                border: Border.all(color: ViewerPalette.border),
+              ),
+              child: ClipRRect(
+                borderRadius: BorderRadius.circular(2),
+                child: Image(
+                  image: createNoteImageProvider(backImage),
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+}
+
+String _valueOrDash(String value) => value.trim().isEmpty ? '-' : value;
 
 class _NoteThumbnail extends StatelessWidget {
   const _NoteThumbnail({required this.image});
