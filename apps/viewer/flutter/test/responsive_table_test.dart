@@ -362,7 +362,7 @@ void main() {
       final titleCenter = tester.getCenter(titleFinder).dy;
       expect(tester.getRect(titleFinder).height, lessThan(60));
       expect(
-        (tester.getCenter(find.text('20 / 20')).dy - titleCenter).abs(),
+        (tester.getCenter(find.text('20 notes')).dy - titleCenter).abs(),
         lessThan(40),
       );
       expect(
@@ -380,7 +380,7 @@ void main() {
     await pumpTable(tester, size: const Size(400, 900));
 
     final title = find.text('TEST COLLECTION');
-    final counter = find.text('3 / 3');
+    final counter = find.text('3 notes');
     final importIcon = find.byIcon(Icons.file_upload_outlined);
     expect(title, findsOneWidget);
     expect(counter, findsOneWidget);
@@ -418,17 +418,29 @@ void main() {
     await tester.enterText(find.byType(TextField), 'zzz');
     await tester.pumpAndSettle();
 
-    expect(find.text('No notes match the current filter.'), findsOneWidget);
+    expect(find.text('No notes match this filter'), findsOneWidget);
+    expect(find.text('Clear filter'), findsOneWidget);
+    expect(find.text('Import notes'), findsNothing);
     expect(card(1), findsNothing);
     expect(tester.takeException(), isNull);
+
+    await tester.tap(find.text('Clear filter'));
+    await tester.pumpAndSettle();
+    expect(card(1), findsOneWidget);
   });
 
   testWidgets('an empty collection renders the empty state in card mode', (
     WidgetTester tester,
   ) async {
-    await pumpTable(tester, repository: _CardRepository(empty: true));
+    await pumpTable(
+      tester,
+      repository: _CardRepository(empty: true, collectionName: 'Blank Album'),
+    );
 
-    expect(find.text('No notes match the current filter.'), findsOneWidget);
+    expect(find.text('This collection is empty'), findsOneWidget);
+    expect(find.textContaining('Blank Album'), findsOneWidget);
+    expect(find.text('Import notes'), findsOneWidget);
+    expect(find.text('Clear filter'), findsNothing);
     expect(tester.takeException(), isNull);
   });
 }
@@ -456,12 +468,14 @@ class _CardRepository extends ViewerRepository {
     this.empty = false,
     this.longValues = false,
     this.manyTags = false,
+    this.collectionName,
   });
 
   final int noteCount;
   final bool empty;
   final bool longValues;
   final bool manyTags;
+  final String? collectionName;
 
   @override
   bool get canManageImportedDatasets => true;
@@ -480,9 +494,11 @@ class _CardRepository extends ViewerRepository {
       'collections': [
         {
           'id': 1,
-          'name': longValues
-              ? 'A collection name long enough to need an ellipsis'
-              : 'Test Collection',
+          'name':
+              collectionName ??
+              (longValues
+                  ? 'A collection name long enough to need an ellipsis'
+                  : 'Test Collection'),
           'noteCount': notes.length,
         },
       ],

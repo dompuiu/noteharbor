@@ -1,12 +1,17 @@
 import 'package:flutter/material.dart';
 
 import '../data/dataset_controller.dart';
+import '../data/viewer_repository.dart';
 import '../features/import/import_dataset_screen.dart';
 import '../features/table/notes_table_screen.dart';
 import 'viewer_palette.dart';
 
 class ViewerApp extends StatefulWidget {
-  const ViewerApp({super.key});
+  const ViewerApp({super.key, this.controller});
+
+  /// Tests can inject a controller loaded from a fake repository. Production
+  /// builds the real one and owns its lifetime.
+  final DatasetController? controller;
 
   @override
   State<ViewerApp> createState() => _ViewerAppState();
@@ -14,16 +19,20 @@ class ViewerApp extends StatefulWidget {
 
 class _ViewerAppState extends State<ViewerApp> {
   late final DatasetController _controller;
+  late final bool _ownsController;
 
   @override
   void initState() {
     super.initState();
-    _controller = DatasetController()..load();
+    _ownsController = widget.controller == null;
+    _controller = widget.controller ?? (DatasetController()..load());
   }
 
   @override
   void dispose() {
-    _controller.dispose();
+    if (_ownsController) {
+      _controller.dispose();
+    }
     super.dispose();
   }
 
@@ -330,8 +339,20 @@ class _ViewerAppState extends State<ViewerApp> {
           final dataset = _controller.dataset;
           final reduceMotion =
               MediaQuery.disableAnimationsOf(context);
+          // A first-run install has no archive: that is Import, not a load
+          // failure. Only a real load error (or the first load in flight)
+          // belongs to the table's in-card state.
+          final loadFailure = _controller.loadError;
+          final showTableState =
+              dataset == null &&
+              (_controller.isLoading ||
+                  (loadFailure != null &&
+                      loadFailure is! NoImportedDatasetException));
+          final showImport = dataset != null
+              ? dataset.collections.isEmpty
+              : !showTableState;
           final Widget child;
-          if (dataset == null || dataset.collections.isEmpty) {
+          if (showImport) {
             child = ImportDatasetScreen(
               controller: _controller,
               key: const ValueKey('import'),

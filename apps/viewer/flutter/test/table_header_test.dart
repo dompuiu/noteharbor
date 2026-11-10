@@ -39,13 +39,19 @@ void main() {
     final handle = tester.ensureSemantics();
     await pumpTable(tester, const Size(1400, 900));
 
-    expect(find.bySemanticsLabel('Order, sorted ascending'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('ID (display order), sorted ascending'),
+      findsOneWidget,
+    );
     expect(find.bySemanticsLabel('Denomination, not sorted'), findsOneWidget);
 
     await tester.tap(find.text('#'));
     await tester.pumpAndSettle();
 
-    expect(find.bySemanticsLabel('Order, sorted descending'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('ID (display order), sorted descending'),
+      findsOneWidget,
+    );
     handle.dispose();
   });
 

@@ -4,6 +4,15 @@ import '../models/viewer_dataset.dart';
 import 'imported_dataset_loader.dart';
 import 'native_dataset_store.dart';
 
+/// No archive has been imported yet. This is a first-run state, not a load
+/// failure: the app opens Import instead of an error card.
+class NoImportedDatasetException implements Exception {
+  const NoImportedDatasetException();
+
+  @override
+  String toString() => 'No imported dataset is installed.';
+}
+
 class ViewerRepository {
   ViewerRepository({NativeDatasetStore? nativeDatasetStore})
       : _nativeDatasetStore = nativeDatasetStore ?? createNativeDatasetStore(),
@@ -17,7 +26,7 @@ class ViewerRepository {
   Future<ViewerDataset> loadDataset() async {
     final importedLocation = await _nativeDatasetStore.getImportedDatasetLocation();
     if (importedLocation == null) {
-      throw StateError('No imported dataset is installed.');
+      throw const NoImportedDatasetException();
     }
 
     return _importedDatasetLoader.load(importedLocation);

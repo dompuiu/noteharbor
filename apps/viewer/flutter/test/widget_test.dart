@@ -87,7 +87,7 @@ void main() {
     await tester.enterText(find.byType(TextField), 'cat: 17');
     await tester.pumpAndSettle();
 
-    expect(find.text('No notes match the current filter.'), findsOneWidget);
+    expect(find.text('No notes match this filter'), findsOneWidget);
   });
 
   testWidgets('date and denomination filters accept comma-separated values', (

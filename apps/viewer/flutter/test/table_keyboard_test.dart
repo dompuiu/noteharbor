@@ -320,8 +320,8 @@ void main() {
 
       await tester.enterText(find.byType(TextField), 'zzz');
       await tester.pumpAndSettle();
-      expect(find.text('No notes match the current filter.'), findsOneWidget);
-      expect(find.text('0 notes · Sorted by ID ↑'), findsOneWidget);
+      expect(find.text('No notes match this filter'), findsOneWidget);
+      expect(find.text('0 of 5 · Sorted by ID ↑'), findsOneWidget);
 
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);
       await tester.pump();

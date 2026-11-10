@@ -81,6 +81,10 @@ const double _kFilterBarMaxWidth = 560;
 const double _kHeaderControlHeight = 40;
 const double _kTagChipHorizontalPadding = 10;
 const double _kTagChipHorizontalGap = 6;
+const EdgeInsets _kTagChipPadding = EdgeInsets.symmetric(
+  horizontal: _kTagChipHorizontalPadding,
+  vertical: 4,
+);
 
 /// Horizontal room the Tags cell needs beyond the measured chips: the cell's
 /// own 12px gutters on both sides plus breathing room at the column edge.
@@ -159,16 +163,6 @@ const TextStyle _kCardMetaTextStyle = TextStyle(
   height: 1.3,
 );
 
-const TextStyle _kCardCodeTextStyle = TextStyle(
-  fontFamily: 'Inter',
-  color: ViewerPalette.textMuted,
-  fontSize: 11.5,
-  fontWeight: FontWeight.w500,
-  letterSpacing: 0.045,
-  height: 1.3,
-  fontFeatures: [FontFeature.tabularFigures()],
-);
-
 /// Sortable columns in visual order, shared by the grid header chain, the
 /// card sort menu, and the explicit Tab order.
 const List<({String value, String label})> _kSortableColumns = [
@@ -234,11 +228,55 @@ const TextStyle _kTagChipTextStyle = TextStyle(
   height: 1,
 );
 
+/// DESIGN's Data role: table cell values at 13.5px, tabular so numbers and
+/// serials never jitter.
 const TextStyle _kDataCellTextStyle = TextStyle(
   fontFamily: 'Inter',
   color: _kTableText,
+  fontSize: 13.5,
   fontWeight: FontWeight.w400,
   fontFeatures: [FontFeature.tabularFigures()],
+);
+
+/// DESIGN's Code role: serials sit one step under Data, in Body, with the
+/// code role's open tracking.
+const TextStyle _kCodeTextStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: ViewerPalette.textMuted,
+  fontSize: 13,
+  fontWeight: FontWeight.w500,
+  letterSpacing: 0.045,
+  height: 1.3,
+  fontFeatures: [FontFeature.tabularFigures()],
+);
+
+/// The ID column is tertiary metadata: Body Faint, never full ink.
+const TextStyle _kIdCellTextStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: ViewerPalette.textFaint,
+  fontSize: 13.5,
+  fontWeight: FontWeight.w400,
+  fontFeatures: [FontFeature.tabularFigures()],
+);
+
+/// Empty values share one muted dash, so absence reads the same in every cell.
+/// The role matches the ID column's tertiary ink.
+const TextStyle _kDashTextStyle = _kIdCellTextStyle;
+
+const Text _kDashText = Text('-', style: _kDashTextStyle);
+
+/// Titles and detail lines shared by the empty, loading, and error states.
+const TextStyle _kStateTitleTextStyle = TextStyle(
+  fontFamily: 'Inter',
+  fontWeight: FontWeight.w700,
+  fontSize: 15,
+  color: ViewerPalette.text,
+);
+
+const TextStyle _kStateDetailTextStyle = TextStyle(
+  fontFamily: 'Inter',
+  fontSize: 13,
+  color: ViewerPalette.textMuted,
 );
 
 /// The unified filter bar's text: the hint and the typed query share the scope
@@ -552,17 +590,29 @@ bool _matchesTagFilter(NoteRecord note, String rawFilterValue) {
 
 // ---------------------------------------------------------------------------
 
-double _measureTextWidth(String text, TextStyle style) {
+double _measureTextWidth(
+  String text,
+  TextStyle style, {
+  TextScaler textScaler = TextScaler.noScaling,
+}) {
   final painter = TextPainter(
     text: TextSpan(text: text, style: style),
     maxLines: 1,
     textDirection: TextDirection.ltr,
+    textScaler: textScaler,
   )..layout();
   return painter.width;
 }
 
-double _tagChipWidth(String tagName) {
-  return _measureTextWidth(tagName, _kTagChipTextStyle) +
+double _tagChipWidth(
+  String tagName, {
+  TextScaler textScaler = TextScaler.noScaling,
+}) {
+  return _measureTextWidth(
+        tagName,
+        _kTagChipTextStyle,
+        textScaler: textScaler,
+      ) +
       (_kTagChipHorizontalPadding * 2) +
       2;
 }
@@ -574,19 +624,53 @@ List<String> _tagNames(List<Tag> tags) {
       .toList(growable: false);
 }
 
+/// How many leading tags fit in [maxWidth] once the overflow chip's label is
+/// measured with the same text scale the chips render at. One chip is dropped
+/// in favour of `+N more` as soon as the full run no longer fits.
+({int visible, int hidden}) _planTagRow(
+  List<String> tagNames,
+  double maxWidth,
+  TextScaler textScaler,
+) {
+  double rowWidth(int visible) {
+    var width = 0.0;
+    for (var index = 0; index < visible; index++) {
+      width += _tagChipWidth(tagNames[index], textScaler: textScaler);
+      if (index > 0) {
+        width += _kTagChipHorizontalGap;
+      }
+    }
+    final hidden = tagNames.length - visible;
+    if (hidden > 0) {
+      if (visible > 0) {
+        width += _kTagChipHorizontalGap;
+      }
+      width += _tagChipWidth('+$hidden more', textScaler: textScaler);
+    }
+    return width;
+  }
+
+  for (var visible = tagNames.length; visible >= 0; visible--) {
+    // TextPainter and the mounted Text round glyph widths slightly
+    // differently; a few pixels of slack keep a row that lands on the column
+    // edge from tipping into a sub-pixel RenderFlex overflow.
+    if (rowWidth(visible) <= maxWidth - 4) {
+      return (visible: visible, hidden: tagNames.length - visible);
+    }
+  }
+  return (visible: 0, hidden: tagNames.length);
+}
+
 double _calculateTagsColumnWidth(List<NoteRecord> notes) {
   final headerWidth =
       _measureTextWidth('Tags', const TextStyle(fontWeight: FontWeight.w800)) +
       52;
   final notesWidth = notes.fold<double>(0, (maxWidth, note) {
-    if (note.tags.isEmpty) {
-      return math.max(maxWidth, _measureTextWidth('-', const TextStyle()));
+    final tagNames = _tagNames(note.tags);
+    if (tagNames.isEmpty) {
+      return math.max(maxWidth, _measureTextWidth('-', _kDashTextStyle));
     }
 
-    final tagNames = note.tags
-        .map((tag) => tag.name.trim())
-        .where((name) => name.isNotEmpty)
-        .toList(growable: false);
     final rowWidth = tagNames
         .map(_tagChipWidth)
         .fold<double>(0, (sum, width) => sum + width);
@@ -594,7 +678,13 @@ double _calculateTagsColumnWidth(List<NoteRecord> notes) {
     return math.max(maxWidth, rowWidth + spacing + _kTagsColumnSafetyPadding);
   });
 
-  return math.max(_kDefaultTagsColumnWidth, math.max(headerWidth, notesWidth));
+  // Tags never widen the grid past its cap: whatever does not fit falls back
+  // to the cell's +N more chip, so one note with many tags cannot widen every
+  // row or push the readable columns off screen.
+  return math.min(
+    _kMaxTagsColumnWidth,
+    math.max(_kDefaultTagsColumnWidth, math.max(headerWidth, notesWidth)),
+  );
 }
 
 /// The scrolling columns' widths for one layout pass.
@@ -1261,6 +1351,15 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     _resetVerticalScroll();
   }
 
+  void _clearFilter() {
+    _searchController.clear();
+    setState(() {
+      _query = '';
+      _selectedIndex = null;
+    });
+    _resetVerticalScroll();
+  }
+
   Widget? _clearFilterButton() {
     if (_query.isEmpty) {
       return null;
@@ -1269,14 +1368,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       padding: const EdgeInsets.only(right: 6),
       child: IconButton(
         tooltip: 'Clear filter',
-        onPressed: () {
-          _searchController.clear();
-          setState(() {
-            _query = '';
-            _selectedIndex = null;
-          });
-          _resetVerticalScroll();
-        },
+        onPressed: _clearFilter,
         iconSize: 18,
         padding: const EdgeInsets.all(7),
         constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
@@ -1836,7 +1928,11 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   /// pan; when a column still sits past the right edge, a slim footer states
   /// the result count, the sort, and how to pan: the scrollbar stays hidden,
   /// but the cut can never read as empty data.
-  Widget _buildGrid(List<NoteRecord> notes, double availableWidth) {
+  Widget _buildGrid(
+    List<NoteRecord> notes,
+    double availableWidth, {
+    required int totalCount,
+  }) {
     final tagsMinWidth = _calculateTagsColumnWidth(notes);
     final tableWidth = math.max(
       _kPinnedPaneWidth +
@@ -2013,6 +2109,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         ),
         _TableFooter(
           visibleCount: notes.length,
+          totalCount: totalCount,
           sortKey: _sortKey,
           ascending: _ascending,
           showPanHint: columnsNeedPan,
@@ -2040,30 +2137,75 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
             child: AnimatedBuilder(
               animation: widget.controller,
               builder: (context, _) {
+                final canImport = widget.controller.canManageImportedDatasets;
                 if (widget.controller.isLoading &&
                     widget.controller.dataset == null) {
-                  return const _TableSkeleton();
+                  return const _TableStateCard(
+                    key: ValueKey('tableLoadingCard'),
+                    icon: Icons.hourglass_empty_rounded,
+                    title: 'Loading notes…',
+                    detail: 'Reading the collection from the archive.',
+                    liveRegion: true,
+                  );
                 }
 
-                if (widget.controller.error != null &&
+                if (widget.controller.loadError != null &&
                     widget.controller.dataset == null) {
-                  return Center(
-                    child: Padding(
-                      padding: const EdgeInsets.all(24),
-                      child: Text(
-                        'Failed to load dataset: ${widget.controller.error}',
-                      ),
+                  return _TableStateCard(
+                    key: const ValueKey('tableErrorCard'),
+                    liveRegion: true,
+                    icon: Icons.error_outline_rounded,
+                    title: 'Couldn’t load notes',
+                    detail:
+                        'The dataset could not be read. Nothing was changed.',
+                    reassurance:
+                        'Check that the archive is available, then try again.',
+                    action: Wrap(
+                      alignment: WrapAlignment.center,
+                      spacing: 8,
+                      runSpacing: 8,
+                      children: [
+                        FilledButton(
+                          onPressed: () => unawaited(widget.controller.load()),
+                          child: const Text('Try again'),
+                        ),
+                        if (canImport)
+                          TextButton(
+                            onPressed: _openImportScreen,
+                            child: const Text('Import another archive'),
+                          ),
+                      ],
                     ),
                   );
                 }
 
                 final dataset = widget.controller.dataset;
                 if (dataset == null) {
-                  return const Center(child: Text('No dataset available.'));
+                  return _TableStateCard(
+                    key: const ValueKey('tableNoDatasetCard'),
+                    icon: Icons.collections_bookmark_outlined,
+                    title: 'No notes loaded',
+                    detail: 'Import an archive to start a collection.',
+                    action: canImport
+                        ? FilledButton.icon(
+                            onPressed: _openImportScreen,
+                            icon: const Icon(
+                              Icons.file_upload_outlined,
+                              size: 16,
+                            ),
+                            label: const Text('Import notes'),
+                          )
+                        : null,
+                  );
                 }
 
                 final scopedNotes = widget.controller.activeCollectionNotes;
                 final notes = _sortedNotes(scopedNotes);
+                final rawCollectionName =
+                    widget.controller.activeCollection?.name ?? '';
+                final collectionName = rawCollectionName.trim().isEmpty
+                    ? 'Collection'
+                    : rawCollectionName.trim();
 
                 // The Viewer keeps a 12px inset rather than the Editor's 24px
                 // horizontal step: the card already owns 14px cell gutters, and
@@ -2074,19 +2216,14 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                     crossAxisAlignment: CrossAxisAlignment.stretch,
                     children: [
                       _Header(
-                        collectionName:
-                            widget.controller.activeCollection?.name ??
-                            'Collection',
+                        collectionName: collectionName,
                         collections: dataset.collections,
                         activeCollectionId:
                             widget.controller.activeCollection?.id,
                         onSelectCollection: _selectCollectionFromTitle,
                         totalCount: scopedNotes.length,
                         visibleCount: notes.length,
-                        onOpenImports:
-                            widget.controller.canManageImportedDatasets
-                            ? _openImportScreen
-                            : null,
+                        onOpenImports: canImport ? _openImportScreen : null,
                         importButtonFocusNode: _importButtonFocusNode,
                       ),
                       const SizedBox(height: 20),
@@ -2170,7 +2307,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                               ),
                                               child: DropdownButtonHideUnderline(
                                                 child: Tooltip(
-                                                  message: 'Filter field',
+                                                  message: 'Filter by',
                                                   child: DropdownButton<String>(
                                                     key: const ValueKey(
                                                       'filterScope',
@@ -2311,11 +2448,22 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                           builder: (context, constraints) {
                             final Widget body;
                             if (notes.isEmpty) {
+                              final collectionIsEmpty = scopedNotes.isEmpty;
                               body = Column(
                                 children: [
-                                  const Expanded(child: _TableEmptyState()),
+                                  Expanded(
+                                    child: _TableEmptyState(
+                                      filtered: !collectionIsEmpty,
+                                      collectionName: collectionName,
+                                      onClearFilter: _clearFilter,
+                                      onImport: canImport
+                                          ? _openImportScreen
+                                          : null,
+                                    ),
+                                  ),
                                   _TableFooter(
                                     visibleCount: 0,
+                                    totalCount: scopedNotes.length,
                                     sortKey: _sortKey,
                                     ascending: _ascending,
                                     showPanHint: false,
@@ -2353,7 +2501,11 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                 borderRadius: BorderRadius.circular(
                                   _kCardRadius,
                                 ),
-                                child: _buildGrid(notes, constraints.maxWidth),
+                                child: _buildGrid(
+                                  notes,
+                                  constraints.maxWidth,
+                                  totalCount: scopedNotes.length,
+                                ),
                               );
                             }
 
@@ -2472,7 +2624,7 @@ class _Header extends StatelessWidget {
     // The identity block (mark + collection title) and the trailing controls
     // always share one line. The title is the only flexible part, so it
     // ellipsizes instead of pushing the counter and import action onto a new
-    // row; card-width headers drop the pill's caption to keep that line roomy.
+    // row.
     Widget identity() {
       return Row(
         children: [
@@ -2539,9 +2691,8 @@ class _Header extends StatelessWidget {
           children: [
             _StatPill(
               label: 'Notes',
-              value: '$visibleCount / $totalCount',
+              value: _notesCountLabel(visibleCount, totalCount),
               maxWidth: statMaxWidth,
-              showLabel: !compact,
             ),
             if (importButton != null) ...[
               SizedBox(width: compact ? 8 : 12),
@@ -3179,12 +3330,7 @@ class _ImportButtonState extends State<_ImportButton> {
 }
 
 class _StatPill extends StatelessWidget {
-  const _StatPill({
-    required this.label,
-    required this.value,
-    this.maxWidth,
-    this.showLabel = true,
-  });
+  const _StatPill({required this.label, required this.value, this.maxWidth});
 
   final String label;
   final String value;
@@ -3193,10 +3339,6 @@ class _StatPill extends StatelessWidget {
   /// contents when a large text scale would otherwise crowd out the title and
   /// the import action. Wide headers leave it unbounded.
   final double? maxWidth;
-
-  /// Card-width headers drop the tiny caption: the value alone still reads as
-  /// a counter and leaves room for the title and import action.
-  final bool showLabel;
 
   @override
   Widget build(BuildContext context) {
@@ -3222,32 +3364,14 @@ class _StatPill extends StatelessWidget {
         child: SizedBox(
           height: _kHeaderControlHeight,
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: showLabel ? 16 : 12),
+            padding: const EdgeInsets.symmetric(horizontal: 16),
             child: FittedBox(
               fit: BoxFit.scaleDown,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  if (showLabel) ...[
-                    const Text(
-                      'NOTES',
-                      style: TextStyle(
-                        fontFamily: 'Inter',
-                        fontSize: 11,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.2,
-                        color: ViewerPalette.textMuted,
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    valueText,
-                  ] else
-                    Semantics(
-                      label: '$label $value',
-                      excludeSemantics: true,
-                      child: valueText,
-                    ),
-                ],
+              child: Semantics(
+                label: label,
+                value: value,
+                excludeSemantics: true,
+                child: valueText,
               ),
             ),
           ),
@@ -3287,7 +3411,8 @@ class _PinnedTableHeader extends StatelessWidget {
               activeSortKey: sortKey,
               ascending: ascending,
               onSort: onSort,
-              semanticLabel: 'Order',
+              semanticLabel: 'ID (display order)',
+              tooltip: 'ID (display order)',
               focusNode: headerFocusNodes['displayOrder'],
             ),
             _HeaderCell(
@@ -3427,6 +3552,7 @@ class _HeaderCell extends StatelessWidget {
     required this.onSort,
     this.isSortable = true,
     this.semanticLabel,
+    this.tooltip,
     this.focusNode,
   });
 
@@ -3439,6 +3565,7 @@ class _HeaderCell extends StatelessWidget {
   final ValueChanged<String> onSort;
   final bool isSortable;
   final String? semanticLabel;
+  final String? tooltip;
   final FocusNode? focusNode;
 
   static const double _kIndicatorSize = 14;
@@ -3515,13 +3642,16 @@ class _HeaderCell extends StatelessWidget {
               // shifts when the sort flips. Right-aligned columns put it on
               // the leading side so the label stays flush with the data.
               final leadingIndicator = alignment == Alignment.centerRight;
+              final headerLabel = Text(
+                label.toUpperCase(),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: _kHeaderLabelTextStyle.copyWith(color: labelColor),
+              );
               final labelText = Flexible(
-                child: Text(
-                  label.toUpperCase(),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: _kHeaderLabelTextStyle.copyWith(color: labelColor),
-                ),
+                child: tooltip == null
+                    ? headerLabel
+                    : Tooltip(message: tooltip!, child: headerLabel),
               );
 
               return Semantics(
@@ -3686,6 +3816,7 @@ class _PinnedTableRow extends StatelessWidget {
                   _DataCell(
                     width: _kOrderColumnWidth,
                     alignment: Alignment.centerRight,
+                    style: _kIdCellTextStyle,
                     child: Text('${note.displayOrder}'),
                   ),
                   _DataCell(
@@ -3782,32 +3913,29 @@ class _TableRow extends StatelessWidget {
                   _DataCell(
                     width: columnWidths.denomination,
                     emphasized: true,
-                    child: Text(note.denomination),
+                    child: _CellValue(note.denomination),
                   ),
                   _DataCell(
                     width: columnWidths.issueDate,
-                    child: Text(note.issueDate.isEmpty ? '-' : note.issueDate),
+                    child: _CellValue(note.issueDate),
                   ),
                   _DataCell(
                     width: columnWidths.catalogNumber,
                     emphasized: true,
-                    child: Text(
-                      note.catalogNumber.isEmpty ? '-' : note.catalogNumber,
-                    ),
+                    child: _CellValue(note.catalogNumber),
                   ),
                   _DataCell(
                     width: columnWidths.gradingCompany,
-                    child: Text(
-                      note.gradingCompany.isEmpty ? '-' : note.gradingCompany,
-                    ),
+                    child: _CellValue(note.gradingCompany),
                   ),
                   _DataCell(
                     width: columnWidths.grade,
-                    child: Text(note.grade.isEmpty ? '-' : note.grade),
+                    child: _GradePill(grade: note.grade),
                   ),
                   _DataCell(
                     width: columnWidths.serial,
-                    child: Text(note.serial.isEmpty ? '-' : note.serial),
+                    style: _kCodeTextStyle,
+                    child: _CellValue(note.serial),
                   ),
                   _DataCell(
                     width: columnWidths.tags,
@@ -4306,7 +4434,7 @@ class _CardSpecLine extends StatelessWidget {
                 'S/N ${_valueOrDash(note.serial)}',
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: _kCardCodeTextStyle,
+                style: _kCodeTextStyle,
               ),
             ),
           ],
@@ -4375,7 +4503,7 @@ class _GradePill extends StatelessWidget {
   Widget build(BuildContext context) {
     final text = grade.trim();
     if (text.isEmpty) {
-      return Text('-', style: _kCardMetaTextStyle);
+      return _kDashText;
     }
 
     final (background, foreground, border) = switch (_gradeTier(text)) {
@@ -4410,7 +4538,7 @@ class _GradePill extends StatelessWidget {
         style: TextStyle(
           fontFamily: 'Inter',
           color: foreground,
-          fontSize: 12,
+          fontSize: 13,
           fontWeight: FontWeight.w600,
           height: 1.2,
           fontFeatures: const [FontFeature.tabularFigures()],
@@ -4525,6 +4653,15 @@ class _NotePlate extends StatelessWidget {
 
 String _valueOrDash(String value) => value.trim().isEmpty ? '-' : value;
 
+/// The header and footer share one count phrase: the plain total when nothing
+/// is filtered, and `visible of total` while a filter is narrowing the set.
+String _notesCountLabel(int visibleCount, int totalCount) {
+  if (visibleCount == totalCount) {
+    return totalCount == 1 ? '1 note' : '$totalCount notes';
+  }
+  return '$visibleCount of $totalCount';
+}
+
 class _NoteThumbnail extends StatelessWidget {
   const _NoteThumbnail({required this.image});
 
@@ -4598,18 +4735,120 @@ class _NoteTagsCell extends StatelessWidget {
     final tagNames = _tagNames(tags);
 
     if (tagNames.isEmpty) {
-      return const Text('-');
+      return _kDashText;
     }
 
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        for (var i = 0; i < tagNames.length; i++) ...[
-          if (i > 0) const SizedBox(width: _kTagChipHorizontalGap),
-          _TagChip(label: tagNames[i], onTap: () => onTagTap(tagNames[i])),
-        ],
-      ],
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final plan = _planTagRow(
+          tagNames,
+          constraints.maxWidth,
+          MediaQuery.textScalerOf(context),
+        );
+
+        return Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var index = 0; index < plan.visible; index++) ...[
+              if (index > 0) const SizedBox(width: _kTagChipHorizontalGap),
+              _TagChip(
+                label: tagNames[index],
+                onTap: () => onTagTap(tagNames[index]),
+              ),
+            ],
+            if (plan.hidden > 0) ...[
+              if (plan.visible > 0)
+                const SizedBox(width: _kTagChipHorizontalGap),
+              _TagOverflowChip(
+                hiddenTags: tagNames.sublist(plan.visible),
+                onTagTap: onTagTap,
+              ),
+            ],
+          ],
+        );
+      },
     );
+  }
+}
+
+/// The dashed Ochre ghost that closes a tag run too long for the column. It is
+/// an affordance, not a tag: opening it lists the tags that did not fit, and
+/// picking one applies the same filter a chip tap does.
+class _TagOverflowChip extends StatelessWidget {
+  const _TagOverflowChip({required this.hiddenTags, required this.onTagTap});
+
+  final List<String> hiddenTags;
+  final ValueChanged<String> onTagTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = '+${hiddenTags.length} more';
+
+    return PopupMenuButton<String>(
+      tooltip: '${hiddenTags.length} more tags',
+      position: PopupMenuPosition.under,
+      onSelected: onTagTap,
+      itemBuilder: (context) => [
+        for (final tag in hiddenTags)
+          PopupMenuItem<String>(
+            value: tag,
+            height: 36,
+            child: Text(tag, style: _kTagChipTextStyle),
+          ),
+      ],
+      child: CustomPaint(
+        key: const ValueKey('tagOverflowChip'),
+        painter: const _DashedChipBorderPainter(
+          color: ViewerPalette.tagTextMuted,
+          radius: ViewerPalette.radiusChip,
+        ),
+        child: Padding(
+          padding: _kTagChipPadding,
+          child: Text(
+            label,
+            maxLines: 1,
+            style: _kTagChipTextStyle.copyWith(
+              color: ViewerPalette.tagTextMuted,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _DashedChipBorderPainter extends CustomPainter {
+  const _DashedChipBorderPainter({required this.color, required this.radius});
+
+  final Color color;
+  final double radius;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final rrect = RRect.fromRectAndRadius(
+      Offset.zero & size,
+      Radius.circular(radius),
+    );
+    const dashWidth = 5.0;
+    const dashGap = 3.0;
+    final paint = Paint()
+      ..color = color
+      ..strokeWidth = 1
+      ..style = PaintingStyle.stroke;
+    final path = Path()..addRRect(rrect);
+    for (final metric in path.computeMetrics()) {
+      var distance = 0.0;
+      while (distance < metric.length) {
+        final end = (distance + dashWidth).clamp(0.0, metric.length);
+        canvas.drawPath(metric.extractPath(distance, end), paint);
+        distance += dashWidth + dashGap;
+      }
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _DashedChipBorderPainter oldDelegate) {
+    return oldDelegate.color != color || oldDelegate.radius != radius;
   }
 }
 
@@ -4636,35 +4875,40 @@ class _TagChipState extends State<_TagChip> {
 
   @override
   Widget build(BuildContext context) {
-    return GestureDetector(
+    return Semantics(
+      button: true,
+      label: 'Filter by ${widget.label}',
       onTap: widget.onTap,
-      child: MouseRegion(
-        cursor: SystemMouseCursors.click,
-        onEnter: (_) => setState(() => _hovered = true),
-        onExit: (_) => setState(() => _hovered = false),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 150),
-          curve: Curves.easeOut,
-          decoration: BoxDecoration(
-            color: _hovered ? ViewerPalette.tagBackgroundHover : _kTagChipBg,
-            borderRadius: BorderRadius.circular(ViewerPalette.radiusChip),
-            border: Border.all(
-              color: _hovered ? ViewerPalette.tagBorderHover : _kTagChipBorder,
+      excludeSemantics: true,
+      child: GestureDetector(
+        onTap: widget.onTap,
+        child: MouseRegion(
+          cursor: SystemMouseCursors.click,
+          onEnter: (_) => setState(() => _hovered = true),
+          onExit: (_) => setState(() => _hovered = false),
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 150),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              color: _hovered ? ViewerPalette.tagBackgroundHover : _kTagChipBg,
+              borderRadius: BorderRadius.circular(ViewerPalette.radiusChip),
+              border: Border.all(
+                color: _hovered
+                    ? ViewerPalette.tagBorderHover
+                    : _kTagChipBorder,
+              ),
             ),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.symmetric(
-              horizontal: _kTagChipHorizontalPadding,
-              vertical: 4,
-            ),
-            child: Text(
-              widget.label,
-              maxLines: widget.multiline ? null : 1,
-              overflow: widget.multiline
-                  ? TextOverflow.clip
-                  : TextOverflow.visible,
-              softWrap: widget.multiline,
-              style: _kTagChipTextStyle,
+            child: Padding(
+              padding: _kTagChipPadding,
+              child: Text(
+                widget.label,
+                maxLines: widget.multiline ? null : 1,
+                overflow: widget.multiline
+                    ? TextOverflow.clip
+                    : TextOverflow.visible,
+                softWrap: widget.multiline,
+                style: _kTagChipTextStyle,
+              ),
             ),
           ),
         ),
@@ -4679,6 +4923,7 @@ class _DataCell extends StatelessWidget {
     required this.child,
     this.alignment = Alignment.centerLeft,
     this.emphasized = false,
+    this.style,
   });
 
   final double width;
@@ -4686,8 +4931,14 @@ class _DataCell extends StatelessWidget {
   final AlignmentGeometry alignment;
   final bool emphasized;
 
+  /// Optional role override: ID is Body Faint, Serial is Code. Null keeps the
+  /// default Data role.
+  final TextStyle? style;
+
   @override
   Widget build(BuildContext context) {
+    final baseStyle = style ?? _kDataCellTextStyle;
+
     return SizedBox(
       width: width,
       child: Padding(
@@ -4696,8 +4947,8 @@ class _DataCell extends StatelessWidget {
           alignment: alignment,
           child: DefaultTextStyle.merge(
             style: emphasized
-                ? _kDataCellTextStyle.copyWith(fontWeight: FontWeight.w600)
-                : _kDataCellTextStyle,
+                ? baseStyle.copyWith(fontWeight: FontWeight.w600)
+                : baseStyle,
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             child: child,
@@ -4705,6 +4956,18 @@ class _DataCell extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// A text cell that renders the shared muted dash when the value is empty.
+class _CellValue extends StatelessWidget {
+  const _CellValue(this.value);
+
+  final String value;
+
+  @override
+  Widget build(BuildContext context) {
+    return value.trim().isEmpty ? _kDashText : Text(value);
   }
 }
 
@@ -4756,12 +5019,14 @@ class _ColumnsEdgeFade extends StatelessWidget {
 class _TableFooter extends StatelessWidget {
   const _TableFooter({
     required this.visibleCount,
+    required this.totalCount,
     required this.sortKey,
     required this.ascending,
     required this.showPanHint,
   });
 
   final int visibleCount;
+  final int totalCount;
   final String sortKey;
   final bool ascending;
   final bool showPanHint;
@@ -4774,7 +5039,7 @@ class _TableFooter extends StatelessWidget {
       color: ViewerPalette.textFaint,
       fontFeatures: [FontFeature.tabularFigures()],
     );
-    final countLabel = visibleCount == 1 ? '1 note' : '$visibleCount notes';
+    final countLabel = _notesCountLabel(visibleCount, totalCount);
     final sortLabel = _kColumnLabels[sortKey] ?? sortKey;
 
     return Container(
@@ -4810,137 +5075,191 @@ class _TableFooter extends StatelessWidget {
 }
 
 class _TableEmptyState extends StatelessWidget {
-  const _TableEmptyState();
+  const _TableEmptyState({
+    required this.filtered,
+    required this.collectionName,
+    required this.onClearFilter,
+    required this.onImport,
+  });
+
+  /// True when the collection has notes but the active filter hides them all;
+  /// false when the collection itself has nothing to show yet.
+  final bool filtered;
+  final String collectionName;
+  final VoidCallback onClearFilter;
+  final VoidCallback? onImport;
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(32),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            DecoratedBox(
-              decoration: BoxDecoration(
-                color: ViewerPalette.surfaceContainer,
-                borderRadius: BorderRadius.circular(ViewerPalette.radiusLg),
-                border: Border.all(color: ViewerPalette.border),
-              ),
-              child: const Padding(
-                padding: EdgeInsets.all(16),
-                child: Icon(
-                  Icons.search_off_rounded,
-                  size: 28,
-                  color: ViewerPalette.textMuted,
+    final title = filtered
+        ? 'No notes match this filter'
+        : 'This collection is empty';
+    final detail = filtered
+        ? 'Try a different search, or clear the filter to see everything.'
+        : 'Notes in "$collectionName" will appear here once they are imported.';
+
+    return _StateCopy(
+      key: const ValueKey('tableEmptyState'),
+      icon: filtered
+          ? Icons.search_off_rounded
+          : Icons.collections_bookmark_outlined,
+      title: title,
+      detail: detail,
+      action: filtered
+          ? OutlinedButton.icon(
+              key: const ValueKey('emptyStateClearFilter'),
+              onPressed: onClearFilter,
+              icon: const Icon(Icons.close_rounded, size: 16),
+              label: const Text('Clear filter'),
+            )
+          : onImport == null
+          ? null
+          : FilledButton.icon(
+              key: const ValueKey('emptyStateImport'),
+              onPressed: onImport,
+              icon: const Icon(Icons.file_upload_outlined, size: 16),
+              label: const Text('Import notes'),
+            ),
+    );
+  }
+}
+
+/// The shared state body: icon plate, named title, detail and reassurance
+/// lines, and one action. It centres when it fits and scrolls at large text
+/// scales or short windows, so the copy is never clipped.
+class _StateCopy extends StatelessWidget {
+  const _StateCopy({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    this.reassurance,
+    this.action,
+    this.liveRegion = false,
+    super.key,
+  });
+
+  final IconData icon;
+  final String title;
+  final String detail;
+  final String? reassurance;
+  final Widget? action;
+  final bool liveRegion;
+
+  @override
+  Widget build(BuildContext context) {
+    final copy = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        DecoratedBox(
+          decoration: BoxDecoration(
+            color: ViewerPalette.surfaceContainer,
+            borderRadius: BorderRadius.circular(ViewerPalette.radiusLg),
+            border: Border.all(color: ViewerPalette.border),
+          ),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Icon(icon, size: 28, color: ViewerPalette.textMuted),
+          ),
+        ),
+        const SizedBox(height: 16),
+        Text(title, textAlign: TextAlign.center, style: _kStateTitleTextStyle),
+        const SizedBox(height: 6),
+        Text(
+          detail,
+          textAlign: TextAlign.center,
+          style: _kStateDetailTextStyle,
+        ),
+        if (reassurance != null) ...[
+          const SizedBox(height: 4),
+          Text(
+            reassurance!,
+            textAlign: TextAlign.center,
+            style: _kStateDetailTextStyle,
+          ),
+        ],
+      ],
+    );
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        return SingleChildScrollView(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minHeight: constraints.maxHeight),
+            child: Center(
+              child: Padding(
+                padding: const EdgeInsets.all(32),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    liveRegion
+                        ? Semantics(
+                            liveRegion: true,
+                            container: true,
+                            child: copy,
+                          )
+                        : copy,
+                    if (action != null) ...[
+                      const SizedBox(height: 16),
+                      action!,
+                    ],
+                  ],
                 ),
               ),
             ),
-            const SizedBox(height: 16),
-            const Text(
-              'No notes match the current filter.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontWeight: FontWeight.w700,
-                fontSize: 15,
-                color: ViewerPalette.text,
-              ),
-            ),
-            const SizedBox(height: 6),
-            const Text(
-              'Try a different search, or clear the filter to see everything.',
-              textAlign: TextAlign.center,
-              style: TextStyle(
-                fontFamily: 'Inter',
-                fontSize: 13,
-                color: ViewerPalette.textMuted,
-              ),
-            ),
-          ],
-        ),
-      ),
+          ),
+        );
+      },
     );
   }
 }
 
-class _TableSkeleton extends StatefulWidget {
-  const _TableSkeleton();
+/// DESIGN's in-card loading, load-error, and no-dataset states. Each replaces
+/// the table in the same white card shell: a quiet icon plate, a named title,
+/// one detail line, and at most one primary recovery pill.
+class _TableStateCard extends StatelessWidget {
+  const _TableStateCard({
+    required this.icon,
+    required this.title,
+    required this.detail,
+    this.reassurance,
+    this.action,
+    this.liveRegion = false,
+    super.key,
+  });
 
-  @override
-  State<_TableSkeleton> createState() => _TableSkeletonState();
-}
+  final IconData icon;
+  final String title;
+  final String detail;
+  final String? reassurance;
+  final Widget? action;
 
-class _TableSkeletonState extends State<_TableSkeleton>
-    with SingleTickerProviderStateMixin {
-  late final AnimationController _pulse = AnimationController(
-    vsync: this,
-    duration: const Duration(milliseconds: 1100),
-  )..repeat(reverse: true);
-
-  @override
-  void dispose() {
-    _pulse.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 640),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: ViewerPalette.surface,
-            borderRadius: BorderRadius.circular(ViewerPalette.radiusXl),
-            border: Border.all(color: ViewerPalette.border),
-            boxShadow: ViewerPalette.shadowMid,
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(20),
-            child: AnimatedBuilder(
-              animation: _pulse,
-              builder: (context, _) {
-                final t = Curves.easeInOut.transform(_pulse.value);
-                return Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    for (var i = 0; i < 5; i++) ...[
-                      _SkeletonLine(
-                        alpha: 0.35 + 0.45 * (i.isEven ? t : 1 - t),
-                        widthFactor: i == 0 ? 0.9 : (i == 4 ? 0.55 : 0.75),
-                      ),
-                      if (i < 4) const SizedBox(height: 12),
-                    ],
-                  ],
-                );
-              },
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _SkeletonLine extends StatelessWidget {
-  const _SkeletonLine({required this.alpha, required this.widthFactor});
-
-  final double alpha;
-  final double widthFactor;
+  /// Only the copy block is a live region, so the action is not announced
+  /// twice when the state changes.
+  final bool liveRegion;
 
   @override
   Widget build(BuildContext context) {
-    return FractionallySizedBox(
-      widthFactor: widthFactor,
-      alignment: Alignment.centerLeft,
+    return Padding(
+      padding: const EdgeInsets.all(12),
       child: DecoratedBox(
         decoration: BoxDecoration(
-          color: ViewerPalette.textFaint.withValues(
-            alpha: alpha.clamp(0.0, 1.0),
-          ),
-          borderRadius: BorderRadius.circular(ViewerPalette.radiusSm),
+          color: _kTableSurface,
+          borderRadius: BorderRadius.circular(_kCardRadius),
+          border: Border.all(color: _kTableBorder),
         ),
-        child: const SizedBox(height: 16),
+        child: Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 440),
+            child: _StateCopy(
+              icon: icon,
+              title: title,
+              detail: detail,
+              reassurance: reassurance,
+              action: action,
+              liveRegion: liveRegion,
+            ),
+          ),
+        ),
       ),
     );
   }

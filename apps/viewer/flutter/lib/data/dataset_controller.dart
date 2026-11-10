@@ -16,6 +16,7 @@ class DatasetController extends ChangeNotifier {
 
   ViewerDataset? _dataset;
   Object? _error;
+  Object? _loadError;
   bool _isLoading = false;
   bool _isMutating = false;
   int? _activeCollectionId;
@@ -27,6 +28,11 @@ class DatasetController extends ChangeNotifier {
 
   ViewerDataset? get dataset => _dataset;
   Object? get error => _error;
+
+  /// The last dataset load failure. Mutation failures stay on [error] so a
+  /// failed import does not replace the Import screen with the table's error
+  /// card; only a real load failure should do that.
+  Object? get loadError => _loadError;
   bool get isLoading => _isLoading;
   bool get isMutating => _isMutating;
   bool get canManageImportedDatasets => _repository.canManageImportedDatasets;
@@ -69,6 +75,7 @@ class DatasetController extends ChangeNotifier {
   Future<void> load() async {
     _isLoading = true;
     _error = null;
+    _loadError = null;
     notifyListeners();
 
     try {
@@ -76,6 +83,7 @@ class DatasetController extends ChangeNotifier {
       await _restoreSavedSelection();
     } catch (error) {
       _error = error;
+      _loadError = error;
     } finally {
       _isLoading = false;
       notifyListeners();
@@ -85,6 +93,7 @@ class DatasetController extends ChangeNotifier {
   Future<void> importArchive(String archivePath) async {
     _isMutating = true;
     _error = null;
+    _loadError = null;
     notifyListeners();
 
     try {
@@ -103,6 +112,7 @@ class DatasetController extends ChangeNotifier {
   Future<void> deleteCollection(int collectionId, {String? collectionName}) async {
     _isMutating = true;
     _error = null;
+    _loadError = null;
     notifyListeners();
 
     try {
@@ -121,6 +131,7 @@ class DatasetController extends ChangeNotifier {
   Future<void> deleteImportedDataset() async {
     _isMutating = true;
     _error = null;
+    _loadError = null;
     notifyListeners();
 
     try {
