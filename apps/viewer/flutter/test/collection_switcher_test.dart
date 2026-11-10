@@ -25,6 +25,11 @@ void main() {
 
     expect(find.text("SERBAN'S NOTES"), findsOneWidget);
     expect(find.byKey(const ValueKey('collectionMenu')), findsNothing);
+    // The collection name starts on the same left edge as the brand eyebrow.
+    expect(
+      tester.getTopLeft(find.text("SERBAN'S NOTES")).dx,
+      closeTo(tester.getTopLeft(find.text('NOTE HARBOR')).dx, 0.5),
+    );
     // The chevron is always on screen so the title reads as a switcher
     // without waiting for hover or focus.
     expect(find.byIcon(Icons.expand_more), findsOneWidget);
