@@ -695,7 +695,7 @@ class _NoteImage extends StatelessWidget {
               : Image(
                   image: createNoteImageProvider(image),
                   fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Center(
+                  errorBuilder: (_, _, _) => const Center(
                     child: Text(
                       'Missing image',
                       style: TextStyle(
