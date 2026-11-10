@@ -16,6 +16,7 @@ import '../../widgets/mouse_drag_scroll_behavior.dart';
 import '../../widgets/note_image_provider.dart';
 import '../import/import_dataset_screen.dart';
 import '../slideshow/note_slideshow_screen.dart';
+import 'note_sorting.dart';
 
 /// Minimum column widths for the nine-column grid. On a window wider than the
 /// grid needs, [_calculateColumnWidths] spreads the spare width across the
@@ -1212,19 +1213,20 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         })
         .toList(growable: false);
 
-    filtered.sort((left, right) {
-      final leftValue = left.valueForColumn(_sortKey).toLowerCase();
-      final rightValue = right.valueForColumn(_sortKey).toLowerCase();
+    return sortNotes(filtered, column: _sortKey, ascending: _ascending);
+  }
 
-      final result = switch (_sortKey) {
-        'displayOrder' => left.displayOrder.compareTo(right.displayOrder),
-        _ => leftValue.compareTo(rightValue),
-      };
-
-      return _ascending ? result : -result;
-    });
-
-    return filtered;
+  /// A sort, filter, or scope change rebuilds the list from a different first
+  /// row. The old vertical offset would then open the result set partway down
+  /// (or at its tail when the new set is shorter), so both panes return to the
+  /// top wherever a change drops the row selection.
+  void _resetVerticalScroll() {
+    if (_verticalScrollController.hasClients) {
+      _verticalScrollController.jumpTo(0);
+    }
+    if (_pinnedVerticalScrollController.hasClients) {
+      _pinnedVerticalScrollController.jumpTo(0);
+    }
   }
 
   void _toggleSort(String key) {
@@ -1237,6 +1239,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       }
       _selectedIndex = null;
     });
+    _resetVerticalScroll();
   }
 
   /// Card mode's sort menu names the field in one control and leaves the
@@ -1261,6 +1264,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     if (_horizontalScrollController.hasClients) {
       _horizontalScrollController.jumpTo(0);
     }
+    _resetVerticalScroll();
   }
 
   Widget? _clearFilterButton() {
@@ -1277,6 +1281,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
             _query = '';
             _selectedIndex = null;
           });
+          _resetVerticalScroll();
         },
         iconSize: 18,
         padding: const EdgeInsets.all(7),
@@ -1317,6 +1322,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         _filterScope = 'tags';
         _selectedIndex = null;
       });
+      _resetVerticalScroll();
     }
     if (result != null) {
       _revealNoteById(result.noteId);
@@ -1622,6 +1628,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
           _query = '';
           _selectedIndex = null;
         });
+        _resetVerticalScroll();
       }
       return KeyEventResult.handled;
     }
@@ -1776,6 +1783,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       _filterScope = scope;
       _selectedIndex = null;
     });
+    _resetVerticalScroll();
     // The menu closes on selection; hand typing straight to the filter
     // field, however the option was picked (mouse, touch, or keyboard).
     _focusSearchField();
@@ -2285,10 +2293,13 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                             enabledBorder: InputBorder.none,
                                             focusedBorder: InputBorder.none,
                                           ),
-                                          onChanged: (value) => setState(() {
-                                            _query = value;
-                                            _selectedIndex = null;
-                                          }),
+                                          onChanged: (value) {
+                                            setState(() {
+                                              _query = value;
+                                              _selectedIndex = null;
+                                            });
+                                            _resetVerticalScroll();
+                                          },
                                         ),
                                       ),
                                     ],

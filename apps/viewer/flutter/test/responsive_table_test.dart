@@ -287,16 +287,17 @@ void main() {
     await tester.tap(find.text('Denomination').last);
     await tester.pumpAndSettle();
 
+    // Denomination reads by amount: 5 Lei stays above 10 Lei.
     expect(
-      tester.getTopLeft(card(2)).dy,
-      lessThan(tester.getTopLeft(card(1)).dy),
+      tester.getTopLeft(card(1)).dy,
+      lessThan(tester.getTopLeft(card(2)).dy),
     );
 
     await tester.tap(find.byKey(const ValueKey('cardSortDirection')));
     await tester.pumpAndSettle();
     expect(
-      tester.getTopLeft(card(1)).dy,
-      lessThan(tester.getTopLeft(card(2)).dy),
+      tester.getTopLeft(card(2)).dy,
+      lessThan(tester.getTopLeft(card(1)).dy),
     );
   });
 
