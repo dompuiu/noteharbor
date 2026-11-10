@@ -17,7 +17,7 @@ import '../../widgets/note_image_provider.dart';
 import '../import/import_dataset_screen.dart';
 import '../slideshow/note_slideshow_screen.dart';
 
-const double _kOrderColumnWidth = 90;
+const double _kOrderColumnWidth = 72;
 const double _kFrontColumnWidth = 120;
 const double _kDenominationColumnWidth = 190;
 const double _kDateColumnWidth = 120;
@@ -37,7 +37,7 @@ const double _kFixedColumnsWidth = _kOrderColumnWidth +
 const double _kTableHorizontalPadding = 14;
 const Color _kTableSurface = ViewerPalette.surface;
 const Color _kTableBorder = ViewerPalette.border;
-const Color _kTableCardBorder = ViewerPalette.borderControl;
+const Color _kTableCardBorder = ViewerPalette.border;
 const Color _kTableHeaderBg = ViewerPalette.tableHeaderBackground;
 const Color _kTableHeaderDivider = ViewerPalette.border;
 const Color _kTableDivider = ViewerPalette.borderSoft;
@@ -50,7 +50,9 @@ const double _kHeaderBadgeHeight = 48;
 const double _kHeaderControlHeight = 40;
 const double _kTagChipHorizontalPadding = 10;
 const double _kTagChipHorizontalGap = 6;
-const double _kTagsColumnSafetyPadding = 24;
+/// Horizontal room the Tags cell needs beyond the measured chips: the cell's
+/// own 12px gutters on both sides plus breathing room at the column edge.
+const double _kTagsColumnSafetyPadding = 48;
 const double _kTableRowHeight = 80;
 const double _kTableRowSeparatorHeight = 1;
 const double _kTableThumbnailWidth = 96;
@@ -116,10 +118,10 @@ const TextStyle _kCardCodeTextStyle = TextStyle(
 /// Sortable columns in visual order, shared by the grid header chain, the
 /// card sort menu, and the explicit Tab order.
 const List<({String value, String label})> _kSortableColumns = [
-  (value: 'displayOrder', label: 'ID'),
+  (value: 'displayOrder', label: '#'),
   (value: 'denomination', label: 'Denomination'),
   (value: 'issueDate', label: 'Date'),
-  (value: 'catalogNumber', label: 'Catalog'),
+  (value: 'catalogNumber', label: 'Catalog #'),
   (value: 'gradingCompany', label: 'Company'),
   (value: 'grade', label: 'Grade'),
   (value: 'serial', label: 'Serial'),
@@ -495,7 +497,7 @@ double _calculateTagsColumnWidth(List<NoteRecord> notes) {
         'Tags',
         const TextStyle(fontWeight: FontWeight.w800),
       ) +
-      28;
+      52;
   final notesWidth = notes.fold<double>(0, (maxWidth, note) {
     if (note.tags.isEmpty) {
       return math.max(maxWidth, _measureTextWidth('-', const TextStyle()));
@@ -1595,7 +1597,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   }
 
   /// The nine-column desktop grid, kept at its full minimum width and panned
-  /// horizontally whenever the window is narrower than it.
+  /// horizontally whenever the window is narrower than it. When a column sits
+  /// past the right edge, a slim footer states the visible range and how to
+  /// pan: the scrollbar stays hidden, but the cut can never read as empty data.
   Widget _buildGrid(List<NoteRecord> notes, double availableWidth) {
     final tagsColumnWidth = _calculateTagsColumnWidth(notes);
     final minTableWidth = _kFixedColumnsWidth +
@@ -1603,69 +1607,108 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         (_kTableHorizontalPadding * 2);
     final tableWidth = math.max(minTableWidth, availableWidth);
 
-    return NotificationListener<ScrollNotification>(
-      onNotification: _handleTableScrollNotification,
-      child: ScrollConfiguration(
-        behavior: const MouseDragScrollBehavior(),
-        child: SingleChildScrollView(
-          controller: _horizontalScrollController,
-          scrollDirection: Axis.horizontal,
-          child: SizedBox(
-            width: tableWidth,
-            child: Column(
-              children: [
-                _TableHeader(
-                  sortKey: _sortKey,
-                  ascending: _ascending,
-                  onSort: _toggleSort,
-                  tagsColumnWidth: tagsColumnWidth,
-                  draggingColumns: _columnsDragging,
-                  headerFocusNodes: _headerFocusNodes,
-                ),
-                const Divider(
-                  height: 1,
-                  thickness: 1,
-                  color: _kTableHeaderDivider,
-                ),
-                Expanded(
-                  child: ScrollConfiguration(
-                    behavior: const MaterialScrollBehavior(),
-                    child: Scrollbar(
-                      controller: _verticalScrollController,
-                      thumbVisibility: true,
-                      child: ListView.separated(
-                        controller: _verticalScrollController,
-                        itemCount: notes.length,
-                        separatorBuilder: (context, index) => const Divider(
-                          height: 1,
-                          color: _kTableDivider,
-                        ),
-                        itemBuilder: (context, index) {
-                          final note = notes[index];
+    final columnWidths = <double>[
+      _kOrderColumnWidth,
+      _kFrontColumnWidth,
+      _kDenominationColumnWidth,
+      _kDateColumnWidth,
+      _kCatalogColumnWidth,
+      _kCompanyColumnWidth,
+      _kGradeColumnWidth,
+      _kSerialColumnWidth,
+      tagsColumnWidth,
+    ];
+    // Only hint when a whole column's centre sits past the edge: a few px of
+    // slack clipped from the last column's right padding is not a hidden
+    // column, and announcing "1–9 of 9" would be noise.
+    var showPanHint = false;
+    var columnStart = _kTableHorizontalPadding;
+    for (final width in columnWidths) {
+      final center = columnStart + (width / 2);
+      if (center > availableWidth - _kTableHorizontalPadding) {
+        showPanHint = true;
+        break;
+      }
+      columnStart += width;
+    }
 
-                          final row = _TableRow(
-                            note: note,
-                            tagsColumnWidth: tagsColumnWidth,
-                            draggingColumns: _columnsDragging,
-                            selected:
-                                _keyboardNavEnabled && _selectedIndex == index,
-                            onTagTap: _applyTagFilter,
-                            onTap: () => _openNoteAtIndex(notes, index),
-                          );
-                          if (index.isOdd) {
-                            return ColoredBox(color: _kZebraTint, child: row);
-                          }
-                          return row;
-                        },
+    return Column(
+      children: [
+        Expanded(
+          child: NotificationListener<ScrollNotification>(
+            onNotification: _handleTableScrollNotification,
+            child: ScrollConfiguration(
+              behavior: const MouseDragScrollBehavior(),
+              child: SingleChildScrollView(
+                controller: _horizontalScrollController,
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: tableWidth,
+                  child: Column(
+                    children: [
+                      _TableHeader(
+                        sortKey: _sortKey,
+                        ascending: _ascending,
+                        onSort: _toggleSort,
+                        tagsColumnWidth: tagsColumnWidth,
+                        draggingColumns: _columnsDragging,
+                        headerFocusNodes: _headerFocusNodes,
                       ),
-                    ),
+                      const Divider(
+                        height: 1,
+                        thickness: 1,
+                        color: _kTableHeaderDivider,
+                      ),
+                      Expanded(
+                        child: ScrollConfiguration(
+                          behavior: const MaterialScrollBehavior(),
+                          child: Scrollbar(
+                            controller: _verticalScrollController,
+                            thumbVisibility: true,
+                            child: ListView.separated(
+                              controller: _verticalScrollController,
+                              itemCount: notes.length,
+                              separatorBuilder: (context, index) =>
+                                  const Divider(
+                                height: 1,
+                                color: _kTableDivider,
+                              ),
+                              itemBuilder: (context, index) {
+                                final note = notes[index];
+
+                                final row = _TableRow(
+                                  note: note,
+                                  tagsColumnWidth: tagsColumnWidth,
+                                  draggingColumns: _columnsDragging,
+                                  selected: _keyboardNavEnabled &&
+                                      _selectedIndex == index,
+                                  onTagTap: _applyTagFilter,
+                                  onTap: () => _openNoteAtIndex(notes, index),
+                                );
+                                if (index.isOdd) {
+                                  return ColoredBox(
+                                      color: _kZebraTint, child: row);
+                                }
+                                return row;
+                              },
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
                   ),
                 ),
-              ],
+              ),
             ),
           ),
         ),
-      ),
+        if (showPanHint)
+          _PanHint(
+            columnWidths: columnWidths,
+            availableWidth: availableWidth,
+            controller: _horizontalScrollController,
+          ),
+      ],
     );
   }
 
@@ -1986,8 +2029,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                   color: _kTableSurface,
                                   borderRadius:
                                       BorderRadius.circular(_kCardRadius),
-                                  border: Border.all(
-                                      color: _kTableCardBorder, width: 1),
+                                  // The 1px frame is painted by the foreground
+                                  // layer below so content cannot cover it; a
+                                  // background border would double its alpha.
                                   boxShadow: ViewerPalette.shadowMid,
                                 ),
                                 child: DecoratedBox(
@@ -2917,15 +2961,18 @@ class _TableHeader extends StatelessWidget {
             children: [
               _HeaderCell(
                   width: _kOrderColumnWidth,
-                  label: 'ID',
+                  label: '#',
+                  alignment: Alignment.centerRight,
                   sortKey: 'displayOrder',
                   activeSortKey: sortKey,
                   ascending: ascending,
                   onSort: onSort,
+                  semanticLabel: 'Order',
                   focusNode: headerFocusNodes['displayOrder']),
               _HeaderCell(
                   width: _kFrontColumnWidth,
                   label: 'Front',
+                  alignment: Alignment.center,
                   isSortable: false,
                   sortKey: '',
                   activeSortKey: sortKey,
@@ -2934,6 +2981,7 @@ class _TableHeader extends StatelessWidget {
               _HeaderCell(
                   width: _kDenominationColumnWidth,
                   label: 'Denomination',
+                  alignment: Alignment.centerLeft,
                   sortKey: 'denomination',
                   activeSortKey: sortKey,
                   ascending: ascending,
@@ -2942,6 +2990,7 @@ class _TableHeader extends StatelessWidget {
               _HeaderCell(
                   width: _kDateColumnWidth,
                   label: 'Date',
+                  alignment: Alignment.centerLeft,
                   sortKey: 'issueDate',
                   activeSortKey: sortKey,
                   ascending: ascending,
@@ -2949,7 +2998,8 @@ class _TableHeader extends StatelessWidget {
                   focusNode: headerFocusNodes['issueDate']),
               _HeaderCell(
                   width: _kCatalogColumnWidth,
-                  label: 'Catalog',
+                  label: 'Catalog #',
+                  alignment: Alignment.centerLeft,
                   sortKey: 'catalogNumber',
                   activeSortKey: sortKey,
                   ascending: ascending,
@@ -2958,6 +3008,7 @@ class _TableHeader extends StatelessWidget {
               _HeaderCell(
                   width: _kCompanyColumnWidth,
                   label: 'Company',
+                  alignment: Alignment.centerLeft,
                   sortKey: 'gradingCompany',
                   activeSortKey: sortKey,
                   ascending: ascending,
@@ -2966,6 +3017,7 @@ class _TableHeader extends StatelessWidget {
               _HeaderCell(
                   width: _kGradeColumnWidth,
                   label: 'Grade',
+                  alignment: Alignment.centerLeft,
                   sortKey: 'grade',
                   activeSortKey: sortKey,
                   ascending: ascending,
@@ -2974,6 +3026,7 @@ class _TableHeader extends StatelessWidget {
               _HeaderCell(
                   width: _kSerialColumnWidth,
                   label: 'Serial',
+                  alignment: Alignment.centerLeft,
                   sortKey: 'serial',
                   activeSortKey: sortKey,
                   ascending: ascending,
@@ -2982,6 +3035,7 @@ class _TableHeader extends StatelessWidget {
               _HeaderCell(
                   width: tagsColumnWidth,
                   label: 'Tags',
+                  alignment: Alignment.centerLeft,
                   sortKey: 'tags',
                   activeSortKey: sortKey,
                   ascending: ascending,
@@ -2995,92 +3049,260 @@ class _TableHeader extends StatelessWidget {
   }
 }
 
+/// The table's pan hint. DESIGN keeps the horizontal scrollbar hidden, so when
+/// the grid is wider than the card this one line states the visible column
+/// range and how to pan. It sits outside the horizontal viewport and listens to
+/// the controller, so the range stays true as the columns move.
+class _PanHint extends StatelessWidget {
+  const _PanHint({
+    required this.columnWidths,
+    required this.availableWidth,
+    required this.controller,
+  });
+
+  final List<double> columnWidths;
+  final double availableWidth;
+  final ScrollController controller;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      height: 28,
+      alignment: Alignment.centerLeft,
+      padding: const EdgeInsets.symmetric(
+        horizontal: _kTableHorizontalPadding,
+      ),
+      decoration: const BoxDecoration(
+        color: ViewerPalette.surface,
+        border: Border(top: BorderSide(color: _kTableDivider)),
+      ),
+      child: AnimatedBuilder(
+        animation: controller,
+        builder: (context, _) {
+          final offset = controller.hasClients ? controller.offset : 0.0;
+          var first = 0;
+          var last = columnWidths.length - 1;
+          var found = false;
+          var start = _kTableHorizontalPadding;
+          for (var index = 0; index < columnWidths.length; index++) {
+            final center = start + (columnWidths[index] / 2);
+            final visible = center >= offset + _kTableHorizontalPadding &&
+                center <= offset + availableWidth - _kTableHorizontalPadding;
+            if (visible && !found) {
+              first = index;
+              found = true;
+            }
+            if (visible) {
+              last = index;
+            }
+            start += columnWidths[index];
+          }
+
+          final range = 'Columns ${first + 1}–${last + 1} '
+              'of ${columnWidths.length}';
+
+          return Semantics(
+            container: true,
+            excludeSemantics: true,
+            label: '$range. Drag the header or use the left and right arrow '
+                'keys to pan the columns.',
+            child: Text(
+              '$range · drag the header or use ← →',
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                fontSize: 11,
+                fontWeight: FontWeight.w500,
+                letterSpacing: 0.2,
+                color: ViewerPalette.textFaint,
+              ),
+            ),
+          );
+        },
+      ),
+    );
+  }
+}
+
 class _HeaderCell extends StatelessWidget {
   const _HeaderCell({
     required this.width,
     required this.label,
+    required this.alignment,
     required this.sortKey,
     required this.activeSortKey,
     required this.ascending,
     required this.onSort,
     this.isSortable = true,
+    this.semanticLabel,
     this.focusNode,
   });
 
   final double width;
   final String label;
+  final AlignmentGeometry alignment;
   final String sortKey;
   final String activeSortKey;
   final bool ascending;
   final ValueChanged<String> onSort;
   final bool isSortable;
+  final String? semanticLabel;
   final FocusNode? focusNode;
+
+  static const double _kIndicatorSize = 14;
+  static const double _kIndicatorGap = 4;
+  static const EdgeInsets _kCellPadding = EdgeInsets.symmetric(horizontal: 12);
+
+  // The sort button carries 6px of its own padding for the hover wash, so the
+  // cell gives back 6px; the label then lands on the same 12px line as the
+  // data cells instead of floating 6px inside them.
+  static const EdgeInsets _kSortableCellPadding =
+      EdgeInsets.symmetric(horizontal: 6);
 
   @override
   Widget build(BuildContext context) {
-    final isActive = isSortable && sortKey == activeSortKey;
+    if (!isSortable) {
+      return SizedBox(
+        width: width,
+        child: Padding(
+          padding: _kCellPadding,
+          child: Align(
+            alignment: alignment,
+            child: Text(
+              label.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: _kHeaderLabelTextStyle.copyWith(
+                color: ViewerPalette.textMuted,
+              ),
+            ),
+          ),
+        ),
+      );
+    }
+
+    final node = focusNode!;
+    final accessibleName = semanticLabel ?? label;
+    final active = sortKey == activeSortKey;
 
     return SizedBox(
       width: width,
-      child: isSortable
-          ? TextButton(
-              focusNode: focusNode,
-              onPressed: () => onSort(sortKey),
-              style: TextButton.styleFrom(
-                alignment: Alignment.center,
-                foregroundColor: _kTableSortableHeaderText,
-                overlayColor: ViewerPalette.accentSoft,
-                shape: RoundedRectangleBorder(
-                  borderRadius: BorderRadius.circular(ViewerPalette.radiusSm),
+      child: Padding(
+        padding: _kSortableCellPadding,
+        child: Align(
+          alignment: alignment,
+          child: AnimatedBuilder(
+            animation: node,
+            builder: (context, _) {
+              final focused = node.hasFocus;
+              final labelColor = active || focused
+                  ? _kTableSortableHeaderText
+                  : ViewerPalette.textMuted;
+              final indicator = Icon(
+                active
+                    ? (ascending
+                        ? Icons.arrow_upward_rounded
+                        : Icons.arrow_downward_rounded)
+                    : Icons.unfold_more_rounded,
+                size: _kIndicatorSize,
+                color: active
+                    ? _kTableSortableHeaderText
+                    : focused
+                        ? ViewerPalette.accent
+                        : ViewerPalette.textFaint.withValues(alpha: 0.5),
+              );
+
+              // The indicator always occupies its slot, so the label never
+              // shifts when the sort flips. Right-aligned columns put it on
+              // the leading side so the label stays flush with the data.
+              final leadingIndicator = alignment == Alignment.centerRight;
+              final labelText = Flexible(
+                child: Text(
+                  label.toUpperCase(),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  style: _kHeaderLabelTextStyle.copyWith(color: labelColor),
                 ),
-              ),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Flexible(
-                      child: Text(
-                    label.toUpperCase(),
-                    style: _kHeaderLabelTextStyle.copyWith(
-                      color: isActive
-                          ? _kTableSortableHeaderText
-                          : ViewerPalette.textMuted,
+              );
+
+              return Semantics(
+                container: true,
+                button: true,
+                excludeSemantics: true,
+                label: active
+                    ? '$accessibleName, sorted '
+                        '${ascending ? 'ascending' : 'descending'}'
+                    : '$accessibleName, not sorted',
+                onTap: () => onSort(sortKey),
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    TextButton(
+                      focusNode: node,
+                      onPressed: () => onSort(sortKey),
+                      style: TextButton.styleFrom(
+                        foregroundColor: labelColor,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 6, vertical: 4),
+                        shape: RoundedRectangleBorder(
+                          borderRadius:
+                              BorderRadius.circular(ViewerPalette.radiusChip),
+                        ),
+                      ).copyWith(
+                        overlayColor:
+                            WidgetStateProperty.resolveWith((states) {
+                          if (states.contains(WidgetState.focused)) {
+                            return Colors.transparent;
+                          }
+                          if (states.contains(WidgetState.hovered) ||
+                              states.contains(WidgetState.pressed)) {
+                            return ViewerPalette.accentSoft;
+                          }
+                          return null;
+                        }),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          if (leadingIndicator) ...[
+                            indicator,
+                            const SizedBox(width: _kIndicatorGap),
+                          ],
+                          labelText,
+                          if (!leadingIndicator) ...[
+                            const SizedBox(width: _kIndicatorGap),
+                            indicator,
+                          ],
+                        ],
+                      ),
                     ),
-                  )),
-                  AnimatedRotation(
-                    turns: isActive && !ascending ? 0.5 : 0.0,
-                    duration: const Duration(milliseconds: 180),
-                    curve: Curves.easeOut,
-                    child: AnimatedOpacity(
-                      opacity: isActive ? 1.0 : 0.0,
-                      duration: const Duration(milliseconds: 150),
-                      child: const Padding(
-                        padding: EdgeInsets.only(left: 5),
-                        child: Text(
-                          '▲',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 10,
-                            fontWeight: FontWeight.w800,
-                            color: _kTableSortableHeaderText,
-                            height: 1,
+                    if (focused)
+                      Positioned(
+                        left: -4,
+                        right: -4,
+                        top: -4,
+                        bottom: -4,
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(
+                                  ViewerPalette.radiusChip + 4),
+                              border: Border.all(
+                                color: ViewerPalette.accent,
+                                width: 2,
+                              ),
+                            ),
                           ),
                         ),
                       ),
-                    ),
-                  ),
-                ],
-              ),
-            )
-          : Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 12),
-              child: Center(
-                  child: Text(
-                label.toUpperCase(),
-                style: _kHeaderLabelTextStyle.copyWith(
-                  color: ViewerPalette.textMuted,
+                  ],
                 ),
-              )),
-            ),
+              );
+            },
+          ),
+        ),
+      ),
     );
   }
 }
@@ -3162,9 +3384,11 @@ class _TableRow extends StatelessWidget {
               children: [
                 _DataCell(
                     width: _kOrderColumnWidth,
+                    alignment: Alignment.centerRight,
                     child: Text('${note.displayOrder}')),
                 _DataCell(
                   width: _kFrontColumnWidth,
+                  alignment: Alignment.center,
                   child: _NoteThumbnail(image: image),
                 ),
                 _DataCell(
@@ -4038,22 +4262,30 @@ class _DataCell extends StatelessWidget {
   const _DataCell({
     required this.width,
     required this.child,
+    this.alignment = Alignment.centerLeft,
     this.emphasized = false,
   });
 
   final double width;
   final Widget child;
+  final AlignmentGeometry alignment;
   final bool emphasized;
 
   @override
   Widget build(BuildContext context) {
     return SizedBox(
       width: width,
-      child: DefaultTextStyle.merge(
-        style: emphasized
-            ? _kDataCellTextStyle.copyWith(fontWeight: FontWeight.w600)
-            : _kDataCellTextStyle,
-        child: Center(child: child),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        child: Align(
+          alignment: alignment,
+          child: DefaultTextStyle.merge(
+            style: emphasized
+                ? _kDataCellTextStyle.copyWith(fontWeight: FontWeight.w600)
+                : _kDataCellTextStyle,
+            child: child,
+          ),
+        ),
       ),
     );
   }
