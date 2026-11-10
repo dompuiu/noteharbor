@@ -2355,7 +2355,7 @@ class _CollectionTitleState extends State<_CollectionTitle> {
               showWhenUnlinked: false,
               targetAnchor: Alignment.bottomLeft,
               followerAnchor: Alignment.topLeft,
-              offset: const Offset(-3, 6),
+              offset: const Offset(0, 6),
               child: Align(
                 alignment: Alignment.topLeft,
                 child: TapRegion(
@@ -2395,28 +2395,25 @@ class _CollectionTitleState extends State<_CollectionTitle> {
                       excludeSemantics: true,
                       label:
                           'Collection: ${widget.title}. Activate to switch collection.',
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 3),
-                        child: Row(
-                          mainAxisSize: MainAxisSize.min,
-                          children: [
-                            Flexible(child: title),
-                            Padding(
-                              padding: const EdgeInsets.only(left: 5),
-                              child: AnimatedRotation(
-                                duration: const Duration(milliseconds: 150),
-                                turns: _open ? 0.5 : 0,
-                                child: Icon(
-                                  Icons.expand_more,
-                                  size: 16,
-                                  color: _triggerFocus.hasFocus
-                                      ? ViewerPalette.accent
-                                      : ViewerPalette.textFaint,
-                                ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Flexible(child: title),
+                          Padding(
+                            padding: const EdgeInsets.only(left: 5),
+                            child: AnimatedRotation(
+                              duration: const Duration(milliseconds: 150),
+                              turns: _open ? 0.5 : 0,
+                              child: Icon(
+                                Icons.expand_more,
+                                size: 16,
+                                color: _triggerFocus.hasFocus
+                                    ? ViewerPalette.accent
+                                    : ViewerPalette.textFaint,
                               ),
                             ),
-                          ],
-                        ),
+                          ),
+                        ],
                       ),
                     ),
                   ),
