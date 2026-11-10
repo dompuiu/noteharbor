@@ -284,10 +284,15 @@ void main() {
 
     await tester.tap(find.byKey(const ValueKey('cardSortKey')));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Denomination').last);
+    await tester.tap(find.text('Catalog #').last);
     await tester.pumpAndSettle();
 
-    // Denomination reads by amount: 5 Lei stays above 10 Lei.
+    // Catalog reads naturally: P-87, P-88, P-89 against display order
+    // P-88, P-89, P-87.
+    expect(
+      tester.getTopLeft(card(3)).dy,
+      lessThan(tester.getTopLeft(card(1)).dy),
+    );
     expect(
       tester.getTopLeft(card(1)).dy,
       lessThan(tester.getTopLeft(card(2)).dy),
@@ -298,6 +303,10 @@ void main() {
     expect(
       tester.getTopLeft(card(2)).dy,
       lessThan(tester.getTopLeft(card(1)).dy),
+    );
+    expect(
+      tester.getTopLeft(card(1)).dy,
+      lessThan(tester.getTopLeft(card(3)).dy),
     );
   });
 

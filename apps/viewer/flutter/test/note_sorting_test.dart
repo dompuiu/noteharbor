@@ -110,27 +110,41 @@ void main() {
         note(id: 6, issueDate: 'ND (1941-44)'),
         note(id: 7, issueDate: '1941'),
         note(id: 8, issueDate: ''),
+        note(id: 9, issueDate: '2000-04'),
+        note(id: 10, issueDate: '1999-13'),
+        note(id: 11, issueDate: '13/45/2000'),
+        note(id: 12, issueDate: 'ND (1935)'),
       ];
 
       expect(dates(notes, ascending: true), [
         '01/15/1915',
+        'ND (1935)',
         '1941',
         '1941-44',
         'ND (1941-44)',
         '09/10/1941',
         '1966',
+        // Two-digit suffixes above 12 are ranges; 13 rolls into 2013.
+        '1999-13',
+        // 01-12 is a year-month, as PMG stores it.
+        '2000-04',
         // Unparseable values keep a string order after every parsed date.
         '',
         '03/01/5/1934',
+        '13/45/2000',
       ]);
       expect(dates(notes, ascending: false), [
+        '13/45/2000',
         '03/01/5/1934',
         '',
+        '2000-04',
+        '1999-13',
         '1966',
         '09/10/1941',
         'ND (1941-44)',
         '1941-44',
         '1941',
+        'ND (1935)',
         '01/15/1915',
       ]);
     });
@@ -186,54 +200,71 @@ void main() {
 
   test('sorting never drops rows', () {
     final notes = [
-      note(id: 1, issueDate: 'not a date'),
-      note(id: 2, denomination: ''),
-      note(id: 3, grade: 'ungraded'),
-      note(id: 4, catalogNumber: ''),
+      note(
+        id: 1,
+        issueDate: 'not a date',
+        denomination: '',
+        catalogNumber: '',
+        grade: '',
+      ),
+      note(
+        id: 2,
+        issueDate: '',
+        denomination: 'unparseable',
+        catalogNumber: '',
+        grade: 'ungraded',
+      ),
+      note(id: 3),
+      note(id: 4),
     ];
 
-    expect(
-      sortNotes(notes, column: 'issueDate', ascending: true),
-      hasLength(4),
-    );
-    expect(
-      sortNotes(notes, column: 'catalogNumber', ascending: true),
-      hasLength(4),
-    );
+    for (final column in [
+      'denomination',
+      'catalogNumber',
+      'issueDate',
+      'grade',
+    ]) {
+      expect(sortNotes(notes, column: column, ascending: true), hasLength(4));
+      expect(sortNotes(notes, column: column, ascending: false), hasLength(4));
+    }
+  });
+
+  test('sorts a copy and leaves the input untouched', () {
+    final notes = [
+      note(id: 1, denomination: '5 Lei'),
+      note(id: 2, denomination: '1 Lei'),
+    ];
+
+    final sorted = sortNotes(notes, column: 'denomination', ascending: true);
+
+    expect(sorted.map((note) => note.id), [2, 1]);
+    expect(notes.map((note) => note.id), [1, 2]);
+    expect(identical(sorted, notes), isFalse);
   });
 }
 
 List<String> denominations(List<NoteRecord> notes, {required bool ascending}) =>
-    sortNotes(
-      notes,
-      column: 'denomination',
-      ascending: ascending,
-    ).map((note) => note.denomination).toList();
+    _values(notes, 'denomination', (note) => note.denomination, ascending);
 
 List<String> catalogs(List<NoteRecord> notes, {required bool ascending}) =>
-    sortNotes(
-      notes,
-      column: 'catalogNumber',
-      ascending: ascending,
-    ).map((note) => note.catalogNumber).toList();
+    _values(notes, 'catalogNumber', (note) => note.catalogNumber, ascending);
 
 List<String> dates(List<NoteRecord> notes, {required bool ascending}) =>
-    sortNotes(
-      notes,
-      column: 'issueDate',
-      ascending: ascending,
-    ).map((note) => note.issueDate).toList();
+    _values(notes, 'issueDate', (note) => note.issueDate, ascending);
 
 List<String> grades(List<NoteRecord> notes, {required bool ascending}) =>
-    sortNotes(
-      notes,
-      column: 'grade',
-      ascending: ascending,
-    ).map((note) => note.grade).toList();
+    _values(notes, 'grade', (note) => note.grade, ascending);
+
+List<String> _values(
+  List<NoteRecord> notes,
+  String column,
+  String Function(NoteRecord note) value,
+  bool ascending,
+) => sortNotes(notes, column: column, ascending: ascending).map(value).toList();
 
 NoteRecord note({
   required int id,
-  int displayOrder = 0,
+  int? displayOrder,
   String denomination = '',
   String issueDate = '',
   String catalogNumber = '',
@@ -242,7 +273,7 @@ NoteRecord note({
   return NoteRecord(
     id: id,
     collectionId: 1,
-    displayOrder: displayOrder == 0 ? id : displayOrder,
+    displayOrder: displayOrder ?? id,
     denomination: denomination,
     issueDate: issueDate,
     catalogNumber: catalogNumber,

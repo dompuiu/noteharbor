@@ -1171,13 +1171,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       _horizontalScrollController.jumpTo(0);
     }
 
-    if (_verticalScrollController.hasClients) {
-      _verticalScrollController.jumpTo(0);
-    }
-
-    if (_pinnedVerticalScrollController.hasClients) {
-      _pinnedVerticalScrollController.jumpTo(0);
-    }
+    _resetVerticalScroll();
   }
 
   List<NoteRecord> _sortedNotes(List<NoteRecord> notes) {
@@ -1219,7 +1213,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   /// A sort, filter, or scope change rebuilds the list from a different first
   /// row. The old vertical offset would then open the result set partway down
   /// (or at its tail when the new set is shorter), so both panes return to the
-  /// top wherever a change drops the row selection.
+  /// top whenever the visible rows change.
   void _resetVerticalScroll() {
     if (_verticalScrollController.hasClients) {
       _verticalScrollController.jumpTo(0);

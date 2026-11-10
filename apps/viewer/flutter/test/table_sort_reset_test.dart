@@ -34,7 +34,9 @@ void main() {
   ScrollController verticalController(WidgetTester tester) =>
       tester.widget<ListView>(find.byType(ListView).last).controller!;
 
-  testWidgets('sorting values uses the domain comparators', (tester) async {
+  testWidgets('sorting by denomination uses the domain comparator', (
+    tester,
+  ) async {
     await pumpTable(tester, noteCount: 4, size: const Size(1400, 700));
 
     await tester.tap(find.text('DENOMINATION'));

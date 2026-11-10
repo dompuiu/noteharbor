@@ -69,8 +69,12 @@ int _compareDenominations(String left, String right) {
   return _compareText(left, right);
 }
 
+final RegExp _nonDigitPattern = RegExp(r'[^0-9]');
+
+/// Whole leu/bani amounts are the archive's format, so currency words and
+/// grouping punctuation are simply stripped before the comparison.
 int? _denominationAmount(String value) {
-  final digits = value.replaceAll(RegExp(r'[^0-9]'), '');
+  final digits = value.replaceAll(_nonDigitPattern, '');
   return digits.isEmpty ? null : int.tryParse(digits);
 }
 
@@ -156,8 +160,10 @@ String _stripLeadingZeros(String digits) {
 // ---------------------------------------------------------------------------
 // Issue date: free text. Year-only values and ranges are approximate and sit
 // at the start of their year; an ND range sorts with its range's start year,
-// after the exact start year and range without the ND marker. Unparseable
-// values (including blank) sort after every parsed date, in string order.
+// after the exact start year and range without the ND marker. A YYYY-MM suffix
+// above 12 is a range, while 01-12 is the year-month PMG stores. In ascending
+// order, unparseable values (including blank) sort after every parsed date, in
+// string order; descending reverses the whole order.
 // ---------------------------------------------------------------------------
 
 int _compareIssueDates(String left, String right) {
@@ -174,26 +180,11 @@ int _compareIssueDates(String left, String right) {
     return -1;
   }
 
-  final yearResult = leftDate.startYear.compareTo(rightDate.startYear);
-  if (yearResult != 0) {
-    return yearResult;
-  }
-  final monthResult = leftDate.month.compareTo(rightDate.month);
-  if (monthResult != 0) {
-    return monthResult;
-  }
-  final dayResult = leftDate.day.compareTo(rightDate.day);
-  if (dayResult != 0) {
-    return dayResult;
-  }
-  final endResult = leftDate.endYear.compareTo(rightDate.endYear);
-  if (endResult != 0) {
-    return endResult;
-  }
-  return _compareText(left, right);
+  final result = leftDate.compareTo(rightDate);
+  return result != 0 ? result : _compareText(left, right);
 }
 
-class _IssueDate {
+class _IssueDate implements Comparable<_IssueDate> {
   const _IssueDate({
     required this.startYear,
     required this.endYear,
@@ -205,6 +196,23 @@ class _IssueDate {
   final int endYear;
   final int month;
   final int day;
+
+  @override
+  int compareTo(_IssueDate other) {
+    final yearResult = startYear.compareTo(other.startYear);
+    if (yearResult != 0) {
+      return yearResult;
+    }
+    final monthResult = month.compareTo(other.month);
+    if (monthResult != 0) {
+      return monthResult;
+    }
+    final dayResult = day.compareTo(other.day);
+    if (dayResult != 0) {
+      return dayResult;
+    }
+    return endYear.compareTo(other.endYear);
+  }
 }
 
 final RegExp _monthDayYearPattern = RegExp(r'^(\d{1,2})/(\d{1,2})/(\d{4})$');
@@ -223,30 +231,37 @@ _IssueDate? _parseIssueDate(String raw) {
 
   final monthDayYear = _monthDayYearPattern.firstMatch(value);
   if (monthDayYear != null) {
+    final year = int.parse(monthDayYear.group(3)!);
     final month = int.parse(monthDayYear.group(1)!);
     final day = int.parse(monthDayYear.group(2)!);
-    final year = int.parse(monthDayYear.group(3)!);
-    if (month < 1 || month > 12 || day < 1 || day > 31) {
+    final date = DateTime(year, month, day);
+    if (date.year != year || date.month != month || date.day != day) {
       return null;
     }
     return _IssueDate(startYear: year, endYear: year, month: month, day: day);
   }
 
-  final noDateRange = _noDateRangePattern.firstMatch(value);
-  if (noDateRange != null) {
-    final startYear = int.parse(noDateRange.group(1)!);
-    return _IssueDate(
-      startYear: startYear,
-      endYear: _rangeEndYear(startYear, noDateRange.group(2)),
-    );
-  }
-
-  final range = _yearRangePattern.firstMatch(value);
+  final range =
+      _noDateRangePattern.firstMatch(value) ??
+      _yearRangePattern.firstMatch(value);
   if (range != null) {
     final startYear = int.parse(range.group(1)!);
+    final rawEnd = range.group(2);
+    // A two-digit suffix 01-12 is a year-month (PMG stores "2000-04"), not a
+    // range; every real range in the archive ends above 12.
+    if (rawEnd != null &&
+        rawEnd.length == 2 &&
+        int.parse(rawEnd) >= 1 &&
+        int.parse(rawEnd) <= 12) {
+      return _IssueDate(
+        startYear: startYear,
+        endYear: startYear,
+        month: int.parse(rawEnd),
+      );
+    }
     return _IssueDate(
       startYear: startYear,
-      endYear: _rangeEndYear(startYear, range.group(2)),
+      endYear: _rangeEndYear(startYear, rawEnd),
     );
   }
 
@@ -260,7 +275,7 @@ _IssueDate? _parseIssueDate(String raw) {
 }
 
 /// Reads a range's right-hand year. A two-digit year stays in the start
-/// year's century unless that would put it before the start (1999-01).
+/// year's century unless that would put it before the start (1999-13).
 int _rangeEndYear(int startYear, String? rawEnd) {
   if (rawEnd == null) {
     return startYear;
@@ -304,8 +319,10 @@ int _compareGrades(String left, String right) {
   return _compareText(left, right);
 }
 
+final RegExp _gradeNumberPattern = RegExp(r'\d+');
+
 int? _gradeNumber(String value) {
-  final match = RegExp(r'\d+').firstMatch(value);
+  final match = _gradeNumberPattern.firstMatch(value);
   return match == null ? null : int.tryParse(match.group(0)!);
 }
 
