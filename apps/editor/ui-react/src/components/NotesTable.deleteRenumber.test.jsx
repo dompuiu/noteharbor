@@ -147,7 +147,7 @@ describe("deleting a note renumbers the ID column", () => {
     await openRowMenu(user, "BBBB");
     await user.click(screen.getByRole("menuitem", { name: "Edit" }));
     await screen.findByLabelText("Denomination");
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Delete note" }));
     await user.click(
       within(await screen.findByRole("dialog")).getByRole("button", {
         name: "Delete",

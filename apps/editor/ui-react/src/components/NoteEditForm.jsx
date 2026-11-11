@@ -1592,27 +1592,42 @@ function NoteEditForm({
       ) : null}
 
       <div className="panel">
-        <div className="panel-heading">
-          <div>
+        <div className="panel-heading note-editor-heading">
+          <div className="panel-heading-copy">
             <p className="eyebrow">{isCreateMode ? "Add note" : "Edit note"}</p>
+            {/* Position context, with the one command that acts on it; the
+                save path keeps the action side to itself. */}
+            <div className="note-editor-position">
+              <NoteCounter
+                addMode={isCreateMode}
+                canGoNext={canNavigateNext}
+                canGoPrevious={canNavigatePrevious}
+                counterTitle={
+                  isCreateMode
+                    ? "A new note will be inserted here"
+                    : "Current note in table view"
+                }
+                jumpLabel="Current note position"
+                onJump={onJumpToPosition}
+                onNext={onNavigateNext}
+                onPrevious={onNavigatePrevious}
+                position={currentNotePosition}
+                total={totalNotesInView}
+              />
+              {!isCreateMode && onAddBefore ? (
+                <button
+                  className="button"
+                  data-shortcut="Ctrl+A"
+                  disabled={saving}
+                  onClick={onAddBefore}
+                  type="button"
+                >
+                  Add before
+                </button>
+              ) : null}
+            </div>
           </div>
           <div className="inline-actions">
-            <NoteCounter
-              addMode={isCreateMode}
-              canGoNext={canNavigateNext}
-              canGoPrevious={canNavigatePrevious}
-              counterTitle={
-                isCreateMode
-                  ? "A new note will be inserted here"
-                  : "Current note in table view"
-              }
-              jumpLabel="Current note position"
-              onJump={onJumpToPosition}
-              onNext={onNavigateNext}
-              onPrevious={onNavigatePrevious}
-              position={currentNotePosition}
-              total={totalNotesInView}
-            />
             <button
               aria-label="Paste note details"
               className="icon-link"
@@ -1697,28 +1712,6 @@ function NoteEditForm({
                 />
               </svg>
             </button>
-            {!isCreateMode && onAddBefore ? (
-              <button
-                className="button"
-                data-shortcut="Ctrl+A"
-                disabled={saving}
-                onClick={onAddBefore}
-                type="button"
-              >
-                Add before
-              </button>
-            ) : null}
-            {!isCreateMode && onDelete ? (
-              <button
-                className="button button-danger"
-                data-shortcut="Ctrl+D"
-                disabled={saving}
-                onClick={onDelete}
-                type="button"
-              >
-                Delete
-              </button>
-            ) : null}
             {onCancel ? (
               <button
                 className="button"
@@ -1743,6 +1736,18 @@ function NoteEditForm({
             )}
             <button
               className="button"
+              data-shortcut="Ctrl+Shift+S"
+              form="edit-note-form"
+              onClick={() => {
+                saveIntentRef.current = "return";
+              }}
+              disabled={saving || positionInvalid}
+              type="submit"
+            >
+              {isCreateMode ? "Add & close" : "Save & close"}
+            </button>
+            <button
+              className="button button-primary"
               data-shortcut="Ctrl+S"
               form="edit-note-form"
               onClick={() => {
@@ -1758,18 +1763,6 @@ function NoteEditForm({
                 : isCreateMode
                   ? "Add"
                   : "Save"}
-            </button>
-            <button
-              className="button button-primary"
-              data-shortcut="Ctrl+Shift+S"
-              form="edit-note-form"
-              onClick={() => {
-                saveIntentRef.current = "return";
-              }}
-              disabled={saving || positionInvalid}
-              type="submit"
-            >
-              {isCreateMode ? "Add & close" : "Save & close"}
             </button>
           </div>
         </div>
@@ -2159,6 +2152,22 @@ function NoteEditForm({
                   </div>
                 ))}
             </dl>
+          </div>
+        ) : null}
+
+        {/* Destructive, and it stays away from the save path: at the foot of
+            the record, under a hairline, named for what it removes. */}
+        {!isCreateMode && onDelete ? (
+          <div className="note-editor-danger-zone">
+            <button
+              className="button button-danger-soft"
+              data-shortcut="Ctrl+D"
+              disabled={saving}
+              onClick={onDelete}
+              type="button"
+            >
+              Delete note
+            </button>
           </div>
         ) : null}
       </div>

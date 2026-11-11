@@ -939,7 +939,7 @@ describe("Two save actions", () => {
 });
 
 describe("The editor's collection actions", () => {
-  test("Save & close is the primary action; every action shows its shortcut", async () => {
+  test("Save is the primary action; every editor action shows its shortcut", async () => {
     const user = userEvent.setup();
     renderTable();
     await openEditorOn(user, "AAAA");
@@ -947,8 +947,8 @@ describe("The editor's collection actions", () => {
     const save = screen.getByRole("button", { name: "Save" });
     const saveAndClose = screen.getByRole("button", { name: "Save & close" });
 
-    expect(saveAndClose).toHaveClass("button-primary");
-    expect(save).not.toHaveClass("button-primary");
+    expect(save).toHaveClass("button-primary");
+    expect(saveAndClose).not.toHaveClass("button-primary");
 
     expect(save).toHaveAttribute("data-shortcut", "Ctrl+S");
     expect(saveAndClose).toHaveAttribute("data-shortcut", "Ctrl+Shift+S");
@@ -960,10 +960,22 @@ describe("The editor's collection actions", () => {
       "data-shortcut",
       "Ctrl+A",
     );
-    expect(screen.getByRole("button", { name: "Delete" })).toHaveAttribute(
-      "data-shortcut",
-      "Ctrl+D",
-    );
+    expect(
+      screen.getByRole("button", { name: "Delete note" }),
+    ).toHaveAttribute("data-shortcut", "Ctrl+D");
+
+    // The hierarchy the reduction settles: Save closes the action row, Add
+    // before sits with the position counter, and Delete stands at the foot of
+    // the panel, outside the header.
+    expect(save.closest(".inline-actions").lastElementChild).toBe(save);
+    expect(
+      screen
+        .getByRole("button", { name: "Add before" })
+        .closest(".note-editor-position"),
+    ).not.toBeNull();
+    const deleteNote = screen.getByRole("button", { name: "Delete note" });
+    expect(deleteNote.closest(".note-editor-danger-zone")).not.toBeNull();
+    expect(deleteNote.closest(".panel-heading")).toBeNull();
   });
 
   test("Add before opens create mode ahead of the edited note", async () => {
@@ -987,7 +999,7 @@ describe("The editor's collection actions", () => {
     renderTable();
     await openEditorOn(user, "BBBB");
 
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Delete note" }));
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: "Delete" }));
 
@@ -1003,7 +1015,7 @@ describe("The editor's collection actions", () => {
     renderTable();
     await openEditorOn(user, "BBBB");
 
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Delete note" }));
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
 
@@ -1066,7 +1078,7 @@ describe("The editor's collection actions", () => {
     const field = await openEditorOn(user, "BBBB");
 
     await user.type(field, "!");
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Delete note" }));
     const dialog = await screen.findByRole("dialog");
 
     await user.keyboard("{Control>}s{/Control}");
@@ -1084,7 +1096,7 @@ describe("Deleting the Note being edited from the slideshow", () => {
     await openSlideshowOn(user, denomination);
     await user.click(screen.getByRole("button", { name: "Edit note" }));
     await screen.findByLabelText("Denomination");
-    await user.click(screen.getByRole("button", { name: "Delete" }));
+    await user.click(screen.getByRole("button", { name: "Delete note" }));
     const dialog = await screen.findByRole("dialog", { name: /^Delete .+\?$/ });
     await user.click(within(dialog).getByRole("button", { name: "Delete" }));
   }

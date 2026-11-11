@@ -1916,6 +1916,20 @@ describe("slideshow overlay styles", () => {
     expect(screen[1]).toMatch(/margin:\s*0 auto/);
   });
 
+  test("the note editor's action row wraps and Delete stands apart", () => {
+    const actions = styles.match(
+      /\.note-editor-heading > \.inline-actions\s*\{([^}]*)\}/,
+    );
+    expect(actions).not.toBeNull();
+    expect(actions[1]).toMatch(/flex-wrap:\s*wrap/);
+
+    const dangerZone = styles.match(
+      /\.note-editor-danger-zone\s*\{([^}]*)\}/,
+    );
+    expect(dangerZone).not.toBeNull();
+    expect(dangerZone[1]).toMatch(/border-top:/);
+  });
+
   test("the note editor's fields grow with the wider panel", () => {
     const fields = styles.match(
       /#edit-note-form \.field-block > input,\s*#edit-note-form \.url-field-row > input\s*\{([^}]*)\}/,

@@ -6,6 +6,7 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ### Changed
 
+- Note editor: **Save** is the one primary action, with **Save & close** kept beside it as a secondary carrying its Ctrl+Shift+S badge. Position and **Add before** sit together in the heading, and **Delete note** moves to the foot of the panel instead of standing next to the save path.
 - Note editor: Auto Populate is a visible **Scrape page** action, sized to the URL field, that carries its progress on the button, reports the source and number of fields it changed with a one-step undo, and marks each filled or replaced field as **Scraped**.
 
 ## [2.12.1] - 2026-11-09

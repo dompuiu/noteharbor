@@ -5794,6 +5794,40 @@ td.drag-cell {
   margin: 0 auto;
 }
 
+/* The Note editor's header splits context from action: position and its one
+   command on the left, the save path alone on the right. Both halves wrap
+   instead of pushing a control off the panel. */
+.note-editor-heading {
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.note-editor-heading > .panel-heading-copy {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.note-editor-position {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.note-editor-heading > .inline-actions {
+  flex: 1 1 auto;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
+.note-editor-danger-zone {
+  margin-top: 28px;
+  padding-top: 18px;
+  border-top: 1px solid var(--border);
+}
+
 #edit-note-form .field-block {
   gap: 12px;
 }
