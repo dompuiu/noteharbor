@@ -58,7 +58,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(
-      find.textContaining('Could not delete the collection:'),
+      find.text('Could not delete the collection.'),
       findsOneWidget,
     );
     // The message renders right under the panel, not in the bottom banner.

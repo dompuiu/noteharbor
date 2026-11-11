@@ -130,7 +130,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
           builder: (context) => AlertDialog(
             title: const Text('Import this archive?'),
             content: const Text(
-              'Importing replaces any collection on this device that shares a name with one in the archive. Collections not in the archive stay as they are.',
+              'Importing replaces any collection on this device with the same name as a collection in the archive. Collections not in the archive stay as they are.',
             ),
             actions: [
               TextButton(
@@ -167,11 +167,11 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
         return;
       }
       _setStatus('Imported $_selectedArchiveName.', false);
-    } catch (error) {
+    } catch (_) {
       if (!mounted) {
         return;
       }
-      _setStatus('Could not import the archive: $error', true);
+      _setStatus('Could not import the archive.', true);
     } finally {
       if (mounted) {
         setState(() => _isImporting = false);
@@ -230,12 +230,12 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
         _collectionMessage = 'Deleted ${activeCollection.name}.';
         _collectionMessageIsError = false;
       });
-    } catch (error) {
+    } catch (_) {
       if (!mounted) {
         return;
       }
       setState(() {
-        _collectionMessage = 'Could not delete the collection: $error';
+        _collectionMessage = 'Could not delete the collection.';
         _collectionMessageIsError = true;
       });
     }
@@ -281,11 +281,11 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
         _selectedArchiveName = null;
       });
       _setStatus('Deleted the archive. Import an archive to continue.', false);
-    } catch (error) {
+    } catch (_) {
       if (!mounted) {
         return;
       }
-      _setStatus('Could not delete the archive: $error', true);
+      _setStatus('Could not delete the archive.', true);
     }
   }
 
@@ -356,28 +356,23 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                               _Panel(
                                 icon: Icons.inventory_2_outlined,
                                 title: 'Archive on this device',
-                                child: Column(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                child: Wrap(
+                                  spacing: 12,
+                                  runSpacing: 12,
                                   children: [
-                                    Wrap(
-                                      spacing: 12,
-                                      runSpacing: 12,
-                                      children: [
-                                        _InfoPill(
-                                          label: 'Archive created',
-                                          value: generatedAt == null || generatedAt.isEmpty
-                                              ? 'Unknown'
-                                              : formatFriendlyDatasetBuiltAt(generatedAt),
-                                        ),
-                                        _InfoPill(
-                                          label: 'Collections',
-                                          value: '${collections.length}',
-                                        ),
-                                        _InfoPill(
-                                          label: 'Notes',
-                                          value: '${activeCollection?.noteCount ?? 0}',
-                                        ),
-                                      ],
+                                    _InfoPill(
+                                      label: 'Archive created',
+                                      value: generatedAt == null || generatedAt.isEmpty
+                                          ? 'Not recorded'
+                                          : formatFriendlyDatasetBuiltAt(generatedAt),
+                                    ),
+                                    _InfoPill(
+                                      label: 'Collections',
+                                      value: '${collections.length}',
+                                    ),
+                                    _InfoPill(
+                                      label: 'Notes',
+                                      value: '${activeCollection?.noteCount ?? 0}',
                                     ),
                                   ],
                                 ),
@@ -499,20 +494,11 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                               icon: Icons.delete_forever_outlined,
                               iconColor: ViewerPalette.danger,
                               title: 'Delete archive',
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Text(
-                                    'Delete the archive and its notes from this device.',
-                                  ),
-                                  const SizedBox(height: 16),
-                                  FilledButton.tonalIcon(
-                                    onPressed: isBusy ? null : _deleteImportedData,
-                                    style: ViewerButtonStyles.dangerTonal(),
-                                    icon: const Icon(Icons.delete_outline_rounded),
-                                    label: const Text('Delete archive'),
-                                  ),
-                                ],
+                              child: FilledButton.tonalIcon(
+                                onPressed: isBusy ? null : _deleteImportedData,
+                                style: ViewerButtonStyles.dangerTonal(),
+                                icon: const Icon(Icons.delete_outline_rounded),
+                                label: const Text('Delete archive'),
                               ),
                             ),
                           ],
@@ -960,7 +946,7 @@ class _ArchiveDropZoneState extends State<_ArchiveDropZone> {
                         padding: const EdgeInsets.symmetric(
                             horizontal: 8, vertical: 4),
                         child: Text(
-                          'ZIP',
+                          'ARCHIVE',
                           style: TextStyle(
                             fontFamily: 'Inter',
                             fontSize: 11,
