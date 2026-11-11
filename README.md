@@ -26,7 +26,7 @@ This is a pnpm workspace with apps under `apps/`:
 
 Local data (SQLite DB + images) lives in `data/` by default; see [Environment variables](#environment-variables) to override the location.
 
-`data/` is gitignored, so new Git worktrees would otherwise start with an empty database. `pnpm install` installs a `post-checkout` hook (`scripts/install-hooks.mjs`) that links the primary checkout's `data/` into every new worktree. Run it manually with:
+`data/` is gitignored, so new Git worktrees would otherwise start with an empty database. `pnpm install` installs a `post-checkout` hook (`scripts/install-hooks.mjs`) that links the primary checkout's `data/` into every new worktree. The hook always points at the primary checkout's copy of `scripts/post-checkout`, no matter which worktree ran `pnpm install`, and re-installing repairs a hook left dangling by a deleted worktree. Run it manually with:
 
 ```bash
 node scripts/install-hooks.mjs
