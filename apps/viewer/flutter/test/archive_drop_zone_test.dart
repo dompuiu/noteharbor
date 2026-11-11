@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
+import 'package:note_harbor_viewer/app/viewer_palette.dart';
 import 'package:note_harbor_viewer/features/import/archive_drop_zone.dart';
 import 'package:note_harbor_viewer/features/import/archive_staging.dart';
 
@@ -186,6 +187,45 @@ void main() {
   testWidgets('names the picker while it is open', (WidgetTester tester) async {
     await pumpZone(tester, isPicking: true, onChoose: () {});
     expect(find.text('Choosing...'), findsOneWidget);
+  });
+
+  Color zoneFill(WidgetTester tester) {
+    final container = tester.widget<Container>(
+      find.descendant(
+        of: find.byType(AnimatedContainer),
+        matching: find.byType(Container),
+      ),
+    );
+    return (container.decoration! as BoxDecoration).color!;
+  }
+
+  testWidgets('the drag-over fill fades between opaque colors', (
+    WidgetTester tester,
+  ) async {
+    await pumpZone(tester, onChoose: () {});
+    final details = DropEventDetails(
+      localPosition: Offset.zero,
+      globalPosition: Offset.zero,
+    );
+
+    dropTarget(tester).onDragEntered!(details);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 70));
+
+    // A translucent target makes Color.lerp dip through a half-alpha red and
+    // flash a saturated pink mid-fade. Both ends stay opaque instead.
+    expect(zoneFill(tester).a, 1.0);
+
+    await tester.pumpAndSettle();
+    expect(
+      zoneFill(tester),
+      Color.alphaBlend(ViewerPalette.accentSoft, ViewerPalette.surface),
+    );
+
+    dropTarget(tester).onDragExited!(details);
+    await tester.pump();
+    await tester.pump(const Duration(milliseconds: 70));
+    expect(zoneFill(tester).a, 1.0);
   });
 
   testWidgets('shows the drag-over state until the drag leaves', (

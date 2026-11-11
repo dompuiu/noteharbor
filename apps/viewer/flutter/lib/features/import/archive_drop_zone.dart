@@ -184,11 +184,20 @@ class _ArchiveDropZoneState extends State<ArchiveDropZone> {
 
     final active = dragging || selected;
     final focused = interactive && _focused;
+    // accentSoft is translucent, and AnimatedContainer tweens colors with
+    // Color.lerp, which interpolates alpha as well. Fading an opaque fill to a
+    // translucent one dips through a half-alpha red and flashes a saturated
+    // pink before it settles. Blending the wash over the white panel first
+    // keeps both ends opaque, so the fade stays one pale ramp.
+    final activeFill = Color.alphaBlend(
+      ViewerPalette.accentSoft,
+      ViewerPalette.surface,
+    );
     final Color borderColor;
     final Color fillColor;
     if (active) {
       borderColor = ViewerPalette.accent;
-      fillColor = ViewerPalette.accentSoft;
+      fillColor = activeFill;
     } else if (hovered) {
       borderColor = ViewerPalette.accent.withValues(alpha: 0.55);
       fillColor = ViewerPalette.surfaceStep;
