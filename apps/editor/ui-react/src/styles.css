@@ -5656,10 +5656,14 @@ td.drag-cell {
 }
 
 /* The menu floats above the table in a portal, positioned from the button's
-   viewport rect, so the table's scroll containers cannot clip it. */
+   viewport rect, so the table's scroll containers cannot clip it. The Note
+   editor's image cards share this menu; the edit overlay sits on 110, so the
+   portalled panel has to clear it the way the tag dropdown does. */
 .row-actions-menu {
   position: fixed;
-  z-index: 40;
+  /* Above the edit overlay (110) so a card menu shows in add/edit, below the
+     scrape-conflict (120) and shortcuts (200) modals. */
+  z-index: 115;
   display: flex;
   flex-direction: column;
   min-width: 180px;
@@ -6274,8 +6278,7 @@ button.tag {
   max-height: 220px;
 }
 
-.image-slot-header,
-.image-slot-actions {
+.image-slot-header {
   display: flex;
   justify-content: space-between;
   gap: 8px;
@@ -6283,45 +6286,20 @@ button.tag {
   flex-wrap: wrap;
 }
 
-.image-slot-badge {
-  border-radius: var(--radius-pill);
-  padding: 3px 10px;
-  font-size: 0.72rem;
-  font-weight: 700;
-  background: var(--success-bg);
-  color: var(--success);
-}
-
-.image-slot-badge--danger {
-  background: var(--danger-bg);
-  color: var(--danger);
-}
-
 .image-slot-header-meta {
   display: flex;
   gap: 8px;
+  align-items: center;
   flex-wrap: wrap;
   justify-content: flex-end;
 }
 
-.image-slot-source {
-  border-radius: var(--radius-pill);
-  padding: 3px 10px;
-  font-size: 0.72rem;
-  font-weight: 600;
-  background: var(--surface-3);
+/* The slot's provenance and pending state read as Meta-sized Body text; the
+   comment in NoteEditForm explains why they are not chips. */
+.image-slot-meta {
+  margin: 0;
   color: var(--text-muted);
-}
-
-.image-slot-source--scraped {
-  background: var(--success-bg);
-  color: var(--success);
-}
-
-.image-slot-source--uploaded,
-.image-slot-source--generated {
-  background: var(--info-bg);
-  color: var(--info);
+  font-size: 0.75rem;
 }
 
 .image-dropzone {
@@ -6332,6 +6310,8 @@ button.tag {
   border-radius: var(--radius-lg);
   border: 2px dashed var(--border-control);
   background: var(--surface);
+  color: inherit;
+  font: inherit;
   cursor: pointer;
   transition:
     border-color 0.15s ease,
@@ -6340,11 +6320,13 @@ button.tag {
 }
 
 .image-dropzone:hover,
-.image-dropzone:focus-visible,
 .image-dropzone--active {
   border-color: var(--accent);
   box-shadow: var(--shadow-md);
-  outline: none;
+}
+
+.image-dropzone:focus-visible {
+  border-color: var(--accent);
 }
 
 .image-dropzone-preview {
@@ -6364,20 +6346,13 @@ button.tag {
   display: none;
 }
 
-.image-slot-actions--wrap {
-  align-items: stretch;
-}
-
 .image-generate-toggle {
   display: flex;
   gap: 8px;
   align-items: center;
+  white-space: nowrap;
   font-size: 0.86rem;
   color: var(--text-muted);
-}
-
-.image-generate-toggle--inline {
-  white-space: nowrap;
 }
 
 .image-generate-toggle input {

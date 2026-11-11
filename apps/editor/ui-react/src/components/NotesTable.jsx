@@ -66,7 +66,7 @@ import { BulkTagPanel } from "./BulkTagPanel.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { NoCollectionsPrompt } from "./NoCollectionsPrompt.jsx";
 import { NotesTableView } from "./NotesTableView.jsx";
-import { RowActionsMenu } from "./RowActionsMenu.jsx";
+import { ActionsMenu } from "./ActionsMenu.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 import { TableBulkBar } from "./TableBulkBar.jsx";
 import { ToastHost } from "./Toast.jsx";
@@ -4575,7 +4575,7 @@ function NotesTable({
                 {collection &&
                 !isNewCollection &&
                 (onRenameCollection || onDeleteCollection) ? (
-                  <RowActionsMenu
+                  <ActionsMenu
                     items={collectionActionItems}
                     label="Collection actions"
                   />

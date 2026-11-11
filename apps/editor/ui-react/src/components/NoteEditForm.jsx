@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useId, useMemo, useRef, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import {
   createNote,
@@ -24,6 +24,7 @@ import { normalizePastedImageFile } from "../lib/pastedImages.js";
 import { extractPmgDescriptionFields } from "../lib/pmgDescription.js";
 import { CATALOG_ROUTES } from "../lib/routes.js";
 import { NoteCounter } from "./NoteCounter.jsx";
+import { ActionsMenu } from "./ActionsMenu.jsx";
 import {
   CollectionPositionFields,
   needsPositionReference,
@@ -282,6 +283,7 @@ function NoteEditForm({
 }) {
   const { id: routeNoteId } = useParams();
   const navigate = useNavigate();
+  const imagesGroupId = useId();
   // An explicit null noteId means "create a new note" (the table overlay
   // passes null for create, a note id for edit). Only fall back to the route
   // param when no prop was given at all (the standalone /catalog/notes/:id
@@ -1898,8 +1900,14 @@ function NoteEditForm({
             />
           </div>
 
-          <div className="field-block full-span">
-            <span>Pictures</span>
+          {/* One group for the four Note images, so each card's image
+              controls are announced as part of a named set instead of a run. */}
+          <div
+            aria-labelledby={`${imagesGroupId}-label`}
+            className="field-block full-span"
+            role="group"
+          >
+            <span id={`${imagesGroupId}-label`}>Note images</span>
             <div className="image-slot-grid">
               {imageSlots.map((slot) => {
                 const currentImage = pickImage(
@@ -1926,45 +1934,85 @@ function NoteEditForm({
                   : pendingPreview ||
                     scrapedImageUrl ||
                     versionedImagePath(currentImage?.localPath, noteVersion);
+                const hasPendingFile = Boolean(pendingPreview);
                 const hasPendingImage =
-                  Boolean(pendingPreview) || Boolean(scrapedImageUrl);
+                  hasPendingFile || Boolean(scrapedImageUrl);
                 const hasExistingImage = Boolean(currentImage) && !isDeleted;
                 const showGenerateOption =
                   slot.variant === "thumbnail" && hasFullImage;
+                const slotName = `${slot.label} image`;
+                const headerId = `${imagesGroupId}-${slot.key}-label`;
+                // Provenance and pending state are plain meta text, never a
+                // status chip: that hue belongs to a message.
+                const metaText = isDeleted
+                  ? "Will delete"
+                  : hasPendingImage
+                    ? "New image ready"
+                    : hasExistingImage
+                      ? slotOriginLabel(currentImage?.origin)
+                      : "";
+                const slotActions = [
+                  {
+                    key: "clear",
+                    label: `Clear new file for ${slotName}`,
+                    disabled: !hasPendingFile,
+                    onSelect: () => clearSlotFile(slot),
+                  },
+                  ...(scrapedImageUrl && !hasPendingFile
+                    ? [
+                        {
+                          key: "discard-scraped",
+                          label: `Discard scraped file for ${slotName}`,
+                          onSelect: () => clearScrapedImage(slot.key),
+                        },
+                      ]
+                    : []),
+                  {
+                    key: "delete",
+                    label: `Delete ${slotName}`,
+                    danger: true,
+                    disabled: !hasExistingImage && !hasPendingImage,
+                    onSelect: () => markSlotDeleted(slot),
+                    separated: true,
+                  },
+                  {
+                    key: "undo",
+                    label: `Undo delete of ${slotName}`,
+                    disabled: !isDeleted,
+                    onSelect: () => undoSlotDelete(slot),
+                  },
+                ];
+                const hasSlotAction = slotActions.some((item) => !item.disabled);
 
                 return (
                   <div
+                    aria-labelledby={headerId}
                     className={`image-slot-card image-slot-card--${slot.variant}`}
                     key={slot.key}
+                    role="group"
                   >
                     <div className="image-slot-header">
-                      <strong>{slot.label}</strong>
+                      <strong id={headerId}>{slotName}</strong>
                       <div className="image-slot-header-meta">
-                        {hasPendingImage ? (
-                          <span className="image-slot-badge">
-                            New image ready
-                          </span>
+                        {metaText ? (
+                          <p className="image-slot-meta">{metaText}</p>
                         ) : null}
-                        {!hasPendingImage &&
-                        hasExistingImage &&
-                        currentImage?.origin ? (
-                          <span
-                            className={`image-slot-source image-slot-source--${currentImage.origin}`}
-                          >
-                            {slotOriginLabel(currentImage.origin)}
-                          </span>
-                        ) : null}
-                        {isDeleted ? (
-                          <span className="image-slot-badge image-slot-badge--danger">
-                            Will delete
-                          </span>
+                        {hasSlotAction ? (
+                          <ActionsMenu
+                            items={slotActions}
+                            label={`${slotName} actions`}
+                          />
                         ) : null}
                       </div>
                     </div>
-                    <div
+                    {/* The dropzone is the slot's one action: choosing a file,
+                        dropping one, or pasting a screenshot all start here. */}
+                    <button
+                      aria-label={`Choose or drop ${slotName}`}
                       className={`image-dropzone${activePasteSlot === slot.key ? " image-dropzone--active" : ""}`}
                       onClick={() => {
                         setActivePasteSlot(slot.key);
+                        inputRefs.current[slot.key]?.click();
                       }}
                       onDragOver={(event) => {
                         event.preventDefault();
@@ -1984,88 +2032,38 @@ function NoteEditForm({
                         event.preventDefault();
                         setSlotFile(slot, await normalizePastedImageFile(file));
                       }}
-                      role="button"
-                      tabIndex={0}
-                      onKeyDown={(event) => {
-                        if (event.key === "Enter" || event.key === " ") {
-                          event.preventDefault();
-                          setActivePasteSlot(slot.key);
-                          inputRefs.current[slot.key]?.click();
-                        }
-                      }}
+                      type="button"
                     >
                       {previewSrc ? (
                         <img
-                          alt={`${slot.label} preview`}
+                          alt={`${slotName} preview`}
                           className="image-dropzone-preview"
                           src={previewSrc}
                         />
                       ) : (
                         <div className="image-dropzone-empty">
-                          {isDeleted ? "Image will be removed" : "No image yet"}
+                          {isDeleted
+                            ? "Image will be removed"
+                            : "Choose, drop, or paste an image"}
                         </div>
                       )}
-                    </div>
-                    <div className="image-slot-actions image-slot-actions--wrap">
-                      <button
-                        className="button"
-                        onClick={() => {
-                          setActivePasteSlot(slot.key);
-                          inputRefs.current[slot.key]?.click();
-                        }}
-                        type="button"
-                      >
-                        Choose file
-                      </button>
-                      <button
-                        className="button"
-                        disabled={!pendingImages[slot.key]}
-                        onClick={() => clearSlotFile(slot)}
-                        type="button"
-                      >
-                        Clear new file
-                      </button>
-                      {scrapedImageUrl && !pendingImages[slot.key] ? (
-                        <button
-                          className="button"
-                          onClick={() => clearScrapedImage(slot.key)}
-                          type="button"
-                        >
-                          Discard scraped
-                        </button>
-                      ) : null}
-                      <button
-                        className="button button-danger-soft"
-                        disabled={!hasExistingImage && !hasPendingImage}
-                        onClick={() => markSlotDeleted(slot)}
-                        type="button"
-                      >
-                        Delete image
-                      </button>
-                      <button
-                        className="button"
-                        disabled={!isDeleted}
-                        onClick={() => undoSlotDelete(slot)}
-                        type="button"
-                      >
-                        Undo delete
-                      </button>
-                      {showGenerateOption ? (
-                        <label className="image-generate-toggle image-generate-toggle--inline">
-                          <input
-                            checked={generatedThumbnails[slot.type]}
-                            onChange={(event) =>
-                              setGeneratedThumbnails((current) => ({
-                                ...current,
-                                [slot.type]: event.target.checked,
-                              }))
-                            }
-                            type="checkbox"
-                          />
-                          <span>Generate thumbnail</span>
-                        </label>
-                      ) : null}
-                    </div>
+                    </button>
+                    {showGenerateOption ? (
+                      <label className="image-generate-toggle">
+                        <input
+                          aria-describedby={headerId}
+                          checked={generatedThumbnails[slot.type]}
+                          onChange={(event) =>
+                            setGeneratedThumbnails((current) => ({
+                              ...current,
+                              [slot.type]: event.target.checked,
+                            }))
+                          }
+                          type="checkbox"
+                        />
+                        <span>Generate thumbnail</span>
+                      </label>
+                    ) : null}
                     <input
                       accept="image/*"
                       className="image-slot-input"

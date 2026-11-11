@@ -1,6 +1,6 @@
 import { Fragment, memo, useCallback, useMemo, useState } from "react";
 import { TagsCell } from "./TagsCell.jsx";
-import { RowActionsMenu } from "./RowActionsMenu.jsx";
+import { ActionsMenu } from "./ActionsMenu.jsx";
 import { highlightTerms } from "../lib/tableCells.jsx";
 import { gradeTier } from "../lib/tableColumns.js";
 import { noteRowLabel } from "../lib/noteRowModel.js";
@@ -374,7 +374,7 @@ export const NoteRow = memo(function NoteRow({
 
     return (
       <td {...cellAttributes(column)}>
-        <RowActionsMenu
+        <ActionsMenu
           items={items}
           label={`Actions for ${noteLabel}`}
           ref={actionsRef}

@@ -191,25 +191,27 @@ function ActionIcon({ name }) {
   );
 }
 
-// A row's actions button and its menu. The shared popover shell owns the
-// trigger's aria, the portal, positioning, focus return and every dismissal
-// rule; this file supplies only the trigger's look, the note-specific label,
-// and the menu items the caller hands in (label, handler, optional href, icon).
-// The ref exposes `{ open }` for the table's `o` shortcut.
-export const RowActionsMenu = forwardRef(function RowActionsMenu(
+// A row's (or a Note image card's) three-dot button and its menu. The shared
+// popover shell owns the trigger's aria, the portal, positioning, focus return
+// and every dismissal rule; this file supplies only the trigger's look, the
+// caller's label, and the menu items it hands in (label, handler, optional
+// href and icon). The ref exposes `{ open }` for the table's `o` shortcut.
+export const ActionsMenu = forwardRef(function ActionsMenu(
   { items, label, shortcut },
   ref,
 ) {
   return (
     <AnchoredPopover
-      // The actions column is the table's last, unpinned column, so on a
-      // narrow window its button can be scrolled out of view. Opening from
+      // In the table, the actions column is the last, unpinned column, so on
+      // a narrow window its button can be scrolled out of view. Opening from
       // the keyboard has to bring it back first, or the menu anchors to a
       // button the collector cannot see.
       align="end"
       className="row-actions-menu"
       closeOnRouteChange
-      initialFocus={(panel) => panel.querySelector('[role="menuitem"]')}
+      initialFocus={(panel) =>
+        panel.querySelector('[role="menuitem"]:not(:disabled)')
+      }
       onKeyDown={(event, panel) =>
         handleMenuNavigation(event, panel, '[role="menuitem"]')
       }
@@ -221,9 +223,9 @@ export const RowActionsMenu = forwardRef(function RowActionsMenu(
           aria-keyshortcuts={shortcut}
           aria-label={label}
           className={`row-menu-btn${open ? " is-open" : ""}`}
-          // The trigger sits inside the row, whose click opens the note
-          // slideshow. The shell's toggle stays the open path; the row just
-          // must not also see the press.
+          // In the table, the trigger sits inside the row, whose click opens
+          // the note slideshow. The shell's toggle stays the open path; the
+          // row just must not also see the press.
           onClick={(event) => {
             event.stopPropagation();
             triggerProps.onClick(event);

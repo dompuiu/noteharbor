@@ -1021,6 +1021,17 @@ describe("table styles", () => {
     expect(menu[1]).toMatch(/z-index:\s*\d+/);
   });
 
+  // The Note editor's image cards reuse the row actions menu. Its panel is
+  // portalled to <body>, so it has to clear the opaque edit-note overlay or
+  // the card's Delete/Undo items would paint underneath it.
+  test("the actions menu clears the edit-note overlay", () => {
+    const menu = styles.match(/\.row-actions-menu\s*\{([^}]*)\}/);
+    const overlay = styles.match(/\.edit-note-overlay\s*\{([^}]*)\}/);
+    const menuZ = Number(menu?.[1].match(/z-index:\s*(\d+)/)?.[1]);
+    const overlayZ = Number(overlay?.[1].match(/z-index:\s*(\d+)/)?.[1]);
+    expect(menuZ).toBeGreaterThan(overlayZ);
+  });
+
   // The row action button is always visible: hiding it until hover made the
   // menu undiscoverable at rest. jsdom cannot resolve :hover, so the contract
   // is pinned here as a static check over the stylesheet.
