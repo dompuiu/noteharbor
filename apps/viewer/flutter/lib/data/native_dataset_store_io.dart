@@ -7,6 +7,9 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:sqlite3/sqlite3.dart';
 
+import '../models/archive_preview.dart';
+import '../models/viewer_collection.dart';
+
 class ImportedDatasetLocation {
   const ImportedDatasetLocation({
     required this.rootPath,
@@ -44,10 +47,7 @@ class NativeDatasetStore {
   }
 
   Future<void> importArchive(String archivePath) async {
-    final sourceArchive = File(archivePath);
-    if (!sourceArchive.existsSync()) {
-      throw StateError('The selected archive file no longer exists.');
-    }
+    final sourceArchive = _existingArchiveFile(archivePath);
 
     // path_provider must run on the main isolate. Everything heavy below
     // runs in a background isolate so the import overlay keeps animating,
@@ -63,6 +63,25 @@ class NativeDatasetStore {
     if (result['ok'] != 'true') {
       throw StateError(result['error'] ?? 'Import failed.');
     }
+  }
+
+  /// Reads what [archivePath] holds without installing it, so the import
+  /// confirmation can list the collections it will replace.
+  ///
+  /// Returns null when the file is not a Note Harbor archive. Like
+  /// [importArchive], the container lookup stays on the main isolate and the
+  /// unpacking, database read, and cleanup run in a background isolate.
+  Future<ArchivePreview?> peekArchive(String archivePath) async {
+    final sourceArchive = _existingArchiveFile(archivePath);
+
+    final containerDir = await _containerDirectory();
+    return compute(
+      _peekArchiveInBackground,
+      <String, String>{
+        'archivePath': sourceArchive.path,
+        'containerPath': containerDir.path,
+      },
+    );
   }
 
   /// Deletes a collection and its notes, tags, and image files.
@@ -193,6 +212,14 @@ class NativeDatasetStore {
   }
 }
 
+File _existingArchiveFile(String archivePath) {
+  final archive = File(archivePath);
+  if (!archive.existsSync()) {
+    throw StateError('The selected archive file no longer exists.');
+  }
+  return archive;
+}
+
 /// Runs the whole archive import off the UI thread.
 ///
 /// Only plain strings cross the isolate boundary: [params] carries the
@@ -226,10 +253,7 @@ Future<void> _runArchiveImport({
   required String archivePath,
   required String containerPath,
 }) async {
-  final sourceArchive = File(archivePath);
-  if (!sourceArchive.existsSync()) {
-    throw StateError('The selected archive file no longer exists.');
-  }
+  final sourceArchive = _existingArchiveFile(archivePath);
 
   final containerDir = Directory(containerPath);
   final extractionDir = Directory(
@@ -242,36 +266,7 @@ Future<void> _runArchiveImport({
   await extractionDir.create(recursive: true);
 
   try {
-    final inputStream = InputFileStream(sourceArchive.path);
-    try {
-      final archive = ZipDecoder().decodeStream(inputStream);
-      final progress = _UiYieldCounter(20);
-      for (final entry in archive) {
-        final normalizedPath = p.normalize(entry.name);
-        if (p.isAbsolute(normalizedPath) ||
-            normalizedPath == '..' ||
-            normalizedPath.startsWith('../') ||
-            normalizedPath.startsWith('..\\')) {
-          throw StateError('Archive contains invalid file paths.');
-        }
-
-        final outputPath = p.join(extractionDir.path, normalizedPath);
-        if (entry.isFile) {
-          Directory(p.dirname(outputPath)).createSync(recursive: true);
-          final outputStream = OutputFileStream(outputPath);
-          try {
-            entry.writeContent(outputStream);
-          } finally {
-            outputStream.closeSync();
-          }
-        } else {
-          Directory(outputPath).createSync(recursive: true);
-        }
-        await progress.tick();
-      }
-    } finally {
-      inputStream.closeSync();
-    }
+    await _extractArchive(sourceArchive, extractionDir);
 
     final archiveDataDir = _findArchiveDataDir(extractionDir);
     if (archiveDataDir == null) {
@@ -337,6 +332,128 @@ Future<void> _runArchiveImport({
     }
     if (stagedDir.existsSync()) {
       await stagedDir.delete(recursive: true);
+    }
+  }
+}
+
+/// Unpacks [sourceArchive] into [extractionDir], rejecting entries that would
+/// escape it (zip slip). Import and preview share this so both read an
+/// archive the same way.
+Future<void> _extractArchive(File sourceArchive, Directory extractionDir) async {
+  final inputStream = InputFileStream(sourceArchive.path);
+  try {
+    final archive = ZipDecoder().decodeStream(inputStream);
+    final progress = _UiYieldCounter(20);
+    for (final entry in archive) {
+      final normalizedPath = p.normalize(entry.name);
+      if (p.isAbsolute(normalizedPath) ||
+          normalizedPath == '..' ||
+          normalizedPath.startsWith('../') ||
+          normalizedPath.startsWith('..\\')) {
+        throw StateError('Archive contains invalid file paths.');
+      }
+
+      final outputPath = p.join(extractionDir.path, normalizedPath);
+      if (entry.isFile) {
+        Directory(p.dirname(outputPath)).createSync(recursive: true);
+        final outputStream = OutputFileStream(outputPath);
+        try {
+          entry.writeContent(outputStream);
+        } finally {
+          outputStream.closeSync();
+        }
+      } else {
+        Directory(outputPath).createSync(recursive: true);
+      }
+      await progress.tick();
+    }
+  } finally {
+    inputStream.closeSync();
+  }
+}
+
+/// Runs the archive preview off the UI thread.
+///
+/// Returns null when the file is not a Note Harbor archive.
+@pragma('vm:entry-point')
+Future<ArchivePreview?> _peekArchiveInBackground(
+  Map<String, String> params,
+) async {
+  final extractionDir = Directory(
+    p.join(
+      params['containerPath']!,
+      'preview-${DateTime.now().microsecondsSinceEpoch}',
+    ),
+  );
+  await extractionDir.create(recursive: true);
+
+  try {
+    await _extractArchive(File(params['archivePath']!), extractionDir);
+    final archiveDataDir = _findArchiveDataDir(extractionDir);
+    if (archiveDataDir == null) {
+      return null;
+    }
+
+    final databasePath = p.join(archiveDataDir.path, 'banknotes.db');
+    final database = sqlite3.open(databasePath, mode: OpenMode.readOnly);
+    try {
+      if (!_tableExists(database, 'collections') ||
+          !_tableExists(database, 'banknotes')) {
+        return null;
+      }
+
+      // Every collection the import would install, including empty ones,
+      // with the same name filter the import applies.
+      final rows = database.select('''
+        SELECT c.id AS id, c.name AS name, COUNT(b.id) AS note_count
+        FROM collections c
+        LEFT JOIN banknotes b ON b.collection_id = c.id
+        WHERE c.id > 0 AND trim(c.name) <> ''
+        GROUP BY c.id, c.name
+        ORDER BY c.name COLLATE NOCASE ASC, c.id ASC
+      ''');
+      if (rows.isEmpty) {
+        return null;
+      }
+
+      // SQLite datetimes are UTC; strftime hands back a stable ISO stamp for
+      // the same archive instead of the extraction time of the temp copy.
+      final generatedAt = database.select('''
+        SELECT strftime('%Y-%m-%dT%H:%M:%SZ', MAX(updated_at)) AS generated_at
+        FROM (
+          SELECT MAX(updated_at) AS updated_at FROM banknotes
+          UNION ALL
+          SELECT MAX(updated_at) FROM collections
+        )
+      ''').first['generated_at'] as String?;
+
+      return ArchivePreview(
+        generatedAt: generatedAt,
+        collections: rows
+            .map(
+              (row) => ViewerCollection(
+                id: (row['id'] as int?) ?? 0,
+                name: '${row['name'] ?? ''}'.trim(),
+                noteCount: (row['note_count'] as int?) ?? 0,
+              ),
+            )
+            .toList(growable: false),
+      );
+    } finally {
+      database.close();
+    }
+  } on ArchiveException {
+    return null;
+  } on SqliteException {
+    return null;
+  } on StateError {
+    // Zip-slip paths and other malformed-archive signals.
+    return null;
+  } on FormatException {
+    return null;
+  } finally {
+    if (extractionDir.existsSync()) {
+      await extractionDir.delete(recursive: true);
     }
   }
 }

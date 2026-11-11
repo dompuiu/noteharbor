@@ -1,3 +1,5 @@
+import '../models/archive_preview.dart';
+
 class ImportedDatasetLocation {
   const ImportedDatasetLocation({
     required this.rootPath,
@@ -20,6 +22,8 @@ class NativeDatasetStore {
   Future<void> importArchive(String archivePath) async {
     throw UnsupportedError('Archive import is only available on native builds.');
   }
+
+  Future<ArchivePreview?> peekArchive(String archivePath) async => null;
 
   Future<void> deleteCollection(int collectionId, {String? collectionName}) async {
     throw UnsupportedError('Collection management is only available on native builds.');

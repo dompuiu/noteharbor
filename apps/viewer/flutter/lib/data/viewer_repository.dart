@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../models/archive_preview.dart';
 import '../models/viewer_dataset.dart';
 import 'imported_dataset_loader.dart';
 import 'native_dataset_store.dart';
@@ -34,6 +35,10 @@ class ViewerRepository {
 
   Future<void> importArchive(String archivePath) {
     return _nativeDatasetStore.importArchive(archivePath);
+  }
+
+  Future<ArchivePreview?> peekArchive(String archivePath) {
+    return _nativeDatasetStore.peekArchive(archivePath);
   }
 
   Future<void> deleteCollection(int collectionId, {String? collectionName}) {
