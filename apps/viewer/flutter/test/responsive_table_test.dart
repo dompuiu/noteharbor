@@ -104,6 +104,65 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
+  testWidgets('card tags flow inline instead of stacking one per line', (
+    WidgetTester tester,
+  ) async {
+    await pumpTable(tester, size: const Size(520, 900));
+
+    final silver = tester.getRect(find.text('Silver'));
+    final romania = tester.getRect(find.text('Romania'));
+
+    // Two short tags share the footer row. Each chip used to expand to the
+    // whole card width, so every tag forced a row of its own.
+    expect((silver.center.dy - romania.center.dy).abs(), lessThan(1));
+    expect(romania.left, greaterThan(silver.right));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('card tag footer starts under the plate, not the text column', (
+    WidgetTester tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    await pumpTable(tester, size: const Size(520, 900));
+
+    final cardRect = tester.getRect(card(1));
+    final chipRect = tester.getRect(
+      find.bySemanticsLabel('Filter by tag Silver'),
+    );
+
+    // 12 px is the card's own left padding. The footer spans the card, so its
+    // chips line up with the mounted plate instead of the text column.
+    expect(chipRect.left, moreOrLessEquals(cardRect.left + 12));
+
+    handle.dispose();
+  });
+
+  testWidgets('card tag runs sit close together', (WidgetTester tester) async {
+    final handle = tester.ensureSemantics();
+    await pumpTable(
+      tester,
+      size: const Size(400, 1200),
+      repository: _CardRepository(manyTags: true),
+    );
+
+    final tops = <double>{};
+    for (var tag = 1; tag <= 10; tag++) {
+      tops.add(
+        tester
+            .getRect(find.bySemanticsLabel('Filter by tag Tag $tag'))
+            .top,
+      );
+    }
+    final rows = tops.toList()..sort();
+    expect(rows.length, greaterThan(1));
+    for (var index = 1; index < rows.length; index++) {
+      // A 32 pt target plus the 4 pt run gap.
+      expect(rows[index] - rows[index - 1], lessThanOrEqualTo(36));
+    }
+
+    handle.dispose();
+  });
+
   testWidgets('card grades wear the catalogue bands', (
     WidgetTester tester,
   ) async {

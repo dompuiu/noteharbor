@@ -86,9 +86,20 @@ const EdgeInsets _kTagChipPadding = EdgeInsets.symmetric(
   vertical: 4,
 );
 
-/// Shortest side of a tag chip's tap and focus target. The visible pill stays
-/// at its compact height inside a 44 pt touch area.
+/// Width of every tag chip's tap and focus target, and the height of a grid
+/// chip's. The visible pill stays at its compact height inside that area; card
+/// footers shorten the height to [_kCardTagChipMinHeight].
 const double _kTagChipMinTargetSize = 44;
+
+/// Card footers trade part of the chip's vertical target for density: the
+/// full-width footer can hold several runs, and a 44 pt target per run made
+/// those runs look like separate blocks. 32 pt still clears the 24 pt minimum
+/// for a dense metadata action, and the grid keeps the full 44 pt target.
+const double _kCardTagChipMinHeight = 32;
+
+/// The gap between chip runs in the card footer. Small on purpose: the run
+/// already carries the chip's vertical target padding.
+const double _kCardTagRunSpacing = 4;
 
 /// Horizontal room the Tags cell needs beyond the measured chips: the cell's
 /// own 12px gutters on both sides plus breathing room at the column edge.
@@ -4790,99 +4801,112 @@ class _NoteCard extends StatelessWidget {
                       8,
                       compact ? 10 : 12,
                     ),
-                    child: Row(
+                    child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        _NotePlate(
-                          front: front,
-                          back: back,
-                          width: imageWidth,
-                          height: imageHeight,
-                          selected: selected,
-                        ),
-                        SizedBox(width: compact ? 10 : 14),
-                        Expanded(
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              _CardTopLine(note: note, compact: compact),
-                              SizedBox(height: compact ? 3 : 4),
-                              Row(
-                                crossAxisAlignment: CrossAxisAlignment.baseline,
-                                textBaseline: TextBaseline.alphabetic,
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            _NotePlate(
+                              front: front,
+                              back: back,
+                              width: imageWidth,
+                              height: imageHeight,
+                              selected: selected,
+                            ),
+                            SizedBox(width: compact ? 10 : 14),
+                            Expanded(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                mainAxisSize: MainAxisSize.min,
                                 children: [
-                                  Expanded(
-                                    flex: 3,
-                                    child: Text(
-                                      title,
-                                      maxLines: 2,
-                                      overflow: TextOverflow.ellipsis,
-                                      style: TextStyle(
-                                        fontFamily: 'Inter',
-                                        color: _kTableText,
-                                        fontSize: compact ? 18 : 20,
-                                        fontWeight: FontWeight.w800,
-                                        height: 1.12,
-                                        letterSpacing: -0.3,
-                                      ),
-                                    ),
-                                  ),
-                                  if (compact) ...[
-                                    const SizedBox(width: 8),
-                                    Flexible(
-                                      child: Text(
-                                        _valueOrDash(note.issueDate),
-                                        maxLines: 1,
-                                        overflow: TextOverflow.ellipsis,
-                                        textAlign: TextAlign.right,
-                                        style: _kCardMetaTextStyle.copyWith(
-                                          fontSize: 11,
-                                          fontFeatures: const [
-                                            FontFeature.tabularFigures(),
-                                          ],
+                                  _CardTopLine(note: note, compact: compact),
+                                  SizedBox(height: compact ? 3 : 4),
+                                  Row(
+                                    crossAxisAlignment:
+                                        CrossAxisAlignment.baseline,
+                                    textBaseline: TextBaseline.alphabetic,
+                                    children: [
+                                      Expanded(
+                                        flex: 3,
+                                        child: Text(
+                                          title,
+                                          maxLines: 2,
+                                          overflow: TextOverflow.ellipsis,
+                                          style: TextStyle(
+                                            fontFamily: 'Inter',
+                                            color: _kTableText,
+                                            fontSize: compact ? 18 : 20,
+                                            fontWeight: FontWeight.w800,
+                                            height: 1.12,
+                                            letterSpacing: -0.3,
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  ],
+                                      if (compact) ...[
+                                        const SizedBox(width: 8),
+                                        Flexible(
+                                          child: Text(
+                                            _valueOrDash(note.issueDate),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                            textAlign: TextAlign.right,
+                                            style: _kCardMetaTextStyle.copyWith(
+                                              fontSize: 11,
+                                              fontFeatures: const [
+                                                FontFeature.tabularFigures(),
+                                              ],
+                                            ),
+                                          ),
+                                        ),
+                                      ],
+                                    ],
+                                  ),
+                                  SizedBox(height: compact ? 5 : 6),
+                                  _CardSpecLine(note: note),
                                 ],
                               ),
-                              SizedBox(height: compact ? 5 : 6),
-                              _CardSpecLine(note: note),
-                              if (tagNames.isNotEmpty) ...[
-                                SizedBox(height: compact ? 6 : 8),
-                                Container(height: 1, color: _kTableDivider),
-                                SizedBox(height: compact ? 6 : 8),
-                                Wrap(
-                                  spacing: _kTagChipHorizontalGap,
-                                  runSpacing: _kTagChipHorizontalGap,
-                                  children: [
-                                    for (final (index, tagName) in tagNames.indexed)
-                                      _TagChip(
-                                        label: tagName,
-                                        multiline: true,
-                                        focusNode: tagFocusNodes[index],
-                                        onTap: () => onTagTap(tagName),
-                                        onTab: ({required bool forward}) =>
-                                            onTagTab(index, forward: forward),
-                                      ),
-                                  ],
+                            ),
+                            const SizedBox(width: 4),
+                            Padding(
+                              padding: EdgeInsets.only(top: compact ? 2 : 4),
+                              child: Icon(
+                                Icons.chevron_right_rounded,
+                                size: compact ? 16 : 18,
+                                color: selected
+                                    ? ViewerPalette.accent
+                                    : ViewerPalette.textFaint,
+                              ),
+                            ),
+                          ],
+                        ),
+                        // The footer runs the card's full width, so its rule and
+                        // its chips start under the plate instead of waiting
+                        // for the text column. A full-width run packs the tags
+                        // into fewer rows on a phone.
+                        if (tagNames.isNotEmpty) ...[
+                          SizedBox(height: compact ? 6 : 8),
+                          Container(height: 1, color: _kTableDivider),
+                          SizedBox(height: compact ? 6 : 8),
+                          Wrap(
+                            spacing: _kTagChipHorizontalGap,
+                            runSpacing: _kCardTagRunSpacing,
+                            children: [
+                              for (final (index, tagName)
+                                  in tagNames.indexed)
+                                _TagChip(
+                                  label: tagName,
+                                  multiline: true,
+                                  minTargetHeight: _kCardTagChipMinHeight,
+                                  focusNode: tagFocusNodes[index],
+                                  onTap: () => onTagTap(tagName),
+                                  onTab: ({required bool forward}) =>
+                                      onTagTab(index, forward: forward),
                                 ),
-                              ],
                             ],
                           ),
-                        ),
-                        const SizedBox(width: 4),
-                        Padding(
-                          padding: EdgeInsets.only(top: compact ? 2 : 4),
-                          child: Icon(
-                            Icons.chevron_right_rounded,
-                            size: compact ? 16 : 18,
-                            color: selected
-                                ? ViewerPalette.accent
-                                : ViewerPalette.textFaint,
-                          ),
-                        ),
+                        ],
                       ],
                     ),
                   );
@@ -5421,6 +5445,7 @@ class _TagChip extends StatefulWidget {
     required this.focusNode,
     required this.onTab,
     this.multiline = false,
+    this.minTargetHeight = _kTagChipMinTargetSize,
   });
 
   final String label;
@@ -5437,6 +5462,10 @@ class _TagChip extends StatefulWidget {
   /// Card mode lets a long tag wrap inside the chip instead of running past
   /// the card edge. Grid chips are measured to fit their column.
   final bool multiline;
+
+  /// Vertical tap and focus target. Card footers pass a shorter one to keep
+  /// their runs close together; grid cells keep the 44 pt default.
+  final double minTargetHeight;
 
   @override
   State<_TagChip> createState() => _TagChipState();
@@ -5502,11 +5531,18 @@ class _TagChipState extends State<_TagChip> {
             behavior: HitTestBehavior.opaque,
             onTap: _activate,
             child: ConstrainedBox(
-              constraints: const BoxConstraints(
+              constraints: BoxConstraints(
                 minWidth: _kTagChipMinTargetSize,
-                minHeight: _kTagChipMinTargetSize,
+                minHeight: widget.minTargetHeight,
               ),
-              child: Center(
+              // `widthFactor` keeps the chip as wide as its pill: a bare
+              // `Center` fills the whole run width inside a `Wrap`, which
+              // gave every tag a row of its own in card mode. Left-aligning
+              // the pill keeps a run's first chip flush with the run start,
+              // even when its 44 pt target is wider than the label.
+              child: Align(
+                alignment: Alignment.centerLeft,
+                widthFactor: 1,
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
