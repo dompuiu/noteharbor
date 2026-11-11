@@ -11,6 +11,13 @@ import '../../widgets/viewer_button_styles.dart';
 import 'archive_drop_zone.dart';
 import 'import_archive_dialog.dart';
 
+/// The one sentence each removal scope uses, shared by its row and its dialog.
+String _collectionRemoval(String name) =>
+    'Delete "$name" and all its notes and note images from this device.';
+
+String _archiveRemoval() =>
+    'Delete the archive and all its collections from this device.';
+
 class ImportDatasetScreen extends StatefulWidget {
   const ImportDatasetScreen({required this.controller, super.key});
 
@@ -172,6 +179,10 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       if (!mounted) {
         return;
       }
+      setState(() {
+        _collectionMessage = null;
+        _collectionMessageIsError = false;
+      });
       _setStatus('Imported $_selectedArchiveName.', false);
     } catch (_) {
       if (!mounted) {
@@ -188,10 +199,6 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
   Future<void> _deleteActiveCollection() async {
     final activeCollection = widget.controller.activeCollection;
     if (activeCollection == null) {
-      setState(() {
-        _collectionMessage = 'Choose a collection to delete.';
-        _collectionMessageIsError = true;
-      });
       return;
     }
 
@@ -199,9 +206,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Delete collection?'),
-            content: Text(
-              'Delete "${activeCollection.name}" and all its notes and note images from this device?',
-            ),
+            content: Text('${_collectionRemoval(activeCollection.name)}?'),
             actions: [
               TextButton(
                 onPressed: () => Navigator.of(context).pop(false),
@@ -233,7 +238,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
         return;
       }
       setState(() {
-        _collectionMessage = 'Deleted ${activeCollection.name}.';
+        _collectionMessage = 'Deleted collection "${activeCollection.name}".';
         _collectionMessageIsError = false;
       });
     } catch (_) {
@@ -252,8 +257,8 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
           context: context,
           builder: (context) => AlertDialog(
             title: const Text('Delete archive?'),
-            content: const Text(
-              'This deletes the archive and all its collections from this device. You will need to import an archive again before browsing your notes.',
+            content: Text(
+              '${_archiveRemoval()} You will need to import an archive again before browsing your notes.',
             ),
             actions: [
               TextButton(
@@ -285,6 +290,8 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       setState(() {
         _selectedArchivePath = null;
         _selectedArchiveName = null;
+        _collectionMessage = null;
+        _collectionMessageIsError = false;
       });
       _setStatus('Deleted the archive. Import an archive to continue.', false);
     } catch (_) {
@@ -380,6 +387,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                           ? 'Notes'
                                           : 'Notes in ${activeCollection.name}',
                                       value: '${activeCollection?.noteCount ?? 0}',
+                                      maxWidth: 240,
                                     ),
                                   ],
                                 ),
@@ -466,6 +474,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                           if (!isFirstRun) ...[
                             const SizedBox(height: 18),
                             _Panel(
+                              key: const ValueKey('removeSection'),
                               icon: Icons.delete_forever_outlined,
                               iconColor: ViewerPalette.danger,
                               title: 'Remove',
@@ -476,15 +485,12 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                   if (activeCollection != null) ...[
                                     _RemoveRow(
                                       scope: 'Collection',
-                                      detail:
-                                          'Delete "${activeCollection.name}" and its notes and note images from this device.',
-                                      actionLabel: 'Delete collection',
+                                      detail: _collectionRemoval(
+                                        activeCollection.name,
+                                      ),
                                       onPressed: isBusy
                                           ? null
                                           : _deleteActiveCollection,
-                                      message: _collectionMessage,
-                                      messageIsError:
-                                          _collectionMessageIsError,
                                     ),
                                     const Divider(
                                       height: 28,
@@ -493,12 +499,25 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                   ],
                                   _RemoveRow(
                                     scope: 'Archive',
-                                    detail:
-                                        'Delete the archive and every collection in it from this device.',
-                                    actionLabel: 'Delete archive',
+                                    detail: _archiveRemoval(),
                                     onPressed:
                                         isBusy ? null : _deleteImportedData,
                                   ),
+                                  if (_collectionMessage != null) ...[
+                                    const SizedBox(height: 16),
+                                    Semantics(
+                                      liveRegion: true,
+                                      child: Text(
+                                        _collectionMessage!,
+                                        style: TextStyle(
+                                          color: _collectionMessageIsError
+                                              ? ViewerPalette.danger
+                                              : ViewerPalette.textMuted,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ),
+                                  ],
                                 ],
                               ),
                             ),
@@ -631,6 +650,7 @@ class _ImportArchiveButton extends StatelessWidget {
 class _Panel extends StatelessWidget {
   const _Panel({
     required this.child,
+    super.key,
     this.icon,
     this.title,
     this.iconColor,
@@ -707,24 +727,17 @@ class _Panel extends StatelessWidget {
   }
 }
 
-/// One scope inside the Remove section: what it deletes, the action, and the
-/// action's own inline result.
+/// One scope inside the Remove section: what it deletes and the action.
 class _RemoveRow extends StatelessWidget {
   const _RemoveRow({
     required this.scope,
     required this.detail,
-    required this.actionLabel,
     required this.onPressed,
-    this.message,
-    this.messageIsError = false,
   });
 
   final String scope;
   final String detail;
-  final String actionLabel;
   final VoidCallback? onPressed;
-  final String? message;
-  final bool messageIsError;
 
   @override
   Widget build(BuildContext context) {
@@ -747,20 +760,8 @@ class _RemoveRow extends StatelessWidget {
         FilledButton.tonal(
           onPressed: onPressed,
           style: ViewerButtonStyles.dangerTonal(),
-          child: Text(actionLabel),
+          child: Text('Delete ${scope.toLowerCase()}'),
         ),
-        if (message != null) ...[
-          const SizedBox(height: 12),
-          Text(
-            message!,
-            style: TextStyle(
-              color: messageIsError
-                  ? ViewerPalette.danger
-                  : ViewerPalette.textMuted,
-              fontWeight: FontWeight.w600,
-            ),
-          ),
-        ],
       ],
     );
   }
@@ -918,14 +919,18 @@ class _StatusBanner extends StatelessWidget {
 }
 
 class _InfoPill extends StatelessWidget {
-  const _InfoPill({required this.label, required this.value});
+  const _InfoPill({required this.label, required this.value, this.maxWidth});
 
   final String label;
   final String value;
 
+  /// Caps a pill whose label carries user text, so a long name ellipsizes
+  /// instead of stretching the wrap.
+  final double? maxWidth;
+
   @override
   Widget build(BuildContext context) {
-    return DecoratedBox(
+    final pill = DecoratedBox(
       decoration: BoxDecoration(
         color: ViewerPalette.surface,
         borderRadius:
@@ -940,6 +945,8 @@ class _InfoPill extends StatelessWidget {
           children: [
             Text(
               label.toUpperCase(),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 11,
@@ -963,5 +970,13 @@ class _InfoPill extends StatelessWidget {
         ),
       ),
     );
+
+    final width = maxWidth;
+    return width == null
+        ? pill
+        : ConstrainedBox(
+            constraints: BoxConstraints(maxWidth: width),
+            child: pill,
+          );
   }
 }

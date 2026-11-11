@@ -30,12 +30,12 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.file_upload_outlined));
     await tester.pumpAndSettle();
-    expect(find.text('IMPORT ARCHIVE'), findsWidgets);
+    expect(find.byType(ImportDatasetScreen), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
 
-    expect(find.text('IMPORT ARCHIVE'), findsNothing);
+    expect(find.byType(ImportDatasetScreen), findsNothing);
     expect(find.text('NOTE HARBOR'), findsOneWidget);
   });
 
@@ -73,7 +73,6 @@ void main() {
     // then re-ensure visibility before tapping.
     await tester.scrollUntilVisible(find.text('Delete archive'), 200);
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(find.text('Delete archive'), 200);
     await tester.tap(find.text('Delete archive'));
     await tester.pumpAndSettle();
     expect(find.text('Delete archive?'), findsOneWidget);
@@ -83,7 +82,7 @@ void main() {
 
     // The dialog dismisses; the import screen stays put.
     expect(find.text('Delete archive?'), findsNothing);
-    expect(find.text('IMPORT ARCHIVE'), findsWidgets);
+    expect(find.byType(ImportDatasetScreen), findsOneWidget);
   });
 }
 

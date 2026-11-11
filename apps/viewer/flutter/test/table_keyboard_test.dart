@@ -1171,7 +1171,7 @@ void main() {
         buildHome(ImportDatasetScreen(controller: controller)),
       );
       await tester.pumpAndSettle();
-      expect(find.text('IMPORT ARCHIVE'), findsWidgets);
+      expect(find.byType(ImportDatasetScreen), findsOneWidget);
 
       await tester.pumpWidget(
         buildHome(NotesTableScreen(controller: controller)),
@@ -1498,7 +1498,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await pumpKeyboardTableWithImports(tester);
-    expect(find.byTooltip('Import or remove archives'), findsOneWidget);
+    expect(find.byTooltip('Import or remove the archive'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.slash);
     await tester.pump();

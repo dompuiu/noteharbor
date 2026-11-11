@@ -3694,7 +3694,7 @@ class _ImportButtonState extends State<_ImportButton> {
           width: _kHeaderControlHeight,
           child: IconButton(
             focusNode: widget.focusNode,
-            tooltip: 'Import or remove archives',
+            tooltip: 'Import or remove the archive',
             onPressed: widget.onPressed,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints.tightFor(

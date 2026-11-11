@@ -27,7 +27,7 @@ void main() {
     await tester.pumpAndSettle();
   }
 
-  testWidgets('active collection panel has no default button or source pill', (
+  testWidgets('import screen uses archive and collection with one Remove section', (
     WidgetTester tester,
   ) async {
     await pumpImportScreen(tester, await loadedController());
@@ -72,12 +72,14 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
 
+    // The result stays inside the Remove section, not in the page banner.
     expect(
-      find.text('Could not delete the collection.'),
+      find.descendant(
+        of: find.byKey(const ValueKey('removeSection')),
+        matching: find.text('Could not delete the collection.'),
+      ),
       findsOneWidget,
     );
-    // The message renders right under the panel, not in the bottom banner.
-    expect(find.text('IMPORT ARCHIVE'), findsWidgets);
   });
 
   testWidgets('delete success shows inline confirmation', (
@@ -94,7 +96,7 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
 
-    expect(find.text('Deleted Alpha.'), findsOneWidget);
+    expect(find.text('Deleted collection "Alpha".'), findsOneWidget);
   });
 }
 

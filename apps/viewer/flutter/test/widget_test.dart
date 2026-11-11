@@ -55,7 +55,7 @@ void main() {
     expect(find.text('ARCHIVE ON THIS DEVICE'), findsNothing);
     expect(find.text('ACTIVE COLLECTION'), findsNothing);
     expect(find.text('IMPORT ARCHIVE'), findsOneWidget);
-    expect(find.text('DELETE ARCHIVE'), findsNothing);
+    expect(find.text('REMOVE'), findsNothing);
 
     // The one action fits above a 375x667 fold and waits for a selection.
     final action = find.widgetWithText(FilledButton, 'Import archive');

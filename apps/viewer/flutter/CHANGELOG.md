@@ -10,8 +10,7 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ### Changed
 
-### Changed
-
+- Import screen: one noun per concept — the file is an archive and what it holds is a collection. The app bar and import panel read Import archive, the Notes stat names its collection, and the two destructive panels collapse into one subordinate Remove section with a row per scope.
 - Import screen: first run is one card with one action — an eyebrow, a title, one sentence, the archive drop zone, and a single primary pill that chooses the archive then imports it. The management, active-collection, and delete panels stay hidden on first run, so the status banner lands above the fold on a phone; an imported archive with no collections still offers Delete archive.
 - Import screen copy: written for collectors — first run opens with "Bring your notes in" and one instruction to choose the archive exported from Note Harbor Editor, the replace-by-name rule appears once in the confirmation, and developer terms (file formats, database files, "dataset") are gone.
 - Import screen: the drop zone is now the only picker. It takes focus, opens the picker on Enter or Space, and draws a 2px accent focus ring beside the hover treatment; the duplicate `Choose archive` button is gone and `Import archive` waits for a selection. Its hint names drop plus click on desktop and drop plus tap on Android; iOS keeps the tap wording.
