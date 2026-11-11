@@ -141,7 +141,7 @@ void main() {
     expect(find.byKey(const ValueKey('importArchiveDialog')), findsNothing);
     expect(repository.importCount, 0);
     // Still on the import screen, with the archive still selected.
-    expect(find.text('IMPORT'), findsOneWidget);
+    expect(find.text('IMPORT ARCHIVE'), findsWidgets);
     expect(find.text('coins.zip'), findsOneWidget);
   });
 
@@ -157,7 +157,7 @@ void main() {
 
     expect(find.byKey(const ValueKey('importArchiveDialog')), findsNothing);
     expect(repository.importCount, 0);
-    expect(find.text('IMPORT'), findsOneWidget);
+    expect(find.text('IMPORT ARCHIVE'), findsWidgets);
   });
 
   testWidgets('confirming imports the selected archive', (

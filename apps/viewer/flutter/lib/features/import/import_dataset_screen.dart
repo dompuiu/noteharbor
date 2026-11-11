@@ -253,7 +253,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
           builder: (context) => AlertDialog(
             title: const Text('Delete archive?'),
             content: const Text(
-              'This deletes the archive and its notes from this device. You will need to import an archive again before browsing your notes.',
+              'This deletes the archive and all its collections from this device. You will need to import an archive again before browsing your notes.',
             ),
             actions: [
               TextButton(
@@ -325,7 +325,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                 automaticallyImplyLeading: !_isImporting &&
                     (widget.controller.dataset?.collections.isNotEmpty ??
                         false),
-                title: const Text('IMPORT'),
+                title: const Text('IMPORT ARCHIVE'),
               ),
               body: ColoredBox(
                 color: ViewerPalette.pageBackground,
@@ -376,7 +376,9 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                       value: '${collections.length}',
                                     ),
                                     _InfoPill(
-                                      label: 'Notes',
+                                      label: activeCollection == null
+                                          ? 'Notes'
+                                          : 'Notes in ${activeCollection.name}',
                                       value: '${activeCollection?.noteCount ?? 0}',
                                     ),
                                   ],
@@ -423,26 +425,6 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                               });
                                             },
                                     ),
-                                    const SizedBox(height: 14),
-                                    FilledButton.tonal(
-                                      onPressed: isBusy || activeCollection == null
-                                          ? null
-                                          : _deleteActiveCollection,
-                                      style: ViewerButtonStyles.dangerTonal(),
-                                      child: const Text('Delete collection'),
-                                    ),
-                                    if (_collectionMessage != null) ...[
-                                      const SizedBox(height: 12),
-                                      Text(
-                                        _collectionMessage!,
-                                        style: TextStyle(
-                                          color: _collectionMessageIsError
-                                              ? ViewerPalette.danger
-                                              : ViewerPalette.textMuted,
-                                          fontWeight: FontWeight.w600,
-                                        ),
-                                      ),
-                                    ],
                                   ],
                                 ),
                               ),
@@ -450,7 +432,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                             ],
                             _Panel(
                               icon: Icons.archive_outlined,
-                              title: 'Import an archive',
+                              title: 'Import archive',
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
@@ -486,12 +468,38 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                             _Panel(
                               icon: Icons.delete_forever_outlined,
                               iconColor: ViewerPalette.danger,
-                              title: 'Delete archive',
-                              child: FilledButton.tonalIcon(
-                                onPressed: isBusy ? null : _deleteImportedData,
-                                style: ViewerButtonStyles.dangerTonal(),
-                                icon: const Icon(Icons.delete_outline_rounded),
-                                label: const Text('Delete archive'),
+                              title: 'Remove',
+                              subdued: true,
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  if (activeCollection != null) ...[
+                                    _RemoveRow(
+                                      scope: 'Collection',
+                                      detail:
+                                          'Delete "${activeCollection.name}" and its notes and note images from this device.',
+                                      actionLabel: 'Delete collection',
+                                      onPressed: isBusy
+                                          ? null
+                                          : _deleteActiveCollection,
+                                      message: _collectionMessage,
+                                      messageIsError:
+                                          _collectionMessageIsError,
+                                    ),
+                                    const Divider(
+                                      height: 28,
+                                      color: ViewerPalette.borderSoft,
+                                    ),
+                                  ],
+                                  _RemoveRow(
+                                    scope: 'Archive',
+                                    detail:
+                                        'Delete the archive and every collection in it from this device.',
+                                    actionLabel: 'Delete archive',
+                                    onPressed:
+                                        isBusy ? null : _deleteImportedData,
+                                  ),
+                                ],
                               ),
                             ),
                           ],
@@ -621,12 +629,21 @@ class _ImportArchiveButton extends StatelessWidget {
 }
 
 class _Panel extends StatelessWidget {
-  const _Panel({required this.child, this.icon, this.title, this.iconColor});
+  const _Panel({
+    required this.child,
+    this.icon,
+    this.title,
+    this.iconColor,
+    this.subdued = false,
+  });
 
   final Widget child;
   final IconData? icon;
   final String? title;
   final Color? iconColor;
+
+  /// Quieter heading for a section that ranks below the page's main panels.
+  final bool subdued;
 
   @override
   Widget build(BuildContext context) {
@@ -670,20 +687,81 @@ class _Panel extends StatelessWidget {
                           .textTheme
                           .headlineSmall
                           ?.copyWith(
-                            fontSize: 20,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: -0.3,
+                            fontSize: subdued ? 13 : 20,
+                            fontWeight:
+                                subdued ? FontWeight.w700 : FontWeight.w800,
+                            letterSpacing: subdued ? 0.9 : -0.3,
+                            color: subdued ? ViewerPalette.textMuted : null,
                           ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 16),
+              SizedBox(height: subdued ? 12 : 16),
             ],
             child,
           ],
         ),
       ),
+    );
+  }
+}
+
+/// One scope inside the Remove section: what it deletes, the action, and the
+/// action's own inline result.
+class _RemoveRow extends StatelessWidget {
+  const _RemoveRow({
+    required this.scope,
+    required this.detail,
+    required this.actionLabel,
+    required this.onPressed,
+    this.message,
+    this.messageIsError = false,
+  });
+
+  final String scope;
+  final String detail;
+  final String actionLabel;
+  final VoidCallback? onPressed;
+  final String? message;
+  final bool messageIsError;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          scope.toUpperCase(),
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            fontSize: 11,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.9,
+            color: ViewerPalette.textMuted,
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(detail),
+        const SizedBox(height: 12),
+        FilledButton.tonal(
+          onPressed: onPressed,
+          style: ViewerButtonStyles.dangerTonal(),
+          child: Text(actionLabel),
+        ),
+        if (message != null) ...[
+          const SizedBox(height: 12),
+          Text(
+            message!,
+            style: TextStyle(
+              color: messageIsError
+                  ? ViewerPalette.danger
+                  : ViewerPalette.textMuted,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+        ],
+      ],
     );
   }
 }

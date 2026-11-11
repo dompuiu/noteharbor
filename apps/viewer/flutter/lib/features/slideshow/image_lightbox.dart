@@ -1095,7 +1095,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
                         return const Padding(
                           padding: EdgeInsets.all(32),
                           child: Text(
-                            'This image file is missing from the current dataset.',
+                            'This image file is missing from the current collection.',
                             style: TextStyle(color: ViewerPalette.roomMuted),
                             textAlign: TextAlign.center,
                           ),

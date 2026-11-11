@@ -34,10 +34,9 @@ void main() {
 
     expect(find.text('ACTIVE COLLECTION'), findsOneWidget);
     expect(find.text('ARCHIVE ON THIS DEVICE'), findsOneWidget);
-    expect(find.text('Delete collection'), findsOneWidget);
     expect(find.text('Set as default collection'), findsNothing);
     expect(find.text('Active source'), findsNothing);
-    expect(find.text('NOTES'), findsOneWidget);
+    expect(find.text('NOTES IN ALPHA'), findsOneWidget);
     expect(find.text('Notes (active)'), findsNothing);
     // No "(default)" suffix on the dropdown entries.
     expect(find.text('Alpha (2)'), findsOneWidget);
@@ -47,9 +46,19 @@ void main() {
     await tester.pumpAndSettle();
     expect(find.text('Choose archive'), findsNothing);
     expect(find.widgetWithText(FilledButton, 'Import archive'), findsOneWidget);
+
+    // Both destructive actions share one subordinate Remove section, with a
+    // row per scope: this collection, then the whole archive.
+    await tester.scrollUntilVisible(find.text('Delete collection'), 200);
+    await tester.pumpAndSettle();
+    expect(find.text('REMOVE'), findsOneWidget);
+    expect(find.text('COLLECTION'), findsOneWidget);
+    expect(find.text('ARCHIVE'), findsOneWidget);
+    expect(find.text('Delete collection'), findsOneWidget);
+    expect(find.text('Delete archive'), findsOneWidget);
   });
 
-  testWidgets('delete failure shows inline under the active collection', (
+  testWidgets('delete failure shows inline in the remove section', (
     WidgetTester tester,
   ) async {
     await pumpImportScreen(tester, await loadedController(failDelete: true));
@@ -68,7 +77,7 @@ void main() {
       findsOneWidget,
     );
     // The message renders right under the panel, not in the bottom banner.
-    expect(find.text('IMPORT'), findsOneWidget);
+    expect(find.text('IMPORT ARCHIVE'), findsWidgets);
   });
 
   testWidgets('delete success shows inline confirmation', (

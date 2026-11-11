@@ -54,7 +54,7 @@ void main() {
     // Nothing from the populated page appears before a collection exists.
     expect(find.text('ARCHIVE ON THIS DEVICE'), findsNothing);
     expect(find.text('ACTIVE COLLECTION'), findsNothing);
-    expect(find.text('IMPORT AN ARCHIVE'), findsNothing);
+    expect(find.text('IMPORT ARCHIVE'), findsOneWidget);
     expect(find.text('DELETE ARCHIVE'), findsNothing);
 
     // The one action fits above a 375x667 fold and waits for a selection.
@@ -84,7 +84,8 @@ void main() {
     // Not first run: the archive exists on disk even though it has no
     // collection, so it must stay recoverable without panelling a manager.
     expect(find.text('GET STARTED'), findsNothing);
-    expect(find.text('IMPORT AN ARCHIVE'), findsOneWidget);
+    // The AppBar and the import panel both name the archive.
+    expect(find.text('IMPORT ARCHIVE'), findsNWidgets(2));
     expect(find.text('ARCHIVE ON THIS DEVICE'), findsNothing);
     expect(find.text('ACTIVE COLLECTION'), findsNothing);
 

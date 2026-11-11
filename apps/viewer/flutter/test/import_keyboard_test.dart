@@ -30,12 +30,12 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.file_upload_outlined));
     await tester.pumpAndSettle();
-    expect(find.text('IMPORT'), findsOneWidget);
+    expect(find.text('IMPORT ARCHIVE'), findsWidgets);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
 
-    expect(find.text('IMPORT'), findsNothing);
+    expect(find.text('IMPORT ARCHIVE'), findsNothing);
     expect(find.text('NOTE HARBOR'), findsOneWidget);
   });
 
@@ -53,7 +53,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Still on the sole route; there is nowhere to go back to.
-    expect(find.text('IMPORT'), findsOneWidget);
+    expect(find.text('IMPORT ARCHIVE'), findsOneWidget);
   });
 
   testWidgets('escape closes the confirm dialog without leaving import', (
@@ -71,16 +71,10 @@ void main() {
     // The bundled Inter font resolves asynchronously on first pump, which
     // can shift the list layout after the initial scroll settles. Settle,
     // then re-ensure visibility before tapping.
-    await tester.scrollUntilVisible(
-      find.byIcon(Icons.delete_outline_rounded),
-      200,
-    );
+    await tester.scrollUntilVisible(find.text('Delete archive'), 200);
     await tester.pumpAndSettle();
-    await tester.scrollUntilVisible(
-      find.byIcon(Icons.delete_outline_rounded),
-      200,
-    );
-    await tester.tap(find.byIcon(Icons.delete_outline_rounded));
+    await tester.scrollUntilVisible(find.text('Delete archive'), 200);
+    await tester.tap(find.text('Delete archive'));
     await tester.pumpAndSettle();
     expect(find.text('Delete archive?'), findsOneWidget);
 
@@ -89,7 +83,7 @@ void main() {
 
     // The dialog dismisses; the import screen stays put.
     expect(find.text('Delete archive?'), findsNothing);
-    expect(find.text('IMPORT'), findsOneWidget);
+    expect(find.text('IMPORT ARCHIVE'), findsWidgets);
   });
 }
 

@@ -479,7 +479,7 @@ void main() {
 
     expect(find.text('No notes match this filter'), findsOneWidget);
     expect(find.text('Clear filter'), findsOneWidget);
-    expect(find.text('Import notes'), findsNothing);
+    expect(find.text('Import archive'), findsNothing);
     expect(card(1), findsNothing);
     expect(tester.takeException(), isNull);
 
@@ -498,7 +498,7 @@ void main() {
 
     expect(find.text('This collection is empty'), findsOneWidget);
     expect(find.textContaining('Blank Album'), findsOneWidget);
-    expect(find.text('Import notes'), findsOneWidget);
+    expect(find.text('Import archive'), findsOneWidget);
     expect(find.text('Clear filter'), findsNothing);
     expect(tester.takeException(), isNull);
   });

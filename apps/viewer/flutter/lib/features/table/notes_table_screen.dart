@@ -2493,7 +2493,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                     icon: Icons.error_outline_rounded,
                     title: 'Couldn’t load notes',
                     detail:
-                        'The dataset could not be read. Nothing was changed.',
+                        'The archive could not be read. Nothing was changed.',
                     reassurance:
                         'Check that the archive is available, then try again.',
                     action: Wrap(
@@ -2529,7 +2529,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                               Icons.file_upload_outlined,
                               size: 16,
                             ),
-                            label: const Text('Import notes'),
+                            label: const Text('Import archive'),
                           )
                         : null,
                   );
@@ -3694,7 +3694,7 @@ class _ImportButtonState extends State<_ImportButton> {
           width: _kHeaderControlHeight,
           child: IconButton(
             focusNode: widget.focusNode,
-            tooltip: 'Manage imported archives',
+            tooltip: 'Import or remove archives',
             onPressed: widget.onPressed,
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints.tightFor(
@@ -5808,7 +5808,7 @@ class _TableEmptyState extends StatelessWidget {
               key: const ValueKey('emptyStateImport'),
               onPressed: onImport,
               icon: const Icon(Icons.file_upload_outlined, size: 16),
-              label: const Text('Import notes'),
+              label: const Text('Import archive'),
             ),
     );
   }
