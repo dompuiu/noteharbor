@@ -2,7 +2,7 @@ name: note_harbor_viewer
 description: Note Harbor Viewer.
 publish_to: "none"
 
-version: 1.14.0+25
+version: 1.14.1+26
 
 environment:
   sdk: ^3.13.0

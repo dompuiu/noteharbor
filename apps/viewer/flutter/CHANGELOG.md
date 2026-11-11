@@ -4,6 +4,8 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ## [Unreleased]
 
+## [1.14.1] - 2026-11-10
+
 ### Changed
 
 - Table screen: a card's tag footer now spans the whole card, so the rule and the chips start under the mounted plate and pack into fewer rows. Card chips keep their 44 pt width but use a 32 pt vertical target and sit closer together; the grid keeps the full 44 pt target.
