@@ -4,17 +4,30 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ## [Unreleased]
 
+## [1.14.0] - 2026-11-10
+
 ### Added
 
 - Table screen: the collection title is now a collection switcher. It stays a plain uppercase heading at rest, with a small chevron beside the name. The menu lists every collection with its note count, filters as you type, and switches on click, Enter, or the arrow keys. Libraries with a single collection keep the plain title.
+- Table screen: below 700 logical px the nine-column grid becomes a vertical card list — a 96x56 front thumbnail, the denomination, labelled metadata for every column, and tag chips. Sorting moves into a compact bar, keyboard selection and the Tab chain carry over, and the list never scrolls horizontally.
+- Table header: a live range footer names the visible rows, replacing the silent column cut. Headers align with their data, the sorted state is named for assistive tech, and keyboard focus draws a real ring.
 
 ### Changed
 
 - Table screen: the note counter and import action always share the collection-title line, even on a narrow window; long collection names ellipsize between them.
+- Table screen: notes mount as catalogue plates on the grey tray, with the denomination as the plate title and the date alongside. Catalogue number, company, grade, and serial sit in a quiet spec line, grades wear the uncirculated/choice/circulated bands, and a reverse-image peek shows the back.
+- Table screen: density, columns, and the filter bar were rebalanced for scanning. The filter scope stays wide enough to keep `Catalog` readable at 320 px, tags cap at 320px behind a `+N more` menu that filters on selection, and every empty value shares one muted dash.
+- Table screen: sorting follows domain order and resets the scroll position, so a new sort starts at the top of the collection.
+- Table screen: empty-collection and no-matches states are now distinct, and empty-collection offers Import while no-matches offers Clear filter.
+- Table screen: rows, tag chips, and the collection switcher are accessible. Rows announce one label with a hint and selection state, chips are 44 pt filter buttons with a focus ring and Enter/Space, the counter is a live region, and serial and catalog numbers copy from a long-press menu, Ctrl/Cmd+C, or an assistive action.
+- Buttons across the import screen, slideshow, lightbox, and table share one style: explicit disabled colors and border, a 40px minimum height, hover feedback, and a soft-red tonal variant for destructive actions.
 - The app now requires Flutter 3.47 / Dart 3.13, matching `window_manager` 0.6 and `screen_retriever` 0.3.
 
 ### Fixed
 
+- Table screen: the scrollbar no longer duplicates, and filter text centers in its field.
+- Table screen: End, PageDown, and a slideshow return now reveal the selected card, including cards the lazy list had not built yet.
+- Table screen: loading and load errors render as in-card states with no raw exception text, a copy block, Try again, and an import escape; first-run and no-archive now route to Import instead of the error card.
 - Windows desktop: the built executable is `note_harbor_viewer.exe` again, so `flutter run -d windows` (and `pnpm dev:viewer:flutter`) can launch it. The `Note Harbor Viewer.exe` OUTPUT_NAME override is gone; the window title and file metadata still carry the pretty name.
 - Desktop window persistence, after moving to the nativeapi-based `window_manager` 0.6 and `screen_retriever` 0.3 packages: the desktop build compiles again, and position, size and the Windows maximized state still restore on launch.
 
