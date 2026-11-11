@@ -1,5 +1,5 @@
 import { MemoryRouter, Route, Routes } from "react-router-dom";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen } from "@testing-library/react";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 
@@ -64,9 +64,9 @@ describe("Note editor create mode over the table", () => {
     );
 
     await screen.findByLabelText("Denomination");
-    await waitFor(() => {
-      expect(screen.getByText("Add note")).toBeInTheDocument();
-    });
+    expect(
+      await screen.findByRole("heading", { level: 1, name: "Add note" }),
+    ).toBeInTheDocument();
     expect(getNote).not.toHaveBeenCalled();
     expect(await screen.findByLabelText("Denomination")).toHaveValue("");
     // The destination Collection is part of creating a note too, not just
@@ -93,7 +93,61 @@ describe("Note editor create mode over the table", () => {
     expect(await screen.findByLabelText("Denomination")).toHaveValue(
       "FIRSTNOTE",
     );
+    expect(
+      screen.getByRole("heading", { level: 1, name: "FIRSTNOTE" }),
+    ).toBeInTheDocument();
     expect(getNote).toHaveBeenCalledWith(1, 1);
+  });
+
+  test("captions the Display title with the Collection", async () => {
+    const { container } = render(
+      <MemoryRouter initialEntries={["/catalog/collections/1/view"]}>
+        <Routes>
+          <Route
+            path="/catalog/collections/:id/view"
+            element={
+              <NoteEditForm noteId={null} overlay selectedCollectionId={1} />
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    await screen.findByLabelText("Denomination");
+
+    const eyebrow = container.querySelector(
+      ".note-editor-title .collection-eyebrow",
+    );
+    expect(eyebrow).toHaveTextContent("Test");
+    const title = screen.getByRole("heading", { level: 1, name: "Add note" });
+    expect(
+      eyebrow.compareDocumentPosition(title) &
+        Node.DOCUMENT_POSITION_FOLLOWING,
+    ).toBeTruthy();
+  });
+
+  test("an existing note without a denomination titles as Untitled note", async () => {
+    getNote.mockResolvedValue({
+      note: { ...firstNotePayload(), denomination: "" },
+    });
+
+    render(
+      <MemoryRouter initialEntries={["/catalog/collections/1/view"]}>
+        <Routes>
+          <Route
+            path="/catalog/collections/:id/view"
+            element={
+              <NoteEditForm noteId={1} overlay selectedCollectionId={1} />
+            }
+          />
+        </Routes>
+      </MemoryRouter>,
+    );
+
+    expect(await screen.findByLabelText("Denomination")).toHaveValue("");
+    expect(
+      screen.getByRole("heading", { level: 1, name: "Untitled note" }),
+    ).toBeInTheDocument();
   });
 
   test("no noteId prop still resolves the standalone note route", async () => {

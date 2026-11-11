@@ -1941,6 +1941,21 @@ describe("slideshow overlay styles", () => {
     expect(dangerZone[1]).toMatch(/border-top:/);
   });
 
+  test("the note editor's title takes the Display voice", () => {
+    const title = styles.match(
+      /\.collection-title-row h1,\s*\n\.note-editor-title h1\s*\{([^}]*)\}/,
+    );
+    expect(title).not.toBeNull();
+    expect(title[1]).toMatch(/font-size:\s*1\.3125rem/);
+    expect(title[1]).toMatch(/font-weight:\s*800/);
+    expect(title[1]).toMatch(/letter-spacing:\s*-0\.01em/);
+    expect(title[1]).toMatch(/text-transform:\s*uppercase/);
+
+    const caption = styles.match(/\.note-editor-title\s*\{([^}]*)\}/);
+    expect(caption).not.toBeNull();
+    expect(caption[1]).toMatch(/display:\s*grid/);
+  });
+
   test("the note editor's fields grow with the wider panel", () => {
     const fields = styles.match(
       /#edit-note-form \.field-block > input,\s*#edit-note-form \.url-field-row > input\s*\{([^}]*)\}/,
@@ -2402,7 +2417,7 @@ describe("catalog header", () => {
   });
 
   test("the collection title wears the uppercase display voice at 21px", () => {
-    const title = styles.match(/\.collection-title-row h1\s*\{([^}]*)\}/);
+    const title = styles.match(/\.collection-title-row h1[^{]*\{([^}]*)\}/);
     expect(title).not.toBeNull();
     expect(title[1]).toMatch(/font-size:\s*1\.3125rem/);
     expect(title[1]).toMatch(/font-weight:\s*800/);

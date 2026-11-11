@@ -6,6 +6,7 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ### Changed
 
+- Note editor: the screen now leads with its Display title — **Add note** when creating, the note's denomination when editing — over a caption naming its Collection, instead of letting the old 0.72rem eyebrow carry the screen's name.
 - Note editor: the four Note image slots are one named **Note images** group, and each card's dropzone is its single action (**Choose or drop Front full image**). Clear, delete, and undo wait behind a per-card actions menu named for its slot (**Delete Front full image**), while provenance and pending state read as plain Body text instead of coloured badges.
 - Note editor: **Save** is the one primary action, with **Save & close** kept beside it as a secondary carrying its Ctrl+Shift+S badge. Position and **Add before** sit together in the heading, and **Delete note** moves to the foot of the panel instead of standing next to the save path.
 - Note editor: Auto Populate is a visible **Scrape page** action, sized to the URL field, that carries its progress on the button, reports the source and number of fields it changed with a one-step undo, and marks each filled or replaced field as **Scraped**.

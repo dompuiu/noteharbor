@@ -1019,9 +1019,8 @@ describe("The editor's collection actions", () => {
     const dialog = await screen.findByRole("dialog");
     await user.click(within(dialog).getByRole("button", { name: "Cancel" }));
 
-    expect(screen.getByText("BBBB")).toBeInTheDocument();
+    expect(screen.getByLabelText("Denomination")).toHaveValue("BBBB");
     expect(currentHash()).toContain("edit/2");
-    expect(screen.getByLabelText("Denomination")).toBeInTheDocument();
   });
 
   test("Ctrl+A opens create mode ahead of the edited note", async () => {

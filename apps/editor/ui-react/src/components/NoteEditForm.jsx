@@ -405,6 +405,19 @@ function NoteEditForm({
   const canScrapeUrl = !scraping && Boolean(form.url.trim());
   const movingToDifferentCollection =
     !isCreateMode && destinationCollectionId !== selectedCollectionId;
+  const targetCollectionId = destinationCollectionId ?? selectedCollectionId;
+  const targetCollection =
+    collections.find(
+      (collection) => collection.id === targetCollectionId,
+    ) ?? null;
+  // The caption names the note's Collection. In edit mode that stays the one
+  // the note was loaded from until a save actually moves it; a new note has no
+  // home yet, so its chosen destination is the honest caption.
+  const captionCollection = isCreateMode
+    ? targetCollection
+    : (collections.find(
+        (collection) => collection.id === selectedCollectionId,
+      ) ?? null);
   // While moving to a different collection, the position picker reflects that
   // collection's notes instead of the ones the form originally loaded.
   const positionSourceNotes = destinationNotesOverride ?? allNotes;
@@ -1326,14 +1339,8 @@ function NoteEditForm({
         }
       });
 
-      const targetCollectionId =
-        destinationCollectionId ?? selectedCollectionId;
       const destinationDiffers = targetCollectionId !== selectedCollectionId;
-      const destinationCollection =
-        collections.find(
-          (collection) => collection.id === targetCollectionId,
-        ) ?? null;
-      const destinationName = destinationCollection?.name ?? "the collection";
+      const destinationName = targetCollection?.name ?? "the collection";
       const payload = isCreateMode
         ? await createNote(payloadWithImages, targetCollectionId)
         : await updateNote(noteId, payloadWithImages, selectedCollectionId);
@@ -1348,7 +1355,7 @@ function NoteEditForm({
         );
 
         landInCollection({
-          collection: destinationCollection,
+          collection: targetCollection,
           collectionId: destinationCollectionId,
           message: `Moved to ${destinationName}.`,
           note: movedPayload.note,
@@ -1373,7 +1380,7 @@ function NoteEditForm({
       // with a toast while the table stays put.
       if (isCreateMode && destinationDiffers) {
         landInCollection({
-          collection: destinationCollection,
+          collection: targetCollection,
           collectionId: targetCollectionId,
           message: `Note added to ${destinationName}.`,
           note: payload.note,
@@ -1477,6 +1484,12 @@ function NoteEditForm({
   const notesSourceId = `${notesInputId}-source`;
   const notesScrapedFrom = scrapedFieldSource("notes");
   const scrapedCount = Object.keys(scrapeUndo ?? {}).length;
+  // Create mode titles the screen with the mode's own wording; edit mode
+  // titles it with the note's denomination, falling back the same way the
+  // slideshow does when the note has none.
+  const screenTitle = isCreateMode
+    ? "Add note"
+    : form.denomination.trim() || "Untitled note";
 
   return (
     <section className={wrapperClassName}>
@@ -1596,7 +1609,14 @@ function NoteEditForm({
       <div className="panel">
         <div className="panel-heading note-editor-heading">
           <div className="panel-heading-copy">
-            <p className="eyebrow">{isCreateMode ? "Add note" : "Edit note"}</p>
+            <div className="note-editor-title">
+              {captionCollection ? (
+                <p className="eyebrow collection-eyebrow">
+                  {captionCollection.name}
+                </p>
+              ) : null}
+              <h1>{screenTitle}</h1>
+            </div>
             {/* Position context, with the one command that acts on it; the
                 save path keeps the action side to itself. */}
             <div className="note-editor-position">

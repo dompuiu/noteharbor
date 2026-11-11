@@ -2767,10 +2767,12 @@ input[type="radio"] {
   gap: 8px;
 }
 
-.collection-title-row h1 {
+.collection-title-row h1,
+.note-editor-title h1 {
   margin: 0;
   /* Brand display voice at the page-head scale: uppercase, ultra-heavy,
-     tight tracking. The 21px size keeps the dense table header intact. */
+     tight tracking. The 21px size keeps the dense table header intact, and
+     the Note editor takes the same one title above its fields. */
   font-size: 1.3125rem;
   font-weight: 800;
   letter-spacing: -0.01em;
@@ -5811,6 +5813,14 @@ td.drag-cell {
   align-items: center;
   gap: 20px;
   flex-wrap: wrap;
+  min-width: 0;
+}
+
+/* The title block stacks the Collection caption over the screen's Display
+   title, so the heading stays one shout beside the position control. */
+.note-editor-title {
+  display: grid;
+  gap: 4px;
   min-width: 0;
 }
 
