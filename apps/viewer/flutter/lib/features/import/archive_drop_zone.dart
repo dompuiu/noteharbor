@@ -3,9 +3,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/viewer_palette.dart';
+import 'archive_staging.dart';
 
 /// Called with the local path and file name of a dropped archive.
 typedef ArchiveDroppedCallback = void Function(String path, String name);
+
+/// Copies a dropped archive to a stable path before it is selected.
+typedef ArchiveStager = Future<String?> Function(
+  String path,
+  List<int>? appleBookmark,
+);
 
 /// The banner message for a dropped file that is not a .zip archive, or null
 /// when the drop can be selected.
@@ -27,6 +34,7 @@ class ArchiveDropZone extends StatefulWidget {
     required this.onDropped,
     this.onDropRejected,
     this.isPicking = false,
+    this.stageArchive = stageDroppedArchive,
   });
 
   /// The selected archive's file name, or null before one is chosen.
@@ -43,6 +51,9 @@ class ArchiveDropZone extends StatefulWidget {
 
   /// True while the file picker is open.
   final bool isPicking;
+
+  /// Copies the dropped file out of the sandbox grant. Tests replace this.
+  final ArchiveStager stageArchive;
 
   @override
   State<ArchiveDropZone> createState() => _ArchiveDropZoneState();
@@ -71,37 +82,56 @@ class _ArchiveDropZoneState extends State<ArchiveDropZone> {
     onChoose();
   }
 
-  void _handleDrop(DropDoneDetails details) {
-    setState(() => _dragging = false);
-
-    final files = details.files.whereType<DropItemFile>().toList(
-      growable: false,
-    );
-    if (files.isEmpty) {
-      widget.onDropRejected?.call('Drop a .zip archive file.');
-      return;
+  String? _dropProblem(List<DropItem> items, List<DropItemFile> files) {
+    if (items.length != files.length || files.isEmpty) {
+      return 'Drop a .zip archive file, not a folder.';
     }
     if (files.length > 1) {
-      widget.onDropRejected?.call('Drop one .zip archive at a time.');
-      return;
+      return 'Drop one .zip archive at a time.';
     }
 
     final file = files.single;
     final problem = archiveDropProblem(file.name);
     if (problem != null) {
+      return problem;
+    }
+    if (file.path.isEmpty) {
+      return 'Could not read the dropped archive.';
+    }
+    return null;
+  }
+
+  Future<void> _handleDrop(DropDoneDetails details) async {
+    setState(() => _dragging = false);
+
+    final files = details.files.whereType<DropItemFile>().toList(
+      growable: false,
+    );
+    final problem = _dropProblem(details.files, files);
+    if (problem != null) {
       widget.onDropRejected?.call(problem);
       return;
     }
 
-    if (file.path.isEmpty) {
+    final file = files.single;
+    final stagedPath = await widget.stageArchive(
+      file.path,
+      file.extraAppleBookmark,
+    );
+    if (!mounted) {
+      return;
+    }
+    if (stagedPath == null) {
       widget.onDropRejected?.call('Could not read the dropped archive.');
       return;
     }
 
-    widget.onDropped?.call(file.path, file.name);
+    widget.onDropped?.call(stagedPath, file.name);
   }
 
-  KeyEventResult _handleKeyEvent(FocusNode node, KeyEvent event) {
+  KeyEventResult _handleKeyEvent(KeyEvent event) {
+    // The node stays focused after choosing, while the parent flips onChoose
+    // to null for the picker. The guard stops Enter from reopening it.
     if (!_interactive || (event is! KeyDownEvent && event is! KeyRepeatEvent)) {
       return KeyEventResult.ignored;
     }
@@ -152,29 +182,37 @@ class _ArchiveDropZoneState extends State<ArchiveDropZone> {
       semanticsHint = 'Drop a .zip archive here or click to choose one';
     }
 
-    final borderColor = dragging || selected
-        ? ViewerPalette.accent
-        : hovered
-        ? ViewerPalette.accent.withValues(alpha: 0.55)
-        : ViewerPalette.borderControl;
-    final fillColor = dragging || selected
-        ? ViewerPalette.accentSoft
-        : hovered
-        ? ViewerPalette.surfaceStep
-        : ViewerPalette.surfaceMist;
-    final hint = widget.isPicking
-        ? 'Choosing...'
-        : dragging
-        ? 'Drop to choose'
-        : selected
-        ? 'Ready to import'
-        : idleHint;
+    final active = dragging || selected;
+    final focused = interactive && _focused;
+    final Color borderColor;
+    final Color fillColor;
+    if (active) {
+      borderColor = ViewerPalette.accent;
+      fillColor = ViewerPalette.accentSoft;
+    } else if (hovered) {
+      borderColor = ViewerPalette.accent.withValues(alpha: 0.55);
+      fillColor = ViewerPalette.surfaceStep;
+    } else {
+      borderColor = ViewerPalette.borderControl;
+      fillColor = ViewerPalette.surfaceMist;
+    }
+
+    final String hint;
+    if (widget.isPicking) {
+      hint = 'Choosing...';
+    } else if (dragging) {
+      hint = 'Drop to choose';
+    } else if (selected) {
+      hint = 'Ready to import';
+    } else {
+      hint = idleHint;
+    }
 
     final zone = Focus(
       key: const ValueKey('archiveDropZoneFocus'),
       focusNode: _focusNode,
       canRequestFocus: interactive,
-      onKeyEvent: _handleKeyEvent,
+      onKeyEvent: (_, event) => _handleKeyEvent(event),
       onFocusChange: (focused) => setState(() => _focused = focused),
       child: MouseRegion(
         cursor: interactive ? SystemMouseCursors.click : MouseCursor.defer,
@@ -191,12 +229,11 @@ class _ArchiveDropZoneState extends State<ArchiveDropZone> {
               borderRadius: BorderRadius.circular(ViewerPalette.radiusControl),
             ),
             child: CustomPaint(
-              key: const ValueKey('archiveDropZonePaint'),
               painter: _DashedBorderPainter(
                 color: borderColor,
                 radius: ViewerPalette.radiusControl,
               ),
-              foregroundPainter: _focused && interactive
+              foregroundPainter: focused
                   ? const _FocusRingPainter(
                       color: ViewerPalette.accent,
                       radius: ViewerPalette.radiusControl,
@@ -297,7 +334,7 @@ class _ArchiveDropZoneState extends State<ArchiveDropZone> {
       key: const ValueKey('archiveDropZone'),
       button: true,
       enabled: interactive,
-      label: selected ? 'Selected archive $fileName' : 'Archive drop zone',
+      label: selected ? 'Selected archive $fileName' : 'Choose a .zip archive',
       hint: semanticsHint,
       onTap: interactive ? _choose : null,
       excludeSemantics: true,
@@ -354,8 +391,8 @@ class _FocusRingPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final rrect = RRect.fromRectAndRadius(
-      (Offset.zero & size).deflate(1),
-      Radius.circular(radius - 1),
+      (Offset.zero & size).deflate(2),
+      Radius.circular(radius - 2),
     );
     canvas.drawRRect(
       rrect,

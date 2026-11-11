@@ -6,14 +6,13 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ### Added
 
-- Import screen: the archive drop zone accepts a `.zip` dragged from the OS on Windows, macOS, Linux, and Android, and names the drag-over state `Drop to choose`. A non-.zip or multi-file drop reports in the status banner. iOS has no drop target in `desktop_drop`, so its hint only promises the tap.
+- Import screen: the archive drop zone accepts a `.zip` dragged from the OS on desktop, and names the drag-over state `Drop to choose`. A non-.zip or multi-file drop reports in the status banner. iOS has no drop target in `desktop_drop`, so its hint only promises the tap.
 
 ### Changed
 
 - Import screen: first run is one card with one action — an eyebrow, a title, one sentence, the archive drop zone, and a single primary pill that chooses the archive then imports it. The management, active-collection, and delete panels stay hidden on first run, so the status banner lands above the fold on a phone; an imported archive with no collections still offers Delete archive.
 - Import screen copy: written for collectors — first run opens with "Bring your notes in" and one instruction to choose the archive exported from Note Harbor Editor, the replace-by-name rule appears once in the confirmation, and developer terms (file formats, database files, "dataset") are gone.
 - Import screen: the drop zone is now the only picker. It takes focus, opens the picker on Enter or Space, and draws a 2px accent focus ring beside the hover treatment; the duplicate `Choose archive` button is gone and `Import archive` waits for a selection. Its hint names drop plus click on desktop and drop plus tap on Android; iOS keeps the tap wording.
-
 ## [1.14.1] - 2026-11-10
 
 ### Changed

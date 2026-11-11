@@ -130,6 +130,8 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
     });
   }
 
+  void _reportDropProblem(String message) => _setStatus(message, true);
+
   Future<void> _importArchive() async {
     final archivePath = _selectedArchivePath;
     if (archivePath == null) {
@@ -356,13 +358,10 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                               fileName: _selectedArchiveName,
                               isBusy: isBusy,
                               isPicking: _isPicking,
-                              busyLabel: widget.controller.isMutating
-                                  ? 'Importing...'
-                                  : null,
+                              isImporting: widget.controller.isMutating,
                               onChoose: _pickArchive,
                               onDropped: _handleDroppedArchive,
-                              onDropRejected: (message) =>
-                                  _setStatus(message, true),
+                              onDropRejected: _reportDropProblem,
                               onImport: _importArchive,
                             )
                           else ...[
@@ -468,20 +467,15 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                     isPicking: _isPicking,
                                     onChoose: isBusy ? null : _pickArchive,
                                     onDropped: _handleDroppedArchive,
-                                    onDropRejected: (message) =>
-                                        _setStatus(message, true),
+                                    onDropRejected: _reportDropProblem,
                                   ),
                                   const SizedBox(height: 16),
-                                  FilledButton.icon(
-                                    onPressed: isBusy ||
-                                            _selectedArchivePath == null
-                                        ? null
-                                        : _importArchive,
-                                    icon: const Icon(
-                                        Icons.file_upload_outlined),
-                                    label: Text(widget.controller.isMutating
-                                        ? 'Importing...'
-                                        : 'Import archive'),
+                                  _ImportArchiveButton(
+                                    enabled: !isBusy &&
+                                        _selectedArchivePath != null,
+                                    isImporting:
+                                        widget.controller.isMutating,
+                                    onPressed: _importArchive,
                                   ),
                                 ],
                               ),
@@ -540,14 +534,14 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
   }
 }
 
-/// The whole first-run page: one card, one action. Before an archive is
-/// chosen the primary pill opens the picker; afterwards it imports.
+/// The whole first-run page: one card, one action. The drop zone is the
+/// picker; the primary pill imports the archive it selects.
 class _FirstRunImportCard extends StatelessWidget {
   const _FirstRunImportCard({
     required this.fileName,
     required this.isBusy,
     required this.isPicking,
-    required this.busyLabel,
+    required this.isImporting,
     required this.onChoose,
     required this.onDropped,
     required this.onDropRejected,
@@ -557,7 +551,7 @@ class _FirstRunImportCard extends StatelessWidget {
   final String? fileName;
   final bool isBusy;
   final bool isPicking;
-  final String? busyLabel;
+  final bool isImporting;
   final VoidCallback onChoose;
   final ArchiveDroppedCallback onDropped;
   final ValueChanged<String> onDropRejected;
@@ -602,13 +596,34 @@ class _FirstRunImportCard extends StatelessWidget {
             onDropRejected: onDropRejected,
           ),
           const SizedBox(height: 16),
-          FilledButton.icon(
-            onPressed: isBusy || !hasSelection ? null : onImport,
-            icon: const Icon(Icons.file_upload_outlined),
-            label: Text(busyLabel ?? 'Import archive'),
+          _ImportArchiveButton(
+            enabled: !isBusy && hasSelection,
+            isImporting: isImporting,
+            onPressed: onImport,
           ),
         ],
       ),
+    );
+  }
+}
+
+class _ImportArchiveButton extends StatelessWidget {
+  const _ImportArchiveButton({
+    required this.enabled,
+    required this.isImporting,
+    required this.onPressed,
+  });
+
+  final bool enabled;
+  final bool isImporting;
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return FilledButton.icon(
+      onPressed: enabled && !isImporting ? onPressed : null,
+      icon: const Icon(Icons.file_upload_outlined),
+      label: Text(isImporting ? 'Importing...' : 'Import archive'),
     );
   }
 }
@@ -777,53 +792,56 @@ class _StatusBanner extends StatelessWidget {
     final accent = isError ? ViewerPalette.danger : ViewerPalette.success;
     final wash =
         isError ? ViewerPalette.dangerSoft : ViewerPalette.successSoft;
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: wash,
-        borderRadius:
-            BorderRadius.circular(ViewerPalette.radiusSm),
-        border: Border.all(
-          color: accent.withValues(alpha: 0.3),
-          width: 1,
+    return Semantics(
+      liveRegion: true,
+      container: true,
+      child: DecoratedBox(
+        decoration: BoxDecoration(
+          color: wash,
+          borderRadius: BorderRadius.circular(ViewerPalette.radiusSm),
+          border: Border.all(
+            color: accent.withValues(alpha: 0.3),
+            width: 1,
+          ),
         ),
-      ),
-      child: Row(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          DecoratedBox(
-            decoration: BoxDecoration(
-              color: accent,
-              borderRadius: const BorderRadius.only(
-                topLeft: Radius.circular(ViewerPalette.radiusSm - 1),
-                bottomLeft: Radius.circular(ViewerPalette.radiusSm - 1),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            DecoratedBox(
+              decoration: BoxDecoration(
+                color: accent,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(ViewerPalette.radiusSm - 1),
+                  bottomLeft: Radius.circular(ViewerPalette.radiusSm - 1),
+                ),
+              ),
+              child: const SizedBox(width: 3),
+            ),
+            Padding(
+              padding: const EdgeInsets.all(14),
+              child: Icon(
+                isError
+                    ? Icons.error_outline_rounded
+                    : Icons.check_circle_outline_rounded,
+                color: accent,
+                size: 22,
               ),
             ),
-            child: const SizedBox(width: 3),
-          ),
-          Padding(
-            padding: const EdgeInsets.all(14),
-            child: Icon(
-              isError
-                  ? Icons.error_outline_rounded
-                  : Icons.check_circle_outline_rounded,
-              color: accent,
-              size: 22,
-            ),
-          ),
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(0, 14, 16, 14),
-              child: Text(
-                message,
-                style: TextStyle(
-                  fontFamily: 'Inter',
-                  fontWeight: FontWeight.w600,
-                  color: accent,
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.fromLTRB(0, 14, 16, 14),
+                child: Text(
+                  message,
+                  style: TextStyle(
+                    fontFamily: 'Inter',
+                    fontWeight: FontWeight.w600,
+                    color: accent,
+                  ),
                 ),
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
