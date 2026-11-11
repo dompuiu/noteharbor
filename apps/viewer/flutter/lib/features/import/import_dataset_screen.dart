@@ -94,7 +94,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
 
     try {
       final result = await FilePicker.pickFiles(
-        dialogTitle: 'Choose Note Harbor archive',
+        dialogTitle: 'Choose a Note Harbor archive',
         type: FileType.custom,
         allowedExtensions: const ['zip'],
       );
@@ -128,9 +128,9 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
     final confirmed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Import archive?'),
+            title: const Text('Import this archive?'),
             content: const Text(
-              'Importing an archive replaces collections found in the archive (matched by name). Collections not present in the archive stay untouched on this device.',
+              'Importing replaces any collection on this device that shares a name with one in the archive. Collections not in the archive stay as they are.',
             ),
             actions: [
               TextButton(
@@ -166,12 +166,12 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       if (!mounted) {
         return;
       }
-      _setStatus('Imported $_selectedArchiveName successfully.', false);
+      _setStatus('Imported $_selectedArchiveName.', false);
     } catch (error) {
       if (!mounted) {
         return;
       }
-      _setStatus('Import failed: $error', true);
+      _setStatus('Could not import the archive: $error', true);
     } finally {
       if (mounted) {
         setState(() => _isImporting = false);
@@ -183,7 +183,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
     final activeCollection = widget.controller.activeCollection;
     if (activeCollection == null) {
       setState(() {
-        _collectionMessage = 'Select a collection to delete.';
+        _collectionMessage = 'Choose a collection to delete.';
         _collectionMessageIsError = true;
       });
       return;
@@ -194,7 +194,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
           builder: (context) => AlertDialog(
             title: const Text('Delete collection?'),
             content: Text(
-              'Delete "${activeCollection.name}" and all notes/images in that collection from this device?',
+              'Delete "${activeCollection.name}" and all its notes and note images from this device?',
             ),
             actions: [
               TextButton(
@@ -235,7 +235,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
         return;
       }
       setState(() {
-        _collectionMessage = 'Delete failed: $error';
+        _collectionMessage = 'Could not delete the collection: $error';
         _collectionMessageIsError = true;
       });
     }
@@ -245,9 +245,9 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
     final confirmed = await showDialog<bool>(
           context: context,
           builder: (context) => AlertDialog(
-            title: const Text('Delete imported data?'),
+            title: const Text('Delete archive?'),
             content: const Text(
-              'This removes the imported archive from this device. You will need to import another archive before browsing notes again.',
+              'This deletes the archive and its notes from this device. You will need to import an archive again before browsing your notes.',
             ),
             actions: [
               TextButton(
@@ -280,12 +280,12 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
         _selectedArchivePath = null;
         _selectedArchiveName = null;
       });
-      _setStatus('Imported data deleted. Import another archive to continue.', false);
+      _setStatus('Deleted the archive. Import an archive to continue.', false);
     } catch (error) {
       if (!mounted) {
         return;
       }
-      _setStatus('Delete failed: $error', true);
+      _setStatus('Could not delete the archive: $error', true);
     }
   }
 
@@ -319,7 +319,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                 automaticallyImplyLeading: !_isImporting &&
                     (widget.controller.dataset?.collections.isNotEmpty ??
                         false),
-                title: const Text('IMPORT DATASET'),
+                title: const Text('IMPORT'),
               ),
               body: ColoredBox(
                 color: ViewerPalette.pageBackground,
@@ -355,22 +355,18 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                             if (hasCollections) ...[
                               _Panel(
                                 icon: Icons.inventory_2_outlined,
-                                title: 'Manage viewer data',
+                                title: 'Archive on this device',
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    const Text(
-                                      'Import a Note Harbor archive exported from the editor. Imported data stays on this device. Collections present in the archive replace matching local collections by name; other local collections stay untouched.',
-                                    ),
-                                    const SizedBox(height: 18),
                                     Wrap(
                                       spacing: 12,
                                       runSpacing: 12,
                                       children: [
                                         _InfoPill(
-                                          label: 'Dataset built',
+                                          label: 'Archive created',
                                           value: generatedAt == null || generatedAt.isEmpty
-                                              ? 'Not available yet'
+                                              ? 'Unknown'
                                               : formatFriendlyDatasetBuiltAt(generatedAt),
                                         ),
                                         _InfoPill(
@@ -394,7 +390,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                   crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
                                     const Text(
-                                      'Select which collection is shown in the table and slideshow screens.',
+                                      'Choose the collection shown in the table and the note slideshow.',
                                     ),
                                     const SizedBox(height: 14),
                                     DropdownButtonFormField<int>(
@@ -454,14 +450,10 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                             ],
                             _Panel(
                               icon: Icons.archive_outlined,
-                              title: 'Archive import',
+                              title: 'Import an archive',
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  const Text(
-                                    'Choose a `.zip` archive with `banknotes.db` and `images/`, then import it into the native viewer app.',
-                                  ),
-                                  const SizedBox(height: 18),
                                   _ArchiveDropZone(
                                     fileName: _selectedArchiveName,
                                     onTap: isBusy ? null : _pickArchive,
@@ -489,13 +481,6 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                       ),
                                     ],
                                   ),
-                                  const SizedBox(height: 12),
-                                  const Text(
-                                    'Import is destructive for collections present in the archive: matching local collections are replaced from archive data.',
-                                    style: TextStyle(
-                                        color: ViewerPalette.danger,
-                                        fontWeight: FontWeight.w600),
-                                  ),
                                 ],
                               ),
                             ),
@@ -513,19 +498,19 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                             _Panel(
                               icon: Icons.delete_forever_outlined,
                               iconColor: ViewerPalette.danger,
-                              title: 'Delete imported data',
+                              title: 'Delete archive',
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Text(
-                                    'Delete the imported archive data from this device and return the app to its import-first state.',
+                                    'Delete the archive and its notes from this device.',
                                   ),
                                   const SizedBox(height: 16),
                                   FilledButton.tonalIcon(
                                     onPressed: isBusy ? null : _deleteImportedData,
                                     style: ViewerButtonStyles.dangerTonal(),
                                     icon: const Icon(Icons.delete_outline_rounded),
-                                    label: const Text('Delete imported data'),
+                                    label: const Text('Delete archive'),
                                   ),
                                 ],
                               ),
@@ -601,7 +586,7 @@ class _FirstRunImportCard extends StatelessWidget {
           ),
           const SizedBox(height: 8),
           Text(
-            'IMPORT YOUR ARCHIVE',
+            'BRING YOUR NOTES IN',
             style: Theme.of(context)
                 .textTheme
                 .headlineSmall
@@ -609,7 +594,7 @@ class _FirstRunImportCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           const Text(
-            'Choose a Note Harbor archive exported from the editor to install its notes, images, and database on this device.',
+            'Choose the archive you exported from Note Harbor Editor.',
           ),
           const SizedBox(height: 20),
           _ArchiveDropZone(
@@ -884,7 +869,7 @@ class _ArchiveDropZoneState extends State<_ArchiveDropZone> {
       button: true,
       label: selected
           ? 'Selected archive $fileName. Choose a different archive'
-          : 'Choose a .zip archive',
+          : 'Choose an archive',
       child: GestureDetector(
         onTap: onTap,
         child: MouseRegion(
@@ -934,7 +919,7 @@ class _ArchiveDropZoneState extends State<_ArchiveDropZone> {
                         mainAxisSize: MainAxisSize.min,
                         children: [
                           Text(
-                            fileName ?? 'No archive selected',
+                            fileName ?? 'No archive chosen',
                             style: TextStyle(
                               fontFamily: 'Inter',
                               fontWeight: FontWeight.w700,
@@ -948,7 +933,7 @@ class _ArchiveDropZoneState extends State<_ArchiveDropZone> {
                           Text(
                             selected
                                 ? 'Ready to import'
-                                : 'Tap to choose a .zip archive',
+                                : 'A Note Harbor archive',
                             style: const TextStyle(
                               fontFamily: 'Inter',
                               fontSize: 12,

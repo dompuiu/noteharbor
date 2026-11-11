@@ -1171,7 +1171,7 @@ void main() {
         buildHome(ImportDatasetScreen(controller: controller)),
       );
       await tester.pumpAndSettle();
-      expect(find.text('IMPORT DATASET'), findsOneWidget);
+      expect(find.text('IMPORT'), findsOneWidget);
 
       await tester.pumpWidget(
         buildHome(NotesTableScreen(controller: controller)),

@@ -41,15 +41,19 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('GET STARTED'), findsOneWidget);
-    expect(find.text('IMPORT YOUR ARCHIVE'), findsOneWidget);
-    expect(find.text('Tap to choose a .zip archive'), findsOneWidget);
+    expect(find.text('BRING YOUR NOTES IN'), findsOneWidget);
+    expect(
+      find.text('Choose the archive you exported from Note Harbor Editor.'),
+      findsOneWidget,
+    );
+    expect(find.text('A Note Harbor archive'), findsOneWidget);
     expect(find.byType(OutlinedButton), findsNothing);
 
     // Nothing from the populated page appears before a collection exists.
-    expect(find.text('MANAGE VIEWER DATA'), findsNothing);
+    expect(find.text('ARCHIVE ON THIS DEVICE'), findsNothing);
     expect(find.text('ACTIVE COLLECTION'), findsNothing);
-    expect(find.text('ARCHIVE IMPORT'), findsNothing);
-    expect(find.text('DELETE IMPORTED DATA'), findsNothing);
+    expect(find.text('IMPORT AN ARCHIVE'), findsNothing);
+    expect(find.text('DELETE ARCHIVE'), findsNothing);
 
     // The one action fits above a 375x667 fold.
     final action = find.widgetWithText(FilledButton, 'Choose archive');
@@ -77,15 +81,15 @@ void main() {
     // Not first run: the archive exists on disk even though it has no
     // collection, so it must stay recoverable without panelling a manager.
     expect(find.text('GET STARTED'), findsNothing);
-    expect(find.text('ARCHIVE IMPORT'), findsOneWidget);
-    expect(find.text('MANAGE VIEWER DATA'), findsNothing);
+    expect(find.text('IMPORT AN ARCHIVE'), findsOneWidget);
+    expect(find.text('ARCHIVE ON THIS DEVICE'), findsNothing);
     expect(find.text('ACTIVE COLLECTION'), findsNothing);
 
     await tester.scrollUntilVisible(
-      find.text('Delete imported data'),
+      find.text('Delete archive'),
       200.0,
     );
-    expect(find.text('Delete imported data'), findsOneWidget);
+    expect(find.text('Delete archive'), findsOneWidget);
   });
 
   testWidgets('catalog field filter excludes longer numeric prefixes', (

@@ -33,7 +33,7 @@ void main() {
     await pumpImportScreen(tester, await loadedController());
 
     expect(find.text('ACTIVE COLLECTION'), findsOneWidget);
-    expect(find.text('MANAGE VIEWER DATA'), findsOneWidget);
+    expect(find.text('ARCHIVE ON THIS DEVICE'), findsOneWidget);
     expect(find.text('Delete collection'), findsOneWidget);
     expect(find.text('Set as default collection'), findsNothing);
     expect(find.text('Active source'), findsNothing);
@@ -57,9 +57,12 @@ void main() {
     await tester.tap(find.widgetWithText(FilledButton, 'Delete'));
     await tester.pumpAndSettle();
 
-    expect(find.textContaining('Delete failed:'), findsOneWidget);
+    expect(
+      find.textContaining('Could not delete the collection:'),
+      findsOneWidget,
+    );
     // The message renders right under the panel, not in the bottom banner.
-    expect(find.text('IMPORT DATASET'), findsOneWidget);
+    expect(find.text('IMPORT'), findsOneWidget);
   });
 
   testWidgets('delete success shows inline confirmation', (

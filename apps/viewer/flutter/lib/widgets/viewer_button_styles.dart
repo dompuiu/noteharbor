@@ -5,7 +5,7 @@ import '../app/viewer_palette.dart';
 /// Button styles the app theme cannot express on its own.
 ///
 /// The theme paints every filled button in the accent red, so the soft-red
-/// destructive actions ("Delete collection", "Delete imported data") declare
+/// destructive actions ("Delete collection", "Delete archive") declare
 /// their own full state ramp here instead of repeating it at each call site.
 abstract final class ViewerButtonStyles {
   /// Quiet destructive action: soft red wash, red ink, red hairline edge.

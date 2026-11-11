@@ -30,12 +30,12 @@ void main() {
 
     await tester.tap(find.byIcon(Icons.file_upload_outlined));
     await tester.pumpAndSettle();
-    expect(find.text('IMPORT DATASET'), findsOneWidget);
+    expect(find.text('IMPORT'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
 
-    expect(find.text('Import Dataset'), findsNothing);
+    expect(find.text('IMPORT'), findsNothing);
     expect(find.text('NOTE HARBOR'), findsOneWidget);
   });
 
@@ -53,7 +53,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // Still on the sole route; there is nowhere to go back to.
-    expect(find.text('IMPORT DATASET'), findsOneWidget);
+    expect(find.text('IMPORT'), findsOneWidget);
   });
 
   testWidgets('escape closes the confirm dialog without leaving import', (
@@ -82,14 +82,14 @@ void main() {
     );
     await tester.tap(find.byIcon(Icons.delete_outline_rounded));
     await tester.pumpAndSettle();
-    expect(find.text('Delete imported data?'), findsOneWidget);
+    expect(find.text('Delete archive?'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
 
     // The dialog dismisses; the import screen stays put.
-    expect(find.text('Delete imported data?'), findsNothing);
-    expect(find.text('IMPORT DATASET'), findsOneWidget);
+    expect(find.text('Delete archive?'), findsNothing);
+    expect(find.text('IMPORT'), findsOneWidget);
   });
 }
 
