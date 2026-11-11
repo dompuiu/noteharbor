@@ -46,8 +46,10 @@ void main() {
       find.text('Choose the archive you exported from Note Harbor Editor.'),
       findsOneWidget,
     );
-    expect(find.text('A Note Harbor archive'), findsOneWidget);
+    expect(find.text('Drop or tap to choose'), findsOneWidget);
     expect(find.byType(OutlinedButton), findsNothing);
+    // The drop zone is the only picker; the pill imports the selected archive.
+    expect(find.text('Choose archive'), findsNothing);
 
     // Nothing from the populated page appears before a collection exists.
     expect(find.text('ARCHIVE ON THIS DEVICE'), findsNothing);
@@ -55,9 +57,10 @@ void main() {
     expect(find.text('IMPORT AN ARCHIVE'), findsNothing);
     expect(find.text('DELETE ARCHIVE'), findsNothing);
 
-    // The one action fits above a 375x667 fold.
-    final action = find.widgetWithText(FilledButton, 'Choose archive');
+    // The one action fits above a 375x667 fold and waits for a selection.
+    final action = find.widgetWithText(FilledButton, 'Import archive');
     expect(action, findsOneWidget);
+    expect(tester.widget<FilledButton>(action).onPressed, isNull);
     expect(tester.getBottomRight(action).dy, lessThan(667));
 
     // The version line is the ListView's last child.

@@ -7,6 +7,7 @@ import '../../app/viewer_palette.dart';
 import '../../data/dataset_controller.dart';
 import '../../utils/dataset_date_format.dart';
 import '../../widgets/viewer_button_styles.dart';
+import 'archive_drop_zone.dart';
 
 class ImportDatasetScreen extends StatefulWidget {
   const ImportDatasetScreen({required this.controller, super.key});
@@ -116,6 +117,17 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
         setState(() => _isPicking = false);
       }
     }
+  }
+
+  /// A drop is a selection, not an import: the user still confirms the
+  /// destructive import from the panel's Import archive button.
+  void _handleDroppedArchive(String path, String name) {
+    setState(() {
+      _selectedArchivePath = path;
+      _selectedArchiveName = name;
+      _message = null;
+      _messageIsError = false;
+    });
   }
 
   Future<void> _importArchive() async {
@@ -343,12 +355,14 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                             _FirstRunImportCard(
                               fileName: _selectedArchiveName,
                               isBusy: isBusy,
-                              busyLabel: _isPicking
-                                  ? 'Choosing...'
-                                  : widget.controller.isMutating
-                                      ? 'Importing...'
-                                      : null,
+                              isPicking: _isPicking,
+                              busyLabel: widget.controller.isMutating
+                                  ? 'Importing...'
+                                  : null,
                               onChoose: _pickArchive,
+                              onDropped: _handleDroppedArchive,
+                              onDropRejected: (message) =>
+                                  _setStatus(message, true),
                               onImport: _importArchive,
                             )
                           else ...[
@@ -449,32 +463,25 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  _ArchiveDropZone(
+                                  ArchiveDropZone(
                                     fileName: _selectedArchiveName,
-                                    onTap: isBusy ? null : _pickArchive,
+                                    isPicking: _isPicking,
+                                    onChoose: isBusy ? null : _pickArchive,
+                                    onDropped: _handleDroppedArchive,
+                                    onDropRejected: (message) =>
+                                        _setStatus(message, true),
                                   ),
                                   const SizedBox(height: 16),
-                                  Wrap(
-                                    spacing: 12,
-                                    runSpacing: 12,
-                                    children: [
-                                      OutlinedButton.icon(
-                                        onPressed: isBusy ? null : _pickArchive,
-                                        icon: const Icon(Icons.folder_open_rounded),
-                                        label: Text(_isPicking
-                                            ? 'Choosing...'
-                                            : 'Choose archive'),
-                                      ),
-                                      FilledButton.icon(
-                                        onPressed: isBusy || _selectedArchivePath == null
-                                            ? null
-                                            : _importArchive,
-                                        icon: const Icon(Icons.file_upload_outlined),
-                                        label: Text(widget.controller.isMutating
-                                            ? 'Importing...'
-                                            : 'Import archive'),
-                                      ),
-                                    ],
+                                  FilledButton.icon(
+                                    onPressed: isBusy ||
+                                            _selectedArchivePath == null
+                                        ? null
+                                        : _importArchive,
+                                    icon: const Icon(
+                                        Icons.file_upload_outlined),
+                                    label: Text(widget.controller.isMutating
+                                        ? 'Importing...'
+                                        : 'Import archive'),
                                   ),
                                 ],
                               ),
@@ -539,22 +546,26 @@ class _FirstRunImportCard extends StatelessWidget {
   const _FirstRunImportCard({
     required this.fileName,
     required this.isBusy,
+    required this.isPicking,
     required this.busyLabel,
     required this.onChoose,
+    required this.onDropped,
+    required this.onDropRejected,
     required this.onImport,
   });
 
   final String? fileName;
   final bool isBusy;
+  final bool isPicking;
   final String? busyLabel;
   final VoidCallback onChoose;
+  final ArchiveDroppedCallback onDropped;
+  final ValueChanged<String> onDropRejected;
   final VoidCallback onImport;
 
   @override
   Widget build(BuildContext context) {
     final hasSelection = fileName != null;
-    final label =
-        busyLabel ?? (hasSelection ? 'Import archive' : 'Choose archive');
 
     return _Panel(
       child: Column(
@@ -583,19 +594,18 @@ class _FirstRunImportCard extends StatelessWidget {
             'Choose the archive you exported from Note Harbor Editor.',
           ),
           const SizedBox(height: 20),
-          _ArchiveDropZone(
+          ArchiveDropZone(
             fileName: fileName,
-            onTap: isBusy ? null : onChoose,
+            isPicking: isPicking,
+            onChoose: isBusy ? null : onChoose,
+            onDropped: onDropped,
+            onDropRejected: onDropRejected,
           ),
           const SizedBox(height: 16),
           FilledButton.icon(
-            onPressed: isBusy ? null : (hasSelection ? onImport : onChoose),
-            icon: Icon(
-              hasSelection
-                  ? Icons.file_upload_outlined
-                  : Icons.folder_open_rounded,
-            ),
-            label: Text(label),
+            onPressed: isBusy || !hasSelection ? null : onImport,
+            icon: const Icon(Icons.file_upload_outlined),
+            label: Text(busyLabel ?? 'Import archive'),
           ),
         ],
       ),
@@ -819,189 +829,6 @@ class _StatusBanner extends StatelessWidget {
   }
 }
 
-class _ArchiveDropZone extends StatefulWidget {
-  const _ArchiveDropZone({required this.fileName, required this.onTap});
-
-  final String? fileName;
-  final VoidCallback? onTap;
-
-  @override
-  State<_ArchiveDropZone> createState() => _ArchiveDropZoneState();
-}
-
-class _ArchiveDropZoneState extends State<_ArchiveDropZone> {
-  bool _hovered = false;
-
-  @override
-  Widget build(BuildContext context) {
-    final fileName = widget.fileName;
-    final onTap = widget.onTap;
-    final selected = fileName != null;
-    final interactive = onTap != null;
-    final hovered = interactive && _hovered;
-
-    final borderColor = selected
-        ? ViewerPalette.accent
-        : hovered
-            ? ViewerPalette.accent.withValues(alpha: 0.55)
-            : ViewerPalette.borderControl;
-    final fillColor = selected
-        ? ViewerPalette.accentSoft
-        : hovered
-            ? ViewerPalette.surfaceStep
-            : ViewerPalette.surfaceMist;
-
-    return Semantics(
-      button: true,
-      label: selected
-          ? 'Selected archive $fileName. Choose a different archive'
-          : 'Choose an archive',
-      child: GestureDetector(
-        onTap: onTap,
-        child: MouseRegion(
-          cursor: interactive
-              ? SystemMouseCursors.click
-              : MouseCursor.defer,
-          onEnter: (_) => setState(() => _hovered = true),
-          onExit: (_) => setState(() => _hovered = false),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 140),
-            curve: Curves.easeOut,
-            decoration: BoxDecoration(
-              color: fillColor,
-              borderRadius:
-                  BorderRadius.circular(ViewerPalette.radiusControl),
-            ),
-            child: CustomPaint(
-              painter: _DashedBorderPainter(
-                color: borderColor,
-                radius: ViewerPalette.radiusControl,
-              ),
-              child: Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: ViewerPalette.surface,
-                        borderRadius: BorderRadius.circular(
-                            ViewerPalette.radiusSm),
-                        border:
-                            Border.all(color: ViewerPalette.border),
-                      ),
-                      child: const Padding(
-                        padding: EdgeInsets.all(10),
-                        child: Icon(
-                          Icons.archive_outlined,
-                          color: ViewerPalette.accent,
-                          size: 22,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Text(
-                            fileName ?? 'No archive chosen',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              fontWeight: FontWeight.w700,
-                              color: selected
-                                  ? ViewerPalette.text
-                                  : ViewerPalette.textMuted,
-                            ),
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                          const SizedBox(height: 4),
-                          Text(
-                            selected
-                                ? 'Ready to import'
-                                : 'A Note Harbor archive',
-                            style: const TextStyle(
-                              fontFamily: 'Inter',
-                              fontSize: 12,
-                              color: ViewerPalette.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    DecoratedBox(
-                      decoration: BoxDecoration(
-                        color: selected
-                            ? ViewerPalette.accentStrong
-                            : ViewerPalette.surface,
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                          color: selected
-                              ? ViewerPalette.accentStrong
-                              : ViewerPalette.border,
-                        ),
-                      ),
-                      child: Padding(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 8, vertical: 4),
-                        child: Text(
-                          'ARCHIVE',
-                          style: TextStyle(
-                            fontFamily: 'Inter',
-                            fontSize: 11,
-                            fontWeight: FontWeight.w800,
-                            letterSpacing: 1.0,
-                            color: selected
-                                ? ViewerPalette.onAccent
-                                : ViewerPalette.textMuted,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-class _DashedBorderPainter extends CustomPainter {
-  const _DashedBorderPainter({required this.color, required this.radius});
-
-  final Color color;
-  final double radius;
-
-  @override
-  void paint(Canvas canvas, Size size) {
-    final rect = Offset.zero & size;
-    final rrect = RRect.fromRectAndRadius(rect, Radius.circular(radius));
-    const dashWidth = 7.0;
-    const dashGap = 5.0;
-    final paint = Paint()
-      ..color = color
-      ..strokeWidth = 1.5
-      ..style = PaintingStyle.stroke;
-    final path = Path()..addRRect(rrect);
-    for (final metric in path.computeMetrics()) {
-      var distance = 0.0;
-      while (distance < metric.length) {
-        final end = (distance + dashWidth).clamp(0.0, metric.length);
-        canvas.drawPath(metric.extractPath(distance, end), paint);
-        distance += dashWidth + dashGap;
-      }
-    }
-  }
-
-  @override
-  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) {
-    return oldDelegate.color != color || oldDelegate.radius != radius;
-  }
-}
 class _InfoPill extends StatelessWidget {
   const _InfoPill({required this.label, required this.value});
 

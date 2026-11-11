@@ -41,6 +41,12 @@ void main() {
     expect(find.text('Notes (active)'), findsNothing);
     // No "(default)" suffix on the dropdown entries.
     expect(find.text('Alpha (2)'), findsOneWidget);
+
+    // The drop zone is the only picker; no duplicate Choose archive button.
+    await tester.scrollUntilVisible(find.text('Import archive'), 200);
+    await tester.pumpAndSettle();
+    expect(find.text('Choose archive'), findsNothing);
+    expect(find.widgetWithText(FilledButton, 'Import archive'), findsOneWidget);
   });
 
   testWidgets('delete failure shows inline under the active collection', (
