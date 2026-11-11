@@ -1496,10 +1496,10 @@ function NoteEditForm({
       {scrapeConflictOverlayOpen ? (
         <section className="edit-note-overlay scrape-conflict-overlay">
           <div
-            className="edit-note-overlay-frame scrape-conflict-overlay-frame"
+            className="edit-note-overlay-frame"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="edit-note-overlay-content scrape-conflict-overlay-content">
+            <div className="edit-note-overlay-content">
               <div className="panel scrape-conflict-panel">
                 <div className="panel-heading">
                   <div>

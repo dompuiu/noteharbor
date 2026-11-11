@@ -6426,19 +6426,12 @@ button.tag {
   overflow-anchor: none;
 }
 
-/* The frame holds the 1200px app floor (minus the overlay's 24px side
-   padding) at every viewport size: smaller windows scroll the overlay
-   instead of squeezing the form, and the 1120px form stays centred in that
-   1200px canvas. The auto inline margins keep it centred with a reachable
-   start when it overflows, unlike the overlay's plain center placement,
-   which would strand the left edge. */
+/* The frame is fluid: the overlay's own 24px side padding is the gutter, and
+   the 1120px working width is a ceiling rather than a floor. Below it the form
+   reflows in place instead of forcing the overlay to scroll sideways, so Save
+   stays reachable in a narrow window. The overlay's grid centring places it. */
 .edit-note-overlay-frame {
-  width: 100%;
-  min-width: calc(1200px - 48px);
-  margin-inline: auto;
-  display: flex;
-  justify-content: center;
-  min-height: 0;
+  width: min(100%, var(--note-editor-width));
   padding-bottom: 28px;
 }
 
@@ -6457,14 +6450,6 @@ button.tag {
 
 .scrape-conflict-overlay {
   z-index: 120;
-}
-
-.scrape-conflict-overlay-frame {
-  min-width: calc(1200px - 48px);
-}
-
-.scrape-conflict-overlay-content {
-  width: min(100%, 1120px);
 }
 
 .scrape-conflict-panel {
@@ -6531,6 +6516,22 @@ button.tag {
   display: flex;
   justify-content: flex-end;
   gap: 12px;
+}
+
+/* The note editor's two-column grids want roughly 420px per column for a
+   44px field and a 200px image well, so a 900px window — 852px of form after
+   the overlay's 48px padding — is where they stack into one column. The
+   scrape-review action row wraps with them instead of holding one line. */
+@media (max-width: 900px) {
+  #edit-note-form,
+  .image-slot-grid,
+  .scrape-conflict-values {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .scrape-conflict-panel .inline-actions {
+    flex-wrap: wrap;
+  }
 }
 
 .confirm-dialog-overlay {

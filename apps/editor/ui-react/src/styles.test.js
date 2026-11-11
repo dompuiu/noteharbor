@@ -1805,11 +1805,21 @@ describe("sidebar styles", () => {
     expect(block[1]).toMatch(/transition:\s*none/);
   });
 
-  // The app follows the window with no breakpoint-specific layout: narrow
-  // windows shrink the main area, so there are no width-based media queries
-  // and no narrow-screen drawer to conflict with the "b" rail shortcut.
-  test("has no width-based media queries", () => {
-    expect(styles).not.toMatch(/@media\s*\((max|min)-width/);
+  // The app follows the window with no breakpoint-specific shell layout: a
+  // narrow window shrinks the main area and the rail, and there is no
+  // narrow-screen drawer to conflict with the "b" rail shortcut. The Note
+  // editor's form grids do stack at a narrow width (see the note editor
+  // suite); no width-based query may reach the shell.
+  test("width-based queries never reshape the shell", () => {
+    const headers = styles.match(/@media[^{]*\bwidth\b[^{]*\{/g) ?? [];
+
+    // The Note editor's one query exists; the shell stays out of all of them.
+    expect(headers.length).toBeGreaterThan(0);
+    for (const header of headers) {
+      const block = atRule(styles, header);
+      expect(block).not.toBeNull();
+      expect(block).not.toMatch(/\.sidebar|drawer|app-shell|\.app-main|#root/);
+    }
   });
 
   test("has no drawer, hamburger, or backdrop selectors", () => {
@@ -1877,9 +1887,9 @@ describe("slideshow overlay styles", () => {
     expect(panel[1]).toMatch(/min-height:\s*calc\(100vh/);
   });
 
-  // Fixed overlays size against the viewport. Each overlay freezes its
-  // content at a desktop rendering and scrolls instead of reflowing on
-  // smaller windows.
+  // The slideshow and image popover size against the viewport and freeze
+  // their content at a desktop rendering. The Note editor is the exception:
+  // it reflows below its breakpoint instead of scrolling sideways.
   test("the slideshow panel holds the 1200px floor", () => {
     const panel = styles.match(
       /\.slideshow-screen--overlay \.slideshow-panel\s*\{([^}]*)\}/,
@@ -1889,23 +1899,20 @@ describe("slideshow overlay styles", () => {
     expect(panel[1]).toMatch(/min-width:\s*calc\(1200px - 32px\)/);
   });
 
-  test("the edit-note overlay scrolls horizontally instead of squeezing", () => {
+  test("the edit-note overlay keeps its own vertical scroll", () => {
     const overlay = styles.match(/\.edit-note-overlay\s*\{([^}]*)\}/);
     expect(overlay).not.toBeNull();
     expect(overlay[1]).toMatch(/overflow:\s*auto/);
     expect(overlay[1]).not.toMatch(/overflow-y/);
   });
 
-  test("the edit-note frame holds the 1200px floor with the form centred", () => {
+  test("the edit-note frame is fluid instead of holding a floor", () => {
     const frame = styles.match(/\.edit-note-overlay-frame\s*\{([^}]*)\}/);
     expect(frame).not.toBeNull();
-    // 1200px minus the overlay's 24px side padding; the 1120px form stays
-    // centred in that canvas via the frame's flex centering.
-    expect(frame[1]).toMatch(/min-width:\s*calc\(1200px - 48px\)/);
-    expect(frame[1]).toMatch(/justify-content:\s*center/);
-    // Auto inline margins keep the frame centred with a reachable start when
-    // it overflows, unlike the overlay's plain center placement.
-    expect(frame[1]).toMatch(/margin-inline:\s*auto/);
+    // The 1120px working width is the ceiling; a narrow window shrinks it.
+    expect(frame[1]).toMatch(
+      /width:\s*min\(100%,\s*var\(--note-editor-width\)\)/,
+    );
   });
 
   test("the edit-note content fills the note editor's column", () => {
@@ -1974,12 +1981,35 @@ describe("slideshow overlay styles", () => {
     expect(textarea[1]).toMatch(/font-size:\s*0\.95rem/);
   });
 
-  test("the scrape-conflict frame holds the 1200px floor", () => {
-    const frame = styles.match(
-      /\.scrape-conflict-overlay-frame\s*\{([^}]*)\}/,
+  test("the scrape-conflict overlay shares the fluid frame", () => {
+    // No rule reintroduces the editor's old 1200px floor, on the conflict
+    // overlay or anywhere else.
+    expect(styles).not.toMatch(/calc\(1200px - 48px\)/);
+    expect(styles).not.toMatch(/\.scrape-conflict-overlay-(frame|content)\s*\{/);
+  });
+
+  test("the note editor's grids stay two columns above the breakpoint", () => {
+    for (const selector of ["form-grid", "image-slot-grid"]) {
+      const grid = styles.match(
+        new RegExp(`^\\.${selector}\\s*\\{([^}]*)\\}`, "m"),
+      );
+      expect(grid).not.toBeNull();
+      expect(grid[1]).toMatch(
+        /grid-template-columns:\s*repeat\(2,\s*minmax\(0,\s*1fr\)\)/,
+      );
+    }
+  });
+
+  test("a narrow window stacks the note editor's grids and actions", () => {
+    const narrow = atRule(styles, "@media (max-width: 900px)");
+    expect(narrow).not.toBeNull();
+    expect(narrow).toContain("#edit-note-form");
+    expect(narrow).toContain(".image-slot-grid");
+    expect(narrow).toContain(".scrape-conflict-values");
+    expect(narrow).toMatch(/grid-template-columns:\s*minmax\(0,\s*1fr\)/);
+    expect(narrow).toMatch(
+      /\.scrape-conflict-panel \.inline-actions\s*\{[^}]*flex-wrap:\s*wrap/,
     );
-    expect(frame).not.toBeNull();
-    expect(frame[1]).toMatch(/min-width:\s*calc\(1200px - 48px\)/);
   });
 
   test("the image popover scrolls instead of squeezing", () => {

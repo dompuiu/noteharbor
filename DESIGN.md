@@ -257,7 +257,7 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Focus:** border becomes red with the standard 2px red hairline halo; no glow.
 - **Disabled / Error:** errors use the danger text and border; disabled controls keep their shape and drop to Body Faint.
 - **Search and filters:** the same field at 34–36px; the active-filter state adds a red border rather than a fill. The Viewer's unified table filter bar is a 40px field: a 180–200px scope select, a hairline divider, and the text input taking the rest of a 560px cap.
-- **Note editor:** the one larger instance — the wider editing column gives the toolbar room and its fields stand 44px tall at 0.95rem so the two-column grid keeps its proportions.
+- **Note editor:** the one larger instance — the wider editing column gives the toolbar room and its fields stand 44px tall at 0.95rem so the two-column grid keeps its proportions. The column is a ceiling rather than a floor: at 900px and below the field and image grids stack into one column, so the fields stay readable and Save stays reachable instead of the overlay scrolling sideways.
 
 ### Table
 - **Container:** a white card with a 6px radius, 1px structural border, filling the viewport.
