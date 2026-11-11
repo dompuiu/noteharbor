@@ -780,7 +780,11 @@ describe("Home and End in the slideshow and image preview", () => {
       expect(currentHash()).toContain("slideshow/3/preview/back");
     });
     expect(screen.getByText("CCCC - Back")).toBeInTheDocument();
-    expect(screen.getByText("6 / 6")).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("textbox", { name: "Image position" })
+        .closest(".note-counter-value"),
+    ).toHaveTextContent("6 / 6");
 
     await user.keyboard("{Home}");
 
@@ -788,7 +792,11 @@ describe("Home and End in the slideshow and image preview", () => {
       expect(currentHash()).toContain("slideshow/1/preview/front");
     });
     expect(screen.getByText("AAAA - Front")).toBeInTheDocument();
-    expect(screen.getByText("1 / 6")).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("textbox", { name: "Image position" })
+        .closest(".note-counter-value"),
+    ).toHaveTextContent("1 / 6");
   });
 
   test("Ctrl+arrows page in fit view while modified Home stays put", async () => {

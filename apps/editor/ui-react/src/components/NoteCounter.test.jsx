@@ -9,11 +9,15 @@ function renderCounter(props = {}) {
   );
 }
 
+function renderedValue(container) {
+  return container.querySelector(".note-counter-value");
+}
+
 describe("NoteCounter", () => {
   test("renders the position and total as visible text", () => {
-    renderCounter();
+    const { container } = renderCounter();
 
-    expect(screen.getByText("3 / 9")).toBeInTheDocument();
+    expect(renderedValue(container)).toHaveTextContent("3 / 9");
   });
 
   test("the previous and next controls fire their callbacks", async () => {
@@ -50,11 +54,16 @@ describe("NoteCounter", () => {
   });
 
   test("the add variant renders ? / N and never a number", () => {
-    renderCounter({ addMode: true, position: null, total: 4 });
+    const { container } = renderCounter({
+      addMode: true,
+      position: null,
+      total: 4,
+    });
+    const counter = renderedValue(container);
 
-    expect(screen.getByText("? / 4")).toBeInTheDocument();
-    expect(screen.queryByText("1 / 4")).not.toBeInTheDocument();
-    expect(screen.queryByText("0 / 4")).not.toBeInTheDocument();
+    expect(counter).toHaveTextContent("? / 4");
+    expect(counter).not.toHaveTextContent("1 / 4");
+    expect(counter).not.toHaveTextContent("0 / 4");
   });
 });
 
@@ -87,6 +96,15 @@ describe("NoteCounter's editable number", () => {
     expect(onJump).toHaveBeenCalledWith(123);
   });
 
+  test("the textbox exposes the number alone, not the total", async () => {
+    renderCounter({ onJump: vi.fn(), total: 9 });
+
+    const field = screen.getByRole("textbox", { name: "Note position" });
+
+    expect(field).toHaveTextContent(/^3$/);
+    expect(field).not.toHaveTextContent("/");
+  });
+
   test("an out-of-range value clamps to the nearest position", async () => {
     const { onJump, user } = await openEditable({ total: 5 });
 
@@ -104,7 +122,11 @@ describe("NoteCounter's editable number", () => {
     await user.keyboard("{Escape}");
 
     expect(onJump).not.toHaveBeenCalled();
-    expect(screen.getByText("3 / 20")).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("textbox", { name: "Note position" })
+        .closest(".note-counter-value"),
+    ).toHaveTextContent("3 / 20");
     expect(document.activeElement).toBe(document.body);
   });
 

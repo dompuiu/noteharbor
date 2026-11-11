@@ -299,6 +299,7 @@ function NoteEditForm({
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [saveAnnouncement, setSaveAnnouncement] = useState("");
   const [currentImages, setCurrentImages] = useState([]);
   const [noteVersion, setNoteVersion] = useState("");
   const [pendingImages, setPendingImages] = useState({});
@@ -511,6 +512,7 @@ function NoteEditForm({
 
     setLoading(true);
     setError("");
+    setSaveAnnouncement("");
     setForm(emptyForm);
     setCurrentImages([]);
     setNoteVersion("");
@@ -1314,6 +1316,7 @@ function NoteEditForm({
     event.preventDefault();
     setSaving(true);
     setError("");
+    setSaveAnnouncement("");
 
     try {
       const payloadWithImages = {
@@ -1390,6 +1393,13 @@ function NoteEditForm({
 
       if (onSaveSuccess) {
         onSaveSuccess(payload.note, reorderedNotes, undefined, intent);
+        // Staying on an edited Note leaves no other signal that the save
+        // finished — the button only says it started and the route stays put.
+        // A create switches into edit mode (a new route and title), so it
+        // already reports itself; this keeps the live region honest.
+        if (intent === "stay" && !isCreateMode) {
+          setSaveAnnouncement("Note saved.");
+        }
         return;
       }
 
@@ -1789,10 +1799,21 @@ function NoteEditForm({
           </div>
         </div>
 
-        {error ? <p className="error-text">{error}</p> : null}
+        {error ? (
+          <p className="error-text" role="alert">
+            {error}
+          </p>
+        ) : null}
+        {/* Mounted even while empty so the region exists before a save
+            reports into it. It is a bare live region rather than a status
+            role so it never competes with the toast host's status. */}
+        <p aria-atomic="true" aria-live="polite" className="note-editor-announcer">
+          {saveAnnouncement}
+        </p>
         {scrapeToast ? <Toast tone="danger">{scrapeToast}</Toast> : null}
 
         <form
+          aria-busy={saving || undefined}
           className="form-grid"
           id="edit-note-form"
           autoComplete="off"

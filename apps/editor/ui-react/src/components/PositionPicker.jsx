@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { noteThumbnailPath } from "../lib/tableCells.jsx";
 
 function PositionPicker({ notes, onSelect, selectedId }) {
+  const filterLabel = "Filter by denomination or catalog number";
   const [filter, setFilter] = useState("");
   const listRef = useRef(null);
   const selectedButtonRef = useRef(null);
@@ -40,9 +41,10 @@ function PositionPicker({ notes, onSelect, selectedId }) {
   return (
     <div className="position-picker">
       <input
+        aria-label={filterLabel}
         className="filter-input"
         onChange={(event) => setFilter(event.target.value)}
-        placeholder="Filter by denomination or catalog number"
+        placeholder={filterLabel}
         type="text"
         value={filter}
       />

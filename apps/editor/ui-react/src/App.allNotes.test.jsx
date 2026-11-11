@@ -568,7 +568,11 @@ describe("All notes screen", () => {
     expect(screen.getByTestId("pathname")).toHaveTextContent(
       "/catalog/all-notes#slideshow/2",
     );
-    expect(screen.getByText("2 / 3")).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("textbox", { name: "Note position" })
+        .closest(".note-counter-value"),
+    ).toHaveTextContent("2 / 3");
 
     await user.keyboard("{Escape}");
     expect(screen.getByTestId("pathname")).toHaveTextContent(
@@ -590,7 +594,11 @@ describe("All notes screen", () => {
     expect(screen.getByTestId("pathname")).toHaveTextContent(
       "/catalog/all-notes#slideshow/3",
     );
-    expect(screen.getByText("1 / 1")).toBeInTheDocument();
+    expect(
+      screen
+        .getByRole("textbox", { name: "Note position" })
+        .closest(".note-counter-value"),
+    ).toHaveTextContent("1 / 1");
 
     await user.click(screen.getByRole("button", { name: "Close slideshow" }));
     expect(screen.getByTestId("pathname")).toHaveTextContent(

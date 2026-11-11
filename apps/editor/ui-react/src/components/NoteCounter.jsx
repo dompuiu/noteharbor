@@ -105,17 +105,19 @@ function NoteCounter({
   ]
     .filter(Boolean)
     .join(" ");
+  // The number alone is the editable value; the total stays beside it so a
+  // textbox never exposes "3 / 12" as its value.
   const editableProps =
     editable && !editing
       ? {
           "aria-label": jumpLabel,
-          className: `${valueClassName} note-counter-value--editable`,
+          className: "note-counter-value--editable",
           onClick: beginEdit,
           onFocus: beginEdit,
           role: "textbox",
           tabIndex: 0,
         }
-      : { className: valueClassName };
+      : null;
 
   return (
     <div className={rootClassName}>
@@ -138,23 +140,27 @@ function NoteCounter({
           </svg>
         </button>
       ) : null}
-      <span title={counterTitle} {...editableProps}>
-        {editing ? (
-          <input
-            aria-label={jumpLabel}
-            className="note-counter-input"
-            data-note-counter-input="true"
-            inputMode="numeric"
-            onBlur={() => setEditing(false)}
-            onChange={(event) => setDraft(event.target.value.replace(/\D/g, ""))}
-            onKeyDown={handleInputKeyDown}
-            placeholder={currentPosition}
-            ref={inputRef}
-            value={draft}
-          />
-        ) : (
-          currentPosition
-        )}
+      <span className={valueClassName} title={counterTitle}>
+        <span {...editableProps}>
+          {editing ? (
+            <input
+              aria-label={jumpLabel}
+              className="note-counter-input"
+              data-note-counter-input="true"
+              inputMode="numeric"
+              onBlur={() => setEditing(false)}
+              onChange={(event) =>
+                setDraft(event.target.value.replace(/\D/g, ""))
+              }
+              onKeyDown={handleInputKeyDown}
+              placeholder={currentPosition}
+              ref={inputRef}
+              value={draft}
+            />
+          ) : (
+            currentPosition
+          )}
+        </span>
         {` / ${total}`}
       </span>
       {showArrowControls ? (

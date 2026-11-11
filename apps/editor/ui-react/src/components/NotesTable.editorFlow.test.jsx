@@ -193,6 +193,8 @@ beforeEach(() => {
   });
 });
 
+const ADD_MODE_COUNTER_TITLE = "A new note will be inserted here";
+
 describe("The counter in create mode", () => {
   test("adding a Note shows ? / N in place of a number", async () => {
     const user = userEvent.setup();
@@ -201,8 +203,9 @@ describe("The counter in create mode", () => {
 
     await user.click(railAddButton());
 
-    expect(await screen.findByText("? / 3")).toBeInTheDocument();
-    expect(screen.queryByText("1 / 3")).not.toBeInTheDocument();
+    const counter = await screen.findByTitle(ADD_MODE_COUNTER_TITLE);
+    expect(counter).toHaveTextContent("? / 3");
+    expect(counter).not.toHaveTextContent("1 / 3");
   });
 
   test("an arrow while adding opens the neighbouring Note for editing", async () => {
@@ -251,7 +254,9 @@ describe("The counter in create mode", () => {
     });
     await user.click(railAddButton());
 
-    expect(await screen.findByText("? / 0")).toBeInTheDocument();
+    expect(await screen.findByTitle(ADD_MODE_COUNTER_TITLE)).toHaveTextContent(
+      "? / 0",
+    );
     expect(
       screen.queryByRole("button", { name: "Edit previous note" }),
     ).not.toBeInTheDocument();
@@ -268,7 +273,8 @@ describe("Adding from the Note slideshow", () => {
 
     expect(currentHash()).toContain("slideshow/2");
     expect(currentHash()).toContain("overlay=create");
-    expect(await screen.findByText("? / 3")).toBeInTheDocument();
+    const counter = await screen.findByTitle(ADD_MODE_COUNTER_TITLE);
+    expect(counter).toHaveTextContent("? / 3");
     // The slideshow stays rendered behind the editor. Its controls are inert
     // while the overlay is open (out of the tab order and the accessibility
     // tree), so pin the survival on a DOM attribute that outlives `inert`: the
