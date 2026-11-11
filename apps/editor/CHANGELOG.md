@@ -4,6 +4,10 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+### Changed
+
+- Note editor: Auto Populate is a visible **Scrape grading page** action that carries its progress on the button, reports the source and number of fields it changed with a one-step undo, and marks each filled or replaced field as **Scraped**.
+
 ## [2.12.1] - 2026-11-09
 
 ### Changed

@@ -189,6 +189,44 @@ function fieldInputId(name) {
   return `edit-note-${name}`;
 }
 
+function urlHostname(url) {
+  try {
+    return new URL(url).hostname.replace(/^www\./, "");
+  } catch {
+    return "";
+  }
+}
+
+function formatScrapeSummary({ count, reason, source }) {
+  if (count) {
+    return `Filled ${count} ${count === 1 ? "field" : "fields"} from ${source}.`;
+  }
+
+  return reason === "kept"
+    ? "No fields changed; the current values were kept."
+    : `No fields changed; the note already matches ${source}.`;
+}
+
+function FieldLabel({ htmlFor, label, scrapedFrom, sourceId }) {
+  return (
+    <div className="field-label-row">
+      <label htmlFor={htmlFor}>{label}</label>
+      {scrapedFrom ? (
+        <span
+          className="field-source-badge"
+          id={sourceId}
+          title={`Scraped from ${scrapedFrom}`}
+        >
+          <span aria-hidden="true">Scraped</span>
+          <span className="field-source-detail">
+            Scraped from {scrapedFrom}
+          </span>
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
 function TagSuggestionCloud({ limit = 16, onSelect, query = "", selected = [], vocabulary = [] }) {
   const items = useMemo(() => {
     const selectedKeys = new Set(selected.map((tag) => tag.toLowerCase()));
@@ -288,8 +326,11 @@ function NoteEditForm({
   const [scrapeConflicts, setScrapeConflicts] = useState([]);
   const [scrapeConflictSelections, setScrapeConflictSelections] = useState({});
   const [scrapeConflictOverlayOpen, setScrapeConflictOverlayOpen] = useState(false);
-  const [scrapeFilledCount, setScrapeFilledCount] = useState(0);
+  const [scrapeProgress, setScrapeProgress] = useState({ source: "", count: 0 });
+  const [scrapeSummary, setScrapeSummary] = useState(null);
+  const [scrapeUndo, setScrapeUndo] = useState(null);
   const [pendingScrapedImages, setPendingScrapedImages] = useState({});
+  const formRef = useRef(form);
   const inputRefs = useRef({});
   const firstFieldRef = useRef(null);
   const formElementRef = useRef(null);
@@ -335,6 +376,12 @@ function NoteEditForm({
     baselineSignatureRef.current = editorSnapshot();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
+
+  // The scrape resolves asynchronously, so it reads the latest form from a
+  // mirror rather than from the state captured when it started.
+  useEffect(() => {
+    formRef.current = form;
+  }, [form]);
 
   useEffect(() => {
     onDirtyChange?.(dirty);
@@ -467,7 +514,7 @@ function NoteEditForm({
     setScrapeConflicts([]);
     setScrapeConflictSelections({});
     setScrapeConflictOverlayOpen(false);
-    setScrapeFilledCount(0);
+    resetScrapeResult();
     setPendingScrapedImages({});
     clearScrapeBrowserPollTimer();
 
@@ -686,6 +733,25 @@ function NoteEditForm({
   function handleFieldChange(event) {
     const { name, value } = event.target;
     setForm((current) => ({ ...current, [name]: value }));
+
+    // Editing a harvested field makes the value the user's, not the page's:
+    // dropping it from the undo also drops its provenance mark.
+    if (
+      scrapeUndo &&
+      Object.prototype.hasOwnProperty.call(scrapeUndo, name)
+    ) {
+      const nextUndo = { ...scrapeUndo };
+      delete nextUndo[name];
+      const remainingCount = Object.keys(nextUndo).length;
+
+      if (!remainingCount) {
+        setScrapeSummary(null);
+        setScrapeUndo(null);
+        return;
+      }
+
+      setScrapeUndo(nextUndo);
+    }
   }
 
   function clearScrapedImage(slotKey) {
@@ -857,6 +923,60 @@ function NoteEditForm({
     scrapeToastTimer.current = setTimeout(() => setScrapeToast(null), 4000);
   }
 
+  function resetScrapeResult() {
+    setScrapeProgress({ source: "", count: 0 });
+    setScrapeSummary(null);
+    setScrapeUndo(null);
+  }
+
+  function reportScrapeResult(reason = "match") {
+    setScrapeSummary({ reason });
+  }
+
+  // The undo targets and the provenance marks are the same set: every field a
+  // scrape wrote has an entry until the user edits it or undoes the scrape.
+  function scrapedFieldSource(fieldName) {
+    return scrapeUndo &&
+      Object.prototype.hasOwnProperty.call(scrapeUndo, fieldName)
+      ? scrapeProgress.source
+      : "";
+  }
+
+  // Every value a scrape writes is recorded with the value it replaced, so the
+  // summary can undo the whole scrape in one step. The field marks live in the
+  // form, not in the saved note: provenance is for this editing session.
+  function applyScrapedValues(updates) {
+    const fieldNames = Object.keys(updates);
+
+    if (!fieldNames.length) {
+      return 0;
+    }
+
+    const currentForm = formRef.current;
+    const previousValues = Object.fromEntries(
+      fieldNames.map((fieldName) => [
+        fieldName,
+        currentForm[fieldName] ?? "",
+      ]),
+    );
+
+    setForm((current) => ({ ...current, ...updates }));
+    setScrapeUndo((current) => ({ ...(current ?? {}), ...previousValues }));
+
+    return fieldNames.length;
+  }
+
+  function handleUndoScrape() {
+    if (!scrapeUndo) {
+      return;
+    }
+
+    const restoredValues = { ...scrapeUndo };
+    setForm((current) => ({ ...current, ...restoredValues }));
+    setScrapeUndo(null);
+    setScrapeSummary(null);
+  }
+
   function resolveScrapeUpdates(currentForm, scrapedUpdates) {
     return Object.entries(scrapedUpdates).reduce(
       (result, [fieldName, scrapedValue]) => {
@@ -916,8 +1036,10 @@ function NoteEditForm({
   async function handleAutoPopulate() {
     setScraping(true);
     setScrapeToast(null);
+    resetScrapeResult();
 
     try {
+      const scrapeUrl = form.url.trim();
       const browserReady = await ensureScrapeBrowserReady();
       if (!browserReady) {
         return;
@@ -925,7 +1047,7 @@ function NoteEditForm({
 
       let result;
       try {
-        result = await scrapePreview(form.url, {
+        result = await scrapePreview(scrapeUrl, {
           timeoutMs: SCRAPE_NAVIGATION_TIMEOUT_MS,
         });
       } catch (scrapeError) {
@@ -943,11 +1065,11 @@ function NoteEditForm({
         if (!relaunched) {
           return;
         }
-        result = await scrapePreview(form.url, {
+        result = await scrapePreview(scrapeUrl, {
           timeoutMs: SCRAPE_NAVIGATION_TIMEOUT_MS,
         });
       }
-      const mappedUpdates = mapScrapedFields(result.scraped_data, form.url);
+      const mappedUpdates = mapScrapedFields(result.scraped_data, scrapeUrl);
 
       if (Object.keys(mappedUpdates).length === 0) {
         showScrapeToast(
@@ -956,25 +1078,15 @@ function NoteEditForm({
         return;
       }
 
-      setForm((current) => {
-        const { autoFillUpdates, conflicts } = resolveScrapeUpdates(
-          current,
-          mappedUpdates,
-        );
+      // The grading company is inferred from the URL. Keep it in the form
+      // update, but it alone is not evidence that the page yielded a field.
+      const pageFieldNames = Object.keys(mappedUpdates).filter(
+        (fieldName) => fieldName !== "grading_company",
+      );
 
-        setScrapeFilledCount(Object.keys(autoFillUpdates).length);
-
-        if (conflicts.length) {
-          openScrapeConflictOverlay(conflicts);
-        } else {
-          closeScrapeConflictOverlay();
-        }
-
-        return Object.keys(autoFillUpdates).length
-          ? { ...current, ...autoFillUpdates }
-          : current;
-      });
-      setScrapeDetails(result.scraped_data);
+      if (Object.keys(result.scraped_data ?? {}).length) {
+        setScrapeDetails(result.scraped_data);
+      }
 
       const nextScrapedImages = {};
       for (const img of result.images) {
@@ -982,6 +1094,32 @@ function NoteEditForm({
         nextScrapedImages[key] = img.sourceUrl;
       }
       setPendingScrapedImages(nextScrapedImages);
+
+      if (pageFieldNames.length === 0) {
+        showScrapeToast(
+          "No fields were found on the page. If Chrome is showing a CAPTCHA or a setup screen, complete it and try Auto Populate again.",
+        );
+        return;
+      }
+
+      const source =
+        inferGradingCompany(scrapeUrl) || urlHostname(scrapeUrl) || "the page";
+      const { autoFillUpdates, conflicts } = resolveScrapeUpdates(
+        formRef.current,
+        mappedUpdates,
+      );
+      const autoFilledCount = applyScrapedValues(autoFillUpdates);
+
+      setScrapeProgress({ source, count: autoFilledCount });
+
+      if (conflicts.length) {
+        openScrapeConflictOverlay(conflicts);
+        return;
+      }
+
+      // A successful scrape always says what it did, even when every scraped
+      // value already matched: no fill is ever silent.
+      reportScrapeResult(autoFilledCount ? "filled" : "match");
     } catch (err) {
       const message = err.message || "Scraping failed.";
       const timedOut = /timed out|timeout .*exceeded/i.test(message);
@@ -1024,11 +1162,15 @@ function NoteEditForm({
 
       return updates;
     }, {});
+    const replacedCount = applyScrapedValues(selectedUpdates);
+    const count = scrapeProgress.count + replacedCount;
 
-    if (Object.keys(selectedUpdates).length) {
-      setForm((current) => ({ ...current, ...selectedUpdates }));
-    }
+    reportScrapeResult(count ? "filled" : "kept");
+    closeScrapeConflictOverlay();
+  }
 
+  function handleCancelScrapeConflicts() {
+    reportScrapeResult(scrapeProgress.count ? "filled" : "kept");
     closeScrapeConflictOverlay();
   }
 
@@ -1329,6 +1471,11 @@ function NoteEditForm({
     );
   }
 
+  const notesInputId = fieldInputId("notes");
+  const notesSourceId = `${notesInputId}-source`;
+  const notesScrapedFrom = scrapedFieldSource("notes");
+  const scrapedCount = Object.keys(scrapeUndo ?? {}).length;
+
   return (
     <section className={wrapperClassName}>
       {scrapeConflictOverlayOpen ? (
@@ -1347,10 +1494,10 @@ function NoteEditForm({
                       {scrapeConflicts.length} conflicting field
                       {scrapeConflicts.length === 1 ? "" : "s"} need a decision.
                     </p>
-                    {scrapeFilledCount ? (
+                    {scrapeProgress.count ? (
                       <p className="muted">
-                        {scrapeFilledCount} empty field
-                        {scrapeFilledCount === 1 ? " was" : "s were"} filled automatically.
+                        {scrapeProgress.count} empty field
+                        {scrapeProgress.count === 1 ? " was" : "s were"} filled automatically.
                       </p>
                     ) : null}
                   </div>
@@ -1425,7 +1572,7 @@ function NoteEditForm({
                 <div className="scrape-conflict-footer">
                   <button
                     className="button"
-                    onClick={closeScrapeConflictOverlay}
+                    onClick={handleCancelScrapeConflicts}
                     type="button"
                   >
                     Cancel
@@ -1647,11 +1794,19 @@ function NoteEditForm({
             ["serial", "Serial"],
           ].map(([name, label]) => {
             const inputId = fieldInputId(name);
+            const sourceId = `${inputId}-source`;
+            const scrapedFrom = scrapedFieldSource(name);
 
             return (
               <div className="field-block" key={name}>
-                <label htmlFor={inputId}>{label}</label>
+                <FieldLabel
+                  htmlFor={inputId}
+                  label={label}
+                  scrapedFrom={scrapedFrom}
+                  sourceId={sourceId}
+                />
                 <input
+                  aria-describedby={scrapedFrom ? sourceId : undefined}
                   autoComplete="off"
                   data-note-editor-context-field="true"
                   id={inputId}
@@ -1678,29 +1833,71 @@ function NoteEditForm({
                 value={form.url}
               />
               <button
-                aria-label="Auto Populate fields from URL"
-                className="button"
+                aria-busy={scraping || undefined}
+                className="button url-scrape-button"
                 disabled={!canScrapeUrl}
                 onClick={handleAutoPopulate}
-                title="Auto Populate fields from URL — opens Chrome and the tab if needed"
+                title="Scrape the grading page at this URL with Auto Populate — opens Chrome and the tab if needed"
                 type="button"
               >
                 {scraping ? (
-                  <span className="scrape-spinner" aria-label="Loading" />
+                  <span aria-hidden="true" className="scrape-spinner" />
                 ) : (
                   <span aria-hidden="true">✦</span>
                 )}
+                <span>
+                  {scraping
+                    ? "Scraping grading page…"
+                    : "Scrape grading page"}
+                </span>
               </button>
+            </div>
+            {/* Mounted even while empty so the live region exists before a
+                scrape puts its report into it. */}
+            <div
+              className={`scrape-result${scrapeSummary ? "" : " scrape-result--idle"}`}
+            >
+              <p
+                aria-atomic="true"
+                aria-live="polite"
+                className="scrape-result-message"
+              >
+                {scrapeSummary
+                  ? formatScrapeSummary({
+                      ...scrapeSummary,
+                      count: scrapedCount,
+                      source: scrapeProgress.source,
+                    })
+                  : ""}
+              </p>
+              {scrapeSummary && scrapeUndo ? (
+                <button
+                  className="scrape-result-undo"
+                  onClick={handleUndoScrape}
+                  title="Restore the fields this scrape changed"
+                  type="button"
+                >
+                  Undo
+                </button>
+              ) : null}
             </div>
           </div>
 
           <div className="field-block full-span">
-            <label htmlFor={fieldInputId("notes")}>Notes</label>
+            <FieldLabel
+              htmlFor={notesInputId}
+              label="Notes"
+              scrapedFrom={notesScrapedFrom}
+              sourceId={notesSourceId}
+            />
             <textarea
+              aria-describedby={
+                notesScrapedFrom ? notesSourceId : undefined
+              }
               autoComplete="off"
               className="note-textarea"
               data-note-editor-context-field="true"
-              id={fieldInputId("notes")}
+              id={notesInputId}
               name="notes"
               onChange={handleFieldChange}
               onContextMenu={handleNoteEditorTextContextMenu}
