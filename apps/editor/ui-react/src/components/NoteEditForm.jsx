@@ -1834,6 +1834,9 @@ function NoteEditForm({
               />
               <button
                 aria-busy={scraping || undefined}
+                aria-label={
+                  scraping ? "Scraping grading page…" : "Scrape grading page"
+                }
                 className="button url-scrape-button"
                 disabled={!canScrapeUrl}
                 onClick={handleAutoPopulate}
@@ -1845,11 +1848,7 @@ function NoteEditForm({
                 ) : (
                   <span aria-hidden="true">✦</span>
                 )}
-                <span>
-                  {scraping
-                    ? "Scraping grading page…"
-                    : "Scrape grading page"}
-                </span>
+                <span>{scraping ? "Scraping…" : "Scrape page"}</span>
               </button>
             </div>
             {/* Mounted even while empty so the live region exists before a

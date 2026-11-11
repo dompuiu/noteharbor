@@ -153,7 +153,9 @@ describe("Note editor Autopopulate browser handling", () => {
     );
     const button = await renderForm();
 
-    expect(button).toHaveTextContent("Scrape grading page");
+    expect(button).toHaveTextContent("Scrape page");
+    // The full verb and object stay in the accessible name.
+    expect(button).toHaveAccessibleName("Scrape grading page");
     // The report's live region exists before a scrape writes into it.
     expect(scrapeReport()).toBeEmptyDOMElement();
 

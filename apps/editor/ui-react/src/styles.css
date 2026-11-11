@@ -7410,10 +7410,14 @@ button.tag {
   min-width: 0;
 }
 
-/* The scrape action says its verb and object; the glyph is decoration. */
+/* The scrape action says its verb and object; the glyph is decoration. It
+   stands as tall as the URL field and stays compact beside it. */
 .url-scrape-button {
   flex: none;
-  gap: 8px;
+  gap: 6px;
+  min-height: 44px;
+  padding: 10px 12px;
+  font-size: 0.95rem;
   white-space: nowrap;
 }
 
