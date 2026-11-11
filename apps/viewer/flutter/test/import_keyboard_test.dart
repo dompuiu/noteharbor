@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_harbor_viewer/data/dataset_controller.dart';
+import 'package:note_harbor_viewer/data/last_collection_store.dart';
 import 'package:note_harbor_viewer/data/viewer_repository.dart';
 import 'package:note_harbor_viewer/features/import/import_dataset_screen.dart';
 import 'package:note_harbor_viewer/features/table/notes_table_screen.dart';
@@ -10,7 +11,10 @@ import 'package:note_harbor_viewer/models/viewer_dataset.dart';
 
 void main() {
   Future<DatasetController> loadedController() async {
-    final controller = DatasetController(repository: _ImportKeyboardRepository());
+    final controller = DatasetController(
+      repository: _ImportKeyboardRepository(),
+      selectionStore: _MemoryLastCollectionStore(),
+    );
     await controller.load();
     return controller;
   }
@@ -99,9 +103,13 @@ class _ImportKeyboardRepository extends ViewerRepository {
       'generatedAt': '2026-03-28T12:00:00Z',
       'noteCount': 1,
       'source': 'imported',
+      'collections': [
+        {'id': 1, 'name': 'Alpha', 'noteCount': 1},
+      ],
       'notes': [
         {
           'id': 1,
+          'collectionId': 1,
           'displayOrder': 1,
           'denomination': '5 Lei',
           'issueDate': '1966',
@@ -130,5 +138,22 @@ class _EmptyViewerRepository extends ViewerRepository {
   @override
   Future<ViewerDataset> loadDataset() {
     throw StateError('No imported dataset is installed.');
+  }
+}
+
+class _MemoryLastCollectionStore implements LastCollectionStore {
+  LastCollectionSelection? saved;
+
+  @override
+  Future<LastCollectionSelection?> load() async => saved;
+
+  @override
+  Future<void> save(LastCollectionSelection selection) async {
+    saved = selection;
+  }
+
+  @override
+  Future<void> clear() async {
+    saved = null;
   }
 }

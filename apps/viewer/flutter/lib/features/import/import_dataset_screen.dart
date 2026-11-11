@@ -332,227 +332,205 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                       final collections = dataset?.collections ?? const [];
                       final activeCollection = widget.controller.activeCollection;
                       final isBusy = widget.controller.isMutating || _isPicking || _isImporting;
-                      final isInitialEmptyState = dataset == null;
+                      final hasCollections = collections.isNotEmpty;
+                      final isFirstRun = dataset == null;
 
                       return ListView(
                         controller: _scrollController,
                         padding: const EdgeInsets.all(20),
                         children: [
-                          if (isInitialEmptyState) ...[
-                            _Panel(
-                              child: Row(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  const Icon(
-                                    Icons.info_outline_rounded,
-                                    color: ViewerPalette.info,
-                                    size: 28,
-                                  ),
-                                  const SizedBox(width: 14),
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
+                          if (isFirstRun)
+                            _FirstRunImportCard(
+                              fileName: _selectedArchiveName,
+                              isBusy: isBusy,
+                              busyLabel: _isPicking
+                                  ? 'Choosing...'
+                                  : widget.controller.isMutating
+                                      ? 'Importing...'
+                                      : null,
+                              onChoose: _pickArchive,
+                              onImport: _importArchive,
+                            )
+                          else ...[
+                            if (hasCollections) ...[
+                              _Panel(
+                                icon: Icons.inventory_2_outlined,
+                                title: 'Manage viewer data',
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Import a Note Harbor archive exported from the editor. Imported data stays on this device. Collections present in the archive replace matching local collections by name; other local collections stay untouched.',
+                                    ),
+                                    const SizedBox(height: 18),
+                                    Wrap(
+                                      spacing: 12,
+                                      runSpacing: 12,
                                       children: [
-                                        Text(
-                                          'IMPORT DATA TO GET STARTED',
-                                          style: Theme.of(context)
-                                              .textTheme
-                                              .titleLarge
-                                              ?.copyWith(
-                                                fontWeight: FontWeight.w800,
-                                                letterSpacing: -0.2,
-                                              ),
+                                        _InfoPill(
+                                          label: 'Dataset built',
+                                          value: generatedAt == null || generatedAt.isEmpty
+                                              ? 'Not available yet'
+                                              : formatFriendlyDatasetBuiltAt(generatedAt),
                                         ),
-                                        const SizedBox(height: 8),
-                                        const Text(
-                                          'This viewer no longer ships with a bundled dataset. Choose a Note Harbor archive exported from the editor to install your notes, pictures, and SQLite database on this device.',
+                                        _InfoPill(
+                                          label: 'Collections',
+                                          value: '${collections.length}',
+                                        ),
+                                        _InfoPill(
+                                          label: 'Notes',
+                                          value: '${activeCollection?.noteCount ?? 0}',
                                         ),
                                       ],
                                     ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                            const SizedBox(height: 18),
-                          ],
-                          _Panel(
-                            icon: Icons.inventory_2_outlined,
-                            title: 'Manage viewer data',
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Import a Note Harbor archive exported from the editor. Imported data stays on this device. Collections present in the archive replace matching local collections by name; other local collections stay untouched.',
-                                ),
-                                const SizedBox(height: 18),
-                                Wrap(
-                                  spacing: 12,
-                                  runSpacing: 12,
-                                  children: [
-                                    _InfoPill(
-                                      label: 'Dataset built',
-                                      value: generatedAt == null || generatedAt.isEmpty
-                                          ? 'Not available yet'
-                                          : formatFriendlyDatasetBuiltAt(generatedAt),
-                                    ),
-                                    _InfoPill(
-                                      label: 'Collections',
-                                      value: '${collections.length}',
-                                    ),
-                                    _InfoPill(
-                                      label: 'Notes',
-                                      value: '${activeCollection?.noteCount ?? 0}',
-                                    ),
                                   ],
                                 ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 18),
-                          if (collections.isNotEmpty) ...[
+                              ),
+                              const SizedBox(height: 18),
+                              _Panel(
+                                icon: Icons.collections_bookmark_outlined,
+                                title: 'Active collection',
+                                child: Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Select which collection is shown in the table and slideshow screens.',
+                                    ),
+                                    const SizedBox(height: 14),
+                                    DropdownButtonFormField<int>(
+                                      key: ValueKey('collection-${activeCollection?.id}'),
+                                      initialValue: activeCollection?.id,
+                                      decoration: const InputDecoration(
+                                        border: OutlineInputBorder(),
+                                      ),
+                                      items: collections
+                                          .map(
+                                            (collection) => DropdownMenuItem<int>(
+                                              value: collection.id,
+                                              child: Text(
+                                                '${collection.name} (${collection.noteCount})',
+                                              ),
+                                            ),
+                                          )
+                                          .toList(growable: false),
+                                      onChanged: isBusy
+                                          ? null
+                                          : (collectionId) {
+                                              if (collectionId == null) {
+                                                return;
+                                              }
+                                              widget.controller.selectCollection(collectionId);
+                                              setState(() {
+                                                _message = null;
+                                                _collectionMessage = null;
+                                                _collectionMessageIsError = false;
+                                              });
+                                            },
+                                    ),
+                                    const SizedBox(height: 14),
+                                    FilledButton.tonal(
+                                      onPressed: isBusy || activeCollection == null
+                                          ? null
+                                          : _deleteActiveCollection,
+                                      style: ViewerButtonStyles.dangerTonal(),
+                                      child: const Text('Delete collection'),
+                                    ),
+                                    if (_collectionMessage != null) ...[
+                                      const SizedBox(height: 12),
+                                      Text(
+                                        _collectionMessage!,
+                                        style: TextStyle(
+                                          color: _collectionMessageIsError
+                                              ? ViewerPalette.danger
+                                              : ViewerPalette.textMuted,
+                                          fontWeight: FontWeight.w600,
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
+                              const SizedBox(height: 18),
+                            ],
                             _Panel(
-                              icon: Icons.collections_bookmark_outlined,
-                              title: 'Active collection',
+                              icon: Icons.archive_outlined,
+                              title: 'Archive import',
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
                                   const Text(
-                                    'Select which collection is shown in the table and slideshow screens.',
+                                    'Choose a `.zip` archive with `banknotes.db` and `images/`, then import it into the native viewer app.',
                                   ),
-                                  const SizedBox(height: 14),
-                                  DropdownButtonFormField<int>(
-                                    key: ValueKey('collection-${activeCollection?.id}'),
-                                    initialValue: activeCollection?.id,
-                                    decoration: const InputDecoration(
-                                      border: OutlineInputBorder(),
-                                    ),
-                                    items: collections
-                                        .map(
-                                          (collection) => DropdownMenuItem<int>(
-                                            value: collection.id,
-                                            child: Text(
-                                              '${collection.name} (${collection.noteCount})',
-                                            ),
-                                          ),
-                                        )
-                                        .toList(growable: false),
-                                    onChanged: isBusy
-                                        ? null
-                                        : (collectionId) {
-                                            if (collectionId == null) {
-                                              return;
-                                            }
-                                            widget.controller.selectCollection(collectionId);
-                                            setState(() {
-                                              _message = null;
-                                              _collectionMessage = null;
-                                              _collectionMessageIsError = false;
-                                            });
-                                          },
+                                  const SizedBox(height: 18),
+                                  _ArchiveDropZone(
+                                    fileName: _selectedArchiveName,
+                                    onTap: isBusy ? null : _pickArchive,
                                   ),
-                                  const SizedBox(height: 14),
-                                  FilledButton.tonal(
-                                    onPressed: isBusy || activeCollection == null
-                                        ? null
-                                        : _deleteActiveCollection,
-                                    style: ViewerButtonStyles.dangerTonal(),
-                                    child: const Text('Delete collection'),
-                                  ),
-                                  if (_collectionMessage != null) ...[
-                                    const SizedBox(height: 12),
-                                    Text(
-                                      _collectionMessage!,
-                                      style: TextStyle(
-                                        color: _collectionMessageIsError
-                                            ? ViewerPalette.danger
-                                            : ViewerPalette.textMuted,
-                                        fontWeight: FontWeight.w600,
+                                  const SizedBox(height: 16),
+                                  Wrap(
+                                    spacing: 12,
+                                    runSpacing: 12,
+                                    children: [
+                                      OutlinedButton.icon(
+                                        onPressed: isBusy ? null : _pickArchive,
+                                        icon: const Icon(Icons.folder_open_rounded),
+                                        label: Text(_isPicking
+                                            ? 'Choosing...'
+                                            : 'Choose archive'),
                                       ),
-                                    ),
-                                  ],
+                                      FilledButton.icon(
+                                        onPressed: isBusy || _selectedArchivePath == null
+                                            ? null
+                                            : _importArchive,
+                                        icon: const Icon(Icons.file_upload_outlined),
+                                        label: Text(widget.controller.isMutating
+                                            ? 'Importing...'
+                                            : 'Import archive'),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 12),
+                                  const Text(
+                                    'Import is destructive for collections present in the archive: matching local collections are replaced from archive data.',
+                                    style: TextStyle(
+                                        color: ViewerPalette.danger,
+                                        fontWeight: FontWeight.w600),
+                                  ),
                                 ],
                               ),
                             ),
-                            const SizedBox(height: 18),
                           ],
-                          _Panel(
-                            icon: Icons.archive_outlined,
-                            title: 'Archive import',
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Choose a `.zip` archive with `banknotes.db` and `images/`, then import it into the native viewer app.',
-                                ),
-                                const SizedBox(height: 18),
-                                _ArchiveDropZone(
-                                  fileName: _selectedArchiveName,
-                                  onTap: isBusy ? null : _pickArchive,
-                                ),
-                                const SizedBox(height: 16),
-                                Wrap(
-                                  spacing: 12,
-                                  runSpacing: 12,
-                                  children: [
-                                    OutlinedButton.icon(
-                                      onPressed: isBusy ? null : _pickArchive,
-                                      icon: const Icon(Icons.folder_open_rounded),
-                                      label: Text(_isPicking
-                                          ? 'Choosing...'
-                                          : 'Choose archive'),
-                                    ),
-                                    FilledButton.icon(
-                                      onPressed: isBusy || _selectedArchivePath == null
-                                          ? null
-                                          : _importArchive,
-                                      icon: const Icon(Icons.file_upload_outlined),
-                                      label: Text(widget.controller.isMutating
-                                          ? 'Importing...'
-                                          : 'Import archive'),
-                                    ),
-                                  ],
-                                ),
-                                const SizedBox(height: 12),
-                                const Text(
-                                  'Import is destructive for collections present in the archive: matching local collections are replaced from archive data.',
-                                  style: TextStyle(
-                                      color: ViewerPalette.danger,
-                                      fontWeight: FontWeight.w600),
-                                ),
-                              ],
-                            ),
-                          ),
-                          const SizedBox(height: 18),
                           if (_message != null) ...[
+                            const SizedBox(height: 18),
                             _StatusBanner(
                               key: _statusKey,
                               message: _message!,
                               isError: _messageIsError,
                             ),
-                            const SizedBox(height: 18),
                           ],
-                          _Panel(
-                            icon: Icons.delete_forever_outlined,
-                            iconColor: ViewerPalette.danger,
-                            title: 'Delete imported data',
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                const Text(
-                                  'Delete the imported archive data from this device and return the app to its import-first state.',
-                                ),
-                                const SizedBox(height: 16),
-                                FilledButton.tonalIcon(
-                                  onPressed: isBusy || dataset == null
-                                      ? null
-                                      : _deleteImportedData,
-                                  style: ViewerButtonStyles.dangerTonal(),
-                                  icon: const Icon(Icons.delete_outline_rounded),
-                                  label: const Text('Delete imported data'),
-                                ),
-                              ],
+                          if (!isFirstRun) ...[
+                            const SizedBox(height: 18),
+                            _Panel(
+                              icon: Icons.delete_forever_outlined,
+                              iconColor: ViewerPalette.danger,
+                              title: 'Delete imported data',
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  const Text(
+                                    'Delete the imported archive data from this device and return the app to its import-first state.',
+                                  ),
+                                  const SizedBox(height: 16),
+                                  FilledButton.tonalIcon(
+                                    onPressed: isBusy ? null : _deleteImportedData,
+                                    style: ViewerButtonStyles.dangerTonal(),
+                                    icon: const Icon(Icons.delete_outline_rounded),
+                                    label: const Text('Delete imported data'),
+                                  ),
+                                ],
+                              ),
                             ),
-                          ),
+                          ],
                           const SizedBox(height: 24),
                           const Center(
                             child: Text(
@@ -579,6 +557,76 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
               _ImportProgressOverlay(archiveName: _selectedArchiveName),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The whole first-run page: one card, one action. Before an archive is
+/// chosen the primary pill opens the picker; afterwards it imports.
+class _FirstRunImportCard extends StatelessWidget {
+  const _FirstRunImportCard({
+    required this.fileName,
+    required this.isBusy,
+    required this.busyLabel,
+    required this.onChoose,
+    required this.onImport,
+  });
+
+  final String? fileName;
+  final bool isBusy;
+  final String? busyLabel;
+  final VoidCallback onChoose;
+  final VoidCallback onImport;
+
+  @override
+  Widget build(BuildContext context) {
+    final hasSelection = fileName != null;
+    final label =
+        busyLabel ?? (hasSelection ? 'Import archive' : 'Choose archive');
+
+    return _Panel(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'GET STARTED',
+            style: TextStyle(
+              fontFamily: 'Inter',
+              fontSize: 11,
+              fontWeight: FontWeight.w800,
+              letterSpacing: 1.1,
+              color: ViewerPalette.accentStrong,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'IMPORT YOUR ARCHIVE',
+            style: Theme.of(context)
+                .textTheme
+                .headlineSmall
+                ?.copyWith(fontSize: 24),
+          ),
+          const SizedBox(height: 10),
+          const Text(
+            'Choose a Note Harbor archive exported from the editor to install its notes, images, and database on this device.',
+          ),
+          const SizedBox(height: 20),
+          _ArchiveDropZone(
+            fileName: fileName,
+            onTap: isBusy ? null : onChoose,
+          ),
+          const SizedBox(height: 16),
+          FilledButton.icon(
+            onPressed: isBusy ? null : (hasSelection ? onImport : onChoose),
+            icon: Icon(
+              hasSelection
+                  ? Icons.file_upload_outlined
+                  : Icons.folder_open_rounded,
+            ),
+            label: Text(label),
+          ),
+        ],
       ),
     );
   }

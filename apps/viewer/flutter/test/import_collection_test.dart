@@ -33,6 +33,7 @@ void main() {
     await pumpImportScreen(tester, await loadedController());
 
     expect(find.text('ACTIVE COLLECTION'), findsOneWidget);
+    expect(find.text('MANAGE VIEWER DATA'), findsOneWidget);
     expect(find.text('Delete collection'), findsOneWidget);
     expect(find.text('Set as default collection'), findsNothing);
     expect(find.text('Active source'), findsNothing);

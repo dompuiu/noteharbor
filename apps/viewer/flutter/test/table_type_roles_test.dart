@@ -266,7 +266,7 @@ void main() {
     await tester.pumpWidget(ViewerApp(controller: controller));
     await tester.pumpAndSettle();
 
-    expect(find.text('IMPORT DATA TO GET STARTED'), findsOneWidget);
+    expect(find.text('IMPORT YOUR ARCHIVE'), findsOneWidget);
     expect(find.byKey(const ValueKey('tableErrorCard')), findsNothing);
   });
 

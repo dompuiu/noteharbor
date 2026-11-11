@@ -24,9 +24,13 @@ void main() {
     expect(find.byIcon(Icons.file_upload_outlined), findsOneWidget);
   });
 
-  testWidgets('import screen shows first-run empty state', (
+  testWidgets('import screen shows one first-run card above the fold', (
     WidgetTester tester,
   ) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(375, 667);
+    addTearDown(tester.view.reset);
+
     final controller =
         DatasetController(repository: _MissingViewerRepository());
     await controller.load();
@@ -36,13 +40,52 @@ void main() {
     );
     await tester.pumpAndSettle();
 
-    expect(find.text('IMPORT DATA TO GET STARTED'), findsOneWidget);
-    expect(find.text('No dataset imported'), findsNothing);
-    // The Active source pill was removed; Dataset built covers the header.
-    // The archive picker sits below the fold on first run; the lazy ListView
-    // only builds it once scrolled into range.
-    await tester.scrollUntilVisible(find.text('Choose archive'), 200.0);
-    expect(find.text('Choose archive'), findsOneWidget);
+    expect(find.text('GET STARTED'), findsOneWidget);
+    expect(find.text('IMPORT YOUR ARCHIVE'), findsOneWidget);
+    expect(find.text('Tap to choose a .zip archive'), findsOneWidget);
+    expect(find.byType(OutlinedButton), findsNothing);
+
+    // Nothing from the populated page appears before a collection exists.
+    expect(find.text('MANAGE VIEWER DATA'), findsNothing);
+    expect(find.text('ACTIVE COLLECTION'), findsNothing);
+    expect(find.text('ARCHIVE IMPORT'), findsNothing);
+    expect(find.text('DELETE IMPORTED DATA'), findsNothing);
+
+    // The one action fits above a 375x667 fold.
+    final action = find.widgetWithText(FilledButton, 'Choose archive');
+    expect(action, findsOneWidget);
+    expect(tester.getBottomRight(action).dy, lessThan(667));
+
+    // The version line is the ListView's last child.
+    final listView = tester.widget<ListView>(find.byType(ListView));
+    final delegate = listView.childrenDelegate as SliverChildListDelegate;
+    final lastChild = delegate.children.last as Center;
+    expect((lastChild.child! as Text).data, startsWith('Note Harbor Viewer v'));
+  });
+
+  testWidgets('an imported archive without collections keeps delete available', (
+    WidgetTester tester,
+  ) async {
+    final controller = DatasetController(repository: _FakeViewerRepository());
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: ImportDatasetScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    // Not first run: the archive exists on disk even though it has no
+    // collection, so it must stay recoverable without panelling a manager.
+    expect(find.text('GET STARTED'), findsNothing);
+    expect(find.text('ARCHIVE IMPORT'), findsOneWidget);
+    expect(find.text('MANAGE VIEWER DATA'), findsNothing);
+    expect(find.text('ACTIVE COLLECTION'), findsNothing);
+
+    await tester.scrollUntilVisible(
+      find.text('Delete imported data'),
+      200.0,
+    );
+    expect(find.text('Delete imported data'), findsOneWidget);
   });
 
   testWidgets('catalog field filter excludes longer numeric prefixes', (

@@ -4,6 +4,10 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ## [Unreleased]
 
+### Changed
+
+- Import screen: first run is one card with one action — an eyebrow, a title, one sentence, the archive drop zone, and a single primary pill that chooses the archive then imports it. The management, active-collection, and delete panels stay hidden on first run, so the status banner lands above the fold on a phone; an imported archive with no collections still offers Delete imported data.
+
 ## [1.14.1] - 2026-11-10
 
 ### Changed
