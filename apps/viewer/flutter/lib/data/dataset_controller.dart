@@ -1,5 +1,6 @@
 import 'package:flutter/foundation.dart';
 
+import '../models/archive_preview.dart';
 import '../models/note_record.dart';
 import '../models/viewer_collection.dart';
 import '../models/viewer_dataset.dart';
@@ -88,6 +89,13 @@ class DatasetController extends ChangeNotifier {
       _isLoading = false;
       notifyListeners();
     }
+  }
+
+  /// Reads what [archivePath] holds without installing it, for the import
+  /// confirmation's collection list. A failed read is reported by the dialog,
+  /// not here, so it must not touch the controller's error state.
+  Future<ArchivePreview?> peekArchive(String archivePath) {
+    return _repository.peekArchive(archivePath);
   }
 
   Future<void> importArchive(String archivePath) async {

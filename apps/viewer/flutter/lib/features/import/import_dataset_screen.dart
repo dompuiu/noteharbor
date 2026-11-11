@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:path/path.dart' as p;
 
 import '../../app/app_info.dart';
 import '../../app/viewer_palette.dart';
@@ -8,6 +9,7 @@ import '../../data/dataset_controller.dart';
 import '../../utils/dataset_date_format.dart';
 import '../../widgets/viewer_button_styles.dart';
 import 'archive_drop_zone.dart';
+import 'import_archive_dialog.dart';
 
 class ImportDatasetScreen extends StatefulWidget {
   const ImportDatasetScreen({required this.controller, super.key});
@@ -141,21 +143,11 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
 
     final confirmed = await showDialog<bool>(
           context: context,
-          builder: (context) => AlertDialog(
-            title: const Text('Import this archive?'),
-            content: const Text(
-              'Importing replaces any collection on this device with the same name as a collection in the archive. Collections not in the archive stay as they are.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.of(context).pop(false),
-                child: const Text('Cancel'),
-              ),
-              FilledButton(
-                onPressed: () => Navigator.of(context).pop(true),
-                child: const Text('Import'),
-              ),
-            ],
+          builder: (context) => ImportArchiveDialog(
+            fileName: _selectedArchiveName ?? p.basename(archivePath),
+            peekArchive: () => widget.controller.peekArchive(archivePath),
+            installedCollections:
+                widget.controller.dataset?.collections ?? const [],
           ),
         ) ??
         false;
