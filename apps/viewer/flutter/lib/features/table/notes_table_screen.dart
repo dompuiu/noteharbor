@@ -86,6 +86,10 @@ const EdgeInsets _kTagChipPadding = EdgeInsets.symmetric(
   vertical: 4,
 );
 
+/// Shortest side of a tag chip's tap and focus target. The visible pill stays
+/// at its compact height inside a 44 pt touch area.
+const double _kTagChipMinTargetSize = 44;
+
 /// Horizontal room the Tags cell needs beyond the measured chips: the cell's
 /// own 12px gutters on both sides plus breathing room at the column edge.
 const double _kTagsColumnSafetyPadding = 48;
@@ -608,13 +612,16 @@ double _tagChipWidth(
   String tagName, {
   TextScaler textScaler = TextScaler.noScaling,
 }) {
-  return _measureTextWidth(
+  final chipWidth =
+      _measureTextWidth(
         tagName,
         _kTagChipTextStyle,
         textScaler: textScaler,
       ) +
       (_kTagChipHorizontalPadding * 2) +
       2;
+  // The hit target is at least 44 pt wide, so the column must reserve that.
+  return math.max(chipWidth, _kTagChipMinTargetSize);
 }
 
 List<String> _tagNames(List<Tag> tags) {
@@ -660,6 +667,34 @@ List<String> _tagNames(List<Tag> tags) {
   }
   return (visible: 0, hidden: tagNames.length);
 }
+
+/// The grid row's readable summary, in the order a collector scans a note:
+/// denomination, date, catalog, company, grade, serial, then tags. Empty
+/// columns are left out so a screen reader does not hear a run of dashes.
+String _noteSummaryLabel(NoteRecord note) {
+  final parts = <String>[
+    if (note.denomination.trim().isNotEmpty) note.denomination.trim(),
+    if (note.issueDate.trim().isNotEmpty) 'dated ${note.issueDate.trim()}',
+    if (note.catalogNumber.trim().isNotEmpty)
+      'catalog ${note.catalogNumber.trim()}',
+    if (note.gradingCompany.trim().isNotEmpty) note.gradingCompany.trim(),
+    if (note.grade.trim().isNotEmpty) 'grade ${note.grade.trim()}',
+    if (note.serial.trim().isNotEmpty) 'serial ${note.serial.trim()}',
+  ];
+  final tagNames = _tagNames(note.tags);
+  if (tagNames.isNotEmpty) {
+    parts.add('tags ${tagNames.join(', ')}');
+  }
+  return parts.isEmpty ? 'Empty note' : parts.join(', ');
+}
+
+/// The copy targets a row offers: the identifiers a collector most often
+/// needs elsewhere.
+String? _copyableCatalog(NoteRecord note) =>
+    note.catalogNumber.trim().isEmpty ? null : note.catalogNumber.trim();
+
+String? _copyableSerial(NoteRecord note) =>
+    note.serial.trim().isEmpty ? null : note.serial.trim();
 
 double _calculateTagsColumnWidth(List<NoteRecord> notes) {
   final headerWidth =
@@ -798,7 +833,21 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   /// Measures the area the table body occupies, so keyboard handlers can tell
   /// which layout is on screen without recording it during build.
   final GlobalKey _tableAreaKey = GlobalKey();
+  final GlobalKey _columnsViewportKey = GlobalKey();
   final Map<int, GlobalKey> _cardKeys = <int, GlobalKey>{};
+
+  /// One focus node per tag chip, keyed by note. The table owns the explicit
+  /// Tab chain, so it has to be able to hand focus to a row's chips and back.
+  final Map<int, List<FocusNode>> _tagFocusNodes = <int, List<FocusNode>>{};
+
+  /// Nodes retired by a dataset reload. They are disposed after the rebuilding
+  /// frame, when their Focus widgets have detached them.
+  final List<FocusNode> _retiredTagFocusNodes = <FocusNode>[];
+  bool _retireTagNodesScheduled = false;
+
+  /// The dataset whose notes the tag focus nodes were built for. A reload can
+  /// reuse note ids with different tag lists, so the cache cannot outlive it.
+  Object? _lastDataset;
 
   GlobalKey _cardKeyFor(int noteId) => _cardKeys.putIfAbsent(
     noteId,
@@ -1054,6 +1103,155 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     }
   }
 
+  /// The chip focus nodes for [note], created once and reused across builds.
+  /// The viewer's data is read-only between archive loads, so a note's tag
+  /// list does not change under a node until [_retireTagFocusNodes] runs.
+  List<FocusNode> _tagFocusNodesFor(NoteRecord note) {
+    return _tagFocusNodes.putIfAbsent(note.id, () {
+      return [
+        for (final name in _tagNames(note.tags))
+          FocusNode(debugLabel: 'tagFilter-${note.id}-$name'),
+      ];
+    });
+  }
+
+  /// Drops the chip nodes when the notes may have changed. The old nodes stay
+  /// alive until the rebuilding frame has detached their Focus widgets.
+  void _retireTagFocusNodes() {
+    for (final nodes in _tagFocusNodes.values) {
+      _retiredTagFocusNodes.addAll(nodes);
+    }
+    _tagFocusNodes.clear();
+    if (_retireTagNodesScheduled) {
+      return;
+    }
+    _retireTagNodesScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _retireTagNodesScheduled = false;
+      for (final node in _retiredTagFocusNodes) {
+        node.dispose();
+      }
+      _retiredTagFocusNodes.clear();
+    });
+  }
+
+  /// Moves keyboard focus onto chip [chipIndex] of [note], keeping the row's
+  /// selection ring lit so the chip reads as part of the row.
+  void _focusTagChip(NoteRecord note, int chipIndex) {
+    final nodes = _tagFocusNodesFor(note);
+    if (chipIndex < 0 || chipIndex >= nodes.length) {
+      return;
+    }
+    final node = nodes[chipIndex];
+    // A tag hidden behind the overflow chip has no mounted Focus, so it
+    // cannot take keyboard focus.
+    if (node.context == null) {
+      return;
+    }
+    final rowIndex = _currentVisibleNotes().indexWhere(
+      (candidate) => candidate.id == note.id,
+    );
+    if (rowIndex >= 0) {
+      _focusSelection(rowIndex);
+      _ensureSelectedVisible();
+    }
+    node.requestFocus();
+    // The Tags column can sit off the right edge on a narrow window; bring the
+    // focused chip into view the same way headers are revealed.
+    _revealChip(node);
+  }
+
+  /// Pans the columns the minimal amount that shows [node]'s chip. The chip
+  /// sits inside the rows' vertical list, so the generic viewport walk would
+  /// measure against the wrong scroller; the horizontal viewport's key gives
+  /// the on-screen position directly.
+  void _revealChip(FocusNode node) {
+    if (!_columnsOverflow) {
+      return;
+    }
+    final viewport =
+        _columnsViewportKey.currentContext?.findRenderObject() as RenderBox?;
+    final box = node.context?.findRenderObject();
+    if (viewport == null || box is! RenderBox) {
+      return;
+    }
+    final left = box.localToGlobal(Offset.zero, ancestor: viewport).dx;
+    final right = left + box.size.width;
+    final position = _horizontalScrollController.position;
+    if (left < 0) {
+      _animateColumnsTo(position.pixels + left);
+    } else if (right > viewport.size.width) {
+      _animateColumnsTo(position.pixels + right - viewport.size.width);
+    }
+  }
+
+  /// Tab from the selected row enters its first visible tag chip. Rows
+  /// without tags, or whose tags all sit behind the overflow chip, keep
+  /// walking straight to the next row.
+  bool _focusTagsOfSelectedRow() {
+    final index = _selectedIndex;
+    final notes = _currentVisibleNotes();
+    if (index == null || index < 0 || index >= notes.length) {
+      return false;
+    }
+    final note = notes[index];
+    final nodes = _tagFocusNodesFor(note);
+    for (var chipIndex = 0; chipIndex < nodes.length; chipIndex++) {
+      if (nodes[chipIndex].context != null) {
+        _focusTagChip(note, chipIndex);
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /// Tab from a chip: the next visible chip in the same row, or the next row.
+  void _focusAfterTag(NoteRecord note, int chipIndex, {required bool forward}) {
+    final nodes = _tagFocusNodesFor(note);
+    final step = forward ? 1 : -1;
+    for (var index = chipIndex + step; index >= 0 && index < nodes.length; index += step) {
+      if (nodes[index].context != null) {
+        _focusTagChip(note, index);
+        return;
+      }
+    }
+
+    final notes = _currentVisibleNotes();
+    final rowIndex = notes.indexWhere((candidate) => candidate.id == note.id);
+    if (rowIndex < 0) {
+      _tableFocusNode.requestFocus();
+      return;
+    }
+    if (forward) {
+      if (rowIndex + 1 < notes.length) {
+        _focusRowFromTab(rowIndex + 1);
+      }
+      return;
+    }
+
+    // Reverse out of the first chip returns to its row, ring still lit.
+    _focusSelection(rowIndex);
+  }
+
+  /// Shift+Tab from a row steps into the previous row's last visible chip,
+  /// matching the forward chain row -> chips -> next row.
+  bool _focusTrailingTagOfPreviousRow() {
+    final index = _selectedIndex;
+    final notes = _currentVisibleNotes();
+    if (index == null || index <= 0 || index >= notes.length) {
+      return false;
+    }
+    final previous = notes[index - 1];
+    final nodes = _tagFocusNodesFor(previous);
+    for (var chipIndex = nodes.length - 1; chipIndex >= 0; chipIndex--) {
+      if (nodes[chipIndex].context != null) {
+        _focusTagChip(previous, chipIndex);
+        return true;
+      }
+    }
+    return false;
+  }
+
   /// Explicit Tab order within a focused header button. The table-level
   /// handler owns row Tab; this owns header-to-header (and header-to-edge)
   /// moves so propagation stops here once handled.
@@ -1163,6 +1361,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   void initState() {
     super.initState();
     _lastActiveCollectionId = widget.controller.activeCollectionId;
+    _lastDataset = widget.controller.dataset;
     widget.controller.addListener(_handleControllerChange);
     _searchFocusNode.addListener(_handleFilterFocusChange);
     _scopeFocusNode.addListener(_handleFilterFocusChange);
@@ -1181,6 +1380,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
 
     oldWidget.controller.removeListener(_handleControllerChange);
     _lastActiveCollectionId = widget.controller.activeCollectionId;
+    _lastDataset = widget.controller.dataset;
+    _retireTagFocusNodes();
+    _cardKeys.clear();
     widget.controller.addListener(_handleControllerChange);
   }
 
@@ -1203,6 +1405,16 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     for (final node in _headerFocusNodes.values) {
       node.dispose();
     }
+    for (final nodes in _tagFocusNodes.values) {
+      for (final node in nodes) {
+        node.dispose();
+      }
+    }
+    _tagFocusNodes.clear();
+    for (final node in _retiredTagFocusNodes) {
+      node.dispose();
+    }
+    _retiredTagFocusNodes.clear();
     super.dispose();
   }
 
@@ -1238,6 +1450,13 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   }
 
   void _handleControllerChange() {
+    final dataset = widget.controller.dataset;
+    if (!identical(dataset, _lastDataset)) {
+      _lastDataset = dataset;
+      _retireTagFocusNodes();
+      _cardKeys.clear();
+    }
+
     final currentCollectionId = widget.controller.activeCollectionId;
     if (_lastActiveCollectionId == currentCollectionId) {
       return;
@@ -1358,6 +1577,88 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       _selectedIndex = null;
     });
     _resetVerticalScroll();
+  }
+
+  /// Tells a screen reader about an action it could not see, since the table
+  /// has no toast of its own.
+  void _announce(String message) {
+    SemanticsService.sendAnnouncement(
+      View.of(context),
+      message,
+      Directionality.of(context),
+    );
+  }
+
+  /// Copies [value] and says what was copied.
+  Future<void> _copyValue(String value, String what) async {
+    await Clipboard.setData(ClipboardData(text: value));
+    if (!mounted) {
+      return;
+    }
+    _announce('Copied $what $value');
+  }
+
+  /// The row's copy action, available by right click and long press. Text
+  /// selection would fight the drag-to-pan table, so the identifiers are
+  /// copied from a small menu instead.
+  Future<void> _showNoteMenu(NoteRecord note, Offset globalPosition) async {
+    final catalog = _copyableCatalog(note);
+    final serial = _copyableSerial(note);
+    final targets = <({String label, String value})>[
+      if (catalog != null) (label: 'catalog number', value: catalog),
+      if (serial != null) (label: 'serial', value: serial),
+    ];
+    if (targets.isEmpty) {
+      return;
+    }
+
+    final overlay = Overlay.of(context).context.findRenderObject();
+    if (overlay is! RenderBox) {
+      return;
+    }
+
+    final choice = await showMenu<({String label, String value})>(
+      context: context,
+      position: RelativeRect.fromRect(
+        Rect.fromPoints(globalPosition, globalPosition),
+        Offset.zero & overlay.size,
+      ),
+      items: [
+        for (final target in targets)
+          PopupMenuItem(
+            value: target,
+            child: Text('Copy ${target.label}'),
+          ),
+      ],
+    );
+    if (!mounted || choice == null) {
+      return;
+    }
+    await _copyValue(choice.value, choice.label);
+  }
+
+  /// Ctrl/Cmd+C copies the selected row's serial (or its catalog number when
+  /// it has no serial), the identifiers a collector most often needs. Returns
+  /// whether a row was selected to copy from.
+  bool _copySelectedRow() {
+    final notes = _currentVisibleNotes();
+    final index = _selectedIndex;
+    if (index == null || index < 0 || index >= notes.length) {
+      return false;
+    }
+    final note = notes[index];
+    final serial = _copyableSerial(note);
+    if (serial != null) {
+      unawaited(_copyValue(serial, 'serial'));
+      return true;
+    }
+    final catalog = _copyableCatalog(note);
+    if (catalog != null) {
+      unawaited(_copyValue(catalog, 'catalog number'));
+      return true;
+    }
+    _announce('This note has no serial or catalog number to copy');
+    return true;
   }
 
   Widget? _clearFilterButton() {
@@ -1609,6 +1910,16 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
           ? KeyEventResult.handled
           : KeyEventResult.ignored;
     }
+    // Copy the selected row's identifier. It comes before the modifier screen
+    // below, which hands every other Ctrl/Cmd chord back to the platform. Only
+    // the first press copies: a held chord must not re-copy on every repeat.
+    if (event is KeyDownEvent &&
+        primaryModifierPressed &&
+        key == LogicalKeyboardKey.keyC) {
+      if (_copySelectedRow()) {
+        return KeyEventResult.handled;
+      }
+    }
     if (HardwareKeyboard.instance.isControlPressed ||
         HardwareKeyboard.instance.isMetaPressed) {
       return KeyEventResult.ignored;
@@ -1629,12 +1940,18 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
           _focusLastControlBeforeRows();
           return KeyEventResult.handled;
         }
+        if (_focusTrailingTagOfPreviousRow()) {
+          return KeyEventResult.handled;
+        }
         _focusRowFromTab(current - 1);
         return KeyEventResult.handled;
       }
       final current = _selectedIndex;
       if (current == null) {
         _focusFirstControlAfterFilter();
+        return KeyEventResult.handled;
+      }
+      if (_focusTagsOfSelectedRow()) {
         return KeyEventResult.handled;
       }
       if (current >= notes.length - 1) {
@@ -1959,6 +2276,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
               draggingColumns: _columnsDragging,
               selected: selected,
               onTap: () => _openNoteAtIndex(notes, index),
+              onMenu: (position) => _showNoteMenu(note, position),
+              onCopy: _copyValue,
             )
           : _TableRow(
               note: note,
@@ -1967,6 +2286,11 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
               selected: selected,
               onTagTap: _applyTagFilter,
               onTap: () => _openNoteAtIndex(notes, index),
+              onMenu: (position) => _showNoteMenu(note, position),
+              onCopy: _copyValue,
+              tagFocusNodes: _tagFocusNodesFor(note),
+              onTagTab: (chipIndex, {required forward}) =>
+                  _focusAfterTag(note, chipIndex, forward: forward),
             );
       if (index.isOdd) {
         return ColoredBox(color: _kZebraTint, child: row);
@@ -2044,6 +2368,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                           child: ScrollConfiguration(
                             behavior: const MouseDragScrollBehavior(),
                             child: SingleChildScrollView(
+                              key: _columnsViewportKey,
                               controller: _horizontalScrollController,
                               scrollDirection: Axis.horizontal,
                               child: SizedBox(
@@ -2487,7 +2812,17 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                   onTagTap: _applyTagFilter,
                                   onOpenNote: (index) =>
                                       _openNoteAtIndex(notes, index),
+                                  onMenu: (index, position) =>
+                                      _showNoteMenu(notes[index], position),
+                                  onCopy: _copyValue,
                                   cardKeyFor: _cardKeyFor,
+                                  tagFocusNodesFor: _tagFocusNodesFor,
+                                  onTagTab: (note, chipIndex, {required forward}) =>
+                                      _focusAfterTag(
+                                        note,
+                                        chipIndex,
+                                        forward: forward,
+                                      ),
                                   scrollController: _verticalScrollController,
                                   sortFocusNode: _cardSortFocusNode,
                                   directionFocusNode:
@@ -2690,8 +3025,10 @@ class _Header extends StatelessWidget {
           mainAxisSize: MainAxisSize.min,
           children: [
             _StatPill(
-              label: 'Notes',
               value: _notesCountLabel(visibleCount, totalCount),
+              semanticsLabel:
+                  '$visibleCount of $totalCount '
+                  '${totalCount == 1 ? 'note' : 'notes'}',
               maxWidth: statMaxWidth,
             ),
             if (importButton != null) ...[
@@ -2818,6 +3155,19 @@ class _CollectionTitleState extends State<_CollectionTitle> {
     widget.onSelected(collectionId);
   }
 
+  /// Opens the switcher, or closes it when it is already open. Both the
+  /// gesture and the semantics activate action share this so they cannot
+  /// drift apart.
+  void _activate() {
+    if (_open) {
+      _closeMenu();
+      return;
+    }
+
+    _triggerFocus.requestFocus();
+    _openMenu();
+  }
+
   @override
   Widget build(BuildContext context) {
     final title = Text(
@@ -2865,43 +3215,66 @@ class _CollectionTitleState extends State<_CollectionTitle> {
               child: MouseRegion(
                 cursor: SystemMouseCursors.click,
                 child: Tooltip(
-                  message: 'Switch collection',
+                  message: 'Switch collection: ${widget.title}',
                   waitDuration: const Duration(milliseconds: 500),
                   child: GestureDetector(
                     key: const ValueKey('collectionTitle'),
                     behavior: HitTestBehavior.opaque,
-                    onTap: () {
-                      if (_open) {
-                        _closeMenu();
-                        return;
-                      }
-
-                      _triggerFocus.requestFocus();
-                      _openMenu();
-                    },
+                    onTap: _activate,
                     child: Semantics(
                       button: true,
                       excludeSemantics: true,
                       label:
                           'Collection: ${widget.title}. Activate to switch collection.',
-                      child: Row(
-                        mainAxisSize: MainAxisSize.min,
+                      onTap: _activate,
+                      child: Stack(
+                        clipBehavior: Clip.none,
                         children: [
-                          Flexible(child: title),
-                          Padding(
-                            padding: const EdgeInsets.only(left: 5),
-                            child: AnimatedRotation(
-                              duration: const Duration(milliseconds: 150),
-                              turns: _open ? 0.5 : 0,
-                              child: Icon(
-                                Icons.expand_more,
-                                size: 16,
-                                color: _triggerFocus.hasFocus
-                                    ? ViewerPalette.accent
-                                    : ViewerPalette.textFaint,
+                          Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Flexible(child: title),
+                              Padding(
+                                padding: const EdgeInsets.only(left: 5),
+                                child: AnimatedRotation(
+                                  duration: const Duration(milliseconds: 150),
+                                  turns: _open ? 0.5 : 0,
+                                  child: Icon(
+                                    Icons.expand_more,
+                                    size: 16,
+                                    color: _triggerFocus.hasFocus
+                                        ? ViewerPalette.accent
+                                        : ViewerPalette.textFaint,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          // The 2 px ring the other keyboard stops wear. It is
+                          // paint only, so focus never reflows the heading.
+                          if (_triggerFocus.hasFocus)
+                            Positioned.fill(
+                              left: -4,
+                              top: -4,
+                              right: -4,
+                              bottom: -4,
+                              child: IgnorePointer(
+                                child: DecoratedBox(
+                                  key: const ValueKey(
+                                    'collectionTitleFocusRing',
+                                  ),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(
+                                      ViewerPalette.radiusChip + 4,
+                                    ),
+                                    border: Border.all(
+                                      color: ViewerPalette.accent,
+                                      width: 2,
+                                    ),
+                                  ),
+                                ),
                               ),
                             ),
-                          ),
                         ],
                       ),
                     ),
@@ -3330,10 +3703,17 @@ class _ImportButtonState extends State<_ImportButton> {
 }
 
 class _StatPill extends StatelessWidget {
-  const _StatPill({required this.label, required this.value, this.maxWidth});
+  const _StatPill({
+    required this.value,
+    required this.semanticsLabel,
+    this.maxWidth,
+  });
 
-  final String label;
   final String value;
+
+  /// The spoken form of the counter, e.g. "12 of 169 notes". The pill is a
+  /// live region, so a filter change is announced without moving focus.
+  final String semanticsLabel;
 
   /// Card-width headers cap the pill to a share of the header and shrink its
   /// contents when a large text scale would otherwise crowd out the title and
@@ -3353,24 +3733,25 @@ class _StatPill extends StatelessWidget {
       ),
     );
 
-    return ConstrainedBox(
-      constraints: BoxConstraints(maxWidth: maxWidth ?? double.infinity),
-      child: DecoratedBox(
-        decoration: BoxDecoration(
-          color: _kTableSurface,
-          borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
-          border: Border.all(color: _kTableBorder),
-        ),
-        child: SizedBox(
-          height: _kHeaderControlHeight,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            child: FittedBox(
-              fit: BoxFit.scaleDown,
-              child: Semantics(
-                label: label,
-                value: value,
-                excludeSemantics: true,
+    return Semantics(
+      container: true,
+      liveRegion: true,
+      label: semanticsLabel,
+      excludeSemantics: true,
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxWidth: maxWidth ?? double.infinity),
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: _kTableSurface,
+            borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
+            border: Border.all(color: _kTableBorder),
+          ),
+          child: SizedBox(
+            height: _kHeaderControlHeight,
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
+              child: FittedBox(
+                fit: BoxFit.scaleDown,
                 child: valueText,
               ),
             ),
@@ -3772,6 +4153,8 @@ class _PinnedTableRow extends StatelessWidget {
     required this.draggingColumns,
     required this.selected,
     required this.onTap,
+    required this.onMenu,
+    required this.onCopy,
   });
 
   final NoteRecord note;
@@ -3779,87 +4162,148 @@ class _PinnedTableRow extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
+  /// Opens the row's copy menu at [position] on right click or long press.
+  final ValueChanged<Offset> onMenu;
+
+  /// Copies [value] and announces it; exposed to assistive tech as a custom
+  /// action on the pinned half's semantics node too.
+  final void Function(String value, String what) onCopy;
+
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      // Rows keep the normal cursor on hover (no click hand) and only show the
-      // drag hand while the table is being panned.
-      mouseCursor: draggingColumns ? _draggingCursor : MouseCursor.defer,
-      hoverColor: ViewerPalette.accentSoft,
-      highlightColor: ViewerPalette.accentSoft,
-      // The selection ring is a paint-only overlay: it never participates in
-      // layout, so moving keyboard selection cannot shift rows (same idea as
-      // the editor's box-shadow focus ring). The pinned pane owns the ring's
-      // left half; the scrolling pane draws the rest so the two panes read as
-      // one continuous row.
-      child: SizedBox(
-        height: _kTableRowHeight,
-        child: Stack(
-          key: ValueKey('pinnedTableRow-${note.id}'),
-          children: [
-            if (selected)
-              const Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: ViewerPalette.rowSelected,
-                    borderRadius: BorderRadius.horizontal(
-                      left: Radius.circular(ViewerPalette.radiusMd),
+    final serial = _copyableSerial(note);
+    final catalog = _copyableCatalog(note);
+    // The pinned half carries the note's identity and its front image; the
+    // scrolling half carries the column values. Both halves answer the same
+    // tap, so each is announced as a button that opens the note.
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onLongPressStart: (details) => onMenu(details.globalPosition),
+      onSecondaryTapDown: (details) => onMenu(details.globalPosition),
+      child: Semantics(
+        container: true,
+        button: true,
+        selected: selected,
+        label: 'Note ${note.displayOrder}',
+        hint: 'Opens this note',
+        onTap: onTap,
+        customSemanticsActions: {
+          if (serial != null)
+            const CustomSemanticsAction(label: 'Copy serial'): () =>
+                onCopy(serial, 'serial'),
+          if (catalog != null)
+            const CustomSemanticsAction(label: 'Copy catalog number'): () =>
+                onCopy(catalog, 'catalog number'),
+        },
+        child: InkWell(
+          onTap: onTap,
+          excludeFromSemantics: true,
+          // Rows read as links: a pointing hand at rest, the drag hand only
+          // while the table is being panned.
+          mouseCursor: draggingColumns
+              ? _draggingCursor
+              : SystemMouseCursors.click,
+          hoverColor: ViewerPalette.accentSoft,
+          highlightColor: ViewerPalette.accentSoft,
+          // The selection ring is a paint-only overlay: it never participates in
+          // layout, so moving keyboard selection cannot shift rows (same idea as
+          // the editor's box-shadow focus ring). The pinned pane owns the ring's
+          // left half; the scrolling pane draws the rest so the two panes read as
+          // one continuous row.
+          child: SizedBox(
+            height: _kTableRowHeight,
+            child: Stack(
+              key: ValueKey('pinnedTableRow-${note.id}'),
+              children: [
+                if (selected)
+                  const Positioned.fill(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        color: ViewerPalette.rowSelected,
+                        borderRadius: BorderRadius.horizontal(
+                          left: Radius.circular(ViewerPalette.radiusMd),
+                        ),
+                      ),
+                    ),
+                  ),
+                Padding(
+                  padding: const EdgeInsets.only(
+                    left: _kTableHorizontalPadding,
+                  ),
+                  child: Row(
+                    children: [
+                      _DataCell(
+                        width: _kOrderColumnWidth,
+                        alignment: Alignment.centerRight,
+                        style: _kIdCellTextStyle,
+                        child: ExcludeSemantics(
+                          child: Text('${note.displayOrder}'),
+                        ),
+                      ),
+                      _DataCell(
+                        width: _kFrontColumnWidth,
+                        alignment: Alignment.center,
+                        child: _NoteThumbnail(
+                          image: note.previewFor('front'),
+                          semanticLabel: 'Front image',
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                // A quiet chevron keeps the row's "opens" cue visible on touch
+                // screens, where a hand cursor cannot appear. It is paint only,
+                // so it never takes the row's drag gesture.
+                Positioned(
+                  top: 0,
+                  right: 4,
+                  bottom: 0,
+                  child: IgnorePointer(
+                    child: Center(
+                      child: Icon(
+                        Icons.chevron_right_rounded,
+                        size: 14,
+                        color: selected
+                            ? ViewerPalette.accent
+                            : ViewerPalette.textFaint.withValues(alpha: 0.6),
+                      ),
                     ),
                   ),
                 ),
-              ),
-            Padding(
-              padding: const EdgeInsets.only(left: _kTableHorizontalPadding),
-              child: Row(
-                children: [
-                  _DataCell(
-                    width: _kOrderColumnWidth,
-                    alignment: Alignment.centerRight,
-                    style: _kIdCellTextStyle,
-                    child: Text('${note.displayOrder}'),
+                if (selected)
+                  const Positioned.fill(
+                    child: IgnorePointer(
+                      child: DecoratedBox(
+                        decoration: BoxDecoration(
+                          borderRadius: BorderRadius.horizontal(
+                            left: Radius.circular(ViewerPalette.radiusMd),
+                          ),
+                          border: Border(
+                            top: BorderSide(
+                              color: ViewerPalette.accent,
+                              width: 1.5,
+                            ),
+                            bottom: BorderSide(
+                              color: ViewerPalette.accent,
+                              width: 1.5,
+                            ),
+                            left: BorderSide(
+                              color: ViewerPalette.accent,
+                              width: 1.5,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ),
                   ),
-                  _DataCell(
-                    width: _kFrontColumnWidth,
-                    alignment: Alignment.center,
-                    child: _NoteThumbnail(image: note.previewFor('front')),
-                  ),
-                ],
-              ),
+              ],
             ),
-            if (selected)
-              const Positioned.fill(
-                child: IgnorePointer(
-                  child: DecoratedBox(
-                    decoration: BoxDecoration(
-                      borderRadius: BorderRadius.horizontal(
-                        left: Radius.circular(ViewerPalette.radiusMd),
-                      ),
-                      border: Border(
-                        top: BorderSide(
-                          color: ViewerPalette.accent,
-                          width: 1.5,
-                        ),
-                        bottom: BorderSide(
-                          color: ViewerPalette.accent,
-                          width: 1.5,
-                        ),
-                        left: BorderSide(
-                          color: ViewerPalette.accent,
-                          width: 1.5,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
-              ),
-          ],
+          ),
         ),
       ),
     );
   }
 }
-
 class _TableRow extends StatelessWidget {
   const _TableRow({
     required this.note,
@@ -3867,6 +4311,10 @@ class _TableRow extends StatelessWidget {
     required this.draggingColumns,
     required this.onTagTap,
     required this.onTap,
+    required this.onMenu,
+    required this.onCopy,
+    required this.tagFocusNodes,
+    required this.onTagTab,
     required this.selected,
   });
 
@@ -3875,108 +4323,161 @@ class _TableRow extends StatelessWidget {
   final bool draggingColumns;
   final ValueChanged<String> onTagTap;
   final VoidCallback onTap;
+
+  /// Opens the row's copy menu at [position] on right click or long press.
+  final ValueChanged<Offset> onMenu;
+
+  /// Copies [value] and announces it; exposed to assistive tech as a custom
+  /// action on the row's semantics node.
+  final void Function(String value, String what) onCopy;
+
+  /// The row's chip focus stops, in tag order, and the Tab handler that walks
+  /// them and leaves the row.
+  final List<FocusNode> tagFocusNodes;
+  final void Function(int chipIndex, {required bool forward}) onTagTab;
   final bool selected;
 
   @override
   Widget build(BuildContext context) {
-    return InkWell(
-      onTap: onTap,
-      // Rows keep the normal cursor on hover (no click hand) and only show the
-      // drag hand while the table is being panned.
-      mouseCursor: draggingColumns ? _draggingCursor : MouseCursor.defer,
-      hoverColor: ViewerPalette.accentSoft,
-      highlightColor: ViewerPalette.accentSoft,
-      // The selection ring is a paint-only overlay: it never participates in
-      // layout, so moving keyboard selection cannot shift rows (same idea as
-      // the editor's box-shadow focus ring). The scrolling pane draws the
-      // ring's right half; the pinned pane owns the rest.
-      child: SizedBox(
-        height: _kTableRowHeight,
-        child: Stack(
-          key: ValueKey('tableRow-${note.id}'),
-          children: [
-            if (selected)
-              const Positioned.fill(
-                child: DecoratedBox(
-                  decoration: BoxDecoration(
-                    color: ViewerPalette.rowSelected,
-                    borderRadius: BorderRadius.horizontal(
-                      right: Radius.circular(ViewerPalette.radiusMd),
-                    ),
-                  ),
-                ),
-              ),
-            Padding(
-              padding: const EdgeInsets.only(right: _kTableHorizontalPadding),
-              child: Row(
-                children: [
-                  _DataCell(
-                    width: columnWidths.denomination,
-                    emphasized: true,
-                    child: _CellValue(note.denomination),
-                  ),
-                  _DataCell(
-                    width: columnWidths.issueDate,
-                    child: _CellValue(note.issueDate),
-                  ),
-                  _DataCell(
-                    width: columnWidths.catalogNumber,
-                    emphasized: true,
-                    child: _CellValue(note.catalogNumber),
-                  ),
-                  _DataCell(
-                    width: columnWidths.gradingCompany,
-                    child: _CellValue(note.gradingCompany),
-                  ),
-                  _DataCell(
-                    width: columnWidths.grade,
-                    child: _GradePill(grade: note.grade),
-                  ),
-                  _DataCell(
-                    width: columnWidths.serial,
-                    style: _kCodeTextStyle,
-                    child: _CellValue(note.serial),
-                  ),
-                  _DataCell(
-                    width: columnWidths.tags,
-                    child: _NoteTagsCell(tags: note.tags, onTagTap: onTagTap),
-                  ),
-                ],
-              ),
-            ),
-            if (selected)
-              const Positioned.fill(
-                child: IgnorePointer(
+    final serial = _copyableSerial(note);
+    final catalog = _copyableCatalog(note);
+    return GestureDetector(
+      behavior: HitTestBehavior.translucent,
+      onLongPressStart: (details) => onMenu(details.globalPosition),
+      onSecondaryTapDown: (details) => onMenu(details.globalPosition),
+      child: InkWell(
+        onTap: onTap,
+        excludeFromSemantics: true,
+        // Rows read as links: a pointing hand at rest, the drag hand only
+        // while the table is being panned.
+        mouseCursor: draggingColumns
+            ? _draggingCursor
+            : SystemMouseCursors.click,
+        hoverColor: ViewerPalette.accentSoft,
+        highlightColor: ViewerPalette.accentSoft,
+        // The selection ring is a paint-only overlay: it never participates in
+        // layout, so moving keyboard selection cannot shift rows (same idea as
+        // the editor's box-shadow focus ring). The scrolling pane draws the
+        // ring's right half; the pinned pane owns the rest.
+        child: SizedBox(
+          height: _kTableRowHeight,
+          child: Stack(
+            key: ValueKey('tableRow-${note.id}'),
+            children: [
+              if (selected)
+                const Positioned.fill(
                   child: DecoratedBox(
                     decoration: BoxDecoration(
+                      color: ViewerPalette.rowSelected,
                       borderRadius: BorderRadius.horizontal(
                         right: Radius.circular(ViewerPalette.radiusMd),
                       ),
-                      border: Border(
-                        top: BorderSide(
-                          color: ViewerPalette.accent,
-                          width: 1.5,
+                    ),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.only(right: _kTableHorizontalPadding),
+                child: Row(
+                  children: [
+                    // One semantics node covers the value columns, so a screen
+                    // reader hears the row as a single button instead of one
+                    // node per cell. Tag chips stay outside it: each chip is
+                    // its own filter button.
+                    Semantics(
+                      container: true,
+                      button: true,
+                      selected: selected,
+                      label: _noteSummaryLabel(note),
+                      hint: 'Opens this note',
+                      onTap: onTap,
+                      excludeSemantics: true,
+                      customSemanticsActions: {
+                        if (serial != null)
+                          const CustomSemanticsAction(label: 'Copy serial'):
+                              () => onCopy(serial, 'serial'),
+                        if (catalog != null)
+                          const CustomSemanticsAction(
+                            label: 'Copy catalog number',
+                          ): () => onCopy(catalog, 'catalog number'),
+                      },
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          _DataCell(
+                            width: columnWidths.denomination,
+                            emphasized: true,
+                            child: _CellValue(note.denomination),
+                          ),
+                          _DataCell(
+                            width: columnWidths.issueDate,
+                            child: _CellValue(note.issueDate),
+                          ),
+                          _DataCell(
+                            width: columnWidths.catalogNumber,
+                            emphasized: true,
+                            child: _CellValue(note.catalogNumber),
+                          ),
+                          _DataCell(
+                            width: columnWidths.gradingCompany,
+                            child: _CellValue(note.gradingCompany),
+                          ),
+                          _DataCell(
+                            width: columnWidths.grade,
+                            child: _GradePill(grade: note.grade),
+                          ),
+                          _DataCell(
+                            width: columnWidths.serial,
+                            style: _kCodeTextStyle,
+                            child: _CellValue(note.serial),
+                          ),
+                        ],
+                      ),
+                    ),
+                    _DataCell(
+                      width: columnWidths.tags,
+                      child: _NoteTagsCell(
+                        tags: note.tags,
+                        onTagTap: onTagTap,
+                        focusNodes: tagFocusNodes,
+                        onTagTab: onTagTab,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (selected)
+                const Positioned.fill(
+                  child: IgnorePointer(
+                    child: DecoratedBox(
+                      decoration: BoxDecoration(
+                        borderRadius: BorderRadius.horizontal(
+                          right: Radius.circular(ViewerPalette.radiusMd),
                         ),
-                        bottom: BorderSide(
-                          color: ViewerPalette.accent,
-                          width: 1.5,
-                        ),
-                        right: BorderSide(
-                          color: ViewerPalette.accent,
-                          width: 1.5,
+                        border: Border(
+                          top: BorderSide(
+                            color: ViewerPalette.accent,
+                            width: 1.5,
+                          ),
+                          bottom: BorderSide(
+                            color: ViewerPalette.accent,
+                            width: 1.5,
+                          ),
+                          right: BorderSide(
+                            color: ViewerPalette.accent,
+                            width: 1.5,
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
-          ],
+            ],
+          ),
         ),
       ),
     );
   }
 }
-
 /// Below the grid breakpoint the notes become a vertical card list: a fixed
 /// thumbnail on the left, denomination as the primary line, the remaining
 /// columns as labelled metadata, and tags in the card footer. Sorting moves
@@ -3993,7 +4494,11 @@ class _NoteCardList extends StatelessWidget {
     required this.onToggleSortDirection,
     required this.onTagTap,
     required this.onOpenNote,
+    required this.onMenu,
+    required this.onCopy,
     required this.cardKeyFor,
+    required this.tagFocusNodesFor,
+    required this.onTagTab,
     required this.scrollController,
     required this.sortFocusNode,
     required this.directionFocusNode,
@@ -4009,7 +4514,14 @@ class _NoteCardList extends StatelessWidget {
   final VoidCallback onToggleSortDirection;
   final ValueChanged<String> onTagTap;
   final ValueChanged<int> onOpenNote;
+
+  /// Opens a card's copy menu at [position] on right click or long press.
+  final void Function(int index, Offset position) onMenu;
+  final void Function(String value, String what) onCopy;
   final GlobalKey Function(int noteId) cardKeyFor;
+  final List<FocusNode> Function(NoteRecord note) tagFocusNodesFor;
+  final void Function(NoteRecord note, int chipIndex, {required bool forward})
+  onTagTab;
   final ScrollController scrollController;
   final FocusNode sortFocusNode;
   final FocusNode directionFocusNode;
@@ -4053,6 +4565,11 @@ class _NoteCardList extends StatelessWidget {
                               keyboardNavEnabled && selectedIndex == index,
                           onTagTap: onTagTap,
                           onTap: () => onOpenNote(index),
+                          onMenu: (position) => onMenu(index, position),
+                          onCopy: onCopy,
+                          tagFocusNodes: tagFocusNodesFor(note),
+                          onTagTab: (chipIndex, {required forward}) =>
+                              onTagTab(note, chipIndex, forward: forward),
                         ),
                       );
                     },
@@ -4190,6 +4707,10 @@ class _NoteCard extends StatelessWidget {
     required this.selected,
     required this.onTagTap,
     required this.onTap,
+    required this.onMenu,
+    required this.onCopy,
+    required this.tagFocusNodes,
+    required this.onTagTab,
     super.key,
   });
 
@@ -4197,6 +4718,10 @@ class _NoteCard extends StatelessWidget {
   final bool selected;
   final ValueChanged<String> onTagTap;
   final VoidCallback onTap;
+  final ValueChanged<Offset> onMenu;
+  final void Function(String value, String what) onCopy;
+  final List<FocusNode> tagFocusNodes;
+  final void Function(int chipIndex, {required bool forward}) onTagTab;
 
   @override
   Widget build(BuildContext context) {
@@ -4207,19 +4732,34 @@ class _NoteCard extends StatelessWidget {
         ? 'Untitled note'
         : note.denomination;
     final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
+    final serial = _copyableSerial(note);
+    final catalog = _copyableCatalog(note);
 
     return Semantics(
       button: true,
       selected: selected,
-      label: [
-        title,
-        if (note.catalogNumber.trim().isNotEmpty)
-          'catalog ${note.catalogNumber}',
-        if (note.issueDate.trim().isNotEmpty) note.issueDate,
-        if (note.grade.trim().isNotEmpty) 'grade ${note.grade}',
-      ].join(', '),
+      label: _noteSummaryLabel(note),
+      hint: 'Opens this note',
+      onTap: onTap,
+      customSemanticsActions: {
+        if (serial != null)
+          const CustomSemanticsAction(label: 'Copy serial'): () =>
+              onCopy(serial, 'serial'),
+        if (catalog != null)
+          const CustomSemanticsAction(label: 'Copy catalog number'): () =>
+              onCopy(catalog, 'catalog number'),
+      },
       child: InkWell(
         onTap: onTap,
+        excludeFromSemantics: true,
+        onSecondaryTapDown: (details) => onMenu(details.globalPosition),
+        onLongPress: () {
+          final box = context.findRenderObject() as RenderBox?;
+          if (box == null) {
+            return;
+          }
+          onMenu(box.localToGlobal(box.size.center(Offset.zero)));
+        },
         hoverColor: ViewerPalette.accentSoft,
         highlightColor: ViewerPalette.accentSoft,
         child: Stack(
@@ -4317,11 +4857,14 @@ class _NoteCard extends StatelessWidget {
                                   spacing: _kTagChipHorizontalGap,
                                   runSpacing: _kTagChipHorizontalGap,
                                   children: [
-                                    for (final tagName in tagNames)
+                                    for (final (index, tagName) in tagNames.indexed)
                                       _TagChip(
                                         label: tagName,
                                         multiline: true,
+                                        focusNode: tagFocusNodes[index],
                                         onTap: () => onTagTap(tagName),
+                                        onTab: ({required bool forward}) =>
+                                            onTagTab(index, forward: forward),
                                       ),
                                   ],
                                 ),
@@ -4601,6 +5144,7 @@ class _NotePlate extends StatelessWidget {
                     width: width,
                     height: height,
                     fit: BoxFit.contain,
+                    semanticLabel: 'Front image',
                     frameBuilder:
                         (context, child, frame, wasSynchronouslyLoaded) {
                           if (wasSynchronouslyLoaded || frame != null) {
@@ -4663,15 +5207,23 @@ String _notesCountLabel(int visibleCount, int totalCount) {
 }
 
 class _NoteThumbnail extends StatelessWidget {
-  const _NoteThumbnail({required this.image});
+  const _NoteThumbnail({required this.image, required this.semanticLabel});
 
   final NoteImage? image;
+
+  /// What a screen reader says for the frame. The row still owns the button
+  /// label; this only names the picture inside it.
+  final String semanticLabel;
 
   @override
   Widget build(BuildContext context) {
     final image = this.image;
     if (image == null) {
-      return const _TableThumbnailPlaceholder();
+      return Semantics(
+        image: true,
+        label: semanticLabel,
+        child: const _TableThumbnailPlaceholder(),
+      );
     }
 
     return DecoratedBox(
@@ -4686,6 +5238,7 @@ class _NoteThumbnail extends StatelessWidget {
           width: _kTableThumbnailWidth,
           height: _kTableThumbnailHeight,
           fit: BoxFit.cover,
+          semanticLabel: semanticLabel,
           frameBuilder: (context, child, frame, wasSynchronouslyLoaded) {
             if (wasSynchronouslyLoaded || frame != null) {
               return child;
@@ -4725,10 +5278,17 @@ class _TableThumbnailPlaceholder extends StatelessWidget {
 }
 
 class _NoteTagsCell extends StatelessWidget {
-  const _NoteTagsCell({required this.tags, required this.onTagTap});
+  const _NoteTagsCell({
+    required this.tags,
+    required this.onTagTap,
+    required this.focusNodes,
+    required this.onTagTab,
+  });
 
   final List<Tag> tags;
   final ValueChanged<String> onTagTap;
+  final List<FocusNode> focusNodes;
+  final void Function(int chipIndex, {required bool forward}) onTagTab;
 
   @override
   Widget build(BuildContext context) {
@@ -4753,7 +5313,10 @@ class _NoteTagsCell extends StatelessWidget {
               if (index > 0) const SizedBox(width: _kTagChipHorizontalGap),
               _TagChip(
                 label: tagNames[index],
+                focusNode: focusNodes[index],
                 onTap: () => onTagTap(tagNames[index]),
+                onTab: ({required bool forward}) =>
+                    onTagTab(index, forward: forward),
               ),
             ],
             if (plan.hidden > 0) ...[
@@ -4770,7 +5333,6 @@ class _NoteTagsCell extends StatelessWidget {
     );
   }
 }
-
 /// The dashed Ochre ghost that closes a tag run too long for the column. It is
 /// an affordance, not a tag: opening it lists the tags that did not fit, and
 /// picking one applies the same filter a chip tap does.
@@ -4856,11 +5418,21 @@ class _TagChip extends StatefulWidget {
   const _TagChip({
     required this.label,
     required this.onTap,
+    required this.focusNode,
+    required this.onTab,
     this.multiline = false,
   });
 
   final String label;
   final VoidCallback onTap;
+
+  /// Owned by the table so its explicit Tab chain can enter the row's chips
+  /// and leave them again.
+  final FocusNode focusNode;
+
+  /// Called for Tab (forward) and Shift+Tab (backward), so the chip takes part
+  /// in the table's filter -> headers -> rows -> chips order.
+  final void Function({required bool forward}) onTab;
 
   /// Card mode lets a long tag wrap inside the chip instead of running past
   /// the card edge. Grid chips are measured to fit their column.
@@ -4873,41 +5445,124 @@ class _TagChip extends StatefulWidget {
 class _TagChipState extends State<_TagChip> {
   bool _hovered = false;
 
+  /// Enter and Space filter by the tag, matching a real button. The table's
+  /// row shortcuts only fire when the table itself holds focus, so a focused
+  /// chip keeps these keys.
+  KeyEventResult _handleKey(KeyEvent event) {
+    if (event is! KeyDownEvent && event is! KeyRepeatEvent) {
+      return KeyEventResult.ignored;
+    }
+    final key = event.logicalKey;
+    // A held Enter or Space must not re-apply the filter on every repeat.
+    if (event is KeyDownEvent &&
+        (key == LogicalKeyboardKey.enter ||
+            key == LogicalKeyboardKey.numpadEnter ||
+            key == LogicalKeyboardKey.space)) {
+      widget.onTap();
+      return KeyEventResult.handled;
+    }
+    if (key == LogicalKeyboardKey.tab &&
+        !HardwareKeyboard.instance.isControlPressed &&
+        !HardwareKeyboard.instance.isMetaPressed &&
+        !HardwareKeyboard.instance.isAltPressed) {
+      widget.onTab(forward: !HardwareKeyboard.instance.isShiftPressed);
+      return KeyEventResult.handled;
+    }
+    return KeyEventResult.ignored;
+  }
+
+  void _activate() {
+    widget.focusNode.requestFocus();
+    widget.onTap();
+  }
+
   @override
   Widget build(BuildContext context) {
+    final focused = widget.focusNode.hasFocus;
+
     return Semantics(
+      container: true,
       button: true,
-      label: 'Filter by ${widget.label}',
+      label: 'Filter by tag ${widget.label}',
       onTap: widget.onTap,
       excludeSemantics: true,
-      child: GestureDetector(
-        onTap: widget.onTap,
+      child: Focus(
+        focusNode: widget.focusNode,
+        onFocusChange: (_) {
+          if (mounted) {
+            setState(() {});
+          }
+        },
+        onKeyEvent: (_, event) => _handleKey(event),
         child: MouseRegion(
           cursor: SystemMouseCursors.click,
           onEnter: (_) => setState(() => _hovered = true),
           onExit: (_) => setState(() => _hovered = false),
-          child: AnimatedContainer(
-            duration: const Duration(milliseconds: 150),
-            curve: Curves.easeOut,
-            decoration: BoxDecoration(
-              color: _hovered ? ViewerPalette.tagBackgroundHover : _kTagChipBg,
-              borderRadius: BorderRadius.circular(ViewerPalette.radiusChip),
-              border: Border.all(
-                color: _hovered
-                    ? ViewerPalette.tagBorderHover
-                    : _kTagChipBorder,
+          child: GestureDetector(
+            behavior: HitTestBehavior.opaque,
+            onTap: _activate,
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minWidth: _kTagChipMinTargetSize,
+                minHeight: _kTagChipMinTargetSize,
               ),
-            ),
-            child: Padding(
-              padding: _kTagChipPadding,
-              child: Text(
-                widget.label,
-                maxLines: widget.multiline ? null : 1,
-                overflow: widget.multiline
-                    ? TextOverflow.clip
-                    : TextOverflow.visible,
-                softWrap: widget.multiline,
-                style: _kTagChipTextStyle,
+              child: Center(
+                child: Stack(
+                  clipBehavior: Clip.none,
+                  children: [
+                    AnimatedContainer(
+                      duration: const Duration(milliseconds: 150),
+                      curve: Curves.easeOut,
+                      decoration: BoxDecoration(
+                        color: _hovered
+                            ? ViewerPalette.tagBackgroundHover
+                            : _kTagChipBg,
+                        borderRadius: BorderRadius.circular(
+                          ViewerPalette.radiusChip,
+                        ),
+                        border: Border.all(
+                          color: _hovered
+                              ? ViewerPalette.tagBorderHover
+                              : _kTagChipBorder,
+                        ),
+                      ),
+                      padding: _kTagChipPadding,
+                      child: Text(
+                        widget.label,
+                        maxLines: widget.multiline ? null : 1,
+                        overflow: widget.multiline
+                            ? TextOverflow.clip
+                            : TextOverflow.visible,
+                        softWrap: widget.multiline,
+                        style: _kTagChipTextStyle,
+                      ),
+                    ),
+                    // The 2 px ring sits outside the pill on the same pattern
+                    // as the headers and the collection title. It is paint
+                    // only, so focusing cannot change the chip's size.
+                    if (focused)
+                      Positioned.fill(
+                        left: -4,
+                        top: -4,
+                        right: -4,
+                        bottom: -4,
+                        child: IgnorePointer(
+                          child: DecoratedBox(
+                            key: const ValueKey('tagChipFocusRing'),
+                            decoration: BoxDecoration(
+                              borderRadius: BorderRadius.circular(
+                                ViewerPalette.radiusChip + 4,
+                              ),
+                              border: Border.all(
+                                color: ViewerPalette.accent,
+                                width: 2,
+                              ),
+                            ),
+                          ),
+                        ),
+                      ),
+                  ],
+                ),
               ),
             ),
           ),
@@ -4916,7 +5571,6 @@ class _TagChipState extends State<_TagChip> {
     );
   }
 }
-
 class _DataCell extends StatelessWidget {
   const _DataCell({
     required this.width,

@@ -1020,7 +1020,7 @@ void main() {
     expect(FocusManager.instance.primaryFocus?.debugLabel, 'notesTable');
   });
 
-  keyboardTestWidgets('rows keep a normal cursor until panning on Windows', (
+  keyboardTestWidgets('rows show a hand cursor at rest and while panning', (
     WidgetTester tester,
   ) async {
     await pumpKeyboardTable(tester);
@@ -1028,7 +1028,7 @@ void main() {
     InkWell rowInk() => tester.widget<InkWell>(
       find.ancestor(of: tableRow(3), matching: find.byType(InkWell)),
     );
-    expect(rowInk().mouseCursor, MouseCursor.defer);
+    expect(rowInk().mouseCursor, SystemMouseCursors.click);
 
     final gesture = await tester.startGesture(
       tester.getCenter(tableRow(3)),
@@ -1043,7 +1043,7 @@ void main() {
 
     await gesture.up();
     await tester.pumpAndSettle();
-    expect(rowInk().mouseCursor, MouseCursor.defer);
+    expect(rowInk().mouseCursor, SystemMouseCursors.click);
   });
 
   keyboardTestWidgets('rows show a closed hand while panning off Windows', (
@@ -1054,7 +1054,7 @@ void main() {
     InkWell rowInk() => tester.widget<InkWell>(
       find.ancestor(of: tableRow(3), matching: find.byType(InkWell)),
     );
-    expect(rowInk().mouseCursor, MouseCursor.defer);
+    expect(rowInk().mouseCursor, SystemMouseCursors.click);
 
     final gesture = await tester.startGesture(
       tester.getCenter(tableRow(3)),
@@ -1068,7 +1068,7 @@ void main() {
 
     await gesture.up();
     await tester.pumpAndSettle();
-    expect(rowInk().mouseCursor, MouseCursor.defer);
+    expect(rowInk().mouseCursor, SystemMouseCursors.click);
   }, platform: TargetPlatform.macOS);
 
   keyboardTestWidgets('the header keeps a normal cursor until panning', (
