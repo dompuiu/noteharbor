@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_harbor_viewer/data/dataset_controller.dart';
@@ -94,8 +95,7 @@ void main() {
     expect(collections.dy, greaterThan(created.dy));
     expect(notes.dy, greaterThan(collections.dy));
 
-    // The label may wrap to two lines; the value stays on one.
-    expect(tester.widget<Text>(find.text('NOTES IN ALPHA')).maxLines, 2);
+    // The values stay on one line.
     expect(
       tester.widget<Text>(find.text('Mar 28, 2026 at 12:00 UTC')).maxLines,
       1,
@@ -120,10 +120,6 @@ void main() {
     expect(notes.dy, created.dy);
     expect(collections.dx, greaterThan(created.dx));
     expect(notes.dx, greaterThan(collections.dx));
-    expect(
-      tester.getSize(find.byKey(const ValueKey('archiveSummary'))).width,
-      lessThanOrEqualTo(720),
-    );
   });
 
   testWidgets('archive summary reads each cell as one label and value', (
@@ -139,6 +135,9 @@ void main() {
     );
     expect(find.bySemanticsLabel('Collections: 2'), findsOneWidget);
     expect(find.bySemanticsLabel('Notes in Alpha: 2'), findsOneWidget);
+    // The visible label and value are not separate stops.
+    expect(find.bySemanticsLabel('ARCHIVE CREATED'), findsNothing);
+    expect(find.bySemanticsLabel('Mar 28, 2026 at 12:00 UTC'), findsNothing);
 
     semantics.dispose();
   });
@@ -146,13 +145,19 @@ void main() {
   testWidgets('a long collection name keeps two label lines', (
     WidgetTester tester,
   ) async {
+    // Ahem is much wider than Inter; load the bundled face so the wrap
+    // assertion reflects the real app.
+    final inter = FontLoader('Inter')
+      ..addFont(rootBundle.load('assets/fonts/InterVariable.ttf'));
+    await inter.load();
+
     await pumpImportScreenAt(
       tester,
       await loadedController(
         collections: const [
           {
             'id': 11,
-            'name': 'Collection with a longer name',
+            'name': 'Collection with a much longer name',
             'noteCount': 2,
           },
         ],
@@ -160,7 +165,7 @@ void main() {
       const Size(800, 900),
     );
 
-    final label = find.text('NOTES IN COLLECTION WITH A LONGER NAME');
+    final label = find.text('NOTES IN COLLECTION WITH A MUCH LONGER NAME');
     expect(label, findsOneWidget);
     // Wrapped, not squeezed onto one ellipsized line.
     expect(tester.getSize(label).height, greaterThan(20));

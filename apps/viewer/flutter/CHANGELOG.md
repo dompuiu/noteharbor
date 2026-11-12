@@ -12,6 +12,7 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ### Changed
 
+- Import screen: the archive's date, collection count, and note count are one inset summary strip instead of three pills — label/value cells on a mist ground, split by hairlines, one row at 480 px and wider, three stacked rows below that, and never wider than 720 px. A long collection name keeps two label lines, and a screen reader hears each cell as one `label: value`.
 - Import screen: the page caps its content in a centered 720 px column, so panels and copy keep a readable measure on wide windows instead of stretching across the page.
 - Import screen: one noun per concept — the file is an archive and what it holds is a collection. The app bar and import panel read Import archive, the Notes stat names its collection, and the two destructive panels collapse into one subordinate Remove section with a row per scope.
 - Import screen: first run is one card with one action — an eyebrow, a title, one sentence, the archive drop zone, and a single primary pill that chooses the archive then imports it. The management, active-collection, and delete panels stay hidden on first run, so the status banner lands above the fold on a phone; an imported archive with no collections still offers Delete archive.

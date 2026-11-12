@@ -25,13 +25,6 @@ const double _kPagePadding = 20;
 /// instead of sharing one line.
 const double _kArchiveSummaryBreakpoint = 480;
 
-/// The archive summary's widest measure, so it never stretches across a wide
-/// desktop window.
-const double _kArchiveSummaryMaxWidth = 720;
-
-/// The summary label's 0.08em tracking at its 11px size, in logical pixels.
-const double _kSummaryLabelTracking = 0.88;
-
 /// The one sentence each removal scope uses, shared by its row and its dialog.
 String _collectionRemoval(String name) =>
     'Delete "$name" and all its notes and note images from this device.';
@@ -630,7 +623,6 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                       CrossAxisAlignment.start,
                                   children: [
                                     _ArchiveSummary(
-                                      key: const ValueKey('archiveSummary'),
                                       cells: [
                                         _SummaryCell(
                                           label: 'Archive created',
@@ -1268,7 +1260,7 @@ class _StatusBanner extends StatelessWidget {
 /// itself from its own available width, so it answers to the panel it sits in
 /// rather than the window.
 class _ArchiveSummary extends StatelessWidget {
-  const _ArchiveSummary({required this.cells, super.key});
+  const _ArchiveSummary({required this.cells});
 
   /// The cells in reading order. The first takes twice a count's share of the
   /// row because a date is the widest value.
@@ -1277,7 +1269,7 @@ class _ArchiveSummary extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ConstrainedBox(
-      constraints: const BoxConstraints(maxWidth: _kArchiveSummaryMaxWidth),
+      constraints: const BoxConstraints(maxWidth: _kContentMaxWidth),
       child: LayoutBuilder(
         builder: (context, constraints) {
           final stacked = constraints.maxWidth < _kArchiveSummaryBreakpoint;
@@ -1353,7 +1345,8 @@ class _SummaryCell extends StatelessWidget {
                 fontFamily: 'Inter',
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                letterSpacing: _kSummaryLabelTracking,
+                // 0.08em at 11px.
+                letterSpacing: 0.88,
                 height: 1.3,
                 color: ViewerPalette.textMuted,
               ),
