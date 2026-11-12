@@ -637,13 +637,6 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                           label: 'Collections',
                                           value: '${collections.length}',
                                         ),
-                                        _SummaryCell(
-                                          label: activeCollection == null
-                                              ? 'Notes'
-                                              : 'Notes in ${activeCollection.name}',
-                                          value:
-                                              '${activeCollection?.noteCount ?? 0}',
-                                        ),
                                       ],
                                     ),
                                     if (canShowInFolder) ...[
@@ -1262,8 +1255,8 @@ class _StatusBanner extends StatelessWidget {
 class _ArchiveSummary extends StatelessWidget {
   const _ArchiveSummary({required this.cells});
 
-  /// The cells in reading order. The first takes twice a count's share of the
-  /// row because a date is the widest value.
+  /// The cells in reading order. The first takes twice the share of the row
+  /// because its date value is the widest.
   final List<_SummaryCell> cells;
 
   @override
@@ -1337,8 +1330,7 @@ class _SummaryCell extends StatelessWidget {
           children: [
             Text(
               label.toUpperCase(),
-              // A collection name may take two lines; the count alone would
-              // lose the collection that gives it meaning.
+              // A scaled-up label may take two lines rather than clip.
               maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(

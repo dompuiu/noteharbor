@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_harbor_viewer/data/dataset_controller.dart';
@@ -9,15 +8,9 @@ import 'package:note_harbor_viewer/features/import/import_dataset_screen.dart';
 import 'package:note_harbor_viewer/models/viewer_dataset.dart';
 
 void main() {
-  Future<DatasetController> loadedController({
-    bool failDelete = false,
-    List<Map<String, Object?>>? collections,
-  }) async {
+  Future<DatasetController> loadedController({bool failDelete = false}) async {
     final controller = DatasetController(
-      repository: _CollectionRepository(
-        failDelete: failDelete,
-        collections: collections,
-      ),
+      repository: _CollectionRepository(failDelete: failDelete),
       selectionStore: _MemoryLastCollectionStore(),
     );
     await controller.load();
@@ -54,7 +47,10 @@ void main() {
     expect(find.text('ARCHIVE ON THIS DEVICE'), findsOneWidget);
     expect(find.text('Set as default collection'), findsNothing);
     expect(find.text('Active source'), findsNothing);
-    expect(find.text('NOTES IN ALPHA'), findsOneWidget);
+    expect(find.text('ARCHIVE CREATED'), findsOneWidget);
+    expect(find.text('COLLECTIONS'), findsOneWidget);
+    // The note count lives in the collection select, not a stat of its own.
+    expect(find.text('NOTES IN ALPHA'), findsNothing);
     expect(find.text('Notes (active)'), findsNothing);
     // No "(default)" suffix on the dropdown entries.
     expect(find.text('Alpha (2)'), findsOneWidget);
@@ -87,13 +83,10 @@ void main() {
 
     final created = tester.getTopLeft(find.text('ARCHIVE CREATED'));
     final collections = tester.getTopLeft(find.text('COLLECTIONS'));
-    final notes = tester.getTopLeft(find.text('NOTES IN ALPHA'));
 
     // One cell per row, each starting at the strip's left edge.
     expect(collections.dx, created.dx);
-    expect(notes.dx, created.dx);
     expect(collections.dy, greaterThan(created.dy));
-    expect(notes.dy, greaterThan(collections.dy));
 
     // The values stay on one line.
     expect(
@@ -113,13 +106,10 @@ void main() {
 
     final created = tester.getTopLeft(find.text('ARCHIVE CREATED'));
     final collections = tester.getTopLeft(find.text('COLLECTIONS'));
-    final notes = tester.getTopLeft(find.text('NOTES IN ALPHA'));
 
-    // Three columns on one baseline, in reading order.
+    // Two columns on one baseline, in reading order.
     expect(collections.dy, created.dy);
-    expect(notes.dy, created.dy);
     expect(collections.dx, greaterThan(created.dx));
-    expect(notes.dx, greaterThan(collections.dx));
   });
 
   testWidgets('archive summary reads each cell as one label and value', (
@@ -134,42 +124,11 @@ void main() {
       findsOneWidget,
     );
     expect(find.bySemanticsLabel('Collections: 2'), findsOneWidget);
-    expect(find.bySemanticsLabel('Notes in Alpha: 2'), findsOneWidget);
     // The visible label and value are not separate stops.
     expect(find.bySemanticsLabel('ARCHIVE CREATED'), findsNothing);
     expect(find.bySemanticsLabel('Mar 28, 2026 at 12:00 UTC'), findsNothing);
 
     semantics.dispose();
-  });
-
-  testWidgets('a long collection name keeps two label lines', (
-    WidgetTester tester,
-  ) async {
-    // Ahem is much wider than Inter; load the bundled face so the wrap
-    // assertion reflects the real app.
-    final inter = FontLoader('Inter')
-      ..addFont(rootBundle.load('assets/fonts/InterVariable.ttf'));
-    await inter.load();
-
-    await pumpImportScreenAt(
-      tester,
-      await loadedController(
-        collections: const [
-          {
-            'id': 11,
-            'name': 'Collection with a much longer name',
-            'noteCount': 2,
-          },
-        ],
-      ),
-      const Size(800, 900),
-    );
-
-    final label = find.text('NOTES IN COLLECTION WITH A MUCH LONGER NAME');
-    expect(label, findsOneWidget);
-    // Wrapped, not squeezed onto one ellipsized line.
-    expect(tester.getSize(label).height, greaterThan(20));
-    expect(tester.widget<Text>(label).maxLines, 2);
   });
 
   testWidgets('delete failure shows inline in the remove section', (
@@ -232,18 +191,13 @@ class _MemoryLastCollectionStore implements LastCollectionStore {
 }
 
 class _CollectionRepository extends ViewerRepository {
-  _CollectionRepository({
-    required this.failDelete,
-    List<Map<String, Object?>>? collections,
-  }) : _collections = List.of(collections ?? _defaultCollections);
+  _CollectionRepository({required this.failDelete});
 
-  static const List<Map<String, Object?>> _defaultCollections = [
+  final bool failDelete;
+  final List<Map<String, Object?>> _collections = [
     {'id': 11, 'name': 'Alpha', 'noteCount': 2},
     {'id': 22, 'name': 'Beta', 'noteCount': 3},
   ];
-
-  final bool failDelete;
-  final List<Map<String, Object?>> _collections;
 
   @override
   bool get canManageImportedDatasets => true;
