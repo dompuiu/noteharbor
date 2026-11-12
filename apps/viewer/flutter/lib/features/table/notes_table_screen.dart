@@ -12,6 +12,7 @@ import '../../models/note_image.dart';
 import '../../models/note_record.dart';
 import '../../models/tag.dart';
 import '../../models/viewer_collection.dart';
+import '../../utils/announce.dart';
 import '../../widgets/mouse_drag_scroll_behavior.dart';
 import '../../widgets/note_image_provider.dart';
 import '../import/import_dataset_screen.dart';
@@ -1593,11 +1594,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   /// Tells a screen reader about an action it could not see, since the table
   /// has no toast of its own.
   void _announce(String message) {
-    SemanticsService.sendAnnouncement(
-      View.of(context),
-      message,
-      Directionality.of(context),
-    );
+    announce(context, message);
   }
 
   /// Copies [value] and says what was copied.

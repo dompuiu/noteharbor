@@ -1,6 +1,5 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
@@ -8,6 +7,7 @@ import '../../app/app_info.dart';
 import '../../app/viewer_palette.dart';
 import '../../data/dataset_controller.dart';
 import '../../models/viewer_collection.dart';
+import '../../utils/announce.dart';
 import '../../utils/dataset_date_format.dart';
 import '../../widgets/viewer_button_styles.dart';
 import 'archive_drop_zone.dart';
@@ -33,9 +33,12 @@ String _importFailure(String error) {
 }
 
 /// [error]'s message with `Bad state: `, `Exception: `, and the other Dart
-/// error prefixes removed, ending in a full stop. Null when no reason is left.
+/// error prefixes removed, ending in a full stop. Null when no reason is left:
+/// a bodiless error or the store's own `Import failed.` fallback.
 String? _plainReason(String error) {
-  var reason = error.trim();
+  // Multi-line messages (FormatException source dumps) read as noise in a
+  // banner; the first line carries what happened.
+  var reason = error.trim().split('\n').first.trim();
   for (final prefix in const [
     'Bad state: ',
     'Exception: ',
@@ -48,43 +51,60 @@ String? _plainReason(String error) {
       break;
     }
   }
-  if (reason.isEmpty || reason == 'Import failed.') {
+
+  // `Import failed.` is the store's fallback when its isolate returned no
+  // error text; without this guard the banner repeats it after the colon.
+  if (reason.isEmpty || reason == 'Import failed.' || _isBareError(reason)) {
     return null;
   }
-  reason = '${reason[0].toUpperCase()}${reason.substring(1)}';
+
+  // Uppercase only an ASCII letter, so a non-BMP first character is never
+  // split. Error messages are English, which is enough here.
+  final first = reason.codeUnitAt(0);
+  if (first >= 0x61 && first <= 0x7A) {
+    reason = '${String.fromCharCode(first - 32)}${reason.substring(1)}';
+  }
   return _endsSentence(reason) ? reason : '$reason.';
 }
 
+/// True when stripping the prefix left only the error's type name, e.g.
+/// `Exception()` renders as `Exception`.
+bool _isBareError(String text) {
+  const bareTypes = {
+    'Exception',
+    'FormatException',
+    'ArgumentError',
+    'Unsupported operation',
+    'Bad state',
+  };
+  return bareTypes.contains(text) ||
+      RegExp(r"^Instance of '.*'$").hasMatch(text);
+}
+
 bool _endsSentence(String text) {
-  final last = text[text.length - 1];
-  return last == '.' || last == '!' || last == '?';
+  return '.!?…'.contains(text[text.length - 1]);
 }
 
 /// One outcome banner: the sentence, its tone, and, after a successful import,
 /// the collection the forward action opens.
 class _StatusMessage {
-  const _StatusMessage.success(
-    this.message, {
-    this.viewCollectionId,
-    this.viewCollectionName,
-  }) : isError = false;
+  const _StatusMessage.success(this.message, {this.viewCollection})
+      : isError = false;
 
   const _StatusMessage.error(this.message)
       : isError = true,
-        viewCollectionId = null,
-        viewCollectionName = null;
+        viewCollection = null;
 
   final String message;
   final bool isError;
-  final int? viewCollectionId;
-  final String? viewCollectionName;
+  final ViewerCollection? viewCollection;
 
   /// What a screen reader hears, including the action the sighted banner
   /// offers but an announcement alone cannot describe.
   String get announcement {
-    final collectionName = viewCollectionName;
-    if (!isError && collectionName != null) {
-      return '$message View $collectionName to browse its notes.';
+    final collection = viewCollection;
+    if (!isError && collection != null) {
+      return '$message View ${collection.name} to browse its notes.';
     }
     return message;
   }
@@ -107,6 +127,9 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
   late final FocusNode _viewCollectionFocusNode = FocusNode(
     debugLabel: 'importViewCollection',
   );
+  late final FocusNode _dismissStatusFocusNode = FocusNode(
+    debugLabel: 'importStatusDismiss',
+  );
   final ScrollController _scrollController = ScrollController();
   String? _selectedArchivePath;
   String? _selectedArchiveName;
@@ -128,6 +151,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
     _screenFocusNode.dispose();
     _importButtonFocusNode.dispose();
     _viewCollectionFocusNode.dispose();
+    _dismissStatusFocusNode.dispose();
     _scrollController.dispose();
     super.dispose();
   }
@@ -137,23 +161,44 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
   /// The caller decides where focus goes; this never scrolls mid-page.
   void _showStatus(_StatusMessage status) {
     setState(() => _status = status);
-    SemanticsService.sendAnnouncement(
-      View.of(context),
-      status.announcement,
-      Directionality.of(context),
+    announce(context, status.announcement);
+  }
+
+  /// A success banner belongs at the top of the page, so the forward action
+  /// is on screen when it takes focus. Animations are skipped when the
+  /// platform asks for reduced motion.
+  void _showSuccess(String message, {ViewerCollection? collection}) {
+    _showStatus(
+      _StatusMessage.success(message, viewCollection: collection),
     );
+    _afterFrame(() {
+      (collection == null ? _dismissStatusFocusNode : _viewCollectionFocusNode)
+          .requestFocus();
+      if (!_scrollController.hasClients) {
+        return;
+      }
+      _scrollController.animateTo(
+        0,
+        duration: MediaQuery.disableAnimationsOf(context)
+            ? Duration.zero
+            : const Duration(milliseconds: 220),
+        curve: Curves.easeOut,
+      );
+    });
   }
 
   void _dismissStatus() {
-    if (_status != null) {
-      setState(() => _status = null);
+    final wasError = _status?.isError ?? false;
+    setState(() => _status = null);
+    if (wasError) {
+      _afterFrame(_importButtonFocusNode.requestFocus);
     }
   }
 
-  void _focusAfterFrame(FocusNode node) {
+  void _afterFrame(VoidCallback action) {
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted) {
-        node.requestFocus();
+        action();
       }
     });
   }
@@ -163,13 +208,9 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
   /// it (first run) is replaced by the table on its own, so maybePop is a
   /// no-op there.
   Future<void> _viewStatusCollection() async {
-    final status = _status;
-    if (status == null) {
-      return;
-    }
-    final collectionId = status.viewCollectionId;
-    if (collectionId != null) {
-      await widget.controller.selectCollection(collectionId);
+    final collection = _status?.viewCollection;
+    if (collection != null) {
+      await widget.controller.selectCollection(collection.id);
     }
     if (!mounted) {
       return;
@@ -198,10 +239,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
   }
 
   Future<void> _pickArchive() async {
-    setState(() {
-      _isPicking = true;
-      _status = null;
-    });
+    setState(() => _isPicking = true);
 
     try {
       final result = await FilePicker.pickFiles(
@@ -221,6 +259,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       setState(() {
         _selectedArchivePath = file.path;
         _selectedArchiveName = file.name;
+        _status = null;
       });
     } finally {
       if (mounted) {
@@ -261,9 +300,12 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       ),
     );
 
-    if (importedCollections == null) {
+    if (importedCollections == null || !mounted) {
       return;
     }
+    // On first run the import screen is the whole app and the table replaces
+    // it as soon as the dataset loads, so there is no table to go back to.
+    final canReturnToTable = ModalRoute.of(context)?.canPop ?? false;
 
     setState(() {
       _isImporting = true;
@@ -281,33 +323,13 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
         return;
       }
       final importedName = _selectedArchiveName ?? p.basename(archivePath);
-      final collection = _collectionToView(importedCollections);
+      final collection =
+          canReturnToTable ? _collectionToView(importedCollections) : null;
       setState(() {
         _collectionMessage = null;
         _collectionMessageIsError = false;
       });
-      _showStatus(
-        _StatusMessage.success(
-          'Imported $importedName.',
-          viewCollectionId: collection?.id,
-          viewCollectionName: collection?.name,
-        ),
-      );
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) {
-          return;
-        }
-        // The forward action sits at the top of the page, so this lands the
-        // page where the action is rather than centering a mid-page banner.
-        _viewCollectionFocusNode.requestFocus();
-        if (_scrollController.hasClients) {
-          _scrollController.animateTo(
-            0,
-            duration: const Duration(milliseconds: 220),
-            curve: Curves.easeOut,
-          );
-        }
-      });
+      _showSuccess('Imported $importedName.', collection: collection);
     } catch (error) {
       if (!mounted) {
         return;
@@ -315,7 +337,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       _showStatus(_StatusMessage.error(_importFailure('$error')));
       // The retry button is where the failure came from; leave the page where
       // it is and hand the keyboard back to it.
-      _focusAfterFrame(_importButtonFocusNode);
+      _afterFrame(_importButtonFocusNode.requestFocus);
     } finally {
       if (mounted) {
         setState(() => _isImporting = false);
@@ -323,36 +345,33 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
     }
   }
 
-  /// The collection the forward action opens: the archive's collection that
-  /// is already active when it came from this import, else the archive's
-  /// first collection now installed, else whatever the table shows.
+  /// The collection the forward action opens: the imported collection that is
+  /// already active, else the archive's first collection now installed. Null
+  /// when the archive's preview was unreadable, so no View action is offered
+  /// for a collection the archive may not hold.
   ViewerCollection? _collectionToView(
     List<ViewerCollection> importedCollections,
   ) {
-    final installed = widget.controller.dataset?.collections ?? const [];
-    ViewerCollection? firstImported;
-    for (final imported in importedCollections) {
-      for (final collection in installed) {
-        if (_sameCollectionName(imported.name, collection.name)) {
-          firstImported ??= collection;
-          break;
-        }
-      }
-    }
-
+    final installedByName = {
+      for (final collection
+          in widget.controller.dataset?.collections ?? const [])
+        collection.name.trim(): collection,
+    };
     final active = widget.controller.activeCollection;
     if (active != null &&
         importedCollections.any(
-          (collection) => _sameCollectionName(collection.name, active.name),
+          (collection) => collection.name.trim() == active.name.trim(),
         )) {
       return active;
     }
-
-    return firstImported ?? active;
+    for (final imported in importedCollections) {
+      final match = installedByName[imported.name.trim()];
+      if (match != null) {
+        return match;
+      }
+    }
+    return null;
   }
-
-  bool _sameCollectionName(String a, String b) =>
-      a.trim().toLowerCase() == b.trim().toLowerCase();
 
   Future<void> _deleteActiveCollection() async {
     final activeCollection = widget.controller.activeCollection;
@@ -451,11 +470,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
         _collectionMessage = null;
         _collectionMessageIsError = false;
       });
-      _showStatus(
-        const _StatusMessage.success(
-          'Deleted the archive. Import an archive to continue.',
-        ),
-      );
+      _showSuccess('Deleted the archive. Import an archive to continue.');
     } catch (_) {
       if (!mounted) {
         return;
@@ -514,14 +529,12 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                       final isFirstRun = dataset == null;
                       final status = _status;
 
-                      Widget statusBanner(_StatusMessage status) =>
+                      Widget buildBanner(_StatusMessage status) =>
                           _StatusBanner(
-                            key: const ValueKey('importStatus'),
                             status: status,
-                            actionFocusNode: status.isError
-                                ? null
-                                : _viewCollectionFocusNode,
-                            onViewCollection: status.viewCollectionName == null
+                            actionFocusNode: _viewCollectionFocusNode,
+                            dismissFocusNode: _dismissStatusFocusNode,
+                            onViewCollection: status.viewCollection == null
                                 ? null
                                 : _viewStatusCollection,
                             onDismiss: _dismissStatus,
@@ -532,7 +545,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                         padding: const EdgeInsets.all(20),
                         children: [
                           if (status != null && !status.isError) ...[
-                            statusBanner(status),
+                            buildBanner(status),
                             const SizedBox(height: 18),
                           ],
                           if (isFirstRun)
@@ -623,7 +636,6 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                                 collectionId,
                                               );
                                               setState(() {
-                                                _status = null;
                                                 _collectionMessage = null;
                                                 _collectionMessageIsError =
                                                     false;
@@ -662,7 +674,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                           ],
                           if (status != null && status.isError) ...[
                             const SizedBox(height: 18),
-                            statusBanner(status),
+                            buildBanner(status),
                           ],
                           if (!isFirstRun) ...[
                             const SizedBox(height: 18),
@@ -823,13 +835,13 @@ class _ImportArchiveButton extends StatelessWidget {
   const _ImportArchiveButton({
     required this.enabled,
     required this.isImporting,
+    required this.focusNode,
     required this.onPressed,
-    this.focusNode,
   });
 
   final bool enabled;
   final bool isImporting;
-  final FocusNode? focusNode;
+  final FocusNode focusNode;
   final VoidCallback onPressed;
 
   @override
@@ -1051,15 +1063,16 @@ class _ImportProgressOverlay extends StatelessWidget {
 /// dismisses it, so the page never changes its story while they read it.
 class _StatusBanner extends StatelessWidget {
   const _StatusBanner({
-    super.key,
     required this.status,
     required this.onDismiss,
+    required this.dismissFocusNode,
     this.onViewCollection,
     this.actionFocusNode,
   });
 
   final _StatusMessage status;
   final VoidCallback onDismiss;
+  final FocusNode dismissFocusNode;
   final VoidCallback? onViewCollection;
   final FocusNode? actionFocusNode;
 
@@ -1075,9 +1088,8 @@ class _StatusBanner extends StatelessWidget {
         fontWeight: FontWeight.w700,
       ),
     );
-    final collectionName = status.viewCollectionName;
+    final collectionName = status.viewCollection?.name;
     return Semantics(
-      liveRegion: true,
       container: true,
       child: DecoratedBox(
         decoration: BoxDecoration(
@@ -1144,6 +1156,7 @@ class _StatusBanner extends StatelessWidget {
                           ),
                         TextButton(
                           key: const ValueKey('importOutcomeDismiss'),
+                          focusNode: dismissFocusNode,
                           onPressed: onDismiss,
                           style: actionStyle,
                           child: const Text('Dismiss'),

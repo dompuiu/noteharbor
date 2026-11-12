@@ -29,6 +29,25 @@ void main() {
     }
   });
 
+  Future<DatasetController> readyController({
+    required List<ViewerCollection> installed,
+    List<ViewerCollection> imported = const [],
+    Object? failure,
+    bool firstRun = false,
+  }) async {
+    final controller = DatasetController(
+      repository: _OutcomeRepository(
+        installed: installed,
+        imported: imported,
+        failure: failure,
+        firstRun: firstRun,
+      ),
+      selectionStore: _MemoryLastCollectionStore(),
+    );
+    await controller.load();
+    return controller;
+  }
+
   Future<void> pumpImportRoute(
     WidgetTester tester,
     DatasetController controller,
@@ -96,21 +115,27 @@ void main() {
         return null;
       },
     );
+    addTearDown(
+      () => tester.binding.defaultBinaryMessenger
+          .setMockDecodedMessageHandler<Object?>(
+              SystemChannels.accessibility, null),
+    );
     return announcements;
   }
 
+  String debugLabel(WidgetTester tester) =>
+      tester.binding.focusManager.primaryFocus?.debugLabel ?? '';
+
   testWidgets(
-      'a successful import is announced and offers the imported '
+      'a successful import is announced and offers the first imported '
       'collection', (WidgetTester tester) async {
-    final repository = _OutcomeRepository(
+    final controller = await readyController(
       installed: const [ViewerCollection(id: 11, name: 'Alpha', noteCount: 2)],
-      imported: const [ViewerCollection(id: 2, name: 'Bulgaria', noteCount: 3)],
+      imported: const [
+        ViewerCollection(id: 2, name: 'Bulgaria', noteCount: 3),
+        ViewerCollection(id: 3, name: 'Greece', noteCount: 1),
+      ],
     );
-    final controller = DatasetController(
-      repository: repository,
-      selectionStore: _MemoryLastCollectionStore(),
-    );
-    await controller.load();
     final announcements = captureAnnouncements(tester);
 
     await pumpImportRoute(tester, controller);
@@ -122,10 +147,7 @@ void main() {
       announcements,
       contains('Imported coins.zip. View Bulgaria to browse its notes.'),
     );
-    expect(
-      tester.binding.focusManager.primaryFocus?.debugLabel,
-      'importViewCollection',
-    );
+    expect(debugLabel(tester), 'importViewCollection');
 
     await tester.tap(find.text('View Bulgaria'));
     await tester.pumpAndSettle();
@@ -135,17 +157,58 @@ void main() {
   });
 
   testWidgets(
+      'first-run success announces only the outcome: the table '
+      'replaces the screen, so there is no View action', (
+    WidgetTester tester,
+  ) async {
+    final controller = await readyController(
+      installed: const [],
+      imported: const [
+        ViewerCollection(id: 2, name: 'Bulgaria', noteCount: 3),
+      ],
+      firstRun: true,
+    );
+    final announcements = captureAnnouncements(tester);
+
+    await tester.pumpWidget(
+      MaterialApp(home: ImportDatasetScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+    await confirmImport(tester);
+
+    expect(find.text('Imported coins.zip.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('importOutcomeView')), findsNothing);
+    expect(announcements, contains('Imported coins.zip.'));
+    expect(debugLabel(tester), 'importStatusDismiss');
+  });
+
+  testWidgets('an unreadable preview offers no View action', (
+    WidgetTester tester,
+  ) async {
+    final controller = await readyController(
+      installed: const [ViewerCollection(id: 11, name: 'Alpha', noteCount: 2)],
+      imported: const [],
+    );
+    final announcements = captureAnnouncements(tester);
+
+    await pumpImportRoute(tester, controller);
+    await confirmImport(tester);
+
+    // The archive's collections are unknown, so the banner never claims a
+    // collection the archive may not hold.
+    expect(find.text('Imported coins.zip.'), findsOneWidget);
+    expect(find.byKey(const ValueKey('importOutcomeView')), findsNothing);
+    expect(announcements, contains('Imported coins.zip.'));
+    expect(debugLabel(tester), 'importStatusDismiss');
+  });
+
+  testWidgets(
       'a failure keeps its place and turns a Bad state into a human '
       'sentence with the recovery step', (WidgetTester tester) async {
-    final repository = _OutcomeRepository(
+    final controller = await readyController(
       installed: const [ViewerCollection(id: 11, name: 'Alpha', noteCount: 2)],
       failure: StateError('Archive contains no collections.'),
     );
-    final controller = DatasetController(
-      repository: repository,
-      selectionStore: _MemoryLastCollectionStore(),
-    );
-    await controller.load();
     final announcements = captureAnnouncements(tester);
 
     await pumpImportRoute(tester, controller);
@@ -157,10 +220,7 @@ void main() {
     expect(find.text(expected), findsOneWidget);
     expect(find.textContaining('Bad state:'), findsNothing);
     expect(announcements, contains(expected));
-    expect(
-      tester.binding.focusManager.primaryFocus?.debugLabel,
-      'importButton',
-    );
+    expect(debugLabel(tester), 'importButton');
 
     // The failure remains until the import is retried or dismissed.
     await tester.pump(const Duration(seconds: 10));
@@ -169,20 +229,44 @@ void main() {
     await tester.tap(find.byKey(const ValueKey('importOutcomeDismiss')));
     await tester.pumpAndSettle();
     expect(find.text(expected), findsNothing);
+    expect(debugLabel(tester), 'importButton');
+  });
+
+  testWidgets('an error survives a collection change in the panel above', (
+    WidgetTester tester,
+  ) async {
+    final controller = await readyController(
+      installed: const [
+        ViewerCollection(id: 11, name: 'Alpha', noteCount: 2),
+        ViewerCollection(id: 22, name: 'Beta', noteCount: 3),
+      ],
+      failure: StateError('Archive contains no collections.'),
+    );
+
+    await pumpImportRoute(tester, controller);
+    await confirmImport(tester);
+    final banner = find.textContaining('Could not import the archive:');
+
+    await tester.scrollUntilVisible(
+      find.byType(DropdownButtonFormField<int>),
+      -200,
+    );
+    await tester.pumpAndSettle();
+    await tester.tap(find.byType(DropdownButtonFormField<int>));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Beta (3)').last);
+    await tester.pumpAndSettle();
+
+    expect(banner, findsOneWidget);
   });
 
   testWidgets('a failure drops the Exception prefix too', (
     WidgetTester tester,
   ) async {
-    final repository = _OutcomeRepository(
+    final controller = await readyController(
       installed: const [ViewerCollection(id: 11, name: 'Alpha', noteCount: 2)],
       failure: Exception('The archive is unreadable.'),
     );
-    final controller = DatasetController(
-      repository: repository,
-      selectionStore: _MemoryLastCollectionStore(),
-    );
-    await controller.load();
 
     await pumpImportRoute(tester, controller);
     await confirmImport(tester);
@@ -193,6 +277,25 @@ void main() {
     expect(find.textContaining('Exception:'), findsNothing);
   });
 
+  testWidgets('a bodiless error falls back to the generic sentence', (
+    WidgetTester tester,
+  ) async {
+    final controller = await readyController(
+      installed: const [ViewerCollection(id: 11, name: 'Alpha', noteCount: 2)],
+      failure: Exception(),
+    );
+
+    await pumpImportRoute(tester, controller);
+    await confirmImport(tester);
+
+    const expected =
+        'Could not import the archive. Choose the archive again and retry, '
+        'or try a different archive.';
+    expect(find.text(expected), findsOneWidget);
+    expect(find.textContaining('Could not import the archive: Exception'),
+        findsNothing);
+  });
+
   testWidgets('a successful import returns a scrolled page to the top', (
     WidgetTester tester,
   ) async {
@@ -201,15 +304,12 @@ void main() {
     addTearDown(tester.view.resetPhysicalSize);
     addTearDown(tester.view.resetDevicePixelRatio);
 
-    final repository = _OutcomeRepository(
+    final controller = await readyController(
       installed: const [ViewerCollection(id: 11, name: 'Alpha', noteCount: 2)],
-      imported: const [ViewerCollection(id: 2, name: 'Bulgaria', noteCount: 3)],
+      imported: const [
+        ViewerCollection(id: 2, name: 'Bulgaria', noteCount: 3),
+      ],
     );
-    final controller = DatasetController(
-      repository: repository,
-      selectionStore: _MemoryLastCollectionStore(),
-    );
-    await controller.load();
 
     await pumpImportRoute(tester, controller);
     final listView = tester.widget<ListView>(find.byType(ListView));
@@ -226,16 +326,18 @@ void main() {
 
 class _OutcomeRepository extends ViewerRepository {
   _OutcomeRepository({
-    required this.installed,
+    required List<ViewerCollection> installed,
     this.imported = const [],
     this.failure,
-  }) : _collections = installed;
+    this.firstRun = false,
+  }) : _collections = [...installed];
 
-  final List<ViewerCollection> installed;
   final List<ViewerCollection> imported;
   final Object? failure;
+  final bool firstRun;
 
   List<ViewerCollection> _collections;
+  bool _importedOnce = false;
 
   @override
   bool get canManageImportedDatasets => true;
@@ -250,6 +352,9 @@ class _OutcomeRepository extends ViewerRepository {
 
   @override
   Future<ViewerDataset> loadDataset() async {
+    if (firstRun && !_importedOnce) {
+      throw const NoImportedDatasetException();
+    }
     return ViewerDataset.fromJson({
       'generatedAt': '2026-03-28T12:00:00Z',
       'noteCount': 0,
@@ -274,7 +379,7 @@ class _OutcomeRepository extends ViewerRepository {
     }
     // Re-imported collections churn their IDs, like the real store.
     _collections = [
-      ...installed,
+      ..._collections,
       for (final (index, collection) in imported.indexed)
         ViewerCollection(
           id: 77 + index,
@@ -282,6 +387,7 @@ class _OutcomeRepository extends ViewerRepository {
           noteCount: collection.noteCount,
         ),
     ];
+    _importedOnce = true;
   }
 }
 

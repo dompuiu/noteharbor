@@ -18,7 +18,7 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ### Fixed
 
-- Import screen: import outcomes are announced to screen readers, and a failed import names what went wrong without Dart's `Bad state:`/`Exception:` prefixes and ends with the recovery step. The banner no longer jumps a scrolled page, focus moves to `View <collection>` after a success and back to Import archive after a failure, and a failure stays until the import is retried or the banner is dismissed.
+- Import screen: import outcomes are announced to screen readers, and a failed import names what went wrong without Dart's `Bad state:`/`Exception:` prefixes and ends with the recovery step. The banner no longer jumps a scrolled page, focus moves to the banner's action after a success and back to Import archive after a failure, and a failure stays until the import is retried or the banner is dismissed.
 - Import screen: the drop zone fades to a single pale-red fill when a drag is over it. The fill used to animate into a translucent accent wash, and the color tween dipped through a half-alpha red, flashing a saturated pink before settling.
 
 ## [1.14.1] - 2026-11-10
