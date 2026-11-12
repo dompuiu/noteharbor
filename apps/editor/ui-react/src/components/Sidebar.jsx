@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useCollections } from "../lib/collections.jsx";
 import { ownsPrintableShortcut } from "../lib/editableElement.js";
 import { useShowcases } from "../lib/showcases.jsx";
+import { loadSidebarPinned, saveSidebarPinned } from "../lib/sidebarPin.js";
 import { APP_VERSION } from "../lib/version.js";
 import {
   CATALOG_ROUTES,
@@ -14,7 +15,14 @@ import {
 // The Editor's persistent chrome. It renders on every route beside the main
 // region: a 64px rail of destination icons that expands to 288px on hover or
 // keyboard focus. The layout holds a fixed 1200px desktop floor, so the rail
-// never becomes a drawer: narrow windows scroll horizontally instead.
+// never becomes a drawer: narrow windows scroll horizontally instead. The pin
+// in the head holds the expanded width without hover or focus, and then takes
+// that width out of the main column's flow so the table reflows beside it.
+//
+// Collapsed, each collection and showcase row keeps its glyph and gains a
+// second line of identity under it: the row's note count in tabular figures,
+// or the name's initials when no count has loaded. Hover still reveals the
+// full name, but it is confirmation rather than the only source of truth.
 //
 // The Catalog group is data-driven for collections (the sidebar *is* the
 // collection list): one row per collection, a `+ New collection`
@@ -26,13 +34,13 @@ import {
 // Keyboard model (matches the tables): "b" is global — from a row, the
 // selection bar, or any other control — and opens the rail with the cursor on
 // the current option. Text fields and modal surfaces keep the letter.
-// ↑/↓ and j/k move the cursor through every stop in DOM order — each group's
-// Reorder toggle, each row link/action, and the enabled Move up/down buttons
-// while that group is in reorder mode; Home/End jump; Enter/Space activates
-// the stop (toggles reorder, moves the row, or follows the option); Escape
-// returns focus to the control that opened the rail and collapses it. Tab
-// cycles the stops like ↓, and Shift+Tab like ↑, both wrapping off the ends,
-// so the rail is left with Escape.
+// ↑/↓ and j/k move the cursor through every stop in DOM order — the pin
+// toggle, each group's Reorder toggle, each row link/action, and the enabled
+// Move up/down buttons while that group is in reorder mode; Home/End jump;
+// Enter/Space activates the stop (pins the rail, toggles reorder, moves the
+// row, or follows the option); Escape returns focus to the control that
+// opened the rail and collapses it. Tab cycles the stops like ↓, and Shift+Tab
+// like ↑, both wrapping off the ends, so the rail is left with Escape.
 
 // Per-destination icons, lifted from the settled layout-D prototype.
 const ICONS = {
@@ -55,7 +63,58 @@ const ICONS = {
     '<rect width="8" height="18" x="3" y="3" rx="1"/><path d="M7 3v18"/><path d="M20.4 18.9c.2.5-.1 1.1-.6 1.3l-1.9.7c-.5.2-1.1-.1-1.3-.6L11.1 5.1c-.2-.5.1-1.1.6-1.3l1.9-.7c.5-.2 1.1.1 1.3.6Z"/>',
   showcases:
     '<path d="m22 11-1.296-1.296a2.4 2.4 0 0 0-3.408 0L11 16"/><path d="M4 8a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2"/><circle cx="13" cy="7" r="1" fill="currentColor"/><rect x="8" y="2" width="14" height="14" rx="2"/>',
+  // The pin holds the rail open without hover or focus. One glyph for both
+  // states; the pressed state is the accent tint, not a second icon.
+  pin: '<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
 };
+
+// The collapsed rail's second line of identity. A collection or showcase row
+// shows its loaded note count, in tabular figures so the marks line up; a row
+// with no count (a draft, or a list payload without the field) falls back to
+// the name's two-character initials so no row is anonymous.
+function initialsOf(name) {
+  const words = String(name ?? "")
+    .trim()
+    .split(/\s+/)
+    .filter(Boolean);
+
+  // A blank name still gets a mark; it never renders an empty link.
+  if (words.length === 0) {
+    return "?";
+  }
+
+  const first = Array.from(words[0]);
+
+  if (words.length === 1) {
+    return first.slice(0, 2).join("").toUpperCase();
+  }
+
+  const last = Array.from(words[words.length - 1]);
+
+  return `${first[0]}${last[0]}`.toUpperCase();
+}
+
+function railIdentity(item) {
+  if (Number.isFinite(item.count)) {
+    return String(item.count);
+  }
+
+  return initialsOf(item.label);
+}
+
+// Only collection and showcase rows carry the collapsed identity mark; All
+// notes, Import / Export and the create actions stay plain icons.
+function RailMark({ item }) {
+  if (item.collectionId == null && item.showcaseId == null) {
+    return null;
+  }
+
+  return (
+    <span aria-hidden="true" className="sidebar-link-mark">
+      {railIdentity(item)}
+    </span>
+  );
+}
 
 const ALL_NOTES_ITEM = {
   icon: "list",
@@ -117,6 +176,9 @@ function Sidebar({ pageFocusRef }) {
   // The keyboard cursor, distinct from DOM focus. Null means the rail is not
   // being navigated by keyboard.
   const [cursorIndex, setCursorIndex] = useState(null);
+  // The pin holds the expanded rail open without hover or focus. It survives
+  // reload through localStorage; loading it never focuses the toggle.
+  const [pinned, setPinned] = useState(loadSidebarPinned);
   // Drag-and-drop state for reordering the showcase rows. `dropTarget` records
   // whether the pointer sits above or below the hovered row's midpoint.
   const [draggedShowcaseId, setDraggedShowcaseId] = useState(null);
@@ -147,6 +209,7 @@ function Sidebar({ pageFocusRef }) {
     key: `collection-${collection.id}`,
     label: collection.name,
     to: CATALOG_ROUTES.collection(collection.id),
+    count: collection.note_count,
     matches: (pathname) =>
       pathname === CATALOG_ROUTES.collection(collection.id) ||
       pathname === CATALOG_ROUTES.collectionEdit(collection.id),
@@ -185,6 +248,9 @@ function Sidebar({ pageFocusRef }) {
     key: `showcase-${showcase.id}`,
     label: showcase.name,
     to: SHOWCASE_ROUTES.showcase(showcase.id),
+    // No new fetch from the rail: only a count the list payload already
+    // carries reaches the collapsed mark.
+    count: showcase.note_count,
     matches: (pathname) =>
       pathname === SHOWCASE_ROUTES.showcase(showcase.id) ||
       pathname === SHOWCASE_ROUTES.showcaseEdit(showcase.id),
@@ -260,6 +326,15 @@ function Sidebar({ pageFocusRef }) {
     }
   }
 
+  // Pinning never moves focus: the toggle is only reachable while the rail is
+  // open, so the click or Enter that flips it already has focus where the
+  // collector put it.
+  function togglePinned() {
+    const next = !pinned;
+    setPinned(next);
+    saveSidebarPinned(next);
+  }
+
   function isRowReorderable(item, group) {
     const isShowcase = item.showcaseId != null && !item.pending;
     const isCollection = item.collectionId != null && !item.pending;
@@ -271,11 +346,12 @@ function Sidebar({ pageFocusRef }) {
     );
   }
 
-  // Keyboard cursor stops in DOM order: each group's Reorder toggle, then
-  // each row link/action, with the enabled Move up/down buttons inline after
-  // their row's link while that group is in reorder mode. Disabled moves are
-  // skipped: they are not focusable natively either.
-  const cursorStops = [];
+  // Keyboard cursor stops in DOM order: the pin in the head, then each
+  // group's Reorder toggle, then each row link/action, with the enabled Move
+  // up/down buttons inline after their row's link while that group is in
+  // reorder mode. Disabled moves are skipped: they are not focusable natively
+  // either.
+  const cursorStops = [{ kind: "pin", key: "pin" }];
   for (const group of groups) {
     if (group.reorderScope) {
       cursorStops.push({ kind: "toggle", group, groupId: group.id, key: `toggle-${group.id}` });
@@ -318,6 +394,8 @@ function Sidebar({ pageFocusRef }) {
     }
   }
   const stopIndexByKey = new Map(cursorStops.map((stop, index) => [stop.key, index]));
+  // The pin is the first stop, in the head above every group.
+  const pinIndex = stopIndexByKey.get("pin");
   linksRef.current.length = cursorStops.length;
 
   // After a keyboard move the provider reconciles the order, which rebuilds
@@ -575,6 +653,11 @@ function Sidebar({ pageFocusRef }) {
 
         const stop = cursorStops[cursorIndex];
 
+        if (stop?.kind === "pin") {
+          togglePinned();
+          return;
+        }
+
         if (stop?.kind === "toggle") {
           toggleGroupReorder(stop.group);
           return;
@@ -597,7 +680,7 @@ function Sidebar({ pageFocusRef }) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursorIndex, pathname, showcases, pendingShowcase, collections, pendingCollection, reorderingCollections, reorderingShowcases, cursorStops.length]);
+  }, [cursorIndex, pathname, pinned, showcases, pendingShowcase, collections, pendingCollection, reorderingCollections, reorderingShowcases, cursorStops.length]);
 
   function handleLinkClick(to) {
     // A click means "I'm leaving the rail". The browser focuses a clicked
@@ -868,19 +951,29 @@ function Sidebar({ pageFocusRef }) {
         return;
       }
 
+      // A pinned rail does not collapse when the pointer leaves, so reorder
+      // mode stays with it. Unpinned keeps today's behaviour exactly.
+      if (pinned) {
+        return;
+      }
+
       exitReorderModes();
     }
 
     dock.addEventListener("mouseleave", handleDockMouseLeave);
     return () => dock.removeEventListener("mouseleave", handleDockMouseLeave);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draggedShowcaseId, draggedCollectionId]);
+  }, [draggedShowcaseId, draggedCollectionId, pinned]);
 
   return (
     <div
-      className={
-        cursorIndex !== null ? "sidebar-dock sidebar-dock--open" : "sidebar-dock"
-      }
+      className={[
+        "sidebar-dock",
+        pinned ? "sidebar-dock--pinned" : "",
+        cursorIndex !== null ? "sidebar-dock--open" : "",
+      ]
+        .filter(Boolean)
+        .join(" ")}
       ref={dockRef}
     >
         <nav
@@ -904,7 +997,7 @@ function Sidebar({ pageFocusRef }) {
               setCursorIndex(null);
             }
 
-            if (focusLeft) {
+            if (focusLeft && !pinned) {
               exitReorderModes();
             }
           }}
@@ -918,6 +1011,29 @@ function Sidebar({ pageFocusRef }) {
               </span>
               <span className="sidebar-wordmark">Note Harbor</span>
             </div>
+            <button
+              aria-label="Pin sidebar"
+              aria-pressed={pinned}
+              className={`sidebar-pin${
+                pinned ? " sidebar-pin--active" : ""
+              }${
+                cursorIndex === pinIndex ? " sidebar-pin--cursor" : ""
+              }`}
+              data-sidebar-index={pinIndex}
+              onClick={() => {
+                if (cursorIndex !== null) {
+                  setCursorIndex(pinIndex);
+                }
+                togglePinned();
+              }}
+              ref={(node) => {
+                linksRef.current[pinIndex] = node;
+              }}
+              title={pinned ? "Unpin sidebar" : "Pin sidebar"}
+              type="button"
+            >
+              <ItemIcon className="sidebar-pin-ic" icon="pin" />
+            </button>
           </div>
 
           <div className="sidebar-nav">
@@ -1195,6 +1311,7 @@ function Sidebar({ pageFocusRef }) {
                             <span className="sidebar-link-label">
                               {item.label}
                             </span>
+                            <RailMark item={item} />
                           </Link>
                           <span className="sidebar-row-moves">
                             <button
@@ -1264,6 +1381,7 @@ function Sidebar({ pageFocusRef }) {
                       >
                         <ItemIcon icon={item.icon} />
                         <span className="sidebar-link-label">{item.label}</span>
+                        <RailMark item={item} />
                       </Link>
                     );
                   })}

@@ -220,7 +220,7 @@ Tags are labels, not state, so they left the accent family for their own warm Oc
 
 ## Layout
 
-A fixed, non-scrolling app shell: a slate ink left rail plus a main column that fills the remaining width and height. The dock is a 64px rail whose contents expand over the content to a max of 480px on hover or keyboard focus; it never becomes a drawer and never pushes the main column. Main padding is 16px vertical and 24px horizontal; screens stack with 24px gaps. The Viewer's table screen keeps a 12px page inset so the filter and grid stay roomy at 400px.
+A fixed, non-scrolling app shell: a slate ink left rail plus a main column that fills the remaining width and height. The dock is a 64px rail whose contents expand over the content to a max of 480px on hover or keyboard focus; it never becomes a drawer and, while unpinned, never pushes the main column. Pinning holds the rail open at 288px and takes that width in flow, so the table reflows beside it. Main padding is 16px vertical and 24px horizontal; screens stack with 24px gaps. The Viewer's table screen keeps a 12px page inset so the filter and grid stay roomy at 400px.
 
 The Table screen is one card that consumes the whole remaining area: a bordered `.table-shell`, a grey header band, a scrolling viewport, and a floating bulk-action pill. The card is its own query container. Headers are 40px tall with 12px horizontal padding; rows are 45px with 12px cell padding and a faint neutral zebra stripe. Long content truncates; the layout never wraps a row. The Viewer's read-only table is the same card at 56px rows with a 40×24 thumbnail, and its text columns share spare width so the row content reaches the card's right edge instead of ending in an empty gutter.
 
@@ -276,7 +276,9 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 
 ### Sidebar Navigation
 - **Style:** a 64px Rail Slate rail with white text and a 1px hairline right border; category labels are 9.5px/800 uppercase with 0.14em tracking at 72% white, and a 20px marker ringed in an 18% white hairline.
-- **Expansion:** width animates to `max(288px, max-content)` in 0.18s; the wordmark and link labels toggle display, so the marker never shifts. The expanded rail lifts with the ambient floating shadow.
+- **Collapsed identity:** each collection and showcase row keeps its glyph and carries a second line beneath it in 9.5px/700 tabular figures — its note count, or the name's two-character initials when no count has loaded. It is decoration: the accessible name stays the plain name.
+- **Expansion:** width animates to `max(288px, max-content)` in 0.18s; the wordmark and link labels toggle display, so the marker never shifts. The expanded rail lifts with the ambient floating shadow. The collapsed count yields to the readable name.
+- **Pin:** a pin toggle in the head holds the rail at exactly 288px without hover or focus. Pinned, the dock takes that width in flow so the table reflows beside it; long names ellipsise rather than widening past 288px. The pin survives reload in localStorage and is a keyboard cursor stop.
 - **States:** links sit at 72% white, hover to an 8% white wash, and the active destination takes a 13% white pill plus a 3px red left-edge bar in white text. The `+ New` actions are light red (#ff8a84).
 - **Brand mark:** the red square with the banknote glyph is the rail's only solid red element.
 
@@ -318,6 +320,6 @@ Four deliberate steps: 8px for tight inline controls (`--radius-sm`), 10px for f
 - **Don't** use soft drop shadows on flat cards at rest.
 - **Don't** wrap table cells or soften row density to "breathe"; the Table is a scanning surface.
 - **Don't** set body copy in uppercase or weight 800; the display voice is for titles only.
-- **Don't** turn the sidebar into a drawer or let it push the main column.
+- **Don't** turn the sidebar into a drawer or let the unpinned rail push the main column.
 - **Don't** square off a button or a chip: buttons are pills and chips keep their 7px rectangle.
 - **Don't** paint a message as bare coloured text or give each screen its own notice box; toasts and inline messages share one edge-and-wash pattern.

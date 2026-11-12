@@ -1595,8 +1595,11 @@ describe("sidebar styles", () => {
   });
 
   test("expands on hover and on keyboard focus entering the rail", () => {
-    expect(styles).toMatch(/\.sidebar-dock:hover\s+\.sidebar/);
-    expect(styles).toMatch(/\.sidebar-dock:has\(:focus-visible\)\s+\.sidebar/);
+    // A pinned rail is already expanded, so the overlay widths skip it.
+    expect(styles).toMatch(/\.sidebar-dock:hover:not\(\.sidebar-dock--pinned\)\s+\.sidebar/);
+    expect(styles).toMatch(
+      /\.sidebar-dock:has\(:focus-visible\):not\(\.sidebar-dock--pinned\)\s+\.sidebar/,
+    );
   });
 
   test("hangs the links off an indented rule under each group label", () => {
@@ -1635,7 +1638,7 @@ describe("sidebar styles", () => {
       /\.sidebar-dock \.sidebar-group-label\s*\{[^}]*display:\s*none/,
     );
     expect(styles).toMatch(
-      /\.sidebar-dock:not\(\.sidebar-dock--open\):not\(:hover\):not\(:has\(:focus-visible\)\) \.sidebar-group-label\s*\{[^}]*justify-content:\s*center/,
+      /\.sidebar-dock:not\(\.sidebar-dock--open\):not\(\.sidebar-dock--pinned\):not\(:hover\):not\(:has\(:focus-visible\)\) \.sidebar-group-label[^{]*\{[^}]*justify-content:\s*center/,
     );
   });
 
@@ -1691,7 +1694,7 @@ describe("sidebar styles", () => {
     // while longer names widen it, up to a cap past which the ellipsis
     // still applies.
     const expanded = styles.match(
-      /\.sidebar-dock:hover \.sidebar,\s*\n?\s*\.sidebar-dock:has\(:focus-visible\) \.sidebar\s*\{([^}]*)\}/,
+      /\.sidebar-dock:hover:not\(\.sidebar-dock--pinned\) \.sidebar,\s*\n?\s*\.sidebar-dock:has\(:focus-visible\):not\(\.sidebar-dock--pinned\) \.sidebar\s*\{([^}]*)\}/,
     );
     expect(expanded).not.toBeNull();
     expect(expanded[1]).toMatch(
@@ -1744,7 +1747,7 @@ describe("sidebar styles", () => {
     // not through `:has(:focus-visible)` alone: the class cannot flicker
     // between key presses, so the labels keep one steady computed style.
     const open = styles.match(
-      /\.sidebar-dock\.sidebar-dock--open \.sidebar\s*\{([^}]*)\}/,
+      /\.sidebar-dock\.sidebar-dock--open:not\(\.sidebar-dock--pinned\) \.sidebar\s*\{([^}]*)\}/,
     );
     expect(open).not.toBeNull();
     expect(open[1]).toMatch(
@@ -1763,11 +1766,11 @@ describe("sidebar styles", () => {
   });
 
   test("the collapsed-rail rules yield to the keyboard-open class", () => {
-    // The centred collapsed-rail rules must not match while keyboard-open,
-    // or they would fight the open layout whenever focus visibility
-    // flickers between key presses.
+    // The centred collapsed-rail rules must not match while keyboard-open
+    // (or pinned), or they would fight the open layout whenever focus
+    // visibility flickers between key presses.
     expect(styles).toMatch(
-      /\.sidebar-dock:not\(\.sidebar-dock--open\):not\(:hover\):not\(:has\(:focus-visible\)\) \.sidebar-link--cursor/,
+      /\.sidebar-dock:not\(\.sidebar-dock--open\):not\(\.sidebar-dock--pinned\):not\(:hover\):not\(:has\(:focus-visible\)\) \.sidebar-link--cursor/,
     );
   });
 
@@ -1803,6 +1806,77 @@ describe("sidebar styles", () => {
     expect(block).not.toBeNull();
     expect(block[1]).toMatch(/\.sidebar[\s,{]/);
     expect(block[1]).toMatch(/transition:\s*none/);
+  });
+
+  test("the reduced-motion block drops the pinned label entrance too", () => {
+    const block = styles.match(
+      /@media \(prefers-reduced-motion: reduce\)\s*\{([\s\S]*?)\n\}/,
+    );
+    expect(block).not.toBeNull();
+    expect(block[1]).toMatch(/sidebar-dock--pinned \.sidebar-link-label/);
+  });
+
+  // Collapsed, every collection and showcase row carries a second line of
+  // identity under its shared glyph: the note count in tabular figures, or
+  // the name's initials. The expanding rail swaps it for the readable name.
+  test("the collapsed identity mark uses tabular figures and yields to the name", () => {
+    const mark = styles.match(/\.sidebar-link-mark\s*\{([^}]*)\}/);
+    expect(mark).not.toBeNull();
+    expect(mark[1]).toMatch(/font-variant-numeric:\s*tabular-nums/);
+
+    const collapsed = styles.match(
+      /\.sidebar-dock \.sidebar-link-mark\s*\{([^}]*)\}/,
+    );
+    expect(collapsed).not.toBeNull();
+    expect(collapsed[1]).toMatch(/display:\s*block/);
+
+    const expanded = styles.match(
+      /\.sidebar-dock:hover \.sidebar-link-mark,[\s\S]*?\{([^}]*)\}/,
+    );
+    expect(expanded).not.toBeNull();
+    expect(expanded[1]).toMatch(/display:\s*none/);
+    expect(styles).toMatch(/\.sidebar-dock.sidebar-dock--open \.sidebar-link-mark/);
+  });
+
+  // The mark overlays the glyph instead of sharing its column, so the rail's
+  // rows keep one height and never jump as hover or focus swaps the mark for
+  // the name.
+  test("the collapsed mark overlays the glyph instead of growing the row", () => {
+    const mark = styles.match(/\.sidebar-link-mark\s*\{([^}]*)\}/);
+    expect(mark).not.toBeNull();
+    expect(mark[1]).toMatch(/position:\s*absolute/);
+    const link = styles.match(/\.sidebar-dock \.sidebar-link\s*\{([^}]*)\}/);
+    expect(link).not.toBeNull();
+    expect(link[1]).not.toMatch(/flex-direction:\s*column/);
+  });
+
+  // The pin holds the expanded rail in flow: the dock and the rail take the
+  // 288px width, so the table reflows beside them instead of being overlaid.
+  test("the pin holds the rail in flow at the expanded width", () => {
+    expect(styles).toMatch(
+      /\.sidebar-dock--pinned\s*\{[^}]*width:\s*var\(--sidebar-expanded-width\)/,
+    );
+    expect(styles).toMatch(
+      /\.sidebar-dock\.sidebar-dock--pinned \.sidebar\s*\{[^}]*width:\s*var\(--sidebar-expanded-width\)/,
+    );
+  });
+
+  test("a pinned rail shows the labels without hover or focus", () => {
+    const labels = styles.match(
+      /\.sidebar-dock--pinned \.sidebar-link-label,[\s\S]*?\{([^}]*)\}/,
+    );
+    expect(labels).not.toBeNull();
+    expect(labels[0]).toMatch(/\.sidebar-group-name/);
+    expect(labels[1]).toMatch(/display:\s*block/);
+    expect(styles).toMatch(/\.sidebar-dock--pinned \.sidebar-pin\s*\{[^}]*display:\s*inline-flex/);
+  });
+
+  test("the pin toggle appears with the labels, never on the bare rail", () => {
+    const pin = styles.match(/\.sidebar-pin\s*\{([^}]*)\}/);
+    expect(pin).not.toBeNull();
+    expect(pin[1]).toMatch(/display:\s*none/);
+    expect(styles).toMatch(/\.sidebar-dock:hover \.sidebar-pin/);
+    expect(styles).toMatch(/\.sidebar-dock\.sidebar-dock--open \.sidebar-pin/);
   });
 
   // The app follows the window with no breakpoint-specific shell layout: a

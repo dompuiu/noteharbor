@@ -24,6 +24,7 @@ import {
   reorderShowcases,
 } from "../lib/api.js";
 import { CollectionsProvider } from "../lib/collections.jsx";
+import { sidebarPinStorageKey } from "../lib/sidebarPin.js";
 import { ShowcasesProvider } from "../lib/showcases.jsx";
 import { APP_VERSION } from "../lib/version.js";
 import { Sidebar } from "./Sidebar.jsx";
@@ -93,7 +94,7 @@ beforeEach(() => {
   window.localStorage.clear();
   getShowcases.mockResolvedValue({
     showcases: [
-      { id: 1, name: "Summer" },
+      { id: 1, name: "Summer", note_count: 7 },
       { id: 2, name: "Vienna" },
     ],
   });
@@ -297,6 +298,145 @@ describe("Sidebar navigation groups", () => {
   });
 });
 
+describe("Sidebar collapsed identity", () => {
+  test("collection and showcase rows show their note count under the glyph", async () => {
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    // Default (2), Archive (0), Summer (7), then Vienna, whose fixture carries
+    // no count and so falls back to its initials. All notes, Import / Export
+    // and the create actions stay plain icons.
+    const marks = [...container.querySelectorAll(".sidebar-link-mark")];
+    expect(marks.map((mark) => mark.textContent)).toEqual([
+      "2",
+      "0",
+      "7",
+      "VI",
+    ]);
+
+    // The mark is decoration: the link's accessible name stays the name.
+    for (const mark of marks) {
+      expect(mark).toHaveAttribute("aria-hidden", "true");
+    }
+    expect(
+      screen.getByRole("link", { name: "Default" }),
+    ).toBeInTheDocument();
+  });
+
+  test("a row without a loaded count falls back to two-character initials", async () => {
+    getCollections.mockResolvedValue({
+      collections: [
+        { id: 1, is_default: 1, name: "Default", note_count: null },
+        { id: 2, is_default: 0, name: "Summer Postcards", note_count: "4" },
+      ],
+    });
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    const catalog = container.querySelector(
+      '.sidebar-group[aria-labelledby="sidebar-group-catalog"]',
+    );
+    const marks = [...catalog.querySelectorAll(".sidebar-link-mark")];
+    expect(marks.map((mark) => mark.textContent)).toEqual(["DE", "SP"]);
+  });
+});
+
+describe("Sidebar pin", () => {
+  test("pins the rail open and remembers it across reloads", async () => {
+    const user = userEvent.setup();
+    const { container, unmount } = await renderSidebar(
+      CATALOG_ROUTES.collection(1),
+    );
+
+    expect(container.querySelector(".sidebar-dock--pinned")).toBeNull();
+    const pin = screen.getByRole("button", { name: "Pin sidebar" });
+    expect(pin).toHaveAttribute("aria-pressed", "false");
+
+    await user.click(pin);
+
+    expect(
+      screen.getByRole("button", { name: "Pin sidebar" }),
+    ).toHaveAttribute("aria-pressed", "true");
+    expect(container.querySelector(".sidebar-dock--pinned")).not.toBeNull();
+    expect(window.localStorage.getItem(sidebarPinStorageKey)).toBe(
+      "true",
+    );
+
+    unmount();
+
+    const reloaded = await renderSidebar(CATALOG_ROUTES.collection(1));
+    expect(
+      reloaded.container.querySelector(".sidebar-dock--pinned"),
+    ).not.toBeNull();
+  });
+
+  test("unpinning returns the rail to hover and focus expansion", async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem(sidebarPinStorageKey, "true");
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.click(screen.getByRole("button", { name: "Pin sidebar" }));
+
+    expect(container.querySelector(".sidebar-dock--pinned")).toBeNull();
+    expect(window.localStorage.getItem(sidebarPinStorageKey)).toBe(
+      "false",
+    );
+  });
+
+  test("restoring the pin does not move keyboard focus", async () => {
+    window.localStorage.setItem(sidebarPinStorageKey, "true");
+    await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    expect(
+      screen.getByRole("button", { name: "Pin sidebar" }),
+    ).not.toHaveFocus();
+  });
+
+  test("the pin is a keyboard cursor stop that toggles on Enter", async () => {
+    const user = userEvent.setup();
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.keyboard("{b}");
+    await user.keyboard("{Home}");
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Pin sidebar" }),
+    );
+    expect(
+      document.activeElement.classList.contains("sidebar-pin--cursor"),
+    ).toBe(true);
+
+    await user.keyboard("{Enter}");
+
+    expect(container.querySelector(".sidebar-dock--pinned")).not.toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Pin sidebar" }),
+    ).toHaveAttribute("aria-pressed", "true");
+
+    // A second Enter reads the new state, not the one the listener captured.
+    await user.keyboard("{Enter}");
+    expect(container.querySelector(".sidebar-dock--pinned")).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Pin sidebar" }),
+    ).toHaveAttribute("aria-pressed", "false");
+  });
+
+  test("a pinned rail keeps reorder mode when the pointer leaves", async () => {
+    const user = userEvent.setup();
+    window.localStorage.setItem(sidebarPinStorageKey, "true");
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
+
+    await act(async () => {
+      container.querySelector(".sidebar-dock").dispatchEvent(
+        new MouseEvent("mouseleave", { relatedTarget: document.body }),
+      );
+    });
+
+    expect(
+      screen.getByRole("button", { name: "Done reordering Catalog" }),
+    ).toHaveAttribute("aria-pressed", "true");
+  });
+});
+
 describe("Sidebar keyboard cursor", () => {
   test("`b` opens the rail on the active option", async () => {
     const user = userEvent.setup();
@@ -345,7 +485,7 @@ describe("Sidebar keyboard cursor", () => {
 
     await user.keyboard("{Home}");
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Reorder Catalog" }),
+      screen.getByRole("button", { name: "Pin sidebar" }),
     );
   });
 
@@ -409,14 +549,14 @@ describe("Sidebar keyboard cursor", () => {
     await user.keyboard("{Tab}");
 
     // Tab stays in the rail and wraps, matching ArrowDown. The first stop is
-    // now the Catalog reorder toggle.
+    // now the pin in the head.
     expect(
       container.querySelector(
-        ".sidebar-link--cursor, .sidebar-reorder-toggle--cursor, .sidebar-move-button--cursor",
+        ".sidebar-link--cursor, .sidebar-reorder-toggle--cursor, .sidebar-move-button--cursor, .sidebar-pin--cursor",
       ),
     ).not.toBeNull();
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Reorder Catalog" }),
+      screen.getByRole("button", { name: "Pin sidebar" }),
     );
   });
 
@@ -427,7 +567,7 @@ describe("Sidebar keyboard cursor", () => {
     await user.keyboard("{b}");
     await user.keyboard("{Home}");
     expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Reorder Catalog" }),
+      screen.getByRole("button", { name: "Pin sidebar" }),
     );
 
     await user.keyboard("{Shift>}{Tab}{/Shift}");
@@ -468,6 +608,11 @@ describe("Sidebar keyboard cursor", () => {
     await user.keyboard("{b}");
     await user.keyboard("{Home}");
     expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Pin sidebar" }),
+    );
+
+    await user.keyboard("{ArrowDown}"); // Reorder Catalog
+    expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "Reorder Catalog" }),
     );
 
@@ -486,6 +631,7 @@ describe("Sidebar keyboard cursor", () => {
 
     await user.keyboard("{b}");
     await user.keyboard("{Home}");
+    await user.keyboard("{ArrowDown}"); // Reorder Catalog
     await user.keyboard("{Enter}");
     expect(
       screen.getByRole("button", { name: "Done reordering Catalog" }),
@@ -518,6 +664,7 @@ describe("Sidebar keyboard cursor", () => {
 
     await user.keyboard("{b}");
     await user.keyboard("{Home}");
+    await user.keyboard("{ArrowDown}"); // Reorder Catalog
     await user.keyboard("{Enter}");
     await user.keyboard("{ArrowDown}"); // All notes
     await user.keyboard("{ArrowDown}"); // Default link

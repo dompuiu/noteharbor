@@ -339,6 +339,50 @@ input[type="radio"] {
   min-width: 0;
 }
 
+/* The pin holds the rail at its expanded width without hover or focus. It
+   lives in the head beside the wordmark, so it appears with the labels and is
+   never a target on the 64px rail; the pressed state is the accent tint. */
+.sidebar-pin {
+  flex: none;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  margin-left: auto;
+  padding: 0;
+  border: 1px solid var(--rail-control-border);
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--rail-muted);
+  cursor: pointer;
+}
+
+.sidebar-pin:hover,
+.sidebar-pin:focus-visible {
+  border-color: var(--rail-accent);
+  color: var(--rail-fg);
+}
+
+.sidebar-pin--active {
+  background: var(--rail-active-bg);
+  border-color: var(--rail-accent);
+  color: var(--rail-accent-text);
+}
+
+.sidebar-pin--cursor {
+  box-shadow: inset 0 0 0 1.5px var(--rail-accent);
+}
+
+.sidebar-pin-ic {
+  display: inline-flex;
+}
+
+.sidebar-pin-ic svg {
+  width: 14px;
+  height: 14px;
+}
+
 .sidebar-mark {
   flex: 0 0 auto;
   width: 30px;
@@ -472,6 +516,7 @@ input[type="radio"] {
 }
 
 .sidebar-link {
+  position: relative;
   display: flex;
   align-items: center;
   gap: 11px;
@@ -492,6 +537,34 @@ input[type="radio"] {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* The collapsed rail's identity mark: a collection or showcase row's note
+   count in tabular figures, or its initials when no count has loaded. It is
+   an overlay badge tucked at the glyph's bottom-right, so the row keeps its
+   height whether the rail is quiet or expanded; expanding swaps it for the
+   name. It is decoration — the link's accessible name stays the plain
+   collection name. */
+.sidebar-link-mark {
+  display: none;
+  position: absolute;
+  right: 4px;
+  bottom: 0;
+  min-width: 13px;
+  max-width: 26px;
+  padding: 0 2px;
+  border-radius: 4px;
+  background: var(--rail-marker);
+  color: inherit;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1.35;
+  letter-spacing: 0.01em;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+  white-space: nowrap;
 }
 
 .sidebar-link:hover {
@@ -689,6 +762,7 @@ input[type="radio"] {
    :focus-visible outline here so the two do not stack into a double border.
    Plain Tab focus (no cursor) keeps the outline, so focus stays visible. */
 .sidebar-link--cursor:focus-visible,
+.sidebar-pin--cursor:focus-visible,
 .sidebar-reorder-toggle--cursor:focus-visible,
 .sidebar-move-button--cursor:focus-visible {
   outline: none;
@@ -715,6 +789,12 @@ input[type="radio"] {
   padding-right: 0;
 }
 
+/* Collapsed, the identity mark supplies what the hidden name cannot. It is
+   positioned over the glyph, so the row's box is the same in both states. */
+.sidebar-dock .sidebar-link-mark {
+  display: block;
+}
+
 .sidebar-dock .sidebar-group-links {
   margin-left: 0;
   padding-left: 0;
@@ -722,13 +802,14 @@ input[type="radio"] {
   align-items: center;
 }
 
-/* The dock stays in flow at every width. The rail expands over the content
-   on hover or keyboard focus; it is never pinned, so it never pushes
-   content. The expanded rail fits its content: short names get the 288px
-   floor, longer names widen it up to the cap, and only names beyond the
-   cap truncate with an ellipsis. */
-.sidebar-dock:hover .sidebar,
-.sidebar-dock:has(:focus-visible) .sidebar {
+/* The dock stays in flow at every width. While unpinned, the rail expands
+   over the content on hover or keyboard focus and never pushes it. The
+   expanded rail fits its content: short names get the 288px floor, longer
+   names widen it up to the cap, and only names beyond the cap truncate with
+   an ellipsis. A pinned rail is served by its own width rules below, so the
+   overlay widths skip it. */
+.sidebar-dock:hover:not(.sidebar-dock--pinned) .sidebar,
+.sidebar-dock:has(:focus-visible):not(.sidebar-dock--pinned) .sidebar {
   width: max(var(--sidebar-expanded-width), max-content);
   max-width: 480px;
   box-shadow: var(--shadow-md);
@@ -797,54 +878,96 @@ input[type="radio"] {
    open while navigating with the arrows. React owns this class, so unlike
    `:has(:focus-visible)` it cannot flicker between key presses — the labels
    keep one steady computed style, and their entrance plays once when the
-   rail opens instead of replaying on every move. */
-.sidebar-dock.sidebar-dock--open .sidebar {
+   rail opens instead of replaying on every move. Pinned joins this set: it is
+   the same expanded contents, held without hover or focus at a fixed width
+   (see the pinned width rules below). */
+.sidebar-dock.sidebar-dock--open:not(.sidebar-dock--pinned) .sidebar {
   width: max(var(--sidebar-expanded-width), max-content);
   max-width: 480px;
   box-shadow: var(--shadow-md);
 }
 
-.sidebar-dock.sidebar-dock--open .sidebar-wordmark {
+.sidebar-dock.sidebar-dock--open .sidebar-wordmark,
+.sidebar-dock.sidebar-dock--pinned .sidebar-wordmark {
   display: block;
   animation: sidebar-label-in 0.18s ease;
 }
 
-.sidebar-dock.sidebar-dock--open .sidebar-nav {
+.sidebar-dock.sidebar-dock--open .sidebar-nav,
+.sidebar-dock.sidebar-dock--pinned .sidebar-nav {
   opacity: 1;
   pointer-events: auto;
 }
 
 .sidebar-dock.sidebar-dock--open .sidebar-link-label,
-.sidebar-dock.sidebar-dock--open .sidebar-group-name {
+.sidebar-dock.sidebar-dock--open .sidebar-group-name,
+.sidebar-dock.sidebar-dock--pinned .sidebar-link-label,
+.sidebar-dock.sidebar-dock--pinned .sidebar-group-name {
   display: block;
   animation: sidebar-label-in 0.18s ease;
 }
 
-.sidebar-dock.sidebar-dock--open .sidebar-reorder-toggle {
+.sidebar-dock.sidebar-dock--open .sidebar-reorder-toggle,
+.sidebar-dock.sidebar-dock--pinned .sidebar-reorder-toggle {
   display: inline-flex;
 }
 
-.sidebar-dock.sidebar-dock--open .sidebar-row-moves {
+.sidebar-dock.sidebar-dock--open .sidebar-row-moves,
+.sidebar-dock.sidebar-dock--pinned .sidebar-row-moves {
   display: inline-flex;
 }
 
-.sidebar-dock.sidebar-dock--open .sidebar-link {
+.sidebar-dock.sidebar-dock--open .sidebar-link,
+.sidebar-dock.sidebar-dock--pinned .sidebar-link {
   justify-content: flex-start;
   padding-left: 9px;
   padding-right: 9px;
 }
 
-.sidebar-dock.sidebar-dock--open .sidebar-group-links {
+/* Expanded, the readable name replaces the mark: hover is confirmation,
+   not the only identity. */
+.sidebar-dock:hover .sidebar-link-mark,
+.sidebar-dock:has(:focus-visible) .sidebar-link-mark,
+.sidebar-dock.sidebar-dock--open .sidebar-link-mark,
+.sidebar-dock.sidebar-dock--pinned .sidebar-link-mark {
+  display: none;
+}
+
+/* The pin appears with the labels: it only makes sense beside them. */
+.sidebar-dock:hover .sidebar-pin,
+.sidebar-dock:has(:focus-visible) .sidebar-pin,
+.sidebar-dock.sidebar-dock--open .sidebar-pin,
+.sidebar-dock.sidebar-dock--pinned .sidebar-pin {
+  display: inline-flex;
+}
+
+.sidebar-dock.sidebar-dock--open .sidebar-group-links,
+.sidebar-dock.sidebar-dock--pinned .sidebar-group-links {
   margin-left: 20px;
   padding-left: 12px;
   border-left: 1.5px solid var(--rail-line);
+}
+
+/* Pinned: the rail holds the expanded width without hover or focus and takes
+   that width out of the main column's flow, so the table reflows beside it
+   instead of being overlaid. The width is exactly 288px, not max-content: a
+   long name ellipsises rather than widening a rail that is now part of the
+   layout. These width rules come last so they win over the hover and
+   keyboard-open widths. */
+.sidebar-dock--pinned {
+  width: var(--sidebar-expanded-width);
+}
+
+.sidebar-dock.sidebar-dock--pinned .sidebar {
+  width: var(--sidebar-expanded-width);
+  box-shadow: var(--shadow-md);
 }
 
 /* Collapsed, the cursor's link is the one cleared among the icons; the bare
    rail otherwise shows just the brand mark plus each link's own icon. The
    collapsed rules yield to the keyboard-open class so they never fight the
    open layout while focus visibility settles between key presses. */
-.sidebar-dock:not(.sidebar-dock--open):not(:hover):not(:has(:focus-visible)) .sidebar-link--cursor {
+.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(:hover):not(:has(:focus-visible)) .sidebar-link--cursor {
   display: inline-flex;
 }
 
@@ -852,21 +975,16 @@ input[type="radio"] {
    the rail visually bare. The label keeps its base padding, so its box —
    and the marker inside it — is identical to the expanded state; only the
    name's `display` toggles. */
-.sidebar-dock:not(.sidebar-dock--open):not(:hover):not(:has(:focus-visible)) .sidebar-head {
+.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(:hover):not(:has(:focus-visible)) .sidebar-head {
   justify-content: center;
   padding: 0;
 }
 
-.sidebar-dock:not(.sidebar-dock--open):not(:hover):not(:has(:focus-visible)) .sidebar-group-label {
-  justify-content: center;
-}
-
-/* Collapsed, the group head centres with the marker while the toggle hides. */
-.sidebar-dock:not(.sidebar-dock--open):not(:hover):not(:has(:focus-visible)) .sidebar-group-head {
-  justify-content: center;
-}
-
-.sidebar-dock:not(.sidebar-dock--open):not(:hover):not(:has(:focus-visible)) .sidebar-row {
+/* Collapsed, the category label, its head and the reorderable rows centre
+   their markers while the toggle hides. */
+.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(:hover):not(:has(:focus-visible)) .sidebar-group-label,
+.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(:hover):not(:has(:focus-visible)) .sidebar-group-head,
+.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(:hover):not(:has(:focus-visible)) .sidebar-row {
   justify-content: center;
 }
 
@@ -2301,12 +2419,15 @@ input[type="radio"] {
   .sidebar-dock:hover .sidebar-wordmark,
   .sidebar-dock:has(:focus-visible) .sidebar-wordmark,
   .sidebar-dock.sidebar-dock--open .sidebar-wordmark,
+  .sidebar-dock.sidebar-dock--pinned .sidebar-wordmark,
   .sidebar-dock:hover .sidebar-link-label,
   .sidebar-dock:hover .sidebar-group-name,
   .sidebar-dock:has(:focus-visible) .sidebar-link-label,
   .sidebar-dock:has(:focus-visible) .sidebar-group-name,
   .sidebar-dock.sidebar-dock--open .sidebar-link-label,
-  .sidebar-dock.sidebar-dock--open .sidebar-group-name {
+  .sidebar-dock.sidebar-dock--open .sidebar-group-name,
+  .sidebar-dock.sidebar-dock--pinned .sidebar-link-label,
+  .sidebar-dock.sidebar-dock--pinned .sidebar-group-name {
     animation: none;
   }
 
