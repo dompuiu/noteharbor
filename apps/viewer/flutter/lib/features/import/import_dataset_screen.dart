@@ -1,11 +1,13 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
 import 'package:path/path.dart' as p;
 
 import '../../app/app_info.dart';
 import '../../app/viewer_palette.dart';
 import '../../data/dataset_controller.dart';
+import '../../models/viewer_collection.dart';
 import '../../utils/dataset_date_format.dart';
 import '../../widgets/viewer_button_styles.dart';
 import 'archive_drop_zone.dart';
@@ -18,6 +20,76 @@ String _collectionRemoval(String name) =>
 String _archiveRemoval() =>
     'Delete the archive and all its collections from this device.';
 
+/// What the import screen says when an import fails: the reason the import
+/// gave, without Dart's error-type prefixes, and the step that recovers.
+String _importFailure(String error) {
+  final reason = _plainReason(error);
+  const recovery =
+      'Choose the archive again and retry, or try a different archive.';
+  if (reason == null) {
+    return 'Could not import the archive. $recovery';
+  }
+  return 'Could not import the archive: $reason $recovery';
+}
+
+/// [error]'s message with `Bad state: `, `Exception: `, and the other Dart
+/// error prefixes removed, ending in a full stop. Null when no reason is left.
+String? _plainReason(String error) {
+  var reason = error.trim();
+  for (final prefix in const [
+    'Bad state: ',
+    'Exception: ',
+    'Unsupported operation: ',
+    'FormatException: ',
+    'ArgumentError: ',
+  ]) {
+    if (reason.startsWith(prefix)) {
+      reason = reason.substring(prefix.length).trim();
+      break;
+    }
+  }
+  if (reason.isEmpty || reason == 'Import failed.') {
+    return null;
+  }
+  reason = '${reason[0].toUpperCase()}${reason.substring(1)}';
+  return _endsSentence(reason) ? reason : '$reason.';
+}
+
+bool _endsSentence(String text) {
+  final last = text[text.length - 1];
+  return last == '.' || last == '!' || last == '?';
+}
+
+/// One outcome banner: the sentence, its tone, and, after a successful import,
+/// the collection the forward action opens.
+class _StatusMessage {
+  const _StatusMessage.success(
+    this.message, {
+    this.viewCollectionId,
+    this.viewCollectionName,
+  }) : isError = false;
+
+  const _StatusMessage.error(this.message)
+      : isError = true,
+        viewCollectionId = null,
+        viewCollectionName = null;
+
+  final String message;
+  final bool isError;
+  final int? viewCollectionId;
+  final String? viewCollectionName;
+
+  /// What a screen reader hears, including the action the sighted banner
+  /// offers but an announcement alone cannot describe.
+  String get announcement {
+    final collectionName = viewCollectionName;
+    if (!isError && collectionName != null) {
+      return '$message View $collectionName to browse its notes.';
+    }
+    return message;
+  }
+}
+
 class ImportDatasetScreen extends StatefulWidget {
   const ImportDatasetScreen({required this.controller, super.key});
 
@@ -28,14 +100,17 @@ class ImportDatasetScreen extends StatefulWidget {
 }
 
 class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
-  late final FocusNode _screenFocusNode =
-      FocusNode(debugLabel: 'importScreen');
+  late final FocusNode _screenFocusNode = FocusNode(debugLabel: 'importScreen');
+  late final FocusNode _importButtonFocusNode = FocusNode(
+    debugLabel: 'importButton',
+  );
+  late final FocusNode _viewCollectionFocusNode = FocusNode(
+    debugLabel: 'importViewCollection',
+  );
   final ScrollController _scrollController = ScrollController();
-  final GlobalKey _statusKey = GlobalKey();
   String? _selectedArchivePath;
   String? _selectedArchiveName;
-  String? _message;
-  bool _messageIsError = false;
+  _StatusMessage? _status;
   String? _collectionMessage;
   bool _collectionMessageIsError = false;
   bool _isPicking = false;
@@ -51,28 +126,55 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
   void dispose() {
     FocusManager.instance.removeListener(_handleFocusDrain);
     _screenFocusNode.dispose();
+    _importButtonFocusNode.dispose();
+    _viewCollectionFocusNode.dispose();
     _scrollController.dispose();
     super.dispose();
   }
 
-  void _setStatus(String? message, bool isError) {
-    setState(() {
-      _message = message;
-      _messageIsError = isError;
-    });
-    if (message != null) {
-      WidgetsBinding.instance.addPostFrameCallback((_) {
-        if (!mounted) return;
-        final context = _statusKey.currentContext;
-        if (context != null) {
-          Scrollable.ensureVisible(
-            context,
-            duration: const Duration(milliseconds: 250),
-            alignment: 0.5,
-          );
-        }
-      });
+  /// Shows an outcome banner and says it out loud: the banner is the visual
+  /// half, and the announcement covers screen readers that never reach it.
+  /// The caller decides where focus goes; this never scrolls mid-page.
+  void _showStatus(_StatusMessage status) {
+    setState(() => _status = status);
+    SemanticsService.sendAnnouncement(
+      View.of(context),
+      status.announcement,
+      Directionality.of(context),
+    );
+  }
+
+  void _dismissStatus() {
+    if (_status != null) {
+      setState(() => _status = null);
     }
+  }
+
+  void _focusAfterFrame(FocusNode node) {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        node.requestFocus();
+      }
+    });
+  }
+
+  /// The table's forward action after a successful import: show the imported
+  /// collection, then return to the table on it. A screen with nothing behind
+  /// it (first run) is replaced by the table on its own, so maybePop is a
+  /// no-op there.
+  Future<void> _viewStatusCollection() async {
+    final status = _status;
+    if (status == null) {
+      return;
+    }
+    final collectionId = status.viewCollectionId;
+    if (collectionId != null) {
+      await widget.controller.selectCollection(collectionId);
+    }
+    if (!mounted) {
+      return;
+    }
+    await Navigator.of(context).maybePop();
   }
 
   /// Mirrors the table screen's drain guard: after a table→import swap the
@@ -98,8 +200,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
   Future<void> _pickArchive() async {
     setState(() {
       _isPicking = true;
-      _message = null;
-      _messageIsError = false;
+      _status = null;
     });
 
     try {
@@ -134,39 +235,39 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
     setState(() {
       _selectedArchivePath = path;
       _selectedArchiveName = name;
-      _message = null;
-      _messageIsError = false;
+      _status = null;
     });
   }
 
-  void _reportDropProblem(String message) => _setStatus(message, true);
+  void _reportDropProblem(String message) =>
+      _showStatus(_StatusMessage.error(message));
 
   Future<void> _importArchive() async {
     final archivePath = _selectedArchivePath;
     if (archivePath == null) {
-      _setStatus('Choose an archive before importing.', true);
+      _showStatus(
+        const _StatusMessage.error('Choose an archive before importing.'),
+      );
       return;
     }
 
-    final confirmed = await showDialog<bool>(
-          context: context,
-          builder: (context) => ImportArchiveDialog(
-            fileName: _selectedArchiveName ?? p.basename(archivePath),
-            peekArchive: () => widget.controller.peekArchive(archivePath),
-            installedCollections:
-                widget.controller.dataset?.collections ?? const [],
-          ),
-        ) ??
-        false;
+    final importedCollections = await showDialog<List<ViewerCollection>>(
+      context: context,
+      builder: (context) => ImportArchiveDialog(
+        fileName: _selectedArchiveName ?? p.basename(archivePath),
+        peekArchive: () => widget.controller.peekArchive(archivePath),
+        installedCollections:
+            widget.controller.dataset?.collections ?? const [],
+      ),
+    );
 
-    if (!confirmed) {
+    if (importedCollections == null) {
       return;
     }
 
     setState(() {
       _isImporting = true;
-      _message = null;
-      _messageIsError = false;
+      _status = null;
     });
 
     // Let the confirm dialog finish dismissing and give the framework a
@@ -179,22 +280,79 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       if (!mounted) {
         return;
       }
+      final importedName = _selectedArchiveName ?? p.basename(archivePath);
+      final collection = _collectionToView(importedCollections);
       setState(() {
         _collectionMessage = null;
         _collectionMessageIsError = false;
       });
-      _setStatus('Imported $_selectedArchiveName.', false);
-    } catch (_) {
+      _showStatus(
+        _StatusMessage.success(
+          'Imported $importedName.',
+          viewCollectionId: collection?.id,
+          viewCollectionName: collection?.name,
+        ),
+      );
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) {
+          return;
+        }
+        // The forward action sits at the top of the page, so this lands the
+        // page where the action is rather than centering a mid-page banner.
+        _viewCollectionFocusNode.requestFocus();
+        if (_scrollController.hasClients) {
+          _scrollController.animateTo(
+            0,
+            duration: const Duration(milliseconds: 220),
+            curve: Curves.easeOut,
+          );
+        }
+      });
+    } catch (error) {
       if (!mounted) {
         return;
       }
-      _setStatus('Could not import the archive.', true);
+      _showStatus(_StatusMessage.error(_importFailure('$error')));
+      // The retry button is where the failure came from; leave the page where
+      // it is and hand the keyboard back to it.
+      _focusAfterFrame(_importButtonFocusNode);
     } finally {
       if (mounted) {
         setState(() => _isImporting = false);
       }
     }
   }
+
+  /// The collection the forward action opens: the archive's collection that
+  /// is already active when it came from this import, else the archive's
+  /// first collection now installed, else whatever the table shows.
+  ViewerCollection? _collectionToView(
+    List<ViewerCollection> importedCollections,
+  ) {
+    final installed = widget.controller.dataset?.collections ?? const [];
+    ViewerCollection? firstImported;
+    for (final imported in importedCollections) {
+      for (final collection in installed) {
+        if (_sameCollectionName(imported.name, collection.name)) {
+          firstImported ??= collection;
+          break;
+        }
+      }
+    }
+
+    final active = widget.controller.activeCollection;
+    if (active != null &&
+        importedCollections.any(
+          (collection) => _sameCollectionName(collection.name, active.name),
+        )) {
+      return active;
+    }
+
+    return firstImported ?? active;
+  }
+
+  bool _sameCollectionName(String a, String b) =>
+      a.trim().toLowerCase() == b.trim().toLowerCase();
 
   Future<void> _deleteActiveCollection() async {
     final activeCollection = widget.controller.activeCollection;
@@ -293,12 +451,16 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
         _collectionMessage = null;
         _collectionMessageIsError = false;
       });
-      _setStatus('Deleted the archive. Import an archive to continue.', false);
+      _showStatus(
+        const _StatusMessage.success(
+          'Deleted the archive. Import an archive to continue.',
+        ),
+      );
     } catch (_) {
       if (!mounted) {
         return;
       }
-      _setStatus('Could not delete the archive.', true);
+      _showStatus(const _StatusMessage.error('Could not delete the archive.'));
     }
   }
 
@@ -343,21 +505,43 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                       final dataset = widget.controller.dataset;
                       final generatedAt = dataset?.generatedAt?.trim();
                       final collections = dataset?.collections ?? const [];
-                      final activeCollection = widget.controller.activeCollection;
-                      final isBusy = widget.controller.isMutating || _isPicking || _isImporting;
+                      final activeCollection =
+                          widget.controller.activeCollection;
+                      final isBusy = widget.controller.isMutating ||
+                          _isPicking ||
+                          _isImporting;
                       final hasCollections = collections.isNotEmpty;
                       final isFirstRun = dataset == null;
+                      final status = _status;
+
+                      Widget statusBanner(_StatusMessage status) =>
+                          _StatusBanner(
+                            key: const ValueKey('importStatus'),
+                            status: status,
+                            actionFocusNode: status.isError
+                                ? null
+                                : _viewCollectionFocusNode,
+                            onViewCollection: status.viewCollectionName == null
+                                ? null
+                                : _viewStatusCollection,
+                            onDismiss: _dismissStatus,
+                          );
 
                       return ListView(
                         controller: _scrollController,
                         padding: const EdgeInsets.all(20),
                         children: [
+                          if (status != null && !status.isError) ...[
+                            statusBanner(status),
+                            const SizedBox(height: 18),
+                          ],
                           if (isFirstRun)
                             _FirstRunImportCard(
                               fileName: _selectedArchiveName,
                               isBusy: isBusy,
                               isPicking: _isPicking,
                               isImporting: widget.controller.isMutating,
+                              importButtonFocusNode: _importButtonFocusNode,
                               onChoose: _pickArchive,
                               onDropped: _handleDroppedArchive,
                               onDropRejected: _reportDropProblem,
@@ -374,9 +558,12 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                   children: [
                                     _InfoPill(
                                       label: 'Archive created',
-                                      value: generatedAt == null || generatedAt.isEmpty
+                                      value: generatedAt == null ||
+                                              generatedAt.isEmpty
                                           ? 'Not recorded'
-                                          : formatFriendlyDatasetBuiltAt(generatedAt),
+                                          : formatFriendlyDatasetBuiltAt(
+                                              generatedAt,
+                                            ),
                                     ),
                                     _InfoPill(
                                       label: 'Collections',
@@ -386,7 +573,8 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                       label: activeCollection == null
                                           ? 'Notes'
                                           : 'Notes in ${activeCollection.name}',
-                                      value: '${activeCollection?.noteCount ?? 0}',
+                                      value:
+                                          '${activeCollection?.noteCount ?? 0}',
                                       maxWidth: 240,
                                     ),
                                   ],
@@ -404,14 +592,19 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                     ),
                                     const SizedBox(height: 14),
                                     DropdownButtonFormField<int>(
-                                      key: ValueKey('collection-${activeCollection?.id}'),
+                                      key: ValueKey(
+                                        'collection-${activeCollection?.id}',
+                                      ),
                                       initialValue: activeCollection?.id,
                                       decoration: const InputDecoration(
                                         border: OutlineInputBorder(),
                                       ),
                                       items: collections
                                           .map(
-                                            (collection) => DropdownMenuItem<int>(
+                                            (
+                                              collection,
+                                            ) =>
+                                                DropdownMenuItem<int>(
                                               value: collection.id,
                                               child: Text(
                                                 '${collection.name} (${collection.noteCount})',
@@ -425,11 +618,15 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                               if (collectionId == null) {
                                                 return;
                                               }
-                                              widget.controller.selectCollection(collectionId);
+                                              widget.controller
+                                                  .selectCollection(
+                                                collectionId,
+                                              );
                                               setState(() {
-                                                _message = null;
+                                                _status = null;
                                                 _collectionMessage = null;
-                                                _collectionMessageIsError = false;
+                                                _collectionMessageIsError =
+                                                    false;
                                               });
                                             },
                                     ),
@@ -453,23 +650,19 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                   ),
                                   const SizedBox(height: 16),
                                   _ImportArchiveButton(
-                                    enabled: !isBusy &&
-                                        _selectedArchivePath != null,
-                                    isImporting:
-                                        widget.controller.isMutating,
+                                    enabled:
+                                        !isBusy && _selectedArchivePath != null,
+                                    isImporting: widget.controller.isMutating,
+                                    focusNode: _importButtonFocusNode,
                                     onPressed: _importArchive,
                                   ),
                                 ],
                               ),
                             ),
                           ],
-                          if (_message != null) ...[
+                          if (status != null && status.isError) ...[
                             const SizedBox(height: 18),
-                            _StatusBanner(
-                              key: _statusKey,
-                              message: _message!,
-                              isError: _messageIsError,
-                            ),
+                            statusBanner(status),
                           ],
                           if (!isFirstRun) ...[
                             const SizedBox(height: 18),
@@ -540,10 +733,7 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
               ),
             ),
             if (_isImporting)
-              const ModalBarrier(
-                dismissible: false,
-                color: Color(0x8C000000),
-              ),
+              const ModalBarrier(dismissible: false, color: Color(0x8C000000)),
             if (_isImporting)
               _ImportProgressOverlay(archiveName: _selectedArchiveName),
           ],
@@ -561,6 +751,7 @@ class _FirstRunImportCard extends StatelessWidget {
     required this.isBusy,
     required this.isPicking,
     required this.isImporting,
+    required this.importButtonFocusNode,
     required this.onChoose,
     required this.onDropped,
     required this.onDropRejected,
@@ -571,6 +762,7 @@ class _FirstRunImportCard extends StatelessWidget {
   final bool isBusy;
   final bool isPicking;
   final bool isImporting;
+  final FocusNode importButtonFocusNode;
   final VoidCallback onChoose;
   final ArchiveDroppedCallback onDropped;
   final ValueChanged<String> onDropRejected;
@@ -618,6 +810,7 @@ class _FirstRunImportCard extends StatelessWidget {
           _ImportArchiveButton(
             enabled: !isBusy && hasSelection,
             isImporting: isImporting,
+            focusNode: importButtonFocusNode,
             onPressed: onImport,
           ),
         ],
@@ -631,16 +824,19 @@ class _ImportArchiveButton extends StatelessWidget {
     required this.enabled,
     required this.isImporting,
     required this.onPressed,
+    this.focusNode,
   });
 
   final bool enabled;
   final bool isImporting;
+  final FocusNode? focusNode;
   final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     return FilledButton.icon(
       onPressed: enabled && !isImporting ? onPressed : null,
+      focusNode: focusNode,
       icon: const Icon(Icons.file_upload_outlined),
       label: Text(isImporting ? 'Importing...' : 'Import archive'),
     );
@@ -671,8 +867,7 @@ class _Panel extends StatelessWidget {
     return DecoratedBox(
       decoration: BoxDecoration(
         color: ViewerPalette.surface,
-        borderRadius:
-            BorderRadius.circular(ViewerPalette.radiusMd),
+        borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
         border: Border.all(color: ViewerPalette.border, width: 1),
       ),
       child: Padding(
@@ -688,7 +883,8 @@ class _Panel extends StatelessWidget {
                     decoration: BoxDecoration(
                       color: ViewerPalette.surfaceMist,
                       borderRadius: BorderRadius.circular(
-                          ViewerPalette.radiusSm),
+                        ViewerPalette.radiusSm,
+                      ),
                     ),
                     child: Padding(
                       padding: const EdgeInsets.all(8),
@@ -703,16 +899,14 @@ class _Panel extends StatelessWidget {
                   Expanded(
                     child: Text(
                       resolvedTitle.toUpperCase(),
-                      style: Theme.of(context)
-                          .textTheme
-                          .headlineSmall
-                          ?.copyWith(
-                            fontSize: subdued ? 13 : 20,
-                            fontWeight:
-                                subdued ? FontWeight.w700 : FontWeight.w800,
-                            letterSpacing: subdued ? 0.9 : -0.3,
-                            color: subdued ? ViewerPalette.textMuted : null,
-                          ),
+                      style:
+                          Theme.of(context).textTheme.headlineSmall?.copyWith(
+                                fontSize: subdued ? 13 : 20,
+                                fontWeight:
+                                    subdued ? FontWeight.w700 : FontWeight.w800,
+                                letterSpacing: subdued ? 0.9 : -0.3,
+                                color: subdued ? ViewerPalette.textMuted : null,
+                              ),
                     ),
                   ),
                 ],
@@ -787,8 +981,7 @@ class _ImportProgressOverlay extends StatelessWidget {
             child: DecoratedBox(
               decoration: BoxDecoration(
                 color: ViewerPalette.surface,
-                borderRadius: BorderRadius.circular(
-                    ViewerPalette.radiusMd),
+                borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
                 border: Border.all(color: ViewerPalette.border),
                 boxShadow: ViewerPalette.shadowHigh,
               ),
@@ -801,7 +994,8 @@ class _ImportProgressOverlay extends StatelessWidget {
                       decoration: BoxDecoration(
                         color: ViewerPalette.surfaceMist,
                         borderRadius: BorderRadius.circular(
-                            ViewerPalette.radiusControl),
+                          ViewerPalette.radiusControl,
+                        ),
                       ),
                       child: const SizedBox(
                         width: 64,
@@ -852,17 +1046,36 @@ class _ImportProgressOverlay extends StatelessWidget {
   }
 }
 
+/// One outcome banner: what happened, and the action that comes next. A
+/// failure keeps its tone and copy until the import is retried or the user
+/// dismisses it, so the page never changes its story while they read it.
 class _StatusBanner extends StatelessWidget {
-  const _StatusBanner({super.key, required this.message, required this.isError});
+  const _StatusBanner({
+    super.key,
+    required this.status,
+    required this.onDismiss,
+    this.onViewCollection,
+    this.actionFocusNode,
+  });
 
-  final String message;
-  final bool isError;
+  final _StatusMessage status;
+  final VoidCallback onDismiss;
+  final VoidCallback? onViewCollection;
+  final FocusNode? actionFocusNode;
 
   @override
   Widget build(BuildContext context) {
+    final isError = status.isError;
     final accent = isError ? ViewerPalette.danger : ViewerPalette.success;
-    final wash =
-        isError ? ViewerPalette.dangerSoft : ViewerPalette.successSoft;
+    final wash = isError ? ViewerPalette.dangerSoft : ViewerPalette.successSoft;
+    final actionStyle = TextButton.styleFrom(
+      foregroundColor: accent,
+      textStyle: const TextStyle(
+        fontFamily: 'Inter',
+        fontWeight: FontWeight.w700,
+      ),
+    );
+    final collectionName = status.viewCollectionName;
     return Semantics(
       liveRegion: true,
       container: true,
@@ -870,10 +1083,7 @@ class _StatusBanner extends StatelessWidget {
         decoration: BoxDecoration(
           color: wash,
           borderRadius: BorderRadius.circular(ViewerPalette.radiusSm),
-          border: Border.all(
-            color: accent.withValues(alpha: 0.3),
-            width: 1,
-          ),
+          border: Border.all(color: accent.withValues(alpha: 0.3), width: 1),
         ),
         child: Row(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -900,14 +1110,47 @@ class _StatusBanner extends StatelessWidget {
             ),
             Expanded(
               child: Padding(
-                padding: const EdgeInsets.fromLTRB(0, 14, 16, 14),
-                child: Text(
-                  message,
-                  style: TextStyle(
-                    fontFamily: 'Inter',
-                    fontWeight: FontWeight.w600,
-                    color: accent,
-                  ),
+                padding: const EdgeInsets.fromLTRB(0, 6, 8, 6),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Padding(
+                      padding: const EdgeInsets.only(top: 8),
+                      child: Text(
+                        status.message,
+                        style: TextStyle(
+                          fontFamily: 'Inter',
+                          fontWeight: FontWeight.w600,
+                          color: accent,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Wrap(
+                      spacing: 8,
+                      runSpacing: 4,
+                      children: [
+                        if (collectionName != null)
+                          TextButton.icon(
+                            key: const ValueKey('importOutcomeView'),
+                            focusNode: actionFocusNode,
+                            onPressed: onViewCollection,
+                            style: actionStyle,
+                            icon: const Icon(
+                              Icons.arrow_forward_rounded,
+                              size: 18,
+                            ),
+                            label: Text('View $collectionName'),
+                          ),
+                        TextButton(
+                          key: const ValueKey('importOutcomeDismiss'),
+                          onPressed: onDismiss,
+                          style: actionStyle,
+                          child: const Text('Dismiss'),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
               ),
             ),
@@ -933,8 +1176,7 @@ class _InfoPill extends StatelessWidget {
     final pill = DecoratedBox(
       decoration: BoxDecoration(
         color: ViewerPalette.surface,
-        borderRadius:
-            BorderRadius.circular(ViewerPalette.radiusPill),
+        borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
         border: Border.all(color: ViewerPalette.borderControl),
       ),
       child: Padding(

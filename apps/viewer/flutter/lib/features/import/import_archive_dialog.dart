@@ -13,6 +13,9 @@ typedef _ArchiveEntry = ({ViewerCollection collection, bool replaces});
 /// null or failed preview hides the list and falls back to the by-name
 /// replacement sentence, so the dialog still names the file and what matching
 /// names cost.
+///
+/// Pops the archive's collections when the user confirms, so the screen knows
+/// which collection to offer after the import, or null when they cancel.
 class ImportArchiveDialog extends StatefulWidget {
   const ImportArchiveDialog({
     super.key,
@@ -70,13 +73,15 @@ class _ImportArchiveDialogState extends State<ImportArchiveDialog> {
           actions: [
             TextButton(
               key: const ValueKey('importArchiveCancel'),
-              onPressed: () => Navigator.of(context).pop(false),
+              onPressed: () => Navigator.of(context).pop(),
               child: const Text('Cancel'),
             ),
             FilledButton(
               key: const ValueKey('importArchiveConfirm'),
-              onPressed:
-                  isLoading ? null : () => Navigator.of(context).pop(true),
+              onPressed: isLoading
+                  ? null
+                  : () =>
+                      Navigator.of(context).pop(_confirmedCollections(entries)),
               child: Text(_confirmLabel(entries)),
             ),
           ],
@@ -117,6 +122,16 @@ String _normalizeName(String name) {
 /// `1 note` / `2 notes`, without repeating the plural ternary everywhere.
 String _counted(int count, String noun) =>
     '$count $noun${count == 1 ? '' : 's'}';
+
+/// The collections the user agreed to import. A fallback dialog still confirms
+/// with an unreadable preview, in which case the screen has no names to offer
+/// and keeps the collection that was already active.
+List<ViewerCollection> _confirmedCollections(List<_ArchiveEntry>? entries) {
+  if (entries == null) {
+    return const <ViewerCollection>[];
+  }
+  return [for (final entry in entries) entry.collection];
+}
 
 String _confirmLabel(List<_ArchiveEntry>? entries) {
   if (entries == null) {
@@ -173,7 +188,8 @@ class _DialogContent extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-              'This archive contains ${_counted(entries.length, 'collection')}.'),
+            'This archive contains ${_counted(entries.length, 'collection')}.',
+          ),
           const SizedBox(height: ViewerPalette.spaceMd),
           ConstrainedBox(
             constraints: const BoxConstraints(maxHeight: 220),
@@ -183,10 +199,7 @@ class _DialogContent extends StatelessWidget {
                 children: [
                   for (final (index, entry) in entries.indexed) ...[
                     if (index > 0)
-                      const Divider(
-                        height: 1,
-                        color: ViewerPalette.borderSoft,
-                      ),
+                      const Divider(height: 1, color: ViewerPalette.borderSoft),
                     _CollectionRow(entry: entry),
                   ],
                 ],

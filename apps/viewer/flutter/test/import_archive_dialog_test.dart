@@ -20,14 +20,14 @@ void main() {
     );
   }
 
-  Future<ValueNotifier<bool?>> openDialog(
+  Future<ValueNotifier<List<ViewerCollection>?>> openDialog(
     WidgetTester tester, {
     required Future<ArchivePreview?> Function() peekArchive,
     List<ViewerCollection> installedCollections = const [],
     String fileName = 'roman-harbor.zip',
     bool settle = true,
   }) async {
-    final result = ValueNotifier<bool?>(true);
+    final result = ValueNotifier<List<ViewerCollection>?>(const []);
     await tester.pumpWidget(
       MaterialApp(
         home: Builder(
@@ -35,7 +35,7 @@ void main() {
             body: Center(
               child: FilledButton(
                 onPressed: () async {
-                  result.value = await showDialog<bool>(
+                  result.value = await showDialog<List<ViewerCollection>>(
                     context: context,
                     builder: (context) => ImportArchiveDialog(
                       fileName: fileName,
@@ -116,10 +116,7 @@ void main() {
   testWidgets('confirms with Add when no collection is installed', (
     WidgetTester tester,
   ) async {
-    await openDialog(
-      tester,
-      peekArchive: () async => previewOf([bulgaria]),
-    );
+    await openDialog(tester, peekArchive: () async => previewOf([bulgaria]));
 
     expect(find.text('New'), findsOneWidget);
     expect(
@@ -179,11 +176,7 @@ void main() {
     WidgetTester tester,
   ) async {
     final preview = Completer<ArchivePreview?>();
-    await openDialog(
-      tester,
-      peekArchive: () => preview.future,
-      settle: false,
-    );
+    await openDialog(tester, peekArchive: () => preview.future, settle: false);
 
     expect(find.text('Import "roman-harbor.zip"?'), findsOneWidget);
     expect(find.text('Reading the archive…'), findsOneWidget);
@@ -252,7 +245,39 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.byKey(const ValueKey('importArchiveDialog')), findsNothing);
-    expect(result.value, isFalse);
+    expect(result.value, isNull);
+  });
+
+  testWidgets('confirming returns the collections the archive holds', (
+    WidgetTester tester,
+  ) async {
+    final result = await openDialog(
+      tester,
+      peekArchive: () async => previewOf([romania, bulgaria]),
+    );
+
+    await tester.tap(find.byKey(const ValueKey('importArchiveConfirm')));
+    await tester.pumpAndSettle();
+
+    expect(result.value?.map((collection) => collection.name), [
+      'Romania',
+      'Bulgaria',
+    ]);
+  });
+
+  testWidgets('confirming an unreadable archive returns no collections', (
+    WidgetTester tester,
+  ) async {
+    final result = await openDialog(
+      tester,
+      peekArchive: () async => null,
+      fileName: 'unknown.zip',
+    );
+
+    await tester.tap(find.byKey(const ValueKey('importArchiveConfirm')));
+    await tester.pumpAndSettle();
+
+    expect(result.value, isEmpty);
   });
 
   testWidgets('Escape closes without importing', (WidgetTester tester) async {
