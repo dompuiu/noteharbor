@@ -9,9 +9,17 @@ import '../../data/dataset_controller.dart';
 import '../../models/viewer_collection.dart';
 import '../../utils/announce.dart';
 import '../../utils/dataset_date_format.dart';
+import '../../utils/reveal_in_folder.dart';
 import '../../widgets/viewer_button_styles.dart';
 import 'archive_drop_zone.dart';
 import 'import_archive_dialog.dart';
+
+/// The widest the import page's content grows: a readable measure on desktop
+/// windows instead of panels that stretch across the whole window.
+const double _kContentMaxWidth = 720;
+
+/// The page's minimum padding on every edge.
+const double _kPagePadding = 20;
 
 /// The one sentence each removal scope uses, shared by its row and its dialog.
 String _collectionRemoval(String name) =>
@@ -111,9 +119,17 @@ class _StatusMessage {
 }
 
 class ImportDatasetScreen extends StatefulWidget {
-  const ImportDatasetScreen({required this.controller, super.key});
+  const ImportDatasetScreen({
+    required this.controller,
+    this.revealFolder = revealInFolder,
+    super.key,
+  });
 
   final DatasetController controller;
+
+  /// Opens the imported archive's folder in the OS file manager. Tests
+  /// replace this so the suite never opens a real window.
+  final Future<bool> Function(String path) revealFolder;
 
   @override
   State<ImportDatasetScreen> createState() => _ImportDatasetScreenState();
@@ -312,9 +328,8 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       _status = null;
     });
 
-    // Let the confirm dialog finish dismissing and give the framework a
-    // chance to paint the blocking import overlay before the import below
-    // monopolizes the UI thread with synchronous disk work.
+    // Let the confirm dialog finish dismissing and the framework paint the
+    // blocking import overlay before the import starts.
     await Future<void>.delayed(const Duration(milliseconds: 150));
 
     try {
@@ -371,6 +386,23 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
       }
     }
     return null;
+  }
+
+  /// Opens the installed archive's folder in the desktop's file manager.
+  /// Only shown on desktop, so a failed launch is reported here rather than
+  /// falling back to an in-app browser.
+  Future<void> _showArchiveInFolder() async {
+    final directory = await widget.controller.importedArchiveDirectory();
+    if (!mounted) {
+      return;
+    }
+    final revealed = directory != null && await widget.revealFolder(directory);
+    if (!mounted || revealed) {
+      return;
+    }
+    _showStatus(
+      const _StatusMessage.error('Could not open the archive folder.'),
+    );
   }
 
   Future<void> _deleteActiveCollection() async {
@@ -496,6 +528,16 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final platform = Theme.of(context).platform;
+    final canShowInFolder =
+        widget.controller.canManageImportedDatasets &&
+        (platform == TargetPlatform.windows ||
+            platform == TargetPlatform.macOS ||
+            platform == TargetPlatform.linux);
+    final windowWidth = MediaQuery.sizeOf(context).width;
+    final gutter = (windowWidth - _kContentMaxWidth) / 2;
+    final sideInset = gutter > _kPagePadding ? gutter : _kPagePadding;
+
     return Focus(
       focusNode: _screenFocusNode,
       autofocus: true,
@@ -540,9 +582,16 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                             onDismiss: _dismissStatus,
                           );
 
+                      final showInFolder = _ShowInFolderButton(
+                        onPressed: isBusy ? null : _showArchiveInFolder,
+                      );
+
                       return ListView(
                         controller: _scrollController,
-                        padding: const EdgeInsets.all(20),
+                        padding: EdgeInsets.symmetric(
+                          horizontal: sideInset,
+                          vertical: _kPagePadding,
+                        ),
                         children: [
                           if (status != null && !status.isError) ...[
                             buildBanner(status),
@@ -565,31 +614,41 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                               _Panel(
                                 icon: Icons.inventory_2_outlined,
                                 title: 'Archive on this device',
-                                child: Wrap(
-                                  spacing: 12,
-                                  runSpacing: 12,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.start,
                                   children: [
-                                    _InfoPill(
-                                      label: 'Archive created',
-                                      value: generatedAt == null ||
-                                              generatedAt.isEmpty
-                                          ? 'Not recorded'
-                                          : formatFriendlyDatasetBuiltAt(
-                                              generatedAt,
-                                            ),
+                                    Wrap(
+                                      spacing: 12,
+                                      runSpacing: 12,
+                                      children: [
+                                        _InfoPill(
+                                          label: 'Archive created',
+                                          value: generatedAt == null ||
+                                                  generatedAt.isEmpty
+                                              ? 'Not recorded'
+                                              : formatFriendlyDatasetBuiltAt(
+                                                  generatedAt,
+                                                ),
+                                        ),
+                                        _InfoPill(
+                                          label: 'Collections',
+                                          value: '${collections.length}',
+                                        ),
+                                        _InfoPill(
+                                          label: activeCollection == null
+                                              ? 'Notes'
+                                              : 'Notes in ${activeCollection.name}',
+                                          value:
+                                              '${activeCollection?.noteCount ?? 0}',
+                                          maxWidth: 240,
+                                        ),
+                                      ],
                                     ),
-                                    _InfoPill(
-                                      label: 'Collections',
-                                      value: '${collections.length}',
-                                    ),
-                                    _InfoPill(
-                                      label: activeCollection == null
-                                          ? 'Notes'
-                                          : 'Notes in ${activeCollection.name}',
-                                      value:
-                                          '${activeCollection?.noteCount ?? 0}',
-                                      maxWidth: 240,
-                                    ),
+                                    if (canShowInFolder) ...[
+                                      const SizedBox(height: 12),
+                                      showInFolder,
+                                    ],
                                   ],
                                 ),
                               ),
@@ -668,6 +727,10 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                     focusNode: _importButtonFocusNode,
                                     onPressed: _importArchive,
                                   ),
+                                  if (canShowInFolder && !hasCollections) ...[
+                                    const SizedBox(height: 12),
+                                    showInFolder,
+                                  ],
                                 ],
                               ),
                             ),
@@ -851,6 +914,23 @@ class _ImportArchiveButton extends StatelessWidget {
       focusNode: focusNode,
       icon: const Icon(Icons.file_upload_outlined),
       label: Text(isImporting ? 'Importing...' : 'Import archive'),
+    );
+  }
+}
+
+/// Opens the installed archive's folder in the desktop's file manager.
+class _ShowInFolderButton extends StatelessWidget {
+  const _ShowInFolderButton({required this.onPressed});
+
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return TextButton.icon(
+      key: const ValueKey('showArchiveInFolder'),
+      onPressed: onPressed,
+      icon: const Icon(Icons.folder_open_outlined, size: 18),
+      label: const Text('Show in folder'),
     );
   }
 }

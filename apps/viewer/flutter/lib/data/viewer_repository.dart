@@ -33,6 +33,16 @@ class ViewerRepository {
     return _importedDatasetLoader.load(importedLocation);
   }
 
+  /// The installed archive's folder, or null when this build cannot manage
+  /// imported datasets or none is installed.
+  Future<String?> importedArchiveDirectory() async {
+    if (!canManageImportedDatasets) {
+      return null;
+    }
+    final importedLocation = await _nativeDatasetStore.getImportedDatasetLocation();
+    return importedLocation?.rootPath;
+  }
+
   Future<void> importArchive(String archivePath) {
     return _nativeDatasetStore.importArchive(archivePath);
   }

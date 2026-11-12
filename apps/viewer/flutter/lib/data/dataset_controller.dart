@@ -91,6 +91,11 @@ class DatasetController extends ChangeNotifier {
     }
   }
 
+  /// The installed archive's folder, for the desktop's Show in folder action.
+  Future<String?> importedArchiveDirectory() {
+    return _repository.importedArchiveDirectory();
+  }
+
   /// Reads what [archivePath] holds without installing it, for the import
   /// confirmation's collection list. A failed read is reported by the dialog,
   /// not here, so it must not touch the controller's error state.
