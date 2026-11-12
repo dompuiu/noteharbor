@@ -8,9 +8,15 @@ import 'package:note_harbor_viewer/features/import/import_dataset_screen.dart';
 import 'package:note_harbor_viewer/models/viewer_dataset.dart';
 
 void main() {
-  Future<DatasetController> loadedController({bool failDelete = false}) async {
+  Future<DatasetController> loadedController({
+    bool failDelete = false,
+    List<Map<String, Object?>>? collections,
+  }) async {
     final controller = DatasetController(
-      repository: _CollectionRepository(failDelete: failDelete),
+      repository: _CollectionRepository(
+        failDelete: failDelete,
+        collections: collections,
+      ),
       selectionStore: _MemoryLastCollectionStore(),
     );
     await controller.load();
@@ -25,6 +31,17 @@ void main() {
       MaterialApp(home: ImportDatasetScreen(controller: controller)),
     );
     await tester.pumpAndSettle();
+  }
+
+  Future<void> pumpImportScreenAt(
+    WidgetTester tester,
+    DatasetController controller,
+    Size size,
+  ) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1;
+    addTearDown(tester.view.reset);
+    await pumpImportScreen(tester, controller);
   }
 
   testWidgets('import screen uses archive and collection with one Remove section', (
@@ -56,6 +73,98 @@ void main() {
     expect(find.text('ARCHIVE'), findsOneWidget);
     expect(find.text('Delete collection'), findsOneWidget);
     expect(find.text('Delete archive'), findsOneWidget);
+  });
+
+  testWidgets('archive summary stacks its cells on a narrow window', (
+    WidgetTester tester,
+  ) async {
+    await pumpImportScreenAt(
+      tester,
+      await loadedController(),
+      const Size(360, 800),
+    );
+
+    final created = tester.getTopLeft(find.text('ARCHIVE CREATED'));
+    final collections = tester.getTopLeft(find.text('COLLECTIONS'));
+    final notes = tester.getTopLeft(find.text('NOTES IN ALPHA'));
+
+    // One cell per row, each starting at the strip's left edge.
+    expect(collections.dx, created.dx);
+    expect(notes.dx, created.dx);
+    expect(collections.dy, greaterThan(created.dy));
+    expect(notes.dy, greaterThan(collections.dy));
+
+    // The label may wrap to two lines; the value stays on one.
+    expect(tester.widget<Text>(find.text('NOTES IN ALPHA')).maxLines, 2);
+    expect(
+      tester.widget<Text>(find.text('Mar 28, 2026 at 12:00 UTC')).maxLines,
+      1,
+    );
+  });
+
+  testWidgets('archive summary shares one row on a wide window', (
+    WidgetTester tester,
+  ) async {
+    await pumpImportScreenAt(
+      tester,
+      await loadedController(),
+      const Size(800, 900),
+    );
+
+    final created = tester.getTopLeft(find.text('ARCHIVE CREATED'));
+    final collections = tester.getTopLeft(find.text('COLLECTIONS'));
+    final notes = tester.getTopLeft(find.text('NOTES IN ALPHA'));
+
+    // Three columns on one baseline, in reading order.
+    expect(collections.dy, created.dy);
+    expect(notes.dy, created.dy);
+    expect(collections.dx, greaterThan(created.dx));
+    expect(notes.dx, greaterThan(collections.dx));
+    expect(
+      tester.getSize(find.byKey(const ValueKey('archiveSummary'))).width,
+      lessThanOrEqualTo(720),
+    );
+  });
+
+  testWidgets('archive summary reads each cell as one label and value', (
+    WidgetTester tester,
+  ) async {
+    final semantics = tester.ensureSemantics();
+
+    await pumpImportScreen(tester, await loadedController());
+
+    expect(
+      find.bySemanticsLabel('Archive created: Mar 28, 2026 at 12:00 UTC'),
+      findsOneWidget,
+    );
+    expect(find.bySemanticsLabel('Collections: 2'), findsOneWidget);
+    expect(find.bySemanticsLabel('Notes in Alpha: 2'), findsOneWidget);
+
+    semantics.dispose();
+  });
+
+  testWidgets('a long collection name keeps two label lines', (
+    WidgetTester tester,
+  ) async {
+    await pumpImportScreenAt(
+      tester,
+      await loadedController(
+        collections: const [
+          {
+            'id': 11,
+            'name': 'Collection with a longer name',
+            'noteCount': 2,
+          },
+        ],
+      ),
+      const Size(800, 900),
+    );
+
+    final label = find.text('NOTES IN COLLECTION WITH A LONGER NAME');
+    expect(label, findsOneWidget);
+    // Wrapped, not squeezed onto one ellipsized line.
+    expect(tester.getSize(label).height, greaterThan(20));
+    expect(tester.widget<Text>(label).maxLines, 2);
   });
 
   testWidgets('delete failure shows inline in the remove section', (
@@ -118,13 +227,18 @@ class _MemoryLastCollectionStore implements LastCollectionStore {
 }
 
 class _CollectionRepository extends ViewerRepository {
-  _CollectionRepository({required this.failDelete});
+  _CollectionRepository({
+    required this.failDelete,
+    List<Map<String, Object?>>? collections,
+  }) : _collections = List.of(collections ?? _defaultCollections);
 
-  final bool failDelete;
-  final List<Map<String, Object?>> _collections = [
+  static const List<Map<String, Object?>> _defaultCollections = [
     {'id': 11, 'name': 'Alpha', 'noteCount': 2},
     {'id': 22, 'name': 'Beta', 'noteCount': 3},
   ];
+
+  final bool failDelete;
+  final List<Map<String, Object?>> _collections;
 
   @override
   bool get canManageImportedDatasets => true;

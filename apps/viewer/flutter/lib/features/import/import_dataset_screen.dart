@@ -21,6 +21,17 @@ const double _kContentMaxWidth = 720;
 /// The page's minimum padding on every edge.
 const double _kPagePadding = 20;
 
+/// The archive summary's own breakpoint: below it the cells stack into rows
+/// instead of sharing one line.
+const double _kArchiveSummaryBreakpoint = 480;
+
+/// The archive summary's widest measure, so it never stretches across a wide
+/// desktop window.
+const double _kArchiveSummaryMaxWidth = 720;
+
+/// The summary label's 0.08em tracking at its 11px size, in logical pixels.
+const double _kSummaryLabelTracking = 0.88;
+
 /// The one sentence each removal scope uses, shared by its row and its dialog.
 String _collectionRemoval(String name) =>
     'Delete "$name" and all its notes and note images from this device.';
@@ -618,11 +629,10 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                   crossAxisAlignment:
                                       CrossAxisAlignment.start,
                                   children: [
-                                    Wrap(
-                                      spacing: 12,
-                                      runSpacing: 12,
-                                      children: [
-                                        _InfoPill(
+                                    _ArchiveSummary(
+                                      key: const ValueKey('archiveSummary'),
+                                      cells: [
+                                        _SummaryCell(
                                           label: 'Archive created',
                                           value: generatedAt == null ||
                                                   generatedAt.isEmpty
@@ -631,17 +641,16 @@ class _ImportDatasetScreenState extends State<ImportDatasetScreen> {
                                                   generatedAt,
                                                 ),
                                         ),
-                                        _InfoPill(
+                                        _SummaryCell(
                                           label: 'Collections',
                                           value: '${collections.length}',
                                         ),
-                                        _InfoPill(
+                                        _SummaryCell(
                                           label: activeCollection == null
                                               ? 'Notes'
                                               : 'Notes in ${activeCollection.name}',
                                           value:
                                               '${activeCollection?.noteCount ?? 0}',
-                                          maxWidth: 240,
                                         ),
                                       ],
                                     ),
@@ -1254,49 +1263,110 @@ class _StatusBanner extends StatelessWidget {
   }
 }
 
-class _InfoPill extends StatelessWidget {
-  const _InfoPill({required this.label, required this.value, this.maxWidth});
+/// The archive's at-a-glance numbers as one inset strip: label/value cells on a
+/// mist ground, split by hairlines instead of a pill per stat. The strip sizes
+/// itself from its own available width, so it answers to the panel it sits in
+/// rather than the window.
+class _ArchiveSummary extends StatelessWidget {
+  const _ArchiveSummary({required this.cells, super.key});
+
+  /// The cells in reading order. The first takes twice a count's share of the
+  /// row because a date is the widest value.
+  final List<_SummaryCell> cells;
+
+  @override
+  Widget build(BuildContext context) {
+    return ConstrainedBox(
+      constraints: const BoxConstraints(maxWidth: _kArchiveSummaryMaxWidth),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final stacked = constraints.maxWidth < _kArchiveSummaryBreakpoint;
+          final children = <Widget>[];
+          for (var index = 0; index < cells.length; index++) {
+            if (index > 0) {
+              children.add(
+                SizedBox(
+                  height: stacked ? 1 : null,
+                  width: stacked ? null : 1,
+                  child: const ColoredBox(color: ViewerPalette.borderSoft),
+                ),
+              );
+            }
+            children.add(
+              stacked
+                  ? cells[index]
+                  : Expanded(flex: index == 0 ? 2 : 1, child: cells[index]),
+            );
+          }
+
+          return DecoratedBox(
+            decoration: BoxDecoration(
+              color: ViewerPalette.surfaceMist,
+              borderRadius: BorderRadius.circular(ViewerPalette.radiusSm),
+              border: Border.all(color: ViewerPalette.borderSoft),
+            ),
+            child: stacked
+                ? Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: children,
+                  )
+                : IntrinsicHeight(
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: children,
+                    ),
+                  ),
+          );
+        },
+      ),
+    );
+  }
+}
+
+/// One cell of the archive summary: a quiet label above its value. A screen
+/// reader hears the pair as one `label: value` node, not two separate stops.
+class _SummaryCell extends StatelessWidget {
+  const _SummaryCell({required this.label, required this.value});
 
   final String label;
   final String value;
 
-  /// Caps a pill whose label carries user text, so a long name ellipsizes
-  /// instead of stretching the wrap.
-  final double? maxWidth;
-
   @override
   Widget build(BuildContext context) {
-    final pill = DecoratedBox(
-      decoration: BoxDecoration(
-        color: ViewerPalette.surface,
-        borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
-        border: Border.all(color: ViewerPalette.borderControl),
-      ),
+    return Semantics(
+      container: true,
+      excludeSemantics: true,
+      label: '$label: $value',
       child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           mainAxisSize: MainAxisSize.min,
           children: [
             Text(
               label.toUpperCase(),
-              maxLines: 1,
+              // A collection name may take two lines; the count alone would
+              // lose the collection that gives it meaning.
+              maxLines: 2,
               overflow: TextOverflow.ellipsis,
               style: const TextStyle(
                 fontFamily: 'Inter',
                 fontSize: 11,
                 fontWeight: FontWeight.w700,
-                letterSpacing: 0.9,
+                letterSpacing: _kSummaryLabelTracking,
+                height: 1.3,
                 color: ViewerPalette.textMuted,
-                height: 1,
               ),
             ),
             const SizedBox(height: 6),
             Text(
               value,
+              maxLines: 1,
+              softWrap: false,
               style: const TextStyle(
                 fontFamily: 'Inter',
-                fontWeight: FontWeight.w600,
+                fontSize: 16,
+                fontWeight: FontWeight.w700,
                 color: ViewerPalette.text,
                 fontFeatures: [FontFeature.tabularFigures()],
               ),
@@ -1305,13 +1375,5 @@ class _InfoPill extends StatelessWidget {
         ),
       ),
     );
-
-    final width = maxWidth;
-    return width == null
-        ? pill
-        : ConstrainedBox(
-            constraints: BoxConstraints(maxWidth: width),
-            child: pill,
-          );
   }
 }
