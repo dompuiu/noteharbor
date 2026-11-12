@@ -609,6 +609,25 @@ input[type="radio"] {
   font-style: italic;
 }
 
+/* The hairline is a quiet cue; the pill names the state outright, so the
+   draft never passes for a saved row even at a glance. It is decoration: the
+   link's accessible name already says "Unsaved …". */
+.sidebar-link-pending {
+  flex: none;
+  margin-left: auto;
+  padding: 1px 6px;
+  border: 1px solid var(--rail-control-border);
+  border-radius: 999px;
+  color: var(--rail-muted);
+  font-size: 9px;
+  font-style: normal;
+  font-weight: 700;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
 /* The hairline shares the outline slot, so restore the global focus ring on
    the pending row: keyboard focus must stay visible (WCAG 2.4.7). The cursor
    state below still drops it in favour of its own ring. */
@@ -744,6 +763,12 @@ input[type="radio"] {
    in the row's flow (and the row's own hover or focus reveals them). The grip
    shares the item icon slot, so it stays in the row without adding width. */
 .sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(:hover):not(:has(:focus-visible)) .sidebar-row-moves {
+  display: none;
+}
+
+/* The pill only makes sense beside the readable name, so the truly collapsed
+   rail keeps just the dashed hairline and italic mark. */
+.sidebar-dock:not(.sidebar-dock--open):not(.sidebar-dock--pinned):not(:hover):not(:has(:focus-visible)) .sidebar-link-pending {
   display: none;
 }
 

@@ -1333,6 +1333,14 @@ function Sidebar({ pageFocusRef }) {
                       >
                         <ItemIcon icon={item.icon} />
                         <span className="sidebar-link-label">{item.label}</span>
+                        {item.pending ? (
+                          <span
+                            aria-hidden="true"
+                            className="sidebar-link-pending"
+                          >
+                            Unsaved
+                          </span>
+                        ) : null}
                         <RailMark item={item} />
                       </Link>
                     );

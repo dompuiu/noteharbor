@@ -986,6 +986,9 @@ describe("Sidebar collection rows", () => {
     });
     expect(draft).toHaveClass("sidebar-link--pending");
     expect(draft).toHaveAttribute("title", "Collection");
+    expect(draft.querySelector(".sidebar-link-pending")).toHaveTextContent(
+      "Unsaved",
+    );
     const { container } = { container: document.querySelector(".sidebar-nav") };
     expect(collectionLabels(container)).toEqual([
       "All notes",
