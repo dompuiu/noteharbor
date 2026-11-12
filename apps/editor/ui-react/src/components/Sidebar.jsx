@@ -35,12 +35,19 @@ import {
 // selection bar, or any other control — and opens the rail with the cursor on
 // the current option. Text fields and modal surfaces keep the letter.
 // ↑/↓ and j/k move the cursor through every stop in DOM order — the pin
-// toggle, each group's Reorder toggle, each row link/action, and the enabled
-// Move up/down buttons while that group is in reorder mode; Home/End jump;
-// Enter/Space activates the stop (pins the rail, toggles reorder, moves the
-// row, or follows the option); Escape returns focus to the control that
-// opened the rail and collapses it. Tab cycles the stops like ↓, and Shift+Tab
-// like ↑, both wrapping off the ends, so the rail is left with Escape.
+// toggle, then each row link/action; Home/End jump; Enter/Space activates the
+// stop (pins the rail or follows the option); Escape returns focus to the
+// control that opened the rail and collapses it. Tab cycles the stops like ↓,
+// and Shift+Tab like ↑, both wrapping off the ends, so the rail is left with
+// Escape.
+//
+// Reordering has no mode. A saved collection or showcase row is always
+// draggable while the rail is expanded or pinned: its grip appears on row
+// hover or focus, its 24px Move up/down buttons sit beside it, and Shift+↑/↓
+// jumps the focused row to the top or bottom of its group. A drag outlives
+// pointer-leave and blur — only a drop, Escape, or a click outside the rail
+// ends it — and the dock holds the open layout for the whole gesture so the
+// grip and the drop targets never vanish under the pointer.
 
 // Per-destination icons, lifted from the settled layout-D prototype.
 const ICONS = {
@@ -52,8 +59,8 @@ const ICONS = {
   grid: '<rect x="3.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="3.5" width="7" height="7" rx="1.6"/><rect x="3.5" y="13.5" width="7" height="7" rx="1.6"/><rect x="13.5" y="13.5" width="7" height="7" rx="1.6"/>',
   list: '<path d="M8 6h13M8 12h13M8 18h13"/><path d="M3 6h.01M3 12h.01M3 18h.01"/>',
   plus: '<path d="M12 5v14M5 12h14"/>',
-  // The reorder toggle and the drag handles shown while a group is in
-  // reorder mode. Three horizontal strokes read as "grab these rows".
+  // The grip shown on a reorderable row's hover or focus. Three horizontal
+  // strokes read as "grab these rows".
   reorder: '<path d="M4 6h16M4 12h16M4 18h16"/>',
   // Section markers for the two sidebar categories. They read as hubs, not
   // as destinations: a stack of books for Catalog, a grid for Showcases. Both
@@ -67,6 +74,9 @@ const ICONS = {
   // states; the pressed state is the accent tint, not a second icon.
   pin: '<path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/>',
 };
+
+// Shift+↑/↓ jumps a reorderable row to the matching edge of its group.
+const SHIFT_ARROW_DIRECTIONS = { ArrowDown: 1, ArrowUp: -1 };
 
 // The collapsed rail's second line of identity. A collection or showcase row
 // shows its loaded note count, in tabular figures so the marks line up; a row
@@ -188,11 +198,10 @@ function Sidebar({ pageFocusRef }) {
   // the server's order.
   const [draggedCollectionId, setDraggedCollectionId] = useState(null);
   const [collectionDropTarget, setCollectionDropTarget] = useState(null);
-  // Reorder mode is opt-in per group, flipped by the group's Reorder toggle.
-  // Rows are only draggable — and only show their grip handle and move
-  // buttons — while their own group's toggle is on.
-  const [reorderingCollections, setReorderingCollections] = useState(false);
-  const [reorderingShowcases, setReorderingShowcases] = useState(false);
+  const dragActive = draggedShowcaseId != null || draggedCollectionId != null;
+  // One reorder request at a time: a second request built from the same list
+  // would overwrite the first with a stale order when both land.
+  const reorderInFlightRef = useRef(false);
   const navRef = useRef(null);
   const linksRef = useRef([]);
   // The control that held focus when "b" opened the rail. Escape hands focus
@@ -284,7 +293,6 @@ function Sidebar({ pageFocusRef }) {
       id: "catalog",
       icon: "catalog",
       label: "Catalog",
-      reorderScope: "collections",
       items: [
         ALL_NOTES_ITEM,
         ...collectionItems,
@@ -296,35 +304,9 @@ function Sidebar({ pageFocusRef }) {
       id: "showcases",
       icon: "grid",
       label: "Showcases",
-      reorderScope: "showcases",
       items: [...showcaseItems, newShowcaseItem],
     },
   ];
-
-  function isGroupReordering(group) {
-    if (group.reorderScope === "collections") {
-      return reorderingCollections;
-    }
-
-    if (group.reorderScope === "showcases") {
-      return reorderingShowcases;
-    }
-
-    return false;
-  }
-
-  function toggleGroupReorder(group) {
-    if (group.reorderScope === "collections") {
-      clearCollectionDrag();
-      setReorderingCollections((current) => !current);
-      return;
-    }
-
-    if (group.reorderScope === "showcases") {
-      clearShowcaseDrag();
-      setReorderingShowcases((current) => !current);
-    }
-  }
 
   // Pinning never moves focus: the toggle is only reachable while the rail is
   // open, so the click or Enter that flips it already has focus where the
@@ -335,62 +317,27 @@ function Sidebar({ pageFocusRef }) {
     saveSidebarPinned(next);
   }
 
-  function isRowReorderable(item, group) {
-    const isShowcase = item.showcaseId != null && !item.pending;
-    const isCollection = item.collectionId != null && !item.pending;
-    const reorderMode = isGroupReordering(group);
+  // A saved collection or showcase row is the only reorderable unit. Drafts
+  // are display-only; destinations and actions are not part of an order.
+  function isReorderableItem(item) {
+    if (item.pending) {
+      return false;
+    }
 
-    return (
-      (isShowcase && reorderMode && group.reorderScope === "showcases") ||
-      (isCollection && reorderMode && group.reorderScope === "collections")
-    );
+    return item.showcaseId != null || item.collectionId != null;
   }
 
-  // Keyboard cursor stops in DOM order: the pin in the head, then each
-  // group's Reorder toggle, then each row link/action, with the enabled Move
-  // up/down buttons inline after their row's link while that group is in
-  // reorder mode. Disabled moves are skipped: they are not focusable natively
-  // either.
+  // Keyboard cursor stops in DOM order: the pin in the head, then each row
+  // link/action. Move buttons stay out of the sequence: Shift+↑/↓ moves the
+  // focused row without walking into a second control per row.
   const cursorStops = [{ kind: "pin", key: "pin" }];
   for (const group of groups) {
-    if (group.reorderScope) {
-      cursorStops.push({ kind: "toggle", group, groupId: group.id, key: `toggle-${group.id}` });
-    }
     for (const item of group.items) {
       cursorStops.push({
         kind: "item",
         item,
-        group,
-        groupId: group.id,
         key: item.key ?? item.to,
       });
-      if (isRowReorderable(item, group)) {
-        const list = item.showcaseId != null ? showcases : collections;
-        const rowId = item.showcaseId != null ? item.showcaseId : item.collectionId;
-        const rowIndex = list.findIndex((entry) => entry.id === rowId);
-        const canMoveUp = rowIndex > 0;
-        const canMoveDown = rowIndex >= 0 && rowIndex < list.length - 1;
-        if (canMoveUp) {
-          cursorStops.push({
-            kind: "move",
-            item,
-            group,
-            groupId: group.id,
-            direction: -1,
-            key: `move-${item.key}-up`,
-          });
-        }
-        if (canMoveDown) {
-          cursorStops.push({
-            kind: "move",
-            item,
-            group,
-            groupId: group.id,
-            direction: 1,
-            key: `move-${item.key}-down`,
-          });
-        }
-      }
     }
   }
   const stopIndexByKey = new Map(cursorStops.map((stop, index) => [stop.key, index]));
@@ -398,10 +345,30 @@ function Sidebar({ pageFocusRef }) {
   const pinIndex = stopIndexByKey.get("pin");
   linksRef.current.length = cursorStops.length;
 
-  // After a keyboard move the provider reconciles the order, which rebuilds
-  // the stops. Park the moved row's key so the next render can land the
-  // cursor on that row's link in its new place, even when the move buttons
-  // themselves change identity at the ends.
+  // The Shift+↑/↓ row comes from the keyboard cursor, or from a row that
+  // native Tab focused (including its move buttons) when no cursor is open.
+  function keyboardReorderStop() {
+    if (cursorIndex != null) {
+      const stop = cursorStops[cursorIndex];
+      return stop?.kind === "item" ? stop : null;
+    }
+
+    const active = document.activeElement;
+
+    if (!(active instanceof Element) || !navRef.current?.contains(active)) {
+      return null;
+    }
+
+    const link = active.closest(".sidebar-row")?.querySelector(".sidebar-link");
+    const index = link ? Number(link.getAttribute("data-sidebar-index")) : NaN;
+    const stop = Number.isInteger(index) ? cursorStops[index] : null;
+
+    return stop?.kind === "item" ? stop : null;
+  }
+
+  // After a keyboard move or jump the provider reconciles the order, which
+  // rebuilds the stops. Park the moved row's key so the next render can land
+  // the cursor on that row's link in its new place.
   const pendingMoveFocusRef = useRef(null);
 
   const newShowcaseTo = SHOWCASE_ROUTES.showcaseEdit(NEW_SHOWCASE_ID);
@@ -520,8 +487,8 @@ function Sidebar({ pageFocusRef }) {
     linksRef.current[cursorIndex]?.focus({ preventScroll: true });
   }, [cursorIndex, cursorStops.length]);
 
-  // The stops rebuild when reorder mode flips or the order reconciles. Clamp
-  // a cursor left past the end (e.g. toggling a group off removed its moves).
+  // The stops rebuild when the order reconciles. Clamp a cursor left past the
+  // end so it never points at a stop that no longer exists.
   useEffect(() => {
     if (cursorIndex === null) {
       return;
@@ -566,13 +533,17 @@ function Sidebar({ pageFocusRef }) {
 
   useEffect(() => {
     function handleKeyDown(event) {
-      // Shift is part of Shift+Tab, which the rail handles; every other
-      // shifted key is left to the browser.
+      const jumpDirection = event.shiftKey
+        ? (SHIFT_ARROW_DIRECTIONS[event.key] ?? null)
+        : null;
+
+      // Shift is part of Shift+Tab and the Shift+↑/↓ row jump, which the rail
+      // handles; every other shifted key is left to the browser.
       if (
         event.metaKey ||
         event.ctrlKey ||
         event.altKey ||
-        (event.shiftKey && event.key !== "Tab")
+        (event.shiftKey && event.key !== "Tab" && jumpDirection == null)
       ) {
         return;
       }
@@ -580,6 +551,18 @@ function Sidebar({ pageFocusRef }) {
       const target = event.target;
       const inSidebar =
         target instanceof Node && navRef.current?.contains(target);
+
+      // Escape ends a drag even when the pointer started it and focus never
+      // entered the rail. When a keyboard cursor is also open, the same press
+      // closes it and hands focus back to the opener.
+      if (event.key === "Escape" && dragActive) {
+        event.preventDefault();
+        clearDrag();
+
+        if (!inSidebar || cursorIndex === null) {
+          return;
+        }
+      }
 
       if (!inSidebar) {
         // "b" opens the rail from anywhere: table rows, the selection actions
@@ -599,6 +582,21 @@ function Sidebar({ pageFocusRef }) {
       if (event.key === "Escape") {
         event.preventDefault();
         leaveCursor({ restoreFocus: true });
+        return;
+      }
+
+      // Shift+↑/↓ jumps the focused row to the top or bottom of its group,
+      // beside the 24px Move up/down buttons that step one place at a time.
+      // Rows that cannot reorder keep the browser's own shifted-key behavior.
+      if (jumpDirection != null) {
+        const stop = keyboardReorderStop();
+
+        if (!stop || !isReorderableItem(stop.item)) {
+          return;
+        }
+
+        event.preventDefault();
+        void reorderItem(stop.item, jumpDirection, { jump: true });
         return;
       }
 
@@ -658,21 +656,6 @@ function Sidebar({ pageFocusRef }) {
           return;
         }
 
-        if (stop?.kind === "toggle") {
-          toggleGroupReorder(stop.group);
-          return;
-        }
-
-        if (stop?.kind === "move") {
-          pendingMoveFocusRef.current = stop.item.key ?? stop.item.to;
-          if (stop.item.showcaseId != null) {
-            void handleMoveShowcase(stop.item.showcaseId, stop.direction);
-          } else {
-            void handleMoveCollection(stop.item.collectionId, stop.direction);
-          }
-          return;
-        }
-
         activateItemStop(stop?.item);
       }
     }
@@ -680,7 +663,7 @@ function Sidebar({ pageFocusRef }) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursorIndex, pathname, pinned, showcases, pendingShowcase, collections, pendingCollection, reorderingCollections, reorderingShowcases, cursorStops.length]);
+  }, [cursorIndex, pathname, pinned, showcases, pendingShowcase, collections, pendingCollection, dragActive, cursorStops.length]);
 
   function handleLinkClick(to) {
     // A click means "I'm leaving the rail". The browser focuses a clicked
@@ -739,6 +722,26 @@ function Sidebar({ pageFocusRef }) {
     );
   }
 
+  // The rail cannot surface an error, so a failed reorder is swallowed; the
+  // next load reconciles the order. One request at a time: a second order
+  // built from the same list would otherwise overwrite the first in flight.
+  async function requestReorder(ids, reorder) {
+    if (reorderInFlightRef.current) {
+      return false;
+    }
+
+    reorderInFlightRef.current = true;
+
+    try {
+      await reorder(ids);
+      return true;
+    } catch {
+      return false;
+    } finally {
+      reorderInFlightRef.current = false;
+    }
+  }
+
   // Commit a drop by handing the new id order to the provider. The sidebar
   // never reorders its own copy; the provider applies the server's order, so a
   // failed request leaves the visible order untouched.
@@ -786,16 +789,20 @@ function Sidebar({ pageFocusRef }) {
       return;
     }
 
-    try {
-      await reorderShowcases(nextShowcases.map((showcase) => showcase.id));
-    } catch {
-      // The rail cannot surface an error; the next load reconciles the order.
-    }
+    await requestReorder(
+      nextShowcases.map((showcase) => showcase.id),
+      reorderShowcases,
+    );
   }
 
   function clearCollectionDrag() {
     setDraggedCollectionId(null);
     setCollectionDropTarget(null);
+  }
+
+  function clearDrag() {
+    clearShowcaseDrag();
+    clearCollectionDrag();
   }
 
   function handleCollectionDragStart(event, collectionId) {
@@ -862,129 +869,101 @@ function Sidebar({ pageFocusRef }) {
       return;
     }
 
-    try {
-      await reorderCollections(nextCollections.map((collection) => collection.id));
-    } catch {
-      // The rail cannot surface an error; the next load reconciles the order.
-    }
+    await requestReorder(
+      nextCollections.map((collection) => collection.id),
+      reorderCollections,
+    );
   }
 
-  // Keyboard-accessible stepping while a group is in reorder mode: swap the
-  // row with its neighbour and hand the new id order to the provider, exactly
-  // like a drop. A no-op at the ends.
-  async function handleMoveShowcase(showcaseId, direction) {
-    const index = showcases.findIndex(
-      (showcase) => showcase.id === showcaseId,
-    );
-    const nextIndex = index + direction;
-
-    if (index < 0 || nextIndex < 0 || nextIndex >= showcases.length) {
+  // One step (or, with `jump`, straight to an edge) for the row's Move buttons
+  // and the Shift+↑/↓ accelerator. The rail never reorders its own copy: it
+  // hands the provider the new id order and lets the server's order land.
+  async function reorderItem(item, direction, { jump = false } = {}) {
+    if (reorderInFlightRef.current) {
       return;
     }
 
-    const nextShowcases = [...showcases];
-    [nextShowcases[index], nextShowcases[nextIndex]] = [
-      nextShowcases[nextIndex],
-      nextShowcases[index],
-    ];
+    const isShowcase = item.showcaseId != null;
+    const list = isShowcase ? showcases : collections;
+    const reorder = isShowcase ? reorderShowcases : reorderCollections;
+    const id = isShowcase ? item.showcaseId : item.collectionId;
+    const index = list.findIndex((entry) => entry.id === id);
+    const targetIndex = jump
+      ? (direction < 0 ? 0 : list.length - 1)
+      : index + direction;
 
-    try {
-      await reorderShowcases(nextShowcases.map((showcase) => showcase.id));
-    } catch {
-      // The rail cannot surface an error; the next load reconciles the order.
-    }
-  }
-
-  async function handleMoveCollection(collectionId, direction) {
-    const index = collections.findIndex(
-      (collection) => collection.id === collectionId,
-    );
-    const nextIndex = index + direction;
-
-    if (index < 0 || nextIndex < 0 || nextIndex >= collections.length) {
+    if (
+      index < 0 ||
+      targetIndex === index ||
+      targetIndex < 0 ||
+      targetIndex >= list.length
+    ) {
       return;
     }
 
-    const nextCollections = [...collections];
-    [nextCollections[index], nextCollections[nextIndex]] = [
-      nextCollections[nextIndex],
-      nextCollections[index],
-    ];
+    const next = [...list];
+    const [moved] = next.splice(index, 1);
+    next.splice(targetIndex, 0, moved);
 
-    try {
-      await reorderCollections(nextCollections.map((collection) => collection.id));
-    } catch {
-      // The rail cannot surface an error; the next load reconciles the order.
+    pendingMoveFocusRef.current = item.key ?? item.to;
+
+    const landed = await requestReorder(
+      next.map((entry) => entry.id),
+      reorder,
+    );
+
+    // A failed request leaves the order unchanged, so no rebuild will consume
+    // the parked focus; drop it before some later update steals focus.
+    if (!landed) {
+      pendingMoveFocusRef.current = null;
     }
   }
 
-  // Reorder mode lives only while the rail is open. Collapsing it — the
-  // pointer leaving the dock, or focus moving out to the page — switches
-  // every group's toggle back off.
-  function exitReorderModes() {
-    setReorderingCollections(false);
-    setReorderingShowcases(false);
-  }
-
-  // The pointer leaving the dock collapses the rail, so reorder mode
-  // goes with it. This subscribes natively rather than through React's
-  // `onMouseLeave`: the native event carries the true `relatedTarget`,
-  // which is the only evidence the pointer genuinely left (a null
-  // target means it left for browser chrome, or the event is synthetic
-  // and the pointer never moved — neither must reset anything).
-  const dockRef = useRef(null);
+  // A click outside the rail ends a drag that is still in flight (for example
+  // after the gesture was cancelled by the browser, or after a pointer left
+  // and clicked back on the page). A drop or Escape clear it too; hovering out
+  // never does.
   useEffect(() => {
-    const dock = dockRef.current;
-
-    if (!dock) {
+    if (!dragActive) {
       return undefined;
     }
 
-    function handleDockMouseLeave(event) {
-      if (!(event.relatedTarget instanceof Node)) {
+    function handlePointerDown(event) {
+      if (event.target instanceof Node && navRef.current?.contains(event.target)) {
         return;
       }
 
-      // A drop outside the rail is a no-op (dragend clears it); never
-      // yank the mode out from under a drag that may still land on a row.
-      if (draggedShowcaseId != null || draggedCollectionId != null) {
-        return;
-      }
-
-      // A pinned rail does not collapse when the pointer leaves, so reorder
-      // mode stays with it. Unpinned keeps today's behaviour exactly.
-      if (pinned) {
-        return;
-      }
-
-      exitReorderModes();
+      clearDrag();
     }
 
-    dock.addEventListener("mouseleave", handleDockMouseLeave);
-    return () => dock.removeEventListener("mouseleave", handleDockMouseLeave);
+    document.addEventListener("pointerdown", handlePointerDown, true);
+    return () =>
+      document.removeEventListener("pointerdown", handlePointerDown, true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [draggedShowcaseId, draggedCollectionId, pinned]);
+  }, [dragActive]);
 
   return (
     <div
       className={[
         "sidebar-dock",
         pinned ? "sidebar-dock--pinned" : "",
-        cursorIndex !== null ? "sidebar-dock--open" : "",
+        // The open layout is held for the whole drag so pointer-leave cannot
+        // hide the grips and drop targets mid-gesture.
+        cursorIndex !== null || dragActive ? "sidebar-dock--open" : "",
       ]
         .filter(Boolean)
         .join(" ")}
-      ref={dockRef}
     >
         <nav
           aria-label="Sections"
           className="sidebar"
           id="app-sidebar"
           onBlur={(event) => {
-            // Focus leaving the rail collapses it, so reorder mode goes
-            // with it. `relatedTarget` is the primary signal, but focus
-            // moved by a mouse click can arrive without one — fall back
-            // to the newly focused element, which is already current.
+            // Focus leaving the rail collapses the keyboard cursor.
+            // `relatedTarget` is the primary signal, but focus moved by a
+            // mouse click can arrive without one — fall back to the newly
+            // focused element, which is already current. A drag survives
+            // blur: only drop, Escape, or a click-away ends it.
             const next =
               event.relatedTarget instanceof Node
                 ? event.relatedTarget
@@ -995,10 +974,6 @@ function Sidebar({ pageFocusRef }) {
 
             if (cursorIndex !== null && focusLeft) {
               setCursorIndex(null);
-            }
-
-            if (focusLeft && !pinned) {
-              exitReorderModes();
             }
           }}
           ref={navRef}
@@ -1037,61 +1012,20 @@ function Sidebar({ pageFocusRef }) {
           </div>
 
           <div className="sidebar-nav">
-            {groups.map((group) => {
-              const reorderMode = isGroupReordering(group);
-              const reorderPressedLabel = reorderMode
-                ? `Done reordering ${group.label}`
-                : `Reorder ${group.label}`;
-
-              return (
+            {groups.map((group) => (
               <div
                 aria-labelledby={`sidebar-group-${group.id}`}
                 className="sidebar-group"
                 key={group.id}
                 role="group"
               >
-                <div className="sidebar-group-head">
-                  <p
-                    className="sidebar-group-label"
-                    id={`sidebar-group-${group.id}`}
-                  >
-                    <ItemIcon className="sidebar-group-ic" icon={group.icon} />
-                    <span className="sidebar-group-name">{group.label}</span>
-                  </p>
-                  {group.reorderScope ? (
-                    <button
-                      aria-label={reorderPressedLabel}
-                      aria-pressed={reorderMode}
-                      className={`sidebar-reorder-toggle${
-                        reorderMode ? " sidebar-reorder-toggle--active" : ""
-                      }${
-                        cursorIndex === stopIndexByKey.get(`toggle-${group.id}`)
-                          ? " sidebar-reorder-toggle--cursor"
-                          : ""
-                      }`}
-                      data-sidebar-index={stopIndexByKey.get(`toggle-${group.id}`)}
-                      onClick={() => {
-                        if (cursorIndex !== null) {
-                          setCursorIndex(stopIndexByKey.get(`toggle-${group.id}`));
-                        }
-                        toggleGroupReorder(group);
-                      }}
-                      ref={(node) => {
-                        linksRef.current[stopIndexByKey.get(`toggle-${group.id}`)] = node;
-                      }}
-                      title={reorderPressedLabel}
-                      type="button"
-                    >
-                      <ItemIcon
-                        className="sidebar-reorder-toggle-ic"
-                        icon="reorder"
-                      />
-                      <span className="sidebar-reorder-toggle-label">
-                        Reorder
-                      </span>
-                    </button>
-                  ) : null}
-                </div>
+                <p
+                  className="sidebar-group-label"
+                  id={`sidebar-group-${group.id}`}
+                >
+                  <ItemIcon className="sidebar-group-ic" icon={group.icon} />
+                  <span className="sidebar-group-name">{group.label}</span>
+                </p>
                 <div className="sidebar-group-links">
                   {group.items.map((item) => {
                     const index = stopIndexByKey.get(item.key ?? item.to);
@@ -1099,8 +1033,9 @@ function Sidebar({ pageFocusRef }) {
                       item.type !== "action" && isItemActive(item, pathname);
                     // A pending draft row is display-only: it cannot be
                     // dragged or become a drop target.
-                    const isShowcase = item.showcaseId != null && !item.pending;
-                    const isCollection = item.collectionId != null && !item.pending;
+                    const reorderable = isReorderableItem(item);
+                    const isShowcase = reorderable && item.showcaseId != null;
+                    const isCollection = reorderable && item.collectionId != null;
                     const dropPlacement = isShowcase
                       ? (showcaseDropTarget?.showcaseId === item.showcaseId
                         ? showcaseDropTarget.placement
@@ -1115,31 +1050,12 @@ function Sidebar({ pageFocusRef }) {
                       : isCollection
                         ? draggedCollectionId === item.collectionId
                         : false;
-                    // Reorder mode is opt-in per group: only rows of the group
-                    // whose toggle is on become draggable and grow a grip
-                    // handle plus keyboard move buttons. Everything else —
-                    // pending drafts, actions, the other group's rows — stays
-                    // a plain navigating link.
-                    const reorderable =
-                      (isShowcase &&
-                        reorderMode &&
-                        group.reorderScope === "showcases") ||
-                      (isCollection &&
-                        reorderMode &&
-                        group.reorderScope === "collections");
-                    // In reorder mode the drop/dragging markers live on the
-                    // row wrapper; the link keeps only its active/cursor
-                    // state. Outside reorder mode no drag state exists.
+                    // The drop/dragging markers live on the row wrapper; the
+                    // link keeps only its active/cursor state.
                     const className = `sidebar-link${
                       active ? " sidebar-link--active" : ""
                     }${cursorIndex === index ? " sidebar-link--cursor" : ""}${
                       item.type === "action" ? " sidebar-link--action" : ""
-                    }${
-                      !reorderable && dropPlacement
-                        ? ` sidebar-link--drop-${dropPlacement}`
-                        : ""
-                    }${
-                      !reorderable && isDragging ? " sidebar-link--dragging" : ""
                     }`;
 
                     if (item.type === "action") {
@@ -1257,19 +1173,7 @@ function Sidebar({ pageFocusRef }) {
                       }
 
                       function handleMove(direction) {
-                        pendingMoveFocusRef.current = item.key ?? item.to;
-                        if (cursorIndex !== null) {
-                          const moveKey = `move-${item.key}-${direction === -1 ? "up" : "down"}`;
-                          const moveIndex = stopIndexByKey.get(moveKey);
-                          if (moveIndex != null) {
-                            setCursorIndex(moveIndex);
-                          }
-                        }
-                        if (isShowcase) {
-                          void handleMoveShowcase(item.showcaseId, direction);
-                        } else {
-                          void handleMoveCollection(item.collectionId, direction);
-                        }
+                        void reorderItem(item, direction);
                       }
 
                       return (
@@ -1278,9 +1182,7 @@ function Sidebar({ pageFocusRef }) {
                           data-sidebar-index={index}
                           draggable
                           key={item.key ?? item.to}
-                          onDragEnd={isShowcase
-                            ? clearShowcaseDrag
-                            : clearCollectionDrag}
+                          onDragEnd={clearDrag}
                           onDragLeave={handleRowDragLeave}
                           onDragOver={handleRowDragOver}
                           onDragStart={handleRowDragStart}
@@ -1300,10 +1202,13 @@ function Sidebar({ pageFocusRef }) {
                             title={item.label}
                             to={item.to}
                           >
-                            {/* In reorder mode the hamburger takes the
-                            item icon's own slot (same 22px box), so it
-                            lines up exactly with the icons of the rows
-                            that cannot be dragged. */}
+                            {/* The grip shares the item icon's own 22px slot
+                            and appears on row hover or focus, so the row
+                            never shifts and every icon keeps one column. */}
+                            <ItemIcon
+                              className="sidebar-ic sidebar-ic--item"
+                              icon={item.icon}
+                            />
                             <ItemIcon
                               className="sidebar-ic sidebar-ic--grip"
                               icon="reorder"
@@ -1316,20 +1221,9 @@ function Sidebar({ pageFocusRef }) {
                           <span className="sidebar-row-moves">
                             <button
                               aria-label={`Move ${item.label} up`}
-                              className={`sidebar-move-button${
-                                cursorIndex === stopIndexByKey.get(`move-${item.key}-up`)
-                                  ? " sidebar-move-button--cursor"
-                                  : ""
-                              }`}
-                              data-sidebar-index={stopIndexByKey.get(`move-${item.key}-up`)}
+                              className="sidebar-move-button"
                               disabled={!canMoveUp}
                               onClick={() => handleMove(-1)}
-                              ref={(node) => {
-                                const moveIndex = stopIndexByKey.get(`move-${item.key}-up`);
-                                if (moveIndex != null) {
-                                  linksRef.current[moveIndex] = node;
-                                }
-                              }}
                               title={`Move ${item.label} up`}
                               type="button"
                             >
@@ -1337,20 +1231,9 @@ function Sidebar({ pageFocusRef }) {
                             </button>
                             <button
                               aria-label={`Move ${item.label} down`}
-                              className={`sidebar-move-button${
-                                cursorIndex === stopIndexByKey.get(`move-${item.key}-down`)
-                                  ? " sidebar-move-button--cursor"
-                                  : ""
-                              }`}
-                              data-sidebar-index={stopIndexByKey.get(`move-${item.key}-down`)}
+                              className="sidebar-move-button"
                               disabled={!canMoveDown}
                               onClick={() => handleMove(1)}
-                              ref={(node) => {
-                                const moveIndex = stopIndexByKey.get(`move-${item.key}-down`);
-                                if (moveIndex != null) {
-                                  linksRef.current[moveIndex] = node;
-                                }
-                              }}
                               title={`Move ${item.label} down`}
                               type="button"
                             >
@@ -1361,9 +1244,8 @@ function Sidebar({ pageFocusRef }) {
                       );
                     }
 
-                    // A plain link stays a plain link, in or out of reorder
-                    // mode: actions, Import / Export, and pending drafts
-                    // never shift for the reorder UI.
+                    // A plain link stays a plain link: actions, Import /
+                    // Export, and pending drafts never shift for reordering.
                     return (
                       <Link
                         aria-current={active ? "page" : undefined}
@@ -1387,8 +1269,7 @@ function Sidebar({ pageFocusRef }) {
                   })}
                 </div>
               </div>
-              );
-            })}
+            ))}
           </div>
           <div className="sidebar-foot">
             <span className="sidebar-version">v{APP_VERSION}</span>

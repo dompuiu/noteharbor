@@ -128,10 +128,11 @@ describe("Sidebar navigation groups", () => {
       expect(screen.getAllByRole("link", { name: label })).toHaveLength(1);
     }
 
-    // Every link plus the two create actions carries an icon.
-    expect(container.querySelectorAll(".sidebar-link .sidebar-ic svg")).toHaveLength(
-      LINKS.length + 2,
-    );
+    // Every destination and create action carries its own icon; the grip is
+    // an extra icon in reorderable rows, not a replacement.
+    expect(
+      container.querySelectorAll(".sidebar-link .sidebar-ic:not(.sidebar-ic--grip) svg"),
+    ).toHaveLength(LINKS.length + 2);
     expect(newCollectionButton()).toBeInTheDocument();
     expect(newShowcaseButton()).toBeInTheDocument();
   });
@@ -418,22 +419,15 @@ describe("Sidebar pin", () => {
     ).toHaveAttribute("aria-pressed", "false");
   });
 
-  test("a pinned rail keeps reorder mode when the pointer leaves", async () => {
-    const user = userEvent.setup();
+  test("a pinned rail shows saved rows and their grips without hover", async () => {
     window.localStorage.setItem(sidebarPinStorageKey, "true");
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
 
-    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
-
-    await act(async () => {
-      container.querySelector(".sidebar-dock").dispatchEvent(
-        new MouseEvent("mouseleave", { relatedTarget: document.body }),
-      );
-    });
-
+    expect(container.querySelector(".sidebar-dock--pinned")).not.toBeNull();
     expect(
-      screen.getByRole("button", { name: "Done reordering Catalog" }),
-    ).toHaveAttribute("aria-pressed", "true");
+      screen.getByRole("link", { name: "Default" }).closest(".sidebar-row"),
+    ).not.toBeNull();
+    expect(document.querySelectorAll(".sidebar-ic--grip")).toHaveLength(4);
   });
 });
 
@@ -552,7 +546,7 @@ describe("Sidebar keyboard cursor", () => {
     // now the pin in the head.
     expect(
       container.querySelector(
-        ".sidebar-link--cursor, .sidebar-reorder-toggle--cursor, .sidebar-move-button--cursor, .sidebar-pin--cursor",
+        ".sidebar-link--cursor, .sidebar-pin--cursor",
       ),
     ).not.toBeNull();
     expect(document.activeElement).toBe(
@@ -574,85 +568,59 @@ describe("Sidebar keyboard cursor", () => {
 
     expect(
       container.querySelector(
-        ".sidebar-link--cursor, .sidebar-reorder-toggle--cursor, .sidebar-move-button--cursor",
+        ".sidebar-link--cursor, .sidebar-pin--cursor",
       ),
     ).not.toBeNull();
     expect(document.activeElement).toHaveTextContent("New showcase");
   });
 
-  test("arrows walk through the reorder toggles in DOM order", async () => {
+  test("arrows walk every stop in DOM order and wrap off the ends", async () => {
     const user = userEvent.setup();
     await renderSidebar(CATALOG_ROUTES.collection(1));
 
     await user.keyboard("{b}");
     // "b" lands on the active row link; one step back is All notes, then the
-    // group's toggle above the collections.
+    // sequence wraps to the last stop because no group toggle interrupts it.
     expect(document.activeElement).toHaveTextContent("Default");
     await user.keyboard("{ArrowUp}");
     expect(document.activeElement).toHaveTextContent("All notes");
     await user.keyboard("{ArrowUp}");
-    expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Reorder Catalog" }),
-    );
-
-    await user.keyboard("{ArrowDown}");
-    expect(document.activeElement).toHaveTextContent("All notes");
-    await user.keyboard("{ArrowDown}");
-    expect(document.activeElement).toHaveTextContent("Default");
-  });
-
-  test("Enter on a reorder toggle flips reorder mode", async () => {
-    const user = userEvent.setup();
-    await renderSidebar(CATALOG_ROUTES.collection(1));
-
-    await user.keyboard("{b}");
-    await user.keyboard("{Home}");
     expect(document.activeElement).toBe(
       screen.getByRole("button", { name: "Pin sidebar" }),
     );
 
-    await user.keyboard("{ArrowDown}"); // Reorder Catalog
-    expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Reorder Catalog" }),
-    );
+    // One more step off the first stop wraps to the last.
+    await user.keyboard("{ArrowUp}");
+    expect(document.activeElement).toHaveTextContent("New showcase");
 
-    await user.keyboard("{Enter}");
-    expect(
-      screen.getByRole("button", { name: "Done reordering Catalog" }),
-    ).toHaveAttribute("aria-pressed", "true");
-    expect(
-      screen.getByRole("button", { name: "Move Default down" }),
-    ).toBeInTheDocument();
+    await user.keyboard("{ArrowDown}");
+    expect(document.activeElement).toBe(
+      screen.getByRole("button", { name: "Pin sidebar" }),
+    );
   });
 
-  test("move buttons join the arrow sequence while their group is reordering", async () => {
+  test("Shift+↑/↓ jumps the focused row to either end of its group", async () => {
     const user = userEvent.setup();
-    await renderSidebar(CATALOG_ROUTES.collection(1));
+    reorderCollections.mockResolvedValue({
+      collections: [
+        { id: 2, is_default: 0, name: "Archive" },
+        { id: 1, is_default: 1, name: "Default" },
+      ],
+    });
+    await renderSidebar(CATALOG_ROUTES.collection(2));
 
-    await user.keyboard("{b}");
-    await user.keyboard("{Home}");
-    await user.keyboard("{ArrowDown}"); // Reorder Catalog
-    await user.keyboard("{Enter}");
-    expect(
-      screen.getByRole("button", { name: "Done reordering Catalog" }),
-    ).toBeInTheDocument();
+    await user.keyboard("{b}"); // Archive
+    await user.keyboard("{Shift>}{ArrowUp}{/Shift}");
 
-    // Cursor stayed on the Catalog toggle; All notes follows, then Default,
-    // then the enabled Move down (the disabled Move up is skipped).
-    await user.keyboard("{ArrowDown}");
-    expect(document.activeElement).toHaveTextContent("All notes");
-    await user.keyboard("{ArrowDown}");
-    expect(document.activeElement).toHaveTextContent("Default");
-    await user.keyboard("{ArrowDown}");
-    expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Move Default down" }),
-    );
-
-    await user.keyboard("{ArrowDown}");
-    expect(document.activeElement).toHaveTextContent("Archive");
+    await waitFor(() => {
+      expect(reorderCollections).toHaveBeenCalledWith([2, 1]);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Archive" })).toHaveFocus();
+    });
   });
 
-  test("Enter on a move button reorders and focus follows the moved row", async () => {
+  test("Shift+↑/↓ works from a row focused with Tab", async () => {
     const user = userEvent.setup();
     reorderCollections.mockResolvedValue({
       collections: [
@@ -662,18 +630,9 @@ describe("Sidebar keyboard cursor", () => {
     });
     await renderSidebar(CATALOG_ROUTES.collection(1));
 
-    await user.keyboard("{b}");
-    await user.keyboard("{Home}");
-    await user.keyboard("{ArrowDown}"); // Reorder Catalog
-    await user.keyboard("{Enter}");
-    await user.keyboard("{ArrowDown}"); // All notes
-    await user.keyboard("{ArrowDown}"); // Default link
-    await user.keyboard("{ArrowDown}"); // Move Default down
-    expect(document.activeElement).toBe(
-      screen.getByRole("button", { name: "Move Default down" }),
-    );
-
-    await user.keyboard("{Enter}");
+    // No "b": native Tab focus on the row is enough for the accelerator.
+    screen.getByRole("link", { name: "Default" }).focus();
+    await user.keyboard("{Shift>}{ArrowDown}{/Shift}");
 
     await waitFor(() => {
       expect(reorderCollections).toHaveBeenCalledWith([2, 1]);
@@ -683,16 +642,31 @@ describe("Sidebar keyboard cursor", () => {
     });
   });
 
+  test("Shift+↑/↓ does nothing on a row that cannot reorder", async () => {
+    const user = userEvent.setup();
+    await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.keyboard("{b}"); // Default
+    await user.keyboard("{ArrowUp}"); // All notes
+    expect(document.activeElement).toHaveTextContent("All notes");
+
+    await user.keyboard("{Shift>}{ArrowDown}{/Shift}");
+
+    expect(reorderCollections).not.toHaveBeenCalled();
+    expect(document.activeElement).toHaveTextContent("All notes");
+  });
+
   test("Tab keeps its native order until the cursor is active", async () => {
     const user = userEvent.setup();
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
 
     // No "b": a plain Tab through the rail must not be captured or wrap.
-    screen.getByRole("link", { name: "Default" }).focus();
+    // All notes has no move buttons, so the next stop is the Default link.
+    screen.getByRole("link", { name: "All notes" }).focus();
     await user.keyboard("{Tab}");
 
     expect(container.querySelector(".sidebar-link--cursor")).toBeNull();
-    expect(document.activeElement).toHaveTextContent("Archive");
+    expect(document.activeElement).toHaveTextContent("Default");
   });
 
   test("`b` opens the rail from any focusable control", async () => {
@@ -1023,67 +997,58 @@ describe("Sidebar collection rows", () => {
 });
 
 describe("Sidebar collection reordering", () => {
-  test("rows are plain links until the Catalog reorder toggle is on", async () => {
-    const user = userEvent.setup();
-    await renderSidebar(CATALOG_ROUTES.collection(1));
+  test("saved rows are always draggable and grow a grip without a toggle", async () => {
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
 
-    const toggle = screen.getByRole("button", { name: "Reorder Catalog" });
-    expect(toggle).toHaveAttribute("aria-pressed", "false");
-
-    // No grips, no move buttons, nothing draggable before opting in.
-    expect(document.querySelectorAll(".sidebar-ic--grip")).toHaveLength(0);
+    // Reordering has no mode: no per-group toggle exists.
     expect(
-      screen.queryByRole("button", { name: "Move Default up" }),
+      screen.queryByRole("button", { name: /^Reorder (Catalog|Showcases)$/ }),
     ).not.toBeInTheDocument();
+
+    // A saved collection row is the draggable unit; its name stays a link.
+    const row = screen
+      .getByRole("link", { name: "Default" })
+      .closest(".sidebar-row");
+    expect(row).not.toBeNull();
+    expect(row).toHaveAttribute("draggable", "true");
     expect(
       screen.getByRole("link", { name: "Default" }).getAttribute("draggable"),
     ).toBe("false");
 
-    await user.click(toggle);
-
-    expect(
-      screen.getByRole("button", { name: "Done reordering Catalog" }),
-    ).toHaveAttribute("aria-pressed", "true");
-    // Two collection rows swap their item icon for the grip; the other
-    // catalog rows (New collection, Import / Export) keep their icons.
-    expect(
-      document.querySelectorAll(".sidebar-ic--grip"),
-    ).toHaveLength(2);
-    // The All notes destination is not a collection: it gains no grip and is
-    // never draggable, even while the Catalog group is reordering.
+    // `All notes` is a destination, not a collection: no wrapper, no grip.
     expect(
       screen.getByRole("link", { name: "All notes" }).closest(".sidebar-row"),
     ).toBeNull();
-    expect(
-      screen.getByRole("link", { name: "All notes" }).getAttribute("draggable"),
-    ).toBe("false");
+
+    const catalogGroup = container.querySelector(
+      '.sidebar-group[aria-labelledby="sidebar-group-catalog"]',
+    );
+    expect(catalogGroup.querySelectorAll(".sidebar-ic--grip")).toHaveLength(2);
     expect(
       screen.getByRole("button", { name: "Move Default up" }),
     ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Move Summer up" }),
-    ).not.toBeInTheDocument();
   });
 
-  test("the Showcases toggle only affects showcase rows", async () => {
+  test("a pending collection draft is never draggable or a drop target", async () => {
     const user = userEvent.setup();
-    await renderSidebar(CATALOG_ROUTES.collection(1));
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
 
-    await user.click(screen.getByRole("button", { name: "Reorder Showcases" }));
+    await user.click(newCollectionButton());
+    const draft = await screen.findByRole("link", { name: "Collection" });
 
+    expect(draft.closest(".sidebar-row")).toBeNull();
+    expect(draft.getAttribute("draggable")).toBe("false");
     expect(
-      document.querySelectorAll(".sidebar-ic--grip"),
-    ).toHaveLength(2);
-    expect(
-      screen.getByRole("button", { name: "Move Summer down" }),
-    ).toBeInTheDocument();
-    expect(
-      screen.queryByRole("button", { name: "Move Default up" }),
+      screen.queryByRole("button", { name: "Move Collection up" }),
     ).not.toBeInTheDocument();
+    expect(
+      container
+        .querySelector('.sidebar-group[aria-labelledby="sidebar-group-catalog"]')
+        .querySelectorAll(".sidebar-ic--grip"),
+    ).toHaveLength(2);
   });
 
   test("a very long name keeps its full text in the title while it truncates", async () => {
-    const user = userEvent.setup();
     const longName = `${"Showcase ".repeat(20).trim()}`;
     getCollections.mockResolvedValue({
       collections: [
@@ -1097,38 +1062,24 @@ describe("Sidebar collection reordering", () => {
     const link = screen.getByRole("link", { name: longName });
     expect(link).toHaveAttribute("title", longName);
 
-    // Same in reorder mode: the long row still fits its wrapper.
-    // (Re-query: the toggle re-renders the row, detaching the old node.)
-    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
-    const row = screen
-      .getByRole("link", { name: longName })
-      .closest(".sidebar-row");
+    const row = link.closest(".sidebar-row");
     expect(row).not.toBeNull();
-    expect(
-      row.querySelector(".sidebar-link-label"),
-    ).toHaveTextContent(longName);
+    expect(row.querySelector(".sidebar-link-label")).toHaveTextContent(longName);
     expect(container.querySelector(".sidebar-nav")).toBeInTheDocument();
   });
 
   test("grips take the icon slot so every icon shares one column", async () => {
-    const user = userEvent.setup();
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
 
-    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
-
-    // Only the two draggable rows swap their icon for the grip, and the
-    // grip reuses the same 22px icon box — so grips, `+` actions, and
-    // Import / Export icons all sit in one column and no row shifts.
+    // Every reorderable row carries both the item icon and the grip; CSS
+    // shows one or the other in the same 22px box, so nothing shifts.
     const catalogGroup = container.querySelector(
       '.sidebar-group[aria-labelledby="sidebar-group-catalog"]',
     );
-    expect(
-      catalogGroup.querySelectorAll(".sidebar-ic--grip"),
-    ).toHaveLength(2);
+    expect(catalogGroup.querySelectorAll(".sidebar-row")).toHaveLength(2);
     for (const row of catalogGroup.querySelectorAll(".sidebar-row")) {
-      const icon = row.querySelector(":scope > .sidebar-link > .sidebar-ic");
-      expect(icon).not.toBeNull();
-      expect(icon.classList.contains("sidebar-ic--grip")).toBe(true);
+      expect(row.querySelector(".sidebar-ic--item")).not.toBeNull();
+      expect(row.querySelector(".sidebar-ic--grip")).not.toBeNull();
     }
     // Plain rows keep their own icons and gain no wrapper or slot.
     expect(
@@ -1137,97 +1088,105 @@ describe("Sidebar collection reordering", () => {
     expect(
       screen.getByRole("link", { name: "Import / Export" }).closest(".sidebar-row"),
     ).toBeNull();
-    expect(
-      screen
-        .getByRole("button", { name: "New collection" })
-        .querySelector(".sidebar-ic--grip"),
-    ).toBeNull();
   });
 
-  test("moving focus out of the rail switches reorder off", async () => {
-    const user = userEvent.setup();
-    await renderSidebar(CATALOG_ROUTES.collection(1));
+  test("the pointer leaving the rail does not end a drag", async () => {
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+    const defaultRow = screen
+      .getByRole("link", { name: "Default" })
+      .closest(".sidebar-row");
 
-    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
-    expect(
-      screen.getByRole("button", { name: "Done reordering Catalog" }),
-    ).toBeInTheDocument();
-
-    // Focus leaves the rail for the page (the rail collapses with it).
     await act(async () => {
-      screen.getByTestId("page-anchor").focus();
+      defaultRow.dispatchEvent(
+        dragEvent("dragstart", { dataTransfer: makeDataTransfer() }),
+      );
     });
 
-    expect(
-      screen.getByRole("button", { name: "Reorder Catalog" }),
-    ).toHaveAttribute("aria-pressed", "false");
-    expect(document.querySelectorAll(".sidebar-ic--grip")).toHaveLength(0);
-  });
+    expect(defaultRow.classList.contains("sidebar-row--dragging")).toBe(true);
+    // The dock holds the open layout for the whole gesture, so the drop
+    // targets and grips never vanish under the pointer.
+    expect(container.querySelector(".sidebar-dock--open")).not.toBeNull();
 
-  test("tabbing within the rail keeps reorder on", async () => {
-    const user = userEvent.setup();
-    await renderSidebar(CATALOG_ROUTES.collection(1));
-
-    // Focus starts on the toggle, inside the rail; Tab stays inside it.
-    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
-    await user.tab();
-
-    expect(
-      screen.getByRole("button", { name: "Done reordering Catalog" }),
-    ).toHaveAttribute("aria-pressed", "true");
-    expect(document.querySelectorAll(".sidebar-ic--grip")).toHaveLength(2);
-  });
-
-  test("the pointer leaving the rail switches every reorder toggle off", async () => {
-    const user = userEvent.setup();
-    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
-
-    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
-    await user.click(screen.getByRole("button", { name: "Reorder Showcases" }));
-    expect(document.querySelectorAll(".sidebar-ic--grip")).toHaveLength(4);
-
-    // The pointer moves out of the dock onto the page: the rail collapses
-    // with it. Dispatched natively — it does not bubble, so only a real
-    // dock exit delivers it, with the true outside target attached.
+    // Dispatched natively — it does not bubble, so only a real dock exit
+    // delivers it, with the true outside target attached.
     await act(async () => {
       container.querySelector(".sidebar-dock").dispatchEvent(
         new MouseEvent("mouseleave", { relatedTarget: document.body }),
       );
     });
 
-    expect(
-      screen.getByRole("button", { name: "Reorder Catalog" }),
-    ).toHaveAttribute("aria-pressed", "false");
-    expect(
-      screen.getByRole("button", { name: "Reorder Showcases" }),
-    ).toHaveAttribute("aria-pressed", "false");
-    expect(document.querySelectorAll(".sidebar-ic--grip")).toHaveLength(0);
+    expect(defaultRow.classList.contains("sidebar-row--dragging")).toBe(true);
+    expect(container.querySelector(".sidebar-dock--open")).not.toBeNull();
   });
 
-  test("toggling off hides the handles again", async () => {
+  test("blur does not end a drag", async () => {
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+    const defaultRow = screen
+      .getByRole("link", { name: "Default" })
+      .closest(".sidebar-row");
+
+    await act(async () => {
+      defaultRow.dispatchEvent(
+        dragEvent("dragstart", { dataTransfer: makeDataTransfer() }),
+      );
+    });
+
+    // Focus moves out to the page, as a click on the table would do.
+    await act(async () => {
+      screen.getByTestId("page-anchor").focus();
+    });
+
+    expect(defaultRow.classList.contains("sidebar-row--dragging")).toBe(true);
+    expect(container.querySelector(".sidebar-dock--open")).not.toBeNull();
+  });
+
+  test("Escape ends an active drag but keeps the rail usable", async () => {
     const user = userEvent.setup();
-    await renderSidebar(CATALOG_ROUTES.collection(1));
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+    const defaultRow = screen
+      .getByRole("link", { name: "Default" })
+      .closest(".sidebar-row");
 
-    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
-    expect(
-      document.querySelectorAll(".sidebar-ic--grip"),
-    ).toHaveLength(2);
+    await act(async () => {
+      defaultRow.dispatchEvent(
+        dragEvent("dragstart", { dataTransfer: makeDataTransfer() }),
+      );
+    });
+    expect(defaultRow.classList.contains("sidebar-row--dragging")).toBe(true);
 
-    await user.click(
-      screen.getByRole("button", { name: "Done reordering Catalog" }),
-    );
+    await user.keyboard("{Escape}");
 
-    expect(document.querySelectorAll(".sidebar-ic--grip")).toHaveLength(0);
-    expect(
-      screen.queryByRole("button", { name: "Move Default up" }),
-    ).not.toBeInTheDocument();
+    expect(defaultRow.classList.contains("sidebar-row--dragging")).toBe(false);
+    expect(container.querySelector(".sidebar-dock--open")).toBeNull();
+    // A drag with no keyboard cursor must not eject focus onto the page.
+    expect(document.activeElement).not.toBe(screen.getByTestId("page-anchor"));
+    expect(reorderCollections).not.toHaveBeenCalled();
+  });
+
+  test("a click outside the rail ends an active drag", async () => {
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+    const defaultRow = screen
+      .getByRole("link", { name: "Default" })
+      .closest(".sidebar-row");
+
+    await act(async () => {
+      defaultRow.dispatchEvent(
+        dragEvent("dragstart", { dataTransfer: makeDataTransfer() }),
+      );
+    });
+
+    await act(async () => {
+      document.body.dispatchEvent(
+        new Event("pointerdown", { bubbles: true }),
+      );
+    });
+
+    expect(defaultRow.classList.contains("sidebar-row--dragging")).toBe(false);
+    expect(container.querySelector(".sidebar-dock--open")).toBeNull();
   });
 
   test("the first row cannot move up and the last cannot move down", async () => {
-    const user = userEvent.setup();
     await renderSidebar(CATALOG_ROUTES.collection(1));
-
-    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
 
     expect(
       screen.getByRole("button", { name: "Move Default up" }),
@@ -1250,7 +1209,6 @@ describe("Sidebar collection reordering", () => {
     });
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
 
-    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
     await user.click(screen.getByRole("button", { name: "Move Archive up" }));
 
     await waitFor(() => {
@@ -1267,8 +1225,66 @@ describe("Sidebar collection reordering", () => {
     });
   });
 
-  test("dropping one collection onto another hands the provider the new order", async () => {
+  test("a second reorder is ignored while a request is in flight", async () => {
     const user = userEvent.setup();
+    let resolveReorder;
+    reorderCollections.mockReturnValue(
+      new Promise((resolve) => {
+        resolveReorder = resolve;
+      }),
+    );
+    await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.click(screen.getByRole("button", { name: "Move Archive up" }));
+    await user.click(screen.getByRole("button", { name: "Move Default down" }));
+
+    expect(reorderCollections).toHaveBeenCalledTimes(1);
+    expect(reorderCollections).toHaveBeenCalledWith([2, 1]);
+
+    await act(async () => {
+      resolveReorder({
+        collections: [
+          { id: 2, is_default: 0, name: "Archive" },
+          { id: 1, is_default: 1, name: "Default" },
+        ],
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Archive" })).toBeInTheDocument();
+    });
+  });
+
+  test("Shift+↓ jumps the focused row to the bottom of the group", async () => {
+    const user = userEvent.setup();
+    getCollections.mockResolvedValue({
+      collections: [
+        { id: 1, is_default: 1, name: "Default", note_count: 2 },
+        { id: 2, is_default: 0, name: "Archive", note_count: 0 },
+        { id: 3, is_default: 0, name: "Winter", note_count: 4 },
+      ],
+    });
+    reorderCollections.mockResolvedValue({
+      collections: [
+        { id: 2, is_default: 0, name: "Archive", note_count: 0 },
+        { id: 3, is_default: 0, name: "Winter", note_count: 4 },
+        { id: 1, is_default: 1, name: "Default", note_count: 2 },
+      ],
+    });
+    await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.keyboard("{b}"); // Default
+    await user.keyboard("{Shift>}{ArrowDown}{/Shift}");
+
+    await waitFor(() => {
+      expect(reorderCollections).toHaveBeenCalledWith([2, 3, 1]);
+    });
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Default" })).toHaveFocus();
+    });
+  });
+
+  test("dropping one collection onto another hands the provider the new order", async () => {
     reorderCollections.mockResolvedValue({
       collections: [
         { id: 2, is_default: 0, name: "Archive" },
@@ -1276,8 +1292,6 @@ describe("Sidebar collection reordering", () => {
       ],
     });
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
-
-    await user.click(screen.getByRole("button", { name: "Reorder Catalog" }));
 
     const defRow = screen
       .getByRole("link", { name: "Default" })
@@ -1312,11 +1326,41 @@ describe("Sidebar collection reordering", () => {
       ]);
     });
   });
+
+  test("a failed reorder leaves the visible order untouched", async () => {
+    reorderCollections.mockRejectedValue(new Error("offline"));
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    const defRow = screen
+      .getByRole("link", { name: "Default" })
+      .closest(".sidebar-row");
+    const archiveRow = screen
+      .getByRole("link", { name: "Archive" })
+      .closest(".sidebar-row");
+    const dataTransfer = makeDataTransfer();
+
+    await act(async () => {
+      defRow.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+    });
+    await act(async () => {
+      archiveRow.dispatchEvent(dragEvent("drop", { clientY: 400, dataTransfer }));
+    });
+
+    await waitFor(() => {
+      expect(reorderCollections).toHaveBeenCalled();
+    });
+    expect(collectionLabels(container)).toEqual([
+      "All notes",
+      "Default",
+      "Archive",
+      "New collection",
+      "Import / Export",
+    ]);
+  });
 });
 
 describe("Sidebar showcase reordering", () => {
   test("dropping one showcase onto another hands the provider the new order", async () => {
-    const user = userEvent.setup();
     reorderShowcases.mockResolvedValue({
       showcases: [
         { id: 2, name: "Vienna" },
@@ -1324,8 +1368,6 @@ describe("Sidebar showcase reordering", () => {
       ],
     });
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
-
-    await user.click(screen.getByRole("button", { name: "Reorder Showcases" }));
 
     const summerRow = screen
       .getByRole("link", { name: "Summer" })
@@ -1369,7 +1411,6 @@ describe("Sidebar showcase reordering", () => {
     });
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
 
-    await user.click(screen.getByRole("button", { name: "Reorder Showcases" }));
     await user.click(screen.getByRole("button", { name: "Move Vienna up" }));
 
     await waitFor(() => {
@@ -1385,10 +1426,7 @@ describe("Sidebar showcase reordering", () => {
   });
 
   test("a drop that lands a showcase back where it started persists nothing", async () => {
-    const user = userEvent.setup();
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
-
-    await user.click(screen.getByRole("button", { name: "Reorder Showcases" }));
 
     const summerRow = screen
       .getByRole("link", { name: "Summer" })
@@ -1418,6 +1456,17 @@ describe("Sidebar showcase reordering", () => {
       "Vienna",
       "New showcase",
     ]);
+  });
+
+  test("a pending showcase draft is never draggable", async () => {
+    const user = userEvent.setup();
+    await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.click(newShowcaseButton());
+    const draft = await screen.findByRole("link", { name: "Showcase" });
+
+    expect(draft.closest(".sidebar-row")).toBeNull();
+    expect(draft.getAttribute("draggable")).toBe("false");
   });
 });
 

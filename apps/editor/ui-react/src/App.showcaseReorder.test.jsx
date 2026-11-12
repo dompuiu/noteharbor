@@ -170,8 +170,7 @@ function makeDataTransfer() {
 }
 
 function reorderLabels() {
-  // Scoped to the showcase canvas: the sidebar's own per-group Reorder
-  // toggles ("Reorder Catalog", "Reorder Showcases") share the prefix.
+  // Scoped to the showcase canvas, whose handles share the "Reorder " prefix.
   return within(document.querySelector(".showcase-screen"))
     .getAllByRole("button", { name: /^Reorder / })
     .map((handle) => handle.getAttribute("aria-label"));

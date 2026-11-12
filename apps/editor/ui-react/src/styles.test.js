@@ -1655,12 +1655,44 @@ describe("sidebar styles", () => {
     );
   });
 
-  test("the reorder toggles and move buttons hide on the collapsed rail", () => {
+  test("the move buttons hide only on the truly collapsed rail", () => {
+    // Hover, keyboard-open and pin must keep the row's move pair in flow; the
+    // collapsed-state rule excludes all three, so it cannot win in expanded
+    // states (and needs no later display re-enable).
     expect(styles).toMatch(
-      /\.sidebar-dock \.sidebar-reorder-toggle,\s*\n?\s*\.sidebar-dock \.sidebar-row-moves\s*\{[^}]*display:\s*none/,
+      /\.sidebar-dock:not\(\.sidebar-dock--open\):not\(\.sidebar-dock--pinned\):not\(:hover\):not\(:has\(:focus-visible\)\) \.sidebar-row-moves\s*\{[^}]*display:\s*none/,
+    );
+    expect(styles).not.toMatch(
+      /\.sidebar-dock \.sidebar-row-moves\s*\{[^}]*display:\s*none/,
+    );
+    expect(styles).not.toMatch(/sidebar-reorder-toggle/);
+  });
+
+  test("the move buttons reserve space but reveal on row hover or focus", () => {
+    const moves = styles.match(/\.sidebar-row-moves\s*\{([^}]*)\}/);
+    expect(moves).not.toBeNull();
+    expect(moves[1]).toMatch(/display:\s*inline-flex/);
+    expect(moves[1]).toMatch(/visibility:\s*hidden/);
+    expect(styles).toMatch(
+      /\.sidebar-row:is\(:hover, :focus-within\) \.sidebar-row-moves\s*\{[^}]*visibility:\s*visible/,
+    );
+
+    // WCAG 2.2 target size: both one-step buttons are 24x24.
+    const button = styles.match(/\.sidebar-move-button\s*\{([^}]*)\}/);
+    expect(button).not.toBeNull();
+    expect(button[1]).toMatch(/width:\s*24px/);
+    expect(button[1]).toMatch(/height:\s*24px/);
+  });
+
+  test("the grip appears on row hover or focus in the item icon's slot", () => {
+    expect(styles).toMatch(
+      /\.sidebar-ic--grip\s*\{[^}]*display:\s*none/,
     );
     expect(styles).toMatch(
-      /\.sidebar-dock:hover \.sidebar-reorder-toggle/,
+      /\.sidebar-row:is\(:hover, :focus-within\) \.sidebar-ic--item\s*\{[^}]*display:\s*none/,
+    );
+    expect(styles).toMatch(
+      /\.sidebar-row:is\(:hover, :focus-within\) \.sidebar-ic--grip\s*\{[^}]*display:\s*grid/,
     );
   });
 
@@ -1709,17 +1741,14 @@ describe("sidebar styles", () => {
     expect(row[1]).toMatch(/cursor:\s*grab/);
   });
 
-  test("row and header wrappers span the links block like the links do", () => {
+  test("row wrappers span the links block like the links do", () => {
     // The links block keeps the collapsed rail's `align-items: center`.
-    // Plain links are immune via their own `width: 100%`; the row and
-    // header wrappers need the same, or they shrink-wrap and centre
-    // themselves instead of lining up with the links.
+    // Plain links are immune via their own `width: 100%`; the row wrapper
+    // needs the same, or it shrink-wraps and centres itself instead of
+    // lining up with the links.
     const row = styles.match(/\.sidebar-row\s*\{([^}]*)\}/);
     expect(row).not.toBeNull();
     expect(row[1]).toMatch(/width:\s*100%/);
-    const head = styles.match(/\.sidebar-group-head\s*\{([^}]*)\}/);
-    expect(head).not.toBeNull();
-    expect(head[1]).toMatch(/width:\s*100%/);
   });
 
   test("the rail width transition can interpolate to max-content", () => {
@@ -1785,18 +1814,8 @@ describe("sidebar styles", () => {
     // :focus-visible outline would double it. The outline is dropped only on
     // cursor stops; a plain Tab focus keeps the browser outline.
     expect(styles).toMatch(/\.sidebar-link--cursor:focus-visible/);
-    expect(styles).toMatch(/\.sidebar-reorder-toggle--cursor:focus-visible/);
-    expect(styles).toMatch(/\.sidebar-move-button--cursor:focus-visible/);
+    expect(styles).toMatch(/\.sidebar-pin--cursor:focus-visible/);
     expect(styles).toMatch(/outline:\s*none/);
-  });
-
-  test("the reorder toggle and move buttons ring the keyboard cursor", () => {
-    expect(styles).toMatch(
-      /\.sidebar-reorder-toggle--cursor\s*\{[^}]*box-shadow:\s*inset 0 0 0 1\.5px var\(--rail-accent\)/,
-    );
-    expect(styles).toMatch(
-      /\.sidebar-move-button--cursor\s*\{[^}]*box-shadow:\s*inset 0 0 0 1\.5px var\(--rail-accent\)/,
-    );
   });
 
   test("the reduced-motion block drops the sidebar transition", () => {
