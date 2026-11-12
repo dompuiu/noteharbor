@@ -137,13 +137,32 @@ describe("Creating a showcase", () => {
     });
     // Deferred creation: the server sees nothing until Save.
     expect(createShowcase).not.toHaveBeenCalled();
-    // The draft row is visible in the sidebar while pending.
-    expect(await screen.findByRole("link", { name: "Showcase" })).toBeInTheDocument();
+    // The draft row is visible in the sidebar while pending, named as such.
+    expect(
+      await screen.findByRole("link", { name: "Unsaved showcase: Showcase" }),
+    ).toBeInTheDocument();
 
     const nameField = await screen.findByLabelText("Showcase name");
     await waitFor(() => {
       expect(nameField).toHaveFocus();
     });
+  });
+
+  test("the draft rail row follows the typed name before Save", async () => {
+    const user = userEvent.setup();
+    renderAt(CATALOG_ROUTES.collection(1));
+
+    await user.click(
+      await screen.findByRole("button", { name: "New showcase" }),
+    );
+    const field = await screen.findByLabelText("Showcase name");
+    await user.clear(field);
+    await user.type(field, "Winter");
+
+    expect(
+      await screen.findByRole("link", { name: "Unsaved showcase: Winter" }),
+    ).toBeInTheDocument();
+    expect(createShowcase).not.toHaveBeenCalled();
   });
 
   test("Save on a draft posts the showcase and opens its view route", async () => {
@@ -201,8 +220,12 @@ describe("Creating a showcase", () => {
       expect(currentPath()).toBe(SHOWCASE_ROUTES.showcase(2));
     });
     await waitFor(() => {
-      expect(screen.queryByRole("link", { name: "Showcase" })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("link", { name: "Unsaved showcase: Showcase" }),
+      ).not.toBeInTheDocument();
     });
+    // Discarding a draft says so rather than vanishing wordlessly.
+    expect(screen.getByText("Showcase draft discarded.")).toBeInTheDocument();
   });
 
   test("Cancel on a draft with no showcases goes home", async () => {
@@ -242,7 +265,9 @@ describe("Creating a showcase", () => {
       expect(currentPath()).toBe(SHOWCASE_ROUTES.showcase(2));
     });
     await waitFor(() => {
-      expect(screen.queryByRole("link", { name: "Showcase" })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("link", { name: "Unsaved showcase: Showcase" }),
+      ).not.toBeInTheDocument();
     });
   });
 
@@ -259,8 +284,12 @@ describe("Creating a showcase", () => {
 
     expect(createShowcase).not.toHaveBeenCalled();
     await waitFor(() => {
-      expect(screen.queryByRole("link", { name: "Showcase" })).not.toBeInTheDocument();
+      expect(
+        screen.queryByRole("link", { name: "Unsaved showcase: Showcase" }),
+      ).not.toBeInTheDocument();
     });
+    // A route change drops the draft, and the rail says so.
+    expect(screen.getByText("Showcase draft discarded.")).toBeInTheDocument();
   });
 });
 

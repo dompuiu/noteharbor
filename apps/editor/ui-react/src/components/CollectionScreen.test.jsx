@@ -152,6 +152,7 @@ function collectionsContext(overrides = {}) {
     deleteCollection: vi.fn(),
     pendingCollection: null,
     beginPendingCollection: vi.fn(),
+    updatePendingCollectionName: vi.fn(),
     discardPendingCollection: vi.fn(),
     ...overrides,
   };
@@ -451,6 +452,28 @@ describe("CollectionScreen new draft", () => {
     await waitFor(() => {
       expect(createCollection).toHaveBeenCalledWith("Third");
     });
+  });
+
+  test("typing a draft name updates the staged rail row before Save", async () => {
+    const user = userEvent.setup();
+    const createCollection = vi.fn();
+    const updatePendingCollectionName = vi.fn();
+    useCollections.mockReturnValue(
+      collectionsContext({
+        pendingCollection: { id: "new", name: "Collection" },
+        createCollection,
+        updatePendingCollectionName,
+      }),
+    );
+    renderEdit("new");
+
+    const input = screen.getByRole("textbox", { name: "Collection name" });
+    await user.clear(input);
+    await user.type(input, "Winter");
+
+    expect(updatePendingCollectionName).toHaveBeenLastCalledWith("Winter");
+    // Nothing POSTs before Save.
+    expect(createCollection).not.toHaveBeenCalled();
   });
 
   test("Cancel on a draft discards it without posting", async () => {

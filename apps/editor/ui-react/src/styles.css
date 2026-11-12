@@ -596,6 +596,20 @@ input[type="radio"] {
   box-shadow: inset 3px 0 0 var(--rail-accent);
 }
 
+/* A not-yet-saved draft row: a dashed hairline and an italic name set it
+   apart from every saved collection and showcase at a glance, expanded or
+   collapsed. It stays display-only, so no grip or move controls follow it. */
+.sidebar-link--pending {
+  outline: 1px dashed var(--rail-line);
+  outline-offset: -2px;
+  color: var(--rail-muted);
+}
+
+.sidebar-link--pending .sidebar-link-label,
+.sidebar-link--pending .sidebar-link-mark {
+  font-style: italic;
+}
+
 .sidebar-link--cursor {
   background: var(--rail-cursor-bg);
   color: var(--rail-fg);

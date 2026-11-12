@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   createShowcase as createShowcaseRequest,
   deleteShowcase as deleteShowcaseRequest,
@@ -21,6 +28,11 @@ function ShowcasesProvider({ children }) {
   // draft row in the sidebar and an empty edit canvas; Save POSTs it, while
   // Cancel or leaving the `new` route discards it without a request.
   const [pendingShowcase, setPendingShowcase] = useState(null);
+  // The staged row as it stands right now. Discarding is a one-shot action:
+  // a link click and the route-change effect can both ask in the same tick,
+  // and only the call that actually drops the row should say so.
+  const pendingShowcaseRef = useRef(null);
+  pendingShowcaseRef.current = pendingShowcase;
 
   async function refreshShowcases() {
     setLoadingShowcases(true);
@@ -60,8 +72,26 @@ function ShowcasesProvider({ children }) {
     setPendingShowcase((current) => current ?? { id: 'new', name: 'Showcase' });
   }
 
+  // The draft's name follows the canvas field on every keystroke, so the rail
+  // reads the name about to be saved rather than the placeholder it started
+  // with. Nothing POSTs.
+  function updatePendingShowcaseName(name) {
+    setPendingShowcase((current) =>
+      current ? { ...current, name } : current,
+    );
+  }
+
+  // Answers true when this call dropped a staged row. The caller raises the
+  // "draft discarded" message from that answer, so a screen and the rail never
+  // report the same discard twice.
   function discardPendingShowcase() {
+    if (!pendingShowcaseRef.current) {
+      return false;
+    }
+
+    pendingShowcaseRef.current = null;
     setPendingShowcase(null);
+    return true;
   }
 
   // Reconcile the list from a single server row after a mutation, rather than
@@ -118,6 +148,7 @@ function ShowcasesProvider({ children }) {
       showcasesError,
       pendingShowcase,
       beginPendingShowcase,
+      updatePendingShowcaseName,
       discardPendingShowcase,
       createShowcase: handleCreateShowcase,
       deleteShowcase: handleDeleteShowcase,

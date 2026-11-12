@@ -246,7 +246,11 @@ describe("Sidebar navigation groups", () => {
       );
     });
     // The draft is visible in the sidebar while it is pending.
-    expect(screen.getByRole("link", { name: "Showcase" })).toBeInTheDocument();
+    const draft = screen.getByRole("link", {
+      name: "Unsaved showcase: Showcase",
+    });
+    expect(draft).toHaveClass("sidebar-link--pending");
+    expect(draft).toHaveAttribute("title", "Showcase");
   });
 
   test("leaving the draft route discards the pending showcase", async () => {
@@ -254,13 +258,15 @@ describe("Sidebar navigation groups", () => {
     await renderSidebar(CATALOG_ROUTES.collection(1));
 
     await user.click(newShowcaseButton());
-    await screen.findByRole("link", { name: "Showcase" });
+    await screen.findByRole("link", { name: "Unsaved showcase: Showcase" });
 
     await user.click(screen.getByRole("link", { name: "Default" }));
 
     await waitFor(() => {
-      expect(screen.queryByRole("link", { name: "Showcase" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Unsaved showcase: Showcase" })).not.toBeInTheDocument();
     });
+    // The row does not disappear wordlessly.
+    expect(await screen.findByText("Showcase draft discarded.")).toBeInTheDocument();
     expect(createShowcase).not.toHaveBeenCalled();
   });
 
@@ -975,7 +981,11 @@ describe("Sidebar collection rows", () => {
       );
     });
     // The draft is visible in the sidebar while it is pending, above Import.
-    expect(screen.getByRole("link", { name: "Collection" })).toBeInTheDocument();
+    const draft = screen.getByRole("link", {
+      name: "Unsaved collection: Collection",
+    });
+    expect(draft).toHaveClass("sidebar-link--pending");
+    expect(draft).toHaveAttribute("title", "Collection");
     const { container } = { container: document.querySelector(".sidebar-nav") };
     expect(collectionLabels(container)).toEqual([
       "All notes",
@@ -992,13 +1002,15 @@ describe("Sidebar collection rows", () => {
     await renderSidebar(CATALOG_ROUTES.collection(1));
 
     await user.click(newCollectionButton());
-    await screen.findByRole("link", { name: "Collection" });
+    await screen.findByRole("link", { name: "Unsaved collection: Collection" });
 
     await user.click(screen.getByRole("link", { name: "Default" }));
 
     await waitFor(() => {
-      expect(screen.queryByRole("link", { name: "Collection" })).not.toBeInTheDocument();
+      expect(screen.queryByRole("link", { name: "Unsaved collection: Collection" })).not.toBeInTheDocument();
     });
+    // The row does not disappear wordlessly.
+    expect(await screen.findByText("Collection draft discarded.")).toBeInTheDocument();
     expect(createCollection).not.toHaveBeenCalled();
   });
 });
@@ -1041,7 +1053,7 @@ describe("Sidebar collection reordering", () => {
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
 
     await user.click(newCollectionButton());
-    const draft = await screen.findByRole("link", { name: "Collection" });
+    const draft = await screen.findByRole("link", { name: "Unsaved collection: Collection" });
 
     expect(draft.closest(".sidebar-row")).toBeNull();
     expect(draft.getAttribute("draggable")).toBe("false");
@@ -1476,7 +1488,7 @@ describe("Sidebar showcase reordering", () => {
     await renderSidebar(CATALOG_ROUTES.collection(1));
 
     await user.click(newShowcaseButton());
-    const draft = await screen.findByRole("link", { name: "Showcase" });
+    const draft = await screen.findByRole("link", { name: "Unsaved showcase: Showcase" });
 
     expect(draft.closest(".sidebar-row")).toBeNull();
     expect(draft.getAttribute("draggable")).toBe("false");

@@ -162,10 +162,34 @@ describe("ShowcasesProvider", () => {
     expect(screen.getByTestId("pending")).toHaveTextContent("Showcase");
     expect(createShowcase).not.toHaveBeenCalled();
 
+    let discarded;
     await act(async () => {
-      context.discardPendingShowcase();
+      discarded = context.discardPendingShowcase();
     });
+    expect(discarded).toBe(true);
     expect(screen.getByTestId("pending")).toHaveTextContent("");
+
+    // A second call in the same tick has nothing left to drop, so the caller
+    // knows not to announce a second discard.
+    await act(async () => {
+      discarded = context.discardPendingShowcase();
+    });
+    expect(discarded).toBe(false);
+  });
+
+  test("a pending showcase follows the typed name without posting", async () => {
+    renderProvider();
+    await screen.findByText("Summer,Vienna");
+
+    await act(async () => {
+      context.beginPendingShowcase();
+    });
+    await act(async () => {
+      context.updatePendingShowcaseName("Winter");
+    });
+
+    expect(screen.getByTestId("pending")).toHaveTextContent("Winter");
+    expect(createShowcase).not.toHaveBeenCalled();
   });
 
   test("creating clears a pending draft and appends the server row", async () => {

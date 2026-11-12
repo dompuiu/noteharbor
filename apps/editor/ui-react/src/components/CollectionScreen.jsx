@@ -6,6 +6,7 @@ import { useCollections } from "../lib/collections.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 import { NotesTable } from "./NotesTable.jsx";
 import { TablePerfBoundary } from "./TablePerfBoundary.jsx";
+import { useToastHost } from "./Toast.jsx";
 
 // The table is the expensive part of this screen, so the opt-in dev readout
 // wraps it here rather than inside NotesTable. With the flag off the boundary
@@ -34,6 +35,7 @@ function CollectionScreen({ mode }) {
     deleteCollection,
     pendingCollection,
     beginPendingCollection,
+    updatePendingCollectionName,
     discardPendingCollection,
   } = useCollections();
   // `new` is the not-yet-saved draft from `+ New collection`: no server row;
@@ -54,6 +56,7 @@ function CollectionScreen({ mode }) {
   const [saveError, setSaveError] = useState("");
   const [deleting, setDeleting] = useState(false);
   const { confirm, dialog, isOpen: confirmOpen } = useConfirmation();
+  const toastHost = useToastHost();
 
   // Entering edit mode lands the cursor in the title field (focused and
   // selected) so the name can be retyped at once. The `e` shortcut from
@@ -118,6 +121,12 @@ function CollectionScreen({ mode }) {
 
     setNameDraft(trimmed);
     setNameError("");
+
+    if (isNew) {
+      // The rail shows the name that will be saved: drop the surrounding
+      // whitespace the field still holds.
+      updatePendingCollectionName(trimmed);
+    }
   }
 
   function handleNameKeyDown(event) {
@@ -200,7 +209,9 @@ function CollectionScreen({ mode }) {
     // last collection in the list (or home when the list is empty) so the
     // sidebar row disappears with it.
     if (isNew) {
-      discardPendingCollection();
+      if (discardPendingCollection()) {
+        toastHost?.current?.show("Collection draft discarded.", "info");
+      }
       const lastCollection = collections[collections.length - 1] ?? null;
       navigate(
         lastCollection
@@ -286,6 +297,7 @@ function CollectionScreen({ mode }) {
           newCollectionName={nameDraft}
           onNewCollectionNameChange={(value) => {
             setNameDraft(value);
+            updatePendingCollectionName(value);
             setNameError("");
             setSaveError("");
           }}

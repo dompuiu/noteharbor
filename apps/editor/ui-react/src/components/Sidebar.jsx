@@ -86,6 +86,12 @@ const SHIFT_ARROW_DIRECTIONS = { ArrowDown: 1, ArrowUp: -1 };
 const REORDER_FAILURE_MESSAGE =
   "Couldn't save the new order — it was restored.";
 
+// One message for each staged draft that goes away without being saved. The
+// rail raises it when leaving the draft route; the draft screen raises the
+// same message on Cancel, and only the call that actually drops the row wins.
+const COLLECTION_DRAFT_DISCARDED = "Collection draft discarded.";
+const SHOWCASE_DRAFT_DISCARDED = "Showcase draft discarded.";
+
 // One reorderable row, named by the provider's own id, in the shape both the
 // parked focus and the failure hand-back use.
 function rowTarget(item) {
@@ -249,7 +255,7 @@ function Sidebar({ pageFocusRef }) {
     collectionItems.push({
       icon: "banknote",
       key: "collection-new",
-      label: pendingCollection.name,
+      label: pendingCollection.name.trim() || "Collection",
       to: CATALOG_ROUTES.collectionEdit(NEW_COLLECTION_ID),
       matches: (pathname) =>
         pathname === CATALOG_ROUTES.collectionEdit(NEW_COLLECTION_ID),
@@ -290,7 +296,7 @@ function Sidebar({ pageFocusRef }) {
     showcaseItems.push({
       icon: "showcases",
       key: "showcase-new",
-      label: pendingShowcase.name,
+      label: pendingShowcase.name.trim() || "Showcase",
       to: SHOWCASE_ROUTES.showcaseEdit(NEW_SHOWCASE_ID),
       matches: (pathname) =>
         pathname === SHOWCASE_ROUTES.showcaseEdit(NEW_SHOWCASE_ID),
@@ -422,6 +428,21 @@ function Sidebar({ pageFocusRef }) {
     leaveCursor();
   }
 
+  // Leaving a draft route drops its staged row. Say so from here (or from the
+  // draft screen's Cancel) because the row otherwise disappears without a
+  // trace; the provider answers which call actually dropped a row, so the two
+  // surfaces never report one discard twice. `nextPath` keeps the draft's own
+  // destination from discarding it.
+  function discardPendingFor(nextPath) {
+    if (nextPath !== newShowcaseTo && discardPendingShowcase()) {
+      toastHost?.current?.show(SHOWCASE_DRAFT_DISCARDED, "info");
+    }
+
+    if (nextPath !== newCollectionTo && discardPendingCollection()) {
+      toastHost?.current?.show(COLLECTION_DRAFT_DISCARDED, "info");
+    }
+  }
+
   function openCursor() {
     const active = document.activeElement;
     returnFocusRef.current =
@@ -486,12 +507,7 @@ function Sidebar({ pageFocusRef }) {
       return;
     }
 
-    if (item.to !== newShowcaseTo) {
-      discardPendingShowcase();
-    }
-    if (item.to !== newCollectionTo) {
-      discardPendingCollection();
-    }
+    discardPendingFor(item.to);
     navigate(item.to);
   }
 
@@ -718,31 +734,18 @@ function Sidebar({ pageFocusRef }) {
     // A click means "I'm leaving the rail". The browser focuses a clicked
     // link, so without this the collapsed rail would keep keyboard focus and
     // claim the arrow keys. Hand focus to the page. Leaving a draft route
-    // discards a not-yet-saved row so it never lingers.
-    if (to !== newShowcaseTo) {
-      discardPendingShowcase();
-    }
-    if (to !== newCollectionTo) {
-      discardPendingCollection();
-    }
+    // discards a not-yet-saved row so it never lingers, and the discard says
+    // so rather than vanishing wordlessly.
+    discardPendingFor(to);
     leaveCursor();
   }
 
   // Any route change away from a draft (browser back, typed URL, Cancel's
-  // own navigation already cleared it) drops the pending row. The effect only
-  // watches the pathname so staging a draft and navigating to it in one
-  // click never discards itself mid-flight.
-  const pendingShowcaseRef = useRef(null);
-  pendingShowcaseRef.current = pendingShowcase ? true : null;
-  const pendingCollectionRef = useRef(null);
-  pendingCollectionRef.current = pendingCollection ? true : null;
+  // own navigation already cleared it) drops the pending row and announces
+  // it. The effect only watches the pathname so staging a draft and
+  // navigating to it in one click never discards itself mid-flight.
   useEffect(() => {
-    if (pendingShowcaseRef.current && pathname !== newShowcaseTo) {
-      discardPendingShowcase();
-    }
-    if (pendingCollectionRef.current && pathname !== newCollectionTo) {
-      discardPendingCollection();
-    }
+    discardPendingFor(pathname);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname]);
 
@@ -1114,12 +1117,21 @@ function Sidebar({ pageFocusRef }) {
                         ? draggedCollectionId === item.collectionId
                         : false;
                     // The drop/dragging markers live on the row wrapper; the
-                    // link keeps only its active/cursor state.
+                    // link keeps only its active/cursor state. A pending
+                    // draft adds its own treatment so it never passes for a
+                    // saved row.
                     const className = `sidebar-link${
                       active ? " sidebar-link--active" : ""
                     }${cursorIndex === index ? " sidebar-link--cursor" : ""}${
                       item.type === "action" ? " sidebar-link--action" : ""
-                    }`;
+                    }${item.pending ? " sidebar-link--pending" : ""}`;
+                    // A draft row is display-only, but its accessible name
+                    // still says so: "Unsaved collection: Winter".
+                    const accessibleLabel = item.pending
+                      ? `Unsaved ${
+                          item.showcaseId != null ? "showcase" : "collection"
+                        }: ${item.label}`
+                      : item.label;
 
                     if (item.type === "action") {
                       return (
@@ -1312,7 +1324,7 @@ function Sidebar({ pageFocusRef }) {
                     return (
                       <Link
                         aria-current={active ? "page" : undefined}
-                        aria-label={item.label}
+                        aria-label={accessibleLabel}
                         className={className}
                         data-sidebar-index={index}
                         draggable={false}

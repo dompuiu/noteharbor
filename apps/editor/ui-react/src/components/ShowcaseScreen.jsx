@@ -66,6 +66,7 @@ import { ShowcaseReorderableCell } from "./ShowcaseReorderableCell.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
 import { ImagePopover } from "./Slideshow.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
+import { useToastHost } from "./Toast.jsx";
 
 // One showcase, rendered in one of two near-identical modes. View mode is the
 // read-only presentation; edit mode is a draft canvas with Save/Cancel.
@@ -90,6 +91,7 @@ function ShowcaseScreen({ mode }) {
     createShowcase,
     pendingShowcase,
     beginPendingShowcase,
+    updatePendingShowcaseName,
     discardPendingShowcase,
   } = useShowcases();
   // `new` is the not-yet-saved draft from `+ New showcase`: no server row,
@@ -114,6 +116,11 @@ function ShowcaseScreen({ mode }) {
   const [nameError, setNameError] = useState("");
   const [deleting, setDeleting] = useState(false);
   const { confirm, dialog, isOpen: confirmOpen } = useConfirmation();
+  const toastHost = useToastHost();
+  // The name the draft started with. The provider's pending row follows every
+  // keystroke, so its live name cannot also answer "did the user rename this
+  // draft?" for the unsaved-changes guard.
+  const draftStartNameRef = useRef(showcaseName);
   const confirmOpenRef = useRef(false);
   confirmOpenRef.current = confirmOpen;
   // The unsaved-changes guard reads the latest draft state through this ref,
@@ -164,6 +171,7 @@ function ShowcaseScreen({ mode }) {
     setDrillIds([]);
     consumedEditEntryRef.current = false;
     editFocusDoneRef.current = false;
+    draftStartNameRef.current = showcaseName;
   }, [showcaseId, isNew]);
 
   useEffect(() => {
@@ -347,6 +355,12 @@ function ShowcaseScreen({ mode }) {
 
     setNameDraft(trimmed);
     setNameError("");
+
+    if (isNew) {
+      // The rail shows the name that will be saved: drop the surrounding
+      // whitespace the field still holds.
+      updatePendingShowcaseName(trimmed);
+    }
   }
 
   function handleNameKeyDown(event) {
@@ -397,7 +411,7 @@ function ShowcaseScreen({ mode }) {
   const newNameEdited =
     isNew &&
     nameDraft.trim() !== "" &&
-    nameDraft.trim() !== (pendingShowcase?.name ?? "Showcase");
+    nameDraft.trim() !== draftStartNameRef.current;
   const hasUnsavedEdits = isNew
     ? treeDirty || newNameEdited
     : treeDirty || nameDirty;
@@ -1077,7 +1091,9 @@ function ShowcaseScreen({ mode }) {
     // last showcase in the list (or home when the list is empty) so the
     // sidebar row disappears with it.
     if (isNew) {
-      discardPendingShowcase();
+      if (discardPendingShowcase()) {
+        toastHost?.current?.show("Showcase draft discarded.", "info");
+      }
       const lastShowcase = showcases[showcases.length - 1] ?? null;
       navigate(
         lastShowcase
@@ -1543,6 +1559,7 @@ function ShowcaseScreen({ mode }) {
                 onBlur={commitName}
                 onChange={(event) => {
                   setNameDraft(event.target.value);
+                  updatePendingShowcaseName(event.target.value);
                   setNameError("");
                   setSaveError("");
                 }}

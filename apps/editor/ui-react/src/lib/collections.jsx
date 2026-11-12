@@ -1,4 +1,11 @@
-import { createContext, useContext, useEffect, useMemo, useState } from 'react';
+import {
+  createContext,
+  useContext,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from 'react';
 import {
   createCollection,
   deleteCollection,
@@ -28,6 +35,11 @@ function CollectionsProvider({ children }) {
   // a draft row in the sidebar and an empty edit canvas; Save POSTs it, while
   // Cancel or leaving the `new` route discards it without a request.
   const [pendingCollection, setPendingCollection] = useState(null);
+  // The staged row as it stands right now. Discarding is a one-shot action:
+  // a link click and the route-change effect can both ask in the same tick,
+  // and only the call that actually drops the row should say so.
+  const pendingCollectionRef = useRef(null);
+  pendingCollectionRef.current = pendingCollection;
 
   async function refreshCollections() {
     setLoadingCollections(true);
@@ -114,8 +126,26 @@ function CollectionsProvider({ children }) {
     setPendingCollection((current) => current ?? { id: 'new', name: 'Collection' });
   }
 
+  // The draft's name follows the canvas field on every keystroke, so the rail
+  // reads the name about to be saved rather than the placeholder it started
+  // with. Nothing POSTs.
+  function updatePendingCollectionName(name) {
+    setPendingCollection((current) =>
+      current ? { ...current, name } : current,
+    );
+  }
+
+  // Answers true when this call dropped a staged row. The caller raises the
+  // "draft discarded" message from that answer, so a screen and the rail never
+  // report the same discard twice.
   function discardPendingCollection() {
+    if (!pendingCollectionRef.current) {
+      return false;
+    }
+
+    pendingCollectionRef.current = null;
     setPendingCollection(null);
+    return true;
   }
 
   async function handleRenameCollection(collectionId, name) {
@@ -164,6 +194,7 @@ function CollectionsProvider({ children }) {
       markDisconnected,
       pendingCollection,
       beginPendingCollection,
+      updatePendingCollectionName,
       discardPendingCollection,
       refreshCollections,
       renameCollection: handleRenameCollection,

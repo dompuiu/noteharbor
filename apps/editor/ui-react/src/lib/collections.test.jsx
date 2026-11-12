@@ -27,6 +27,7 @@ function Probe() {
   return (
     <>
       <output data-testid="names">{context.collections.map((c) => c.name).join(",")}</output>
+      <output data-testid="pending">{context.pendingCollection?.name ?? ""}</output>
       <output data-testid="reason">{context.collectionsErrorReason ?? ""}</output>
       <output data-testid="connection">{context.connectionLostReason ?? ""}</output>
     </>
@@ -109,6 +110,39 @@ describe("CollectionsProvider mutations", () => {
     expect(screen.getByTestId("names")).toHaveTextContent("Archive");
     expect(getCollections.mock.calls.length).toBe(loadsBefore);
     expect(result.nextCollectionId).toBe(2);
+  });
+});
+
+describe("CollectionsProvider pending draft", () => {
+  test("stages blank, follows the typed name, and discards once", async () => {
+    renderProvider();
+    await screen.findByText("Default,Archive");
+
+    await act(async () => {
+      context.beginPendingCollection();
+    });
+    expect(screen.getByTestId("pending")).toHaveTextContent("Collection");
+
+    await act(async () => {
+      context.updatePendingCollectionName("Winter");
+    });
+    expect(screen.getByTestId("pending")).toHaveTextContent("Winter");
+    // Nothing POSTs while the draft name changes.
+    expect(createCollection).not.toHaveBeenCalled();
+
+    let discarded;
+    await act(async () => {
+      discarded = context.discardPendingCollection();
+    });
+    expect(discarded).toBe(true);
+    expect(screen.getByTestId("pending")).toHaveTextContent("");
+
+    // A second call in the same tick has nothing left to drop, so the caller
+    // knows not to announce a second discard.
+    await act(async () => {
+      discarded = context.discardPendingCollection();
+    });
+    expect(discarded).toBe(false);
   });
 });
 
