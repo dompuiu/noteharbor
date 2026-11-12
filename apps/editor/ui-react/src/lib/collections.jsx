@@ -35,11 +35,12 @@ function CollectionsProvider({ children }) {
   // a draft row in the sidebar and an empty edit canvas; Save POSTs it, while
   // Cancel or leaving the `new` route discards it without a request.
   const [pendingCollection, setPendingCollection] = useState(null);
-  // The staged row as it stands right now. Discarding is a one-shot action:
-  // a link click and the route-change effect can both ask in the same tick,
-  // and only the call that actually drops the row should say so.
+  // The staged row as it stands right now, kept in step by the handlers below
+  // rather than derived on render. A Save clears the state and navigates in
+  // one batch, so the route-change effect still sees a stale `pendingCollection`;
+  // this ref lets it tell "saved" from "discarded" and announce only the real
+  // discard.
   const pendingCollectionRef = useRef(null);
-  pendingCollectionRef.current = pendingCollection;
 
   async function refreshCollections() {
     setLoadingCollections(true);
@@ -108,6 +109,13 @@ function CollectionsProvider({ children }) {
     });
   }
 
+  // One writer for the staged row: the ref answers synchronously (a discard is
+  // one-shot) and the state is what the rail renders, so they never drift.
+  function stagePendingCollection(next) {
+    pendingCollectionRef.current = next;
+    setPendingCollection(next);
+  }
+
   async function handleCreateCollection(name) {
     const payload = await createCollection(name);
     const createdCollection = payload.collection;
@@ -115,36 +123,37 @@ function CollectionsProvider({ children }) {
     if (createdCollection) {
       applyCollectionRow(createdCollection);
       // A pending draft (if any) is now real; drop it so the sidebar shows
-      // only the server row.
-      setPendingCollection(null);
+      // only the server row. Clearing both says the draft was saved, not
+      // discarded.
+      stagePendingCollection(null);
     }
 
     return createdCollection;
   }
 
   function beginPendingCollection() {
-    setPendingCollection((current) => current ?? { id: 'new', name: 'Collection' });
+    if (!pendingCollectionRef.current) {
+      stagePendingCollection({ id: 'new', name: 'Collection' });
+    }
   }
 
   // The draft's name follows the canvas field on every keystroke, so the rail
   // reads the name about to be saved rather than the placeholder it started
   // with. Nothing POSTs.
   function updatePendingCollectionName(name) {
-    setPendingCollection((current) =>
-      current ? { ...current, name } : current,
-    );
+    if (pendingCollectionRef.current) {
+      stagePendingCollection({ ...pendingCollectionRef.current, name });
+    }
   }
 
-  // Answers true when this call dropped a staged row. The caller raises the
-  // "draft discarded" message from that answer, so a screen and the rail never
-  // report the same discard twice.
+  // Answers true when this call dropped a staged row, so the caller announces
+  // only a real discard and a Save's clear is never mistaken for one.
   function discardPendingCollection() {
     if (!pendingCollectionRef.current) {
       return false;
     }
 
-    pendingCollectionRef.current = null;
-    setPendingCollection(null);
+    stagePendingCollection(null);
     return true;
   }
 

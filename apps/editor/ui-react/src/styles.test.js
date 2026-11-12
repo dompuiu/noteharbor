@@ -2655,6 +2655,23 @@ describe("primary buttons", () => {
     );
   });
 
+  // A draft row must stay distinguishable from a saved one, and its dashed
+  // hairline shares the outline slot, so keyboard focus needs its ring back.
+  test("a pending draft keeps its hairline and a visible focus ring", () => {
+    const pending = styles.match(/\.sidebar-link--pending\s*\{([^}]*)\}/);
+    expect(pending).not.toBeNull();
+    expect(pending[1]).toMatch(
+      /outline:\s*1px dashed var\(--rail-control-border\)/,
+    );
+    expect(pending[1]).not.toMatch(/color:/);
+    expect(styles).toMatch(
+      /\.sidebar-link--pending:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--rail-accent\)/,
+    );
+    expect(styles).toMatch(
+      /\.sidebar-link--pending \.sidebar-link-label,[\s\S]{0,120}font-style:\s*italic/,
+    );
+  });
+
   // Add note is just another primary button now: no bespoke class survives in
   // the CSS or in the markup.
   test("Add note wears the shared primary class", () => {

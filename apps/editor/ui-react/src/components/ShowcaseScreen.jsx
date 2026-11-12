@@ -50,6 +50,7 @@ import {
 } from "../lib/showcaseDraft.js";
 import { useShowcases } from "../lib/showcases.jsx";
 import { useCollections } from "../lib/collections.jsx";
+import { SHOWCASE_DRAFT_DISCARDED } from "../lib/draftMessages.js";
 import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
 import { ShowcaseCategorySection } from "./ShowcaseCategorySection.jsx";
 import { ShowcaseCategoryTile } from "./ShowcaseCategoryTile.jsx";
@@ -172,6 +173,9 @@ function ShowcaseScreen({ mode }) {
     consumedEditEntryRef.current = false;
     editFocusDoneRef.current = false;
     draftStartNameRef.current = showcaseName;
+    // The starting name is captured on entry only: later keystrokes change
+    // `showcaseName` on purpose and must not reset the guard's baseline.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showcaseId, isNew]);
 
   useEffect(() => {
@@ -238,12 +242,15 @@ function ShowcaseScreen({ mode }) {
   }, [editMode, isNew, justCreated, loading, showcase]);
 
   // A direct load of the draft URL (reload, share) has no provider draft yet;
-  // stage one so the sidebar row and the canvas agree.
+  // stage one so the sidebar row and the canvas agree. Entry only: after a
+  // Save clears the draft, the rail already shows the real row, and staging a
+  // fresh draft in the gap before the view route lands would be a ghost.
   useEffect(() => {
-    if (isNew && !pendingShowcase) {
+    if (isNew) {
       beginPendingShowcase();
     }
-  }, [isNew, pendingShowcase, beginPendingShowcase]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNew]);
 
   useEffect(() => {
     let active = true;
@@ -1092,7 +1099,7 @@ function ShowcaseScreen({ mode }) {
     // sidebar row disappears with it.
     if (isNew) {
       if (discardPendingShowcase()) {
-        toastHost?.current?.show("Showcase draft discarded.", "info");
+        toastHost?.current?.show(SHOWCASE_DRAFT_DISCARDED, "info");
       }
       const lastShowcase = showcases[showcases.length - 1] ?? null;
       navigate(
@@ -1119,6 +1126,7 @@ function ShowcaseScreen({ mode }) {
     navigate,
     showcaseId,
     showcases,
+    toastHost,
   ]);
 
   function handleCancel() {

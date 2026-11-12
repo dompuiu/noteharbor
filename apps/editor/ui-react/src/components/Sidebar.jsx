@@ -7,6 +7,10 @@ import { loadSidebarPinned, saveSidebarPinned } from "../lib/sidebarPin.js";
 import { APP_VERSION } from "../lib/version.js";
 import { useToastHost } from "./Toast.jsx";
 import {
+  COLLECTION_DRAFT_DISCARDED,
+  SHOWCASE_DRAFT_DISCARDED,
+} from "../lib/draftMessages.js";
+import {
   CATALOG_ROUTES,
   NEW_COLLECTION_ID,
   NEW_SHOWCASE_ID,
@@ -85,12 +89,6 @@ const SHIFT_ARROW_DIRECTIONS = { ArrowDown: 1, ArrowUp: -1 };
 // "the app ignored me".
 const REORDER_FAILURE_MESSAGE =
   "Couldn't save the new order — it was restored.";
-
-// One message for each staged draft that goes away without being saved. The
-// rail raises it when leaving the draft route; the draft screen raises the
-// same message on Cancel, and only the call that actually drops the row wins.
-const COLLECTION_DRAFT_DISCARDED = "Collection draft discarded.";
-const SHOWCASE_DRAFT_DISCARDED = "Showcase draft discarded.";
 
 // One reorderable row, named by the provider's own id, in the shape both the
 // parked focus and the failure hand-back use.
@@ -252,10 +250,12 @@ function Sidebar({ pageFocusRef }) {
   }));
 
   if (pendingCollection) {
+    const draftLabel = pendingCollection.name.trim() || "Collection";
     collectionItems.push({
       icon: "banknote",
       key: "collection-new",
-      label: pendingCollection.name.trim() || "Collection",
+      label: draftLabel,
+      ariaLabel: `Unsaved collection: ${draftLabel}`,
       to: CATALOG_ROUTES.collectionEdit(NEW_COLLECTION_ID),
       matches: (pathname) =>
         pathname === CATALOG_ROUTES.collectionEdit(NEW_COLLECTION_ID),
@@ -293,10 +293,12 @@ function Sidebar({ pageFocusRef }) {
   }));
 
   if (pendingShowcase) {
+    const draftLabel = pendingShowcase.name.trim() || "Showcase";
     showcaseItems.push({
       icon: "showcases",
       key: "showcase-new",
-      label: pendingShowcase.name.trim() || "Showcase",
+      label: draftLabel,
+      ariaLabel: `Unsaved showcase: ${draftLabel}`,
       to: SHOWCASE_ROUTES.showcaseEdit(NEW_SHOWCASE_ID),
       matches: (pathname) =>
         pathname === SHOWCASE_ROUTES.showcaseEdit(NEW_SHOWCASE_ID),
@@ -430,9 +432,9 @@ function Sidebar({ pageFocusRef }) {
 
   // Leaving a draft route drops its staged row. Say so from here (or from the
   // draft screen's Cancel) because the row otherwise disappears without a
-  // trace; the provider answers which call actually dropped a row, so the two
-  // surfaces never report one discard twice. `nextPath` keeps the draft's own
-  // destination from discarding it.
+  // trace; the provider answers which call actually dropped a row, so a Save
+  // (which clears the row and navigates in one batch) is never announced as a
+  // discard. `nextPath` keeps the draft's own destination from discarding it.
   function discardPendingFor(nextPath) {
     if (nextPath !== newShowcaseTo && discardPendingShowcase()) {
       toastHost?.current?.show(SHOWCASE_DRAFT_DISCARDED, "info");
@@ -1125,13 +1127,6 @@ function Sidebar({ pageFocusRef }) {
                     }${cursorIndex === index ? " sidebar-link--cursor" : ""}${
                       item.type === "action" ? " sidebar-link--action" : ""
                     }${item.pending ? " sidebar-link--pending" : ""}`;
-                    // A draft row is display-only, but its accessible name
-                    // still says so: "Unsaved collection: Winter".
-                    const accessibleLabel = item.pending
-                      ? `Unsaved ${
-                          item.showcaseId != null ? "showcase" : "collection"
-                        }: ${item.label}`
-                      : item.label;
 
                     if (item.type === "action") {
                       return (
@@ -1324,7 +1319,7 @@ function Sidebar({ pageFocusRef }) {
                     return (
                       <Link
                         aria-current={active ? "page" : undefined}
-                        aria-label={accessibleLabel}
+                        aria-label={item.ariaLabel ?? item.label}
                         className={className}
                         data-sidebar-index={index}
                         draggable={false}

@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from "react-router-dom";
 import { collectionDeleteConfirmation } from "../lib/collectionActions.js";
 import { CATALOG_ROUTES, DEFAULT_DESTINATION, NEW_COLLECTION_ID } from "../lib/routes.js";
 import { useCollections } from "../lib/collections.jsx";
+import { COLLECTION_DRAFT_DISCARDED } from "../lib/draftMessages.js";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 import { NotesTable } from "./NotesTable.jsx";
 import { TablePerfBoundary } from "./TablePerfBoundary.jsx";
@@ -88,12 +89,15 @@ function CollectionScreen({ mode }) {
   }, [collectionName]);
 
   // A direct load of the draft URL (reload, share) has no provider draft yet;
-  // stage one so the sidebar row and the canvas agree.
+  // stage one so the sidebar row and the canvas agree. Entry only: after a
+  // Save clears the draft, the rail already shows the real row, and staging a
+  // fresh draft in the gap before the view route lands would be a ghost.
   useEffect(() => {
-    if (isNew && !pendingCollection) {
+    if (isNew) {
       beginPendingCollection();
     }
-  }, [isNew, pendingCollection, beginPendingCollection]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isNew]);
 
   // In edit mode the name field is part of the draft: blur/Enter only validate
   // locally, and Save persists the rename.
@@ -121,12 +125,6 @@ function CollectionScreen({ mode }) {
 
     setNameDraft(trimmed);
     setNameError("");
-
-    if (isNew) {
-      // The rail shows the name that will be saved: drop the surrounding
-      // whitespace the field still holds.
-      updatePendingCollectionName(trimmed);
-    }
   }
 
   function handleNameKeyDown(event) {
@@ -210,7 +208,7 @@ function CollectionScreen({ mode }) {
     // sidebar row disappears with it.
     if (isNew) {
       if (discardPendingCollection()) {
-        toastHost?.current?.show("Collection draft discarded.", "info");
+        toastHost?.current?.show(COLLECTION_DRAFT_DISCARDED, "info");
       }
       const lastCollection = collections[collections.length - 1] ?? null;
       navigate(

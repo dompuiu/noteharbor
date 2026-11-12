@@ -169,8 +169,8 @@ describe("ShowcasesProvider", () => {
     expect(discarded).toBe(true);
     expect(screen.getByTestId("pending")).toHaveTextContent("");
 
-    // A second call in the same tick has nothing left to drop, so the caller
-    // knows not to announce a second discard.
+    // Only the call that dropped the row reports a discard; a stale second
+    // call (a Save and the route change landing together) stays quiet.
     await act(async () => {
       discarded = context.discardPendingShowcase();
     });

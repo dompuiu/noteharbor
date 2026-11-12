@@ -137,6 +137,7 @@ vi.mock("./NotesTable.jsx", () => ({
 import { CollectionScreen } from "./CollectionScreen.jsx";
 import { useCollections } from "../lib/collections.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
+import { ToastProvider } from "./Toast.jsx";
 import { CATALOG_ROUTES } from "../lib/routes.js";
 
 function collectionsContext(overrides = {}) {
@@ -176,10 +177,12 @@ function renderAt(path, mode) {
   return render(
     <MemoryRouter initialEntries={[path]}>
       <PathnameProbe />
-      <Routes>
-        <Route element={<CollectionScreen mode="view" />} path="/catalog/collections/:id/view" />
-        <Route element={<CollectionScreen mode="edit" />} path="/catalog/collections/:id/edit" />
-      </Routes>
+      <ToastProvider>
+        <Routes>
+          <Route element={<CollectionScreen mode="view" />} path="/catalog/collections/:id/view" />
+          <Route element={<CollectionScreen mode="edit" />} path="/catalog/collections/:id/edit" />
+        </Routes>
+      </ToastProvider>
     </MemoryRouter>,
   );
 }
@@ -436,10 +439,12 @@ describe("CollectionScreen new draft", () => {
   test("a typed draft name posts that name", async () => {
     const user = userEvent.setup();
     const createCollection = vi.fn().mockResolvedValue({ id: 9, name: "Third" });
+    const discardPendingCollection = vi.fn().mockReturnValue(true);
     useCollections.mockReturnValue(
       collectionsContext({
         pendingCollection: { id: "new", name: "Collection" },
         createCollection,
+        discardPendingCollection,
       }),
     );
     renderEdit("new");
@@ -452,6 +457,11 @@ describe("CollectionScreen new draft", () => {
     await waitFor(() => {
       expect(createCollection).toHaveBeenCalledWith("Third");
     });
+    // Saving a draft is not a discard: no "discarded" message follows.
+    expect(discardPendingCollection).not.toHaveBeenCalled();
+    expect(
+      screen.queryByText("Collection draft discarded."),
+    ).not.toBeInTheDocument();
   });
 
   test("typing a draft name updates the staged rail row before Save", async () => {
@@ -479,7 +489,7 @@ describe("CollectionScreen new draft", () => {
   test("Cancel on a draft discards it without posting", async () => {
     const user = userEvent.setup();
     const createCollection = vi.fn();
-    const discardPendingCollection = vi.fn();
+    const discardPendingCollection = vi.fn().mockReturnValue(true);
     useCollections.mockReturnValue(
       collectionsContext({
         pendingCollection: { id: "new", name: "Collection" },
@@ -493,5 +503,9 @@ describe("CollectionScreen new draft", () => {
 
     expect(createCollection).not.toHaveBeenCalled();
     expect(discardPendingCollection).toHaveBeenCalled();
+    // Cancel is a discard, and the shell says so.
+    expect(
+      await screen.findByText("Collection draft discarded."),
+    ).toBeInTheDocument();
   });
 });

@@ -28,11 +28,12 @@ function ShowcasesProvider({ children }) {
   // draft row in the sidebar and an empty edit canvas; Save POSTs it, while
   // Cancel or leaving the `new` route discards it without a request.
   const [pendingShowcase, setPendingShowcase] = useState(null);
-  // The staged row as it stands right now. Discarding is a one-shot action:
-  // a link click and the route-change effect can both ask in the same tick,
-  // and only the call that actually drops the row should say so.
+  // The staged row as it stands right now, kept in step by the handlers below
+  // rather than derived on render. A Save clears the state and navigates in
+  // one batch, so the route-change effect still sees a stale `pendingShowcase`;
+  // this ref lets it tell "saved" from "discarded" and announce only the real
+  // discard.
   const pendingShowcaseRef = useRef(null);
-  pendingShowcaseRef.current = pendingShowcase;
 
   async function refreshShowcases() {
     setLoadingShowcases(true);
@@ -53,6 +54,13 @@ function ShowcasesProvider({ children }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // One writer for the staged row: the ref answers synchronously (a discard is
+  // one-shot) and the state is what the rail renders, so they never drift.
+  function stagePendingShowcase(next) {
+    pendingShowcaseRef.current = next;
+    setPendingShowcase(next);
+  }
+
   async function handleCreateShowcase(name) {
     const payload = await createShowcaseRequest(name);
     const createdShowcase = payload.showcase;
@@ -61,36 +69,37 @@ function ShowcasesProvider({ children }) {
       // A new showcase has the highest display_order, so it appends.
       setShowcases((current) => [...current, createdShowcase]);
       // A pending draft (if any) is now real; drop it so the sidebar shows
-      // only the server row.
-      setPendingShowcase(null);
+      // only the server row. Clearing both says the draft was saved, not
+      // discarded.
+      stagePendingShowcase(null);
     }
 
     return createdShowcase;
   }
 
   function beginPendingShowcase() {
-    setPendingShowcase((current) => current ?? { id: 'new', name: 'Showcase' });
+    if (!pendingShowcaseRef.current) {
+      stagePendingShowcase({ id: 'new', name: 'Showcase' });
+    }
   }
 
   // The draft's name follows the canvas field on every keystroke, so the rail
   // reads the name about to be saved rather than the placeholder it started
   // with. Nothing POSTs.
   function updatePendingShowcaseName(name) {
-    setPendingShowcase((current) =>
-      current ? { ...current, name } : current,
-    );
+    if (pendingShowcaseRef.current) {
+      stagePendingShowcase({ ...pendingShowcaseRef.current, name });
+    }
   }
 
-  // Answers true when this call dropped a staged row. The caller raises the
-  // "draft discarded" message from that answer, so a screen and the rail never
-  // report the same discard twice.
+  // Answers true when this call dropped a staged row, so the caller announces
+  // only a real discard and a Save's clear is never mistaken for one.
   function discardPendingShowcase() {
     if (!pendingShowcaseRef.current) {
       return false;
     }
 
-    pendingShowcaseRef.current = null;
-    setPendingShowcase(null);
+    stagePendingShowcase(null);
     return true;
   }
 

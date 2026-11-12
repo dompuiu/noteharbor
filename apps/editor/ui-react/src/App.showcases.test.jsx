@@ -184,6 +184,10 @@ describe("Creating a showcase", () => {
     });
     // The server row replaces the draft in the sidebar.
     expect(await screen.findByRole("link", { name: "Showcase" })).toBeInTheDocument();
+    // Saving a draft is not a discard: no "discarded" message follows.
+    expect(
+      screen.queryByText("Showcase draft discarded."),
+    ).not.toBeInTheDocument();
   });
 
   test("Save on a renamed draft posts the custom name", async () => {

@@ -600,14 +600,21 @@ input[type="radio"] {
    apart from every saved collection and showcase at a glance, expanded or
    collapsed. It stays display-only, so no grip or move controls follow it. */
 .sidebar-link--pending {
-  outline: 1px dashed var(--rail-line);
+  outline: 1px dashed var(--rail-control-border);
   outline-offset: -2px;
-  color: var(--rail-muted);
 }
 
 .sidebar-link--pending .sidebar-link-label,
 .sidebar-link--pending .sidebar-link-mark {
   font-style: italic;
+}
+
+/* The hairline shares the outline slot, so restore the global focus ring on
+   the pending row: keyboard focus must stay visible (WCAG 2.4.7). The cursor
+   state below still drops it in favour of its own ring. */
+.sidebar-link--pending:focus-visible {
+  outline: 2px solid var(--rail-accent);
+  outline-offset: 2px;
 }
 
 .sidebar-link--cursor {
