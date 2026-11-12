@@ -1,7 +1,14 @@
 import { act, render, screen } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
 import { createRef } from "react";
 import { afterEach, describe, expect, test, vi } from "vitest";
-import { Toast, ToastHost, TOAST_DURATION_MS } from "./Toast.jsx";
+import {
+  Toast,
+  ToastHost,
+  ToastProvider,
+  useToastHost,
+  TOAST_DURATION_MS,
+} from "./Toast.jsx";
 
 afterEach(() => {
   vi.useRealTimers();
@@ -76,5 +83,42 @@ describe("toast host", () => {
     });
 
     expect(screen.queryByRole("status")).not.toBeInTheDocument();
+  });
+});
+
+describe("toast provider", () => {
+  test("one host serves every surface under it", async () => {
+    const user = userEvent.setup();
+
+    function Raiser() {
+      const toastHost = useToastHost();
+
+      return (
+        <button
+          onClick={() =>
+            toastHost.current.show(
+              "Couldn't save the new order — it was restored.",
+              "danger",
+            )
+          }
+          type="button"
+        >
+          Fail a move
+        </button>
+      );
+    }
+
+    render(
+      <ToastProvider>
+        <Raiser />
+      </ToastProvider>,
+    );
+
+    await user.click(screen.getByRole("button", { name: "Fail a move" }));
+
+    // One card, raised through the shell's host, in the shared danger tone.
+    expect(screen.getByRole("alert")).toHaveTextContent(
+      "Couldn't save the new order — it was restored.",
+    );
   });
 });

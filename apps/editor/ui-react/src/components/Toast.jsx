@@ -1,4 +1,6 @@
 import {
+  createContext,
+  useContext,
   useEffect,
   useImperativeHandle,
   useRef,
@@ -62,4 +64,27 @@ export function ToastHost({ toastRef }) {
   }
 
   return <Toast tone={toast.tone}>{toast.message}</Toast>;
+}
+
+const ToastContext = createContext(null);
+
+// The shell owns the one host every screen and chrome surface raises its
+// messages through. The host sits beside `children` and holds its own state,
+// so showing or dismissing a toast never commits the page behind it.
+export function ToastProvider({ children }) {
+  const toastRef = useRef(null);
+
+  return (
+    <ToastContext.Provider value={toastRef}>
+      {children}
+      <ToastHost toastRef={toastRef} />
+    </ToastContext.Provider>
+  );
+}
+
+// The shell's host, or null when the calling surface renders on its own (a
+// test or an isolated preview). A surface uses this host when there is one,
+// and mounts its own otherwise, so the app never renders two at once.
+export function useToastHost() {
+  return useContext(ToastContext);
 }

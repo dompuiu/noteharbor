@@ -5,6 +5,7 @@ import { ownsPrintableShortcut } from "../lib/editableElement.js";
 import { useShowcases } from "../lib/showcases.jsx";
 import { loadSidebarPinned, saveSidebarPinned } from "../lib/sidebarPin.js";
 import { APP_VERSION } from "../lib/version.js";
+import { useToastHost } from "./Toast.jsx";
 import {
   CATALOG_ROUTES,
   NEW_COLLECTION_ID,
@@ -77,6 +78,21 @@ const ICONS = {
 
 // Shift+↑/↓ jumps a reorderable row to the matching edge of its group.
 const SHIFT_ARROW_DIRECTIONS = { ArrowDown: 1, ArrowUp: -1 };
+
+// Every reorder path hands the new id order to the provider, which paints the
+// server's order. A rejection therefore leaves the visible rows where they
+// were, and one message reports that instead of letting the revert pass as
+// "the app ignored me".
+const REORDER_FAILURE_MESSAGE =
+  "Couldn't save the new order — it was restored.";
+
+// One reorderable row, named by the provider's own id, in the shape both the
+// parked focus and the failure hand-back use.
+function rowTarget(item) {
+  return item.showcaseId != null
+    ? { scope: "showcase", id: item.showcaseId }
+    : { scope: "collection", id: item.collectionId };
+}
 
 // The collapsed rail's second line of identity. A collection or showcase row
 // shows its loaded note count, in tabular figures so the marks line up; a row
@@ -208,6 +224,10 @@ function Sidebar({ pageFocusRef }) {
   // back to it so opening the menu never loses the page's place, whether that
   // was a table row, the selection bar, or another control.
   const returnFocusRef = useRef(null);
+  // The shell owns the one toast host; the rail only tells it when a reorder
+  // failed. A rail rendered on its own (a test) raises no message rather than
+  // mounting a second host.
+  const toastHost = useToastHost();
 
   // The collection rows sit inside the Catalog group, above Import / Export.
   // A collection row stays highlighted in both of its modes: view and edit
@@ -367,8 +387,8 @@ function Sidebar({ pageFocusRef }) {
   }
 
   // After a keyboard move or jump the provider reconciles the order, which
-  // rebuilds the stops. Park the moved row's key so the next render can land
-  // the cursor on that row's link in its new place.
+  // rebuilds the stops. Park the moved row so the next render can land the
+  // cursor on that row's link in its new place.
   const pendingMoveFocusRef = useRef(null);
 
   const newShowcaseTo = SHOWCASE_ROUTES.showcaseEdit(NEW_SHOWCASE_ID);
@@ -500,20 +520,16 @@ function Sidebar({ pageFocusRef }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cursorStops.length]);
 
-  // After a move lands, focus follows the moved row's link in its new place.
-  // The effect runs when the provider's order reconciles; on a failed request
-  // the order is unchanged, so the link is found where it started and focus
-  // simply returns to it. In cursor mode the cursor index moves; in native
-  // Tab mode focus is handed directly without claiming the cursor.
-  useEffect(() => {
-    if (pendingMoveFocusRef.current == null) {
-      return;
-    }
-
-    const key = pendingMoveFocusRef.current;
-    pendingMoveFocusRef.current = null;
+  // Land focus on a row's link by its own id, in whichever place it now sits.
+  // In cursor mode the cursor index moves; in native Tab mode focus is handed
+  // directly without claiming the cursor.
+  function focusRowAfterMove(scope, rowId) {
     const nextIndex = cursorStops.findIndex(
-      (stop) => stop.kind === "item" && (stop.item.key ?? stop.item.to) === key,
+      (stop) =>
+        stop.kind === "item" &&
+        (scope === "showcase"
+          ? stop.item.showcaseId === rowId
+          : stop.item.collectionId === rowId),
     );
 
     if (nextIndex < 0) {
@@ -528,6 +544,39 @@ function Sidebar({ pageFocusRef }) {
     if (nextIndex !== cursorIndex) {
       setCursorIndex(nextIndex);
     }
+  }
+
+  // One message and one focus hand-back per failed request, whichever surface
+  // started it. The provider never applied the order, so the row is still
+  // where the collector left it. A request can take a while to fail: if focus
+  // has since moved to the page (a table control, say), the rail leaves it
+  // there and only reports.
+  function reportReorderFailure(scope, rowId) {
+    pendingMoveFocusRef.current = null;
+    toastHost?.current?.show(REORDER_FAILURE_MESSAGE, "danger");
+
+    const active = document.activeElement;
+    const focusIsSettled =
+      active instanceof HTMLElement &&
+      active !== document.body &&
+      !navRef.current?.contains(active);
+
+    if (!focusIsSettled) {
+      focusRowAfterMove(scope, rowId);
+    }
+  }
+
+  // After a move lands, focus follows the moved row's link in its new place.
+  // The effect runs when the provider's order reconciles; a failure clears
+  // the parked row and reports instead.
+  useEffect(() => {
+    if (pendingMoveFocusRef.current == null) {
+      return;
+    }
+
+    const moved = pendingMoveFocusRef.current;
+    pendingMoveFocusRef.current = null;
+    focusRowAfterMove(moved.scope, moved.id);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [showcases, collections]);
 
@@ -722,12 +771,13 @@ function Sidebar({ pageFocusRef }) {
     );
   }
 
-  // The rail cannot surface an error, so a failed reorder is swallowed; the
-  // next load reconciles the order. One request at a time: a second order
-  // built from the same list would otherwise overwrite the first in flight.
+  // One request at a time: a second order built from the same list would
+  // otherwise overwrite the first in flight. Answers true when the server
+  // took the order, false when it refused it, and null when the request was
+  // skipped — a skipped request has nothing to report.
   async function requestReorder(ids, reorder) {
     if (reorderInFlightRef.current) {
-      return false;
+      return null;
     }
 
     reorderInFlightRef.current = true;
@@ -789,10 +839,14 @@ function Sidebar({ pageFocusRef }) {
       return;
     }
 
-    await requestReorder(
+    const landed = await requestReorder(
       nextShowcases.map((showcase) => showcase.id),
       reorderShowcases,
     );
+
+    if (landed === false) {
+      reportReorderFailure("showcase", movedShowcase.id);
+    }
   }
 
   function clearCollectionDrag() {
@@ -869,10 +923,14 @@ function Sidebar({ pageFocusRef }) {
       return;
     }
 
-    await requestReorder(
+    const landed = await requestReorder(
       nextCollections.map((collection) => collection.id),
       reorderCollections,
     );
+
+    if (landed === false) {
+      reportReorderFailure("collection", movedCollection.id);
+    }
   }
 
   // One step (or, with `jump`, straight to an edge) for the row's Move buttons
@@ -905,7 +963,7 @@ function Sidebar({ pageFocusRef }) {
     const [moved] = next.splice(index, 1);
     next.splice(targetIndex, 0, moved);
 
-    pendingMoveFocusRef.current = item.key ?? item.to;
+    pendingMoveFocusRef.current = rowTarget(item);
 
     const landed = await requestReorder(
       next.map((entry) => entry.id),
@@ -913,9 +971,14 @@ function Sidebar({ pageFocusRef }) {
     );
 
     // A failed request leaves the order unchanged, so no rebuild will consume
-    // the parked focus; drop it before some later update steals focus.
-    if (!landed) {
+    // the parked focus; report it and drop the parked row before a later
+    // update steals focus.
+    if (landed !== true) {
       pendingMoveFocusRef.current = null;
+
+      if (landed === false) {
+        reportReorderFailure(isShowcase ? "showcase" : "collection", id);
+      }
     }
   }
 

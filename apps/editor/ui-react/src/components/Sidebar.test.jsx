@@ -28,6 +28,7 @@ import { sidebarPinStorageKey } from "../lib/sidebarPin.js";
 import { ShowcasesProvider } from "../lib/showcases.jsx";
 import { APP_VERSION } from "../lib/version.js";
 import { Sidebar } from "./Sidebar.jsx";
+import { ToastProvider } from "./Toast.jsx";
 import {
   CATALOG_ROUTES,
   DEFAULT_DESTINATION,
@@ -59,19 +60,21 @@ async function renderSidebar(path) {
   const view = render(
     <MemoryRouter initialEntries={[path]}>
       <LocationProbe />
-      <CollectionsProvider>
-        <ShowcasesProvider>
-          <Sidebar pageFocusRef={pageFocusRef} />
-        </ShowcasesProvider>
-      </CollectionsProvider>
-      <main>
-        <span
-          className="page-focus-anchor"
-          data-testid="page-anchor"
-          ref={pageFocusRef}
-          tabIndex={-1}
-        />
-      </main>
+      <ToastProvider>
+        <CollectionsProvider>
+          <ShowcasesProvider>
+            <Sidebar pageFocusRef={pageFocusRef} />
+          </ShowcasesProvider>
+        </CollectionsProvider>
+        <main>
+          <span
+            className="page-focus-anchor"
+            data-testid="page-anchor"
+            ref={pageFocusRef}
+            tabIndex={-1}
+          />
+        </main>
+      </ToastProvider>
     </MemoryRouter>,
   );
 
@@ -91,6 +94,10 @@ function newCollectionButton() {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // clearAllMocks keeps implementations; a rejected reorder set by one test
+  // must not outlive it.
+  reorderCollections.mockReset();
+  reorderShowcases.mockReset();
   window.localStorage.clear();
   getShowcases.mockResolvedValue({
     showcases: [
@@ -1349,6 +1356,9 @@ describe("Sidebar collection reordering", () => {
     await waitFor(() => {
       expect(reorderCollections).toHaveBeenCalled();
     });
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn't save the new order — it was restored.",
+    );
     expect(collectionLabels(container)).toEqual([
       "All notes",
       "Default",
@@ -1456,6 +1466,9 @@ describe("Sidebar showcase reordering", () => {
       "Vienna",
       "New showcase",
     ]);
+    // Nothing was asked of the server, so nothing is reported.
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    expect(container.querySelector(".toast")).toBeNull();
   });
 
   test("a pending showcase draft is never draggable", async () => {
@@ -1467,6 +1480,188 @@ describe("Sidebar showcase reordering", () => {
 
     expect(draft.closest(".sidebar-row")).toBeNull();
     expect(draft.getAttribute("draggable")).toBe("false");
+  });
+});
+
+describe("Sidebar reorder failures", () => {
+  const FAILURE = "Couldn't save the new order — it was restored.";
+
+  test("a failed move reports it and returns focus to the row", async () => {
+    const user = userEvent.setup();
+    reorderCollections.mockRejectedValue(
+      new Error("The server is unreachable."),
+    );
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.click(screen.getByRole("button", { name: "Move Default down" }));
+
+    // One failed request, one message (findByRole refuses a second match),
+    // and focus lands on the moved row's link rather than a dead button.
+    expect(await screen.findByRole("alert")).toHaveTextContent(FAILURE);
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Default" })).toHaveFocus();
+    });
+    expect(collectionLabels(container)).toEqual([
+      "All notes",
+      "Default",
+      "Archive",
+      "New collection",
+      "Import / Export",
+    ]);
+  });
+
+  test("a failed Shift+↑/↓ jump reports it and keeps focus on the row", async () => {
+    const user = userEvent.setup();
+    reorderCollections.mockRejectedValue(
+      new Error("The server is unreachable."),
+    );
+    await renderSidebar(CATALOG_ROUTES.collection(2));
+
+    await user.keyboard("{b}"); // Archive
+    await user.keyboard("{Shift>}{ArrowUp}{/Shift}");
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(FAILURE);
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Archive" })).toHaveFocus();
+    });
+  });
+
+  test("a failed showcase drop reports it and returns focus to the row", async () => {
+    reorderShowcases.mockRejectedValue(
+      new Error("The server is unreachable."),
+    );
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    const summerRow = screen
+      .getByRole("link", { name: "Summer" })
+      .closest(".sidebar-row");
+    const viennaRow = screen
+      .getByRole("link", { name: "Vienna" })
+      .closest(".sidebar-row");
+    const dataTransfer = makeDataTransfer();
+
+    await act(async () => {
+      summerRow.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+    });
+    await act(async () => {
+      viennaRow.dispatchEvent(
+        dragEvent("dragover", { clientY: 400, dataTransfer }),
+      );
+    });
+    await act(async () => {
+      viennaRow.dispatchEvent(dragEvent("drop", { clientY: 400, dataTransfer }));
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(FAILURE);
+    await waitFor(() => {
+      expect(screen.getByRole("link", { name: "Summer" })).toHaveFocus();
+    });
+    expect(showcaseLabels(container)).toEqual([
+      "Summer",
+      "Vienna",
+      "New showcase",
+    ]);
+  });
+
+  test("a late failure leaves focus where the collector moved it", async () => {
+    let rejectMove;
+    reorderCollections.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectMove = reject;
+        }),
+    );
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    const defRow = screen
+      .getByRole("link", { name: "Default" })
+      .closest(".sidebar-row");
+    const archiveRow = screen
+      .getByRole("link", { name: "Archive" })
+      .closest(".sidebar-row");
+    const dataTransfer = makeDataTransfer();
+
+    await act(async () => {
+      defRow.dispatchEvent(dragEvent("dragstart", { dataTransfer }));
+    });
+    await act(async () => {
+      archiveRow.dispatchEvent(
+        dragEvent("dragover", { clientY: 400, dataTransfer }),
+      );
+    });
+    await act(async () => {
+      archiveRow.dispatchEvent(dragEvent("drop", { clientY: 400, dataTransfer }));
+    });
+
+    // The request hangs; the collector moves on to the page. The rejection
+    // must report without yanking focus back into the rail.
+    screen.getByTestId("page-anchor").focus();
+    await act(async () => {
+      rejectMove(new Error("The server is unreachable."));
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(FAILURE);
+    expect(screen.getByTestId("page-anchor")).toHaveFocus();
+    expect(collectionLabels(container)).toEqual([
+      "All notes",
+      "Default",
+      "Archive",
+      "New collection",
+      "Import / Export",
+    ]);
+  });
+
+  test("a reorder skipped while one is in flight reports nothing", async () => {
+    const user = userEvent.setup();
+    let rejectMove;
+    reorderCollections.mockImplementation(
+      () =>
+        new Promise((_resolve, reject) => {
+          rejectMove = reject;
+        }),
+    );
+    await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.click(screen.getByRole("button", { name: "Move Archive up" }));
+    // The first request is still in flight, so this second move is skipped
+    // and must not report a failure of its own.
+    await user.click(screen.getByRole("button", { name: "Move Default down" }));
+
+    expect(reorderCollections).toHaveBeenCalledTimes(1);
+
+    await act(async () => {
+      rejectMove(new Error("The server is unreachable."));
+    });
+
+    expect(await screen.findByRole("alert")).toHaveTextContent(FAILURE);
+    expect(reorderCollections).toHaveBeenCalledTimes(1);
+  });
+
+  test("a successful move raises no message", async () => {
+    const user = userEvent.setup();
+    reorderCollections.mockResolvedValue({
+      collections: [
+        { id: 2, is_default: 0, name: "Archive" },
+        { id: 1, is_default: 1, name: "Default" },
+      ],
+    });
+    const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
+
+    await user.click(screen.getByRole("button", { name: "Move Archive up" }));
+
+    await waitFor(() => {
+      expect(collectionLabels(container)).toEqual([
+        "All notes",
+        "Archive",
+        "Default",
+        "New collection",
+        "Import / Export",
+      ]);
+    });
+    expect(screen.queryByRole("alert")).not.toBeInTheDocument();
+    // The LocationProbe's <output> is the only status role here; no toast
+    // card joined it.
+    expect(container.querySelector(".toast")).toBeNull();
   });
 });
 

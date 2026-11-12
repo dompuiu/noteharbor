@@ -3,6 +3,7 @@ import { act, render, screen } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 import { NotesTable } from "./NotesTable.jsx";
+import { ToastProvider } from "./Toast.jsx";
 import { chooseSelectOption } from "../test/selectField.js";
 import {
   noteRowRenderCount,
@@ -87,8 +88,8 @@ class FakeResizeObserver {
   disconnect() {}
 }
 
-function renderTable() {
-  return render(
+function renderTable({ shellHost = false } = {}) {
+  const table = (
     <MemoryRouter initialEntries={["/catalog/collections/1/view"]}>
       <NotesTable
         collection={collections[0]}
@@ -97,7 +98,11 @@ function renderTable() {
         collectionsError=""
         loadingCollections={false}
       />
-    </MemoryRouter>,
+    </MemoryRouter>
+  );
+
+  return render(
+    shellHost ? <ToastProvider>{table}</ToastProvider> : table,
   );
 }
 
@@ -221,6 +226,47 @@ describe("moving a note to another collection", () => {
 
     // Dismissal is the toast's own timer, so the table must not commit and no
     // note row may render for it.
+    resetNoteRowRenders();
+    virtualizerStats.renders = 0;
+
+    expect(dismissTimers).toHaveLength(1);
+    act(() => {
+      dismissTimers[0]();
+    });
+
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+    expect(noteRowRenderCount()).toBe(0);
+    expect(virtualizerStats.renders).toBe(0);
+  });
+
+  test("under the shell's host the table raises no second toast", async () => {
+    const user = userEvent.setup();
+    const { container } = renderTable({ shellHost: true });
+
+    await screen.findByText("NOTE-1");
+    setScrollMetrics(scrollerFor(container));
+    await flushFrame();
+
+    await user.click(screen.getByRole("button", { name: "Actions for NOTE-1" }));
+    await user.click(screen.getByRole("menuitem", { name: "Edit" }));
+    await screen.findByLabelText("Denomination");
+    await chooseSelectOption(user, "Collection", "Other");
+    await chooseSelectOption(
+      user,
+      "Position in collection",
+      "Start of collection",
+    );
+    await user.click(screen.getByRole("button", { name: "Save & close" }));
+
+    // One card: findByRole refuses a second. The shell's host replaced the
+    // table's local one.
+    expect(await screen.findByRole("status")).toHaveTextContent(
+      "Moved to Other.",
+    );
+
+    // The production path keeps the same promise as the local host: showing
+    // and dismissing the message never commits the table.
+    await settleTable();
     resetNoteRowRenders();
     virtualizerStats.renders = 0;
 

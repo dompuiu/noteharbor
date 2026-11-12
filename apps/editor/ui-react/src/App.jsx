@@ -15,6 +15,7 @@ import { NoteEditForm } from "./components/NoteEditForm.jsx";
 import { NoCollectionsPrompt } from "./components/NoCollectionsPrompt.jsx";
 import { ShowcaseScreen } from "./components/ShowcaseScreen.jsx";
 import { Sidebar } from "./components/Sidebar.jsx";
+import { ToastProvider } from "./components/Toast.jsx";
 import { getHealth } from "./lib/api.js";
 import { isDesktopRuntime } from "./lib/appMode.js";
 import { attachMenuBarToggle } from "./lib/menuBar.js";
@@ -220,90 +221,92 @@ function ShellContent() {
   const noteEditorCollection = collections[0] ?? null;
 
   return (
-    <div className="app-shell">
-      <LastVisitedRouteSync />
-      <Sidebar pageFocusRef={pageFocusRef} />
-      <div className="app-main">
-        <main>
-          <span
-            aria-hidden="true"
-            className="page-focus-anchor"
-            ref={pageFocusRef}
-            tabIndex={-1}
-          />
-          {disconnectedReason ? (
-            <ConnectionError
-              checking={checkingConnection}
-              onRetry={handleRetry}
-              reason={disconnectedReason}
+    <ToastProvider>
+      <div className="app-shell">
+        <LastVisitedRouteSync />
+        <Sidebar pageFocusRef={pageFocusRef} />
+        <div className="app-main">
+          <main>
+            <span
+              aria-hidden="true"
+              className="page-focus-anchor"
+              ref={pageFocusRef}
+              tabIndex={-1}
             />
-          ) : (
-            <Routes>
-              <Route
-                element={<AllNotesScreen />}
-                path={CATALOG_ROUTES.allNotes}
+            {disconnectedReason ? (
+              <ConnectionError
+                checking={checkingConnection}
+                onRetry={handleRetry}
+                reason={disconnectedReason}
               />
-              <Route
-                element={<CollectionScreen key="collection-view" mode="view" />}
-                path={CATALOG_ROUTES.collection(":id")}
-              />
-              <Route
-                element={<CollectionScreen key="collection-edit" mode="edit" />}
-                path={CATALOG_ROUTES.collectionEdit(":id")}
-              />
-              <Route
-                element={<CollectionHomeRedirect />}
-                path={CATALOG_ROUTES.collections}
-              />
-              {/* Retired with the sidebar collections: old bookmarks land on
-              the collections home, which resolves to the first collection. */}
-              <Route
-                element={<Navigate replace to={DEFAULT_DESTINATION} />}
-                path="/catalog/banknotes"
-              />
-              <Route
-                element={(
-                  <ImportScreen
-                    collections={collections}
-                    collectionsError={collectionsError}
-                    loadingCollections={loadingCollections}
-                    showcases={showcases}
-                    showcasesError={showcasesError}
-                    loadingShowcases={loadingShowcases}
-                  />
-                )}
-                path={CATALOG_ROUTES.importExport}
-              />
-              <Route
-                element={
-                  <NoteEditorDestination
-                    emptyLibrary={showEmptyLibrary}
-                    selectedCollectionId={noteEditorCollection?.id ?? null}
-                  />
-                }
-                path={CATALOG_ROUTES.noteEdit(":id")}
-              />
-              <Route
-                element={<ShowcaseScreen key="view" mode="view" />}
-                path={SHOWCASE_ROUTES.showcase(":id")}
-              />
-              <Route
-                element={<ShowcaseScreen key="edit" mode="edit" />}
-                path={SHOWCASE_ROUTES.showcaseEdit(":id")}
-              />
-              <Route
-                element={<LegacyShowcaseRedirect />}
-                path="/portfolio/showcases/:id"
-              />
-              <Route
-                element={<Navigate replace to={DEFAULT_DESTINATION} />}
-                path="*"
-              />
-            </Routes>
-          )}
-        </main>
+            ) : (
+              <Routes>
+                <Route
+                  element={<AllNotesScreen />}
+                  path={CATALOG_ROUTES.allNotes}
+                />
+                <Route
+                  element={<CollectionScreen key="collection-view" mode="view" />}
+                  path={CATALOG_ROUTES.collection(":id")}
+                />
+                <Route
+                  element={<CollectionScreen key="collection-edit" mode="edit" />}
+                  path={CATALOG_ROUTES.collectionEdit(":id")}
+                />
+                <Route
+                  element={<CollectionHomeRedirect />}
+                  path={CATALOG_ROUTES.collections}
+                />
+                {/* Retired with the sidebar collections: old bookmarks land on
+                the collections home, which resolves to the first collection. */}
+                <Route
+                  element={<Navigate replace to={DEFAULT_DESTINATION} />}
+                  path="/catalog/banknotes"
+                />
+                <Route
+                  element={(
+                    <ImportScreen
+                      collections={collections}
+                      collectionsError={collectionsError}
+                      loadingCollections={loadingCollections}
+                      showcases={showcases}
+                      showcasesError={showcasesError}
+                      loadingShowcases={loadingShowcases}
+                    />
+                  )}
+                  path={CATALOG_ROUTES.importExport}
+                />
+                <Route
+                  element={
+                    <NoteEditorDestination
+                      emptyLibrary={showEmptyLibrary}
+                      selectedCollectionId={noteEditorCollection?.id ?? null}
+                    />
+                  }
+                  path={CATALOG_ROUTES.noteEdit(":id")}
+                />
+                <Route
+                  element={<ShowcaseScreen key="view" mode="view" />}
+                  path={SHOWCASE_ROUTES.showcase(":id")}
+                />
+                <Route
+                  element={<ShowcaseScreen key="edit" mode="edit" />}
+                  path={SHOWCASE_ROUTES.showcaseEdit(":id")}
+                />
+                <Route
+                  element={<LegacyShowcaseRedirect />}
+                  path="/portfolio/showcases/:id"
+                />
+                <Route
+                  element={<Navigate replace to={DEFAULT_DESTINATION} />}
+                  path="*"
+                />
+              </Routes>
+            )}
+          </main>
+        </div>
       </div>
-    </div>
+    </ToastProvider>
   );
 }
 

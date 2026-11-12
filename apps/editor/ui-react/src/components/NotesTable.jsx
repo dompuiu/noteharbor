@@ -69,7 +69,7 @@ import { NotesTableView } from "./NotesTableView.jsx";
 import { ActionsMenu } from "./ActionsMenu.jsx";
 import { Slideshow } from "./Slideshow.jsx";
 import { TableBulkBar } from "./TableBulkBar.jsx";
-import { ToastHost } from "./Toast.jsx";
+import { ToastHost, useToastHost } from "./Toast.jsx";
 import { MoveNotesDialog } from "./MoveNotesDialog.jsx";
 
 const validPreviewKinds = new Set(["front", "back"]);
@@ -730,8 +730,13 @@ function NotesTable({
   const [loadError, setLoadError] = useState("");
   const [actionError, setActionError] = useState("");
   // The toast owns its message and timer; the table only tells it when to
-  // show one.
-  const toastRef = useRef(null);
+  // show one. Messages go through the shell's host, so the sidebar and every
+  // other chrome surface share the same card. A table rendered on its own
+  // mounts its own host instead; the shell's presence removes the local one,
+  // so the app never shows two.
+  const shellToastRef = useToastHost();
+  const localToastRef = useRef(null);
+  const toastRef = shellToastRef ?? localToastRef;
   // The one Move dialog, opened by the bulk bar or a row menu. It holds the
   // notes as an ordered list, because a bulk move keeps the order the
   // collector sees in the table.
@@ -4678,7 +4683,7 @@ function NotesTable({
             {actionError}
           </p>
         ) : null}
-        <ToastHost toastRef={toastRef} />
+        {shellToastRef ? null : <ToastHost toastRef={localToastRef} />}
 
         {moveRequest ? (
           <MoveNotesDialog

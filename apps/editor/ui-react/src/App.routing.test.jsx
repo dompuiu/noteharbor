@@ -40,7 +40,12 @@ vi.mock("./components/NoteEditForm.jsx", () => ({
 import { ShellContent } from "./App.jsx";
 import { CollectionsProvider } from "./lib/collections.jsx";
 import { ShowcasesProvider } from "./lib/showcases.jsx";
-import { getCollections, getHealth, getShowcases } from "./lib/api.js";
+import {
+  getCollections,
+  getHealth,
+  getShowcases,
+  reorderCollections,
+} from "./lib/api.js";
 import { reportConnectionFailure } from "./lib/connection.js";
 import { CATALOG_ROUTES } from "./lib/routes.js";
 
@@ -402,5 +407,30 @@ describe("Connection state", () => {
     });
 
     expect(await screen.findByText("Collection view screen")).toBeInTheDocument();
+  });
+});
+
+describe("Shell chrome", () => {
+  test("a failed sidebar reorder reaches the shell's single toast host", async () => {
+    const user = userEvent.setup();
+    getCollections.mockResolvedValue({
+      collections: [
+        { id: 1, is_default: 1, name: "Default" },
+        { id: 2, is_default: 0, name: "Archive" },
+      ],
+    });
+    reorderCollections.mockRejectedValue(
+      new Error("The server is unreachable."),
+    );
+
+    renderAt(CATALOG_ROUTES.collection(1));
+
+    await screen.findByRole("link", { name: "Archive" });
+    await user.click(screen.getByRole("button", { name: "Move Archive up" }));
+
+    // One card, from the shell's host: findByRole refuses a second.
+    expect(await screen.findByRole("alert")).toHaveTextContent(
+      "Couldn't save the new order — it was restored.",
+    );
   });
 });
