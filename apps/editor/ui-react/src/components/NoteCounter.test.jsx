@@ -59,6 +59,23 @@ describe("NoteCounter", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
+  test("an optional label names what the numbers count", () => {
+    const { container } = renderCounter({ label: "Image" });
+
+    expect(container.querySelector(".note-counter-label")).toHaveTextContent(
+      "Image",
+    );
+    expect(renderedValue(container)).toHaveTextContent("Image 3 / 9");
+  });
+
+  test("no label is rendered by default", () => {
+    const { container } = renderCounter();
+
+    expect(
+      container.querySelector(".note-counter-label"),
+    ).not.toBeInTheDocument();
+  });
+
   test("the add variant renders ? / N and never a number", () => {
     const { container } = renderCounter({
       addMode: true,

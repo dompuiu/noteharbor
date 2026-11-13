@@ -1389,6 +1389,7 @@ function ImagePopover({
             ) : null}
             <NoteCounter
               jumpLabel="Image position"
+              label="Image"
               onJump={onJump}
               position={counterPosition}
               showArrows={false}

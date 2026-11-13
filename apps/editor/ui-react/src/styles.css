@@ -2531,6 +2531,14 @@ input[type="radio"] {
   gap: 2px;
 }
 
+/* A counter that tallies something other than notes says which list it
+   counts, so the slide's "3 / 7" and the image's "3 / 7" never read alike.
+   The label stays quiet; the numbers still lead. */
+.note-counter-label {
+  margin-right: 4px;
+  color: var(--text-muted);
+}
+
 .note-counter-value--editable {
   display: inline-flex;
   align-items: center;

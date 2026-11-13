@@ -2395,6 +2395,10 @@ describe("slideshow overlay styles", () => {
   test("the overlay chrome uses the app's control surfaces", () => {
     const rules = [
       [/\.counter-pill\s*\{([^}]*)\}/, /background:\s*var\(--surface\)/],
+      [
+        /\.note-counter-label\s*\{([^}]*)\}/,
+        /color:\s*var\(--text-muted\)/,
+      ],
       [/\.arrow-button\s*\{([^}]*)\}/, /background:\s*var\(--surface\)/],
       [
         /\.slide-thumb-btn\s*\{([^}]*background:[^}]*)\}/,

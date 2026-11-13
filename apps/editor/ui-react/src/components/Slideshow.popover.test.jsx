@@ -961,5 +961,16 @@ describe("ImagePopover side and naming", () => {
     expect(counter).toHaveAttribute("aria-valuenow", "1");
     expect(counter).toHaveAttribute("aria-valuemin", "1");
     expect(counter).toHaveAttribute("aria-valuemax", "3");
+    expect(counter).toHaveAttribute("aria-valuetext", "1 of 3");
+  });
+
+  test("the image counter names the image domain in the pill", () => {
+    render(popover());
+
+    const counter = screen
+      .getByRole("spinbutton", { name: "Image position" })
+      .closest(".note-counter-value");
+
+    expect(counter).toHaveTextContent("Image 1 / 3");
   });
 });

@@ -5,7 +5,9 @@ import { useEffect, useRef, useState } from "react";
 // caller passes the position, the total, the labels, and what should happen
 // when a control is used. The first number can be typed into to jump, which
 // is the only state the component keeps: whether the value is being edited,
-// and the digits typed so far.
+// and the digits typed so far. A caller counting something other than notes
+// (the Image popover counts images) passes a label so the pill names its
+// domain.
 function clampPosition(value, total) {
   if (!Number.isFinite(value)) {
     return null;
@@ -20,6 +22,7 @@ function NoteCounter({
   canGoPrevious = true,
   counterTitle,
   jumpLabel = "Note position",
+  label,
   nextLabel = "Edit next note",
   onJump,
   onNext,
@@ -155,6 +158,7 @@ function NoteCounter({
         </button>
       ) : null}
       <span className={valueClassName} title={counterTitle}>
+        {label ? <span className="note-counter-label">{label} </span> : null}
         <span {...editableProps}>
           {editing ? (
             <input
