@@ -769,6 +769,9 @@ describe("ImagePopover side and naming", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "1 leu - 100, Front" })).toBeInTheDocument();
 
+    // The note label is the topbar's first line, with no eyebrow above it.
+    expect(dialog.querySelector(".image-popover-topbar .eyebrow")).toBeNull();
+
     const announcer = dialog.querySelector(
       '.image-popover-announcer[role="status"]',
     );

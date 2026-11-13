@@ -1282,7 +1282,6 @@ function ImagePopover({
       >
         <div className="image-popover-topbar">
           <div className="image-popover-meta">
-            <p className="eyebrow">Preview</p>
             <div className="image-popover-identity">
               <h2 className="image-popover-note-label" id={titleId}>
                 {noteLabel}

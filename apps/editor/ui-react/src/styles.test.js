@@ -2631,12 +2631,58 @@ describe("slideshow overlay styles", () => {
     expect(label[1]).toMatch(/font-weight:\s*600/);
     expect(label[1]).toMatch(/letter-spacing:\s*0\.12em/);
 
+    // The popover note is its headline, so it takes the uppercase Title voice
+    // rather than the panel-heading weight it wore as a caption.
     const noteLabel = styles.match(
       /\.image-popover-note-label\s*\{([^}]*color:\s*var\(--on-dark-text\)[^}]*)\}/,
     );
     expect(noteLabel).not.toBeNull();
-    expect(noteLabel[1]).toMatch(/font-weight:\s*650/);
+    expect(noteLabel[1]).toMatch(/font-size:\s*1\.2rem/);
+    expect(noteLabel[1]).toMatch(/font-weight:\s*800/);
     expect(noteLabel[1]).toMatch(/letter-spacing:\s*-0\.01em/);
+    expect(noteLabel[1]).toMatch(/text-transform:\s*uppercase/);
+  });
+
+  // The topbar is the identity, not chrome: the popover's arrows must sit in
+  // the stage's own centring instead of the note page's sticky offset. The
+  // shared arrow stays sticky, so only the popover is released.
+  test("the popover arrows are not sticky, and the shared arrow still is", () => {
+    const arrow = styles.match(/\.image-popover-arrow\s*\{([^}]*)\}/);
+    expect(arrow).not.toBeNull();
+    expect(arrow[1]).toMatch(/position:\s*static/);
+
+    const shared = styles.match(/\.arrow-button\s*\{([^}]*)\}/);
+    expect(shared).not.toBeNull();
+    expect(shared[1]).toMatch(/position:\s*sticky/);
+
+    // Equal specificity, so source order is what lets the popover override it.
+    expect(styles.indexOf(".image-popover-arrow {")).toBeGreaterThan(
+      styles.indexOf(".arrow-button {"),
+    );
+  });
+
+  // Close keeps its quiet exit: the shared 36px box stays, the pill's ground
+  // and edge go, and the Esc cue stays on the element.
+  test("the popover close drops the pill and keeps the red hover", () => {
+    const close = styles.match(/\.image-popover-close\s*\{([^}]*)\}/);
+    expect(close).not.toBeNull();
+    expect(close[1]).toMatch(/background:\s*transparent/);
+    expect(close[1]).toMatch(/border-color:\s*transparent/);
+    expect(close[1]).toMatch(/color:\s*var\(--on-dark-muted\)/);
+
+    // Equal specificity, so source order is what lets the quiet close beat
+    // the .icon-link pill at rest.
+    expect(styles.indexOf(".image-popover-close {")).toBeGreaterThan(
+      styles.indexOf(".icon-link {"),
+    );
+
+    const hover = styles.match(/\.image-popover-close:hover\s*\{([^}]*)\}/);
+    expect(hover).not.toBeNull();
+    expect(hover[1]).toMatch(/background:\s*transparent/);
+    expect(hover[1]).toMatch(/border-color:\s*transparent/);
+    // The quiet base rule sits after .icon-link:hover, so the hover must
+    // restate the red ink itself instead of inheriting it.
+    expect(hover[1]).toMatch(/color:\s*var\(--accent-strong\)/);
   });
 
   // The plate hover is the app's red interaction edge, the same wash and
