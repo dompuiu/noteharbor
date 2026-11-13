@@ -265,6 +265,63 @@ void main() {
     });
   });
 
+  group('collection order', () {
+    const ranks = {1: 0, 2: 1};
+
+    int rankOf(NoteRecord note) => ranks[note.collectionId] ?? ranks.length;
+
+    test('collection sort groups by rank, then display order', () {
+      final notes = [
+        note(id: 1, collectionId: 2, displayOrder: 1),
+        note(id: 2, collectionId: 1, displayOrder: 2),
+        note(id: 3, collectionId: 2, displayOrder: 2),
+        note(id: 4, collectionId: 1, displayOrder: 1),
+      ];
+
+      List<int> sorted({required bool ascending}) => sortNotes(
+        notes,
+        column: 'collection',
+        ascending: ascending,
+        collectionRankOf: rankOf,
+      ).map((note) => note.id).toList();
+
+      expect(sorted(ascending: true), [4, 2, 1, 3]);
+      // Descending reverses the collection order, not the display order
+      // inside each collection.
+      expect(sorted(ascending: false), [1, 3, 4, 2]);
+    });
+
+    test('other columns break ties by rank, then display order', () {
+      final notes = [
+        note(id: 1, collectionId: 2, displayOrder: 1, denomination: '5 Lei'),
+        note(id: 2, collectionId: 1, displayOrder: 3, denomination: '5 Lei'),
+        note(id: 3, collectionId: 1, displayOrder: 1, denomination: '5 Lei'),
+        note(id: 4, collectionId: 2, displayOrder: 2, denomination: '5 Lei'),
+      ];
+
+      final sorted = sortNotes(
+        notes,
+        column: 'denomination',
+        ascending: true,
+        collectionRankOf: rankOf,
+      );
+
+      expect(sorted.map((note) => note.id), [3, 2, 1, 4]);
+    });
+
+    test('without a rank lookup ties keep display order first', () {
+      final notes = [
+        note(id: 1, collectionId: 2, displayOrder: 1),
+        note(id: 2, collectionId: 1, displayOrder: 2),
+        note(id: 3, collectionId: 1, displayOrder: 1),
+      ];
+
+      final sorted = sortNotes(notes, column: 'collection', ascending: true);
+
+      expect(sorted.map((note) => note.id), [3, 1, 2]);
+    });
+  });
+
   test('sorts a copy and leaves the input untouched', () {
     final notes = [
       note(id: 1, denomination: '5 Lei'),

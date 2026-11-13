@@ -19,11 +19,17 @@ import '../import/import_dataset_screen.dart';
 import '../slideshow/note_slideshow_screen.dart';
 import 'note_sorting.dart';
 
-/// Minimum column widths for the nine-column grid. On a window wider than the
+/// Minimum column widths for the desktop grid. On a window wider than the
 /// grid needs, [_calculateColumnWidths] spreads the spare width across the
 /// scrolling columns so the row content always reaches the card's right edge.
 const double _kOrderColumnWidth = 56;
 const double _kFrontColumnWidth = 88;
+
+/// The All notes scope's collection context. It leads the scrolling pane but
+/// keeps a fixed minimum like the other text columns, so long names ellipsize
+/// instead of pushing the identifiers off screen.
+const double _kCollectionColumnWidth = 170;
+const String _kCollectionColumnLabel = 'Collection';
 const double _kDenominationColumnWidth = 190;
 const double _kDateColumnWidth = 120;
 const double _kCatalogColumnWidth = 130;
@@ -36,7 +42,8 @@ const double _kDefaultTagsColumnWidth = 160;
 /// readable column and the rest of the spare width goes to the text columns.
 const double _kMaxTagsColumnWidth = 320;
 
-/// The scrolling columns' minimum widths, without Tags.
+/// The scrolling text columns' minimum widths, without Tags or All notes'
+/// Collection column.
 const double _kTextColumnsMinWidth =
     _kDenominationColumnWidth +
     _kDateColumnWidth +
@@ -45,9 +52,16 @@ const double _kTextColumnsMinWidth =
     _kGradeColumnWidth +
     _kSerialColumnWidth;
 
+/// The scrolling text columns' minimum widths, including All notes'
+/// Collection column when it is shown.
+double _scrollingColumnsMinWidth({required bool showCollection}) =>
+    _kTextColumnsMinWidth + (showCollection ? _kCollectionColumnWidth : 0);
+
 /// How spare width is shared once Tags has reached its cap. The weights keep
 /// the identifier columns roomier than the short Date and Grade columns.
+/// Collection participates only in All notes, where its column is shown.
 const Map<String, double> _kColumnFlexWeights = {
+  kCollectionSortKey: 1.0,
   'denomination': 1.3,
   'issueDate': 0.8,
   'catalogNumber': 1.0,
@@ -136,7 +150,7 @@ class _NoInnerScrollbarBehavior extends MaterialScrollBehavior {
   }
 }
 
-/// Below this available width the nine-column grid is replaced by a vertical
+/// Below this available width the desktop grid is replaced by a vertical
 /// note-card list. The grid needs ~1,200 px to show every column, so a window
 /// between this breakpoint and that width still pans; the card layout takes
 /// over only where the grid starts cutting columns mid-value.
@@ -192,16 +206,30 @@ const List<({String value, String label})> _kSortableColumns = [
   (value: 'tags', label: 'Tags'),
 ];
 
-/// Sortable column headers in visual order. `Front` has no sort button and is
-/// skipped by the explicit Tab order: filter -> headers -> rows.
-final List<String> _kSortableHeaderKeys = [
-  for (final column in _kSortableColumns) column.value,
-];
+const ({String value, String label}) _kCollectionSortableColumn = (
+  value: kCollectionSortKey,
+  label: _kCollectionColumnLabel,
+);
+
+/// The sortable columns for a scope. All notes adds Collection after the
+/// pinned ID header, where its column leads the scrolling pane.
+List<({String value, String label})> _sortableColumns({
+  required bool allNotes,
+}) {
+  if (!allNotes) {
+    return _kSortableColumns;
+  }
+  return [
+    _kSortableColumns.first,
+    _kCollectionSortableColumn,
+    ..._kSortableColumns.skip(1),
+  ];
+}
 
 /// Human-readable column names for the table footer's sort summary.
 const Map<String, String> _kColumnLabels = {
   'displayOrder': 'ID',
-  'collection': 'Collection',
+  kCollectionSortKey: _kCollectionColumnLabel,
   'denomination': 'Denomination',
   'issueDate': 'Date',
   'catalogNumber': 'Catalog',
@@ -220,9 +248,10 @@ const String _kDefaultFilterScope = 'catalogNumber';
 /// The switcher's All notes row, and the title while that scope is active.
 const String _kAllNotesTitle = 'All notes';
 
-/// A collection opens on its own order; All notes opens grouped by collection
-/// name. The Viewer has no Collection column, so [kCollectionSortKey] only
-/// surfaces in the footer and the card sort menu.
+/// A collection opens on its own order; All notes opens grouped by the
+/// switcher's collection order. Collection also surfaces as the grid's leading
+/// scrolling column and in the card sort menu, but only while All notes is
+/// active.
 const String _kDefaultSortKey = 'displayOrder';
 
 const List<({String value, String label, String hint})> _kFilterScopes = [
@@ -690,10 +719,13 @@ List<String> _tagNames(List<Tag> tags) {
 }
 
 /// The grid row's readable summary, in the order a collector scans a note:
-/// denomination, date, catalog, company, grade, serial, then tags. Empty
-/// columns are left out so a screen reader does not hear a run of dashes.
-String _noteSummaryLabel(NoteRecord note) {
+/// collection (in All notes), denomination, date, catalog, company, grade,
+/// serial, then tags. Empty columns are left out so a screen reader does not
+/// hear a run of dashes.
+String _noteSummaryLabel(NoteRecord note, {String? collectionName}) {
   final parts = <String>[
+    if (collectionName != null && collectionName.trim().isNotEmpty)
+      'collection ${collectionName.trim()}',
     if (note.denomination.trim().isNotEmpty) note.denomination.trim(),
     if (note.issueDate.trim().isNotEmpty) 'dated ${note.issueDate.trim()}',
     if (note.catalogNumber.trim().isNotEmpty)
@@ -743,9 +775,11 @@ double _calculateTagsColumnWidth(List<NoteRecord> notes) {
   );
 }
 
-/// The scrolling columns' widths for one layout pass.
+/// The scrolling columns' widths for one layout pass. [collection] is zero
+/// outside All notes, where the Collection column is absent.
 class _TableColumnWidths {
   const _TableColumnWidths({
+    required this.collection,
     required this.denomination,
     required this.issueDate,
     required this.catalogNumber,
@@ -755,6 +789,7 @@ class _TableColumnWidths {
     required this.tags,
   });
 
+  final double collection;
   final double denomination;
   final double issueDate;
   final double catalogNumber;
@@ -767,27 +802,35 @@ class _TableColumnWidths {
 /// Distributes the scrolling pane's [tableWidth] across its columns. Tags
 /// grows into spare width up to [_kMaxTagsColumnWidth]; whatever remains is
 /// shared by the text columns, so the row content fills the card instead of
-/// leaving a dead gutter on a wide window.
+/// leaving a dead gutter on a wide window. [showCollection] reserves the
+/// Collection column's minimum and shares spare width with it.
 _TableColumnWidths _calculateColumnWidths({
   required double tagsMinWidth,
   required double tableWidth,
+  required bool showCollection,
 }) {
+  final collectionMinWidth = showCollection ? _kCollectionColumnWidth : 0.0;
   final scrollingWidth =
       tableWidth - _kPinnedPaneWidth - _kTableHorizontalPadding;
 
-  var spare = scrollingWidth - (_kTextColumnsMinWidth + tagsMinWidth);
+  var spare =
+      scrollingWidth -
+      (_scrollingColumnsMinWidth(showCollection: showCollection) +
+          tagsMinWidth);
   final tags =
       tagsMinWidth +
       math.max(0.0, math.min(spare, _kMaxTagsColumnWidth - tagsMinWidth));
   spare -= tags - tagsMinWidth;
 
-  final weightTotal = _kColumnFlexWeights.values.fold<double>(
-    0,
-    (sum, weight) => sum + weight,
-  );
+  final weightTotal = _kColumnFlexWeights.entries
+      .where((entry) => showCollection || entry.key != kCollectionSortKey)
+      .fold<double>(0, (sum, entry) => sum + entry.value);
   double share(String key) => spare * (_kColumnFlexWeights[key]! / weightTotal);
 
   return _TableColumnWidths(
+    collection:
+        collectionMinWidth +
+        (showCollection ? share(kCollectionSortKey) : 0),
     denomination: _kDenominationColumnWidth + share('denomination'),
     issueDate: _kDateColumnWidth + share('issueDate'),
     catalogNumber: _kCatalogColumnWidth + share('catalogNumber'),
@@ -837,10 +880,12 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     onKeyEvent: (_, event) => _handleScopeKey(event),
   );
   late final Map<String, FocusNode> _headerFocusNodes = {
-    for (final key in _kSortableHeaderKeys)
-      key: FocusNode(
-        debugLabel: 'tableHeader-$key',
-        onKeyEvent: (node, event) => _handleHeaderKey(event, key),
+    // Built for every scope's keys; the active Tab chain follows
+    // [_sortableHeaderKeys].
+    for (final column in _sortableColumns(allNotes: true))
+      column.value: FocusNode(
+        debugLabel: 'tableHeader-${column.value}',
+        onKeyEvent: (node, event) => _handleHeaderKey(event, column.value),
       ),
   };
   late final FocusNode _importButtonFocusNode = FocusNode(
@@ -914,10 +959,19 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     allNotes: widget.controller.showingAllNotes,
   );
 
-  /// A collection opens on its own order; All notes opens grouped by
-  /// collection name.
+  /// A collection opens on its own order; All notes opens grouped by the
+  /// switcher's collection order.
   String get _scopeDefaultSortKey =>
       widget.controller.showingAllNotes ? kCollectionSortKey : _kDefaultSortKey;
+
+  /// The active header Tab chain: All notes adds Collection after the pinned
+  /// ID header, matching the grid's visual order.
+  List<String> get _sortableHeaderKeys => [
+    for (final column in _sortableColumns(
+      allNotes: widget.controller.showingAllNotes,
+    ))
+      column.value,
+  ];
 
   double get _rowExtent => _kTableRowHeight + _kTableRowSeparatorHeight;
 
@@ -1296,7 +1350,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     if (!_isPlainTab(event)) {
       return KeyEventResult.ignored;
     }
-    final index = _kSortableHeaderKeys.indexOf(sortKey);
+    final keys = _sortableHeaderKeys;
+    final index = keys.indexOf(sortKey);
     if (index < 0) {
       return KeyEventResult.ignored;
     }
@@ -1304,11 +1359,11 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       if (index == 0) {
         _focusSearchField();
       } else {
-        _focusHeader(_kSortableHeaderKeys[index - 1]);
+        _focusHeader(keys[index - 1]);
       }
       return KeyEventResult.handled;
     }
-    if (index == _kSortableHeaderKeys.length - 1) {
+    if (index == keys.length - 1) {
       // Last header behaves like ArrowDown: land on the first row, or stop
       // when there is no row to land on.
       if (_currentVisibleNotes().isEmpty) {
@@ -1317,7 +1372,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       _focusRowFromTab(0);
       return KeyEventResult.handled;
     }
-    _focusHeader(_kSortableHeaderKeys[index + 1]);
+    _focusHeader(keys[index + 1]);
     return KeyEventResult.handled;
   }
 
@@ -1346,7 +1401,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       _cardSortFocusNode.requestFocus();
       return;
     }
-    _focusHeader(_kSortableHeaderKeys.first);
+    _focusHeader(_sortableHeaderKeys.first);
   }
 
   /// Tab order before the rows, in reverse: the last sortable header in grid
@@ -1357,7 +1412,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       _cardSortDirectionFocusNode.requestFocus();
       return;
     }
-    _focusHeader(_kSortableHeaderKeys.last);
+    _focusHeader(_sortableHeaderKeys.last);
   }
 
   void _dropRowSelection() {
@@ -1576,17 +1631,20 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         .toList(growable: false);
 
     final collections = widget.controller.dataset?.collections;
-    final collectionNames =
-        _sortKey == kCollectionSortKey && collections != null
-        ? {for (final collection in collections) collection.id: collection.name}
-        : null;
+    final collectionRanks = collections == null
+        ? null
+        : {
+            for (final (index, collection) in collections.indexed)
+              collection.id: index,
+          };
     return sortNotes(
       filtered,
       column: _sortKey,
       ascending: _ascending,
-      collectionNameOf: collectionNames == null
+      collectionRankOf: collectionRanks == null
           ? null
-          : (note) => collectionNames[note.collectionId] ?? '',
+          : (note) =>
+                collectionRanks[note.collectionId] ?? collectionRanks.length,
     );
   }
 
@@ -2306,7 +2364,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     });
   }
 
-  /// The nine-column desktop grid, kept at its full minimum width and panned
+  /// The desktop grid, kept at its full minimum width and panned
   /// horizontally whenever the window is narrower than it. ID and Front are
   /// pinned outside the horizontal scroller so the note identity survives a
   /// pan; when a column still sits past the right edge, a slim footer states
@@ -2316,11 +2374,16 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     List<NoteRecord> notes,
     double availableWidth, {
     required int totalCount,
+    required bool showCollection,
+    required Map<int, String> collectionNames,
   }) {
     final tagsMinWidth = _calculateTagsColumnWidth(notes);
+    final textMinWidth = _scrollingColumnsMinWidth(
+      showCollection: showCollection,
+    );
     final tableWidth = math.max(
       _kPinnedPaneWidth +
-          _kTextColumnsMinWidth +
+          textMinWidth +
           tagsMinWidth +
           _kTableHorizontalPadding,
       availableWidth,
@@ -2328,6 +2391,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     final columnWidths = _calculateColumnWidths(
       tagsMinWidth: tagsMinWidth,
       tableWidth: tableWidth,
+      showCollection: showCollection,
     );
     final pinnedPaneWidth = math.min(_kPinnedPaneWidth, availableWidth);
     final rightContentWidth = math.max(0.0, tableWidth - pinnedPaneWidth);
@@ -2337,6 +2401,9 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     Widget buildRow(int index, {required bool pinned}) {
       final note = notes[index];
       final selected = _keyboardNavEnabled && _selectedIndex == index;
+      final collectionName = showCollection
+          ? collectionNames[note.collectionId] ?? ''
+          : null;
       final Widget row = pinned
           ? _PinnedTableRow(
               note: note,
@@ -2348,6 +2415,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
             )
           : _TableRow(
               note: note,
+              collectionName: collectionName,
               columnWidths: columnWidths,
               draggingColumns: _columnsDragging,
               selected: selected,
@@ -2449,6 +2517,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                         ascending: _ascending,
                                         onSort: _toggleSort,
                                         columnWidths: columnWidths,
+                                        showCollection: showCollection,
                                         draggingColumns: _columnsDragging,
                                         headerFocusNodes: _headerFocusNodes,
                                       ),
@@ -2594,6 +2663,10 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                 final showingAllNotes = widget.controller.showingAllNotes;
                 final scopedNotes = widget.controller.activeCollectionNotes;
                 final notes = _sortedNotes(scopedNotes);
+                final collectionNames = {
+                  for (final collection in dataset.collections)
+                    collection.id: collection.name,
+                };
                 final trimmedCollectionName =
                     widget.controller.activeCollection?.name.trim() ?? '';
                 final collectionName = showingAllNotes
@@ -2879,6 +2952,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                   selectedIndex: _selectedIndex,
                                   keyboardNavEnabled: _keyboardNavEnabled,
                                   allNotes: showingAllNotes,
+                                  collectionNames: collectionNames,
                                   sortKey: _sortKey,
                                   ascending: _ascending,
                                   onSortKey: _setSortKey,
@@ -2914,6 +2988,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                   notes,
                                   constraints.maxWidth,
                                   totalCount: scopedNotes.length,
+                                  showCollection: showingAllNotes,
+                                  collectionNames: collectionNames,
                                 ),
                               );
                             }
@@ -3966,6 +4042,7 @@ class _TableHeader extends StatelessWidget {
     required this.ascending,
     required this.onSort,
     required this.columnWidths,
+    required this.showCollection,
     required this.draggingColumns,
     required this.headerFocusNodes,
   });
@@ -3974,6 +4051,7 @@ class _TableHeader extends StatelessWidget {
   final bool ascending;
   final ValueChanged<String> onSort;
   final _TableColumnWidths columnWidths;
+  final bool showCollection;
   final bool draggingColumns;
   final Map<String, FocusNode> headerFocusNodes;
 
@@ -3991,6 +4069,17 @@ class _TableHeader extends StatelessWidget {
           padding: const EdgeInsets.only(right: _kTableHorizontalPadding),
           child: Row(
             children: [
+              if (showCollection)
+                _HeaderCell(
+                  width: columnWidths.collection,
+                  label: _kCollectionColumnLabel,
+                  alignment: Alignment.centerLeft,
+                  sortKey: kCollectionSortKey,
+                  activeSortKey: sortKey,
+                  ascending: ascending,
+                  onSort: onSort,
+                  focusNode: headerFocusNodes[kCollectionSortKey],
+                ),
               _HeaderCell(
                 width: columnWidths.denomination,
                 label: 'Denomination',
@@ -4455,6 +4544,7 @@ class _PinnedTableRow extends StatelessWidget {
 class _TableRow extends StatelessWidget {
   const _TableRow({
     required this.note,
+    required this.collectionName,
     required this.columnWidths,
     required this.draggingColumns,
     required this.onTagTap,
@@ -4467,6 +4557,10 @@ class _TableRow extends StatelessWidget {
   });
 
   final NoteRecord note;
+
+  /// The note's collection name in All notes; null in a collection scope,
+  /// where the column is absent.
+  final String? collectionName;
   final _TableColumnWidths columnWidths;
   final bool draggingColumns;
   final ValueChanged<String> onTagTap;
@@ -4535,7 +4629,10 @@ class _TableRow extends StatelessWidget {
                       container: true,
                       button: true,
                       selected: selected,
-                      label: _noteSummaryLabel(note),
+                      label: _noteSummaryLabel(
+                        note,
+                        collectionName: collectionName,
+                      ),
                       hint: 'Opens this note',
                       onTap: onTap,
                       excludeSemantics: true,
@@ -4551,6 +4648,11 @@ class _TableRow extends StatelessWidget {
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
+                          if (collectionName != null)
+                            _DataCell(
+                              width: columnWidths.collection,
+                              child: _CellValue(collectionName!),
+                            ),
                           _DataCell(
                             width: columnWidths.denomination,
                             emphasized: true,
@@ -4638,6 +4740,7 @@ class _NoteCardList extends StatelessWidget {
     required this.selectedIndex,
     required this.keyboardNavEnabled,
     required this.allNotes,
+    required this.collectionNames,
     required this.sortKey,
     required this.ascending,
     required this.onSortKey,
@@ -4659,6 +4762,7 @@ class _NoteCardList extends StatelessWidget {
   final int? selectedIndex;
   final bool keyboardNavEnabled;
   final bool allNotes;
+  final Map<int, String> collectionNames;
   final String sortKey;
   final bool ascending;
   final ValueChanged<String> onSortKey;
@@ -4713,6 +4817,9 @@ class _NoteCardList extends StatelessWidget {
                         child: _NoteCard(
                           key: cardKeyFor(note.id),
                           note: note,
+                          collectionName: allNotes
+                              ? collectionNames[note.collectionId] ?? ''
+                              : null,
                           selected:
                               keyboardNavEnabled && selectedIndex == index,
                           onTagTap: onTagTap,
@@ -4759,16 +4866,9 @@ class _CardSortBar extends StatelessWidget {
 
   /// All notes adds the Collection order its scope defaults to; a collection
   /// keeps the field menu the grid's headers present.
-  static const ({String value, String label}) _collectionOption = (
-    value: kCollectionSortKey,
-    label: 'Collection',
-  );
-
   @override
   Widget build(BuildContext context) {
-    final options = allNotes
-        ? [_collectionOption, ..._kSortableColumns]
-        : _kSortableColumns;
+    final options = _sortableColumns(allNotes: allNotes);
 
     return Container(
       decoration: const BoxDecoration(
@@ -4866,6 +4966,7 @@ class _CardSortBar extends StatelessWidget {
 class _NoteCard extends StatelessWidget {
   const _NoteCard({
     required this.note,
+    required this.collectionName,
     required this.selected,
     required this.onTagTap,
     required this.onTap,
@@ -4877,6 +4978,9 @@ class _NoteCard extends StatelessWidget {
   });
 
   final NoteRecord note;
+
+  /// The note's collection name in All notes; null in a collection scope.
+  final String? collectionName;
   final bool selected;
   final ValueChanged<String> onTagTap;
   final VoidCallback onTap;
@@ -4896,11 +5000,12 @@ class _NoteCard extends StatelessWidget {
     final textScale = MediaQuery.textScalerOf(context).scale(16) / 16;
     final serial = _copyableSerial(note);
     final catalog = _copyableCatalog(note);
+    final collectionLabel = collectionName?.trim() ?? '';
 
     return Semantics(
       button: true,
       selected: selected,
-      label: _noteSummaryLabel(note),
+      label: _noteSummaryLabel(note, collectionName: collectionLabel),
       hint: 'Opens this note',
       onTap: onTap,
       customSemanticsActions: {
@@ -4972,6 +5077,14 @@ class _NoteCard extends StatelessWidget {
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 mainAxisSize: MainAxisSize.min,
                                 children: [
+                                  if (collectionLabel.isNotEmpty) ...[
+                                    _LabeledValue(
+                                      label: _kCollectionColumnLabel
+                                          .toUpperCase(),
+                                      value: collectionLabel,
+                                    ),
+                                    SizedBox(height: compact ? 3 : 4),
+                                  ],
                                   _CardTopLine(note: note, compact: compact),
                                   SizedBox(height: compact ? 3 : 4),
                                   Row(

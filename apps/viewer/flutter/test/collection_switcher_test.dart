@@ -1,5 +1,6 @@
 import 'dart:ui' show Tristate;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/semantics.dart';
 import 'package:flutter/services.dart';
@@ -160,7 +161,7 @@ void main() {
       findsOneWidget,
     );
 
-    await tester.tap(find.text('Romania · 1917'));
+    await tester.tap(_menuItem('Romania · 1917'));
     await tester.pumpAndSettle();
 
     expect(controller.showingAllNotes, isFalse);
@@ -169,6 +170,228 @@ void main() {
     expect(find.text('50 Bani'), findsOneWidget);
     expect(find.text('25 Bani'), findsNothing);
     expect(find.text('1 note'), findsOneWidget);
+  });
+
+  testWidgets('All notes adds a sortable Collection column after ID', (
+    WidgetTester tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    final controller = await _pumpTable(
+      tester,
+      size: const Size(1400, 900),
+      notes: _groupedNotes,
+    );
+
+    await controller.showAllNotes();
+    await tester.pumpAndSettle();
+
+    expect(find.text('COLLECTION'), findsOneWidget);
+    expect(
+      find.bySemanticsLabel('Collection, sorted ascending'),
+      findsOneWidget,
+    );
+
+    // The column leads the scrolling pane, after the pinned ID and Front.
+    final idLeft = tester.getTopLeft(find.text('#')).dx;
+    final collectionLeft = tester.getTopLeft(find.text('COLLECTION')).dx;
+    final denominationLeft = tester.getTopLeft(find.text('DENOMINATION')).dx;
+    expect(collectionLeft, greaterThan(idLeft));
+    expect(collectionLeft, lessThan(denominationLeft));
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('tablePinnedColumns')),
+        matching: find.text('COLLECTION'),
+      ),
+      findsNothing,
+    );
+    expect(
+      find.descendant(
+        of: find.byKey(const ValueKey('tableHeader')),
+        matching: find.text('COLLECTION'),
+      ),
+      findsOneWidget,
+    );
+
+    // Each row names its collection.
+    expect(find.text("Serban's Notes"), findsNWidgets(2));
+    expect(find.text('Romania · 1917'), findsOneWidget);
+    expect(find.text('Duplicates'), findsOneWidget);
+
+    // Default order groups by the switcher's collection order, then each
+    // collection's display order — not by display order across collections.
+    final top = {
+      for (final id in [1, 2, 3, 4])
+        id: tester.getTopLeft(find.byKey(ValueKey('tableRow-$id'))).dy,
+    };
+    expect(top[4]!, lessThan(top[2]!));
+    expect(top[2]!, lessThan(top[3]!));
+    expect(top[3]!, lessThan(top[1]!));
+
+    // A collection scope drops both the column and the row's name.
+    await controller.selectCollection(1);
+    await tester.pumpAndSettle();
+
+    expect(find.text('COLLECTION'), findsNothing);
+    expect(find.text("Serban's Notes"), findsNothing);
+    expect(find.bySemanticsLabel('Collection, sorted ascending'), findsNothing);
+
+    handle.dispose();
+  });
+
+  testWidgets('Collection joins the header Tab chain only in All notes', (
+    WidgetTester tester,
+  ) async {
+    debugDefaultTargetPlatformOverride = TargetPlatform.windows;
+    try {
+      final controller = await _pumpTable(
+        tester,
+        size: const Size(1400, 900),
+      );
+
+      await controller.showAllNotes();
+      await tester.pumpAndSettle();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(
+        FocusManager.instance.primaryFocus?.debugLabel,
+        'tableHeader-displayOrder',
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(
+        FocusManager.instance.primaryFocus?.debugLabel,
+        'tableHeader-collection',
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(
+        FocusManager.instance.primaryFocus?.debugLabel,
+        'tableHeader-denomination',
+      );
+
+      // A collection scope skips the Collection header entirely.
+      await controller.selectCollection(1);
+      await tester.pumpAndSettle();
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.slash);
+      await tester.pump();
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(
+        FocusManager.instance.primaryFocus?.debugLabel,
+        'tableHeader-displayOrder',
+      );
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      expect(
+        FocusManager.instance.primaryFocus?.debugLabel,
+        'tableHeader-denomination',
+      );
+    } finally {
+      debugDefaultTargetPlatformOverride = null;
+    }
+  });
+
+  testWidgets('a note with an unknown collection keeps its row aligned', (
+    WidgetTester tester,
+  ) async {
+    final controller = await _pumpTable(
+      tester,
+      size: const Size(1400, 900),
+      notes: [
+        _note(
+          id: 1,
+          collectionId: 1,
+          denomination: '25 Bani',
+          displayOrder: 1,
+        ),
+        _note(
+          id: 5,
+          collectionId: 99,
+          denomination: '5 Lei',
+          displayOrder: 2,
+        ),
+      ],
+    );
+
+    await controller.showAllNotes();
+    await tester.pumpAndSettle();
+
+    // The missing collection still occupies its cell as a dash, so the
+    // denomination stays under its header instead of shifting left.
+    final orphanDenomination = tester.getTopLeft(
+      find.descendant(
+        of: find.byKey(const ValueKey('tableRow-5')),
+        matching: find.text('5 Lei'),
+      ),
+    );
+    final knownDenomination = tester.getTopLeft(
+      find.descendant(
+        of: find.byKey(const ValueKey('tableRow-1')),
+        matching: find.text('25 Bani'),
+      ),
+    );
+    expect(orphanDenomination.dx, knownDenomination.dx);
+  });
+
+  testWidgets('All notes labels each card with its collection', (
+    WidgetTester tester,
+  ) async {
+    final controller = await _pumpTable(
+      tester,
+      size: const Size(400, 900),
+      notes: _groupedNotes,
+    );
+
+    await controller.showAllNotes();
+    await tester.pumpAndSettle();
+
+    expect(find.byKey(const ValueKey('tableHeader')), findsNothing);
+    expect(
+      find.textContaining("Serban's Notes", findRichText: true),
+      findsNWidgets(2),
+    );
+    expect(
+      find.textContaining('Romania · 1917', findRichText: true),
+      findsOneWidget,
+    );
+    expect(
+      find.textContaining('Duplicates', findRichText: true),
+      findsOneWidget,
+    );
+
+    // The card sort menu offers Collection in All notes.
+    await tester.tap(find.byKey(const ValueKey('cardSortKey')));
+    await tester.pumpAndSettle();
+    expect(find.text('Collection'), findsWidgets);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+
+    // Leaving All notes removes the collection label from every card and
+    // Collection from the sort menu.
+    await controller.selectCollection(2);
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining("Serban's Notes", findRichText: true),
+      findsNothing,
+    );
+    expect(
+      find.textContaining('COLLECTION ', findRichText: true),
+      findsNothing,
+    );
+
+    await tester.tap(find.byKey(const ValueKey('cardSortKey')));
+    await tester.pumpAndSettle();
+    expect(find.text('Collection'), findsNothing);
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
   });
 
   testWidgets('All notes is row 0 for the arrows and Enter', (
@@ -307,15 +530,29 @@ Future<void> _openSwitcher(WidgetTester tester) async {
 
 Future<void> _chooseScope(WidgetTester tester, String label) async {
   await _openSwitcher(tester);
-  await tester.tap(find.text(label));
+  await tester.tap(_menuItem(label));
   await tester.pumpAndSettle();
 }
+
+/// A switcher row's label. All notes rows now repeat collection names, so a
+/// bare text finder is ambiguous while the menu is open.
+Finder _menuItem(String label) => find.descendant(
+  of: find.byKey(const ValueKey('collectionMenu')),
+  matching: find.text(label),
+);
 
 Future<DatasetController> _pumpTable(
   WidgetTester tester, {
   List<ViewerCollection> collections = _collections,
   List<NoteRecord>? notes,
+  Size? size,
 }) async {
+  if (size != null) {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = size;
+    addTearDown(tester.view.reset);
+  }
+
   final controller = DatasetController(
     repository: _FakeRepository(collections, notes: notes),
     selectionStore: _MemoryLastCollectionStore(),
@@ -376,15 +613,25 @@ final List<NoteRecord> _defaultNotes = [
   _note(id: 4, collectionId: 3, denomination: '1 Leu'),
 ];
 
+/// Display orders cross the collections, so grouping by collection order is
+/// visible in the row positions.
+final List<NoteRecord> _groupedNotes = [
+  _note(id: 1, collectionId: 3, denomination: '1 Leu', displayOrder: 1),
+  _note(id: 2, collectionId: 1, denomination: '5 Lei', displayOrder: 3),
+  _note(id: 3, collectionId: 2, denomination: '50 Bani', displayOrder: 2),
+  _note(id: 4, collectionId: 1, denomination: '25 Bani', displayOrder: 1),
+];
+
 NoteRecord _note({
   required int id,
   required int collectionId,
   required String denomination,
+  int? displayOrder,
 }) {
   return NoteRecord(
     id: id,
     collectionId: collectionId,
-    displayOrder: id,
+    displayOrder: displayOrder ?? id,
     denomination: denomination,
     issueDate: '1917',
     catalogNumber: 'P-$id',

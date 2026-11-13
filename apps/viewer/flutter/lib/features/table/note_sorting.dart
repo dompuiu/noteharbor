@@ -1,7 +1,7 @@
 import '../../models/note_record.dart';
 
-/// The All notes scope's default order: notes grouped by collection name. A
-/// collection keeps its own display order instead.
+/// The All notes scope's default order: notes grouped by the switcher's
+/// collection order. A collection keeps its own display order instead.
 const String kCollectionSortKey = 'collection';
 
 /// Sorts a copy of [notes] by [column] in [ascending] order.
@@ -12,17 +12,19 @@ const String kCollectionSortKey = 'collection';
 /// qualifiers as the tiebreaker. Free-text columns keep a case-insensitive
 /// string order.
 ///
-/// Equal keys fall back to display order, then collection, then note id, so
-/// the result is deterministic and never depends on the sort algorithm — also
+/// Equal keys fall back to the collection order (when [collectionRankOf] is
+/// supplied), then display order, then collection id, then note id, so the
+/// result is deterministic and never depends on the sort algorithm — also
 /// across All notes, where display orders repeat in every collection.
 ///
-/// [kCollectionSortKey] compares by collection name; [collectionNameOf]
-/// supplies the name for a note.
+/// [kCollectionSortKey] compares by collection order when [collectionRankOf]
+/// is supplied, otherwise by collection name from [collectionNameOf].
 List<NoteRecord> sortNotes(
   Iterable<NoteRecord> notes, {
   required String column,
   required bool ascending,
   String Function(NoteRecord note)? collectionNameOf,
+  int Function(NoteRecord note)? collectionRankOf,
 }) {
   final sorted = List<NoteRecord>.of(notes);
   sorted.sort((left, right) {
@@ -31,9 +33,18 @@ List<NoteRecord> sortNotes(
       right,
       column,
       collectionNameOf: collectionNameOf,
+      collectionRankOf: collectionRankOf,
     );
     if (result != 0) {
       return ascending ? result : -result;
+    }
+    final collectionRank = _compareCollectionRanks(
+      left,
+      right,
+      collectionRankOf,
+    );
+    if (collectionRank != null) {
+      return collectionRank;
     }
     final displayOrder = left.displayOrder.compareTo(right.displayOrder);
     if (displayOrder != 0) {
@@ -45,16 +56,35 @@ List<NoteRecord> sortNotes(
   return sorted;
 }
 
+/// The collection order difference, or null when no rank lookup is given or
+/// both notes share a collection.
+int? _compareCollectionRanks(
+  NoteRecord left,
+  NoteRecord right,
+  int Function(NoteRecord note)? collectionRankOf,
+) {
+  if (collectionRankOf == null) {
+    return null;
+  }
+  final rank = collectionRankOf(left).compareTo(collectionRankOf(right));
+  return rank == 0 ? null : rank;
+}
+
 int _compareNotes(
   NoteRecord left,
   NoteRecord right,
   String column, {
   String Function(NoteRecord note)? collectionNameOf,
+  int Function(NoteRecord note)? collectionRankOf,
 }) {
   switch (column) {
     case 'displayOrder':
       return left.displayOrder.compareTo(right.displayOrder);
     case kCollectionSortKey:
+      final rank = _compareCollectionRanks(left, right, collectionRankOf);
+      if (rank != null) {
+        return rank;
+      }
       String nameOf(NoteRecord note) => collectionNameOf?.call(note) ?? '';
       return _compareText(nameOf(left), nameOf(right));
     case 'denomination':
