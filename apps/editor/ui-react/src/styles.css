@@ -7544,7 +7544,7 @@ button.tag {
 }
 
 .image-popover-side-button:hover:not([aria-disabled="true"]),
-.image-popover-zoom-button:hover:not(:disabled) {
+.image-popover-zoom-button:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--accent-soft);
   color: var(--accent-strong);
 }
@@ -7556,7 +7556,8 @@ button.tag {
 }
 
 .image-popover-side-button[aria-disabled="true"],
-.image-popover-zoom-button:disabled {
+.image-popover-zoom-button:disabled,
+.image-popover-zoom-button[aria-disabled="true"] {
   cursor: default;
   opacity: 0.45;
 }

@@ -582,13 +582,18 @@ describe("ImagePopover zoom", () => {
 
     const actualSize = screen.getByRole("button", { name: "1:1" });
 
-    // Fit is already one image pixel per screen pixel, so the stop is inert
-    // and says why instead of looking broken.
-    expect(actualSize).toBeDisabled();
+    // Fit is already one image pixel per screen pixel, so the stop is inert:
+    // it stays a choice (aria-disabled, not disabled) and says why.
+    expect(actualSize).toHaveAttribute("aria-pressed", "false");
+    expect(actualSize).toHaveAttribute("aria-disabled", "true");
     expect(actualSize).toHaveAttribute(
       "title",
       "The image already shows one image pixel per screen pixel",
     );
+
+    fireEvent.click(actualSize);
+
+    expect(image.style.width).toBe("");
 
     fireEvent.click(zoomButton("Zoom in"));
 
@@ -599,7 +604,7 @@ describe("ImagePopover zoom", () => {
 
     // Zoomed past the 1:1 fit, the stop has work again: it returns to actual
     // size, and its title stops claiming the image already sits there.
-    expect(actualSize).toBeEnabled();
+    expect(actualSize).not.toHaveAttribute("aria-disabled");
     expect(actualSize).toHaveAttribute(
       "title",
       "Show the image at one image pixel per screen pixel",
@@ -927,12 +932,21 @@ describe("ImagePopover side and naming", () => {
     expect(document.querySelector(".image-popover-empty-state")).not.toBeNull();
     expect(screen.getByText("front-full.jpg")).toBeInTheDocument();
     // The note still claims the scan, so the zoom instrument stays on screen,
-    // but there are no pixels to step through and the readout says Fit.
+    // but there are no pixels to step through: the segments stay choices, the
+    // 1:1 stop names the missing file, and the readout shows no scale.
     expect(
       screen.getByRole("group", { name: "Image zoom" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Zoom in" })).toBeDisabled();
-    expect(zoomLevel()).toHaveTextContent("Fit");
+    expect(screen.getByRole("button", { name: "1:1" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "1:1" })).toHaveAttribute(
+      "title",
+      "Image unavailable",
+    );
+    expect(zoomLevel()).toHaveTextContent("—");
     expect(screen.getByRole("button", { name: "Front" })).toHaveAttribute(
       "aria-pressed",
       "true",
@@ -971,6 +985,11 @@ describe("ImagePopover side and naming", () => {
       .getByRole("spinbutton", { name: "Image position" })
       .closest(".note-counter-value");
 
-    expect(counter).toHaveTextContent("Image 1 / 3");
+    // The gap after the noun is CSS margin, so the label and the numbers are
+    // separate text runs.
+    expect(counter.querySelector(".note-counter-label")).toHaveTextContent(
+      "Image",
+    );
+    expect(counter).toHaveTextContent("1 / 3");
   });
 });
