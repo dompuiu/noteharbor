@@ -203,6 +203,7 @@ Tags are labels, not state, so they left the accent family for their own warm Oc
 ### Hierarchy
 - **Display** (800, 1.3125rem/1.5, `-0.01em`, uppercase): the collection / page title in the Table screen. The brand's billboard voice at the smallest size that still fits a dense header.
 - **Title** (800, 1.4rem/1.3, uppercase): Showcase Category titles and screen headings. Every top-level `h1` in a panel or screen body takes this voice, except the Note slideshow's denomination.
+- **Popover headline** (800, 1.2rem/1.3, `-0.01em`, uppercase): the Image popover's note label, one step below Title so the bar stays lighter than a screen heading.
 - **Presentation room title** (800, 2.1rem/1.12, `-0.02em`, uppercase): the Note slideshow's denomination, one step above Title so the note reads as the catalogue page.
 - **Panel heading** (700, ~1.05–1.15rem): card and panel headings that introduce a block rather than a screen.
 - **Body** (400, 0.86–0.9rem/1.5): field values and running copy.

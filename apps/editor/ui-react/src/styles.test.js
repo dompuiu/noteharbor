@@ -2395,6 +2395,10 @@ describe("slideshow overlay styles", () => {
   test("the overlay chrome uses the app's control surfaces", () => {
     const rules = [
       [/\.counter-pill\s*\{([^}]*)\}/, /background:\s*var\(--surface\)/],
+      [
+        /\.note-counter-label\s*\{([^}]*)\}/,
+        /color:\s*var\(--text-muted\)/,
+      ],
       [/\.arrow-button\s*\{([^}]*)\}/, /background:\s*var\(--surface\)/],
       [
         /\.slide-thumb-btn\s*\{([^}]*background:[^}]*)\}/,
@@ -2432,7 +2436,7 @@ describe("slideshow overlay styles", () => {
         /background:\s*var\(--accent-soft\)/,
       ],
       [
-        /\.image-popover-zoom-button:hover:not\(:disabled\)\s*\{([^}]*)\}/,
+        /\.image-popover-zoom-button:hover:not\(:disabled\):not\(\[aria-disabled="true"\]\)\s*\{([^}]*)\}/,
         /background:\s*var\(--accent-soft\)/,
       ],
     ];
@@ -2631,12 +2635,52 @@ describe("slideshow overlay styles", () => {
     expect(label[1]).toMatch(/font-weight:\s*600/);
     expect(label[1]).toMatch(/letter-spacing:\s*0\.12em/);
 
+    // The popover note is its headline, so it takes the uppercase Title voice
+    // rather than the panel-heading weight it wore as a caption.
     const noteLabel = styles.match(
       /\.image-popover-note-label\s*\{([^}]*color:\s*var\(--on-dark-text\)[^}]*)\}/,
     );
     expect(noteLabel).not.toBeNull();
-    expect(noteLabel[1]).toMatch(/font-weight:\s*650/);
+    expect(noteLabel[1]).toMatch(/font-size:\s*1\.2rem/);
+    expect(noteLabel[1]).toMatch(/font-weight:\s*800/);
     expect(noteLabel[1]).toMatch(/letter-spacing:\s*-0\.01em/);
+    expect(noteLabel[1]).toMatch(/text-transform:\s*uppercase/);
+  });
+
+  // The topbar is the identity, not chrome: the popover's arrows must sit in
+  // the stage's own centring instead of the note page's sticky offset. The
+  // shared arrow stays sticky, so only the popover is released.
+  test("the popover arrows are not sticky, and the shared arrow still is", () => {
+    const arrow = styles.match(/\.image-popover-arrow\s*\{([^}]*)\}/);
+    expect(arrow).not.toBeNull();
+    expect(arrow[1]).toMatch(/position:\s*static/);
+
+    const shared = styles.match(/\.arrow-button\s*\{([^}]*)\}/);
+    expect(shared).not.toBeNull();
+    expect(shared[1]).toMatch(/position:\s*sticky/);
+
+    // Equal specificity, so source order is what lets the popover override it.
+    expect(styles.indexOf(".image-popover-arrow {")).toBeGreaterThan(
+      styles.indexOf(".arrow-button {"),
+    );
+  });
+
+  // Close keeps its quiet exit in both overlays: the shared 36px box stays and
+  // the pill's ground and edge go, so the popover close reads exactly like the
+  // slideshow's, hover included.
+  test("the popover close matches the slideshow close", () => {
+    const close = styles.match(
+      /\.slideshow-close,\n\.image-popover-close\s*\{([^}]*)\}/,
+    );
+    expect(close).not.toBeNull();
+    expect(close[1]).toMatch(/background:\s*transparent/);
+    expect(close[1]).toMatch(/border-color:\s*transparent/);
+    expect(close[1]).toMatch(/color:\s*var\(--on-dark-muted\)/);
+
+    // The hover is the shared pill, inherited rather than restated, so the two
+    // closes cannot drift apart.
+    expect(styles).not.toMatch(/\.image-popover-close:hover/);
+    expect(styles).not.toMatch(/\.slideshow-close:hover/);
   });
 
   // The plate hover is the app's red interaction edge, the same wash and
@@ -2915,5 +2959,96 @@ describe("image popover styles", () => {
     expect(rule).not.toBeNull();
     expect(rule[1]).toMatch(/filter:\s*drop-shadow\(/);
     expect(rule[1]).not.toMatch(/box-shadow:/);
+  });
+
+  // The popover's width queries share their breakpoints with earlier blocks,
+  // so take the block that names the popover's stage rather than the first
+  // (or last) block with that header.
+  function popoverWidthRule(header) {
+    for (let from = 0; ; from += header.length) {
+      from = styles.indexOf(header, from);
+
+      if (from < 0) {
+        return null;
+      }
+
+      const block = atRule(styles.slice(from), header);
+
+      if (block?.includes(".image-popover-stage")) {
+        return block;
+      }
+    }
+  }
+
+  // Both narrow queries carry a `.image-popover-arrow` block of their own and
+  // both must leave the zoomed room's height rules alone. Read them together so
+  // the two width tests do not restate the same extraction and guard.
+  function narrowPopoverRules(header) {
+    const narrow = popoverWidthRule(header);
+    expect(narrow).not.toBeNull();
+
+    // The zoomed room keeps its own height rule: the width query must not
+    // reach in and reshape the stage rows.
+    expect(narrow).not.toMatch(/image-popover-(content|image-wrap)--zoomed/);
+
+    const arrow = narrow.match(/\.image-popover-arrow\s*\{([^}]*)\}/);
+    expect(arrow).not.toBeNull();
+
+    return { arrow: arrow[1], narrow };
+  }
+
+  // A narrow window should not keep paying 56px per arrow: below 900px the
+  // targets step down to 40px and the stage's gutter tightens, while the
+  // layout at 900px and above keeps the roomy targets where space allows.
+  test("the arrows give way below 900px", () => {
+    const base = styles.match(/^\.image-popover-stage\s*\{([^}]*)\}/m);
+    expect(base).not.toBeNull();
+    expect(base[1]).toMatch(/gap:\s*20px/);
+
+    // Above the query the arrow has no size of its own: it keeps the shared
+    // 56px round target. It does pin `position: static` so it does not inherit
+    // the slideshow's sticky offset, but nothing may give it a box.
+    const arrowBase = styles.match(/^\.image-popover-arrow\s*\{([^}]*)\}/m);
+    expect(arrowBase).not.toBeNull();
+    expect(arrowBase[1]).not.toMatch(/width:|height:/);
+    expect(arrowBase[1]).toMatch(/position:\s*static/);
+
+    const { arrow, narrow } = narrowPopoverRules("@media (max-width: 900px)");
+    expect(narrow).toMatch(/\.image-popover-stage\s*\{[^}]*gap:\s*12px/);
+    expect(arrow).toMatch(/width:\s*40px/);
+    expect(arrow).toMatch(/height:\s*40px/);
+
+    // The scrim's auto track grows to the panel's `96vw`, losing the right
+    // gutter (and running past the viewport below 600px); one definite
+    // column bounds it to the padding box so the panel stays centred.
+    expect(narrow).toMatch(
+      /\.image-popover-overlay\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    );
+  });
+
+  // At the narrow end the arrows overlay the plate so the scan keeps the
+  // panel's full width; the stage collapses to one column and nothing
+  // re-clips the plate.
+  test("below 700px the arrows overlay the plate", () => {
+    const { arrow, narrow } = narrowPopoverRules("@media (max-width: 700px)");
+    expect(narrow).toMatch(
+      /\.image-popover-stage\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    );
+
+    expect(arrow).toMatch(/position:\s*absolute/);
+    expect(arrow).toMatch(/top:\s*50%/);
+    expect(arrow).toMatch(/transform:\s*translateY\(-50%\)/);
+    // The arrows ride above the image, its thumbnail and the warming veil.
+    expect(arrow).toMatch(/z-index:\s*3/);
+
+    expect(narrow).toMatch(
+      /\.image-popover-arrow:first-of-type\s*\{[^}]*left:\s*8px/,
+    );
+    expect(narrow).toMatch(
+      /\.image-popover-arrow:last-of-type\s*\{[^}]*right:\s*8px/,
+    );
+    expect(narrow).not.toMatch(
+      /\.image-popover-image-wrap[^{]*\{[^}]*(width|max-width|padding|overflow):/,
+    );
   });
 });

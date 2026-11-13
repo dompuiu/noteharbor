@@ -445,7 +445,7 @@ function SlidePlate({
 
 // Zoom stops as multiples of the fitted image, not of its natural pixels. A
 // scan that arrives much larger than the plate therefore steps up from the
-// size the reader already sees instead of jumping straight to 100%.
+// size the reader already sees instead of jumping straight to 1:1.
 const POPOVER_ZOOM_LEVELS = [1, 1.25, 1.5, 2, 3, 4];
 const ZOOM_EPSILON = 0.001;
 
@@ -459,6 +459,44 @@ const POPOVER_SIDES = [
   { kind: "front", label: "Front" },
   { kind: "back", label: "Back" },
 ];
+
+// The 1:1 segment asks one question in four names: has the scan a measured
+// fit, is that fit already actual size, has the reader zoomed off it, and what
+// should the segment say. One state keeps its pressed mark, its inert case and
+// its title in step.
+function getActualSizeState({ fitScale, fullLoaded, hasImage, scale, zoomed }) {
+  const pressed = zoomed && Math.abs(scale - 1) < ZOOM_EPSILON;
+
+  if (!hasImage) {
+    return { inert: true, pressed, title: "Image unavailable" };
+  }
+
+  if (!fullLoaded) {
+    return { inert: true, pressed, title: "The image is still loading" };
+  }
+
+  if (fitScale <= 0) {
+    return {
+      inert: true,
+      pressed,
+      title: "The image's size is not known yet",
+    };
+  }
+
+  const atFit = fitScale >= 1 - ZOOM_EPSILON;
+  // A fit that is already 1:1 leaves the stop nothing to do until the reader
+  // zooms past it; then it returns to actual size instead of sitting dead.
+  const inert = atFit && !zoomed;
+
+  return {
+    inert,
+    pressed,
+    title:
+      inert || pressed
+        ? "The image already shows one image pixel per screen pixel"
+        : "Show the image at one image pixel per screen pixel",
+  };
+}
 
 function ImagePopover({
   alt,
@@ -484,6 +522,7 @@ function ImagePopover({
 }) {
   const titleId = useId();
   const statusId = useId();
+  const escapeHintId = useId();
   const overlayRef = useRef(null);
   const imageRef = useRef(null);
   const imageWrapRef = useRef(null);
@@ -544,6 +583,13 @@ function ImagePopover({
     fitScale > 0 &&
     (!zoomed || zoomScale < maxZoomScale);
   const canZoomOut = hasImage && zoomed;
+  const actualSize = getActualSizeState({
+    fitScale,
+    fullLoaded,
+    hasImage,
+    scale: zoomScale,
+    zoomed,
+  });
 
   // An axis with no overflow has nothing to pan, so it keeps the image
   // centred. Without this a zoomed plate smaller than the well would snap to
@@ -570,7 +616,7 @@ function ImagePopover({
   // popover is zoomed, the inline scaled size and the zoomed wrap's rules hide
   // it, so lift both for one synchronous read. Without this, switching from
   // one face to the other would keep the old face's fit, and with it a wrong
-  // zoom ladder and 100% stop.
+  // zoom ladder and 1:1 stop.
   function measureFitBox(image, natural) {
     const wrap = imageWrapRef.current;
 
@@ -920,12 +966,16 @@ function ImagePopover({
     setIsDragging(false);
   }
 
+  // A wheel over the plate zooms at the pointer. The overlay is a fixed room,
+  // so scrolling it would only walk the page behind: the wheel belongs to the
+  // image, and the native non-passive listener is what cancels the default.
   function onImageWheel(e) {
+    e.preventDefault();
+
     if (!fullLoaded) {
       return;
     }
 
-    e.preventDefault();
     changeZoom(e.deltaY < 0 ? 1 : -1, anchorInViewport(e));
   }
 
@@ -1222,7 +1272,6 @@ function ImagePopover({
       : undefined;
   const zoomPercent =
     hasImage && fullLoaded && shownScale ? Math.round(shownScale * 100) : 0;
-  const atActualSize = zoomed && Math.abs(zoomScale - 1) < ZOOM_EPSILON;
   const sideLabel =
     POPOVER_SIDES.find((option) => option.kind === side)?.label ?? null;
   const fileName = imageFailed ? failedImage.file : "";
@@ -1248,7 +1297,7 @@ function ImagePopover({
 
   return (
     <div
-      aria-describedby={statusId}
+      aria-describedby={`${escapeHintId} ${statusId}`}
       aria-labelledby={titleId}
       aria-modal="true"
       className="image-popover-overlay"
@@ -1257,6 +1306,12 @@ function ImagePopover({
       role="dialog"
       tabIndex={-1}
     >
+      {/* The first Escape only steps back to Fit. The Close title says so once
+          the button takes focus; the dialog carries the rule from the moment it
+          opens, so a screen reader hears it before the zoom is touched. */}
+      <span className="image-popover-announcer" id={escapeHintId}>
+        Escape returns a zoomed image to Fit, then closes the preview.
+      </span>
       <span className="image-popover-announcer" id={statusId} role="status">
         {announcement}
       </span>
@@ -1266,7 +1321,6 @@ function ImagePopover({
       >
         <div className="image-popover-topbar">
           <div className="image-popover-meta">
-            <p className="eyebrow">Preview</p>
             <div className="image-popover-identity">
               <h2 className="image-popover-note-label" id={titleId}>
                 {noteLabel}
@@ -1320,19 +1374,20 @@ function ImagePopover({
                     Fit
                   </button>
                   <button
-                    aria-pressed={atActualSize}
+                    aria-disabled={actualSize.inert ? true : undefined}
+                    aria-pressed={actualSize.pressed}
                     className="image-popover-zoom-button"
-                    disabled={
-                      !hasImage ||
-                      !fullLoaded ||
-                      !fitScale ||
-                      fitScale >= 1 - ZOOM_EPSILON
-                    }
-                    onClick={() => zoomTo(1)}
-                    title="Show the image at 100%"
+                    onClick={() => {
+                      if (actualSize.inert) {
+                        return;
+                      }
+
+                      zoomTo(1);
+                    }}
+                    title={actualSize.title}
                     type="button"
                   >
-                    100%
+                    1:1
                   </button>
                 </div>
                 <div className="image-popover-zoom-stepper">
@@ -1346,13 +1401,16 @@ function ImagePopover({
                   >
                     &minus;
                   </button>
+                  {/* With no measurable scale the readout prints the table's
+                      muted em dash: the pressed segment already says Fit, so
+                      the readout must not echo the same word beside it. */}
                   <output
                     aria-label="Zoom level"
                     aria-live="polite"
                     className="image-popover-zoom-level"
                     title="Current zoom level"
                   >
-                    {zoomPercent ? `${zoomPercent}%` : "Fit"}
+                    {zoomPercent ? `${zoomPercent}%` : "—"}
                   </output>
                   <button
                     aria-label="Zoom in"
@@ -1368,6 +1426,7 @@ function ImagePopover({
               </div>
             ) : null}
             <NoteCounter
+              countNoun="Image"
               jumpLabel="Image position"
               onJump={onJump}
               position={counterPosition}
@@ -1378,7 +1437,7 @@ function ImagePopover({
             />
             <button
               aria-label="Close preview"
-              className="icon-link image-popover-close"
+              className="button image-popover-close"
               data-shortcut={zoomed ? "Esc ×2" : "Esc"}
               onClick={onClose}
               title="Close preview (Esc twice when zoomed)"

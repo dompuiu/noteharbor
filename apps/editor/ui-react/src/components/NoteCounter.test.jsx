@@ -59,6 +59,25 @@ describe("NoteCounter", () => {
     expect(screen.queryByRole("button")).not.toBeInTheDocument();
   });
 
+  test("an optional count noun names what the numbers count", () => {
+    const { container } = renderCounter({ countNoun: "Image" });
+
+    expect(container.querySelector(".note-counter-label")).toHaveTextContent(
+      "Image",
+    );
+    // The gap after the noun is the label's margin, not a space: the raw text
+    // runs together and still reads "Image 3 / 9".
+    expect(renderedValue(container)).toHaveTextContent("Image3 / 9");
+  });
+
+  test("no count noun is rendered by default", () => {
+    const { container } = renderCounter();
+
+    expect(
+      container.querySelector(".note-counter-label"),
+    ).not.toBeInTheDocument();
+  });
+
   test("the add variant renders ? / N and never a number", () => {
     const { container } = renderCounter({
       addMode: true,

@@ -251,7 +251,7 @@ describe("ImagePopover image loading", () => {
 
     expect(document.querySelector(".image-popover-empty-state")).toBeNull();
     expect(
-      document.querySelector(".image-popover-announcer"),
+      document.querySelector('.image-popover-announcer[role="status"]'),
     ).not.toHaveTextContent("image unavailable");
 
     await finishDecode(BACK_1);
@@ -302,7 +302,14 @@ describe("ImagePopover zoom", () => {
     // The active option is a choice, not a disabled state.
     expect(fit).toBeEnabled();
     expect(fit).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "100%" })).toBeEnabled();
+
+    const actualSize = screen.getByRole("button", { name: "1:1" });
+
+    expect(actualSize).toBeEnabled();
+    expect(actualSize).toHaveAttribute(
+      "title",
+      "Show the image at one image pixel per screen pixel",
+    );
   });
 
   test("keeps the zoom across a note's faces and resets on another note", async () => {
@@ -490,7 +497,7 @@ describe("ImagePopover zoom", () => {
     expect(fullImage().style.width).toBe("625px");
   });
 
-  test("steps from the fitted size and reports the level", async () => {
+  test("steps from the fitted size and marks the 1:1 stop", async () => {
     render(popover());
     await finishDecode(FRONT_1);
 
@@ -504,8 +511,8 @@ describe("ImagePopover zoom", () => {
     });
     measurePopoverWrap({ width: 800, height: 600 });
 
-    // The first press is 1.25x the fitted plate (625px), not 100% of the
-    // 2000px scan.
+    // The first press is 1.25x the fitted plate (625px), not the 2000px
+    // 1:1 stop.
     fireEvent.click(zoomButton("Zoom in"));
 
     expect(image.style.width).toBe("625px");
@@ -517,11 +524,22 @@ describe("ImagePopover zoom", () => {
     expect(image.style.width).toBe("");
     expect(zoomLevel()).toHaveTextContent("25%");
 
-    fireEvent.click(screen.getByRole("button", { name: "100%" }));
+    fireEvent.click(screen.getByRole("button", { name: "1:1" }));
 
     expect(image.style.width).toBe("2000px");
     expect(image.style.height).toBe("1000px");
     expect(zoomLevel()).toHaveTextContent("100%");
+    expect(screen.getByRole("button", { name: "1:1" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Fit" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+
+    // The pressed segment says 1:1, so the readout stays a percent.
+    expect(zoomLevel()).not.toHaveTextContent("1:1");
   });
 
   test("centres the double-clicked point on the first zoom", async () => {
@@ -562,7 +580,20 @@ describe("ImagePopover zoom", () => {
     });
     measurePopoverWrap({ width: 800, height: 600 });
 
-    expect(screen.getByRole("button", { name: "100%" })).toBeDisabled();
+    const actualSize = screen.getByRole("button", { name: "1:1" });
+
+    // Fit is already one image pixel per screen pixel, so the stop is inert:
+    // it stays a choice (aria-disabled, not disabled) and says why.
+    expect(actualSize).toHaveAttribute("aria-pressed", "false");
+    expect(actualSize).toHaveAttribute("aria-disabled", "true");
+    expect(actualSize).toHaveAttribute(
+      "title",
+      "The image already shows one image pixel per screen pixel",
+    );
+
+    fireEvent.click(actualSize);
+
+    expect(image.style.width).toBe("");
 
     fireEvent.click(zoomButton("Zoom in"));
 
@@ -570,6 +601,19 @@ describe("ImagePopover zoom", () => {
     expect(image.style.height).toBe("250px");
     expect(image.style.transform).toBe("translate(150px, 175px)");
     expect(zoomLevel()).toHaveTextContent("125%");
+
+    // Zoomed past the 1:1 fit, the stop has work again: it returns to actual
+    // size, and its title stops claiming the image already sits there.
+    expect(actualSize).not.toHaveAttribute("aria-disabled");
+    expect(actualSize).toHaveAttribute(
+      "title",
+      "Show the image at one image pixel per screen pixel",
+    );
+
+    fireEvent.click(actualSize);
+
+    expect(image.style.width).toBe("");
+    expect(zoomLevel()).toHaveTextContent("100%");
   });
 
   test("wheel zooms in, and Escape unwinds the zoom before closing", async () => {
@@ -593,7 +637,12 @@ describe("ImagePopover zoom", () => {
       screen.getByRole("button", { name: "Close preview" }),
     ).toHaveAttribute("data-shortcut", "Esc");
 
-    fireEvent.wheel(image, { deltaY: -100, clientX: 400, clientY: 300 });
+    // A plain wheel over the plate zooms; no modifier is asked for.
+    fireEvent.wheel(image, {
+      deltaY: -100,
+      clientX: 400,
+      clientY: 300,
+    });
 
     expect(image.style.width).toBe("625px");
     expect(zoomLevel()).toHaveTextContent("31%");
@@ -612,7 +661,7 @@ describe("ImagePopover zoom", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  test("wheel zoom cancels the wheel event so the overlay stays put", async () => {
+  test("a wheel zoom cancels the wheel event so the overlay stays put", async () => {
     render(popover());
     await finishDecode(FRONT_1);
 
@@ -637,7 +686,7 @@ describe("ImagePopover zoom", () => {
     expect(notCanceled).toBe(false);
   });
 
-  test("keeps 100% as the top stop when the ladder ends below it", async () => {
+  test("keeps 1:1 as the top stop when the ladder ends below it", async () => {
     render(popover());
     await finishDecode(FRONT_1);
 
@@ -651,13 +700,14 @@ describe("ImagePopover zoom", () => {
     });
     measurePopoverWrap({ width: 1000, height: 600 });
 
-    fireEvent.click(screen.getByRole("button", { name: "100%" }));
+    fireEvent.click(screen.getByRole("button", { name: "1:1" }));
 
     expect(image.style.width).toBe("5000px");
     expect(zoomButton("Zoom in")).toBeDisabled();
 
-    // At 100% the ladder's top rung (4x fit, 80%) is below the current scale;
-    // a further zoom-in must hold still rather than step backwards.
+    // At the 1:1 stop (100%) the ladder's top rung (4x fit, 80%) is below the
+    // current scale; a further zoom-in must hold still rather than step
+    // backwards.
     fireEvent.keyDown(window, { key: "+" });
 
     expect(image.style.width).toBe("5000px");
@@ -710,7 +760,12 @@ describe("ImagePopover side and naming", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "1 leu - 100, Front" })).toBeInTheDocument();
 
-    const announcer = dialog.querySelector(".image-popover-announcer");
+    // The note label is the topbar's first line, with no eyebrow above it.
+    expect(dialog.querySelector(".image-popover-topbar .eyebrow")).toBeNull();
+
+    const announcer = dialog.querySelector(
+      '.image-popover-announcer[role="status"]',
+    );
     expect(announcer).toHaveAttribute("role", "status");
     expect(announcer).toHaveTextContent("1 leu - 100, Front, image 1 of 3");
 
@@ -718,6 +773,19 @@ describe("ImagePopover side and naming", () => {
     await finishDecode(BACK_1);
 
     expect(announcer).toHaveTextContent("1 leu - 100, Back, image 1 of 3");
+  });
+
+  test("describes the dialog with the two-stage Escape rule", async () => {
+    render(popover());
+    await finishDecode(FRONT_1);
+
+    const dialog = screen.getByRole("dialog", { name: "1 leu - 100" });
+
+    // The rule is read once, on open, before the live status is touched.
+    expect(dialog).toHaveAccessibleDescription(
+      "Escape returns a zoomed image to Fit, then closes the preview. " +
+        "1 leu - 100, Front, image 1 of 3",
+    );
   });
 
   test("the Front | Back toggle marks the open side and asks for the other", () => {
@@ -797,7 +865,7 @@ describe("ImagePopover side and naming", () => {
     render(popover({ availableSides: ["front"], side: "back", src: null, thumb: null }));
 
     expect(
-      document.querySelector(".image-popover-announcer"),
+      document.querySelector('.image-popover-announcer[role="status"]'),
     ).toHaveTextContent("1 leu - 100, Back, image 1 of 3, no image");
   });
 
@@ -810,19 +878,28 @@ describe("ImagePopover side and naming", () => {
     expect(document.querySelector(".image-popover-empty-state")).not.toBeNull();
     expect(screen.getByText("front-full.jpg")).toBeInTheDocument();
     // The note still claims the scan, so the zoom instrument stays on screen,
-    // but there are no pixels to step through and the readout says Fit.
+    // but there are no pixels to step through: the segments stay choices, the
+    // 1:1 stop names the missing file, and the readout shows no scale.
     expect(
       screen.getByRole("group", { name: "Image zoom" }),
     ).toBeInTheDocument();
     expect(screen.getByRole("button", { name: "Zoom in" })).toBeDisabled();
-    expect(zoomLevel()).toHaveTextContent("Fit");
+    expect(screen.getByRole("button", { name: "1:1" })).toHaveAttribute(
+      "aria-disabled",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "1:1" })).toHaveAttribute(
+      "title",
+      "Image unavailable",
+    );
+    expect(zoomLevel()).toHaveTextContent("—");
     expect(screen.getByRole("button", { name: "Front" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
     expect(screen.getByRole("button", { name: "Edit note" })).toBeInTheDocument();
     expect(
-      document.querySelector(".image-popover-announcer"),
+      document.querySelector('.image-popover-announcer[role="status"]'),
     ).toHaveTextContent("image unavailable");
   });
 
@@ -844,5 +921,21 @@ describe("ImagePopover side and naming", () => {
     expect(counter).toHaveAttribute("aria-valuenow", "1");
     expect(counter).toHaveAttribute("aria-valuemin", "1");
     expect(counter).toHaveAttribute("aria-valuemax", "3");
+    expect(counter).toHaveAttribute("aria-valuetext", "1 of 3");
+  });
+
+  test("the image counter names the image domain in the pill", () => {
+    render(popover());
+
+    const counter = screen
+      .getByRole("spinbutton", { name: "Image position" })
+      .closest(".note-counter-value");
+
+    // The gap after the noun is CSS margin, so the label and the numbers are
+    // separate text runs.
+    expect(counter.querySelector(".note-counter-label")).toHaveTextContent(
+      "Image",
+    );
+    expect(counter).toHaveTextContent("1 / 3");
   });
 });

@@ -2531,6 +2531,14 @@ input[type="radio"] {
   gap: 2px;
 }
 
+/* A counter that tallies something other than notes says which list it
+   counts, so the slide's "3 / 7" and the image's "3 / 7" never read alike.
+   The label stays quiet; the numbers still lead. */
+.note-counter-label {
+  margin-right: 4px;
+  color: var(--text-muted);
+}
+
 .note-counter-value--editable {
   display: inline-flex;
   align-items: center;
@@ -6918,7 +6926,12 @@ button.tag {
   background: var(--on-dark-border);
 }
 
-.slideshow-close {
+/* Close is the quiet exit in both overlays: it sits behind a hairline, out of
+   the action cluster, and keeps its Esc cue. Its shared 36px box stays; only
+   the pill's ground and edge drop, so the red wash returns on hover from the
+   one rule `.button:hover` already owns. */
+.slideshow-close,
+.image-popover-close {
   background: transparent;
   border-color: transparent;
   color: var(--on-dark-muted);
@@ -7454,14 +7467,20 @@ button.tag {
   gap: 12px;
 }
 
+/* The note is the popover's headline: it takes the uppercase Title voice, one
+   step below the 1.4rem scale so the bar stays lighter than a screen heading. */
 .image-popover-note-label {
   color: var(--on-dark-text);
-  font-size: 1.05rem;
-  font-weight: 650;
+  font-size: 1.2rem;
+  font-weight: 800;
   letter-spacing: -0.01em;
+  line-height: 1.3;
+  overflow-wrap: anywhere;
+  text-transform: uppercase;
 }
 
-/* The side announcement is for assistive tech only. */
+/* The popover's live announcement and its Escape hint are for assistive tech
+   only. */
 .image-popover-announcer {
   position: absolute;
   width: 1px;
@@ -7514,7 +7533,7 @@ button.tag {
 }
 
 .image-popover-side-button:hover:not([aria-disabled="true"]),
-.image-popover-zoom-button:hover:not(:disabled) {
+.image-popover-zoom-button:hover:not(:disabled):not([aria-disabled="true"]) {
   background: var(--accent-soft);
   color: var(--accent-strong);
 }
@@ -7526,7 +7545,8 @@ button.tag {
 }
 
 .image-popover-side-button[aria-disabled="true"],
-.image-popover-zoom-button:disabled {
+.image-popover-zoom-button:disabled,
+.image-popover-zoom-button[aria-disabled="true"] {
   cursor: default;
   opacity: 0.45;
 }
@@ -7538,10 +7558,11 @@ button.tag {
   flex-wrap: wrap;
 }
 
-/* One scale instrument, 36px tall: a segmented Fit | 100% choice for the two
+/* One scale instrument, 36px tall: a segmented Fit | 1:1 choice for the two
    known scales, then a minus / level / plus stepper that walks the fitted-size
-   ladder. The active choice keeps full contrast and is never disabled; only
-   the stepper stops at the ladder's ends. */
+   ladder. The pressed choice keeps full contrast; the 1:1 stop is inert only
+   when fit is already actual size, and its title says so, while the stepper
+   stops at the ladder's ends. */
 .image-popover-zoom {
   height: 36px;
 }
@@ -7622,7 +7643,10 @@ button.tag {
   overflow-wrap: anywhere;
 }
 
+/* The stage centres the arrows, so they must not inherit the slideshow's
+   sticky offset, which was tuned for the scrolling note page. */
 .image-popover-arrow {
+  position: static;
   flex-shrink: 0;
 }
 
@@ -7694,6 +7718,56 @@ button.tag {
 
 .image-popover-image-wrap--dragging img {
   cursor: grabbing;
+}
+
+/* Below the popover's comfortable width the arrows step down from 56px to
+   40px and the stage's gutter from 20px to 12px, returning the difference to
+   the plate. The layout at 900px and above keeps the roomy targets. */
+@media (max-width: 900px) {
+  .image-popover-stage {
+    gap: 12px;
+  }
+
+  .image-popover-arrow {
+    width: 40px;
+    height: 40px;
+    font-size: 1.15rem;
+  }
+
+  /* The scrim's auto track grows to the panel's own `96vw`, so a narrow
+     window loses its right gutter and below 600px the panel runs past the
+     viewport. One definite column bounds the track to the scrim's padding
+     box, and the content's existing `max-width: 100%` then keeps the panel
+     centred inside it. */
+  .image-popover-overlay {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* At the narrow end the arrows leave the tracks and sit at the stage's edges,
+   over the plate: the stage becomes one column, so the scan keeps the panel's
+   full width instead of shrinking between two columns of chrome. They keep
+   the 900px query's 40px target and ride above the image; nothing here
+   re-clips the plate. */
+@media (max-width: 700px) {
+  .image-popover-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .image-popover-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 3;
+  }
+
+  .image-popover-arrow:first-of-type {
+    left: 8px;
+  }
+
+  .image-popover-arrow:last-of-type {
+    right: 8px;
+  }
 }
 
 .slide-meta {
