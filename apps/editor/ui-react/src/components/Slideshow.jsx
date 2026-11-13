@@ -445,7 +445,7 @@ function SlidePlate({
 
 // Zoom stops as multiples of the fitted image, not of its natural pixels. A
 // scan that arrives much larger than the plate therefore steps up from the
-// size the reader already sees instead of jumping straight to 100%.
+// size the reader already sees instead of jumping straight to 1:1.
 const POPOVER_ZOOM_LEVELS = [1, 1.25, 1.5, 2, 3, 4];
 const ZOOM_EPSILON = 0.001;
 
@@ -545,6 +545,12 @@ function ImagePopover({
     fitScale > 0 &&
     (!zoomed || zoomScale < maxZoomScale);
   const canZoomOut = hasImage && zoomed;
+  // 1:1 needs this scan's measured fit. At fit already 1:1 it has nothing to do
+  // unless the reader has zoomed past it, when it returns to actual size; in
+  // that idle case its title says why rather than reading as broken.
+  const actualSizeReady = hasImage && fullLoaded && fitScale > 0;
+  const fitIsActualSize = actualSizeReady && fitScale >= 1 - ZOOM_EPSILON;
+  const actualSizeInert = fitIsActualSize && !zoomed;
 
   // An axis with no overflow has nothing to pan, so it keeps the image
   // centred. Without this a zoomed plate smaller than the well would snap to
@@ -571,7 +577,7 @@ function ImagePopover({
   // popover is zoomed, the inline scaled size and the zoomed wrap's rules hide
   // it, so lift both for one synchronous read. Without this, switching from
   // one face to the other would keep the old face's fit, and with it a wrong
-  // zoom ladder and 100% stop.
+  // zoom ladder and 1:1 stop.
   function measureFitBox(image, natural) {
     const wrap = imageWrapRef.current;
 
@@ -1232,7 +1238,7 @@ function ImagePopover({
       : undefined;
   const zoomPercent =
     hasImage && fullLoaded && shownScale ? Math.round(shownScale * 100) : 0;
-  const atActualSize = zoomed && Math.abs(zoomScale - 1) < ZOOM_EPSILON;
+  const zoomAtActualSize = zoomed && Math.abs(zoomScale - 1) < ZOOM_EPSILON;
   const sideLabel =
     POPOVER_SIDES.find((option) => option.kind === side)?.label ?? null;
   const fileName = imageFailed ? failedImage.file : "";
@@ -1335,19 +1341,18 @@ function ImagePopover({
                     Fit
                   </button>
                   <button
-                    aria-pressed={atActualSize}
+                    aria-pressed={zoomAtActualSize}
                     className="image-popover-zoom-button"
-                    disabled={
-                      !hasImage ||
-                      !fullLoaded ||
-                      !fitScale ||
-                      fitScale >= 1 - ZOOM_EPSILON
-                    }
+                    disabled={!actualSizeReady || actualSizeInert}
                     onClick={() => zoomTo(1)}
-                    title="Show the image at 100%"
+                    title={
+                      actualSizeInert
+                        ? "The image already shows one image pixel per screen pixel"
+                        : "Show the image at one image pixel per screen pixel"
+                    }
                     type="button"
                   >
-                    100%
+                    1:1
                   </button>
                 </div>
                 <div className="image-popover-zoom-stepper">

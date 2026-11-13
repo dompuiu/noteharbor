@@ -302,7 +302,14 @@ describe("ImagePopover zoom", () => {
     // The active option is a choice, not a disabled state.
     expect(fit).toBeEnabled();
     expect(fit).toHaveAttribute("aria-pressed", "true");
-    expect(screen.getByRole("button", { name: "100%" })).toBeEnabled();
+
+    const actualSize = screen.getByRole("button", { name: "1:1" });
+
+    expect(actualSize).toBeEnabled();
+    expect(actualSize).toHaveAttribute(
+      "title",
+      "Show the image at one image pixel per screen pixel",
+    );
   });
 
   test("keeps the zoom across a note's faces and resets on another note", async () => {
@@ -490,7 +497,7 @@ describe("ImagePopover zoom", () => {
     expect(fullImage().style.width).toBe("625px");
   });
 
-  test("steps from the fitted size and reports the level", async () => {
+  test("steps from the fitted size and marks the 1:1 stop", async () => {
     render(popover());
     await finishDecode(FRONT_1);
 
@@ -504,8 +511,8 @@ describe("ImagePopover zoom", () => {
     });
     measurePopoverWrap({ width: 800, height: 600 });
 
-    // The first press is 1.25x the fitted plate (625px), not 100% of the
-    // 2000px scan.
+    // The first press is 1.25x the fitted plate (625px), not the 2000px
+    // 1:1 stop.
     fireEvent.click(zoomButton("Zoom in"));
 
     expect(image.style.width).toBe("625px");
@@ -517,11 +524,22 @@ describe("ImagePopover zoom", () => {
     expect(image.style.width).toBe("");
     expect(zoomLevel()).toHaveTextContent("25%");
 
-    fireEvent.click(screen.getByRole("button", { name: "100%" }));
+    fireEvent.click(screen.getByRole("button", { name: "1:1" }));
 
     expect(image.style.width).toBe("2000px");
     expect(image.style.height).toBe("1000px");
     expect(zoomLevel()).toHaveTextContent("100%");
+    expect(screen.getByRole("button", { name: "1:1" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Fit" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+
+    // The pressed segment says 1:1, so the readout stays a percent.
+    expect(zoomLevel()).not.toHaveTextContent("1:1");
   });
 
   test("centres the double-clicked point on the first zoom", async () => {
@@ -562,7 +580,15 @@ describe("ImagePopover zoom", () => {
     });
     measurePopoverWrap({ width: 800, height: 600 });
 
-    expect(screen.getByRole("button", { name: "100%" })).toBeDisabled();
+    const actualSize = screen.getByRole("button", { name: "1:1" });
+
+    // Fit is already one image pixel per screen pixel, so the stop is inert
+    // and says why instead of looking broken.
+    expect(actualSize).toBeDisabled();
+    expect(actualSize).toHaveAttribute(
+      "title",
+      "The image already shows one image pixel per screen pixel",
+    );
 
     fireEvent.click(zoomButton("Zoom in"));
 
@@ -570,6 +596,19 @@ describe("ImagePopover zoom", () => {
     expect(image.style.height).toBe("250px");
     expect(image.style.transform).toBe("translate(150px, 175px)");
     expect(zoomLevel()).toHaveTextContent("125%");
+
+    // Zoomed past the 1:1 fit, the stop has work again: it returns to actual
+    // size, and its title stops claiming the image already sits there.
+    expect(actualSize).toBeEnabled();
+    expect(actualSize).toHaveAttribute(
+      "title",
+      "Show the image at one image pixel per screen pixel",
+    );
+
+    fireEvent.click(actualSize);
+
+    expect(image.style.width).toBe("");
+    expect(zoomLevel()).toHaveTextContent("100%");
   });
 
   test("wheel zooms in, and Escape unwinds the zoom before closing", async () => {
@@ -696,7 +735,7 @@ describe("ImagePopover zoom", () => {
     expect(zoomLevel()).toHaveTextContent("25%");
   });
 
-  test("keeps 100% as the top stop when the ladder ends below it", async () => {
+  test("keeps 1:1 as the top stop when the ladder ends below it", async () => {
     render(popover());
     await finishDecode(FRONT_1);
 
@@ -710,13 +749,14 @@ describe("ImagePopover zoom", () => {
     });
     measurePopoverWrap({ width: 1000, height: 600 });
 
-    fireEvent.click(screen.getByRole("button", { name: "100%" }));
+    fireEvent.click(screen.getByRole("button", { name: "1:1" }));
 
     expect(image.style.width).toBe("5000px");
     expect(zoomButton("Zoom in")).toBeDisabled();
 
-    // At 100% the ladder's top rung (4x fit, 80%) is below the current scale;
-    // a further zoom-in must hold still rather than step backwards.
+    // At the 1:1 stop (100%) the ladder's top rung (4x fit, 80%) is below the
+    // current scale; a further zoom-in must hold still rather than step
+    // backwards.
     fireEvent.keyDown(window, { key: "+" });
 
     expect(image.style.width).toBe("5000px");

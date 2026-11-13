@@ -7560,10 +7560,11 @@ button.tag {
   flex-wrap: wrap;
 }
 
-/* One scale instrument, 36px tall: a segmented Fit | 100% choice for the two
+/* One scale instrument, 36px tall: a segmented Fit | 1:1 choice for the two
    known scales, then a minus / level / plus stepper that walks the fitted-size
-   ladder. The active choice keeps full contrast and is never disabled; only
-   the stepper stops at the ladder's ends. */
+   ladder. The pressed choice keeps full contrast; the 1:1 stop is inert only
+   when fit is already actual size, and its title says so, while the stepper
+   stops at the ladder's ends. */
 .image-popover-zoom {
   height: 36px;
 }
