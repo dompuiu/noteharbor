@@ -1217,7 +1217,10 @@ describe("Arrow modifiers and h/j/k/l aliases", () => {
       "→",
       "↓",
     ]);
-    expect(keysOf("Zoom in / out at the pointer")).toEqual(["Wheel"]);
+    expect(keysOf("Zoom in / out at the pointer")).toEqual([
+      "Ctrl/Cmd",
+      "Wheel",
+    ]);
     expect(keysOf("Zoom in, or fit the image again")).toEqual([
       "Double-click",
     ]);

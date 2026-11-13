@@ -593,7 +593,12 @@ describe("ImagePopover zoom", () => {
       screen.getByRole("button", { name: "Close preview" }),
     ).toHaveAttribute("data-shortcut", "Esc");
 
-    fireEvent.wheel(image, { deltaY: -100, clientX: 400, clientY: 300 });
+    fireEvent.wheel(image, {
+      ctrlKey: true,
+      deltaY: -100,
+      clientX: 400,
+      clientY: 300,
+    });
 
     expect(image.style.width).toBe("625px");
     expect(zoomLevel()).toHaveTextContent("31%");
@@ -612,7 +617,7 @@ describe("ImagePopover zoom", () => {
     expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  test("wheel zoom cancels the wheel event so the overlay stays put", async () => {
+  test("a modified wheel zoom cancels the wheel event so the overlay stays put", async () => {
     render(popover());
     await finishDecode(FRONT_1);
 
@@ -629,12 +634,66 @@ describe("ImagePopover zoom", () => {
     // dispatchEvent returns false only when a listener prevented the default;
     // React's delegated wheel listener is passive, so it cannot.
     const notCanceled = fireEvent.wheel(image, {
+      metaKey: true,
       deltaY: -100,
       clientX: 400,
       clientY: 300,
     });
 
     expect(notCanceled).toBe(false);
+  });
+
+  test("a plain wheel leaves the plate at fit and is not cancelled", async () => {
+    render(popover());
+    await finishDecode(FRONT_1);
+
+    const image = fullImage();
+
+    measureImageBox(image, {
+      naturalWidth: 2000,
+      naturalHeight: 1000,
+      fitWidth: 500,
+      fitHeight: 250,
+    });
+    measurePopoverWrap({ width: 800, height: 600 });
+
+    // No modifier: the plate keeps its fit and the event is left to the
+    // overlay's own scroll, never cancelled.
+    const notCanceled = fireEvent.wheel(image, {
+      deltaY: -100,
+      clientX: 400,
+      clientY: 300,
+    });
+
+    expect(notCanceled).toBe(true);
+    expect(image.style.width).toBe("");
+    expect(zoomLevel()).toHaveTextContent("25%");
+  });
+
+  test("Shift+wheel stays out of the zoom, matching normal scrolling", async () => {
+    render(popover());
+    await finishDecode(FRONT_1);
+
+    const image = fullImage();
+
+    measureImageBox(image, {
+      naturalWidth: 2000,
+      naturalHeight: 1000,
+      fitWidth: 500,
+      fitHeight: 250,
+    });
+    measurePopoverWrap({ width: 800, height: 600 });
+
+    const notCanceled = fireEvent.wheel(image, {
+      shiftKey: true,
+      deltaY: -100,
+      clientX: 400,
+      clientY: 300,
+    });
+
+    expect(notCanceled).toBe(true);
+    expect(image.style.width).toBe("");
+    expect(zoomLevel()).toHaveTextContent("25%");
   });
 
   test("keeps 100% as the top stop when the ladder ends below it", async () => {

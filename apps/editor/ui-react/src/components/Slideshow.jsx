@@ -921,12 +921,21 @@ function ImagePopover({
     setIsDragging(false);
   }
 
+  // A plain wheel scrolls the overlay like any other surface; zooming takes an
+  // explicit modifier. Shift+wheel stays a horizontal scroll, not a pan.
   function onImageWheel(e) {
+    if (!(e.ctrlKey || e.metaKey)) {
+      return;
+    }
+
+    // Even before the full scan lands, the modified wheel belongs to the
+    // popover: letting it through would page-zoom the host webview.
+    e.preventDefault();
+
     if (!fullLoaded) {
       return;
     }
 
-    e.preventDefault();
     changeZoom(e.deltaY < 0 ? 1 : -1, anchorInViewport(e));
   }
 
