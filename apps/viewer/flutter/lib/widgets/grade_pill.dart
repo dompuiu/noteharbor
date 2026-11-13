@@ -19,12 +19,13 @@ _GradeTier _gradeTier(String value) {
   return numeric >= 50 ? _GradeTier.choice : _GradeTier.circulated;
 }
 
-/// A note's grade as a pill tinted by its catalogue band, shared by the Table
-/// and the Note slideshow.
+/// A note's grade as a pill tinted by its catalogue band, so the Table and the
+/// Note slideshow can read a grade the same way.
 ///
 /// A blank grade renders [emptyPlaceholder] when one is given, so a table cell
-/// keeps its dash, or nothing at all when it is not, so a slide can omit the
-/// field.
+/// keeps its dash. Callers that space their children, such as the slideshow,
+/// should leave the pill out instead of passing a placeholder that would leave
+/// a gap.
 class GradePill extends StatelessWidget {
   const GradePill({super.key, required this.grade, this.emptyPlaceholder});
 

@@ -17,9 +17,10 @@ void main() {
 
   BoxDecoration pillDecoration(WidgetTester tester, String grade) {
     final pill = tester.widget<Container>(
-      find
-          .ancestor(of: find.text(grade), matching: find.byType(Container))
-          .first,
+      find.descendant(
+        of: find.byType(GradePill),
+        matching: find.byType(Container),
+      ),
     );
     return pill.decoration! as BoxDecoration;
   }
