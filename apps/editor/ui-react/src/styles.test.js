@@ -1983,6 +1983,18 @@ describe("slideshow overlay styles", () => {
     expect(panel[1]).toMatch(/min-height:\s*calc\(100vh/);
   });
 
+  // The room is the scrim's own frame: its bottom border keeps the same 16px
+  // gutter as the top instead of running into the window edge, so the page
+  // scrolls inside the panel rather than the scrim.
+  test("the slideshow panel keeps the scrim's gutter and scrolls itself", () => {
+    const panel = styles.match(
+      /\.slideshow-screen--overlay \.slideshow-panel\s*\{([^}]*)\}/,
+    );
+    expect(panel).not.toBeNull();
+    expect(panel[1]).toMatch(/max-height:\s*calc\(100dvh - 32px\)/);
+    expect(panel[1]).toMatch(/overflow-y:\s*auto/);
+  });
+
   // The slideshow is fluid: it has no floor, so a 1024px window keeps the
   // page and both turns reachable instead of scrolling the overlay sideways.
   test("the slideshow panel is fluid instead of holding a floor", () => {
