@@ -28,6 +28,7 @@ function NoteCounter({
   previousLabel = "Edit previous note",
   showArrows = true,
   total = 0,
+  valueRole = "textbox",
   variant = "light",
 }) {
   const [editing, setEditing] = useState(false);
@@ -106,15 +107,27 @@ function NoteCounter({
     .filter(Boolean)
     .join(" ");
   // The number alone is the editable value; the total stays beside it so a
-  // textbox never exposes "3 / 12" as its value.
+  // textbox never exposes "3 / 12" as its value. A positional caller (the
+  // Image popover's page counter) asks for a spinbutton instead, so assistive
+  // tech hears a position rather than an anonymous text field.
+  const spinbuttonProps =
+    valueRole === "spinbutton"
+      ? {
+          "aria-valuemax": total,
+          "aria-valuemin": 1,
+          "aria-valuenow": position ?? 1,
+          "aria-valuetext": `${position ?? 1} of ${total}`,
+        }
+      : null;
   const editableProps =
     editable && !editing
       ? {
           "aria-label": jumpLabel,
+          ...spinbuttonProps,
           className: "note-counter-value--editable",
           onClick: beginEdit,
           onFocus: beginEdit,
-          role: "textbox",
+          role: valueRole,
           tabIndex: 0,
         }
       : null;

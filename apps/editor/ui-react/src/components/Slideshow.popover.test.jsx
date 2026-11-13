@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen } from "@testing-library/react";
+import { act, fireEvent, render, screen, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 import { preloadImage } from "../lib/imagePreload.js";
 import { ImagePopover } from "./Slideshow.jsx";
@@ -15,17 +15,21 @@ const THUMB_3 = "/api/images/notes/3/front-thumbnail.jpg?v=1";
 function popover(overrides = {}) {
   return (
     <ImagePopover
-      alt="1 leu front"
+      alt="1 leu - 100, Front"
+      availableSides={["front", "back"]}
       canGoNext
       canGoPrevious
       counterPosition={1}
       counterTotal={3}
       noteKey="note-1"
-      noteLabel="1 leu - Front"
+      noteLabel="1 leu - 100"
       onClose={() => {}}
+      onJump={() => {}}
       onNext={() => {}}
       onPrevious={() => {}}
+      onSelectSide={() => {}}
       placeholderText="No image yet."
+      side="front"
       src={FRONT_1}
       thumb={THUMB_1}
       {...overrides}
@@ -587,5 +591,187 @@ describe("ImagePopover zoom", () => {
 
     expect(image.style.width).toBe("5000px");
     expect(zoomLevel()).toHaveTextContent("100%");
+  });
+
+  test("the scrim steps back to Fit before it closes", async () => {
+    const onClose = vi.fn();
+
+    render(popover({ onClose }));
+    await finishDecode(FRONT_1);
+
+    const image = fullImage();
+
+    measureImageBox(image, {
+      naturalWidth: 2000,
+      naturalHeight: 1000,
+      fitWidth: 500,
+      fitHeight: 250,
+    });
+    measurePopoverWrap({ width: 800, height: 600 });
+
+    fireEvent.click(zoomButton("Zoom in"));
+
+    expect(image.style.width).toBe("625px");
+
+    // The first scrim click is the first Escape: it unwinds the zoom only.
+    fireEvent.click(document.querySelector(".image-popover-overlay"));
+
+    expect(onClose).not.toHaveBeenCalled();
+    expect(image.style.width).toBe("");
+
+    fireEvent.click(document.querySelector(".image-popover-overlay"));
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("ImagePopover side and naming", () => {
+  test("names the dialog with the note and announces side and position", async () => {
+    const { rerender } = render(popover());
+    await finishDecode(FRONT_1);
+
+    const dialog = screen.getByRole("dialog", { name: "1 leu - 100" });
+    expect(
+      within(dialog).getByRole("heading", {
+        level: 2,
+        name: "1 leu - 100",
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("img", { name: "1 leu - 100, Front" })).toBeInTheDocument();
+
+    const announcer = dialog.querySelector(".image-popover-announcer");
+    expect(announcer).toHaveAttribute("role", "status");
+    expect(announcer).toHaveTextContent("1 leu - 100, Front, image 1 of 3");
+
+    rerender(popover({ side: "back", src: BACK_1, thumb: BACK_THUMB_1 }));
+    await finishDecode(BACK_1);
+
+    expect(announcer).toHaveTextContent("1 leu - 100, Back, image 1 of 3");
+  });
+
+  test("the Front | Back toggle marks the open side and asks for the other", () => {
+    const onSelectSide = vi.fn();
+
+    render(popover({ onSelectSide }));
+
+    const front = screen.getByRole("button", { name: "Front" });
+    const back = screen.getByRole("button", { name: "Back" });
+
+    expect(front).toHaveAttribute("aria-pressed", "true");
+    expect(back).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(back);
+
+    expect(onSelectSide).toHaveBeenCalledWith("back");
+
+    // The open side is not a switch away from itself.
+    fireEvent.click(front);
+
+    expect(onSelectSide).toHaveBeenCalledTimes(1);
+  });
+
+  test("a missing side shows the empty state without a zoom cluster", () => {
+    const onEdit = vi.fn();
+    const onSelectSide = vi.fn();
+
+    render(
+      popover({
+        availableSides: ["front"],
+        onEdit,
+        onSelectSide,
+        side: "back",
+        src: null,
+        thumb: null,
+      }),
+    );
+
+    const back = screen.getByRole("button", { name: "Back" });
+
+    // aria-disabled, not disabled: the pressed state stays readable.
+    expect(back).toHaveAttribute("aria-pressed", "true");
+    expect(back).toHaveAttribute("aria-disabled", "true");
+    expect(document.querySelector(".image-popover-empty-state")).not.toBeNull();
+    expect(screen.queryByRole("group", { name: "Image zoom" })).toBeNull();
+
+    fireEvent.click(back);
+
+    expect(onSelectSide).not.toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Edit note" }));
+
+    expect(onEdit).toHaveBeenCalledTimes(1);
+  });
+
+  test("a present side stays reachable from a missing one", () => {
+    const onSelectSide = vi.fn();
+
+    render(
+      popover({
+        availableSides: ["front"],
+        onSelectSide,
+        side: "back",
+        src: null,
+        thumb: null,
+      }),
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Front" }));
+
+    expect(onSelectSide).toHaveBeenCalledWith("front");
+    // Without an editor callback (the Showcase) there is nothing to offer.
+    expect(screen.queryByRole("button", { name: "Edit note" })).toBeNull();
+  });
+
+  test("the announcement says when a page has no image", () => {
+    render(popover({ availableSides: ["front"], side: "back", src: null, thumb: null }));
+
+    expect(
+      document.querySelector(".image-popover-announcer"),
+    ).toHaveTextContent("1 leu - 100, Back, image 1 of 3, no image");
+  });
+
+  test("a scan whose file is gone shows the missing state with its file name", async () => {
+    render(popover({ onEdit: () => {} }));
+    await finishDecode(FRONT_1);
+
+    fireEvent.error(fullImage());
+
+    expect(document.querySelector(".image-popover-empty-state")).not.toBeNull();
+    expect(screen.getByText("front-full.jpg")).toBeInTheDocument();
+    // The note still claims the scan, so the zoom instrument stays on screen,
+    // but there are no pixels to step through and the readout says Fit.
+    expect(
+      screen.getByRole("group", { name: "Image zoom" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Zoom in" })).toBeDisabled();
+    expect(zoomLevel()).toHaveTextContent("Fit");
+    expect(screen.getByRole("button", { name: "Front" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+    expect(screen.getByRole("button", { name: "Edit note" })).toBeInTheDocument();
+    expect(
+      document.querySelector(".image-popover-announcer"),
+    ).toHaveTextContent("image unavailable");
+  });
+
+  test("a broken warming thumbnail also shows the missing state", () => {
+    render(popover());
+
+    fireEvent.error(thumbImage());
+
+    expect(fullImage()).toBeNull();
+    // The quiet line names the file that failed, not the full scan behind it.
+    expect(screen.getByText("front-thumbnail.jpg")).toBeInTheDocument();
+  });
+
+  test("the image counter is a spinbutton so the position reads as one", () => {
+    render(popover());
+
+    const counter = screen.getByRole("spinbutton", { name: "Image position" });
+
+    expect(counter).toHaveAttribute("aria-valuenow", "1");
+    expect(counter).toHaveAttribute("aria-valuemin", "1");
+    expect(counter).toHaveAttribute("aria-valuemax", "3");
   });
 });
