@@ -309,34 +309,39 @@ void main() {
   ) async {
     await pumpSlideshow(tester);
 
-    // Map each control to the focus it takes when Tab reaches it, so the test
-    // checks the plate and chip nodes themselves, not their debug labels.
-    final controls = <String, FocusNode>{
+    // Each control's focus node, listed in reading order. Comparing the nodes
+    // themselves keeps the assertion about the plates and chips, not their
+    // debug labels.
+    final readingOrder = <String, FocusNode>{
       'plate front': focusNodeOf(tester, find.text('FRONT')),
       'plate back': focusNodeOf(tester, find.text('BACK')),
       'tag Bank of England': focusNodeOf(tester, find.text('Bank of England')),
       'tag Polymer': focusNodeOf(tester, find.text('Polymer')),
       'tag Portrait': focusNodeOf(tester, find.text('Portrait')),
     };
+    final labelOf = {
+      for (final entry in readingOrder.entries) entry.value: entry.key,
+    };
+    // Distinct nodes, or one Tab could report several names in a row.
+    expect(labelOf, hasLength(readingOrder.length));
 
+    // Tab until every control has been reached. Stops that are not controls
+    // (the top bar's Back button, the slide's own node) are skipped; only the
+    // order of the controls matters here.
     final visited = <String>[];
-    for (var i = 0; i < controls.length + 2; i++) {
+    for (
+      var tabs = 0;
+      tabs < readingOrder.length * 2 && visited.length < readingOrder.length;
+      tabs++
+    ) {
       await tester.sendKeyEvent(LogicalKeyboardKey.tab);
       await tester.pump();
-      final primary = FocusManager.instance.primaryFocus;
-      for (final entry in controls.entries) {
-        if (entry.value == primary) visited.add(entry.key);
-      }
+      final label = labelOf[FocusManager.instance.primaryFocus];
+      if (label != null) visited.add(label);
     }
 
     // The picture pair leads; the tags that filter the collection come after.
-    expect(visited, [
-      'plate front',
-      'plate back',
-      'tag Bank of England',
-      'tag Polymer',
-      'tag Portrait',
-    ]);
+    expect(visited, readingOrder.keys.toList());
   });
 
   testWidgets('reduce motion turns the 220ms page step into a jump', (

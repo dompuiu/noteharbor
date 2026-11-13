@@ -93,12 +93,17 @@ void main() {
   /// slide fits the window without scrolling.
   double maxSlideScrollExtent(WidgetTester tester) {
     var furthest = 0.0;
+    var attached = 0;
     for (final element in find.byType(SingleChildScrollView).evaluate()) {
       final controller = (element.widget as SingleChildScrollView).controller;
       if (controller != null && controller.hasClients) {
+        attached++;
         furthest = math.max(furthest, controller.position.maxScrollExtent);
       }
     }
+    // A missing scroll view would report zero and make a no-overflow check
+    // pass without measuring anything.
+    expect(attached, greaterThan(0), reason: 'no attached slide scroll view');
     return furthest;
   }
 
@@ -108,7 +113,30 @@ void main() {
     expect(find.byType(Image), findsNWidgets(2));
   }
 
+  /// The details sit under the faces rather than beside them.
+  void expectDetailsBelowFaces(WidgetTester tester) {
+    final backPlate = tester.getRect(
+      find.byKey(const ValueKey('plateMat')).last,
+    );
+    expect(
+      tester.getTopLeft(find.text('Details')).dy,
+      greaterThan(backPlate.bottom),
+    );
+  }
+
+  /// The details sit in a rail to the right of the faces.
+  void expectDetailsBesideFaces(WidgetTester tester) {
+    expect(
+      tester.getTopLeft(find.text('Details')).dx,
+      greaterThan(tester.getTopLeft(find.text('FRONT')).dx),
+    );
+  }
+
   void expectEveryFactVisible() {
+    // The header's eyebrow and catalog join the field rows, so a tier that
+    // drops any of them fails here.
+    expect(find.text('PMG · 2013'), findsOneWidget);
+    expect(find.text('P-21a'), findsOneWidget);
     expect(find.text('GRADE'), findsOneWidget);
     expect(find.text('66 EPQ'), findsOneWidget);
     expect(find.text('SERIAL'), findsOneWidget);
@@ -117,6 +145,8 @@ void main() {
     expect(find.text('Britannia'), findsOneWidget);
     expect(find.text('TAGS'), findsOneWidget);
     expect(find.text('Bank of England'), findsOneWidget);
+    expect(find.text('Polymer'), findsOneWidget);
+    expect(find.text('Portrait'), findsOneWidget);
     expect(find.text('SOURCE'), findsOneWidget);
     expect(
       find.text('bankofengland.co.uk/banknotes/5-pound-note'),
@@ -135,14 +165,10 @@ void main() {
     expectBothFacesVisible();
 
     // The details sit beside the pair, not below it.
-    expect(
-      tester.getTopLeft(find.text('Details')).dx,
-      greaterThan(tester.getTopLeft(find.text('FRONT')).dx),
-    );
+    expectDetailsBesideFaces(tester);
 
     // The catalog lives in the rail header, not as a duplicate field row.
     expect(find.text('Details'), findsOneWidget);
-    expect(find.text('P-21a'), findsOneWidget);
     expect(find.text('CATALOG'), findsNothing);
 
     expect(find.byType(GradePill), findsOneWidget);
@@ -165,16 +191,13 @@ void main() {
       expect(find.byType(GradePill), findsOneWidget);
 
       // Facts beside the note, below the pair; a narrow window scrolls nothing.
-      expect(
-        tester.getTopLeft(find.text('Details')).dy,
-        greaterThan(tester.getTopLeft(find.text('FRONT')).dy),
-      );
+      expectDetailsBelowFaces(tester);
       expectEveryFactVisible();
       expect(maxSlideScrollExtent(tester), 0);
     },
   );
 
-  testWidgets('390x844 stacks the faces over the details and scrolls', (
+  testWidgets('a 390x844 phone stacks the faces over the details and scrolls', (
     WidgetTester tester,
   ) async {
     await pumpAt(tester, const Size(390, 844));
@@ -182,11 +205,12 @@ void main() {
     expectBothFacesVisible();
     expectEveryFactVisible();
 
-    // The details follow the pair down the stack rather than sitting beside it.
+    // The faces stack (the back under the front) with the details after them.
     expect(
-      tester.getTopLeft(find.text('Details')).dy,
-      greaterThan(tester.getTopLeft(find.text('BACK')).dy),
+      tester.getTopLeft(find.text('BACK')).dy,
+      greaterThan(tester.getTopLeft(find.text('FRONT')).dy),
     );
+    expectDetailsBelowFaces(tester);
 
     // The stack is taller than a phone window, so it scrolls rather than
     // clipping; the keyboard scroll tests cover reaching it.
@@ -198,20 +222,14 @@ void main() {
   ) async {
     await pumpAt(tester, const Size(1000, 700));
     expectBothFacesVisible();
-    expect(
-      tester.getTopLeft(find.text('Details')).dx,
-      greaterThan(tester.getTopLeft(find.text('FRONT')).dx),
-    );
+    expectDetailsBesideFaces(tester);
     expect(maxSlideScrollExtent(tester), 0);
 
     // One pixel narrower, the pair keeps the full width and the details
     // become a strip below it.
     await pumpAt(tester, const Size(999, 700));
     expectBothFacesVisible();
-    expect(
-      tester.getTopLeft(find.text('Details')).dy,
-      greaterThan(tester.getTopLeft(find.text('FRONT')).dy),
-    );
+    expectDetailsBelowFaces(tester);
     expect(maxSlideScrollExtent(tester), 0);
   });
 
