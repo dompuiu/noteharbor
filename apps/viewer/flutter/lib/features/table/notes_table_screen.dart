@@ -13,6 +13,7 @@ import '../../models/note_record.dart';
 import '../../models/tag.dart';
 import '../../models/viewer_collection.dart';
 import '../../utils/announce.dart';
+import '../../widgets/grade_pill.dart';
 import '../../widgets/mouse_drag_scroll_behavior.dart';
 import '../../widgets/note_image_provider.dart';
 import '../import/import_dataset_screen.dart';
@@ -4691,7 +4692,10 @@ class _TableRow extends StatelessWidget {
                           ),
                           _DataCell(
                             width: columnWidths.grade,
-                            child: _GradePill(grade: note.grade),
+                            child: GradePill(
+                              grade: note.grade,
+                              emptyPlaceholder: _kDashText,
+                            ),
                           ),
                           _DataCell(
                             width: columnWidths.serial,
@@ -5276,7 +5280,7 @@ class _CardSpecLine extends StatelessWidget {
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             if (company.isNotEmpty) Text(company, style: _kCardMetaTextStyle),
-            _GradePill(grade: note.grade),
+            GradePill(grade: note.grade, emptyPlaceholder: _kDashText),
             ConstrainedBox(
               constraints: BoxConstraints(maxWidth: constraints.maxWidth),
               child: Text(
@@ -5322,77 +5326,6 @@ class _LabeledValue extends StatelessWidget {
       ),
       maxLines: 1,
       overflow: TextOverflow.ellipsis,
-    );
-  }
-}
-
-/// The catalogue grade bands used by the Editor table: uncirculated (65+),
-/// choice (50-64), and circulated below that. An unreadable grade reads as a
-/// neutral pill, not as a second accent.
-enum _GradeTier { uncirculated, choice, circulated, none }
-
-_GradeTier _gradeTier(String value) {
-  final match = RegExp(r'\d+(?:\.\d+)?').firstMatch(value);
-  final numeric = match == null ? null : double.tryParse(match.group(0)!);
-  if (numeric == null) {
-    return _GradeTier.none;
-  }
-  if (numeric >= 65) {
-    return _GradeTier.uncirculated;
-  }
-  return numeric >= 50 ? _GradeTier.choice : _GradeTier.circulated;
-}
-
-class _GradePill extends StatelessWidget {
-  const _GradePill({required this.grade});
-
-  final String grade;
-
-  @override
-  Widget build(BuildContext context) {
-    final text = grade.trim();
-    if (text.isEmpty) {
-      return _kDashText;
-    }
-
-    final (background, foreground, border) = switch (_gradeTier(text)) {
-      _GradeTier.uncirculated => (
-        ViewerPalette.successSoft,
-        ViewerPalette.success,
-        const Color(0x3D31A24C),
-      ),
-      _GradeTier.choice => (
-        ViewerPalette.warningSoft,
-        ViewerPalette.warning,
-        const Color(0x4DF7B928),
-      ),
-      _GradeTier.circulated || _GradeTier.none => (
-        ViewerPalette.surfaceMist,
-        ViewerPalette.textMuted,
-        ViewerPalette.borderSoft,
-      ),
-    };
-
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: background,
-        borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
-        border: Border.all(color: border),
-      ),
-      child: Text(
-        text,
-        maxLines: 1,
-        overflow: TextOverflow.ellipsis,
-        style: TextStyle(
-          fontFamily: 'Inter',
-          color: foreground,
-          fontSize: 13,
-          fontWeight: FontWeight.w600,
-          height: 1.2,
-          fontFeatures: const [FontFeature.tabularFigures()],
-        ),
-      ),
     );
   }
 }
