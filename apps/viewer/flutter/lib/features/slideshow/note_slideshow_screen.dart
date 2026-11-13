@@ -1,10 +1,14 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../app/viewer_palette.dart';
 import '../../models/note_image.dart';
 import '../../models/note_record.dart';
+import '../../widgets/grade_pill.dart';
 import '../../widgets/mouse_drag_scroll_behavior.dart';
 import '../../widgets/note_image_provider.dart';
 import 'image_lightbox.dart';
@@ -28,15 +32,99 @@ const _kArrowScrollOffset = 120.0;
 
 /// Fixed landscape stage for the scan images. Measured across the real
 /// dataset (914 full images, avg ratio ~1.55, all but 6 landscape), 3:2
-/// centers the error so letterboxing stays small on every slide. The fixed
-/// height keeps the slide height (and the meta panel position) identical.
+/// centers the error so letterboxing stays small on every slide.
 const _kImageStageAspectRatio = 3 / 2;
+
+/// The room's inset and border only appear once the window can hold them.
+const double _kRoomMinWidth = 760;
+const double _kRoomMinHeight = 560;
+const double _kRoomInset = 16;
+
+/// Width at which the pair gains a details rail beside it, and the width below
+/// which the pair drops back to the stacked slide.
+const double _kRailTierMinWidth = 1000;
+const double _kPairTierMinWidth = 760;
+
+/// The details rail's fixed column width in the widest tier.
+const double _kDetailsRailWidth = 300;
+
+/// Padding inside the white slide card.
+const double _kSlidePadding = 20;
+
+/// Gap between the title block, the plates and the details.
+const double _kSlideGap = 12;
+
+/// Floor for the plate pair so both faces stay visible before the slide
+/// scrolls instead of shrinking further.
+const double _kMinPlatePairHeight = 88;
 
 /// The virtual page the first note is pinned to. The slideshow pages an
 /// unbounded [PageView] so that a swipe past either end wraps with no visible
 /// seam; this leaves enough room behind the first note that a backwards wrap
 /// never runs out of pages.
 const int _kVirtualPageOrigin = 1 << 20;
+
+const TextStyle _kLabelStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: _kTextLabel,
+  fontSize: 11,
+  fontWeight: FontWeight.w700,
+  letterSpacing: 0.9,
+);
+
+const TextStyle _kDetailLabelStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: _kTextLabel,
+  fontSize: 10.5,
+  fontWeight: FontWeight.w800,
+  letterSpacing: 1.1,
+);
+
+const TextStyle _kDetailValueStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: _kTextPrimary,
+  fontSize: 15,
+  fontWeight: FontWeight.w600,
+  fontFeatures: [FontFeature.tabularFigures()],
+);
+
+/// The details strip is the tight copy of the rail: it sits under the plates
+/// and may not push them out of a short window.
+const TextStyle _kStripValueStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: _kTextPrimary,
+  fontSize: 13.5,
+  fontWeight: FontWeight.w600,
+  height: 1.3,
+  fontFeatures: [FontFeature.tabularFigures()],
+);
+
+const TextStyle _kNotesStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: _kTextPrimary,
+  fontSize: 14,
+  height: 1.5,
+);
+
+const TextStyle _kStripNotesStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: _kTextPrimary,
+  fontSize: 13,
+  height: 1.45,
+);
+
+/// How the details travel with the plates: a rail beside them, a four-column
+/// strip below them, or the stacked column on a narrow slide.
+enum _DetailsMode { rail, strip, stacked }
+
+/// The three compositions chosen by the slide's width.
+enum _SlideTier { rail, strip, stack }
+
+_SlideTier _tierFor(double width) {
+  if (width >= _kRailTierMinWidth) return _SlideTier.rail;
+  if (width >= _kPairTierMinWidth) return _SlideTier.strip;
+  return _SlideTier.stack;
+}
 
 class NoteSlideshowResult {
   const NoteSlideshowResult({
@@ -244,9 +332,11 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).shortestSide < 600;
-    final roomInset = compact ? 0.0 : 16.0;
-    final roomRadius = compact ? 0.0 : ViewerPalette.radiusMd;
+    final size = MediaQuery.sizeOf(context);
+    final roomed =
+        size.width >= _kRoomMinWidth && size.height >= _kRoomMinHeight;
+    final roomInset = roomed ? _kRoomInset : 0.0;
+    final roomRadius = roomed ? ViewerPalette.radiusMd : 0.0;
     return Shortcuts(
       // h/j/k/l alias the arrows. The activators stay plain (no modifiers), so
       // any modified arrow or letter is left for the platform and stays inert.
@@ -337,10 +427,10 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                   decoration: BoxDecoration(
                     color: _kBg,
                     borderRadius: BorderRadius.circular(roomRadius),
-                    border: compact
-                        ? null
-                        : Border.all(color: ViewerPalette.roomBorderControl),
-                    boxShadow: compact ? const [] : ViewerPalette.shadowRoom,
+                    border: roomed
+                        ? Border.all(color: ViewerPalette.roomBorderControl)
+                        : null,
+                    boxShadow: roomed ? ViewerPalette.shadowRoom : const [],
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(roomRadius),
@@ -514,8 +604,130 @@ class _NoteSlideState extends State<_NoteSlide> {
     );
   }
 
+  Widget _buildScrollBody(_SlideTier tier) {
+    return ScrollConfiguration(
+      // Reset to the platform default so the mouse drag that pages the
+      // slideshow does not also drag-scroll the card, while keeping the
+      // scrollbar hidden (the bottom fade already signals that the card
+      // content scrolls).
+      behavior: const MaterialScrollBehavior().copyWith(scrollbars: false),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          return SingleChildScrollView(
+            controller: _scrollController,
+            padding: const EdgeInsets.all(_kSlidePadding),
+            child: tier == _SlideTier.stack
+                ? _buildStacked()
+                : ConstrainedBox(
+                    constraints: BoxConstraints(
+                      minHeight: math.max(
+                        0,
+                        constraints.maxHeight - _kSlidePadding * 2,
+                      ),
+                    ),
+                    // IntrinsicHeight lets the body fill the viewport when the
+                    // content fits and grow past it (so the slide scrolls) when
+                    // it does not. The plate pair reports a zero intrinsic
+                    // height so it bends with the viewport instead of pinning
+                    // the body to its card-width size.
+                    child: IntrinsicHeight(child: _buildTiered(tier)),
+                  ),
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _buildTiered(_SlideTier tier) {
+    final header = _SlideHeader(note: widget.note);
+    final pair = _PlatePair(
+      note: widget.note,
+      onTapImage: widget.onTapImage,
+    );
+
+    if (tier == _SlideTier.rail) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          header,
+          const SizedBox(height: _kSlideGap),
+          Expanded(
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(
+                minHeight: _kMinPlatePairHeight,
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: _IgnoreIntrinsicHeight(child: pair)),
+                  const SizedBox(width: 16),
+                  SizedBox(
+                    width: _kDetailsRailWidth,
+                    child: _DetailsRail(
+                      note: widget.note,
+                      mode: _DetailsMode.rail,
+                      onTagTap: widget.onTagTap,
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        header,
+        const SizedBox(height: _kSlideGap),
+        Expanded(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minHeight: _kMinPlatePairHeight),
+            child: _IgnoreIntrinsicHeight(child: pair),
+          ),
+        ),
+        const SizedBox(height: 10),
+        _DetailsRail(
+          note: widget.note,
+          mode: _DetailsMode.strip,
+          onTagTap: widget.onTagTap,
+        ),
+      ],
+    );
+  }
+
+  Widget _buildStacked() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _SlideHeader(note: widget.note, centered: true),
+        const SizedBox(height: 16),
+        _NotePlate(
+          image: widget.note.fullFor('front'),
+          label: 'Front',
+          onTap: () => widget.onTapImage(widget.note, 'front'),
+        ),
+        const SizedBox(height: 12),
+        _NotePlate(
+          image: widget.note.fullFor('back'),
+          label: 'Back',
+          onTap: () => widget.onTapImage(widget.note, 'back'),
+        ),
+        const SizedBox(height: 16),
+        _DetailsRail(
+          note: widget.note,
+          mode: _DetailsMode.stacked,
+          onTagTap: widget.onTagTap,
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final tier = _tierFor(MediaQuery.sizeOf(context).width);
     return Padding(
       padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
       child: Stack(
@@ -531,85 +743,7 @@ class _NoteSlideState extends State<_NoteSlide> {
               clipBehavior: Clip.antiAlias,
               child: Stack(
                 children: [
-                  ScrollConfiguration(
-                    // Reset to the platform default so the mouse drag that
-                    // pages the slideshow does not also drag-scroll the card,
-                    // while keeping the scrollbar hidden (the bottom fade
-                    // already signals that the card content scrolls).
-                    behavior: const MaterialScrollBehavior().copyWith(
-                      scrollbars: false,
-                    ),
-                    child: SingleChildScrollView(
-                      controller: _scrollController,
-                      padding: const EdgeInsets.all(20),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Text(
-                            (widget.note.gradingCompany.trim().isEmpty
-                                    ? 'Collection note'
-                                    : widget.note.gradingCompany)
-                                .toUpperCase(),
-                            style: const TextStyle(
-                              fontFamily: 'Inter',
-                              color: _kTextLabel,
-                              fontSize: 11,
-                              fontWeight: FontWeight.w700,
-                              letterSpacing: 0.9,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          const SizedBox(height: 6),
-                          Text(
-                            widget.note.title.toUpperCase(),
-                            style: const TextStyle(
-                              fontFamily: 'Inter',
-                              color: _kTextPrimary,
-                              fontSize: 28,
-                              fontWeight: FontWeight.w800,
-                              letterSpacing: -0.6,
-                              height: 1.12,
-                            ),
-                            textAlign: TextAlign.center,
-                          ),
-                          if (widget.note.issueDate.trim().isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Text(
-                              widget.note.issueDate,
-                              style: const TextStyle(
-                                fontFamily: 'Inter',
-                                color: _kTextLabel,
-                                fontSize: 14,
-                              ),
-                              textAlign: TextAlign.center,
-                            ),
-                          ],
-                          const SizedBox(height: 14),
-                          Container(
-                            height: 1,
-                            margin: const EdgeInsets.symmetric(horizontal: 48),
-                            color: _kBorder,
-                          ),
-                          const SizedBox(height: 16),
-                          _NoteImage(
-                            image: widget.note.fullFor('front'),
-                            onTap: () =>
-                                widget.onTapImage(widget.note, 'front'),
-                          ),
-                          const SizedBox(height: 12),
-                          _NoteImage(
-                            image: widget.note.fullFor('back'),
-                            onTap: () => widget.onTapImage(widget.note, 'back'),
-                          ),
-                          const SizedBox(height: 16),
-                          _MetaPanel(
-                            note: widget.note,
-                            onTagTap: widget.onTagTap,
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
+                  Positioned.fill(child: _buildScrollBody(tier)),
                   Positioned(
                     left: 0,
                     right: 0,
@@ -646,8 +780,7 @@ class _NoteSlideState extends State<_NoteSlide> {
             child: IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
-                  borderRadius:
-                      BorderRadius.circular(ViewerPalette.radiusMd),
+                  borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
                   border: Border.all(color: _kBorder),
                 ),
               ),
@@ -659,62 +792,204 @@ class _NoteSlideState extends State<_NoteSlide> {
   }
 }
 
-class _NoteImage extends StatelessWidget {
-  const _NoteImage({required this.image, required this.onTap});
+/// Reports no intrinsic height so a flexible child can shrink with the
+/// viewport inside the slide's [IntrinsicHeight]; the child still lays out
+/// normally under the tight height its parent gives it.
+class _IgnoreIntrinsicHeight extends SingleChildRenderObjectWidget {
+  const _IgnoreIntrinsicHeight({required super.child});
+
+  @override
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderIgnoreIntrinsicHeight();
+}
+
+class _RenderIgnoreIntrinsicHeight extends RenderProxyBox {
+  @override
+  double computeMinIntrinsicHeight(double width) => 0;
+
+  @override
+  double computeMaxIntrinsicHeight(double width) => 0;
+}
+
+/// The note's eyebrow, denomination and issue date, over a hairline.
+class _SlideHeader extends StatelessWidget {
+  const _SlideHeader({required this.note, this.centered = false});
+
+  final NoteRecord note;
+  final bool centered;
+
+  @override
+  Widget build(BuildContext context) {
+    final align = centered ? TextAlign.center : TextAlign.start;
+    final crossAxisAlignment =
+        centered ? CrossAxisAlignment.center : CrossAxisAlignment.start;
+    final company = note.gradingCompany.trim();
+    final issueDate = note.issueDate.trim();
+    final eyebrow = [
+      if (company.isNotEmpty) company else 'Collection note',
+      if (issueDate.isNotEmpty) issueDate,
+    ].join(' · ');
+    return Column(
+      crossAxisAlignment: crossAxisAlignment,
+      children: [
+        Text(eyebrow.toUpperCase(), style: _kLabelStyle, textAlign: align),
+        const SizedBox(height: 5),
+        Text(
+          note.title.toUpperCase(),
+          style: const TextStyle(
+            fontFamily: 'Inter',
+            color: _kTextPrimary,
+            fontSize: 33.6,
+            fontWeight: FontWeight.w800,
+            letterSpacing: -0.7,
+            height: 1.12,
+          ),
+          textAlign: align,
+        ),
+      ],
+    );
+  }
+}
+
+/// Both faces at equal weight, each sized to the height the slide gives them.
+class _PlatePair extends StatelessWidget {
+  const _PlatePair({required this.note, required this.onTapImage});
+
+  final NoteRecord note;
+  final void Function(NoteRecord, String) onTapImage;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      children: [
+        Expanded(
+          child: Center(
+            child: _NotePlate(
+              image: note.fullFor('front'),
+              label: 'Front',
+              onTap: () => onTapImage(note, 'front'),
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Expanded(
+          child: Center(
+            child: _NotePlate(
+              image: note.fullFor('back'),
+              label: 'Back',
+              onTap: () => onTapImage(note, 'back'),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// One image plate: a white 3:2 stage with a face label, opened full size.
+class _NotePlate extends StatelessWidget {
+  const _NotePlate({
+    required this.image,
+    required this.label,
+    required this.onTap,
+  });
 
   final NoteImage? image;
+  final String label;
   final VoidCallback onTap;
 
   @override
   Widget build(BuildContext context) {
     final image = this.image;
-    return GestureDetector(
-      onTap: image == null ? null : onTap,
-      child: AspectRatio(
-        aspectRatio: _kImageStageAspectRatio,
-        child: Container(
-          // A plate on the white card: white ground, hairline control border,
-          // and the picture fitted inside. The room carries no second tint.
-          decoration: BoxDecoration(
-            color: ViewerPalette.roomSurface,
-            borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
-            border: Border.all(color: ViewerPalette.roomBorderControl),
-          ),
-          clipBehavior: Clip.antiAlias,
-          padding: const EdgeInsets.all(8),
-          child: image == null
-              ? const Center(
-                  child: Text(
-                    'No image',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      color: ViewerPalette.roomMuted,
+    return MouseRegion(
+      cursor: image == null ? SystemMouseCursors.basic : SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: image == null ? null : onTap,
+        child: AspectRatio(
+          aspectRatio: _kImageStageAspectRatio,
+          child: Container(
+            // A plate on the white card: white ground, hairline control
+            // border, and the picture fitted inside. The room carries no
+            // second tint.
+            decoration: BoxDecoration(
+              color: ViewerPalette.roomSurface,
+              borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
+              border: Border.all(color: ViewerPalette.roomBorderControl),
+            ),
+            clipBehavior: Clip.antiAlias,
+            padding: const EdgeInsets.all(8),
+            child: Stack(
+              children: [
+                Positioned.fill(
+                  child: image == null
+                      ? const Center(
+                          child: Text(
+                            'No image',
+                            style: TextStyle(
+                              fontFamily: 'Inter',
+                              color: ViewerPalette.roomMuted,
+                            ),
+                          ),
+                        )
+                      : Image(
+                          image: createNoteImageProvider(image),
+                          fit: BoxFit.contain,
+                          errorBuilder: (_, _, _) => const Center(
+                            child: Text(
+                              'Missing image',
+                              style: TextStyle(
+                                fontFamily: 'Inter',
+                                color: ViewerPalette.roomMuted,
+                              ),
+                            ),
+                          ),
+                        ),
+                ),
+                Positioned(
+                  left: 4,
+                  top: 4,
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(
+                      horizontal: 7,
+                      vertical: 3,
                     ),
-                  ),
-                )
-              : Image(
-                  image: createNoteImageProvider(image),
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, _, _) => const Center(
+                    decoration: BoxDecoration(
+                      color: ViewerPalette.roomSurface.withValues(alpha: 0.94),
+                      borderRadius: BorderRadius.circular(ViewerPalette.radiusXs),
+                      border: Border.all(color: ViewerPalette.borderSoft),
+                    ),
                     child: Text(
-                      'Missing image',
-                      style: TextStyle(
+                      label.toUpperCase(),
+                      style: const TextStyle(
                         fontFamily: 'Inter',
-                        color: ViewerPalette.roomMuted,
+                        color: _kTextLabel,
+                        fontSize: 10.5,
+                        fontWeight: FontWeight.w800,
+                        letterSpacing: 1.1,
                       ),
                     ),
                   ),
                 ),
+              ],
+            ),
+          ),
         ),
       ),
     );
   }
 }
 
-class _MetaPanel extends StatelessWidget {
-  const _MetaPanel({required this.note, required this.onTagTap});
+/// The note's facts: a rail beside the plates, a four-column strip below them,
+/// or the stacked panel on a narrow slide. A blank field is left out.
+class _DetailsRail extends StatelessWidget {
+  const _DetailsRail({
+    required this.note,
+    required this.mode,
+    required this.onTagTap,
+  });
 
   final NoteRecord note;
+  final _DetailsMode mode;
   final void Function(String tagName) onTagTap;
 
   Uri? _parseSourceUri(String value) {
@@ -731,142 +1006,246 @@ class _MetaPanel extends StatelessWidget {
     await launchUrl(uri, mode: LaunchMode.externalApplication);
   }
 
+  Widget _header() {
+    final catalog = note.catalogNumber.trim();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Row(
+          children: [
+            const Text(
+              'Details',
+              style: TextStyle(
+                fontFamily: 'Inter',
+                color: _kTextLabel,
+                fontSize: 10.5,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 1.1,
+              ),
+            ),
+            const Spacer(),
+            if (catalog.isNotEmpty)
+              Text(
+                catalog,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: _kTextLabel,
+                  fontSize: 11,
+                  fontFeatures: [FontFeature.tabularFigures()],
+                ),
+              ),
+          ],
+        ),
+        const SizedBox(height: 8),
+        const Divider(
+          height: 1,
+          thickness: 1,
+          color: ViewerPalette.borderSoft,
+        ),
+      ],
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
-    final detailEntries = <MapEntry<String, String>>[
-      MapEntry('Catalog', note.catalogNumber),
-      MapEntry('Grade', note.grade),
-      MapEntry('Serial', note.serial),
-      MapEntry('Watermark', note.watermark),
-    ].where((e) => e.value.trim().isNotEmpty).toList(growable: false);
+    final compact = mode == _DetailsMode.strip;
+    final valueStyle = compact ? _kStripValueStyle : _kDetailValueStyle;
+    final notesStyle = compact ? _kStripNotesStyle : _kNotesStyle;
+
+    final serial = note.serial.trim();
+    final watermark = note.watermark.trim();
+    final url = note.url.trim();
+    final notes = note.notes.trim();
+
+    final grade = note.grade.trim().isEmpty
+        ? null
+        : _DetailField(label: 'Grade', value: GradePill(grade: note.grade));
+    final serialField = serial.isEmpty
+        ? null
+        : _DetailField(
+            label: 'Serial',
+            value: SelectableText(serial, style: valueStyle),
+          );
+    final watermarkField = watermark.isEmpty
+        ? null
+        : _DetailField(
+            label: 'Watermark',
+            value: SelectableText(watermark, style: valueStyle),
+          );
+    final tagsField = note.tags.isEmpty
+        ? null
+        : _DetailField(
+            label: 'Tags',
+            value: Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final tag in note.tags)
+                  _TagChip(name: tag.name, onTap: () => onTagTap(tag.name)),
+              ],
+            ),
+          );
+    final sourceField = url.isEmpty
+        ? null
+        : _DetailField(
+            label: 'Source',
+            value: GestureDetector(
+              onTap: _openSourceUrl,
+              child: Text(
+                url,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: _kTextAccent,
+                  decoration: TextDecoration.underline,
+                  fontSize: 14,
+                ),
+              ),
+            ),
+          );
+    final notesField = notes.isEmpty
+        ? null
+        : _DetailField(
+            label: 'Notes',
+            value: Text(notes, style: notesStyle),
+          );
+
+    final fields = [
+      grade,
+      serialField,
+      watermarkField,
+      tagsField,
+      sourceField,
+      notesField,
+    ].whereType<Widget>().toList(growable: false);
+
+    final Widget content;
+    if (compact) {
+      // Four short facts across, then the two long fields share the row below
+      // so a note reads in a couple of lines instead of a narrow column.
+      final shortFields = [grade, serialField, watermarkField, tagsField];
+      final hasShort = shortFields.any((field) => field != null);
+      final longFields = (sourceField == null && notesField == null)
+          ? null
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (sourceField != null)
+                  Expanded(flex: 2, child: sourceField),
+                if (sourceField != null && notesField != null)
+                  const SizedBox(width: 22),
+                if (notesField != null) Expanded(flex: 3, child: notesField),
+              ],
+            );
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (hasShort)
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (var column = 0; column < 4; column++) ...[
+                  if (column > 0) const SizedBox(width: 22),
+                  Expanded(
+                    child: shortFields[column] ?? const SizedBox.shrink(),
+                  ),
+                ],
+              ],
+            ),
+          if (hasShort && longFields != null) const SizedBox(height: 8),
+          ?longFields,
+        ],
+      );
+    } else {
+      content = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          for (var i = 0; i < fields.length; i++) ...[
+            if (i > 0) const SizedBox(height: 14),
+            fields[i],
+          ],
+        ],
+      );
+    }
 
     return Container(
+      padding: mode == _DetailsMode.stacked
+          ? const EdgeInsets.all(20)
+          : mode == _DetailsMode.strip
+              ? const EdgeInsets.fromLTRB(16, 8, 16, 10)
+              : const EdgeInsets.all(16),
       decoration: BoxDecoration(
         color: _kDetailsBg,
         borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
         border: Border.all(color: _kBorder),
       ),
-      padding: const EdgeInsets.all(20),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        mainAxisSize: mode == _DetailsMode.strip
+            ? MainAxisSize.min
+            : MainAxisSize.max,
         children: [
-          for (final entry in detailEntries) ...[
-            Text(
-              entry.key,
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                color: _kTextLabel,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.1,
-              ),
-            ),
-            const SizedBox(height: 3),
-            SelectableText(
-              entry.value,
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                color: _kTextPrimary,
-                fontSize: 16,
-                fontWeight: FontWeight.w600,
-                fontFeatures: [FontFeature.tabularFigures()],
-              ),
-            ),
-            const SizedBox(height: 14),
+          _header(),
+          if (fields.isNotEmpty) ...[
+            SizedBox(height: compact ? 8 : 12),
+            content,
           ],
-          if (note.tags.isNotEmpty) ...[
-            const Text(
-              'Tags',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: _kTextLabel,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.1,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              spacing: 8,
-              runSpacing: 6,
-              children: [
-                for (final tag in note.tags)
-                  GestureDetector(
-                    onTap: () => onTagTap(tag.name),
-                    child: MouseRegion(
-                      cursor: SystemMouseCursors.click,
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(
-                            horizontal: 11, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: _kTagChipBg,
-                          borderRadius: BorderRadius.circular(
-                              ViewerPalette.radiusChip),
-                          border: Border.all(color: _kTagChipBorder),
-                        ),
-                        child: Text(
-                          tag.name,
-                          style: const TextStyle(
-                            fontFamily: 'Inter',
-                            color: _kTagChipText,
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                      ),
-                    ),
-                  ),
-              ],
-            ),
-            const SizedBox(height: 14),
-          ],
-          if (note.url.trim().isNotEmpty) ...[
-            const Text(
-              'Source URL',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: _kTextLabel,
-                fontSize: 11,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.1,
-              ),
-            ),
-            const SizedBox(height: 3),
-            GestureDetector(
-              onTap: _openSourceUrl,
-              child: Text(
-                note.url,
-                style: const TextStyle(
-                  fontFamily: 'Inter',
-                  color: _kTextAccent,
-                  decoration: TextDecoration.underline,
-                  fontSize: 15,
-                ),
-              ),
-            ),
-            const SizedBox(height: 14),
-          ],
-          const Text(
-            'Notes',
-            style: TextStyle(
-              fontFamily: 'Inter',
-              color: _kTextLabel,
-              fontSize: 11,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 1.1,
-            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _DetailField extends StatelessWidget {
+  const _DetailField({required this.label, required this.value});
+
+  final String label;
+  final Widget value;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text(label.toUpperCase(), style: _kDetailLabelStyle),
+        const SizedBox(height: 3),
+        value,
+      ],
+    );
+  }
+}
+
+class _TagChip extends StatelessWidget {
+  const _TagChip({required this.name, required this.onTap});
+
+  final String name;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
+          decoration: BoxDecoration(
+            color: _kTagChipBg,
+            borderRadius: BorderRadius.circular(ViewerPalette.radiusChip),
+            border: Border.all(color: _kTagChipBorder),
           ),
-          const SizedBox(height: 3),
-          Text(
-            note.notes.trim().isEmpty ? 'No extra notes.' : note.notes,
+          child: Text(
+            name,
             style: const TextStyle(
               fontFamily: 'Inter',
-              color: _kTextPrimary,
-              fontSize: 15,
-              height: 1.5,
+              color: _kTagChipText,
+              fontSize: 12,
+              fontWeight: FontWeight.w600,
             ),
           ),
-        ],
+        ),
       ),
     );
   }

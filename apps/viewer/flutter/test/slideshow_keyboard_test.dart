@@ -6,11 +6,22 @@ import 'package:note_harbor_viewer/features/slideshow/note_slideshow_screen.dart
 import 'package:note_harbor_viewer/models/note_record.dart';
 
 void main() {
+  /// Pumps the slideshow, optionally at a given logical surface size.
+  ///
+  /// The stacked slide tiers are the ones with vertical overflow at phone size;
+  /// the pair tiers fit their viewport by design, so scroll tests ask for a
+  /// narrow surface explicitly.
   Future<void> pumpSlideshow(
     WidgetTester tester,
     List<NoteRecord> notes, {
     int initialIndex = 0,
+    Size? surfaceSize,
   }) async {
+    if (surfaceSize != null) {
+      tester.view.physicalSize = surfaceSize;
+      tester.view.devicePixelRatio = 1.0;
+      addTearDown(tester.view.reset);
+    }
     await tester.pumpWidget(
       MaterialApp(
         home: NoteSlideshowScreen(notes: notes, initialIndex: initialIndex),
@@ -104,7 +115,7 @@ void main() {
     final notes = [
       NoteRecord.fromJson(slideNote(id: 1, denomination: 'A', withImages: true)),
     ];
-    await pumpSlideshow(tester, notes);
+    await pumpSlideshow(tester, notes, surfaceSize: const Size(420, 700));
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
@@ -118,7 +129,7 @@ void main() {
     final notes = [
       NoteRecord.fromJson(slideNote(id: 1, denomination: 'A', withImages: true)),
     ];
-    await pumpSlideshow(tester, notes);
+    await pumpSlideshow(tester, notes, surfaceSize: const Size(420, 700));
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
@@ -416,7 +427,7 @@ void main() {
     final notes = [
       NoteRecord.fromJson(slideNote(id: 1, denomination: 'A', withImages: true)),
     ];
-    await pumpSlideshow(tester, notes);
+    await pumpSlideshow(tester, notes, surfaceSize: const Size(420, 700));
 
     await tester.sendKeyEvent(LogicalKeyboardKey.keyJ);
     await tester.pumpAndSettle();
