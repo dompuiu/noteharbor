@@ -645,6 +645,7 @@ describe("Slideshow catalogue page", () => {
 
   test("Copy fields raises the success toast", async () => {
     const user = userEvent.setup();
+    const onCopy = vi.fn();
 
     render(
       <ToastProvider>
@@ -653,12 +654,16 @@ describe("Slideshow catalogue page", () => {
           notes={[note()]}
           onChangeIndex={() => {}}
           onClose={() => {}}
+          onCopy={onCopy}
         />
       </ToastProvider>,
     );
 
     await user.click(screen.getByRole("button", { name: "Copy fields" }));
     expect(await screen.findByText("Note fields copied")).toBeInTheDocument();
+    // Success confirms with the toast; it must not clear an earlier failure
+    // banner behind the room.
+    expect(onCopy).not.toHaveBeenCalled();
   });
 
   test("a failed copy keeps the danger line", async () => {

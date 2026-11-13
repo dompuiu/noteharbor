@@ -70,15 +70,23 @@ function getNeighbourLabel(note) {
   return denomination || issueDate || "Untitled note";
 }
 
-// The plate's file name, without the version/preview query the plate adds.
+// The final segment of an image URL, for naming a file to the reader. Plates
+// and popover scans both carry version and preview queries, and the full path
+// is noise: the file name is the one detail that helps a collector find the
+// scan on disk. An unknown name stays empty; callers that must name something
+// pass their own fallback.
 function fileNameFromPath(path) {
-  const withoutQuery = String(path ?? "").split("?")[0];
-  const name = withoutQuery.split("/").filter(Boolean).pop() ?? "";
+  const name =
+    String(path ?? "")
+      .split(/[?#]/)[0]
+      .split("/")
+      .filter(Boolean)
+      .at(-1) ?? "";
 
   try {
-    return decodeURIComponent(name) || "Image file";
+    return decodeURIComponent(name);
   } catch {
-    return name || "Image file";
+    return name;
   }
 }
 
@@ -447,23 +455,6 @@ function sameSize(left, right) {
   return left.width === right.width && left.height === right.height;
 }
 
-// The final segment of the image URL, for naming a file in the missing-image
-// state. The full path is noisy; the file name is the one detail that helps a
-// collector find the scan on disk.
-function imageFileName(src) {
-  if (!src) {
-    return "";
-  }
-
-  const name = src.split(/[?#]/)[0].split("/").filter(Boolean).at(-1) ?? "";
-
-  try {
-    return decodeURIComponent(name);
-  } catch {
-    return name;
-  }
-}
-
 const POPOVER_SIDES = [
   { kind: "front", label: "Front" },
   { kind: "back", label: "Back" },
@@ -552,7 +543,7 @@ function ImagePopover({
     fullLoaded &&
     fitScale > 0 &&
     (!zoomed || zoomScale < maxZoomScale);
-  const canZoomOut = hasImage && fullLoaded && zoomed;
+  const canZoomOut = hasImage && zoomed;
 
   // An axis with no overflow has nothing to pan, so it keeps the image
   // centred. Without this a zoomed plate smaller than the well would snap to
@@ -620,13 +611,17 @@ function ImagePopover({
 
       // A face whose fit is larger than the retained zoom would leave the
       // plate below its own fit. The zoom view is never smaller than the fit,
-      // so such a switch returns to Fit instead.
+      // so clamp the retained scale up to this face's fit rather than dropping
+      // the zoom: the front/back switch keeps it.
+      const faceFitScale =
+        natural.width > 0 ? fitted.width / natural.width : 0;
+
       if (
         zoomed &&
-        natural.width > 0 &&
-        zoomScale < fitted.width / natural.width - ZOOM_EPSILON
+        faceFitScale > 0 &&
+        zoomScale < faceFitScale - ZOOM_EPSILON
       ) {
-        resetZoom();
+        setZoomScale(faceFitScale);
       }
 
       setFitSize((current) => (sameSize(current, fitted) ? current : fitted));
@@ -736,12 +731,18 @@ function ImagePopover({
   }
 
   function zoomTo(nextScale, anchor = null) {
-    if (!hasImage || !fullLoaded || !fitScale) {
+    if (!hasImage) {
       return;
     }
 
     if (!nextScale || nextScale <= fitScale + ZOOM_EPSILON) {
       resetZoom();
+      return;
+    }
+
+    // A step up needs this scan's measured fit; a step back only needs the
+    // zoom already held, so it still works while the next scan loads.
+    if (!fullLoaded || !fitScale) {
       return;
     }
 
@@ -825,9 +826,14 @@ function ImagePopover({
 
   // A broken <img> records the source it was actually asked to paint, so a
   // late error from the previous page cannot mark the incoming one missing.
-  // The file name follows the element that failed, not the plate's full scan.
+  // Only the current page's own scan or thumbnail can fail it, and the
+  // failure is keyed to the canonical full scan the empty state names.
   function failImage(source) {
-    setFailedImage({ file: imageFileName(source), src: src || null });
+    if (!source || (source !== src && source !== thumb)) {
+      return;
+    }
+
+    setFailedImage({ file: fileNameFromPath(source), src: src || null });
   }
 
   // The scrim steps back to Fit first, exactly like the first Escape, and only
@@ -1678,8 +1684,8 @@ function Slideshow({
 
     try {
       await copyTextToClipboard(clipboardValue);
-      // A success retires any earlier copy failure before confirming.
-      onCopy?.(null);
+      // Success confirms with the toast alone: an earlier copy failure's
+      // danger line stays until its own retry clears it.
       shellToastRef?.current?.show("Note fields copied");
     } catch {
       onCopy?.("Could not copy note details to clipboard.");
@@ -2041,7 +2047,7 @@ function Slideshow({
                 previewItems.map((item) => {
                   const plateFailed = failedPlateSources.has(item.thumb);
                   const plateFileName = plateFailed
-                    ? fileNameFromPath(item.thumb)
+                    ? fileNameFromPath(item.thumb) || "Image file"
                     : null;
 
                   return (

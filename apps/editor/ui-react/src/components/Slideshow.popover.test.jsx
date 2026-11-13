@@ -237,6 +237,29 @@ describe("ImagePopover image loading", () => {
     }
   });
 
+  test("a late error from the previous page does not mark the new image missing", async () => {
+    const { rerender } = render(popover());
+    await finishDecode(FRONT_1);
+
+    const element = fullImage();
+    expect(element).toHaveAttribute("src", FRONT_1);
+
+    // Page to the back while its scan is still decoding: the front stays on
+    // screen, so its element can report a late error for the old URL.
+    rerender(popover({ src: BACK_1, thumb: BACK_THUMB_1 }));
+    fireEvent.error(element);
+
+    expect(document.querySelector(".image-popover-empty-state")).toBeNull();
+    expect(
+      document.querySelector(".image-popover-announcer"),
+    ).not.toHaveTextContent("image unavailable");
+
+    await finishDecode(BACK_1);
+
+    expect(fullImage()).toHaveAttribute("src", BACK_1);
+    expect(document.querySelector(".image-popover-empty-state")).toBeNull();
+  });
+
   test("reuses a warmed full image instead of probing it again", () => {
     const src = "/api/images/notes/9/front-full.jpg?v=1";
     const warmed = preloadImage(src);
@@ -361,7 +384,7 @@ describe("ImagePopover zoom", () => {
     expect(image.style.width).toBe("375px");
   });
 
-  test("returns to Fit when a face's fit is larger than the retained zoom", async () => {
+  test("clamps the retained zoom up to a larger face's fit instead of resetting", async () => {
     const { rerender } = render(popover());
     await finishDecode(FRONT_1);
 
@@ -379,8 +402,9 @@ describe("ImagePopover zoom", () => {
 
     expect(image.style.width).toBe("625px");
 
-    // This back already fits at 80% of its natural pixels, so keeping the
-    // front's 31% zoom would paint it below its own fit.
+    // This back already fits at 80% of its natural pixels, so the front's 31%
+    // zoom would paint it below its own fit. Clamping up to the back's fit
+    // keeps the zoom across the face switch instead of dropping to Fit.
     rerender(popover({ src: BACK_1, thumb: BACK_THUMB_1 }));
     await finishDecode(BACK_1);
     measureImageBox(image, {
@@ -390,11 +414,58 @@ describe("ImagePopover zoom", () => {
       fitHeight: 800,
     });
 
+    expect(image.style.width).toBe("800px");
+    expect(image.style.height).toBe("800px");
+    expect(imageWrap()).toHaveClass("image-popover-image-wrap--zoomed");
+    expect(zoomLevel()).toHaveTextContent("80%");
+    expect(screen.getByRole("button", { name: "Fit" })).toHaveAttribute(
+      "aria-pressed",
+      "false",
+    );
+
+    // The ladder now steps from the back's own fit.
+    fireEvent.click(zoomButton("Zoom in"));
+
+    expect(image.style.width).toBe("1000px");
+    expect(zoomLevel()).toHaveTextContent("100%");
+  });
+
+  test("steps a retained zoom back while the next scan is still loading", async () => {
+    const { rerender } = render(popover());
+    await finishDecode(FRONT_1);
+
+    const image = fullImage();
+
+    measureImageBox(image, {
+      naturalWidth: 2000,
+      naturalHeight: 1000,
+      fitWidth: 500,
+      fitHeight: 250,
+    });
+    measurePopoverWrap({ width: 800, height: 600 });
+
+    fireEvent.click(zoomButton("Zoom in"));
+
+    expect(image.style.width).toBe("625px");
+
+    // The next scan is not decoded yet, so the front stays on screen. Stepping
+    // back needs only the retained zoom, not the incoming page's pixels.
+    rerender(popover({ src: BACK_1, thumb: BACK_THUMB_1 }));
+
+    expect(zoomButton("Zoom out")).toBeEnabled();
+
+    fireEvent.click(zoomButton("Zoom out"));
+
     expect(image.style.width).toBe("");
     expect(screen.getByRole("button", { name: "Fit" })).toHaveAttribute(
       "aria-pressed",
       "true",
     );
+
+    await finishDecode(BACK_1);
+
+    expect(fullImage()).toHaveAttribute("src", BACK_1);
+    expect(fullImage().style.width).toBe("");
   });
 
   test("a same-note Home jump keeps the zoom", async () => {
