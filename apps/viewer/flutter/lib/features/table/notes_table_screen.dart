@@ -431,13 +431,20 @@ bool _matchesDenominationFilterValue(String noteValue, String filterValue) {
   return textTerms.every((term) => noteValue.contains(term));
 }
 
-bool _matchesAllFieldsSearch(NoteRecord note, String allFields) {
+/// The all-fields haystack. [collectionName] joins it only in All notes, where
+/// the collection is part of the row a collector saw.
+bool _matchesAllFieldsSearch(
+  NoteRecord note,
+  String allFields, {
+  String? collectionName,
+}) {
   final searchTerms = _splitSearchTerms(allFields);
   if (searchTerms.isEmpty) {
     return true;
   }
 
   final haystack = [
+    ?collectionName,
     note.displayOrder.toString(),
     note.denomination,
     note.issueDate,
@@ -1599,12 +1606,24 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
 
   List<NoteRecord> _sortedNotes(List<NoteRecord> notes) {
     final trimmedQuery = _query.trim();
+    final collections = widget.controller.dataset?.collections;
+    // All notes shows the collection beside each row, so its name is part of
+    // what the all-fields filter can find. A collection scope keeps the search
+    // on the note's own fields, where the name would match every row.
+    final collectionNames =
+        widget.controller.showingAllNotes && collections != null
+        ? {for (final collection in collections) collection.id: collection.name}
+        : null;
     final filtered = notes
         .where((note) {
           if (trimmedQuery.isEmpty) return true;
 
           if (_filterScope == _kAllFieldsScope) {
-            return _matchesAllFieldsSearch(note, trimmedQuery);
+            return _matchesAllFieldsSearch(
+              note,
+              trimmedQuery,
+              collectionName: collectionNames?[note.collectionId],
+            );
           }
 
           if (_filterScope == 'tags') {
@@ -1630,7 +1649,6 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         })
         .toList(growable: false);
 
-    final collections = widget.controller.dataset?.collections;
     final collectionRanks = collections == null
         ? null
         : {

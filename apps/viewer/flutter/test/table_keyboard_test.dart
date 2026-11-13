@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_harbor_viewer/app/viewer_palette.dart';
 import 'package:note_harbor_viewer/data/dataset_controller.dart';
+import 'package:note_harbor_viewer/data/last_collection_store.dart';
 import 'package:note_harbor_viewer/data/viewer_repository.dart';
 import 'package:note_harbor_viewer/features/import/import_dataset_screen.dart';
 import 'package:note_harbor_viewer/features/table/notes_table_screen.dart';
@@ -49,6 +50,26 @@ void main() {
       MaterialApp(home: NotesTableScreen(controller: controller)),
     );
     await tester.pumpAndSettle();
+  }
+
+  /// Pumps the combined table: three notes across two collections, ordered by
+  /// collection (Alpha's two, then Zulu's one) rather than by display order
+  /// across the archive.
+  Future<DatasetController> pumpAllNotesTable(WidgetTester tester) async {
+    final controller = DatasetController(
+      repository: _AllNotesKeyboardRepository(),
+      selectionStore: _MemoryLastCollectionStore(),
+    );
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    await controller.showAllNotes();
+    await tester.pumpAndSettle();
+    return controller;
   }
 
   Finder tableRow(int id) => find.byKey(ValueKey('tableRow-$id'));
@@ -1534,6 +1555,80 @@ void main() {
       isTrue,
     );
   });
+
+  keyboardTestWidgets(
+    'All notes walks, copies, and presents the combined list',
+    (WidgetTester tester) async {
+      final clipboard = _clipboardRecorder(tester);
+      final controller = await pumpAllNotesTable(tester);
+
+      expect(controller.showingAllNotes, isTrue);
+      expect(find.text('ALL NOTES'), findsOneWidget);
+      expect(find.text('3 notes · Sorted by Collection ↑'), findsOneWidget);
+
+      // Collection order below the switcher wins over display order, so the
+      // combined list runs Alpha One, Alpha Two, then the other collection.
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(selectedRow(11), findsOneWidget);
+
+      await tester.sendKeyDownEvent(LogicalKeyboardKey.controlLeft);
+      await tester.sendKeyEvent(LogicalKeyboardKey.keyC);
+      await tester.sendKeyUpEvent(LogicalKeyboardKey.controlLeft);
+      await tester.pump();
+      expect(clipboard, ['900011']);
+
+      // Enter opens the combined list at the selected row, not just its
+      // collection.
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      expect(find.text('2 / 3'), findsOneWidget);
+      expect(find.text('ALPHA TWO - P-11'), findsOneWidget);
+
+      // Esc returns to the same row in the same All notes scope.
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.text('Back'), findsNothing);
+      expect(selectedRow(11), findsOneWidget);
+      expect(controller.showingAllNotes, isTrue);
+      expect(find.text('ALL NOTES'), findsOneWidget);
+    },
+  );
+
+  keyboardTestWidgets(
+    'All notes presents the filtered list and returns to the same row',
+    (WidgetTester tester) async {
+      final controller = await pumpAllNotesTable(tester);
+
+      await selectFilterScope(tester, 'All fields');
+      await tester.enterText(find.byType(TextField), 'alpha');
+      await tester.pumpAndSettle();
+      expect(find.text('2 of 3'), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
+      await tester.pump();
+      expect(selectedRow(12), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+      await tester.pumpAndSettle();
+      // The slideshow walks only the two visible notes, in the table's order.
+      expect(find.text('1 / 2'), findsOneWidget);
+      expect(find.text('ALPHA ONE - P-12'), findsOneWidget);
+
+      await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+      await tester.pumpAndSettle();
+      expect(find.text('Back'), findsNothing);
+      expect(selectedRow(12), findsOneWidget);
+      // The scope and the narrowing filter both survive the round trip.
+      expect(controller.showingAllNotes, isTrue);
+      expect(find.text('2 of 3'), findsOneWidget);
+      expect(
+        tester.widget<TextField>(find.byType(TextField)).controller?.text,
+        'alpha',
+      );
+    },
+  );
 }
 
 class _KeyboardNavRepository extends ViewerRepository {
@@ -1580,4 +1675,118 @@ class _KeyboardNavRepository extends ViewerRepository {
       ],
     });
   }
+}
+
+class _AllNotesKeyboardRepository extends ViewerRepository {
+  @override
+  bool get canManageImportedDatasets => true;
+
+  @override
+  Future<ViewerDataset> loadDataset() async {
+    return ViewerDataset.fromJson({
+      'generatedAt': '2026-03-28T12:00:00Z',
+      'noteCount': 3,
+      'source': 'imported',
+      'collections': [
+        {'id': 1, 'name': 'Alpha Collection', 'noteCount': 2},
+        {'id': 2, 'name': 'Zulu Collection', 'noteCount': 1},
+      ],
+      'notes': [
+        {
+          'id': 10,
+          'collectionId': 2,
+          'displayOrder': 1,
+          'denomination': 'Zulu Note',
+          'issueDate': '',
+          'catalogNumber': 'P-10',
+          'gradingCompany': '',
+          'grade': '',
+          'watermark': '',
+          'serial': '900010',
+          'url': '',
+          'notes': '',
+          'scrapeStatus': 'done',
+          'scrapeError': '',
+          'tags': [],
+          'images': [],
+          'scrapedData': null,
+        },
+        {
+          'id': 11,
+          'collectionId': 1,
+          'displayOrder': 2,
+          'denomination': 'Alpha Two',
+          'issueDate': '',
+          'catalogNumber': 'P-11',
+          'gradingCompany': '',
+          'grade': '',
+          'watermark': '',
+          'serial': '900011',
+          'url': '',
+          'notes': '',
+          'scrapeStatus': 'done',
+          'scrapeError': '',
+          'tags': [],
+          'images': [],
+          'scrapedData': null,
+        },
+        {
+          'id': 12,
+          'collectionId': 1,
+          'displayOrder': 1,
+          'denomination': 'Alpha One',
+          'issueDate': '',
+          'catalogNumber': 'P-12',
+          'gradingCompany': '',
+          'grade': '',
+          'watermark': '',
+          'serial': '900012',
+          'url': '',
+          'notes': '',
+          'scrapeStatus': 'done',
+          'scrapeError': '',
+          'tags': [],
+          'images': [],
+          'scrapedData': null,
+        },
+      ],
+    });
+  }
+}
+
+class _MemoryLastCollectionStore implements LastCollectionStore {
+  LastCollectionSelection? saved;
+
+  @override
+  Future<LastCollectionSelection?> load() async => saved;
+
+  @override
+  Future<void> save(LastCollectionSelection selection) async {
+    saved = selection;
+  }
+
+  @override
+  Future<void> clear() async {
+    saved = null;
+  }
+}
+
+List<String> _clipboardRecorder(WidgetTester tester) {
+  final texts = <String>[];
+  tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+    SystemChannels.platform,
+    (call) async {
+      if (call.method == 'Clipboard.setData') {
+        texts.add((call.arguments as Map<Object?, Object?>)['text']! as String);
+      }
+      return null;
+    },
+  );
+  addTearDown(
+    () => tester.binding.defaultBinaryMessenger.setMockMethodCallHandler(
+      SystemChannels.platform,
+      null,
+    ),
+  );
+  return texts;
 }

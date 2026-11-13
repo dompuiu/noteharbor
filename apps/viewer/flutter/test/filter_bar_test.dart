@@ -6,6 +6,7 @@ import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_harbor_viewer/app/viewer_palette.dart';
 import 'package:note_harbor_viewer/data/dataset_controller.dart';
+import 'package:note_harbor_viewer/data/last_collection_store.dart';
 import 'package:note_harbor_viewer/data/viewer_repository.dart';
 import 'package:note_harbor_viewer/features/table/notes_table_screen.dart';
 import 'package:note_harbor_viewer/models/viewer_dataset.dart';
@@ -345,6 +346,113 @@ void main() {
 
     expect(tester.getSize(find.byType(TextField)).width, greaterThan(180));
   });
+
+  testWidgets('All fields matches a collection name in All notes', (
+    tester,
+  ) async {
+    await _pumpAllNotes(tester);
+
+    await tester.tap(find.byKey(const ValueKey('filterScope')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('All fields').last);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'romania');
+    await tester.pumpAndSettle();
+
+    // Only the second collection's notes name "Romania", so the combined
+    // table narrows to them even though the word is not in any note field.
+    expect(find.text('50 Bani'), findsOneWidget);
+    expect(find.text('1 Leu'), findsOneWidget);
+    expect(find.text('25 Bani'), findsNothing);
+    expect(find.text('2 of 3'), findsOneWidget);
+
+    // Every term may hit a different part of the row: the collection name
+    // and the note's own denomination.
+    await tester.enterText(find.byType(TextField), 'serban 25');
+    await tester.pumpAndSettle();
+    expect(find.text('25 Bani'), findsOneWidget);
+    expect(find.text('1 of 3'), findsOneWidget);
+  });
+
+  testWidgets('All fields keeps collection names out of a collection scope', (
+    tester,
+  ) async {
+    await _pumpAllNotes(tester, allNotes: false);
+
+    // A collection scope shows no collection column, so its name is not part
+    // of the search: "serban" matches no note field in Serban's Notes.
+    await tester.tap(find.byKey(const ValueKey('filterScope')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('All fields').last);
+    await tester.pumpAndSettle();
+
+    await tester.enterText(find.byType(TextField), 'serban');
+    await tester.pumpAndSettle();
+
+    expect(find.text('No notes match this filter'), findsOneWidget);
+  });
+
+  testWidgets(
+    'a tag chip filters across collections and Clear filter restores',
+    (tester) async {
+      tester.view.devicePixelRatio = 1.0;
+      tester.view.physicalSize = const Size(1400, 900);
+      addTearDown(tester.view.reset);
+
+      final handle = tester.ensureSemantics();
+      final controller = await _pumpAllNotes(tester);
+
+      // Two notes in different collections share the Silver tag.
+      await tester.tap(find.bySemanticsLabel('Filter by tag Silver').first);
+      await tester.pumpAndSettle();
+
+      expect(find.text('25 Bani'), findsOneWidget);
+      expect(find.text('1 Leu'), findsOneWidget);
+      expect(find.text('50 Bani'), findsNothing);
+      expect(find.text('2 of 3'), findsOneWidget);
+      // The chip hands the bar its Tags scope, as it does in a collection.
+      expect(
+        tester
+            .widget<DropdownButton<String>>(
+              find.byKey(const ValueKey('filterScope')),
+            )
+            .value,
+        'tags',
+      );
+
+      await tester.tap(find.byTooltip('Clear filter'));
+      await tester.pumpAndSettle();
+
+      expect(find.text('3 notes'), findsOneWidget);
+      expect(find.text('ALL NOTES'), findsOneWidget);
+      expect(controller.showingAllNotes, isTrue);
+
+      handle.dispose();
+    },
+  );
+}
+
+Future<DatasetController> _pumpAllNotes(
+  WidgetTester tester, {
+  bool allNotes = true,
+}) async {
+  final controller = DatasetController(
+    repository: _AllNotesRepository(),
+    selectionStore: _MemoryLastCollectionStore(),
+  );
+  await controller.load();
+
+  await tester.pumpWidget(
+    MaterialApp(home: NotesTableScreen(controller: controller)),
+  );
+  await tester.pumpAndSettle();
+
+  if (allNotes) {
+    await controller.showAllNotes();
+    await tester.pumpAndSettle();
+  }
+  return controller;
 }
 
 bool _filterFieldHasFocus(WidgetTester tester) {
@@ -356,6 +464,104 @@ Finder get _washFinder => find.byWidgetPredicate(
       widget is AnimatedContainer &&
       (widget.decoration as BoxDecoration?)?.color == ViewerPalette.accentSoft,
 );
+
+class _MemoryLastCollectionStore implements LastCollectionStore {
+  LastCollectionSelection? saved;
+
+  @override
+  Future<LastCollectionSelection?> load() async => saved;
+
+  @override
+  Future<void> save(LastCollectionSelection selection) async {
+    saved = selection;
+  }
+
+  @override
+  Future<void> clear() async {
+    saved = null;
+  }
+}
+
+class _AllNotesRepository extends ViewerRepository {
+  @override
+  bool get canManageImportedDatasets => true;
+
+  @override
+  Future<ViewerDataset> loadDataset() async {
+    return ViewerDataset.fromJson({
+      'generatedAt': '2026-03-28T12:00:00Z',
+      'noteCount': 3,
+      'source': 'imported',
+      'collections': [
+        {'id': 1, 'name': "Serban's Notes", 'noteCount': 1},
+        {'id': 2, 'name': 'Romania · 1917', 'noteCount': 2},
+      ],
+      'notes': [
+        {
+          'id': 1,
+          'collectionId': 1,
+          'displayOrder': 1,
+          'denomination': '25 Bani',
+          'issueDate': '1917',
+          'catalogNumber': 'P-1',
+          'gradingCompany': '',
+          'grade': '',
+          'watermark': '',
+          'serial': '111111',
+          'url': '',
+          'notes': '',
+          'scrapeStatus': 'done',
+          'scrapeError': '',
+          'tags': [
+            {'name': 'Silver'},
+          ],
+          'images': [],
+          'scrapedData': null,
+        },
+        {
+          'id': 2,
+          'collectionId': 2,
+          'displayOrder': 1,
+          'denomination': '50 Bani',
+          'issueDate': '1917',
+          'catalogNumber': 'P-2',
+          'gradingCompany': '',
+          'grade': '',
+          'watermark': '',
+          'serial': '222222',
+          'url': '',
+          'notes': '',
+          'scrapeStatus': 'done',
+          'scrapeError': '',
+          'tags': [],
+          'images': [],
+          'scrapedData': null,
+        },
+        {
+          'id': 3,
+          'collectionId': 2,
+          'displayOrder': 2,
+          'denomination': '1 Leu',
+          'issueDate': '1917',
+          'catalogNumber': 'P-3',
+          'gradingCompany': '',
+          'grade': '',
+          'watermark': '',
+          'serial': '333333',
+          'url': '',
+          'notes': '',
+          'scrapeStatus': 'done',
+          'scrapeError': '',
+          'tags': [
+            {'name': 'Silver'},
+          ],
+          'images': [],
+          'scrapedData': null,
+        },
+      ],
+    });
+  }
+}
 
 class _FakeViewerRepository extends ViewerRepository {
   _FakeViewerRepository();

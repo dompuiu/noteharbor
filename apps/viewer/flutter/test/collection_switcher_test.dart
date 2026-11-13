@@ -455,6 +455,38 @@ void main() {
     expect(find.text('1 Leu'), findsOneWidget);
   });
 
+  testWidgets('All notes keeps counts in step through sort and filter changes', (
+    WidgetTester tester,
+  ) async {
+    final controller = await _pumpTable(tester);
+    await controller.showAllNotes();
+    await tester.pumpAndSettle();
+
+    expect(find.text('4 notes'), findsOneWidget);
+    expect(find.text('4 notes · Sorted by Collection ↑'), findsOneWidget);
+
+    await tester.tap(find.text('DENOMINATION'));
+    await tester.pumpAndSettle();
+    expect(find.text('4 notes'), findsOneWidget);
+    expect(find.text('4 notes · Sorted by Denomination ↑'), findsOneWidget);
+
+    await tester.tap(find.byKey(const ValueKey('filterScope')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('All fields').last);
+    await tester.pumpAndSettle();
+    await tester.enterText(find.byType(TextField), 'bani');
+    await tester.pumpAndSettle();
+
+    // The filter reads against the whole archive, and the sort survives it.
+    expect(find.text('2 of 4'), findsOneWidget);
+    expect(find.text('2 of 4 · Sorted by Denomination ↑'), findsOneWidget);
+
+    await tester.enterText(find.byType(TextField), 'zzz');
+    await tester.pumpAndSettle();
+    expect(find.text('No notes match this filter'), findsOneWidget);
+    expect(find.text('0 of 4 · Sorted by Denomination ↑'), findsOneWidget);
+  });
+
   testWidgets('an empty All notes names the archive', (
     WidgetTester tester,
   ) async {

@@ -360,6 +360,56 @@ void main() {
     expect(clipboard, ['123456']);
   });
 
+  accessibilityTestWidgets('All notes row summary and Collection header', (
+    WidgetTester tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    final controller = await pumpTable(tester);
+    await controller.showAllNotes();
+    await tester.pumpAndSettle();
+
+    // The combined row leads with the collection a screen reader cannot see
+    // in a collection scope.
+    expect(
+      find.bySemanticsLabel("collection Serban's Notes, $_rowLabel"),
+      findsOneWidget,
+    );
+
+    // The Collection header is a sort button that speaks its state.
+    final header = find.bySemanticsLabel('Collection, sorted ascending');
+    expect(header, findsOneWidget);
+    final headerData = tester.getSemantics(header).getSemanticsData();
+    expect(headerData.flagsCollection.isButton, isTrue);
+    expect(headerData.hasAction(SemanticsAction.tap), isTrue);
+
+    await tester.tap(header);
+    await tester.pumpAndSettle();
+    expect(
+      find.bySemanticsLabel('Collection, sorted descending'),
+      findsOneWidget,
+    );
+
+    handle.dispose();
+  });
+
+  testWidgets('All notes card summary names the collection', (
+    WidgetTester tester,
+  ) async {
+    final handle = tester.ensureSemantics();
+    final controller = await pumpTable(tester, size: const Size(520, 900));
+    await controller.showAllNotes();
+    await tester.pumpAndSettle();
+
+    expect(
+      find.bySemanticsLabel(
+        RegExp("^collection Serban's Notes, ${RegExp.escape(_rowLabel)}"),
+      ),
+      findsOneWidget,
+    );
+
+    handle.dispose();
+  });
+
   testWidgets('card mode keeps tag chips tappable with the same label', (
     WidgetTester tester,
   ) async {
