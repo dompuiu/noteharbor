@@ -126,6 +126,62 @@ describe("collection actions in the table header", () => {
     );
   });
 
+  test("the inline rename commits from the Save button beside the name field", async () => {
+    const user = userEvent.setup();
+    const onRenameCollection = vi.fn().mockResolvedValue(undefined);
+    renderTable({ onRenameCollection });
+
+    await user.click(
+      await screen.findByRole("button", { name: "Rename collection: Test" }),
+    );
+
+    const field = screen.getByRole("textbox", { name: "Collection name" });
+    // The form owns the only commit pair, right after the field.
+    expect(screen.getAllByRole("button", { name: "Save" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Cancel" })).toHaveLength(1);
+    expect(
+      Array.from(field.closest("form").querySelectorAll("button")).map(
+        (button) => button.textContent.trim(),
+      ),
+    ).toEqual(["Cancel", "Save"]);
+
+    await user.clear(field);
+    await user.type(field, "  Renamed  ");
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(onRenameCollection).toHaveBeenCalledWith("Renamed"),
+    );
+    expect(
+      screen.queryByRole("textbox", { name: "Collection name" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("the inline rename's Cancel discards the draft without saving", async () => {
+    const user = userEvent.setup();
+    const onRenameCollection = vi.fn();
+    renderTable({ onRenameCollection });
+
+    await user.click(
+      await screen.findByRole("button", { name: "Rename collection: Test" }),
+    );
+    await user.type(
+      screen.getByRole("textbox", { name: "Collection name" }),
+      "Changed",
+    );
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    expect(onRenameCollection).not.toHaveBeenCalled();
+    expect(
+      screen.queryByRole("textbox", { name: "Collection name" }),
+    ).not.toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Rename collection: Test" }),
+      ).toHaveFocus(),
+    );
+  });
+
   test("Escape cancels an inline rename without saving", async () => {
     const user = userEvent.setup();
     const onRenameCollection = vi.fn();

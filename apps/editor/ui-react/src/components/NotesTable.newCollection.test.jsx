@@ -69,10 +69,14 @@ describe("NotesTable new collection draft", () => {
     expect(document.activeElement).toBe(input);
     expect(input).toHaveClass("showcase-name-field");
 
-    // The rail owns the only commit pair; the title form is a lone field.
+    // The title form owns the only commit pair, right after the field.
     expect(screen.getAllByRole("button", { name: "Save" })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "Cancel" })).toHaveLength(1);
-    expect(input.closest("form").querySelectorAll("button")).toHaveLength(0);
+    expect(
+      Array.from(input.closest("form").querySelectorAll("button")).map(
+        (button) => button.textContent.trim(),
+      ),
+    ).toEqual(["Cancel", "Save"]);
   });
 
   test("typing reports the draft name and submitting saves it", async () => {
@@ -90,7 +94,7 @@ describe("NotesTable new collection draft", () => {
     expect(onSaveNewCollection).toHaveBeenCalledTimes(1);
   });
 
-  test("Enter in the draft name saves it like the rail Save", async () => {
+  test("Enter in the draft name saves it like the Save button", async () => {
     const user = userEvent.setup();
     const onSaveNewCollection = vi.fn();
     renderNewCollection({ onSaveNewCollection });
@@ -111,7 +115,7 @@ describe("NotesTable new collection draft", () => {
     expect(onCancelNewCollection).toHaveBeenCalledTimes(1);
   });
 
-  test("shows the same empty table with Cancel/Save instead of Add note", async () => {
+  test("shows the same empty table without Add note", async () => {
     const { getNotes } = await import("../lib/api.js");
     renderNewCollection();
 

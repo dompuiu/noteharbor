@@ -537,6 +537,35 @@ function buildTableHash(route) {
   return "";
 }
 
+function CollectionCommitPair({
+  cancelDisabled,
+  onCancel,
+  saveDisabled,
+  saving,
+}) {
+  return (
+    <>
+      <button
+        className="button"
+        disabled={cancelDisabled}
+        onClick={onCancel}
+        title="Cancel (Esc)"
+        type="button"
+      >
+        Cancel
+      </button>
+      <button
+        className="button button-primary"
+        disabled={saveDisabled}
+        title="Save (Enter)"
+        type="submit"
+      >
+        {saving ? "Saving…" : "Save"}
+      </button>
+    </>
+  );
+}
+
 function NotesTable({
   collection,
   collectionId,
@@ -908,7 +937,7 @@ function NotesTable({
     }
   }, [showingNewCollectionForm]);
 
-  function handleCollectionRenameSubmit(event) {
+  function handleNewCollectionSubmit(event) {
     event.preventDefault();
     void onSaveNewCollection?.();
   }
@@ -4373,11 +4402,21 @@ function NotesTable({
                   ref={collectionEditFieldRef}
                   value={collectionEditName}
                 />
+                <CollectionCommitPair
+                  cancelDisabled={savingCollectionEdit}
+                  onCancel={onCancelCollectionEdit}
+                  saveDisabled={
+                    !canSaveCollectionEdit ||
+                    savingCollectionEdit ||
+                    loadingCollections
+                  }
+                  saving={savingCollectionEdit}
+                />
               </form>
             ) : showingNewCollectionForm ? (
               <form
                 className="collection-rename-form"
-                onSubmit={handleCollectionRenameSubmit}
+                onSubmit={handleNewCollectionSubmit}
               >
                 <input
                   aria-label="Collection name"
@@ -4389,6 +4428,12 @@ function NotesTable({
                   onKeyDown={handleNewCollectionNameKeyDown}
                   ref={collectionNameFieldRef}
                   value={newCollectionName}
+                />
+                <CollectionCommitPair
+                  cancelDisabled={savingNewCollection}
+                  onCancel={onCancelNewCollection}
+                  saveDisabled={savingNewCollection}
+                  saving={savingNewCollection}
                 />
               </form>
             ) : renamingCollection ? (
@@ -4414,54 +4459,12 @@ function NotesTable({
                   ref={collectionRenameFieldRef}
                   value={collectionRenameDraft}
                 />
-                <button
-                  aria-label="Save name"
-                  className="showcase-node-save"
-                  disabled={savingCollectionRename}
-                  title="Save name (Enter)"
-                  type="submit"
-                >
-                  <svg
-                    aria-hidden="true"
-                    focusable="false"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    width="13"
-                  >
-                    <path
-                      d="M4 12.5l5 5L20 6.5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2.5"
-                    />
-                  </svg>
-                </button>
-                <button
-                  aria-label="Cancel rename"
-                  className="showcase-node-cancel"
-                  disabled={savingCollectionRename}
-                  onClick={cancelCollectionRename}
-                  title="Cancel rename (Esc)"
-                  type="button"
-                >
-                  <svg
-                    aria-hidden="true"
-                    focusable="false"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    width="13"
-                  >
-                    <path
-                      d="M6 6l12 12M18 6L6 18"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeWidth="2"
-                    />
-                  </svg>
-                </button>
+                <CollectionCommitPair
+                  cancelDisabled={savingCollectionRename}
+                  onCancel={cancelCollectionRename}
+                  saveDisabled={savingCollectionRename}
+                  saving={savingCollectionRename}
+                />
               </form>
             ) : (
               <div className="collection-title-row">
@@ -4525,41 +4528,6 @@ function NotesTable({
                 type="button"
               >
                 Delete collection
-              </button>
-              <button
-                className="button"
-                disabled={savingCollectionEdit}
-                onClick={onCancelCollectionEdit}
-                type="button"
-              >
-                Cancel
-              </button>
-              <button
-                className="button button-primary"
-                disabled={!canSaveCollectionEdit || savingCollectionEdit || loadingCollections}
-                onClick={onSaveCollectionEdit}
-                type="button"
-              >
-                {savingCollectionEdit ? "Saving…" : "Save"}
-              </button>
-            </div>
-          ) : showingNewCollectionForm ? (
-            <div className="inline-actions">
-              <button
-                className="button"
-                disabled={savingNewCollection}
-                onClick={onCancelNewCollection}
-                type="button"
-              >
-                Cancel
-              </button>
-              <button
-                className="button button-primary"
-                disabled={savingNewCollection}
-                onClick={() => onSaveNewCollection?.()}
-                type="button"
-              >
-                {savingNewCollection ? "Saving…" : "Save"}
               </button>
             </div>
           ) : null}

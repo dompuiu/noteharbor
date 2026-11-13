@@ -22,8 +22,8 @@ function TableWithPerfReadout(props) {
 
 // One collection, rendered in one of two modes sharing one container.
 // View mode shows the title with rename; Add note rides in the table rail.
-// Edit mode swaps the title for a text field and Delete / Cancel / Save.
-// The notes table stays visible in both.
+// Edit mode swaps the title for a text field with Cancel/Save beside it and
+// Delete in the rail. The notes table stays visible in both.
 function CollectionScreen({ mode }) {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -280,7 +280,7 @@ function CollectionScreen({ mode }) {
   const missingCollection = !isNew && !invalidId && !loadingCollections && !collectionsError && !collection;
 
   // A not-yet-saved collection renders the same notes-table view as a saved
-  // one: the title is the draft text field (focused, with save/cancel icons)
+  // one: the title is the draft text field (focused) with its Cancel/Save pair
   // above an empty table. Save POSTs the draft; Cancel discards it.
   if (isNew) {
     return (
@@ -348,9 +348,9 @@ function CollectionScreen({ mode }) {
     );
   }
 
-  // Edit mode is the normal table container with the title as a text
-  // field and Delete / Cancel / Save replacing the view's title controls.
-  // There is no second panel: one container, same table below.
+  // Edit mode is the normal table container with the title as a text field
+  // carrying Cancel/Save, with Delete in the rail in place of the view's
+  // title controls. There is no second panel: one container, same table below.
   if (invalidId || missingCollection) {
     return (
       <section className="screen-stack showcase-screen collection-screen collection-screen--edit">

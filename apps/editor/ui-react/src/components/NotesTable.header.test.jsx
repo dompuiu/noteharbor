@@ -122,27 +122,56 @@ describe("NotesTable header controls", () => {
     ).not.toBeInTheDocument();
   });
 
-  test("offers one commit pair in the rail while the collection is edited", async () => {
+  test("offers one commit pair beside the name field while the collection is edited", async () => {
     renderTable({ isCollectionEditing: true, collectionEditName: "Test" });
 
     const deleteButton = await screen.findByRole("button", {
       name: "Delete collection",
     });
 
-    // The title form is a lone field: the rail owns the only Delete/Cancel/Save.
+    // Cancel/Save sit right after the field; Delete stays in the rail.
     expect(screen.getAllByRole("button", { name: "Save" })).toHaveLength(1);
     expect(screen.getAllByRole("button", { name: "Cancel" })).toHaveLength(1);
-    expect(
+    const formLabels = Array.from(
       screen
         .getByRole("textbox", { name: "Collection name" })
         .closest("form")
         .querySelectorAll("button"),
-    ).toHaveLength(0);
+    ).map((button) => button.textContent.trim());
+    expect(formLabels).toEqual(["Cancel", "Save"]);
 
     const railLabels = Array.from(
       deleteButton.closest(".inline-actions").querySelectorAll("button"),
     ).map((button) => button.textContent.trim());
-    expect(railLabels).toEqual(["Delete collection", "Cancel", "Save"]);
+    expect(railLabels).toEqual(["Delete collection"]);
+  });
+
+  test("the inline Cancel leaves collection edit without saving", async () => {
+    const user = userEvent.setup();
+    const onCancelCollectionEdit = vi.fn();
+    renderTable({
+      isCollectionEditing: true,
+      collectionEditName: "Changed",
+      onCancelCollectionEdit,
+    });
+
+    await user.click(await screen.findByRole("button", { name: "Cancel" }));
+
+    expect(onCancelCollectionEdit).toHaveBeenCalledTimes(1);
+  });
+
+  test("the commit pair disables and shows progress while the edit saves", async () => {
+    renderTable({
+      isCollectionEditing: true,
+      collectionEditName: "Changed",
+      canSaveCollectionEdit: true,
+      savingCollectionEdit: true,
+    });
+
+    expect(
+      await screen.findByRole("button", { name: "Saving…" }),
+    ).toBeDisabled();
+    expect(screen.getByRole("button", { name: "Cancel" })).toBeDisabled();
   });
 
   test("no longer shows the Import / Export link", async () => {
