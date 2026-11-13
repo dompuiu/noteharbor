@@ -2667,9 +2667,14 @@ describe("primary buttons", () => {
     expect(styles).toMatch(
       /\.sidebar-link--pending:focus-visible\s*\{[^}]*outline:\s*2px solid var\(--rail-accent\)/,
     );
-    expect(styles).toMatch(
-      /\.sidebar-link--pending \.sidebar-link-label,[\s\S]{0,120}font-style:\s*italic/,
+    const pendingLabel = styles.match(
+      /\.sidebar-link--pending \.sidebar-link-label,[\s\S]*?\{([^}]*)\}/,
     );
+    expect(pendingLabel).not.toBeNull();
+    expect(pendingLabel[1]).toMatch(/font-style:\s*italic/);
+    // The root disables synthesis and Inter ships roman only, so the pending
+    // rules must opt back in for the italic to render as a slant.
+    expect(pendingLabel[1]).toMatch(/font-synthesis:\s*style/);
   });
 
   // Add note is just another primary button now: no bespoke class survives in
