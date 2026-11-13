@@ -6551,17 +6551,17 @@ button.tag {
 /* The slideshow panel fills the scrim but is fluid: it has no floor, so a
    1024px window keeps the page (and both turns) reachable instead of the
    overlay scrolling sideways. The 1400px ceiling is where a catalogue page
-   stops stretching on a wide monitor. Its height is the scrim's own frame, so
-   the bottom border keeps the same 16px gutter as the top instead of running
-   into the window edge; the page scrolls inside the panel, not the scrim. */
+   stops stretching on a wide monitor. Its height is the scrim's own frame —
+   the room never scrolls as a whole; the plates give up height instead — so
+   the bottom border keeps the same 16px gutter as the top. */
 .slideshow-screen--overlay .slideshow-panel {
   width: 100%;
   max-width: 1400px;
-  min-height: calc(100vh - 32px);
-  min-height: calc(100dvh - 32px);
-  max-height: calc(100vh - 32px);
-  max-height: calc(100dvh - 32px);
-  overflow-y: auto;
+  height: calc(100vh - 32px);
+  height: calc(100dvh - 32px);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
   margin: 0 auto;
   background: var(--on-dark-bg);
   border-radius: var(--radius-lg);
@@ -6986,6 +6986,12 @@ button.tag {
   margin: 0 auto;
 }
 
+.slideshow-screen--overlay .slide-meta {
+  min-height: 0;
+  overflow-y: auto;
+  scrollbar-width: thin;
+}
+
 .slide-images,
 .image-popover-image-wrap {
   position: relative;
@@ -7140,6 +7146,52 @@ button.tag {
   color: var(--on-dark-label);
 }
 
+/* In the room the layout takes the panel's spare height, and the plate column
+   divides it between the faces: the room fits the viewport instead of
+   scrolling, so the plates shrink before anything is clipped. */
+.slideshow-screen--overlay .slideshow-layout {
+  flex: 1 1 auto;
+  grid-template-rows: minmax(0, 1fr);
+  align-items: stretch;
+  min-height: 0;
+}
+
+.slideshow-screen--overlay .slide-card {
+  align-items: stretch;
+  overflow: hidden;
+  min-height: 0;
+}
+
+.slideshow-screen--overlay .slide-images {
+  grid-auto-rows: minmax(0, 1fr);
+  align-items: stretch;
+  height: 100%;
+  min-height: 0;
+}
+
+.slideshow-screen--overlay .slide-thumb-btn {
+  height: 100%;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.slideshow-screen--overlay .slide-plate {
+  position: relative;
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* The percentage height only binds against a definite box, so the scan is
+   pinned to the plate instead of letting its own ratio pick the height. */
+.slideshow-screen--overlay .slide-thumb-btn img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  max-height: none;
+  height: 100%;
+  object-fit: contain;
+}
+
 /* A plate whose file is gone keeps the mat's geometry and says why, instead
    of leaving a broken-image glyph inside it. It shares the empty state's
    dashed wash but stands a little shorter than the no-image placeholder. */
@@ -7244,7 +7296,8 @@ button.tag {
 
 /* Below the card's two-column width the entry stacks above the plates, so the
    name, values and copy stay readable before the images take the full width.
-   The top bar wraps with the same breakpoint. */
+   The top bar wraps with the same breakpoint. The rows split the room's own
+   height — entry 2/5, plates 3/5 — so the stacked page fits too. */
 @media (max-width: 1100px) {
   .slide-card {
     grid-template-columns: minmax(0, 1fr);
@@ -7252,6 +7305,11 @@ button.tag {
 
   .slide-meta {
     order: -1;
+  }
+
+  .slideshow-screen--overlay .slide-card {
+    grid-template-rows: minmax(0, 1fr) minmax(0, 2fr);
+    overflow: hidden;
   }
 }
 

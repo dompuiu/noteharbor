@@ -1980,19 +1980,33 @@ describe("slideshow overlay styles", () => {
     );
     expect(panel).not.toBeNull();
     expect(panel[1]).toMatch(/background:\s*var\(--on-dark-bg\)/);
-    expect(panel[1]).toMatch(/min-height:\s*calc\(100vh/);
+    expect(panel[1]).toMatch(/height:\s*calc\(100vh - 32px\)/);
   });
 
   // The room is the scrim's own frame: its bottom border keeps the same 16px
-  // gutter as the top instead of running into the window edge, so the page
-  // scrolls inside the panel rather than the scrim.
-  test("the slideshow panel keeps the scrim's gutter and scrolls itself", () => {
+  // gutter as the top, and the room itself never scrolls — the plates give up
+  // height instead.
+  test("the slideshow panel fits the scrim without scrolling", () => {
     const panel = styles.match(
       /\.slideshow-screen--overlay \.slideshow-panel\s*\{([^}]*)\}/,
     );
     expect(panel).not.toBeNull();
-    expect(panel[1]).toMatch(/max-height:\s*calc\(100dvh - 32px\)/);
-    expect(panel[1]).toMatch(/overflow-y:\s*auto/);
+    expect(panel[1]).toMatch(/height:\s*calc\(100dvh - 32px\)/);
+    expect(panel[1]).toMatch(/display:\s*flex/);
+    expect(panel[1]).toMatch(/overflow:\s*hidden/);
+
+    const images = styles.match(
+      /\.slideshow-screen--overlay \.slide-images\s*\{([^}]*)\}/,
+    );
+    expect(images).not.toBeNull();
+    expect(images[1]).toMatch(/grid-auto-rows:\s*minmax\(0,\s*1fr\)/);
+
+    const scan = styles.match(
+      /\.slideshow-screen--overlay \.slide-thumb-btn img\s*\{([^}]*)\}/,
+    );
+    expect(scan).not.toBeNull();
+    expect(scan[1]).toMatch(/position:\s*absolute/);
+    expect(scan[1]).toMatch(/object-fit:\s*contain/);
   });
 
   // The slideshow is fluid: it has no floor, so a 1024px window keeps the
