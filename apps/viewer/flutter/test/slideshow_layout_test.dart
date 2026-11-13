@@ -31,12 +31,8 @@ void main() {
     String url = 'bankofengland.co.uk/banknotes/5-pound-note',
     String notes =
         'Polymer issue, first series. Light centre fold visible under raking '
-            'light; corners crisp.',
-    List<String> tags = const [
-      'Bank of England',
-      'Polymer',
-      'Portrait',
-    ],
+        'light; corners crisp.',
+    List<String> tags = const ['Bank of England', 'Polymer', 'Portrait'],
     bool withImages = true,
   }) {
     return {
@@ -53,7 +49,9 @@ void main() {
       'notes': notes,
       'scrapeStatus': 'done',
       'scrapeError': '',
-      'tags': [for (final name in tags) {'name': name}],
+      'tags': [
+        for (final name in tags) {'name': name},
+      ],
       'images': withImages
           ? [
               {
@@ -104,6 +102,12 @@ void main() {
     return furthest;
   }
 
+  void expectBothFacesVisible() {
+    expect(find.text('FRONT'), findsOneWidget);
+    expect(find.text('BACK'), findsOneWidget);
+    expect(find.byType(Image), findsNWidgets(2));
+  }
+
   void expectEveryFactVisible() {
     expect(find.text('GRADE'), findsOneWidget);
     expect(find.text('66 EPQ'), findsOneWidget);
@@ -119,10 +123,7 @@ void main() {
       findsOneWidget,
     );
     expect(find.text('NOTES'), findsOneWidget);
-    expect(
-      find.textContaining('Polymer issue, first series.'),
-      findsOneWidget,
-    );
+    expect(find.textContaining('Polymer issue, first series.'), findsOneWidget);
   }
 
   testWidgets('the widest tier puts the pair beside a details rail', (
@@ -131,9 +132,13 @@ void main() {
     await pumpAt(tester, const Size(1440, 900));
 
     // Both faces at equal weight, each with a room label.
-    expect(find.text('FRONT'), findsOneWidget);
-    expect(find.text('BACK'), findsOneWidget);
-    expect(find.byType(Image), findsNWidgets(2));
+    expectBothFacesVisible();
+
+    // The details sit beside the pair, not below it.
+    expect(
+      tester.getTopLeft(find.text('Details')).dx,
+      greaterThan(tester.getTopLeft(find.text('FRONT')).dx),
+    );
 
     // The catalog lives in the rail header, not as a duplicate field row.
     expect(find.text('Details'), findsOneWidget);
@@ -151,34 +156,57 @@ void main() {
     expect(maxSlideScrollExtent(tester), 0);
   });
 
-  testWidgets('the middle tier fits the pair and a four-column strip at 815x493', (
-    WidgetTester tester,
-  ) async {
-    await pumpAt(tester, const Size(815, 493));
+  testWidgets(
+    'the middle tier fits the pair and a four-column strip at 815x493',
+    (WidgetTester tester) async {
+      await pumpAt(tester, const Size(815, 493));
 
-    expect(find.text('FRONT'), findsOneWidget);
-    expect(find.text('BACK'), findsOneWidget);
-    expect(find.byType(Image), findsNWidgets(2));
-    expect(find.byType(GradePill), findsOneWidget);
+      expectBothFacesVisible();
+      expect(find.byType(GradePill), findsOneWidget);
 
-    // Facts beside the note, below the pair; a narrow window scrolls nothing.
-    expectEveryFactVisible();
-    expect(maxSlideScrollExtent(tester), 0);
-  });
+      // Facts beside the note, below the pair; a narrow window scrolls nothing.
+      expect(
+        tester.getTopLeft(find.text('Details')).dy,
+        greaterThan(tester.getTopLeft(find.text('FRONT')).dy),
+      );
+      expectEveryFactVisible();
+      expect(maxSlideScrollExtent(tester), 0);
+    },
+  );
 
   testWidgets('the narrowest tier stacks the faces and the details', (
     WidgetTester tester,
   ) async {
     await pumpAt(tester, const Size(420, 700));
 
-    expect(find.text('FRONT'), findsOneWidget);
-    expect(find.text('BACK'), findsOneWidget);
-    expect(find.byType(Image), findsNWidgets(2));
+    expectBothFacesVisible();
     expectEveryFactVisible();
 
     // The stack is taller than a phone window, so it scrolls rather than
     // clipping; the keyboard scroll tests cover reaching it.
     expect(maxSlideScrollExtent(tester), greaterThan(0));
+  });
+
+  testWidgets('the rail appears beside the pair at 1000 logical px', (
+    WidgetTester tester,
+  ) async {
+    await pumpAt(tester, const Size(1000, 700));
+    expectBothFacesVisible();
+    expect(
+      tester.getTopLeft(find.text('Details')).dx,
+      greaterThan(tester.getTopLeft(find.text('FRONT')).dx),
+    );
+    expect(maxSlideScrollExtent(tester), 0);
+
+    // One pixel narrower, the pair keeps the full width and the details
+    // become a strip below it.
+    await pumpAt(tester, const Size(999, 700));
+    expectBothFacesVisible();
+    expect(
+      tester.getTopLeft(find.text('Details')).dy,
+      greaterThan(tester.getTopLeft(find.text('FRONT')).dy),
+    );
+    expect(maxSlideScrollExtent(tester), 0);
   });
 
   testWidgets('empty fields and notes are left out', (

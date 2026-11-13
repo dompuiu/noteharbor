@@ -51,7 +51,7 @@ const double _kDetailsRailWidth = 300;
 /// Padding inside the white slide card.
 const double _kSlidePadding = 20;
 
-/// Gap between the title block, the plates and the details.
+/// Gap between the title block and the plate pair.
 const double _kSlideGap = 12;
 
 /// Floor for the plate pair so both faces stay visible before the slide
@@ -78,6 +78,20 @@ const TextStyle _kDetailLabelStyle = TextStyle(
   fontSize: 10.5,
   fontWeight: FontWeight.w800,
   letterSpacing: 1.1,
+);
+
+/// DESIGN.md "Presentation room label": 600, 0.68rem, 0.12em.
+const TextStyle _kPlateLabelStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: _kTextLabel,
+  fontSize: 10.88,
+  fontWeight: FontWeight.w600,
+  letterSpacing: 1.31,
+);
+
+const TextStyle _kPlateNoticeStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: _kTextLabel,
 );
 
 const TextStyle _kDetailValueStyle = TextStyle(
@@ -113,11 +127,8 @@ const TextStyle _kStripNotesStyle = TextStyle(
   height: 1.45,
 );
 
-/// How the details travel with the plates: a rail beside them, a four-column
-/// strip below them, or the stacked column on a narrow slide.
-enum _DetailsMode { rail, strip, stacked }
-
-/// The three compositions chosen by the slide's width.
+/// The three compositions chosen by the slide's width: the pair with a details
+/// rail beside it, the pair with a details strip below it, or the stacked slide.
 enum _SlideTier { rail, strip, stack }
 
 _SlideTier _tierFor(double width) {
@@ -127,10 +138,7 @@ _SlideTier _tierFor(double width) {
 }
 
 class NoteSlideshowResult {
-  const NoteSlideshowResult({
-    required this.noteId,
-    this.tagName,
-  });
+  const NoteSlideshowResult({required this.noteId, this.tagName});
 
   final int noteId;
   final String? tagName;
@@ -153,8 +161,9 @@ class NoteSlideshowScreen extends StatefulWidget {
 class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   late final PageController _pageController;
   late final List<ImageSequenceItem> _imageSequence;
-  late final FocusNode _slideshowFocusNode =
-      FocusNode(debugLabel: 'noteSlideshow');
+  late final FocusNode _slideshowFocusNode = FocusNode(
+    debugLabel: 'noteSlideshow',
+  );
   late int _virtualIndex;
   final Map<int, _NoteSlideState> _slideStates = {};
 
@@ -309,10 +318,8 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
 
     final selectedNoteId = await Navigator.of(context).push<int>(
       MaterialPageRoute<int>(
-        builder: (context) => ImageLightbox(
-          items: _imageSequence,
-          initialIndex: initialIndex,
-        ),
+        builder: (context) =>
+            ImageLightbox(items: _imageSequence, initialIndex: initialIndex),
       ),
     );
 
@@ -582,9 +589,25 @@ class _NoteSlideState extends State<_NoteSlide> {
   }
 
   void _onScroll() {
-    final atBottom = _scrollController.position.pixels >=
+    final atBottom =
+        _scrollController.position.pixels >=
         _scrollController.position.maxScrollExtent - 1;
     if (atBottom != _atBottom) setState(() => _atBottom = atBottom);
+  }
+
+  /// Tracks a viewport whose content now fits (or no longer fits) without the
+  /// user having scrolled, so the bottom fade leaves a slide that has nothing
+  /// below the fold.
+  bool _onScrollMetrics(ScrollMetricsNotification notification) {
+    final metrics = notification.metrics;
+    final atBottom = metrics.pixels >= metrics.maxScrollExtent - 1;
+    if (atBottom == _atBottom) return false;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted && atBottom != _atBottom) {
+        setState(() => _atBottom = atBottom);
+      }
+    });
+    return false;
   }
 
   /// Scrolls the slide content by [dy] pixels, clamped to the scroll extents.
@@ -613,25 +636,28 @@ class _NoteSlideState extends State<_NoteSlide> {
       behavior: const MaterialScrollBehavior().copyWith(scrollbars: false),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          return SingleChildScrollView(
-            controller: _scrollController,
-            padding: const EdgeInsets.all(_kSlidePadding),
-            child: tier == _SlideTier.stack
-                ? _buildStacked()
-                : ConstrainedBox(
-                    constraints: BoxConstraints(
-                      minHeight: math.max(
-                        0,
-                        constraints.maxHeight - _kSlidePadding * 2,
+          return NotificationListener<ScrollMetricsNotification>(
+            onNotification: _onScrollMetrics,
+            child: SingleChildScrollView(
+              controller: _scrollController,
+              padding: const EdgeInsets.all(_kSlidePadding),
+              child: tier == _SlideTier.stack
+                  ? _buildStacked()
+                  : ConstrainedBox(
+                      constraints: BoxConstraints(
+                        minHeight: math.max(
+                          0,
+                          constraints.maxHeight - _kSlidePadding * 2,
+                        ),
                       ),
+                      // IntrinsicHeight lets the body fill the viewport when
+                      // the content fits and grow past it (so the slide
+                      // scrolls) when it does not. The plate pair reports a
+                      // zero intrinsic height so it bends with the viewport
+                      // instead of pinning the body to its card-width size.
+                      child: IntrinsicHeight(child: _buildTiered(tier)),
                     ),
-                    // IntrinsicHeight lets the body fill the viewport when the
-                    // content fits and grow past it (so the slide scrolls) when
-                    // it does not. The plate pair reports a zero intrinsic
-                    // height so it bends with the viewport instead of pinning
-                    // the body to its card-width size.
-                    child: IntrinsicHeight(child: _buildTiered(tier)),
-                  ),
+            ),
           );
         },
       ),
@@ -640,10 +666,7 @@ class _NoteSlideState extends State<_NoteSlide> {
 
   Widget _buildTiered(_SlideTier tier) {
     final header = _SlideHeader(note: widget.note);
-    final pair = _PlatePair(
-      note: widget.note,
-      onTapImage: widget.onTapImage,
-    );
+    final pair = _PlatePair(note: widget.note, onTapImage: widget.onTapImage);
 
     if (tier == _SlideTier.rail) {
       return Column(
@@ -659,13 +682,13 @@ class _NoteSlideState extends State<_NoteSlide> {
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Expanded(child: _IgnoreIntrinsicHeight(child: pair)),
+                  Expanded(child: pair),
                   const SizedBox(width: 16),
                   SizedBox(
                     width: _kDetailsRailWidth,
                     child: _DetailsRail(
                       note: widget.note,
-                      mode: _DetailsMode.rail,
+                      tier: _SlideTier.rail,
                       onTagTap: widget.onTagTap,
                     ),
                   ),
@@ -685,13 +708,13 @@ class _NoteSlideState extends State<_NoteSlide> {
         Expanded(
           child: ConstrainedBox(
             constraints: const BoxConstraints(minHeight: _kMinPlatePairHeight),
-            child: _IgnoreIntrinsicHeight(child: pair),
+            child: pair,
           ),
         ),
-        const SizedBox(height: 10),
+        const SizedBox(height: 12),
         _DetailsRail(
           note: widget.note,
-          mode: _DetailsMode.strip,
+          tier: _SlideTier.strip,
           onTagTap: widget.onTagTap,
         ),
       ],
@@ -703,6 +726,12 @@ class _NoteSlideState extends State<_NoteSlide> {
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         _SlideHeader(note: widget.note, centered: true),
+        const SizedBox(height: 12),
+        Container(
+          height: 1,
+          margin: const EdgeInsets.symmetric(horizontal: 48),
+          color: _kBorder,
+        ),
         const SizedBox(height: 16),
         _NotePlate(
           image: widget.note.fullFor('front'),
@@ -718,7 +747,7 @@ class _NoteSlideState extends State<_NoteSlide> {
         const SizedBox(height: 16),
         _DetailsRail(
           note: widget.note,
-          mode: _DetailsMode.stacked,
+          tier: _SlideTier.stack,
           onTagTap: widget.onTagTap,
         ),
       ],
@@ -811,7 +840,8 @@ class _RenderIgnoreIntrinsicHeight extends RenderProxyBox {
   double computeMaxIntrinsicHeight(double width) => 0;
 }
 
-/// The note's eyebrow, denomination and issue date, over a hairline.
+/// The note's eyebrow — its grading company and issue date — over its
+/// denomination.
 class _SlideHeader extends StatelessWidget {
   const _SlideHeader({required this.note, this.centered = false});
 
@@ -821,8 +851,9 @@ class _SlideHeader extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final align = centered ? TextAlign.center : TextAlign.start;
-    final crossAxisAlignment =
-        centered ? CrossAxisAlignment.center : CrossAxisAlignment.start;
+    final crossAxisAlignment = centered
+        ? CrossAxisAlignment.center
+        : CrossAxisAlignment.start;
     final company = note.gradingCompany.trim();
     final issueDate = note.issueDate.trim();
     final eyebrow = [
@@ -841,7 +872,7 @@ class _SlideHeader extends StatelessWidget {
             color: _kTextPrimary,
             fontSize: 33.6,
             fontWeight: FontWeight.w800,
-            letterSpacing: -0.7,
+            letterSpacing: -0.672,
             height: 1.12,
           ),
           textAlign: align,
@@ -860,28 +891,33 @@ class _PlatePair extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Expanded(
-          child: Center(
-            child: _NotePlate(
-              image: note.fullFor('front'),
-              label: 'Front',
-              onTap: () => onTapImage(note, 'front'),
+    // The pair bends with the viewport rather than reporting the card-width
+    // height its 3:2 plates would ask for; the slide's IntrinsicHeight then
+    // measures the title and details alone and lets the pair take the rest.
+    return _IgnoreIntrinsicHeight(
+      child: Row(
+        children: [
+          Expanded(
+            child: Center(
+              child: _NotePlate(
+                image: note.fullFor('front'),
+                label: 'Front',
+                onTap: () => onTapImage(note, 'front'),
+              ),
             ),
           ),
-        ),
-        const SizedBox(width: 12),
-        Expanded(
-          child: Center(
-            child: _NotePlate(
-              image: note.fullFor('back'),
-              label: 'Back',
-              onTap: () => onTapImage(note, 'back'),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Center(
+              child: _NotePlate(
+                image: note.fullFor('back'),
+                label: 'Back',
+                onTap: () => onTapImage(note, 'back'),
+              ),
             ),
           ),
-        ),
-      ],
+        ],
+      ),
     );
   }
 }
@@ -901,76 +937,72 @@ class _NotePlate extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final image = this.image;
-    return MouseRegion(
-      cursor: image == null ? SystemMouseCursors.basic : SystemMouseCursors.click,
-      child: GestureDetector(
-        onTap: image == null ? null : onTap,
-        child: AspectRatio(
-          aspectRatio: _kImageStageAspectRatio,
-          child: Container(
-            // A plate on the white card: white ground, hairline control
-            // border, and the picture fitted inside. The room carries no
-            // second tint.
-            decoration: BoxDecoration(
-              color: ViewerPalette.roomSurface,
-              borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
-              border: Border.all(color: ViewerPalette.roomBorderControl),
-            ),
-            clipBehavior: Clip.antiAlias,
-            padding: const EdgeInsets.all(8),
-            child: Stack(
-              children: [
-                Positioned.fill(
-                  child: image == null
-                      ? const Center(
-                          child: Text(
-                            'No image',
-                            style: TextStyle(
-                              fontFamily: 'Inter',
-                              color: ViewerPalette.roomMuted,
-                            ),
-                          ),
-                        )
-                      : Image(
-                          image: createNoteImageProvider(image),
-                          fit: BoxFit.contain,
-                          errorBuilder: (_, _, _) => const Center(
-                            child: Text(
-                              'Missing image',
-                              style: TextStyle(
-                                fontFamily: 'Inter',
-                                color: ViewerPalette.roomMuted,
+    return Semantics(
+      button: image != null,
+      label: image == null ? '$label image missing' : '$label image',
+      hint: image == null ? null : 'Opens full size',
+      child: MouseRegion(
+        cursor: image == null
+            ? SystemMouseCursors.basic
+            : SystemMouseCursors.click,
+        child: GestureDetector(
+          onTap: image == null ? null : onTap,
+          child: AspectRatio(
+            aspectRatio: _kImageStageAspectRatio,
+            child: Container(
+              // A plate on the white card: white ground, hairline control
+              // border, and the picture fitted inside. The room carries no
+              // second tint.
+              decoration: BoxDecoration(
+                color: ViewerPalette.roomSurface,
+                borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
+                border: Border.all(color: ViewerPalette.roomBorderControl),
+              ),
+              clipBehavior: Clip.antiAlias,
+              padding: const EdgeInsets.all(8),
+              child: Stack(
+                children: [
+                  Positioned.fill(
+                    child: image == null
+                        ? const Center(
+                            child: Text('No image', style: _kPlateNoticeStyle),
+                          )
+                        : Image(
+                            image: createNoteImageProvider(image),
+                            fit: BoxFit.contain,
+                            errorBuilder: (_, _, _) => const Center(
+                              child: Text(
+                                'Missing image',
+                                style: _kPlateNoticeStyle,
                               ),
                             ),
                           ),
+                  ),
+                  Positioned(
+                    left: 4,
+                    top: 4,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 3,
+                      ),
+                      decoration: BoxDecoration(
+                        color: ViewerPalette.roomSurface.withValues(
+                          alpha: 0.94,
                         ),
-                ),
-                Positioned(
-                  left: 4,
-                  top: 4,
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(
-                      horizontal: 7,
-                      vertical: 3,
-                    ),
-                    decoration: BoxDecoration(
-                      color: ViewerPalette.roomSurface.withValues(alpha: 0.94),
-                      borderRadius: BorderRadius.circular(ViewerPalette.radiusXs),
-                      border: Border.all(color: ViewerPalette.borderSoft),
-                    ),
-                    child: Text(
-                      label.toUpperCase(),
-                      style: const TextStyle(
-                        fontFamily: 'Inter',
-                        color: _kTextLabel,
-                        fontSize: 10.5,
-                        fontWeight: FontWeight.w800,
-                        letterSpacing: 1.1,
+                        borderRadius: BorderRadius.circular(
+                          ViewerPalette.radiusXs,
+                        ),
+                        border: Border.all(color: ViewerPalette.borderSoft),
+                      ),
+                      child: Text(
+                        label.toUpperCase(),
+                        style: _kPlateLabelStyle,
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -984,12 +1016,12 @@ class _NotePlate extends StatelessWidget {
 class _DetailsRail extends StatelessWidget {
   const _DetailsRail({
     required this.note,
-    required this.mode,
+    required this.tier,
     required this.onTagTap,
   });
 
   final NoteRecord note;
-  final _DetailsMode mode;
+  final _SlideTier tier;
   final void Function(String tagName) onTagTap;
 
   Uri? _parseSourceUri(String value) {
@@ -1013,44 +1045,32 @@ class _DetailsRail extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Text(
-              'Details',
-              style: TextStyle(
-                fontFamily: 'Inter',
-                color: _kTextLabel,
-                fontSize: 10.5,
-                fontWeight: FontWeight.w800,
-                letterSpacing: 1.1,
-              ),
-            ),
+            const Text('Details', style: _kDetailLabelStyle),
             const Spacer(),
             if (catalog.isNotEmpty)
-              Text(
+              SelectableText(
                 catalog,
                 style: const TextStyle(
                   fontFamily: 'Inter',
-                  color: _kTextLabel,
-                  fontSize: 11,
+                  color: _kTextPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
                   fontFeatures: [FontFeature.tabularFigures()],
                 ),
               ),
           ],
         ),
         const SizedBox(height: 8),
-        const Divider(
-          height: 1,
-          thickness: 1,
-          color: ViewerPalette.borderSoft,
-        ),
+        const Divider(height: 1, thickness: 1, color: ViewerPalette.borderSoft),
       ],
     );
   }
 
   @override
   Widget build(BuildContext context) {
-    final compact = mode == _DetailsMode.strip;
-    final valueStyle = compact ? _kStripValueStyle : _kDetailValueStyle;
-    final notesStyle = compact ? _kStripNotesStyle : _kNotesStyle;
+    final strip = tier == _SlideTier.strip;
+    final valueStyle = strip ? _kStripValueStyle : _kDetailValueStyle;
+    final notesStyle = strip ? _kStripNotesStyle : _kNotesStyle;
 
     final serial = note.serial.trim();
     final watermark = note.watermark.trim();
@@ -1059,7 +1079,10 @@ class _DetailsRail extends StatelessWidget {
 
     final grade = note.grade.trim().isEmpty
         ? null
-        : _DetailField(label: 'Grade', value: GradePill(grade: note.grade));
+        : _DetailField(
+            label: 'Grade',
+            value: GradePill(grade: note.grade),
+          );
     final serialField = serial.isEmpty
         ? null
         : _DetailField(
@@ -1118,63 +1141,59 @@ class _DetailsRail extends StatelessWidget {
       notesField,
     ].whereType<Widget>().toList(growable: false);
 
-    final Widget content;
-    if (compact) {
+    final Widget? content;
+    if (strip) {
       // Four short facts across, then the two long fields share the row below
       // so a note reads in a couple of lines instead of a narrow column.
       final shortFields = [grade, serialField, watermarkField, tagsField];
       final hasShort = shortFields.any((field) => field != null);
-      final longFields = (sourceField == null && notesField == null)
+      final hasLong = sourceField != null || notesField != null;
+      content = !hasShort && !hasLong
           ? null
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              spacing: 8,
               children: [
-                if (sourceField != null)
-                  Expanded(flex: 2, child: sourceField),
-                if (sourceField != null && notesField != null)
-                  const SizedBox(width: 22),
-                if (notesField != null) Expanded(flex: 3, child: notesField),
+                if (hasShort)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    spacing: 24,
+                    children: [
+                      for (final field in shortFields)
+                        Expanded(child: field ?? const SizedBox.shrink()),
+                    ],
+                  ),
+                if (hasLong)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    spacing: 24,
+                    children: [
+                      if (sourceField != null)
+                        Expanded(flex: 2, child: sourceField),
+                      if (notesField != null)
+                        Expanded(flex: 3, child: notesField),
+                    ],
+                  ),
               ],
             );
-      content = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (hasShort)
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                for (var column = 0; column < 4; column++) ...[
-                  if (column > 0) const SizedBox(width: 22),
-                  Expanded(
-                    child: shortFields[column] ?? const SizedBox.shrink(),
-                  ),
-                ],
-              ],
-            ),
-          if (hasShort && longFields != null) const SizedBox(height: 8),
-          ?longFields,
-        ],
-      );
     } else {
-      content = Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          for (var i = 0; i < fields.length; i++) ...[
-            if (i > 0) const SizedBox(height: 14),
-            fields[i],
-          ],
-        ],
-      );
+      content = fields.isEmpty
+          ? null
+          : Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              mainAxisSize: MainAxisSize.min,
+              spacing: 14,
+              children: fields,
+            );
     }
 
     return Container(
-      padding: mode == _DetailsMode.stacked
-          ? const EdgeInsets.all(20)
-          : mode == _DetailsMode.strip
-              ? const EdgeInsets.fromLTRB(16, 8, 16, 10)
-              : const EdgeInsets.all(16),
+      padding: switch (tier) {
+        _SlideTier.stack => const EdgeInsets.all(20),
+        _SlideTier.strip => const EdgeInsets.fromLTRB(16, 8, 16, 12),
+        _SlideTier.rail => const EdgeInsets.all(16),
+      },
       decoration: BoxDecoration(
         color: _kDetailsBg,
         borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
@@ -1182,15 +1201,12 @@ class _DetailsRail extends StatelessWidget {
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
-        mainAxisSize: mode == _DetailsMode.strip
+        mainAxisSize: tier == _SlideTier.strip
             ? MainAxisSize.min
             : MainAxisSize.max,
         children: [
           _header(),
-          if (fields.isNotEmpty) ...[
-            SizedBox(height: compact ? 8 : 12),
-            content,
-          ],
+          if (content != null) ...[SizedBox(height: strip ? 8 : 12), content],
         ],
       ),
     );
@@ -1290,8 +1306,9 @@ class _EdgeChevronState extends State<_EdgeChevron> {
                     color: _hovered
                         ? ViewerPalette.accentSoft
                         : ViewerPalette.roomSurface,
-                    borderRadius:
-                        BorderRadius.circular(ViewerPalette.radiusPill),
+                    borderRadius: BorderRadius.circular(
+                      ViewerPalette.radiusPill,
+                    ),
                     border: Border.all(
                       color: _hovered
                           ? ViewerPalette.accent

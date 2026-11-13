@@ -445,7 +445,7 @@ void main() {
     final notes = [
       NoteRecord.fromJson(slideNote(id: 1, denomination: 'A', withImages: true)),
     ];
-    await pumpSlideshow(tester, notes);
+    await pumpSlideshow(tester, notes, surfaceSize: const Size(420, 700));
 
     for (final key in const [
       LogicalKeyboardKey.arrowUp,
