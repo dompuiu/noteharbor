@@ -11,7 +11,7 @@ The authoritative app for building and maintaining a banknote collection: browsi
 _Avoid_: Collection manager, note manager
 
 **Viewer**:
-A read-only app that presents a collection from an imported archive, on iOS or on desktop.
+A read-only app that presents the collections of an imported archive, on iOS or on desktop.
 _Avoid_: Presentation app
 
 **Editor app**:
@@ -41,7 +41,7 @@ The Editor screen for creating a new note or editing an existing one, including 
 _Avoid_: Add note screen, edit note screen (as separate screens)
 
 **Note slideshow**:
-A full-screen overlay that presents one note at a time — its images, metadata, tags, and scraped details — with previous/next navigation through the collection.
+A full-screen overlay that presents one note at a time — its images, metadata, tags, and scraped details — with previous/next navigation through the current view.
 _Avoid_: Detail view, presentation mode
 
 **Image popover**:
@@ -83,10 +83,10 @@ _Avoid_: Thumbnail, thumb
 
 ## Viewer screens
 
-The Viewer's screens are a read-only **Table screen** and **Note slideshow** (with **Image popover**), plus an **Import screen** for loading an archive into the Viewer.
+The Viewer's screens are a read-only **Table screen** and **Note slideshow** (with **Image popover**), plus an **Import screen** for loading an archive into the Viewer. The Table screen's title is a collection switcher; it also offers the read-only **All notes scope**, which changes which notes the table shows, never which screen is open.
 
 **All notes scope**:
-The Viewer Table screen's view of every collection's notes, chosen from the collection switcher. Unlike the Editor's **All notes screen**, it is a scope of the Table screen; the active collection stays selected underneath, so leaving it returns to that collection's table.
+The Viewer Table screen's view of every collection's notes, chosen from the collection switcher. Unlike the Editor's **All notes screen**, it is a scope of the Table screen, not a destination of its own; the active collection stays selected underneath, so leaving the scope returns to that collection's table. Notes open grouped by collection name, and the Collection column — shown only in this scope — names each note's collection and sorts like the other columns. Below 700 logical px the card list shows the collection on every card.
 _Avoid_: All notes screen (that is the Editor's), library
 
 ## Domain
@@ -128,5 +128,5 @@ Fetching a graded note's images and catalog details from its grading company (PM
 _Avoid_: Fetch, catalog lookup
 
 **Archive**:
-A portable bundle of a collection — its data and images — for transfer between the Editor and Viewers, or between machines. A Viewer presents one imported archive.
+A portable bundle of one or more collections — their data and images — for transfer between the Editor and Viewers, or between machines. A Viewer presents one imported archive.
 _Avoid_: Export, backup, dataset

@@ -6,6 +6,7 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ### Added
 
+- Table screen: the collection switcher now leads with All notes, a read-only scope over every collection's notes with their combined count. All notes opens grouped by collection name, adds a sortable Collection column that only this scope shows (and, below 700 logical px, a collection label on each card), and keeps the active collection selected underneath, so leaving the scope returns to that collection's table. The scope and the chosen collection survive restarts.
 - Import screen: a successful import offers a `View <collection>` action that returns to the table on the imported collection.
 - Import screen: on desktop, `Show in folder` opens the imported archive's folder in the system file manager.
 - Import screen: the archive drop zone accepts a `.zip` dragged from the OS on desktop, and names the drag-over state `Drop to choose`. A non-.zip or multi-file drop reports in the status banner. iOS has no drop target in `desktop_drop`, so its hint only promises the tap.

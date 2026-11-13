@@ -7,8 +7,10 @@ Read-only Flutter app for the Note Harbor Viewer.
 - native import of editor archives (`banknotes.db` + `images/`)
 - works without the Node server at runtime
 - notes table
+- All notes scope: every collection's notes in one read-only table, with a
+  Collection column shown only in this scope
 - slideshow level 1: note browser
-- slideshow level 2: full-size image sequence across the collection
+- slideshow level 2: full-size image sequence across the current view
 
 ## Runtime Data Flow
 
