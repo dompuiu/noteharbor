@@ -387,6 +387,7 @@ function ImagePopover({
   canGoPrevious,
   counterPosition,
   counterTotal,
+  noteKey,
   noteLabel,
   onClose,
   onJump,
@@ -466,6 +467,64 @@ function ImagePopover({
     };
   }
 
+  // The fitted box is what the plate occupies in the fit view. While the
+  // popover is zoomed, the inline scaled size and the zoomed wrap's rules hide
+  // it, so lift both for one synchronous read. Without this, switching from
+  // one face to the other would keep the old face's fit, and with it a wrong
+  // zoom ladder and 100% stop.
+  function measureFitBox(image, natural) {
+    const wrap = imageWrapRef.current;
+
+    // Without the wrap there is no way to restore the zoomed layout, and the
+    // rect would be the scaled plate, not the fit.
+    if (zoomed && !wrap) {
+      return;
+    }
+
+    const inlineWidth = image.style.width;
+    const inlineHeight = image.style.height;
+
+    let imageRect;
+
+    if (zoomed) {
+      // Lift the zoomed wrap rules and the inline scaled size for one
+      // synchronous read, then put both back exactly as React left them.
+      image.style.width = "";
+      image.style.height = "";
+
+      try {
+        wrap.classList.remove("image-popover-image-wrap--zoomed");
+        imageRect = image.getBoundingClientRect();
+      } finally {
+        wrap.classList.add("image-popover-image-wrap--zoomed");
+        image.style.width = inlineWidth;
+        image.style.height = inlineHeight;
+      }
+    } else {
+      imageRect = image.getBoundingClientRect();
+    }
+
+    if (imageRect.width && imageRect.height) {
+      const fitted = {
+        width: imageRect.width,
+        height: imageRect.height,
+      };
+
+      // A face whose fit is larger than the retained zoom would leave the
+      // plate below its own fit. The zoom view is never smaller than the fit,
+      // so such a switch returns to Fit instead.
+      if (
+        zoomed &&
+        natural.width > 0 &&
+        zoomScale < fitted.width / natural.width - ZOOM_EPSILON
+      ) {
+        resetZoom();
+      }
+
+      setFitSize((current) => (sameSize(current, fitted) ? current : fitted));
+    }
+  }
+
   function measureImage() {
     const image = imageRef.current;
 
@@ -480,18 +539,7 @@ function ImagePopover({
     setNaturalSize((current) =>
       sameSize(current, natural) ? current : natural,
     );
-
-    if (!zoomed) {
-      const imageRect = image.getBoundingClientRect();
-
-      if (imageRect.width && imageRect.height) {
-        const fitted = {
-          width: imageRect.width,
-          height: imageRect.height,
-        };
-        setFitSize((current) => (sameSize(current, fitted) ? current : fitted));
-      }
-    }
+    measureFitBox(image, natural);
   }
 
   function wrapRect() {
@@ -652,16 +700,6 @@ function ImagePopover({
     changeZoom(1, anchorInViewport(e));
   }
 
-  function moveToNextImage() {
-    resetZoom();
-    onNext();
-  }
-
-  function moveToPreviousImage() {
-    resetZoom();
-    onPrevious();
-  }
-
   // A held key repeats faster than slow machines decode, so repeats wait for
   // the current image. Otherwise the queued repeats keep paging after release.
   function stillDecoding(e) {
@@ -770,9 +808,13 @@ function ImagePopover({
     return () => image.removeEventListener("wheel", handleWheel);
   }, [displayedSrc]);
 
-  useEffect(() => {
+  // The zoom belongs to the note, not the face: a note's front and back keep
+  // the chosen scale, while opening another note returns the popover to Fit.
+  // A layout effect, not a passive one: the displayed image swaps before paint,
+  // so a cross-note page must not paint the old note's scale first.
+  useLayoutEffect(() => {
     resetZoom();
-  }, [src]);
+  }, [noteKey]);
 
   // The popover is the nested dialog: focus moves into it on open, and the
   // slideshow behind it is inert (see the panel in Slideshow).
@@ -923,9 +965,9 @@ function ImagePopover({
         // Not pannable: horizontal presses fall back to paging, vertical ones
         // are inert.
         if (direction === "left") {
-          pageWithKey(e, moveToPreviousImage);
+          pageWithKey(e, onPrevious);
         } else if (direction === "right") {
-          pageWithKey(e, moveToNextImage);
+          pageWithKey(e, onNext);
         }
         return;
       }
@@ -957,21 +999,22 @@ function ImagePopover({
       }
 
       if (direction === "right") {
-        pageWithKey(e, moveToNextImage);
+        pageWithKey(e, onNext);
         return;
       }
 
       if (direction === "left") {
-        pageWithKey(e, moveToPreviousImage);
+        pageWithKey(e, onPrevious);
         return;
       }
 
       if (e.key === "Home" || e.key === "End") {
+        // A jump across notes resets through the noteKey effect; a jump to the
+        // same note's other face keeps the zoom like paging does.
         const moved = e.key === "Home" ? onPreviewStart?.() : onPreviewEnd?.();
 
         if (moved) {
           e.preventDefault();
-          resetZoom();
         }
       }
     }
@@ -1042,58 +1085,61 @@ function ImagePopover({
               className="image-popover-zoom"
               role="group"
             >
-              <button
-                aria-pressed={!zoomed}
-                className="image-popover-zoom-button"
-                disabled={!fullLoaded || !zoomed}
-                onClick={resetZoom}
-                title="Fit the image to the plate"
-                type="button"
-              >
-                Fit
-              </button>
-              <button
-                aria-pressed={atActualSize}
-                className="image-popover-zoom-button"
-                disabled={
-                  !fullLoaded ||
-                  !fitScale ||
-                  fitScale >= 1 - ZOOM_EPSILON
-                }
-                onClick={() => zoomTo(1)}
-                title="Show the image at 100%"
-                type="button"
-              >
-                100%
-              </button>
-              <button
-                aria-label="Zoom out"
-                className="image-popover-zoom-button image-popover-zoom-step"
-                disabled={!canZoomOut}
-                onClick={zoomOut}
-                title="Zoom out (-)"
-                type="button"
-              >
-                &minus;
-              </button>
-              <output
-                aria-label="Zoom level"
-                aria-live="polite"
-                className="image-popover-zoom-level"
-                title="Current zoom level"
-              >
-                {zoomPercent ? `${zoomPercent}%` : "Fit"}
-              </output>
-              <button
-                aria-label="Zoom in"
-                className="image-popover-zoom-button image-popover-zoom-step"
-                disabled={!canZoomIn}
-                onClick={zoomIn}
-                title="Zoom in (+)"
-                type="button"
-              >
-                +
-              </button>
+              <div className="image-popover-zoom-segments">
+                <button
+                  aria-pressed={!zoomed}
+                  className="image-popover-zoom-button"
+                  onClick={resetZoom}
+                  title="Fit the image to the plate"
+                  type="button"
+                >
+                  Fit
+                </button>
+                <button
+                  aria-pressed={atActualSize}
+                  className="image-popover-zoom-button"
+                  disabled={
+                    !fullLoaded ||
+                    !fitScale ||
+                    fitScale >= 1 - ZOOM_EPSILON
+                  }
+                  onClick={() => zoomTo(1)}
+                  title="Show the image at 100%"
+                  type="button"
+                >
+                  100%
+                </button>
+              </div>
+              <div className="image-popover-zoom-stepper">
+                <button
+                  aria-label="Zoom out"
+                  className="image-popover-zoom-button image-popover-zoom-step"
+                  disabled={!canZoomOut}
+                  onClick={zoomOut}
+                  title="Zoom out (-)"
+                  type="button"
+                >
+                  &minus;
+                </button>
+                <output
+                  aria-label="Zoom level"
+                  aria-live="polite"
+                  className="image-popover-zoom-level"
+                  title="Current zoom level"
+                >
+                  {zoomPercent ? `${zoomPercent}%` : "Fit"}
+                </output>
+                <button
+                  aria-label="Zoom in"
+                  className="image-popover-zoom-button image-popover-zoom-step"
+                  disabled={!canZoomIn}
+                  onClick={zoomIn}
+                  title="Zoom in (+)"
+                  type="button"
+                >
+                  +
+                </button>
+              </div>
             </div>
             <NoteCounter
               jumpLabel="Image position"
@@ -1106,9 +1152,9 @@ function ImagePopover({
             <button
               aria-label="Close preview"
               className="icon-link image-popover-close"
-              data-shortcut="Esc"
+              data-shortcut={zoomed ? "Esc ×2" : "Esc"}
               onClick={onClose}
-              title="Close preview"
+              title="Close preview (Esc twice when zoomed)"
               type="button"
             >
               Close
@@ -1121,7 +1167,7 @@ function ImagePopover({
             aria-label="Show previous image"
             className="arrow-button image-popover-arrow"
             disabled={!canGoPrevious}
-            onClick={moveToPreviousImage}
+            onClick={onPrevious}
             type="button"
           >
             <span aria-hidden="true">&larr;</span>
@@ -1172,7 +1218,7 @@ function ImagePopover({
             aria-label="Show next image"
             className="arrow-button image-popover-arrow"
             disabled={!canGoNext}
-            onClick={moveToNextImage}
+            onClick={onNext}
             type="button"
           >
             <span aria-hidden="true">&rarr;</span>
@@ -1536,6 +1582,7 @@ function Slideshow({
           canGoPrevious={totalPreviewCount > 1}
           counterPosition={previewSequenceIndex}
           counterTotal={totalPreviewCount}
+          noteKey={note.id}
           noteLabel={`${getNoteDisplayLabel(note)} - ${previewItem.label}`}
           onClose={() => {
             cancelPreviewMove();

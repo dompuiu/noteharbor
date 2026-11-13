@@ -284,6 +284,99 @@ describe("Slideshow slide card", () => {
   });
 });
 
+describe("Image popover over the slideshow", () => {
+  function plate(width, height) {
+    return {
+      width,
+      height,
+      left: 0,
+      top: 0,
+      right: width,
+      bottom: height,
+      x: 0,
+      y: 0,
+      toJSON: () => ({}),
+    };
+  }
+
+  function naturalSize(image, width, height) {
+    Object.defineProperty(image, "naturalWidth", {
+      configurable: true,
+      value: width,
+    });
+    Object.defineProperty(image, "naturalHeight", {
+      configurable: true,
+      value: height,
+    });
+  }
+
+  test("keeps the zoom across a note's faces and resets on the next note", async () => {
+    const decode = vi.fn(() => Promise.resolve());
+    window.HTMLImageElement.prototype.decode = decode;
+
+    const notes = [
+      note({
+        id: 1,
+        images: [
+          { type: "front", variant: "full", localPath: "/front-full.jpg" },
+          { type: "back", variant: "full", localPath: "/back-full.jpg" },
+        ],
+      }),
+      note({
+        id: 2,
+        images: [
+          { type: "front", variant: "full", localPath: "/second-full.jpg" },
+        ],
+      }),
+    ];
+
+    function previewAt(currentIndex, previewKind) {
+      return (
+        <Slideshow
+          currentIndex={currentIndex}
+          notes={notes}
+          onChangeIndex={() => {}}
+          onClose={() => {}}
+          previewKind={previewKind}
+        />
+      );
+    }
+
+    try {
+      const { rerender } = render(previewAt(0, "front"));
+
+      const image = await waitFor(() => {
+        const full = document.querySelector(".image-popover-full");
+        expect(full).not.toBeNull();
+        return full;
+      });
+
+      naturalSize(image, 2000, 1000);
+      image.getBoundingClientRect = () => plate(500, 250);
+      document.querySelector(
+        ".image-popover-image-wrap",
+      ).getBoundingClientRect = () => plate(800, 600);
+      fireEvent.load(image);
+
+      fireEvent.click(screen.getByRole("button", { name: "Zoom in" }));
+
+      expect(image.style.width).toBe("625px");
+
+      // The same note's back face keeps the scale.
+      rerender(previewAt(0, "back"));
+
+      expect(image.style.width).toBe("625px");
+
+      // The next note starts again at Fit.
+      rerender(previewAt(1, "front"));
+
+      expect(image.style.width).toBe("");
+    } finally {
+      delete window.HTMLImageElement.prototype.decode;
+    }
+  });
+});
+
 describe("Slideshow walking", () => {
   test("a held arrow key moves at most once per pacing interval", () => {
     vi.useFakeTimers();

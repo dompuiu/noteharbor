@@ -6,6 +6,7 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ### Changed
 
+- Image preview: the popover is now fluid — `min(1400px, 96vw)` with a wrapping top bar — so it fits a 1024px window instead of scrolling sideways, and its five-button zoom cluster is one 36px scale control: a segmented **Fit**/**100%** choice beside a minus/level/plus stepper. Zoom keeps its scale when a note's front and back are swapped and returns to Fit on another note, and the Close hint now says **Esc ×2** while zoomed.
 - Collections: creating, renaming, or editing a collection now puts one **Cancel**/**Save** pair beside the name field, replacing the check/cross icons there; editing keeps **Delete collection** in the panel rail.
 - Sidebar: the hover-expanded and pinned rails hold one fixed 288px width, so a long collection or showcase name ellipsises inside its row instead of widening the overlay; the 0.18s width transition now animates in WebKit as well as Chromium.
 - Note editor: the screen now leads with its Display title — **Add note** when creating, the note's denomination when editing — over a caption naming its Collection, instead of letting the old 0.72rem eyebrow carry the screen's name.

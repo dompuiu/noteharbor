@@ -1910,6 +1910,7 @@ function ShowcaseScreen({ mode }) {
           canGoPrevious={previewItems.length > 1}
           counterPosition={previewIndex + 1}
           counterTotal={previewItems.length}
+          noteKey={activePreviewItem.noteId}
           noteLabel={showcasePreviewLabel(
             activePreviewItem.note,
             activePreviewItem.kind,
