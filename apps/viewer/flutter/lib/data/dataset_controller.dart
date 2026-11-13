@@ -21,6 +21,7 @@ class DatasetController extends ChangeNotifier {
   bool _isLoading = false;
   bool _isMutating = false;
   int? _activeCollectionId;
+  bool _showingAllNotes = false;
 
   /// Selection persistence is best-effort: the platform channel behind the
   /// file store may stall (or be absent in tests), and that must never block
@@ -38,6 +39,10 @@ class DatasetController extends ChangeNotifier {
   bool get isMutating => _isMutating;
   bool get canManageImportedDatasets => _repository.canManageImportedDatasets;
   int? get activeCollectionId => _activeCollectionId;
+
+  /// Whether the table shows every note in the dataset instead of only the
+  /// active collection's notes.
+  bool get showingAllNotes => _showingAllNotes;
 
   ViewerCollection? get activeCollection {
     final collections = _dataset?.collections;
@@ -63,6 +68,10 @@ class DatasetController extends ChangeNotifier {
     final notes = _dataset?.notes;
     if (notes == null || notes.isEmpty) {
       return const <NoteRecord>[];
+    }
+
+    if (_showingAllNotes) {
+      return List<NoteRecord>.unmodifiable(notes);
     }
 
     final collection = activeCollection;
@@ -151,6 +160,7 @@ class DatasetController extends ChangeNotifier {
       await _repository.deleteImportedDataset();
       _dataset = null;
       _activeCollectionId = null;
+      _showingAllNotes = false;
       await _clearSavedSelection();
     } catch (error) {
       _error = error;
@@ -163,77 +173,89 @@ class DatasetController extends ChangeNotifier {
 
   Future<void> selectCollection(int collectionId) async {
     final collections = _dataset?.collections ?? const <ViewerCollection>[];
-
-    ViewerCollection? selected;
-    for (final collection in collections) {
-      if (collection.id == collectionId) {
-        selected = collection;
-        break;
-      }
-    }
-    if (selected == null) {
+    if (!collections.any((collection) => collection.id == collectionId)) {
       return;
     }
 
-    if (_activeCollectionId == collectionId) {
+    if (_activeCollectionId == collectionId && !_showingAllNotes) {
       return;
     }
 
+    _showingAllNotes = false;
     _activeCollectionId = collectionId;
     notifyListeners();
-    await _saveSelection(selected);
+    await _persistActiveSelection();
   }
 
-  /// Picks the active collection after the dataset (re)loads: the in-memory
-  /// selection wins when it still exists, then the persisted ID, then the
-  /// persisted name (IDs churn on re-import), then the first collection.
-  /// The resolved selection is persisted so restarts restore it.
+  /// Switches the table to every note in the dataset. The active collection
+  /// stays selected, so leaving All notes returns to it.
+  Future<void> showAllNotes() async {
+    if (_showingAllNotes || activeCollection == null) {
+      return;
+    }
+
+    _showingAllNotes = true;
+    notifyListeners();
+    await _persistActiveSelection();
+  }
+
+  /// Picks the active collection after the dataset (re)loads, then re-applies
+  /// the persisted All notes flag. The failed-read fallback keeps the
+  /// in-memory scope, so an import or delete cannot drop it just because
+  /// selection persistence is best-effort.
   Future<void> _restoreSavedSelection() async {
     final collections = _dataset?.collections ?? const <ViewerCollection>[];
 
     if (collections.isEmpty) {
       _activeCollectionId = null;
+      _showingAllNotes = false;
       return;
     }
 
+    final saved = await _loadSavedSelection();
+    _activeCollectionId = _resolveActiveCollectionId(collections, saved);
+    _showingAllNotes = saved?.allCollections ?? _showingAllNotes;
+    await _persistActiveSelection();
+  }
+
+  /// The in-memory selection wins when it still exists, then the persisted
+  /// ID, then the persisted name (IDs churn on re-import), then the first
+  /// collection.
+  int _resolveActiveCollectionId(
+    List<ViewerCollection> collections,
+    LastCollectionSelection? saved,
+  ) {
     final activeId = _activeCollectionId;
     if (activeId != null && collections.any((collection) => collection.id == activeId)) {
-      await _persistActiveSelection(collections);
-      return;
+      return activeId;
     }
 
-    LastCollectionSelection? saved;
-    try {
-      saved = await _selectionStore.load().timeout(
-        _selectionStoreTimeout,
-        onTimeout: () => null,
-      );
-    } catch (_) {
-      saved = null;
+    final savedId = saved?.collectionId;
+    if (savedId != null && collections.any((collection) => collection.id == savedId)) {
+      return savedId;
     }
 
-    if (saved != null) {
-      final savedId = saved.collectionId;
-      if (savedId != null && collections.any((collection) => collection.id == savedId)) {
-        _activeCollectionId = savedId;
-        await _persistActiveSelection(collections);
-        return;
-      }
-
-      final savedName = saved.collectionName?.trim().toLowerCase();
-      if (savedName != null && savedName.isNotEmpty) {
-        for (final collection in collections) {
-          if (collection.name.trim().toLowerCase() == savedName) {
-            _activeCollectionId = collection.id;
-            await _persistActiveSelection(collections);
-            return;
-          }
+    final savedName = saved?.collectionName?.trim().toLowerCase();
+    if (savedName != null && savedName.isNotEmpty) {
+      for (final collection in collections) {
+        if (collection.name.trim().toLowerCase() == savedName) {
+          return collection.id;
         }
       }
     }
 
-    _activeCollectionId = collections.first.id;
-    await _persistActiveSelection(collections);
+    return collections.first.id;
+  }
+
+  Future<LastCollectionSelection?> _loadSavedSelection() async {
+    try {
+      return await _selectionStore.load().timeout(
+        _selectionStoreTimeout,
+        onTimeout: () => null,
+      );
+    } catch (_) {
+      return null;
+    }
   }
 
   Future<void> _saveSelection(ViewerCollection collection) async {
@@ -243,6 +265,7 @@ class DatasetController extends ChangeNotifier {
             LastCollectionSelection(
               collectionId: collection.id,
               collectionName: collection.name,
+              allCollections: _showingAllNotes,
             ),
           )
           .timeout(_selectionStoreTimeout);
@@ -259,14 +282,8 @@ class DatasetController extends ChangeNotifier {
     }
   }
 
-  Future<void> _persistActiveSelection(List<ViewerCollection> collections) async {
-    ViewerCollection? active;
-    for (final collection in collections) {
-      if (collection.id == _activeCollectionId) {
-        active = collection;
-        break;
-      }
-    }
+  Future<void> _persistActiveSelection() async {
+    final active = activeCollection;
     if (active == null) {
       return;
     }

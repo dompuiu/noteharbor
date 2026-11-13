@@ -29,14 +29,7 @@ class _FileLastCollectionStore implements LastCollectionStore {
       if (json is! Map<String, dynamic>) {
         return null;
       }
-      final rawId = json['lastCollectionId'];
-      final rawName = json['lastCollectionName'];
-      final id = rawId is num ? rawId.toInt() : null;
-      final name = rawName == null ? null : '$rawName'.trim();
-      final selection = LastCollectionSelection(
-        collectionId: id != null && id > 0 ? id : null,
-        collectionName: name == null || name.isEmpty ? null : name,
-      );
+      final selection = LastCollectionSelection.fromJson(json);
       return selection.isEmpty ? null : selection;
     } catch (_) {
       // A missing or corrupt file simply means "no remembered selection".
@@ -49,10 +42,7 @@ class _FileLastCollectionStore implements LastCollectionStore {
     try {
       final file = await _stateFile();
       await file.writeAsString(
-        jsonEncode({
-          'lastCollectionId': selection.collectionId,
-          'lastCollectionName': selection.collectionName,
-        }),
+        jsonEncode(selection.toJson()),
         flush: true,
       );
     } catch (_) {
