@@ -174,13 +174,19 @@ void main() {
     },
   );
 
-  testWidgets('the narrowest tier stacks the faces and the details', (
+  testWidgets('390x844 stacks the faces over the details and scrolls', (
     WidgetTester tester,
   ) async {
-    await pumpAt(tester, const Size(420, 700));
+    await pumpAt(tester, const Size(390, 844));
 
     expectBothFacesVisible();
     expectEveryFactVisible();
+
+    // The details follow the pair down the stack rather than sitting beside it.
+    expect(
+      tester.getTopLeft(find.text('Details')).dy,
+      greaterThan(tester.getTopLeft(find.text('BACK')).dy),
+    );
 
     // The stack is taller than a phone window, so it scrolls rather than
     // clipping; the keyboard scroll tests cover reaching it.

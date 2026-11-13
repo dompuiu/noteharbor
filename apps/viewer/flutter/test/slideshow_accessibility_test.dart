@@ -304,6 +304,41 @@ void main() {
     handle.dispose();
   });
 
+  testWidgets('Tab reaches both plates before any tag, in reading order', (
+    WidgetTester tester,
+  ) async {
+    await pumpSlideshow(tester);
+
+    // Map each control to the focus it takes when Tab reaches it, so the test
+    // checks the plate and chip nodes themselves, not their debug labels.
+    final controls = <String, FocusNode>{
+      'plate front': focusNodeOf(tester, find.text('FRONT')),
+      'plate back': focusNodeOf(tester, find.text('BACK')),
+      'tag Bank of England': focusNodeOf(tester, find.text('Bank of England')),
+      'tag Polymer': focusNodeOf(tester, find.text('Polymer')),
+      'tag Portrait': focusNodeOf(tester, find.text('Portrait')),
+    };
+
+    final visited = <String>[];
+    for (var i = 0; i < controls.length + 2; i++) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      final primary = FocusManager.instance.primaryFocus;
+      for (final entry in controls.entries) {
+        if (entry.value == primary) visited.add(entry.key);
+      }
+    }
+
+    // The picture pair leads; the tags that filter the collection come after.
+    expect(visited, [
+      'plate front',
+      'plate back',
+      'tag Bank of England',
+      'tag Polymer',
+      'tag Portrait',
+    ]);
+  });
+
   testWidgets('reduce motion turns the 220ms page step into a jump', (
     WidgetTester tester,
   ) async {
