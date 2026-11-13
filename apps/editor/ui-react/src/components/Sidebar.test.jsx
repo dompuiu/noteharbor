@@ -1080,9 +1080,11 @@ describe("Sidebar collection reordering", () => {
     });
     const { container } = await renderSidebar(CATALOG_ROUTES.collection(1));
 
-    // The visible label truncates via CSS; the full name survives on hover.
+    // The visible label truncates via CSS; the full name survives on hover
+    // and as the link's accessible name.
     const link = screen.getByRole("link", { name: longName });
     expect(link).toHaveAttribute("title", longName);
+    expect(link).toHaveAttribute("aria-label", longName);
 
     const row = link.closest(".sidebar-row");
     expect(row).not.toBeNull();

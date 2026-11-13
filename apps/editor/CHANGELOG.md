@@ -6,6 +6,7 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ### Changed
 
+- Sidebar: the hover-expanded and pinned rails hold one fixed 288px width, so a long collection or showcase name ellipsises inside its row instead of widening the overlay; the 0.18s width transition now animates in WebKit as well as Chromium.
 - Note editor: the screen now leads with its Display title — **Add note** when creating, the note's denomination when editing — over a caption naming its Collection, instead of letting the old 0.72rem eyebrow carry the screen's name.
 - Note editor: the four Note image slots are one named **Note images** group, and each card's dropzone is its single action (**Choose or drop Front full image**). Clear, delete, and undo wait behind a per-card actions menu named for its slot (**Delete Front full image**), while provenance and pending state read as plain Body text instead of coloured badges.
 - Note editor: **Save** is the one primary action, with **Save & close** kept beside it as a secondary carrying its Ctrl+Shift+S badge. Position and **Add before** sit together in the heading, and **Delete note** moves to the foot of the panel instead of standing next to the save path.

@@ -1705,11 +1705,11 @@ describe("sidebar styles", () => {
     );
   });
 
-  test("names beyond the widened rail still truncate with an ellipsis", () => {
-    // The rail widens for long names up to its cap; only names beyond
-    // the cap ellipsise inside the row. Every level of the flex chain
-    // into the label must be allowed to shrink — a flex item keeps
-    // `min-width: auto` (content-sized, no shrinking) unless overridden.
+  test("names beyond the fixed rail still truncate with an ellipsis", () => {
+    // The expanded rail never grows past 288px, so a long name ellipsises
+    // inside the row. Every level of the flex chain into the label must be
+    // allowed to shrink — a flex item keeps `min-width: auto` (content-sized,
+    // no shrinking) unless overridden.
     const label = styles.match(/\.sidebar-link-label\s*\{([^}]*)\}/);
     expect(label).not.toBeNull();
     expect(label[1]).toMatch(/min-width:\s*0/);
@@ -1721,18 +1721,24 @@ describe("sidebar styles", () => {
     expect(row[1]).toMatch(/min-width:\s*0/);
   });
 
-  test("long names widen the rail instead of truncating at 288px", () => {
-    // The expanded rail fits its content: short names get the 288px floor
-    // while longer names widen it, up to a cap past which the ellipsis
-    // still applies.
+  test("long names never widen the expanded rail", () => {
+    // The overlay rail is fixed at 288px: a long name ellipsises inside its
+    // row rather than widening the overlay over the table.
     const expanded = styles.match(
       /\.sidebar-dock:hover:not\(\.sidebar-dock--pinned\) \.sidebar,\s*\n?\s*\.sidebar-dock:has\(:focus-visible\):not\(\.sidebar-dock--pinned\) \.sidebar\s*\{([^}]*)\}/,
     );
     expect(expanded).not.toBeNull();
-    expect(expanded[1]).toMatch(
-      /width:\s*max\(var\(--sidebar-expanded-width\),\s*max-content\)/,
-    );
-    expect(expanded[1]).toMatch(/max-width:\s*480px/);
+    expect(expanded[1]).toMatch(/width:\s*var\(--sidebar-expanded-width\)/);
+  });
+
+  test("no rail rule sizes to content or past the token", () => {
+    // `--sidebar-expanded-width` is the single width knob at every rail
+    // state, so a reintroduced intrinsic size or 480px cap fails here even
+    // if it lands on a different selector.
+    expect(styles).not.toMatch(/max\(var\(--sidebar-expanded-width\)/);
+    expect(styles).not.toMatch(/max-width:\s*480px/);
+    // Keyword interpolation is a Chromium-only crutch the rail no longer needs.
+    expect(styles).not.toMatch(/interpolate-size\s*:/);
   });
 
   test("reorderable rows grab the cursor for dragging", () => {
@@ -1751,18 +1757,18 @@ describe("sidebar styles", () => {
     expect(row[1]).toMatch(/width:\s*100%/);
   });
 
-  test("the rail width transition can interpolate to max-content", () => {
-    // The expanded rail fits its content (max(288px, max-content)), which
-    // only animates when keyword interpolation is allowed. Without this,
-    // the 64px -> max-content width change snaps instead of transitioning.
+  test("the rail width transition carries no interpolate-size hint", () => {
+    // Both ends of the transition are pixel lengths now, so WebKit animates
+    // the rail like every other WebView. `interpolate-size` is a Chromium-only
+    // crutch for keyword widths and must not come back.
     const sidebar = styles.match(/\.sidebar\s*\{([^}]*)\}/);
     expect(sidebar).not.toBeNull();
-    expect(sidebar[1]).toMatch(/interpolate-size:\s*allow-keywords/);
+    expect(sidebar[1]).toMatch(/transition:[\s\S]*?width 0\.18s/);
+    expect(sidebar[1]).not.toMatch(/interpolate-size\s*:/);
   });
 
   test("the expanding labels fade and slide in", () => {
-    // Width alone may snap where keyword interpolation is unsupported, so
-    // the labels carry their own entrance motion on expand.
+    // The rail's width is fixed, so the labels carry the expand motion.
     expect(styles).toMatch(/@keyframes\s+sidebar-label-in/);
     const expandedLabels = styles.match(
       /\.sidebar-dock:hover \.sidebar-link-label,[\s\S]*?\{([^}]*)\}/,
@@ -1779,10 +1785,7 @@ describe("sidebar styles", () => {
       /\.sidebar-dock\.sidebar-dock--open:not\(\.sidebar-dock--pinned\) \.sidebar\s*\{([^}]*)\}/,
     );
     expect(open).not.toBeNull();
-    expect(open[1]).toMatch(
-      /width:\s*max\(var\(--sidebar-expanded-width\),\s*max-content\)/,
-    );
-    expect(open[1]).toMatch(/max-width:\s*480px/);
+    expect(open[1]).toMatch(/width:\s*var\(--sidebar-expanded-width\)/);
   });
 
   test("the keyboard-open class shows the labels with the entrance", () => {
