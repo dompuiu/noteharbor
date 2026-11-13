@@ -1,5 +1,7 @@
 import {
+  useCallback,
   useEffect,
+  useId,
   useLayoutEffect,
   useMemo,
   useRef,
@@ -17,8 +19,10 @@ import {
   useImagePreload,
 } from "../lib/imagePreload.js";
 import { gradeTier } from "../lib/tableColumns.js";
+import { filterFieldLabel } from "../lib/tableFilters.js";
 import { usePacedMove } from "../lib/usePacedMove.js";
 import { NoteCounter } from "./NoteCounter.jsx";
+import { useToastHost } from "./Toast.jsx";
 
 function formatScrapedLabel(label) {
   return String(label ?? "")
@@ -50,6 +54,48 @@ function getNoteDisplayLabel(note) {
 
 function getNoteTitle(note) {
   return String(note?.denomination ?? "").trim() || "Untitled note";
+}
+
+// A neighbour turn names the note the way a catalogue page does: the
+// denomination and its issue year, not the internal index or the catalog
+// number the entry column already carries.
+function getNeighbourLabel(note) {
+  const denomination = String(note?.denomination ?? "").trim();
+  const issueDate = String(note?.issue_date ?? "").trim();
+
+  if (denomination && issueDate) {
+    return `${denomination} ${issueDate}`;
+  }
+
+  return denomination || issueDate || "Untitled note";
+}
+
+// The final segment of an image URL, for naming a file to the reader. Plates
+// and popover scans both carry version and preview queries, and the full path
+// is noise: the file name is the one detail that helps a collector find the
+// scan on disk. An unknown name stays empty; callers that must name something
+// pass their own fallback.
+function fileNameFromPath(path) {
+  const name =
+    String(path ?? "")
+      .split(/[?#]/)[0]
+      .split("/")
+      .filter(Boolean)
+      .at(-1) ?? "";
+
+  try {
+    return decodeURIComponent(name);
+  } catch {
+    return name;
+  }
+}
+
+// A missing value reads as the table's muted dash, so an absent field never
+// looks like a different kind of thing in the room than it does in a row.
+function NoteValue({ value }) {
+  const text = String(value ?? "").trim();
+
+  return text ? text : <span className="muted">-</span>;
 }
 
 // The scraped labels that are worth a place on the slide itself. Each group
@@ -283,7 +329,7 @@ function getPreviewItems(note, { includeMissingSides = false } = {}) {
 
   const noteLabel = getNoteDisplayLabel(note);
   const frontItem = {
-    alt: `${noteLabel} front`,
+    alt: `${noteLabel}, Front`,
     kind: "front",
     label: "Front",
     // `src` stays the full scan for the popover; `slide` is the right-sized
@@ -293,7 +339,7 @@ function getPreviewItems(note, { includeMissingSides = false } = {}) {
     thumb: frontThumb || frontFull,
   };
   const backItem = {
-    alt: `${noteLabel} back`,
+    alt: `${noteLabel}, Back`,
     kind: "back",
     label: "Back",
     src: backFull || backThumb,
@@ -330,15 +376,41 @@ function getPreviewItems(note, { includeMissingSides = false } = {}) {
 // two preview downloads that the next key press throws away. The loaded
 // source is stored rather than a boolean, so a new note resets the layer
 // without an effect and a late load from the previous note cannot win.
-function SlidePlate({ alt, deferFull = false, paused = false, src, thumb }) {
+//
+// A file that is gone (an archive moved between machines, a scrape whose image
+// never landed) keeps the plate's geometry and names what is missing instead
+// of leaving the browser's broken-image glyph inside a mat.
+function SlidePlate({
+  alt,
+  deferFull = false,
+  fileName,
+  failed = false,
+  onError,
+  paused = false,
+  src,
+  thumb,
+}) {
   const [loadedFullSrc, setLoadedFullSrc] = useState(null);
+  const [failedFullSrc, setFailedFullSrc] = useState(null);
   const fullSrc = src && src !== thumb ? src : null;
   const fullLoaded = Boolean(fullSrc) && loadedFullSrc === fullSrc;
+  const fullBroken = Boolean(fullSrc) && failedFullSrc === fullSrc;
   // The popover covers the room, so a full scan still in flight behind it only
   // competes with the plate the reader opened. Once loaded, keep the layer so
   // closing the preview returns to a settled plate.
   const showFull =
-    Boolean(fullSrc) && (fullLoaded || (!deferFull && !paused));
+    Boolean(fullSrc) &&
+    !fullBroken &&
+    (fullLoaded || (!deferFull && !paused));
+
+  if (failed) {
+    return (
+      <span className="slide-plate slide-plate--unavailable">
+        <span className="slide-plate-unavailable-title">Image unavailable</span>
+        <span className="slide-plate-unavailable-file">{fileName}</span>
+      </span>
+    );
+  }
 
   return (
     <span className="slide-plate">
@@ -346,6 +418,7 @@ function SlidePlate({ alt, deferFull = false, paused = false, src, thumb }) {
         alt={alt}
         className="slide-plate-thumb"
         decoding="async"
+        onError={onError}
         src={thumb}
       />
       {showFull ? (
@@ -357,6 +430,7 @@ function SlidePlate({ alt, deferFull = false, paused = false, src, thumb }) {
             decoding="async"
             fetchPriority="low"
             key={fullSrc}
+            onError={() => setFailedFullSrc(fullSrc)}
             onLoad={() => setLoadedFullSrc(fullSrc)}
             src={fullSrc}
           />
@@ -381,23 +455,35 @@ function sameSize(left, right) {
   return left.width === right.width && left.height === right.height;
 }
 
+const POPOVER_SIDES = [
+  { kind: "front", label: "Front" },
+  { kind: "back", label: "Back" },
+];
+
 function ImagePopover({
   alt,
+  availableSides = [],
   canGoNext,
   canGoPrevious,
   counterPosition,
   counterTotal,
+  noteKey,
   noteLabel,
   onClose,
+  onEdit,
   onJump,
   onNext,
   onPrevious,
   onPreviewEnd,
   onPreviewStart,
+  onSelectSide,
   placeholderText,
+  side = null,
   src,
   thumb,
 }) {
+  const titleId = useId();
+  const statusId = useId();
   const overlayRef = useRef(null);
   const imageRef = useRef(null);
   const imageWrapRef = useRef(null);
@@ -409,6 +495,7 @@ function ImagePopover({
   const keyHeldRef = useRef(false);
   const [isDragging, setIsDragging] = useState(false);
   const [displayedSrc, setDisplayedSrc] = useState(null);
+  const [failedImage, setFailedImage] = useState(null);
   const [fitSize, setFitSize] = useState({ width: 0, height: 0 });
   const [naturalSize, setNaturalSize] = useState({ width: 0, height: 0 });
   const [offset, setOffset] = useState({ x: 0, y: 0 });
@@ -420,13 +507,21 @@ function ImagePopover({
   useLayoutEffect(() => {
     offsetRef.current = offset;
   }, [offset]);
-  const fullLoaded = Boolean(src) && displayedSrc === src;
-  const zoomed = zoomScale > 0;
+  const hasSource = Boolean(src);
+  const fullLoaded = hasSource && displayedSrc === src;
+  // A scan whose row exists but whose file has gone renders the browser's
+  // broken-image glyph. Folding that into the same missing-image state as an
+  // absent side means the collector sees one honest answer either way. The
+  // failed source is remembered by URL, so paging to another image clears it,
+  // and the failing file is kept so the quiet line names the real casualty.
+  const imageFailed = hasSource && failedImage?.src === src;
+  const hasImage = hasSource && !imageFailed;
+  const zoomed = hasImage && zoomScale > 0;
   // Until the target full scan is ready, show its thumbnail over the plate
   // already on screen. Paging then answers the key immediately instead of
   // holding a stale image while a multi-MB decode runs.
   const showThumb =
-    !fullLoaded && !zoomed && Boolean(thumb) && thumb !== src;
+    hasImage && !fullLoaded && !zoomed && Boolean(thumb) && thumb !== src;
 
   const fitScale =
     naturalSize.width > 0 && fitSize.width > 0
@@ -441,9 +536,14 @@ function ImagePopover({
   const overflowY = Math.max(0, scaledSize.height - viewportSize.height);
   const pannable = zoomed && (overflowX > 0 || overflowY > 0);
   const maxZoomScale = fitScale * POPOVER_ZOOM_LEVELS.at(-1);
+  // A broken scan still shows the instrument, but every control in it is
+  // inert: there are no pixels to step through.
   const canZoomIn =
-    fullLoaded && fitScale > 0 && (!zoomed || zoomScale < maxZoomScale);
-  const canZoomOut = fullLoaded && zoomed;
+    hasImage &&
+    fullLoaded &&
+    fitScale > 0 &&
+    (!zoomed || zoomScale < maxZoomScale);
+  const canZoomOut = hasImage && zoomed;
 
   // An axis with no overflow has nothing to pan, so it keeps the image
   // centred. Without this a zoomed plate smaller than the well would snap to
@@ -466,6 +566,68 @@ function ImagePopover({
     };
   }
 
+  // The fitted box is what the plate occupies in the fit view. While the
+  // popover is zoomed, the inline scaled size and the zoomed wrap's rules hide
+  // it, so lift both for one synchronous read. Without this, switching from
+  // one face to the other would keep the old face's fit, and with it a wrong
+  // zoom ladder and 100% stop.
+  function measureFitBox(image, natural) {
+    const wrap = imageWrapRef.current;
+
+    // Without the wrap there is no way to restore the zoomed layout, and the
+    // rect would be the scaled plate, not the fit.
+    if (zoomed && !wrap) {
+      return;
+    }
+
+    const inlineWidth = image.style.width;
+    const inlineHeight = image.style.height;
+
+    let imageRect;
+
+    if (zoomed) {
+      // Lift the zoomed wrap rules and the inline scaled size for one
+      // synchronous read, then put both back exactly as React left them.
+      image.style.width = "";
+      image.style.height = "";
+
+      try {
+        wrap.classList.remove("image-popover-image-wrap--zoomed");
+        imageRect = image.getBoundingClientRect();
+      } finally {
+        wrap.classList.add("image-popover-image-wrap--zoomed");
+        image.style.width = inlineWidth;
+        image.style.height = inlineHeight;
+      }
+    } else {
+      imageRect = image.getBoundingClientRect();
+    }
+
+    if (imageRect.width && imageRect.height) {
+      const fitted = {
+        width: imageRect.width,
+        height: imageRect.height,
+      };
+
+      // A face whose fit is larger than the retained zoom would leave the
+      // plate below its own fit. The zoom view is never smaller than the fit,
+      // so clamp the retained scale up to this face's fit rather than dropping
+      // the zoom: the front/back switch keeps it.
+      const faceFitScale =
+        natural.width > 0 ? fitted.width / natural.width : 0;
+
+      if (
+        zoomed &&
+        faceFitScale > 0 &&
+        zoomScale < faceFitScale - ZOOM_EPSILON
+      ) {
+        setZoomScale(faceFitScale);
+      }
+
+      setFitSize((current) => (sameSize(current, fitted) ? current : fitted));
+    }
+  }
+
   function measureImage() {
     const image = imageRef.current;
 
@@ -480,18 +642,7 @@ function ImagePopover({
     setNaturalSize((current) =>
       sameSize(current, natural) ? current : natural,
     );
-
-    if (!zoomed) {
-      const imageRect = image.getBoundingClientRect();
-
-      if (imageRect.width && imageRect.height) {
-        const fitted = {
-          width: imageRect.width,
-          height: imageRect.height,
-        };
-        setFitSize((current) => (sameSize(current, fitted) ? current : fitted));
-      }
-    }
+    measureFitBox(image, natural);
   }
 
   function wrapRect() {
@@ -580,12 +731,18 @@ function ImagePopover({
   }
 
   function zoomTo(nextScale, anchor = null) {
-    if (!fullLoaded || !fitScale) {
+    if (!hasImage) {
       return;
     }
 
     if (!nextScale || nextScale <= fitScale + ZOOM_EPSILON) {
       resetZoom();
+      return;
+    }
+
+    // A step up needs this scan's measured fit; a step back only needs the
+    // zoom already held, so it still works while the next scan loads.
+    if (!fullLoaded || !fitScale) {
       return;
     }
 
@@ -652,14 +809,42 @@ function ImagePopover({
     changeZoom(1, anchorInViewport(e));
   }
 
-  function moveToNextImage() {
-    resetZoom();
-    onNext();
+  function sideAvailable(kind) {
+    return availableSides.includes(kind);
   }
 
-  function moveToPreviousImage() {
-    resetZoom();
-    onPrevious();
+  // A side with no image keeps its toggle visible but inert: `aria-disabled`
+  // rather than `disabled` so the pressed state stays readable to assistive
+  // tech. The caller owns how the switch moves through its sequence.
+  function selectSide(kind) {
+    if (kind === side || !sideAvailable(kind) || !onSelectSide) {
+      return;
+    }
+
+    onSelectSide(kind);
+  }
+
+  // A broken <img> records the source it was actually asked to paint, so a
+  // late error from the previous page cannot mark the incoming one missing.
+  // Only the current page's own scan or thumbnail can fail it, and the
+  // failure is keyed to the canonical full scan the empty state names.
+  function failImage(source) {
+    if (!source || (source !== src && source !== thumb)) {
+      return;
+    }
+
+    setFailedImage({ file: fileNameFromPath(source), src: src || null });
+  }
+
+  // The scrim steps back to Fit first, exactly like the first Escape, and only
+  // closes the preview when there is no zoom left to unwind.
+  function clickScrim() {
+    if (zoomed) {
+      resetZoom();
+      return;
+    }
+
+    onClose();
   }
 
   // A held key repeats faster than slow machines decode, so repeats wait for
@@ -770,15 +955,36 @@ function ImagePopover({
     return () => image.removeEventListener("wheel", handleWheel);
   }, [displayedSrc]);
 
-  useEffect(() => {
+  // The zoom belongs to the note, not the face: a note's front and back keep
+  // the chosen scale, while opening another note returns the popover to Fit.
+  // A layout effect, not a passive one: the displayed image swaps before paint,
+  // so a cross-note page must not paint the old note's scale first.
+  useLayoutEffect(() => {
     resetZoom();
-  }, [src]);
+  }, [noteKey]);
 
   // The popover is the nested dialog: focus moves into it on open, and the
   // slideshow behind it is inert (see the panel in Slideshow).
   useLayoutEffect(() => {
     overlayRef.current?.focus({ preventScroll: true });
   }, []);
+
+  // Paging onto a side with no image removes the zoom cluster. If one of its
+  // buttons held focus, the dialog would be left with focus on <body>: pull it
+  // back to the overlay instead. Controls that survive the switch keep focus.
+  useLayoutEffect(() => {
+    const overlay = overlayRef.current;
+
+    if (hasImage || !overlay) {
+      return;
+    }
+
+    const active = document.activeElement;
+
+    if (!(active instanceof Node) || !overlay.contains(active)) {
+      overlay.focus({ preventScroll: true });
+    }
+  }, [hasImage]);
 
   // The visible image only ever switches to a source that is already decoded,
   // so holding an arrow key never paints an empty frame. While the key is
@@ -923,9 +1129,9 @@ function ImagePopover({
         // Not pannable: horizontal presses fall back to paging, vertical ones
         // are inert.
         if (direction === "left") {
-          pageWithKey(e, moveToPreviousImage);
+          pageWithKey(e, onPrevious);
         } else if (direction === "right") {
-          pageWithKey(e, moveToNextImage);
+          pageWithKey(e, onNext);
         }
         return;
       }
@@ -957,21 +1163,22 @@ function ImagePopover({
       }
 
       if (direction === "right") {
-        pageWithKey(e, moveToNextImage);
+        pageWithKey(e, onNext);
         return;
       }
 
       if (direction === "left") {
-        pageWithKey(e, moveToPreviousImage);
+        pageWithKey(e, onPrevious);
         return;
       }
 
       if (e.key === "Home" || e.key === "End") {
+        // A jump across notes resets through the noteKey effect; a jump to the
+        // same note's other face keeps the zoom like paging does.
         const moved = e.key === "Home" ? onPreviewStart?.() : onPreviewEnd?.();
 
         if (moved) {
           e.preventDefault();
-          resetZoom();
         }
       }
     }
@@ -1014,19 +1221,45 @@ function ImagePopover({
         }
       : undefined;
   const zoomPercent =
-    fullLoaded && shownScale ? Math.round(shownScale * 100) : 0;
+    hasImage && fullLoaded && shownScale ? Math.round(shownScale * 100) : 0;
   const atActualSize = zoomed && Math.abs(zoomScale - 1) < ZOOM_EPSILON;
+  const sideLabel =
+    POPOVER_SIDES.find((option) => option.kind === side)?.label ?? null;
+  const fileName = imageFailed ? failedImage.file : "";
+  const positionAnnouncement =
+    counterPosition && counterTotal
+      ? `image ${counterPosition} of ${counterTotal}`
+      : null;
+  // A page with nothing to paint says so: the empty state is static content,
+  // and the position alone would read as if a scan were there.
+  const availability = imageFailed
+    ? "image unavailable"
+    : hasSource
+      ? null
+      : "no image";
+  const announcement = [
+    noteLabel,
+    sideLabel,
+    positionAnnouncement,
+    availability,
+  ]
+    .filter(Boolean)
+    .join(", ");
 
   return (
     <div
-      aria-label="Image preview"
+      aria-describedby={statusId}
+      aria-labelledby={titleId}
       aria-modal="true"
       className="image-popover-overlay"
-      onClick={onClose}
+      onClick={clickScrim}
       ref={overlayRef}
       role="dialog"
       tabIndex={-1}
     >
+      <span className="image-popover-announcer" id={statusId} role="status">
+        {announcement}
+      </span>
       <div
         className={`image-popover-content${zoomed ? " image-popover-content--zoomed" : ""}`}
         onClick={(e) => e.stopPropagation()}
@@ -1034,81 +1267,121 @@ function ImagePopover({
         <div className="image-popover-topbar">
           <div className="image-popover-meta">
             <p className="eyebrow">Preview</p>
-            <p className="image-popover-note-label">{noteLabel}</p>
+            <div className="image-popover-identity">
+              <h2 className="image-popover-note-label" id={titleId}>
+                {noteLabel}
+              </h2>
+              {side ? (
+                <div
+                  aria-label="Image side"
+                  className="image-popover-sides"
+                  role="group"
+                >
+                  {POPOVER_SIDES.map((option) => {
+                    const available = sideAvailable(option.kind);
+
+                    return (
+                      <button
+                        aria-disabled={available ? undefined : true}
+                        aria-pressed={side === option.kind}
+                        className="image-popover-side-button"
+                        key={option.kind}
+                        onClick={() => selectSide(option.kind)}
+                        title={
+                          available
+                            ? `Show the ${option.label.toLowerCase()} image`
+                            : `No ${option.label.toLowerCase()} image for this note`
+                        }
+                        type="button"
+                      >
+                        {option.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              ) : null}
+            </div>
           </div>
           <div className="image-popover-actions">
-            <div
-              aria-label="Image zoom"
-              className="image-popover-zoom"
-              role="group"
-            >
-              <button
-                aria-pressed={!zoomed}
-                className="image-popover-zoom-button"
-                disabled={!fullLoaded || !zoomed}
-                onClick={resetZoom}
-                title="Fit the image to the plate"
-                type="button"
+            {hasSource ? (
+              <div
+                aria-label="Image zoom"
+                className="image-popover-zoom"
+                role="group"
               >
-                Fit
-              </button>
-              <button
-                aria-pressed={atActualSize}
-                className="image-popover-zoom-button"
-                disabled={
-                  !fullLoaded ||
-                  !fitScale ||
-                  fitScale >= 1 - ZOOM_EPSILON
-                }
-                onClick={() => zoomTo(1)}
-                title="Show the image at 100%"
-                type="button"
-              >
-                100%
-              </button>
-              <button
-                aria-label="Zoom out"
-                className="image-popover-zoom-button image-popover-zoom-step"
-                disabled={!canZoomOut}
-                onClick={zoomOut}
-                title="Zoom out (-)"
-                type="button"
-              >
-                &minus;
-              </button>
-              <output
-                aria-label="Zoom level"
-                aria-live="polite"
-                className="image-popover-zoom-level"
-                title="Current zoom level"
-              >
-                {zoomPercent ? `${zoomPercent}%` : "Fit"}
-              </output>
-              <button
-                aria-label="Zoom in"
-                className="image-popover-zoom-button image-popover-zoom-step"
-                disabled={!canZoomIn}
-                onClick={zoomIn}
-                title="Zoom in (+)"
-                type="button"
-              >
-                +
-              </button>
-            </div>
+                <div className="image-popover-zoom-segments">
+                  <button
+                    aria-pressed={!zoomed}
+                    className="image-popover-zoom-button"
+                    onClick={resetZoom}
+                    title="Fit the image to the plate"
+                    type="button"
+                  >
+                    Fit
+                  </button>
+                  <button
+                    aria-pressed={atActualSize}
+                    className="image-popover-zoom-button"
+                    disabled={
+                      !hasImage ||
+                      !fullLoaded ||
+                      !fitScale ||
+                      fitScale >= 1 - ZOOM_EPSILON
+                    }
+                    onClick={() => zoomTo(1)}
+                    title="Show the image at 100%"
+                    type="button"
+                  >
+                    100%
+                  </button>
+                </div>
+                <div className="image-popover-zoom-stepper">
+                  <button
+                    aria-label="Zoom out"
+                    className="image-popover-zoom-button image-popover-zoom-step"
+                    disabled={!canZoomOut}
+                    onClick={zoomOut}
+                    title="Zoom out (-)"
+                    type="button"
+                  >
+                    &minus;
+                  </button>
+                  <output
+                    aria-label="Zoom level"
+                    aria-live="polite"
+                    className="image-popover-zoom-level"
+                    title="Current zoom level"
+                  >
+                    {zoomPercent ? `${zoomPercent}%` : "Fit"}
+                  </output>
+                  <button
+                    aria-label="Zoom in"
+                    className="image-popover-zoom-button image-popover-zoom-step"
+                    disabled={!canZoomIn}
+                    onClick={zoomIn}
+                    title="Zoom in (+)"
+                    type="button"
+                  >
+                    +
+                  </button>
+                </div>
+              </div>
+            ) : null}
             <NoteCounter
               jumpLabel="Image position"
               onJump={onJump}
               position={counterPosition}
               showArrows={false}
               total={counterTotal}
+              valueRole="spinbutton"
               variant="dark"
             />
             <button
               aria-label="Close preview"
               className="icon-link image-popover-close"
-              data-shortcut="Esc"
+              data-shortcut={zoomed ? "Esc ×2" : "Esc"}
               onClick={onClose}
-              title="Close preview"
+              title="Close preview (Esc twice when zoomed)"
               type="button"
             >
               Close
@@ -1121,14 +1394,14 @@ function ImagePopover({
             aria-label="Show previous image"
             className="arrow-button image-popover-arrow"
             disabled={!canGoPrevious}
-            onClick={moveToPreviousImage}
+            onClick={onPrevious}
             type="button"
           >
             <span aria-hidden="true">&larr;</span>
           </button>
 
           <div className={imageWrapClassName} ref={imageWrapRef}>
-            {src ? (
+            {hasImage ? (
               <>
                 {displayedSrc ? (
                   <img
@@ -1137,6 +1410,7 @@ function ImagePopover({
                     decoding="sync"
                     onDoubleClick={toggleZoom}
                     onDragStart={(e) => e.preventDefault()}
+                    onError={() => failImage(displayedSrc || src)}
                     onLoad={measureImage}
                     onPointerCancel={onImagePointerUp}
                     onPointerDown={onImagePointerDown}
@@ -1152,19 +1426,41 @@ function ImagePopover({
                     alt=""
                     aria-hidden="true"
                     className="image-popover-thumb"
+                    onError={() => failImage(thumb)}
                     src={thumb}
                   />
                 ) : null}
               </>
             ) : (
               <div className="image-popover-empty-state">
-                <p className="eyebrow">No preview</p>
-                <p>{placeholderText}</p>
+                {imageFailed ? (
+                  <>
+                    <p className="eyebrow">Image unavailable</p>
+                    <p>This image file could not be loaded.</p>
+                    {fileName ? (
+                      <p className="image-popover-empty-file">{fileName}</p>
+                    ) : null}
+                  </>
+                ) : (
+                  <>
+                    <p className="eyebrow">No preview</p>
+                    <p>{placeholderText}</p>
+                  </>
+                )}
+                {onEdit ? (
+                  <button
+                    className="icon-link"
+                    onClick={onEdit}
+                    type="button"
+                  >
+                    Edit note
+                  </button>
+                ) : null}
               </div>
             )}
           </div>
 
-          {src && !fullLoaded ? (
+          {hasImage && !fullLoaded ? (
             <span aria-hidden="true" className="image-loading-spinner" />
           ) : null}
 
@@ -1172,7 +1468,7 @@ function ImagePopover({
             aria-label="Show next image"
             className="arrow-button image-popover-arrow"
             disabled={!canGoNext}
-            onClick={moveToNextImage}
+            onClick={onNext}
             type="button"
           >
             <span aria-hidden="true">&rarr;</span>
@@ -1183,8 +1479,44 @@ function ImagePopover({
   );
 }
 
+// One foot turn. The two mirror each other, so the direction alone decides the
+// arrow side, the copy and the handler; the edge case stays visible and inert.
+function SlideshowTurn({ direction, edgeCopy, note, onTurn }) {
+  const next = direction === "next";
+  const directionLabel = next ? "Next" : "Previous";
+  const name = note ? getNeighbourLabel(note) : edgeCopy;
+
+  return (
+    <button
+      aria-label={`${directionLabel} note: ${name}`}
+      className={`button slideshow-turn slideshow-turn--${direction}`}
+      disabled={!note}
+      onClick={onTurn}
+      title={`${directionLabel} note (${next ? "→" : "←"})`}
+      type="button"
+    >
+      {next ? null : (
+        <span aria-hidden="true" className="slideshow-turn-arrow">
+          &larr;
+        </span>
+      )}
+      <span className="slideshow-turn-text">
+        <span className="slideshow-turn-direction">{directionLabel}</span>
+        <span className="slideshow-turn-name">{name}</span>
+      </span>
+      {next ? (
+        <span aria-hidden="true" className="slideshow-turn-arrow">
+          &rarr;
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
 function Slideshow({
+  collectionName = "Notes",
   currentIndex,
+  filterConditions = [],
   keyboardDisabled = false,
   notes,
   onAdd,
@@ -1204,6 +1536,23 @@ function Slideshow({
 }) {
   const note = notes[currentIndex];
   const screenRef = useRef(null);
+  // Plates whose image file failed to load, keyed by the versioned source, so
+  // a replaced file gets its own attempt instead of inheriting the failure.
+  const [failedPlateSources, setFailedPlateSources] = useState(
+    () => new Set(),
+  );
+  const markPlateFailed = useCallback((source) => {
+    setFailedPlateSources((current) => {
+      if (current.has(source)) {
+        return current;
+      }
+
+      const next = new Set(current);
+      next.add(source);
+      return next;
+    });
+  }, []);
+  const shellToastRef = useToastHost();
   // The thumbnail the popover was opened from, so closing it returns the
   // keyboard to that control rather than the room's section.
   const previewTriggerRef = useRef(null);
@@ -1257,25 +1606,16 @@ function Slideshow({
 
   // The next/previous slides are what a held arrow key reaches for. Preload
   // their 500px thumbnails at idle: cheap enough that a walk is instant, and
-  // the visible slide never waits behind them.
+  // the visible slide never waits behind them. The walk stops at the ends, so
+  // an edge warms only the neighbour it can actually reach.
   const neighbouringThumbs = useMemo(() => {
-    const count = notes.length;
-
-    if (count < 2) {
-      return [];
-    }
-
+    const neighbours = [
+      notes[currentIndex - 1],
+      notes[currentIndex + 1],
+    ].filter(Boolean);
     const urls = [];
-    const neighbours = new Set([
-      notes[(currentIndex + 1) % count],
-      notes[(currentIndex - 1 + count) % count],
-    ]);
 
     neighbours.forEach((entry) => {
-      if (!entry) {
-        return;
-      }
-
       getPreviewItems(entry).forEach((item) => {
         if (item.thumb) {
           urls.push(item.thumb);
@@ -1313,12 +1653,30 @@ function Slideshow({
     }
   }
 
+  // The walk stops at the ends; it never wraps to the other end of the set.
+  // The bound check runs now for the two turns and the arrow keys, while the
+  // index clamp inside the updater keeps a move queued by the pacing window
+  // from overshooting the last note. Typed jumps still go through
+  // changeSlideshowIndex and keep their modulo clamp.
   function moveSlideshow(offset) {
+    const target = currentIndex + offset;
+
+    if (target < 0 || target >= notes.length) {
+      return;
+    }
+
     requestRoomMove(() =>
-      onChangeIndex(
-        (current) => (current + offset + notes.length) % notes.length,
+      onChangeIndex((current) =>
+        Math.min(Math.max(current + offset, 0), notes.length - 1),
       ),
     );
+  }
+
+  // Closing the popover and stepping out of it to the editor take the same
+  // route: drop any queued page, then strip the preview from the address.
+  function leavePreview() {
+    cancelPreviewMove();
+    onClosePreview?.(note.id);
   }
 
   async function handleCopyNoteDetails() {
@@ -1326,7 +1684,9 @@ function Slideshow({
 
     try {
       await copyTextToClipboard(clipboardValue);
-      onCopy?.(null);
+      // Success confirms with the toast alone: an earlier copy failure's
+      // danger line stays until its own retry clears it.
+      shellToastRef?.current?.show("Note fields copied");
     } catch {
       onCopy?.("Could not copy note details to clipboard.");
     }
@@ -1464,7 +1824,9 @@ function Slideshow({
 
       if ((event.key === "Enter" || event.key === " ") && note) {
         const openableItem = previewItems.find(
-          (item) => item.kind === "front" || item.kind === "back",
+          (item) =>
+            (item.kind === "front" || item.kind === "back") &&
+            !failedPlateSources.has(item.thumb),
         );
 
         if (openableItem) {
@@ -1481,6 +1843,7 @@ function Slideshow({
   }, [
     cancelRoomMove,
     currentIndex,
+    failedPlateSources,
     keyboardDisabled,
     note,
     notes.length,
@@ -1508,6 +1871,15 @@ function Slideshow({
   const noteAnnouncement = note
     ? `note ${currentIndex + 1} of ${notes.length}, ${denomination || "Untitled note"}`
     : "";
+  // The walk does not wrap, so an edge has no neighbour to name: the turn is
+  // inert and says the set ends there.
+  const previousNote = currentIndex > 0 ? notes[currentIndex - 1] : null;
+  const nextNote =
+    currentIndex < notes.length - 1 ? notes[currentIndex + 1] : null;
+  const progressPercent = ((currentIndex + 1) / notes.length) * 100;
+  const walkingCopy = `Collection · walking ${notes.length} ${
+    notes.length === 1 ? "note" : "notes"
+  }`;
 
   // While an editor overlay is open the slideshow is a backdrop: it keeps
   // rendering, but `inert` takes its controls out of the tab order and stops
@@ -1517,7 +1889,7 @@ function Slideshow({
   // Image popover does not) while a plate is enlarged.
   return (
     <section
-      aria-label="Note slideshow"
+      aria-label={note ? getNoteTitle(note) : "Note slideshow"}
       aria-modal={previewItem ? undefined : "true"}
       className="slideshow-screen slideshow-screen--overlay"
       inert={keyboardDisabled}
@@ -1532,15 +1904,26 @@ function Slideshow({
       {previewItem && note && (
         <ImagePopover
           alt={previewItem.alt}
+          availableSides={previewItems
+            .filter((item) => item.src)
+            .map((item) => item.kind)}
           canGoNext={totalPreviewCount > 1}
           canGoPrevious={totalPreviewCount > 1}
           counterPosition={previewSequenceIndex}
           counterTotal={totalPreviewCount}
-          noteLabel={`${getNoteDisplayLabel(note)} - ${previewItem.label}`}
-          onClose={() => {
-            cancelPreviewMove();
-            onClosePreview?.(note.id);
-          }}
+          noteKey={note.id}
+          noteLabel={getNoteDisplayLabel(note)}
+          onClose={leavePreview}
+          onEdit={
+            readOnly
+              ? undefined
+              : () => {
+                  // The editor is the fix for a missing scan: leave the
+                  // preview first so the editor is not a layer behind it.
+                  leavePreview();
+                  onEdit?.(note.id);
+                }
+          }
           onJump={(position) => {
             cancelPreviewMove();
             onJumpPreview?.(position);
@@ -1555,81 +1938,98 @@ function Slideshow({
             cancelPreviewMove();
             return onPreviewStart?.();
           }}
+          onSelectSide={(kind) =>
+            // The slideshow sequence keeps both slots for every note, so the
+            // other face is always one step away.
+            requestPreviewMove(() => onMovePreview?.(kind === "back" ? 1 : -1))
+          }
           placeholderText={`No scraped ${previewItem.label.toLowerCase()} image exists for this note yet.`}
+          side={previewKind}
           src={previewItem.src}
           thumb={previewItem.thumb}
         />
       )}
 
       <div className="slideshow-panel" inert={Boolean(previewItem)}>
-        <div className="slideshow-topbar">
+        <header className="slideshow-topbar">
+          <div className="slideshow-heading">
+            <p className="eyebrow">{walkingCopy}</p>
+            <div className="slideshow-set">
+              <p className="slideshow-collection-name">{collectionName}</p>
+              {filterConditions.map((condition) => {
+                const fieldLabel = filterFieldLabel(condition.field);
+                const value = `${condition.negated ? "not " : ""}${condition.value}`;
+
+                return (
+                  <span
+                    className={`table-filter-chip slideshow-filter-chip${
+                      condition.negated ? " table-filter-chip--negated" : ""
+                    }`}
+                    key={condition.id}
+                    title={`Filter ${fieldLabel} ${value}`}
+                  >
+                    {fieldLabel} {value}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
           <div className="slideshow-topbar-actions">
-            <NoteCounter
-              jumpLabel="Note position"
-              onJump={(position) => {
-                cancelRoomMove();
-                onJump?.(position);
-              }}
-              position={currentIndex + 1}
-              showArrows={false}
-              total={notes.length}
-              variant="dark"
-            />
+            <div className="slideshow-progress">
+              <NoteCounter
+                jumpLabel="Note position"
+                onJump={(position) => {
+                  cancelRoomMove();
+                  onJump?.(position);
+                }}
+                position={currentIndex + 1}
+                separator=" of "
+                showArrows={false}
+                total={notes.length}
+                variant="dark"
+              />
+              <span aria-hidden="true" className="slideshow-progress-rail">
+                <span
+                  className="slideshow-progress-fill"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </span>
+            </div>
             <button
-              aria-label="Copy note details"
-              className="icon-link"
+              aria-label="Copy fields"
+              className="button"
               onClick={handleCopyNoteDetails}
-              title="Copy note details"
+              title="Copy fields"
               type="button"
             >
-              <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
-                <rect
-                  fill="none"
-                  height="10"
-                  rx="2"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  width="10"
-                  x="9"
-                  y="9"
-                />
-                <rect
-                  fill="none"
-                  height="10"
-                  rx="2"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  width="10"
-                  x="5"
-                  y="5"
-                />
-              </svg>
+              Copy fields
             </button>
             {readOnly ? null : (
               <>
                 <button
-                  aria-label="Add note"
-                  className="icon-link"
+                  aria-label="Add before this note"
+                  className="button"
                   onClick={() => onAdd?.(note.id)}
                   title="Add note before this one (a)"
                   type="button"
                 >
-                  Add note
+                  Add before
                 </button>
                 <button
                   aria-label="Edit note"
-                  className="icon-link"
+                  className="button button-primary"
                   onClick={() => onEdit?.(note.id)}
                   title="Edit note (e)"
                   type="button"
                 >
-                  Edit note
+                  Edit
                 </button>
               </>
             )}
+            <span aria-hidden="true" className="slideshow-topbar-divider" />
             <button
               aria-label="Close slideshow"
-              className="icon-link"
+              className="button slideshow-close"
               data-shortcut="Esc"
               onClick={onClose}
               title="Close slideshow"
@@ -1638,53 +2038,62 @@ function Slideshow({
               Close
             </button>
           </div>
-        </div>
-  
+        </header>
+
         <div className="slideshow-layout">
-          <button
-            aria-label="Previous note"
-            className="arrow-button"
-            onClick={() => moveSlideshow(-1)}
-            title="Previous note (←)"
-            type="button"
-          >
-            <span aria-hidden="true">&larr;</span>
-          </button>
-  
           <div className="slide-card">
             <div className="slide-images">
               {hasSlideImages ? (
-                previewItems.map((item) => (
-                  <button
-                    key={item.kind}
-                    aria-label={`Enlarge ${item.label.toLowerCase()} image`}
-                    className="slide-thumb-btn"
-                    onClick={(event) => {
-                      previewTriggerRef.current = event.currentTarget;
-                      cancelRoomMove();
-                      onOpenPreview?.(note.id, item.kind);
-                    }}
-                    onFocus={() => preloadPreviewItem(item)}
-                    onMouseEnter={() => preloadPreviewItem(item)}
-                    title="Click to enlarge"
-                    type="button"
-                  >
-                    {item.thumb ? (
-                      <SlidePlate
-                        alt={item.alt}
-                        deferFull={walking}
-                        paused={Boolean(previewItem)}
-                        src={item.slide}
-                        thumb={item.thumb}
-                      />
-                    ) : (
-                      <div className="slide-thumb-placeholder">
-                        No scraped image yet
-                      </div>
-                    )}
-                    <span className="slide-thumb-label">{item.label}</span>
-                  </button>
-                ))
+                previewItems.map((item) => {
+                  const plateFailed = failedPlateSources.has(item.thumb);
+                  const plateFileName = plateFailed
+                    ? fileNameFromPath(item.thumb) || "Image file"
+                    : null;
+
+                  return (
+                    <button
+                      key={item.kind}
+                      aria-label={
+                        plateFailed
+                          ? `${item.label} image unavailable: ${plateFileName}`
+                          : `Enlarge ${item.label.toLowerCase()} image`
+                      }
+                      className="slide-thumb-btn"
+                      disabled={plateFailed}
+                      onClick={(event) => {
+                        previewTriggerRef.current = event.currentTarget;
+                        cancelRoomMove();
+                        onOpenPreview?.(note.id, item.kind);
+                      }}
+                      onFocus={() => preloadPreviewItem(item)}
+                      onMouseEnter={() => preloadPreviewItem(item)}
+                      title={
+                        plateFailed
+                          ? "Image unavailable"
+                          : "Click to enlarge"
+                      }
+                      type="button"
+                    >
+                      {item.thumb ? (
+                        <SlidePlate
+                          alt={item.alt}
+                          deferFull={walking}
+                          failed={plateFailed}
+                          fileName={plateFileName ?? undefined}
+                          onError={() => markPlateFailed(item.thumb)}
+                          paused={Boolean(previewItem)}
+                          src={item.slide}
+                          thumb={item.thumb}
+                        />
+                      ) : (
+                        <div className="slide-thumb-placeholder">
+                          No scraped image yet
+                        </div>
+                      )}
+                      <span className="slide-thumb-label">{item.label}</span>
+                    </button>
+                  );
+                })
               ) : (
                 <div className="slide-empty-state">
                   <p className="eyebrow">No images</p>
@@ -1696,18 +2105,21 @@ function Slideshow({
                 </div>
               )}
             </div>
-  
+
             <div className="slide-meta">
               <div>
-                <p className="eyebrow">
-                  {note.grading_company || "Collection note"}
-                </p>
+                {note.grading_company ? (
+                  <p className="eyebrow">{note.grading_company}</p>
+                ) : null}
                 <h1>{getNoteTitle(note)}</h1>
-                <p className="slide-issue">{note.issue_date}</p>
+                <p className="slide-issue">
+                  <NoteValue value={note.issue_date} />
+                </p>
               </div>
               <div className="detail-grid">
                 <p>
-                  <strong>Catalog:</strong> {note.catalog_number || "-"}
+                  <strong>Catalog:</strong>{" "}
+                  <NoteValue value={note.catalog_number} />
                 </p>
                 <p>
                   <strong>Grade:</strong>{" "}
@@ -1718,14 +2130,15 @@ function Slideshow({
                       {note.grade}
                     </span>
                   ) : (
-                    "-"
+                    <span className="muted">-</span>
                   )}
                 </p>
                 <p>
-                  <strong>Serial:</strong> {note.serial || "-"}
+                  <strong>Serial:</strong> <NoteValue value={note.serial} />
                 </p>
                 <p>
-                  <strong>Watermark:</strong> {note.watermark || "-"}
+                  <strong>Watermark:</strong>{" "}
+                  <NoteValue value={note.watermark} />
                 </p>
               </div>
               {scrapedDetailEntries.length ? (
@@ -1789,7 +2202,9 @@ function Slideshow({
                   ) : null}
                 </div>
               ) : null}
-              <p className="slide-notes">{note.notes || "No extra notes."}</p>
+              {String(note.notes ?? "").trim() ? (
+                <p className="slide-notes">{note.notes}</p>
+              ) : null}
               <div className="tag-list">
                 {note.tags.map((tag) => (
                   <span className="tag" key={tag.id || tag.name}>
@@ -1799,17 +2214,22 @@ function Slideshow({
               </div>
             </div>
           </div>
-  
-          <button
-            aria-label="Next note"
-            className="arrow-button"
-            onClick={() => moveSlideshow(1)}
-            title="Next note (→)"
-            type="button"
-          >
-            <span aria-hidden="true">&rarr;</span>
-          </button>
         </div>
+
+        <footer className="slideshow-foot">
+          <SlideshowTurn
+            direction="previous"
+            edgeCopy="Start of set"
+            note={previousNote}
+            onTurn={() => moveSlideshow(-1)}
+          />
+          <SlideshowTurn
+            direction="next"
+            edgeCopy="End of set"
+            note={nextNote}
+            onTurn={() => moveSlideshow(1)}
+          />
+        </footer>
       </div>
     </section>
   );

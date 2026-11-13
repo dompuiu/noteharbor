@@ -561,28 +561,87 @@ describe("the note card in view mode", () => {
     await waitFor(() => {
       expect(currentSearch()).toContain("preview=400%3Afront");
     });
-    // The flattened showcase slideshow shows the note label with the face
-    // and the image counter over every image in display order.
-    expect(screen.getByText("1 leu, 1917 - Front")).toBeInTheDocument();
+    // The popover names the note; the side lives in the Front | Back toggle.
+    expect(
+      screen.getByRole("heading", { name: "1 leu, 1917" }),
+    ).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Front" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  test("the side toggle switches faces inside the note", async () => {
+    const card = await openWithNote();
+    fireEvent.click(card);
+
+    await screen.findByRole("heading", { name: "1 leu, 1917" });
+
+    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+
+    await waitFor(() => {
+      expect(currentSearch()).toBe("?preview=400%3Aback");
+    });
+    expect(screen.getByRole("button", { name: "Back" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  test("a note without a back offers no back side", async () => {
+    getShowcaseTree.mockResolvedValue({
+      showcase_id: 1,
+      nodes: [
+        categoryNode({
+          id: 12,
+          name: "Solo",
+          position: 1,
+          children: [noteNode(420, NOTE_FRONT_ONLY, 1)],
+        }),
+      ],
+    });
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    fireEvent.click(
+      await screen.findByRole("button", { name: "5 lei, 1920" }),
+    );
+    await screen.findByRole("heading", { name: "5 lei, 1920" });
+
+    const back = screen.getByRole("button", { name: "Back" });
+
+    expect(back).toHaveAttribute("aria-disabled", "true");
+    expect(back).toHaveAttribute("aria-pressed", "false");
+
+    fireEvent.click(back);
+
+    // The side is inert, so the address stays on the front.
+    await waitFor(() => {
+      expect(currentSearch()).toBe("?preview=420%3Afront");
+    });
   });
 
   test("the preview pages over the whole showcase and closes back to the level", async () => {
     const card = await openWithNote();
     fireEvent.click(card);
 
-    await screen.findByText("1 leu, 1917 - Front");
+    await screen.findByRole("heading", { name: "1 leu, 1917" });
 
     // Front then back of the first note, then the nested sub note: the
     // slideshow is showcase-wide in display order, not per level.
     fireEvent.click(screen.getByRole("button", { name: "Show next image" }));
-    await screen.findByText("1 leu, 1917 - Back");
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Back" })).toHaveAttribute(
+        "aria-pressed",
+        "true",
+      );
+    });
     // Both faces live at the root, so the drill stays empty.
     expect(currentSearch()).toBe("?preview=400%3Aback");
 
     // The sub note lives inside grouping 20: paging to it drills the
     // address to its containing level instead of leaving a stale level.
     fireEvent.click(screen.getByRole("button", { name: "Show next image" }));
-    await screen.findByText("10 lei, 1930 - Front");
+    await screen.findByRole("heading", { name: "10 lei, 1930" });
     await waitFor(() => {
       expect(currentSearch()).toBe("?node=20&preview=410%3Afront");
     });
@@ -602,7 +661,7 @@ describe("the note card in view mode", () => {
     renderAt(`${SHOWCASE_ROUTES.showcase(1)}?node=20`);
     const subNote = await screen.findByRole("button", { name: "10 lei, 1930" });
     fireEvent.click(subNote);
-    await screen.findByText("10 lei, 1930 - Front");
+    await screen.findByRole("heading", { name: "10 lei, 1930" });
     expect(currentSearch()).toBe("?node=20&preview=410%3Afront");
 
     // The previous image is the root note's back: the drill follows it to
@@ -610,7 +669,7 @@ describe("the note card in view mode", () => {
     fireEvent.click(
       screen.getByRole("button", { name: "Show previous image" }),
     );
-    await screen.findByText("1 leu, 1917 - Back");
+    await screen.findByRole("heading", { name: "1 leu, 1917" });
     await waitFor(() => {
       expect(currentSearch()).toBe("?preview=400%3Aback");
     });

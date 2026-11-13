@@ -114,7 +114,7 @@ const shortcutGroups = [
         keys: ["Double-click"],
         description: "Zoom in, or fit the image again",
       },
-      { keys: ["Esc"], description: "Back to the slideshow" },
+      { keys: ["Esc"], description: "Leave Zoom view, or close the preview" },
     ],
   },
   {

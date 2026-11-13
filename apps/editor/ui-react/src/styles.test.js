@@ -1980,19 +1980,114 @@ describe("slideshow overlay styles", () => {
     );
     expect(panel).not.toBeNull();
     expect(panel[1]).toMatch(/background:\s*var\(--on-dark-bg\)/);
-    expect(panel[1]).toMatch(/min-height:\s*calc\(100vh/);
+    expect(panel[1]).toMatch(/height:\s*calc\(100vh - 32px\)/);
   });
 
-  // The slideshow and image popover size against the viewport and freeze
-  // their content at a desktop rendering. The Note editor is the exception:
-  // it reflows below its breakpoint instead of scrolling sideways.
-  test("the slideshow panel holds the 1200px floor", () => {
+  // The room keeps the scrim's 16px gutter and its own height never scrolls.
+  // Wide, two-column pages shrink the plates to fit; only the stacked page
+  // scrolls, and it scrolls as one card.
+  test("the wide room fits and the stacked page scrolls once", () => {
     const panel = styles.match(
       /\.slideshow-screen--overlay \.slideshow-panel\s*\{([^}]*)\}/,
     );
     expect(panel).not.toBeNull();
-    // 1200px minus the overlay's 16px side padding.
-    expect(panel[1]).toMatch(/min-width:\s*calc\(1200px - 32px\)/);
+    expect(panel[1]).toMatch(/height:\s*calc\(100dvh - 32px\)/);
+    expect(panel[1]).toMatch(/display:\s*flex/);
+    expect(panel[1]).toMatch(/overflow:\s*hidden/);
+
+    const card = styles.match(
+      /\.slideshow-screen--overlay \.slide-card\s*\{([^}]*)\}/,
+    );
+    expect(card).not.toBeNull();
+    expect(card[1]).toMatch(/overflow-y:\s*auto/);
+
+    const wide = atRule(styles, "@media (min-width: 1101px)");
+    expect(wide).not.toBeNull();
+    expect(wide).toMatch(
+      /\.slideshow-screen--overlay \.slide-card\s*\{[^}]*overflow:\s*hidden/,
+    );
+    expect(wide).toMatch(/grid-auto-rows:\s*minmax\(0,\s*1fr\)/);
+    expect(wide).toMatch(/position:\s*absolute/);
+    expect(wide).toMatch(/object-fit:\s*contain/);
+  });
+
+  // The slideshow is fluid: it has no floor, so a 1024px window keeps the
+  // page and both turns reachable instead of scrolling the overlay sideways.
+  test("the slideshow panel is fluid instead of holding a floor", () => {
+    const panel = styles.match(
+      /\.slideshow-screen--overlay \.slideshow-panel\s*\{([^}]*)\}/,
+    );
+    expect(panel).not.toBeNull();
+    expect(panel[1]).not.toMatch(/min-width:\s*calc\(1200px - 32px\)/);
+    expect(panel[1]).toMatch(/width:\s*100%/);
+    expect(panel[1]).toMatch(/max-width:\s*1400px/);
+  });
+
+  // Below the card's two-column width the entry leads and the plates follow,
+  // so the catalogue values stay readable before the images take the width.
+  test("the slide card stacks the entry above the plates when narrow", () => {
+    const narrow = styles.match(
+      /@media \(max-width: 1100px\)\s*\{([\s\S]*?)\n\}/,
+    );
+    expect(narrow).not.toBeNull();
+    expect(narrow[1]).toMatch(
+      /\.slide-card\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    );
+    expect(narrow[1]).toMatch(/\.slide-meta\s*\{[^}]*order:\s*-1/);
+  });
+
+  // The top bar gives way instead of widening the room: both its halves wrap.
+  test("the slideshow top bar wraps", () => {
+    const topbar = styles.match(/\.slideshow-topbar\s*\{([^}]*)\}/);
+    expect(topbar).not.toBeNull();
+    expect(topbar[1]).toMatch(/flex-wrap:\s*wrap/);
+
+    const actions = styles.match(
+      /\.slideshow-topbar-actions\s*\{([^}]*)\}/,
+    );
+    expect(actions).not.toBeNull();
+    expect(actions[1]).toMatch(/flex-wrap:\s*wrap/);
+  });
+
+  // Both turns stay reachable at a short window: the foot sticks to the room.
+  test("the neighbour turns stay pinned to the room", () => {
+    const foot = styles.match(/\.slideshow-foot\s*\{([^}]*)\}/);
+    expect(foot).not.toBeNull();
+    expect(foot[1]).toMatch(/position:\s*sticky/);
+    expect(foot[1]).toMatch(/bottom:\s*0/);
+  });
+
+  // Spacing follows the documented 4px base with 8/12/16/24/32 as the working
+  // steps, so the catalogue page's new rules must not introduce their own
+  // 1/2/5/10/20px rhythm.
+  test("the catalogue page's spacing snaps to the documented steps", () => {
+    const progress = styles.match(/\.slideshow-progress\s*\{([^}]*)\}/);
+    expect(progress).not.toBeNull();
+    expect(progress[1]).toMatch(/gap:\s*4px/);
+
+    const turnText = styles.match(/\.slideshow-turn-text\s*\{([^}]*)\}/);
+    expect(turnText).not.toBeNull();
+    expect(turnText[1]).toMatch(/gap:\s*4px/);
+
+    const foot = styles.match(/\.slideshow-foot\s*\{([^}]*)\}/);
+    expect(foot).not.toBeNull();
+    expect(foot[1]).toMatch(/margin-top:\s*24px/);
+
+    const chip = styles.match(/\.slideshow-filter-chip\s*\{([^}]*)\}/);
+    expect(chip).not.toBeNull();
+    expect(chip[1]).toMatch(/padding:\s*4px 12px/);
+  });
+
+  // The turn's direction reads as the presentation room label — 600 weight at
+  // 0.68rem with 0.12em tracking — instead of an invented third label step.
+  test("the turn direction wears the presentation room label", () => {
+    const direction = styles.match(
+      /\.slideshow-turn-direction\s*\{([^}]*)\}/,
+    );
+    expect(direction).not.toBeNull();
+    expect(direction[1]).toMatch(/font-size:\s*0\.68rem/);
+    expect(direction[1]).toMatch(/font-weight:\s*600/);
+    expect(direction[1]).toMatch(/letter-spacing:\s*0\.12em/);
   });
 
   test("the edit-note overlay keeps its own vertical scroll", () => {
@@ -2114,12 +2209,65 @@ describe("slideshow overlay styles", () => {
     expect(overlay[1]).toMatch(/overflow:\s*auto/);
   });
 
-  test("the image popover content holds its 1200px-viewport width", () => {
+  test("the image popover content fits a narrow window", () => {
     const content = styles.match(/\.image-popover-content\s*\{([^}]*)\}/);
     expect(content).not.toBeNull();
-    // Its width at a 1200px viewport: min(1400px, 96vw).
-    expect(content[1]).toMatch(/min-width:\s*1152px/);
+    // Fluid up to 1400px, but never wider than the overlay's padding box, so
+    // a 1024px window fits without a horizontal scroll.
+    expect(content[1]).toMatch(/width:\s*min\(1400px,\s*96vw\)/);
+    expect(content[1]).toMatch(/max-width:\s*100%/);
     expect(content[1]).toMatch(/margin:\s*auto/);
+    expect(content[1]).not.toMatch(/min-width:/);
+
+    const topbar = styles.match(/\.image-popover-topbar\s*\{([^}]*)\}/);
+    expect(topbar).not.toBeNull();
+    expect(topbar[1]).toMatch(/flex-wrap:\s*wrap/);
+  });
+
+  test("the image popover zoom is one 36px scale instrument", () => {
+    expect(styles).toMatch(/\.image-popover-zoom\s*\{[^}]*height:\s*36px/);
+
+    // The known scales are one segmented block, split by a hairline, and the
+    // ladder stepper sits beside it. The split is an internal divider, so it
+    // takes the 0.1-alpha token rather than the 0.18 structural border.
+    const segments = styles.match(
+      /\.image-popover-zoom-segments\s*\{([^}]*)\}/,
+    );
+    expect(segments).not.toBeNull();
+    expect(segments[1]).toMatch(
+      /border-right:\s*1px solid var\(--border-soft\)/,
+    );
+  });
+
+  test("the image popover side toggle holds its pressed state", () => {
+    const sides = styles.match(/\.image-popover-sides,[^{]*\{([^}]*)\}/);
+    expect(sides).not.toBeNull();
+    expect(sides[1]).toMatch(/border-radius:\s*var\(--radius-control\)/);
+
+    const pressed = styles.match(
+      /\.image-popover-side-button\[aria-pressed="true"\][^{]*\{([^}]*)\}/,
+    );
+    expect(pressed).not.toBeNull();
+    expect(pressed[1]).toMatch(/background:\s*var\(--accent-soft\)/);
+    expect(pressed[1]).toMatch(/color:\s*var\(--accent-strong\)/);
+
+    // A side with no image dims rather than disappearing.
+    const missing = styles.match(
+      /\.image-popover-side-button\[aria-disabled="true"\][^{]*\{([^}]*)\}/,
+    );
+    expect(missing).not.toBeNull();
+    expect(missing[1]).toMatch(/opacity:\s*0\.45/);
+  });
+
+  test("the image popover empty state is a smaller frame", () => {
+    const empty = styles.match(/\.image-popover-empty-state\s*\{([^}]*)\}/);
+    expect(empty).not.toBeNull();
+    expect(empty[1]).toMatch(/width:\s*min\(420px,\s*100%\)/);
+    expect(empty[1]).toMatch(/min-height:\s*min\(30vh,\s*280px\)/);
+
+    const file = styles.match(/\.image-popover-empty-file\s*\{([^}]*)\}/);
+    expect(file).not.toBeNull();
+    expect(file[1]).toMatch(/color:\s*var\(--on-dark-muted\)/);
   });
 
   test("the image popover content owns the on-dark text colour", () => {
@@ -2344,6 +2492,16 @@ describe("slideshow overlay styles", () => {
     const global = styles.match(/:focus-visible\s*\{([^}]*)\}/);
     expect(global).not.toBeNull();
     expect(global[1]).toMatch(/outline:\s*2px solid var\(--accent\)/);
+  });
+
+  test("the counter keeps a visible focus ring inside the overlays", () => {
+    // The shared counter zeroes the browser outline on :focus, so the overlays
+    // must put a ring back on the field where typing lands.
+    const ring = styles.match(
+      /\.slideshow-screen--overlay \.note-counter-input:focus-visible,\s*\n\.image-popover-overlay \.note-counter-input:focus-visible\s*\{([^}]*)\}/,
+    );
+    expect(ring).not.toBeNull();
+    expect(ring[1]).toMatch(/outline:\s*2px solid var\(--accent\)/);
   });
 
   // The shortcut bubble keeps its own dark ground; its label must stay white

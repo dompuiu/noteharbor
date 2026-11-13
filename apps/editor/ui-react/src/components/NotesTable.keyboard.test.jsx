@@ -779,10 +779,12 @@ describe("Home and End in the slideshow and image preview", () => {
     await waitFor(() => {
       expect(currentHash()).toContain("slideshow/3/preview/back");
     });
-    expect(screen.getByText("CCCC - Back")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 2, name: "CCCC" }),
+    ).toBeInTheDocument();
     expect(
       screen
-        .getByRole("textbox", { name: "Image position" })
+        .getByRole("spinbutton", { name: "Image position" })
         .closest(".note-counter-value"),
     ).toHaveTextContent("6 / 6");
 
@@ -791,10 +793,12 @@ describe("Home and End in the slideshow and image preview", () => {
     await waitFor(() => {
       expect(currentHash()).toContain("slideshow/1/preview/front");
     });
-    expect(screen.getByText("AAAA - Front")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 2, name: "AAAA" }),
+    ).toBeInTheDocument();
     expect(
       screen
-        .getByRole("textbox", { name: "Image position" })
+        .getByRole("spinbutton", { name: "Image position" })
         .closest(".note-counter-value"),
     ).toHaveTextContent("1 / 6");
   });
@@ -822,7 +826,9 @@ describe("Home and End in the slideshow and image preview", () => {
     // Ctrl+Home does not jump back to the first page.
     await user.keyboard("{Control>}{Home}{/Control}");
     expect(currentHash()).toContain("slideshow/3/preview/back");
-    expect(screen.getByText("CCCC - Back")).toBeInTheDocument();
+    expect(
+      screen.getByRole("heading", { level: 2, name: "CCCC" }),
+    ).toBeInTheDocument();
   });
 
   test("Home and End change nothing in a Collection with a single note", async () => {
@@ -1762,7 +1768,7 @@ describe("The slideshow as a modal room", () => {
       expect(currentHash()).toContain("slideshow/1");
     });
 
-    return screen.getByRole("dialog", { name: "Note slideshow" });
+    return screen.getByRole("dialog", { name: "AAAA" });
   }
 
   test("is a named modal dialog, takes focus, and makes the table inert", async () => {
@@ -1783,7 +1789,7 @@ describe("The slideshow as a modal room", () => {
 
     await user.tab({ shift: true });
 
-    const next = screen.getByRole("button", { name: "Next note" });
+    const next = screen.getByRole("button", { name: /^Next note/ });
     expect(next).toHaveFocus();
 
     await user.tab();
@@ -1796,7 +1802,7 @@ describe("The slideshow as a modal room", () => {
     const user = userEvent.setup();
     await openSlideshow(user);
 
-    const next = screen.getByRole("button", { name: "Next note" });
+    const next = screen.getByRole("button", { name: /^Next note/ });
     next.focus();
     await user.keyboard(" ");
 
@@ -1810,7 +1816,7 @@ describe("The slideshow as a modal room", () => {
     const user = userEvent.setup();
     await openSlideshow(user);
 
-    const next = screen.getByRole("button", { name: "Next note" });
+    const next = screen.getByRole("button", { name: /^Next note/ });
     next.focus();
     await user.keyboard("{Enter}");
 
@@ -1824,7 +1830,7 @@ describe("The slideshow as a modal room", () => {
     const user = userEvent.setup();
     await openSlideshow(user);
 
-    screen.getByRole("button", { name: "Next note" }).focus();
+    screen.getByRole("button", { name: /^Next note/ }).focus();
     await user.keyboard("{ArrowRight}");
 
     await waitFor(() => {
@@ -1850,14 +1856,17 @@ describe("The slideshow as a modal room", () => {
       ],
     }));
     await openSlideshow(user, notesWithImages);
+    const room = screen.getByRole("dialog", { name: "AAAA" });
 
     const thumbnail = screen.getByRole("button", {
       name: "Enlarge front image",
     });
     await user.click(thumbnail);
 
-    const popover = await screen.findByRole("dialog", {
-      name: "Image preview",
+    // The room and its nested lightbox share the note's name; scope the
+    // popover to the room's own subtree.
+    const popover = await within(room).findByRole("dialog", {
+      name: "AAAA",
     });
 
     expect(popover).toHaveAttribute("aria-modal", "true");

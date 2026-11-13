@@ -38,7 +38,6 @@ import {
   getShowcasePreviewContainingLevelId,
   getShowcasePreviewItems,
   parseShowcasePreviewParam,
-  showcasePreviewLabel,
 } from "../lib/showcasePreview.js";
 import {
   isTempId,
@@ -655,6 +654,22 @@ function ShowcaseScreen({ mode }) {
 
     if (next) {
       replaceShowcasePreview(next);
+    }
+  }
+
+  // The showcase sequence drops missing sides, so a step would land on
+  // another note. A side choice therefore jumps by node id and kind.
+  function selectShowcaseSide(kind) {
+    if (!activePreviewItem) {
+      return;
+    }
+
+    const target = previewItems.find(
+      (item) => item.nodeId === activePreviewItem.nodeId && item.kind === kind,
+    );
+
+    if (target) {
+      replaceShowcasePreview(target);
     }
   }
 
@@ -1906,20 +1921,23 @@ function ShowcaseScreen({ mode }) {
       {previewOpen && activePreviewItem ? (
         <ImagePopover
           alt={activePreviewItem.alt}
+          availableSides={previewItems
+            .filter((item) => item.nodeId === activePreviewItem.nodeId)
+            .map((item) => item.kind)}
           canGoNext={previewItems.length > 1}
           canGoPrevious={previewItems.length > 1}
           counterPosition={previewIndex + 1}
           counterTotal={previewItems.length}
-          noteLabel={showcasePreviewLabel(
-            activePreviewItem.note,
-            activePreviewItem.kind,
-          )}
+          noteKey={activePreviewItem.noteId}
+          noteLabel={activePreviewItem.noteLabel}
           onClose={closeShowcasePreview}
           onJump={jumpShowcasePreview}
           onNext={() => moveShowcasePreview(1)}
           onPrevious={() => moveShowcasePreview(-1)}
           onPreviewEnd={endShowcasePreview}
           onPreviewStart={startShowcasePreview}
+          onSelectSide={selectShowcaseSide}
+          side={activePreviewItem.kind}
           src={activePreviewItem.src}
           thumb={activePreviewItem.thumb}
         />

@@ -20,6 +20,12 @@ describe("NoteCounter", () => {
     expect(renderedValue(container)).toHaveTextContent("3 / 9");
   });
 
+  test("the separator joins the two numbers as a caller spells it", () => {
+    const { container } = renderCounter({ separator: " of " });
+
+    expect(renderedValue(container)).toHaveTextContent("3 of 9");
+  });
+
   test("the previous and next controls fire their callbacks", async () => {
     const onPrevious = vi.fn();
     const onNext = vi.fn();

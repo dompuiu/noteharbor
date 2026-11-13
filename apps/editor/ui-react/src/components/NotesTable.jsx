@@ -1194,6 +1194,11 @@ function NotesTable({
   const slideshowIndex = slideshowRouteActive
     ? slideshowNotes.findIndex((note) => note.id === currentRoute.noteId)
     : -1;
+  // The header chip names the filter the walk is actually using: the route's
+  // snapshot, not the live chips the table may have edited behind the room.
+  const slideshowFilterConditions = slideshowRouteActive
+    ? conditionsFromRoute(currentRoute)
+    : conditions;
   // The room only exists once both the route and its frozen list have landed.
   // Everything that hides the page behind it keys off the same condition, so a
   // cold link or a list still settling can never leave a dead, inert screen.
@@ -4320,7 +4325,9 @@ function NotesTable({
 
       {slideshowOpen ? (
         <Slideshow
+          collectionName={collection?.name}
           currentIndex={slideshowIndex}
+          filterConditions={slideshowFilterConditions}
           keyboardDisabled={editorOverlayOpen}
           notes={slideshowNotes}
           onAdd={openCreateNoteOverSlideshow}

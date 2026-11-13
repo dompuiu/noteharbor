@@ -57,16 +57,17 @@ function getShowcasePreviewItems(nodes) {
     const backSrc = fullSrc(note, "back");
     const frontThumb = thumbSrc(note, "front");
     const backThumb = thumbSrc(note, "back");
-    const denomination = String(note?.denomination ?? "").trim() || "note";
+    const noteLabel = showcasePreviewLabel(note);
 
     if (frontSrc) {
       items.push({
-        alt: `${denomination} front`,
+        alt: `${noteLabel}, Front`,
         kind: "front",
         label: "Front",
         nodeId,
         note,
         noteId: note.id,
+        noteLabel,
         src: frontSrc,
         thumb: frontThumb,
       });
@@ -74,12 +75,13 @@ function getShowcasePreviewItems(nodes) {
 
     if (backSrc) {
       items.push({
-        alt: `${denomination} back`,
+        alt: `${noteLabel}, Back`,
         kind: "back",
         label: "Back",
         nodeId,
         note,
         noteId: note.id,
+        noteLabel,
         src: backSrc,
         thumb: backThumb,
       });
@@ -172,11 +174,11 @@ function getShowcasePreviewContainingLevelId(nodes, previewNodeId) {
   return null;
 }
 
-function showcasePreviewLabel(note, kind) {
+// The note's identity for the popover's visible heading: the side lives in the
+// Front | Back toggle beside it, never in this string.
+function showcasePreviewLabel(note) {
   const parts = showcaseNoteDisplayParts(note);
-  const base = parts.length ? parts.join(", ") : "Untitled note";
-  const face = kind === "back" ? "Back" : "Front";
-  return `${base} - ${face}`;
+  return parts.length ? parts.join(", ") : "Untitled note";
 }
 
 export {

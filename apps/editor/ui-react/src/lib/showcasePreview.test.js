@@ -86,11 +86,9 @@ describe("getShowcasePreviewItems", () => {
       "400:back",
       "401:front",
     ]);
-    // Every item carries its note for the popover label, including backs.
+    // Every item carries its note for the popover heading, including backs.
     expect(items.map((i) => i.note?.id)).toEqual([1, 1, 2]);
-    expect(showcasePreviewLabel(items[1].note, items[1].kind)).toBe(
-      "1 - Back",
-    );
+    expect(showcasePreviewLabel(items[1].note)).toBe("1");
   });
 
   test("prefers the full image over the thumbnail", () => {
@@ -151,12 +149,13 @@ describe("containing level", () => {
 });
 
 describe("showcasePreviewLabel", () => {
-  test("joins display parts with the face", () => {
+  test("names the note without the side", () => {
     expect(
-      showcasePreviewLabel(
-        { denomination: "1 leu", catalog_number: "17", issue_date: "1917" },
-        "back",
-      ),
-    ).toBe("1 leu, Pick 17, 1917 - Back");
+      showcasePreviewLabel({
+        denomination: "1 leu",
+        catalog_number: "17",
+        issue_date: "1917",
+      }),
+    ).toBe("1 leu, Pick 17, 1917");
   });
 });
