@@ -484,6 +484,7 @@ function ImagePopover({
 }) {
   const titleId = useId();
   const statusId = useId();
+  const escapeHintId = useId();
   const overlayRef = useRef(null);
   const imageRef = useRef(null);
   const imageWrapRef = useRef(null);
@@ -1248,7 +1249,7 @@ function ImagePopover({
 
   return (
     <div
-      aria-describedby={statusId}
+      aria-describedby={`${escapeHintId} ${statusId}`}
       aria-labelledby={titleId}
       aria-modal="true"
       className="image-popover-overlay"
@@ -1257,6 +1258,12 @@ function ImagePopover({
       role="dialog"
       tabIndex={-1}
     >
+      {/* The first Escape only steps back to Fit. The Close title says so once
+          the button takes focus; the dialog carries the rule from the moment it
+          opens, so a screen reader hears it before the zoom is touched. */}
+      <span className="image-popover-announcer" id={escapeHintId}>
+        Escape returns a zoomed image to Fit, then closes the preview.
+      </span>
       <span className="image-popover-announcer" id={statusId} role="status">
         {announcement}
       </span>

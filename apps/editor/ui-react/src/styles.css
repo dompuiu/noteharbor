@@ -7461,7 +7461,8 @@ button.tag {
   letter-spacing: -0.01em;
 }
 
-/* The side announcement is for assistive tech only. */
+/* The popover's live announcement and its Escape hint are for assistive tech
+   only. */
 .image-popover-announcer {
   position: absolute;
   width: 1px;

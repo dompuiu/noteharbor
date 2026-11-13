@@ -251,7 +251,7 @@ describe("ImagePopover image loading", () => {
 
     expect(document.querySelector(".image-popover-empty-state")).toBeNull();
     expect(
-      document.querySelector(".image-popover-announcer"),
+      document.querySelector('.image-popover-announcer[role="status"]'),
     ).not.toHaveTextContent("image unavailable");
 
     await finishDecode(BACK_1);
@@ -710,7 +710,9 @@ describe("ImagePopover side and naming", () => {
     ).toBeInTheDocument();
     expect(screen.getByRole("img", { name: "1 leu - 100, Front" })).toBeInTheDocument();
 
-    const announcer = dialog.querySelector(".image-popover-announcer");
+    const announcer = dialog.querySelector(
+      '.image-popover-announcer[role="status"]',
+    );
     expect(announcer).toHaveAttribute("role", "status");
     expect(announcer).toHaveTextContent("1 leu - 100, Front, image 1 of 3");
 
@@ -718,6 +720,19 @@ describe("ImagePopover side and naming", () => {
     await finishDecode(BACK_1);
 
     expect(announcer).toHaveTextContent("1 leu - 100, Back, image 1 of 3");
+  });
+
+  test("describes the dialog with the two-stage Escape rule", async () => {
+    render(popover());
+    await finishDecode(FRONT_1);
+
+    const dialog = screen.getByRole("dialog", { name: "1 leu - 100" });
+
+    // The rule is read once, on open, before the live status is touched.
+    expect(dialog).toHaveAccessibleDescription(
+      "Escape returns a zoomed image to Fit, then closes the preview. " +
+        "1 leu - 100, Front, image 1 of 3",
+    );
   });
 
   test("the Front | Back toggle marks the open side and asks for the other", () => {
@@ -797,7 +812,7 @@ describe("ImagePopover side and naming", () => {
     render(popover({ availableSides: ["front"], side: "back", src: null, thumb: null }));
 
     expect(
-      document.querySelector(".image-popover-announcer"),
+      document.querySelector('.image-popover-announcer[role="status"]'),
     ).toHaveTextContent("1 leu - 100, Back, image 1 of 3, no image");
   });
 
@@ -822,7 +837,7 @@ describe("ImagePopover side and naming", () => {
     );
     expect(screen.getByRole("button", { name: "Edit note" })).toBeInTheDocument();
     expect(
-      document.querySelector(".image-popover-announcer"),
+      document.querySelector('.image-popover-announcer[role="status"]'),
     ).toHaveTextContent("image unavailable");
   });
 
