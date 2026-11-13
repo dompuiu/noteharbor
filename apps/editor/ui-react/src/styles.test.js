@@ -2029,6 +2029,39 @@ describe("slideshow overlay styles", () => {
     expect(foot[1]).toMatch(/bottom:\s*0/);
   });
 
+  // Spacing follows the documented 4px base with 8/12/16/24/32 as the working
+  // steps, so the catalogue page's new rules must not introduce their own
+  // 1/2/5/10/20px rhythm.
+  test("the catalogue page's spacing snaps to the documented steps", () => {
+    const progress = styles.match(/\.slideshow-progress\s*\{([^}]*)\}/);
+    expect(progress).not.toBeNull();
+    expect(progress[1]).toMatch(/gap:\s*4px/);
+
+    const turnText = styles.match(/\.slideshow-turn-text\s*\{([^}]*)\}/);
+    expect(turnText).not.toBeNull();
+    expect(turnText[1]).toMatch(/gap:\s*4px/);
+
+    const foot = styles.match(/\.slideshow-foot\s*\{([^}]*)\}/);
+    expect(foot).not.toBeNull();
+    expect(foot[1]).toMatch(/margin-top:\s*24px/);
+
+    const chip = styles.match(/\.slideshow-filter-chip\s*\{([^}]*)\}/);
+    expect(chip).not.toBeNull();
+    expect(chip[1]).toMatch(/padding:\s*4px 12px/);
+  });
+
+  // The turn's direction reads as the presentation room label — 600 weight at
+  // 0.68rem with 0.12em tracking — instead of an invented third label step.
+  test("the turn direction wears the presentation room label", () => {
+    const direction = styles.match(
+      /\.slideshow-turn-direction\s*\{([^}]*)\}/,
+    );
+    expect(direction).not.toBeNull();
+    expect(direction[1]).toMatch(/font-size:\s*0\.68rem/);
+    expect(direction[1]).toMatch(/font-weight:\s*600/);
+    expect(direction[1]).toMatch(/letter-spacing:\s*0\.12em/);
+  });
+
   test("the edit-note overlay keeps its own vertical scroll", () => {
     const overlay = styles.match(/\.edit-note-overlay\s*\{([^}]*)\}/);
     expect(overlay).not.toBeNull();
@@ -2167,12 +2200,15 @@ describe("slideshow overlay styles", () => {
     expect(styles).toMatch(/\.image-popover-zoom\s*\{[^}]*height:\s*36px/);
 
     // The known scales are one segmented block, split by a hairline, and the
-    // ladder stepper sits beside it.
+    // ladder stepper sits beside it. The split is an internal divider, so it
+    // takes the 0.1-alpha token rather than the 0.18 structural border.
     const segments = styles.match(
       /\.image-popover-zoom-segments\s*\{([^}]*)\}/,
     );
     expect(segments).not.toBeNull();
-    expect(segments[1]).toMatch(/border-right:\s*1px solid/);
+    expect(segments[1]).toMatch(
+      /border-right:\s*1px solid var\(--border-soft\)/,
+    );
   });
 
   test("the image popover side toggle holds its pressed state", () => {
