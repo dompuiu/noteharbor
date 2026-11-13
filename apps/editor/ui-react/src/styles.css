@@ -7309,6 +7309,15 @@ button.tag {
   caret-color: var(--accent);
 }
 
+/* The shared counter drops the browser outline on :focus because the field is
+   only a caret inside a number. In the overlays the field must still show
+   where typing lands, so it keeps the app's red ring on keyboard focus. */
+.slideshow-screen--overlay .note-counter-input:focus-visible,
+.image-popover-overlay .note-counter-input:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
 /* The overlay's own scrollbar belongs to the app, not the host platform. */
 .slideshow-screen--overlay,
 .image-popover-overlay {
@@ -7365,6 +7374,15 @@ button.tag {
   margin: 0;
 }
 
+/* The note identity and its side choice sit on one line: the heading names
+   the note, the toggle says which face is showing. */
+.image-popover-identity {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
 .image-popover-note-label {
   color: var(--on-dark-text);
   font-size: 1.05rem;
@@ -7372,43 +7390,34 @@ button.tag {
   letter-spacing: -0.01em;
 }
 
-.image-popover-actions {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+/* The side announcement is for assistive tech only. */
+.image-popover-announcer {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
-/* One scale instrument, 36px tall: a segmented Fit | 100% choice for the two
-   known scales, then a minus / level / plus stepper that walks the fitted-size
-   ladder. The active choice keeps full contrast and is never disabled; only
-   the stepper stops at the ladder's ends. */
+/* Front | Back is a two-way choice for the open note. A side with no image
+   keeps its button in place with `aria-disabled`, so the pressed state stays
+   visible instead of the control vanishing or both states reading as off. It
+   wears the same segmented pill as the zoom instrument. */
+.image-popover-sides,
 .image-popover-zoom {
   display: inline-flex;
-  height: 36px;
+  gap: 2px;
   padding: 2px;
   border: 1px solid var(--border-control);
   border-radius: var(--radius-control);
   background: var(--surface);
 }
 
-.image-popover-zoom-segments,
-.image-popover-zoom-stepper {
-  display: inline-flex;
-  gap: 2px;
-}
-
-/* The hairline splits the two ways to set the scale: pick a known one, or
-   step to the next. */
-.image-popover-zoom-segments {
-  padding-right: 4px;
-  border-right: 1px solid var(--border);
-}
-
-.image-popover-zoom-stepper {
-  padding-left: 4px;
-}
-
+.image-popover-side-button,
 .image-popover-zoom-button {
   display: inline-flex;
   align-items: center;
@@ -7427,19 +7436,60 @@ button.tag {
     color 0.15s ease;
 }
 
+.image-popover-side-button {
+  min-width: 44px;
+  min-height: 28px;
+  padding: 0 10px;
+}
+
+.image-popover-side-button:hover:not([aria-disabled="true"]),
 .image-popover-zoom-button:hover:not(:disabled) {
   background: var(--accent-soft);
   color: var(--accent-strong);
 }
 
+.image-popover-side-button[aria-pressed="true"],
 .image-popover-zoom-button[aria-pressed="true"] {
   background: var(--accent-soft);
   color: var(--accent-strong);
 }
 
+.image-popover-side-button[aria-disabled="true"],
 .image-popover-zoom-button:disabled {
   cursor: default;
   opacity: 0.45;
+}
+
+.image-popover-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+/* One scale instrument, 36px tall: a segmented Fit | 100% choice for the two
+   known scales, then a minus / level / plus stepper that walks the fitted-size
+   ladder. The active choice keeps full contrast and is never disabled; only
+   the stepper stops at the ladder's ends. */
+.image-popover-zoom {
+  height: 36px;
+}
+
+.image-popover-zoom-segments,
+.image-popover-zoom-stepper {
+  display: inline-flex;
+  gap: 2px;
+}
+
+/* The hairline splits the two ways to set the scale: pick a known one, or
+   step to the next. */
+.image-popover-zoom-segments {
+  padding-right: 4px;
+  border-right: 1px solid var(--border);
+}
+
+.image-popover-zoom-stepper {
+  padding-left: 4px;
 }
 
 .image-popover-zoom-step {
@@ -7478,8 +7528,8 @@ button.tag {
 .image-popover-empty-state {
   display: grid;
   gap: 8px;
-  width: min(520px, 100%);
-  min-height: min(56vh, 520px);
+  width: min(420px, 100%);
+  min-height: min(30vh, 280px);
   align-content: center;
   justify-items: center;
   padding: 32px;
@@ -7492,6 +7542,13 @@ button.tag {
 
 .image-popover-empty-state p {
   margin: 0;
+}
+
+/* The one quiet line that names the scan a collector would have to replace. */
+.image-popover-empty-file {
+  color: var(--on-dark-muted);
+  font-size: 0.78rem;
+  overflow-wrap: anywhere;
 }
 
 .image-popover-arrow {

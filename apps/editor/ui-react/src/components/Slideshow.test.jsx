@@ -1,4 +1,4 @@
-import { act, fireEvent, render, screen, waitFor } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { afterEach, describe, expect, test, vi } from "vitest";
 import { Slideshow } from "./Slideshow.jsx";
@@ -144,7 +144,7 @@ describe("Slideshow slide card", () => {
     });
 
     expect(
-      screen.getByRole("img", { name: "1 Leu - P-1 front" }),
+      screen.getByRole("img", { name: "1 Leu - P-1, Front" }),
     ).toHaveAttribute(
       "src",
       "/front-thumb.jpg?v=2026-01-01T00%3A00%3A00Z",
@@ -376,6 +376,135 @@ describe("Image popover over the slideshow", () => {
     } finally {
       delete window.HTMLImageElement.prototype.decode;
     }
+  });
+
+  test("the side toggle pages to the note's other face", async () => {
+    const onMovePreview = vi.fn();
+    const entries = [
+      note({
+        id: 1,
+        images: [
+          { type: "front", variant: "full", localPath: "/front-full.jpg" },
+          { type: "back", variant: "full", localPath: "/back-full.jpg" },
+        ],
+      }),
+    ];
+
+    const { rerender } = render(
+      <Slideshow
+        currentIndex={0}
+        notes={entries}
+        onChangeIndex={() => {}}
+        onClose={() => {}}
+        onMovePreview={onMovePreview}
+        previewKind="front"
+      />,
+    );
+
+    fireEvent.click(
+      within(document.querySelector(".image-popover-overlay")).getByRole(
+        "button",
+        { name: "Back" },
+      ),
+    );
+
+    expect(onMovePreview).toHaveBeenCalledWith(1);
+
+    rerender(
+      <Slideshow
+        currentIndex={0}
+        notes={entries}
+        onChangeIndex={() => {}}
+        onClose={() => {}}
+        onMovePreview={onMovePreview}
+        previewKind="back"
+      />,
+    );
+
+    fireEvent.click(
+      within(document.querySelector(".image-popover-overlay")).getByRole(
+        "button",
+        { name: "Front" },
+      ),
+    );
+
+    // A second move inside the pacing interval lands on the trailing edge.
+    await waitFor(() => {
+      expect(onMovePreview).toHaveBeenLastCalledWith(-1);
+    });
+  });
+
+  test("a missing side shows the empty state and an inert side toggle", () => {
+    const onClosePreview = vi.fn();
+    const onEdit = vi.fn();
+    const onMovePreview = vi.fn();
+    const entries = [
+      note({
+        id: 1,
+        images: [
+          { type: "front", variant: "full", localPath: "/front-full.jpg" },
+        ],
+      }),
+    ];
+
+    const { rerender } = render(
+      <Slideshow
+        currentIndex={0}
+        notes={entries}
+        onChangeIndex={() => {}}
+        onClose={() => {}}
+        onClosePreview={onClosePreview}
+        onEdit={onEdit}
+        onMovePreview={onMovePreview}
+        previewKind="front"
+      />,
+    );
+
+    // The slideshow keeps both flat slots even though the note has one image,
+    // so the missing back is still a page the counter and arrows reach.
+    expect(document.querySelector(".note-counter-value")).toHaveTextContent(
+      "1 / 2",
+    );
+    fireEvent.click(
+      within(document.querySelector(".image-popover-overlay")).getByRole(
+        "button",
+        { name: "Show next image" },
+      ),
+    );
+    expect(onMovePreview).toHaveBeenCalledWith(1);
+
+    rerender(
+      <Slideshow
+        currentIndex={0}
+        notes={entries}
+        onChangeIndex={() => {}}
+        onClose={() => {}}
+        onClosePreview={onClosePreview}
+        onEdit={onEdit}
+        onMovePreview={onMovePreview}
+        previewKind="back"
+      />,
+    );
+
+    const popover = within(
+      document.querySelector(".image-popover-overlay"),
+    );
+
+    expect(
+      document.querySelector(".image-popover-empty-state"),
+    ).not.toBeNull();
+    expect(popover.queryByRole("group", { name: "Image zoom" })).toBeNull();
+
+    const back = popover.getByRole("button", { name: "Back" });
+
+    expect(back).toHaveAttribute("aria-pressed", "true");
+    expect(back).toHaveAttribute("aria-disabled", "true");
+
+    fireEvent.click(popover.getByRole("button", { name: "Edit note" }));
+
+    // The editor opens over the room, not behind the preview.
+    expect(onClosePreview).toHaveBeenCalledWith(1);
+    expect(onEdit).toHaveBeenCalledWith(1);
   });
 });
 

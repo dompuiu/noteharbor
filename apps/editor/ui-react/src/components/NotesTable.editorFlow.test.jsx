@@ -359,7 +359,7 @@ describe("Adding from the Note slideshow", () => {
     });
 
     await user.click(
-      screen.getByRole("textbox", { name: "Image position" }),
+      screen.getByRole("spinbutton", { name: "Image position" }),
     );
     const input = screen.getByRole("textbox", { name: "Image position" });
     await user.type(input, "4{Enter}");

@@ -2164,9 +2164,7 @@ describe("slideshow overlay styles", () => {
   });
 
   test("the image popover zoom is one 36px scale instrument", () => {
-    const zoom = styles.match(/\.image-popover-zoom\s*\{([^}]*)\}/);
-    expect(zoom).not.toBeNull();
-    expect(zoom[1]).toMatch(/height:\s*36px/);
+    expect(styles).toMatch(/\.image-popover-zoom\s*\{[^}]*height:\s*36px/);
 
     // The known scales are one segmented block, split by a hairline, and the
     // ladder stepper sits beside it.
@@ -2175,6 +2173,37 @@ describe("slideshow overlay styles", () => {
     );
     expect(segments).not.toBeNull();
     expect(segments[1]).toMatch(/border-right:\s*1px solid/);
+  });
+
+  test("the image popover side toggle holds its pressed state", () => {
+    const sides = styles.match(/\.image-popover-sides,[^{]*\{([^}]*)\}/);
+    expect(sides).not.toBeNull();
+    expect(sides[1]).toMatch(/border-radius:\s*var\(--radius-control\)/);
+
+    const pressed = styles.match(
+      /\.image-popover-side-button\[aria-pressed="true"\][^{]*\{([^}]*)\}/,
+    );
+    expect(pressed).not.toBeNull();
+    expect(pressed[1]).toMatch(/background:\s*var\(--accent-soft\)/);
+    expect(pressed[1]).toMatch(/color:\s*var\(--accent-strong\)/);
+
+    // A side with no image dims rather than disappearing.
+    const missing = styles.match(
+      /\.image-popover-side-button\[aria-disabled="true"\][^{]*\{([^}]*)\}/,
+    );
+    expect(missing).not.toBeNull();
+    expect(missing[1]).toMatch(/opacity:\s*0\.45/);
+  });
+
+  test("the image popover empty state is a smaller frame", () => {
+    const empty = styles.match(/\.image-popover-empty-state\s*\{([^}]*)\}/);
+    expect(empty).not.toBeNull();
+    expect(empty[1]).toMatch(/width:\s*min\(420px,\s*100%\)/);
+    expect(empty[1]).toMatch(/min-height:\s*min\(30vh,\s*280px\)/);
+
+    const file = styles.match(/\.image-popover-empty-file\s*\{([^}]*)\}/);
+    expect(file).not.toBeNull();
+    expect(file[1]).toMatch(/color:\s*var\(--on-dark-muted\)/);
   });
 
   test("the image popover content owns the on-dark text colour", () => {
@@ -2399,6 +2428,16 @@ describe("slideshow overlay styles", () => {
     const global = styles.match(/:focus-visible\s*\{([^}]*)\}/);
     expect(global).not.toBeNull();
     expect(global[1]).toMatch(/outline:\s*2px solid var\(--accent\)/);
+  });
+
+  test("the counter keeps a visible focus ring inside the overlays", () => {
+    // The shared counter zeroes the browser outline on :focus, so the overlays
+    // must put a ring back on the field where typing lands.
+    const ring = styles.match(
+      /\.slideshow-screen--overlay \.note-counter-input:focus-visible,\s*\n\.image-popover-overlay \.note-counter-input:focus-visible\s*\{([^}]*)\}/,
+    );
+    expect(ring).not.toBeNull();
+    expect(ring[1]).toMatch(/outline:\s*2px solid var\(--accent\)/);
   });
 
   // The shortcut bubble keeps its own dark ground; its label must stay white
