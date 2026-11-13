@@ -7140,9 +7140,9 @@ button.tag {
   color: var(--on-dark-label);
 }
 
-/* In the room the layout takes the panel's spare height, and the card is the
-   page's one scroll region: the entry and the plates scroll together, while
-   the header and the foot stay put. Nothing else in the room scrolls. */
+/* In the room the layout takes the panel's spare height. Stacked pages scroll
+   as one card (entry and plates together); the wide, two-column page fits the
+   window instead and shrinks the plates. Nothing outside the card scrolls. */
 .slideshow-screen--overlay .slideshow-layout {
   flex: 1 1 auto;
   grid-template-rows: minmax(0, 1fr);
@@ -7154,6 +7154,53 @@ button.tag {
   min-height: 0;
   overflow-y: auto;
   scrollbar-width: thin;
+}
+
+/* Two columns: the plate column divides the card's height between the faces,
+   so both scans fit above the foot instead of scrolling the page. The entry
+   keeps its own safety scroll only when a note is genuinely longer than the
+   room. */
+@media (min-width: 1101px) {
+  .slideshow-screen--overlay .slide-card {
+    align-items: stretch;
+    overflow: hidden;
+  }
+
+  .slideshow-screen--overlay .slide-images {
+    grid-auto-rows: minmax(0, 1fr);
+    align-items: stretch;
+    height: 100%;
+    min-height: 0;
+  }
+
+  .slideshow-screen--overlay .slide-thumb-btn {
+    height: 100%;
+    min-height: 0;
+    overflow: hidden;
+  }
+
+  .slideshow-screen--overlay .slide-plate {
+    position: relative;
+    flex: 1 1 auto;
+    min-height: 0;
+  }
+
+  /* The percentage height only binds against a definite box, so the scan is
+     pinned to the plate instead of letting its own ratio pick the height. */
+  .slideshow-screen--overlay .slide-thumb-btn img {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    max-height: none;
+    height: 100%;
+    object-fit: contain;
+  }
+
+  .slideshow-screen--overlay .slide-meta {
+    min-height: 0;
+    overflow-y: auto;
+    scrollbar-width: thin;
+  }
 }
 
 /* A plate whose file is gone keeps the mat's geometry and says why, instead

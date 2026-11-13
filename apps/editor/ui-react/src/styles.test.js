@@ -1983,10 +1983,10 @@ describe("slideshow overlay styles", () => {
     expect(panel[1]).toMatch(/height:\s*calc\(100vh - 32px\)/);
   });
 
-  // The room is the scrim's own frame and keeps the same 16px gutter as the
-  // top. The header and foot stay put; the card is the page's one scroll
-  // region, so the entry and the plates scroll together.
-  test("the room scrolls one page inside the card", () => {
+  // The room keeps the scrim's 16px gutter and its own height never scrolls.
+  // Wide, two-column pages shrink the plates to fit; only the stacked page
+  // scrolls, and it scrolls as one card.
+  test("the wide room fits and the stacked page scrolls once", () => {
     const panel = styles.match(
       /\.slideshow-screen--overlay \.slideshow-panel\s*\{([^}]*)\}/,
     );
@@ -2001,10 +2001,14 @@ describe("slideshow overlay styles", () => {
     expect(card).not.toBeNull();
     expect(card[1]).toMatch(/overflow-y:\s*auto/);
 
-    // The entry has no second bar beside it.
-    expect(
-      styles.match(/\.slideshow-screen--overlay \.slide-meta\s*\{/),
-    ).toBeNull();
+    const wide = atRule(styles, "@media (min-width: 1101px)");
+    expect(wide).not.toBeNull();
+    expect(wide).toMatch(
+      /\.slideshow-screen--overlay \.slide-card\s*\{[^}]*overflow:\s*hidden/,
+    );
+    expect(wide).toMatch(/grid-auto-rows:\s*minmax\(0,\s*1fr\)/);
+    expect(wide).toMatch(/position:\s*absolute/);
+    expect(wide).toMatch(/object-fit:\s*contain/);
   });
 
   // The slideshow is fluid: it has no floor, so a 1024px window keeps the
