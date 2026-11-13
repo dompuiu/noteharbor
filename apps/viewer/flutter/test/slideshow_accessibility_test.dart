@@ -304,6 +304,46 @@ void main() {
     handle.dispose();
   });
 
+  testWidgets('Tab reaches both plates before any tag, in reading order', (
+    WidgetTester tester,
+  ) async {
+    await pumpSlideshow(tester);
+
+    // Each control's focus node, listed in reading order. Comparing the nodes
+    // themselves keeps the assertion about the plates and chips, not their
+    // debug labels.
+    final readingOrder = <String, FocusNode>{
+      'plate front': focusNodeOf(tester, find.text('FRONT')),
+      'plate back': focusNodeOf(tester, find.text('BACK')),
+      'tag Bank of England': focusNodeOf(tester, find.text('Bank of England')),
+      'tag Polymer': focusNodeOf(tester, find.text('Polymer')),
+      'tag Portrait': focusNodeOf(tester, find.text('Portrait')),
+    };
+    final labelOf = {
+      for (final entry in readingOrder.entries) entry.value: entry.key,
+    };
+    // Distinct nodes, or one Tab could report several names in a row.
+    expect(labelOf, hasLength(readingOrder.length));
+
+    // Tab until every control has been reached. Stops that are not controls
+    // (the top bar's Back button, the slide's own node) are skipped; only the
+    // order of the controls matters here.
+    final visited = <String>[];
+    for (
+      var tabs = 0;
+      tabs < readingOrder.length * 2 && visited.length < readingOrder.length;
+      tabs++
+    ) {
+      await tester.sendKeyEvent(LogicalKeyboardKey.tab);
+      await tester.pump();
+      final label = labelOf[FocusManager.instance.primaryFocus];
+      if (label != null) visited.add(label);
+    }
+
+    // The picture pair leads; the tags that filter the collection come after.
+    expect(visited, readingOrder.keys.toList());
+  });
+
   testWidgets('reduce motion turns the 220ms page step into a jump', (
     WidgetTester tester,
   ) async {
