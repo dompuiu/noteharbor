@@ -122,6 +122,29 @@ describe("NotesTable header controls", () => {
     ).not.toBeInTheDocument();
   });
 
+  test("offers one commit pair in the rail while the collection is edited", async () => {
+    renderTable({ isCollectionEditing: true, collectionEditName: "Test" });
+
+    const deleteButton = await screen.findByRole("button", {
+      name: "Delete collection",
+    });
+
+    // The title form is a lone field: the rail owns the only Delete/Cancel/Save.
+    expect(screen.getAllByRole("button", { name: "Save" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Cancel" })).toHaveLength(1);
+    expect(
+      screen
+        .getByRole("textbox", { name: "Collection name" })
+        .closest("form")
+        .querySelectorAll("button"),
+    ).toHaveLength(0);
+
+    const railLabels = Array.from(
+      deleteButton.closest(".inline-actions").querySelectorAll("button"),
+    ).map((button) => button.textContent.trim());
+    expect(railLabels).toEqual(["Delete collection", "Cancel", "Save"]);
+  });
+
   test("no longer shows the Import / Export link", async () => {
     renderTable();
 

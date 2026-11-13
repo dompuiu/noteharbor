@@ -62,19 +62,17 @@ beforeEach(() => {
 });
 
 describe("NotesTable new collection draft", () => {
-  test("focuses the title field with save/cancel icons like the inline rename", async () => {
+  test("focuses the title field and offers exactly one Save and Cancel", async () => {
     renderNewCollection();
 
     const input = await screen.findByRole("textbox", { name: "Collection name" });
     expect(document.activeElement).toBe(input);
     expect(input).toHaveClass("showcase-name-field");
 
-    const saves = screen.getAllByRole("button", { name: "Save" });
-    const cancels = screen.getAllByRole("button", { name: "Cancel" });
-    expect(saves.some((button) => button.classList.contains("showcase-node-save"))).toBe(true);
-    expect(saves.some((button) => button.classList.contains("button"))).toBe(true);
-    expect(cancels.some((button) => button.classList.contains("showcase-node-cancel"))).toBe(true);
-    expect(cancels.some((button) => button.classList.contains("button"))).toBe(true);
+    // The rail owns the only commit pair; the title form is a lone field.
+    expect(screen.getAllByRole("button", { name: "Save" })).toHaveLength(1);
+    expect(screen.getAllByRole("button", { name: "Cancel" })).toHaveLength(1);
+    expect(input.closest("form").querySelectorAll("button")).toHaveLength(0);
   });
 
   test("typing reports the draft name and submitting saves it", async () => {
@@ -88,10 +86,18 @@ describe("NotesTable new collection draft", () => {
     await user.type(input, "Third");
 
     expect(onNewCollectionNameChange).toHaveBeenCalled();
-    const save = screen
-      .getAllByRole("button", { name: "Save" })
-      .find((button) => button.classList.contains("button"));
-    await user.click(save);
+    await user.click(screen.getByRole("button", { name: "Save" }));
+    expect(onSaveNewCollection).toHaveBeenCalledTimes(1);
+  });
+
+  test("Enter in the draft name saves it like the rail Save", async () => {
+    const user = userEvent.setup();
+    const onSaveNewCollection = vi.fn();
+    renderNewCollection({ onSaveNewCollection });
+
+    const input = await screen.findByRole("textbox", { name: "Collection name" });
+    await user.type(input, "{Enter}");
+
     expect(onSaveNewCollection).toHaveBeenCalledTimes(1);
   });
 
@@ -122,8 +128,6 @@ describe("NotesTable new collection draft", () => {
     // view, without Delete since there is nothing saved yet.
     expect(screen.queryByRole("button", { name: "Add note" })).not.toBeInTheDocument();
     expect(screen.queryByRole("button", { name: "Delete collection" })).not.toBeInTheDocument();
-    expect(screen.getAllByRole("button", { name: "Cancel" })).toHaveLength(2);
-    expect(screen.getAllByRole("button", { name: "Save" })).toHaveLength(2);
     expect(getNotes).not.toHaveBeenCalled();
   });
 

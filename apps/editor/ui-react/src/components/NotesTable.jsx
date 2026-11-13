@@ -4373,53 +4373,6 @@ function NotesTable({
                   ref={collectionEditFieldRef}
                   value={collectionEditName}
                 />
-                <button
-                  aria-label="Save"
-                  className="showcase-node-save"
-                  disabled={!canSaveCollectionEdit || savingCollectionEdit}
-                  title="Save name"
-                  type="submit"
-                >
-                  <svg
-                    aria-hidden="true"
-                    focusable="false"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    width="13"
-                  >
-                    <path
-                      d="M4 12.5l5 5L20 6.5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2.5"
-                    />
-                  </svg>
-                </button>
-                <button
-                  aria-label="Cancel"
-                  className="showcase-node-cancel"
-                  onClick={onCancelCollectionEdit}
-                  title="Discard changes"
-                  type="button"
-                >
-                  <svg
-                    aria-hidden="true"
-                    focusable="false"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    width="13"
-                  >
-                    <path
-                      d="M6 6l12 12M18 6L6 18"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeWidth="2"
-                    />
-                  </svg>
-                </button>
               </form>
             ) : showingNewCollectionForm ? (
               <form
@@ -4437,53 +4390,6 @@ function NotesTable({
                   ref={collectionNameFieldRef}
                   value={newCollectionName}
                 />
-                <button
-                  aria-label="Save"
-                  className="showcase-node-save"
-                  disabled={savingNewCollection}
-                  title="Save name"
-                  type="submit"
-                >
-                  <svg
-                    aria-hidden="true"
-                    focusable="false"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    width="13"
-                  >
-                    <path
-                      d="M4 12.5l5 5L20 6.5"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      strokeWidth="2.5"
-                    />
-                  </svg>
-                </button>
-                <button
-                  aria-label="Cancel"
-                  className="showcase-node-cancel"
-                  onClick={onCancelNewCollection}
-                  title="Discard changes"
-                  type="button"
-                >
-                  <svg
-                    aria-hidden="true"
-                    focusable="false"
-                    height="13"
-                    viewBox="0 0 24 24"
-                    width="13"
-                  >
-                    <path
-                      d="M6 6l12 12M18 6L6 18"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeLinecap="round"
-                      strokeWidth="2"
-                    />
-                  </svg>
-                </button>
               </form>
             ) : renamingCollection ? (
               <form
