@@ -102,6 +102,29 @@ void main() {
 
     expect(controller.offset, 0);
   });
+
+  testWidgets('switching to All notes resets the panes and the sort', (
+    tester,
+  ) async {
+    await pumpTable(tester, noteCount: 40);
+    final controller = verticalController(tester);
+
+    await tester.tap(find.text('DENOMINATION'));
+    await tester.pumpAndSettle();
+    expect(find.text('40 notes · Sorted by Denomination ↑'), findsOneWidget);
+
+    controller.jumpTo(controller.position.maxScrollExtent);
+    await tester.pump();
+    expect(controller.offset, greaterThan(0));
+
+    await tester.tap(find.byKey(const ValueKey('collectionTitle')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('All notes'));
+    await tester.pumpAndSettle();
+
+    expect(controller.offset, 0);
+    expect(find.text('40 notes · Sorted by Collection ↑'), findsOneWidget);
+  });
 }
 
 class _SortRepository extends ViewerRepository {

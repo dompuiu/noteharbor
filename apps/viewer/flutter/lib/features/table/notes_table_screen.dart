@@ -201,6 +201,7 @@ final List<String> _kSortableHeaderKeys = [
 /// Human-readable column names for the table footer's sort summary.
 const Map<String, String> _kColumnLabels = {
   'displayOrder': 'ID',
+  'collection': 'Collection',
   'denomination': 'Denomination',
   'issueDate': 'Date',
   'catalogNumber': 'Catalog',
@@ -215,6 +216,14 @@ const Map<String, String> _kColumnLabels = {
 /// `cat: 17` inline syntax.
 const String _kAllFieldsScope = 'all';
 const String _kDefaultFilterScope = 'catalogNumber';
+
+/// The switcher's All notes row, and the title while that scope is active.
+const String _kAllNotesTitle = 'All notes';
+
+/// A collection opens on its own order; All notes opens grouped by collection
+/// name. The Viewer has no Collection column, so [kCollectionSortKey] only
+/// surfaces in the footer and the card sort menu.
+const String _kDefaultSortKey = 'displayOrder';
 
 const List<({String value, String label, String hint})> _kFilterScopes = [
   (value: 'all', label: 'All fields', hint: 'Filter…'),
@@ -809,9 +818,13 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   String _query = '';
   String _filterScope = _kDefaultFilterScope;
   bool _scopeHovered = false;
-  String _sortKey = 'displayOrder';
+  String _sortKey = _kDefaultSortKey;
   bool _ascending = true;
-  int? _lastActiveCollectionId;
+
+  /// The collection scope the view state belongs to. All notes can switch
+  /// without changing the active collection id, so the scope — not just the
+  /// id — decides when to reset the query, selection, scrolls, and sort.
+  ({int? collectionId, bool allNotes})? _lastScope;
   int? _selectedIndex;
   bool _columnsDragging = false;
   late final FocusNode _tableFocusNode = FocusNode(debugLabel: 'notesTable');
@@ -893,6 +906,18 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
 
   List<NoteRecord> _currentVisibleNotes() =>
       _sortedNotes(widget.controller.activeCollectionNotes);
+
+  /// What the switcher picked: All notes, or one collection. Either can change
+  /// while the other stays put, so a scope change is more than an id change.
+  ({int? collectionId, bool allNotes}) get _scopeKey => (
+    collectionId: widget.controller.activeCollection?.id,
+    allNotes: widget.controller.showingAllNotes,
+  );
+
+  /// A collection opens on its own order; All notes opens grouped by
+  /// collection name.
+  String get _scopeDefaultSortKey =>
+      widget.controller.showingAllNotes ? kCollectionSortKey : _kDefaultSortKey;
 
   double get _rowExtent => _kTableRowHeight + _kTableRowSeparatorHeight;
 
@@ -1372,7 +1397,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   @override
   void initState() {
     super.initState();
-    _lastActiveCollectionId = widget.controller.activeCollectionId;
+    _lastScope = _scopeKey;
+    _sortKey = _scopeDefaultSortKey;
     _lastDataset = widget.controller.dataset;
     widget.controller.addListener(_handleControllerChange);
     _searchFocusNode.addListener(_handleFilterFocusChange);
@@ -1391,8 +1417,16 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
     }
 
     oldWidget.controller.removeListener(_handleControllerChange);
-    _lastActiveCollectionId = widget.controller.activeCollectionId;
+    _lastScope = _scopeKey;
     _lastDataset = widget.controller.dataset;
+    _resetScopeState();
+    // The panes still belong to the old build; move them after the frame that
+    // swaps the notes in.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _resetScopeScrolls();
+      }
+    });
     _retireTagFocusNodes();
     _cardKeys.clear();
     widget.controller.addListener(_handleControllerChange);
@@ -1454,10 +1488,15 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
   }
 
   /// Switching from the title menu hands keyboard control back to the table,
-  /// so arrows browse the new collection immediately instead of staying on the
+  /// so arrows browse the new scope immediately instead of staying on the
   /// heading.
-  void _selectCollectionFromTitle(int collectionId) {
-    unawaited(widget.controller.selectCollection(collectionId));
+  void _selectScope(_ScopeChoice choice) {
+    final collectionId = choice.collectionId;
+    unawaited(
+      collectionId == null
+          ? widget.controller.showAllNotes()
+          : widget.controller.selectCollection(collectionId),
+    );
     _tableFocusNode.requestFocus();
   }
 
@@ -1469,29 +1508,37 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
       _cardKeys.clear();
     }
 
-    final currentCollectionId = widget.controller.activeCollectionId;
-    if (_lastActiveCollectionId == currentCollectionId) {
+    final scope = _scopeKey;
+    if (_lastScope == scope) {
       return;
     }
 
-    _lastActiveCollectionId = currentCollectionId;
+    _lastScope = scope;
 
     if (!mounted) {
       return;
     }
 
-    setState(() {
-      _query = '';
-      _filterScope = _kDefaultFilterScope;
-      _searchController.clear();
-      _selectedIndex = null;
-    });
+    setState(_resetScopeState);
     _cardKeys.clear();
+    _resetScopeScrolls();
+  }
 
+  /// Drops what the previous scope's view carried: the query and its filter
+  /// field, the row selection, and the sort the new scope opens on.
+  void _resetScopeState() {
+    _query = '';
+    _filterScope = _kDefaultFilterScope;
+    _searchController.clear();
+    _sortKey = _scopeDefaultSortKey;
+    _ascending = true;
+    _selectedIndex = null;
+  }
+
+  void _resetScopeScrolls() {
     if (_horizontalScrollController.hasClients) {
       _horizontalScrollController.jumpTo(0);
     }
-
     _resetVerticalScroll();
   }
 
@@ -1528,7 +1575,19 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
         })
         .toList(growable: false);
 
-    return sortNotes(filtered, column: _sortKey, ascending: _ascending);
+    final collections = widget.controller.dataset?.collections;
+    final collectionNames =
+        _sortKey == kCollectionSortKey && collections != null
+        ? {for (final collection in collections) collection.id: collection.name}
+        : null;
+    return sortNotes(
+      filtered,
+      column: _sortKey,
+      ascending: _ascending,
+      collectionNameOf: collectionNames == null
+          ? null
+          : (note) => collectionNames[note.collectionId] ?? '',
+    );
   }
 
   /// A sort, filter, or scope change rebuilds the list from a different first
@@ -2532,13 +2591,16 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                   );
                 }
 
+                final showingAllNotes = widget.controller.showingAllNotes;
                 final scopedNotes = widget.controller.activeCollectionNotes;
                 final notes = _sortedNotes(scopedNotes);
-                final rawCollectionName =
-                    widget.controller.activeCollection?.name ?? '';
-                final collectionName = rawCollectionName.trim().isEmpty
+                final trimmedCollectionName =
+                    widget.controller.activeCollection?.name.trim() ?? '';
+                final collectionName = showingAllNotes
+                    ? _kAllNotesTitle
+                    : trimmedCollectionName.isEmpty
                     ? 'Collection'
-                    : rawCollectionName.trim();
+                    : trimmedCollectionName;
 
                 // The Viewer keeps a 12px inset rather than the Editor's 24px
                 // horizontal step: the card already owns 14px cell gutters, and
@@ -2550,10 +2612,12 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                     children: [
                       _Header(
                         collectionName: collectionName,
+                        allNotes: showingAllNotes,
+                        totalNoteCount: dataset.notes.length,
                         collections: dataset.collections,
                         activeCollectionId:
                             widget.controller.activeCollection?.id,
-                        onSelectCollection: _selectCollectionFromTitle,
+                        onSelectScope: _selectScope,
                         totalCount: scopedNotes.length,
                         visibleCount: notes.length,
                         onOpenImports: canImport ? _openImportScreen : null,
@@ -2781,12 +2845,13 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                           builder: (context, constraints) {
                             final Widget body;
                             if (notes.isEmpty) {
-                              final collectionIsEmpty = scopedNotes.isEmpty;
+                              final scopeIsEmpty = scopedNotes.isEmpty;
                               body = Column(
                                 children: [
                                   Expanded(
                                     child: _TableEmptyState(
-                                      filtered: !collectionIsEmpty,
+                                      filtered: !scopeIsEmpty,
+                                      allNotes: showingAllNotes,
                                       collectionName: collectionName,
                                       onClearFilter: _clearFilter,
                                       onImport: canImport
@@ -2813,6 +2878,7 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                   notes: notes,
                                   selectedIndex: _selectedIndex,
                                   keyboardNavEnabled: _keyboardNavEnabled,
+                                  allNotes: showingAllNotes,
                                   sortKey: _sortKey,
                                   ascending: _ascending,
                                   onSortKey: _setSortKey,
@@ -2942,9 +3008,11 @@ class _FilterScopeOptionState extends State<_FilterScopeOption> {
 class _Header extends StatelessWidget {
   const _Header({
     required this.collectionName,
+    required this.allNotes,
+    required this.totalNoteCount,
     required this.collections,
     required this.activeCollectionId,
-    required this.onSelectCollection,
+    required this.onSelectScope,
     required this.totalCount,
     required this.visibleCount,
     required this.onOpenImports,
@@ -2952,9 +3020,13 @@ class _Header extends StatelessWidget {
   });
 
   final String collectionName;
+  final bool allNotes;
+
+  /// The combined note count the All notes row shows.
+  final int totalNoteCount;
   final List<ViewerCollection> collections;
   final int? activeCollectionId;
-  final ValueChanged<int> onSelectCollection;
+  final ValueChanged<_ScopeChoice> onSelectScope;
   final int totalCount;
   final int visibleCount;
   final VoidCallback? onOpenImports;
@@ -2962,7 +3034,7 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final title = collectionName.trim().isEmpty ? 'Collection' : collectionName;
+    final title = collectionName;
 
     // The identity block (mark + collection title) and the trailing controls
     // always share one line. The title is the only flexible part, so it
@@ -3003,7 +3075,9 @@ class _Header extends StatelessWidget {
                 _CollectionTitle(
                   activeCollectionId: activeCollectionId,
                   collections: collections,
-                  onSelected: onSelectCollection,
+                  allNotes: allNotes,
+                  totalNoteCount: totalNoteCount,
+                  onSelected: onSelectScope,
                   title: title,
                 ),
               ],
@@ -3059,25 +3133,33 @@ class _Header extends StatelessWidget {
   }
 }
 
-/// The collection name, doubling as a collection switcher.
+/// The active scope's name, doubling as the scope switcher.
 ///
 /// It stays a heading at rest: no field, border, or pill. A small chevron sits
 /// beside the name so the switcher is visible without hovering, the pointer
-/// becomes a hand, and the tooltip names the action. Long names ellipsize. A
-/// library with a single collection keeps the plain title — there is nothing
-/// to switch to, so no affordance is shown.
+/// becomes a hand, and the tooltip names the action. Long names ellipsize. Any
+/// library with a collection keeps the switcher, because All notes is always a
+/// second scope; only a library with no collections keeps the plain title.
 class _CollectionTitle extends StatefulWidget {
   const _CollectionTitle({
     required this.title,
     required this.collections,
     required this.activeCollectionId,
+    required this.allNotes,
+    required this.totalNoteCount,
     required this.onSelected,
   });
 
   final String title;
   final List<ViewerCollection> collections;
   final int? activeCollectionId;
-  final ValueChanged<int> onSelected;
+
+  /// Whether the title names the All notes scope rather than a collection.
+  final bool allNotes;
+
+  /// The combined note count the All notes row shows.
+  final int totalNoteCount;
+  final ValueChanged<_ScopeChoice> onSelected;
 
   @override
   State<_CollectionTitle> createState() => _CollectionTitleState();
@@ -3091,7 +3173,7 @@ class _CollectionTitleState extends State<_CollectionTitle> {
 
   bool _open = false;
 
-  bool get _hasChoices => widget.collections.length > 1;
+  bool get _hasChoices => widget.collections.isNotEmpty;
 
   @override
   void initState() {
@@ -3158,9 +3240,9 @@ class _CollectionTitleState extends State<_CollectionTitle> {
     return KeyEventResult.ignored;
   }
 
-  void _handleSelected(int collectionId) {
+  void _handleSelected(_ScopeChoice choice) {
     _closeMenu();
-    widget.onSelected(collectionId);
+    widget.onSelected(choice);
   }
 
   /// Opens the switcher, or closes it when it is already open. Both the
@@ -3211,6 +3293,8 @@ class _CollectionTitleState extends State<_CollectionTitle> {
                   child: _CollectionMenu(
                     activeCollectionId: widget.activeCollectionId,
                     collections: widget.collections,
+                    allNotes: widget.allNotes,
+                    totalNoteCount: widget.totalNoteCount,
                     onClose: _closeMenu,
                     onSelected: _handleSelected,
                   ),
@@ -3223,7 +3307,9 @@ class _CollectionTitleState extends State<_CollectionTitle> {
               child: MouseRegion(
                 cursor: SystemMouseCursors.click,
                 child: Tooltip(
-                  message: 'Switch collection: ${widget.title}',
+                  message: widget.allNotes
+                      ? 'Switch scope: ${widget.title}'
+                      : 'Switch collection: ${widget.title}',
                   waitDuration: const Duration(milliseconds: 500),
                   child: GestureDetector(
                     key: const ValueKey('collectionTitle'),
@@ -3232,8 +3318,10 @@ class _CollectionTitleState extends State<_CollectionTitle> {
                     child: Semantics(
                       button: true,
                       excludeSemantics: true,
-                      label:
-                          'Collection: ${widget.title}. Activate to switch collection.',
+                      label: widget.allNotes
+                          ? 'Scope: ${widget.title}. Activate to switch scope.'
+                          : 'Scope: collection ${widget.title}. '
+                                'Activate to switch scope.',
                       onTap: _activate,
                       child: Stack(
                         clipBehavior: Clip.none,
@@ -3297,17 +3385,40 @@ class _CollectionTitleState extends State<_CollectionTitle> {
   }
 }
 
+/// One selectable scope in the title menu: All notes, or one collection.
+class _ScopeChoice {
+  const _ScopeChoice.allNotes() : collectionId = null;
+  const _ScopeChoice.collection(int this.collectionId);
+
+  final int? collectionId;
+
+  bool get isAllNotes => collectionId == null;
+}
+
+/// One rendered row of the switcher: what it picks, its label, how many notes
+/// it holds, and whether it is the scope on screen.
+typedef _ScopeRow = ({
+  _ScopeChoice choice,
+  String name,
+  int noteCount,
+  bool active,
+});
+
 class _CollectionMenu extends StatefulWidget {
   const _CollectionMenu({
     required this.collections,
     required this.activeCollectionId,
+    required this.allNotes,
+    required this.totalNoteCount,
     required this.onSelected,
     required this.onClose,
   });
 
   final List<ViewerCollection> collections;
   final int? activeCollectionId;
-  final ValueChanged<int> onSelected;
+  final bool allNotes;
+  final int totalNoteCount;
+  final ValueChanged<_ScopeChoice> onSelected;
   final VoidCallback onClose;
 
   @override
@@ -3343,33 +3454,47 @@ class _CollectionMenuState extends State<_CollectionMenu> {
     super.dispose();
   }
 
-  List<ViewerCollection> get _filtered {
+  /// The rows the filter leaves, in display order. The filter jumps to
+  /// collections, so All notes sits out while a query is typed.
+  List<_ScopeRow> get _rows {
     final query = _filter.text.trim().toLowerCase();
+    bool matches(String name) => name.toLowerCase().contains(query);
 
-    if (query.isEmpty) {
-      return widget.collections;
-    }
-
-    return widget.collections
-        .where((collection) => collection.name.toLowerCase().contains(query))
-        .toList(growable: false);
+    return [
+      if (query.isEmpty)
+        (
+          choice: const _ScopeChoice.allNotes(),
+          name: _kAllNotesTitle,
+          noteCount: widget.totalNoteCount,
+          active: widget.allNotes,
+        ),
+      for (final collection in widget.collections)
+        if (query.isEmpty || matches(collection.name))
+          (
+            choice: _ScopeChoice.collection(collection.id),
+            name: collection.name,
+            noteCount: collection.noteCount,
+            active:
+                !widget.allNotes && collection.id == widget.activeCollectionId,
+          ),
+    ];
   }
 
+  /// The row the open menu starts on: the active scope, or the first row when
+  /// the filter hides it.
   int _activeRowIndex() {
-    final index = widget.collections.indexWhere(
-      (collection) => collection.id == widget.activeCollectionId,
-    );
+    final index = _rows.indexWhere((row) => row.active);
     return index < 0 ? 0 : index;
   }
 
   void _handleQueryChanged(String _) {
     setState(() {
-      _highlighted = _filtered.isEmpty ? -1 : 0;
+      _highlighted = _rows.isEmpty ? -1 : 0;
     });
   }
 
   void _moveHighlight(int delta) {
-    final count = _filtered.length;
+    final count = _rows.length;
 
     if (count == 0) {
       return;
@@ -3384,14 +3509,14 @@ class _CollectionMenuState extends State<_CollectionMenu> {
   }
 
   void _activateHighlighted() {
-    final rows = _filtered;
+    final rows = _rows;
 
     if (rows.isEmpty) {
       return;
     }
 
     final index = _highlighted.clamp(0, rows.length - 1);
-    widget.onSelected(rows[index].id);
+    widget.onSelected(rows[index].choice);
   }
 
   KeyEventResult _handleFilterKey(KeyEvent event) {
@@ -3434,10 +3559,28 @@ class _CollectionMenuState extends State<_CollectionMenu> {
 
   @override
   Widget build(BuildContext context) {
-    final rows = _filtered;
+    final rows = _rows;
     final highlighted = rows.isEmpty
         ? -1
         : _highlighted.clamp(0, rows.length - 1);
+    // All notes sits above the COLLECTIONS heading, outside the scrolling
+    // list, so it stays put however long the collection list gets.
+    final startIndex = rows.isNotEmpty && rows.first.choice.isAllNotes ? 1 : 0;
+    final allNotesRow = startIndex == 1 ? rows.first : null;
+    final collectionRows = rows.sublist(startIndex);
+
+    Widget buildRow(_ScopeRow entry, int index) => _CollectionMenuRow(
+      active: entry.active,
+      highlighted: index == highlighted,
+      name: entry.name,
+      noteCount: entry.noteCount,
+      onHover: () {
+        if (_highlighted != index) {
+          setState(() => _highlighted = index);
+        }
+      },
+      onTap: () => widget.onSelected(entry.choice),
+    );
 
     return Container(
       key: const ValueKey('collectionMenu'),
@@ -3497,6 +3640,12 @@ class _CollectionMenuState extends State<_CollectionMenu> {
               ],
             ),
           ),
+          if (allNotesRow != null)
+            Padding(
+              key: const ValueKey('collectionMenuAllNotes'),
+              padding: const EdgeInsets.fromLTRB(4, 4, 4, 0),
+              child: buildRow(allNotesRow, 0),
+            ),
           const Padding(
             padding: EdgeInsets.fromLTRB(14, 8, 14, 4),
             child: Align(
@@ -3514,7 +3663,7 @@ class _CollectionMenuState extends State<_CollectionMenu> {
             ),
           ),
           Flexible(
-            child: rows.isEmpty
+            child: collectionRows.isEmpty
                 ? const Padding(
                     padding: EdgeInsets.fromLTRB(14, 8, 14, 14),
                     child: Align(
@@ -3532,23 +3681,9 @@ class _CollectionMenuState extends State<_CollectionMenu> {
                 : ListView.builder(
                     shrinkWrap: true,
                     padding: const EdgeInsets.fromLTRB(4, 0, 4, 4),
-                    itemCount: rows.length,
-                    itemBuilder: (context, index) {
-                      final collection = rows[index];
-
-                      return _CollectionMenuRow(
-                        active: collection.id == widget.activeCollectionId,
-                        highlighted: index == highlighted,
-                        name: collection.name,
-                        noteCount: collection.noteCount,
-                        onHover: () {
-                          if (_highlighted != index) {
-                            setState(() => _highlighted = index);
-                          }
-                        },
-                        onTap: () => widget.onSelected(collection.id),
-                      );
-                    },
+                    itemCount: collectionRows.length,
+                    itemBuilder: (context, offset) =>
+                        buildRow(collectionRows[offset], startIndex + offset),
                   ),
           ),
           Container(
@@ -3593,9 +3728,13 @@ class _CollectionMenuRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final countLabel = noteCount == 1 ? '1 note' : '$noteCount notes';
     return Semantics(
       button: true,
       selected: active,
+      label: '$name, $countLabel',
+      onTap: onTap,
+      excludeSemantics: true,
       child: MouseRegion(
         onEnter: (_) => onHover(),
         child: GestureDetector(
@@ -4312,6 +4451,7 @@ class _PinnedTableRow extends StatelessWidget {
     );
   }
 }
+
 class _TableRow extends StatelessWidget {
   const _TableRow({
     required this.note,
@@ -4486,6 +4626,7 @@ class _TableRow extends StatelessWidget {
     );
   }
 }
+
 /// Below the grid breakpoint the notes become a vertical card list: a fixed
 /// thumbnail on the left, denomination as the primary line, the remaining
 /// columns as labelled metadata, and tags in the card footer. Sorting moves
@@ -4496,6 +4637,7 @@ class _NoteCardList extends StatelessWidget {
     required this.notes,
     required this.selectedIndex,
     required this.keyboardNavEnabled,
+    required this.allNotes,
     required this.sortKey,
     required this.ascending,
     required this.onSortKey,
@@ -4516,6 +4658,7 @@ class _NoteCardList extends StatelessWidget {
   final List<NoteRecord> notes;
   final int? selectedIndex;
   final bool keyboardNavEnabled;
+  final bool allNotes;
   final String sortKey;
   final bool ascending;
   final ValueChanged<String> onSortKey;
@@ -4542,6 +4685,7 @@ class _NoteCardList extends StatelessWidget {
       child: Column(
         children: [
           _CardSortBar(
+            allNotes: allNotes,
             sortKey: sortKey,
             ascending: ascending,
             onSortKey: onSortKey,
@@ -4596,6 +4740,7 @@ class _NoteCardList extends StatelessWidget {
 /// the arrow button beside it. It takes the place of the grid's header row.
 class _CardSortBar extends StatelessWidget {
   const _CardSortBar({
+    required this.allNotes,
     required this.sortKey,
     required this.ascending,
     required this.onSortKey,
@@ -4604,9 +4749,7 @@ class _CardSortBar extends StatelessWidget {
     required this.directionFocusNode,
   });
 
-  static const List<({String value, String label})> _sortOptions =
-      _kSortableColumns;
-
+  final bool allNotes;
   final String sortKey;
   final bool ascending;
   final ValueChanged<String> onSortKey;
@@ -4614,8 +4757,19 @@ class _CardSortBar extends StatelessWidget {
   final FocusNode sortFocusNode;
   final FocusNode directionFocusNode;
 
+  /// All notes adds the Collection order its scope defaults to; a collection
+  /// keeps the field menu the grid's headers present.
+  static const ({String value, String label}) _collectionOption = (
+    value: kCollectionSortKey,
+    label: 'Collection',
+  );
+
   @override
   Widget build(BuildContext context) {
+    final options = allNotes
+        ? [_collectionOption, ..._kSortableColumns]
+        : _kSortableColumns;
+
     return Container(
       decoration: const BoxDecoration(
         color: _kTableHeaderBg,
@@ -4654,7 +4808,7 @@ class _CardSortBar extends StatelessWidget {
                   fontWeight: FontWeight.w700,
                 ),
                 selectedItemBuilder: (context) => [
-                  for (final option in _sortOptions)
+                  for (final option in options)
                     Align(
                       alignment: Alignment.centerLeft,
                       child: Text(
@@ -4664,7 +4818,7 @@ class _CardSortBar extends StatelessWidget {
                     ),
                 ],
                 items: [
-                  for (final option in _sortOptions)
+                  for (final option in options)
                     DropdownMenuItem<String>(
                       value: option.value,
                       child: Text(option.label),
@@ -5354,6 +5508,7 @@ class _NoteTagsCell extends StatelessWidget {
     );
   }
 }
+
 /// The dashed Ochre ghost that closes a tag run too long for the column. It is
 /// an affordance, not a tag: opening it lists the tags that did not fit, and
 /// picking one applies the same filter a chip tap does.
@@ -5604,6 +5759,7 @@ class _TagChipState extends State<_TagChip> {
     );
   }
 }
+
 class _DataCell extends StatelessWidget {
   const _DataCell({
     required this.width,
@@ -5764,14 +5920,18 @@ class _TableFooter extends StatelessWidget {
 class _TableEmptyState extends StatelessWidget {
   const _TableEmptyState({
     required this.filtered,
+    required this.allNotes,
     required this.collectionName,
     required this.onClearFilter,
     required this.onImport,
   });
 
-  /// True when the collection has notes but the active filter hides them all;
-  /// false when the collection itself has nothing to show yet.
+  /// True when the scope has notes but the active filter hides them all; false
+  /// when the scope itself has nothing to show yet.
   final bool filtered;
+
+  /// Whether the empty scope is the whole archive rather than one collection.
+  final bool allNotes;
   final String collectionName;
   final VoidCallback onClearFilter;
   final VoidCallback? onImport;
@@ -5780,9 +5940,13 @@ class _TableEmptyState extends StatelessWidget {
   Widget build(BuildContext context) {
     final title = filtered
         ? 'No notes match this filter'
+        : allNotes
+        ? 'This archive is empty'
         : 'This collection is empty';
     final detail = filtered
         ? 'Try a different search, or clear the filter to see everything.'
+        : allNotes
+        ? 'Notes from every collection will appear here once they are imported.'
         : 'Notes in "$collectionName" will appear here once they are imported.';
 
     return _StateCopy(

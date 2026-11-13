@@ -85,6 +85,10 @@ _Avoid_: Thumbnail, thumb
 
 The Viewer's screens are a read-only **Table screen** and **Note slideshow** (with **Image popover**), plus an **Import screen** for loading an archive into the Viewer.
 
+**All notes scope**:
+The Viewer Table screen's view of every collection's notes, chosen from the collection switcher. Unlike the Editor's **All notes screen**, it is a scope of the Table screen; the active collection stays selected underneath, so leaving it returns to that collection's table.
+_Avoid_: All notes screen (that is the Editor's), library
+
 ## Domain
 
 **Note**:

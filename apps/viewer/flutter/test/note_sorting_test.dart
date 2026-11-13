@@ -229,6 +229,42 @@ void main() {
     }
   });
 
+  group('collection', () {
+    const names = {1: 'Romania', 2: 'Bulgaria'};
+
+    test('groups notes by collection name, then by display order', () {
+      final notes = [
+        note(id: 1, collectionId: 2, displayOrder: 2, denomination: 'A'),
+        note(id: 2, collectionId: 1, displayOrder: 1, denomination: 'B'),
+        note(id: 3, collectionId: 2, displayOrder: 1, denomination: 'C'),
+        note(id: 4, collectionId: 1, displayOrder: 2, denomination: 'D'),
+      ];
+
+      List<String> sorted({required bool ascending}) => sortNotes(
+        notes,
+        column: 'collection',
+        ascending: ascending,
+        collectionNameOf: (note) => names[note.collectionId] ?? '',
+      ).map((note) => note.denomination).toList();
+
+      expect(sorted(ascending: true), ['C', 'A', 'B', 'D']);
+      // The tie-break inside one collection keeps its own display order even
+      // when the collection names run backwards.
+      expect(sorted(ascending: false), ['B', 'D', 'C', 'A']);
+    });
+
+    test('without a name lookup every note ties on display order', () {
+      final notes = [
+        note(id: 1, collectionId: 2, displayOrder: 2),
+        note(id: 2, collectionId: 1, displayOrder: 1),
+      ];
+
+      final sorted = sortNotes(notes, column: 'collection', ascending: true);
+
+      expect(sorted.map((note) => note.id), [2, 1]);
+    });
+  });
+
   test('sorts a copy and leaves the input untouched', () {
     final notes = [
       note(id: 1, denomination: '5 Lei'),
@@ -265,6 +301,7 @@ List<String> _values(
 NoteRecord note({
   required int id,
   int? displayOrder,
+  int collectionId = 1,
   String denomination = '',
   String issueDate = '',
   String catalogNumber = '',
@@ -272,7 +309,7 @@ NoteRecord note({
 }) {
   return NoteRecord(
     id: id,
-    collectionId: 1,
+    collectionId: collectionId,
     displayOrder: displayOrder ?? id,
     denomination: denomination,
     issueDate: issueDate,

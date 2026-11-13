@@ -1,33 +1,62 @@
 import '../../models/note_record.dart';
 
+/// The All notes scope's default order: notes grouped by collection name. A
+/// collection keeps its own display order instead.
+const String kCollectionSortKey = 'collection';
+
 /// Sorts a copy of [notes] by [column] in [ascending] order.
 ///
 /// The Viewer's sortable columns read as domain values, not as raw strings:
 /// denominations compare by amount, catalog numbers by family (natural
 /// order), dates chronologically, and grades by number with paper-quality
 /// qualifiers as the tiebreaker. Free-text columns keep a case-insensitive
-/// string order. Equal keys fall back to the collection's display order so
-/// the result is deterministic and never depends on the sort algorithm.
+/// string order.
+///
+/// Equal keys fall back to display order, then collection, then note id, so
+/// the result is deterministic and never depends on the sort algorithm — also
+/// across All notes, where display orders repeat in every collection.
+///
+/// [kCollectionSortKey] compares by collection name; [collectionNameOf]
+/// supplies the name for a note.
 List<NoteRecord> sortNotes(
   Iterable<NoteRecord> notes, {
   required String column,
   required bool ascending,
+  String Function(NoteRecord note)? collectionNameOf,
 }) {
   final sorted = List<NoteRecord>.of(notes);
   sorted.sort((left, right) {
-    final result = _compareNotes(left, right, column);
-    if (result == 0) {
-      return left.displayOrder.compareTo(right.displayOrder);
+    final result = _compareNotes(
+      left,
+      right,
+      column,
+      collectionNameOf: collectionNameOf,
+    );
+    if (result != 0) {
+      return ascending ? result : -result;
     }
-    return ascending ? result : -result;
+    final displayOrder = left.displayOrder.compareTo(right.displayOrder);
+    if (displayOrder != 0) {
+      return displayOrder;
+    }
+    final collection = left.collectionId.compareTo(right.collectionId);
+    return collection != 0 ? collection : left.id.compareTo(right.id);
   });
   return sorted;
 }
 
-int _compareNotes(NoteRecord left, NoteRecord right, String column) {
+int _compareNotes(
+  NoteRecord left,
+  NoteRecord right,
+  String column, {
+  String Function(NoteRecord note)? collectionNameOf,
+}) {
   switch (column) {
     case 'displayOrder':
       return left.displayOrder.compareTo(right.displayOrder);
+    case kCollectionSortKey:
+      String nameOf(NoteRecord note) => collectionNameOf?.call(note) ?? '';
+      return _compareText(nameOf(left), nameOf(right));
     case 'denomination':
       return _compareDenominations(left.denomination, right.denomination);
     case 'catalogNumber':
