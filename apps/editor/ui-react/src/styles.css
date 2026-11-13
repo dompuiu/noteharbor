@@ -6926,7 +6926,12 @@ button.tag {
   background: var(--on-dark-border);
 }
 
-.slideshow-close {
+/* Close is the quiet exit in both overlays: it sits behind a hairline, out of
+   the action cluster, and keeps its Esc cue. Its shared 36px box stays; only
+   the pill's ground and edge drop, so the red wash returns on hover from the
+   one rule `.button:hover` already owns. */
+.slideshow-close,
+.image-popover-close {
   background: transparent;
   border-color: transparent;
   color: var(--on-dark-muted);
@@ -7472,22 +7477,6 @@ button.tag {
   line-height: 1.3;
   overflow-wrap: anywhere;
   text-transform: uppercase;
-}
-
-/* Close is the quiet exit: the shared 36px target and pill geometry stay, but
-   the ground and edge drop so only muted ink shows until the red hover. */
-.image-popover-close {
-  background: transparent;
-  border-color: transparent;
-  color: var(--on-dark-muted);
-}
-
-/* The quiet base rule above outranks .icon-link:hover by source order, so the
-   red ink is restated here rather than inherited. */
-.image-popover-close:hover {
-  background: transparent;
-  border-color: transparent;
-  color: var(--accent-strong);
 }
 
 /* The popover's live announcement and its Escape hint are for assistive tech

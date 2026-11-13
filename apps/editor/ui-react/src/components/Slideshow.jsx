@@ -966,15 +966,10 @@ function ImagePopover({
     setIsDragging(false);
   }
 
-  // A plain wheel scrolls the overlay like any other surface; zooming takes an
-  // explicit modifier. Shift+wheel stays a horizontal scroll, not a pan.
+  // A wheel over the plate zooms at the pointer. The overlay is a fixed room,
+  // so scrolling it would only walk the page behind: the wheel belongs to the
+  // image, and the native non-passive listener is what cancels the default.
   function onImageWheel(e) {
-    if (!(e.ctrlKey || e.metaKey)) {
-      return;
-    }
-
-    // Even before the full scan lands, the modified wheel belongs to the
-    // popover: letting it through would page-zoom the host webview.
     e.preventDefault();
 
     if (!fullLoaded) {
@@ -1442,7 +1437,7 @@ function ImagePopover({
             />
             <button
               aria-label="Close preview"
-              className="icon-link image-popover-close"
+              className="button image-popover-close"
               data-shortcut={zoomed ? "Esc ×2" : "Esc"}
               onClick={onClose}
               title="Close preview (Esc twice when zoomed)"

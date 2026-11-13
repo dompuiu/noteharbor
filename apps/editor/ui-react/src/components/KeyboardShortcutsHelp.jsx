@@ -109,7 +109,7 @@ const shortcutGroups = [
         keys: ["Ctrl/Cmd/Shift", "←", "↑", "→", "↓"],
         description: "Pan the zoomed image",
       },
-      { keys: ["Ctrl/Cmd", "Wheel"], description: "Zoom in / out at the pointer" },
+      { keys: ["Wheel"], description: "Zoom in / out at the pointer" },
       {
         keys: ["Double-click"],
         description: "Zoom in, or fit the image again",

@@ -2665,28 +2665,22 @@ describe("slideshow overlay styles", () => {
     );
   });
 
-  // Close keeps its quiet exit: the shared 36px box stays, the pill's ground
-  // and edge go, and the Esc cue stays on the element.
-  test("the popover close drops the pill and keeps the red hover", () => {
-    const close = styles.match(/\.image-popover-close\s*\{([^}]*)\}/);
+  // Close keeps its quiet exit in both overlays: the shared 36px box stays and
+  // the pill's ground and edge go, so the popover close reads exactly like the
+  // slideshow's, hover included.
+  test("the popover close matches the slideshow close", () => {
+    const close = styles.match(
+      /\.slideshow-close,\n\.image-popover-close\s*\{([^}]*)\}/,
+    );
     expect(close).not.toBeNull();
     expect(close[1]).toMatch(/background:\s*transparent/);
     expect(close[1]).toMatch(/border-color:\s*transparent/);
     expect(close[1]).toMatch(/color:\s*var\(--on-dark-muted\)/);
 
-    // Equal specificity, so source order is what lets the quiet close beat
-    // the .icon-link pill at rest.
-    expect(styles.indexOf(".image-popover-close {")).toBeGreaterThan(
-      styles.indexOf(".icon-link {"),
-    );
-
-    const hover = styles.match(/\.image-popover-close:hover\s*\{([^}]*)\}/);
-    expect(hover).not.toBeNull();
-    expect(hover[1]).toMatch(/background:\s*transparent/);
-    expect(hover[1]).toMatch(/border-color:\s*transparent/);
-    // The quiet base rule sits after .icon-link:hover, so the hover must
-    // restate the red ink itself instead of inheriting it.
-    expect(hover[1]).toMatch(/color:\s*var\(--accent-strong\)/);
+    // The hover is the shared pill, inherited rather than restated, so the two
+    // closes cannot drift apart.
+    expect(styles).not.toMatch(/\.image-popover-close:hover/);
+    expect(styles).not.toMatch(/\.slideshow-close:hover/);
   });
 
   // The plate hover is the app's red interaction edge, the same wash and
