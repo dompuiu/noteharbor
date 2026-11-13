@@ -1762,7 +1762,7 @@ describe("The slideshow as a modal room", () => {
       expect(currentHash()).toContain("slideshow/1");
     });
 
-    return screen.getByRole("dialog", { name: "Note slideshow" });
+    return screen.getByRole("dialog", { name: "AAAA" });
   }
 
   test("is a named modal dialog, takes focus, and makes the table inert", async () => {
@@ -1783,7 +1783,7 @@ describe("The slideshow as a modal room", () => {
 
     await user.tab({ shift: true });
 
-    const next = screen.getByRole("button", { name: "Next note" });
+    const next = screen.getByRole("button", { name: /^Next note/ });
     expect(next).toHaveFocus();
 
     await user.tab();
@@ -1796,7 +1796,7 @@ describe("The slideshow as a modal room", () => {
     const user = userEvent.setup();
     await openSlideshow(user);
 
-    const next = screen.getByRole("button", { name: "Next note" });
+    const next = screen.getByRole("button", { name: /^Next note/ });
     next.focus();
     await user.keyboard(" ");
 
@@ -1810,7 +1810,7 @@ describe("The slideshow as a modal room", () => {
     const user = userEvent.setup();
     await openSlideshow(user);
 
-    const next = screen.getByRole("button", { name: "Next note" });
+    const next = screen.getByRole("button", { name: /^Next note/ });
     next.focus();
     await user.keyboard("{Enter}");
 
@@ -1824,7 +1824,7 @@ describe("The slideshow as a modal room", () => {
     const user = userEvent.setup();
     await openSlideshow(user);
 
-    screen.getByRole("button", { name: "Next note" }).focus();
+    screen.getByRole("button", { name: /^Next note/ }).focus();
     await user.keyboard("{ArrowRight}");
 
     await waitFor(() => {

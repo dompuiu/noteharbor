@@ -308,15 +308,14 @@ export function AllNotesScreen() {
 
     // A held arrow key changes the index faster than the full note can
     // arrive. Wait for the walk to settle; the projected row already has the
-    // images, so only the scraped details are delayed.
+    // images, so only the scraped details are delayed. The room's walk stops
+    // at the ends, so only the reachable neighbour is warmed.
     const timer = setTimeout(() => {
-      // The slideshow wraps, so the neighbours on both edges are the row at
-      // the other end of the filtered list.
-      const count = visibleNotes.length;
+      // Warm the open note and the neighbours the walk can actually reach.
       const targets = [
         visibleNotes[slideshowIndex],
-        visibleNotes[(slideshowIndex + 1) % count],
-        visibleNotes[(slideshowIndex - 1 + count) % count],
+        visibleNotes[slideshowIndex - 1],
+        visibleNotes[slideshowIndex + 1],
       ].filter(Boolean);
 
       targets.forEach((target) => {
@@ -799,7 +798,9 @@ export function AllNotesScreen() {
 
       {slideshowOpen ? (
         <Slideshow
+          collectionName="All notes"
           currentIndex={slideshowIndex}
+          filterConditions={conditions}
           notes={slideshowNotes}
           onChangeIndex={handleChangeSlideshowIndex}
           onClose={handleCloseSlideshow}

@@ -448,7 +448,7 @@ describe("NotesTable search", () => {
     expect(await currentHash()).toContain("fc=all%3A2300");
 
     // BBBB (id 2) is filtered out, so Next lands on the next match.
-    await user.click(screen.getByRole("button", { name: "Next note" }));
+    await user.click(screen.getByRole("button", { name: /^Next note/ }));
 
     await waitFor(async () => {
       const hash = await currentHash();
@@ -456,7 +456,7 @@ describe("NotesTable search", () => {
       expect(hash).toContain("fc=all%3A2300");
     });
 
-    await user.click(screen.getByRole("button", { name: "Previous note" }));
+    await user.click(screen.getByRole("button", { name: /^Previous note/ }));
 
     await waitFor(async () => {
       const hash = await currentHash();
