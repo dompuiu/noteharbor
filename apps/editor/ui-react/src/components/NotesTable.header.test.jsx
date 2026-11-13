@@ -138,7 +138,7 @@ describe("NotesTable header controls", () => {
         .closest("form")
         .querySelectorAll("button"),
     ).map((button) => button.textContent.trim());
-    expect(formLabels).toEqual(["Cancel", "Save"]);
+    expect(formLabels).toEqual(["Save", "Cancel"]);
 
     const railLabels = Array.from(
       deleteButton.closest(".inline-actions").querySelectorAll("button"),

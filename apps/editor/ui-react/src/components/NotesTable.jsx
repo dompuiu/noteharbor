@@ -546,6 +546,14 @@ function CollectionCommitPair({
   return (
     <>
       <button
+        className="button button-primary"
+        disabled={saveDisabled}
+        title="Save (Enter)"
+        type="submit"
+      >
+        {saving ? "Saving…" : "Save"}
+      </button>
+      <button
         className="button"
         disabled={cancelDisabled}
         onClick={onCancel}
@@ -553,14 +561,6 @@ function CollectionCommitPair({
         type="button"
       >
         Cancel
-      </button>
-      <button
-        className="button button-primary"
-        disabled={saveDisabled}
-        title="Save (Enter)"
-        type="submit"
-      >
-        {saving ? "Saving…" : "Save"}
       </button>
     </>
   );

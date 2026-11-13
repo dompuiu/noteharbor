@@ -76,7 +76,7 @@ describe("NotesTable new collection draft", () => {
       Array.from(input.closest("form").querySelectorAll("button")).map(
         (button) => button.textContent.trim(),
       ),
-    ).toEqual(["Cancel", "Save"]);
+    ).toEqual(["Save", "Cancel"]);
   });
 
   test("typing reports the draft name and submitting saves it", async () => {

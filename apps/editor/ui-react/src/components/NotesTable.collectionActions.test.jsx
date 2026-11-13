@@ -143,7 +143,7 @@ describe("collection actions in the table header", () => {
       Array.from(field.closest("form").querySelectorAll("button")).map(
         (button) => button.textContent.trim(),
       ),
-    ).toEqual(["Cancel", "Save"]);
+    ).toEqual(["Save", "Cancel"]);
 
     await user.clear(field);
     await user.type(field, "  Renamed  ");
