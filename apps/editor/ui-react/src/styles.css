@@ -7697,6 +7697,56 @@ button.tag {
   cursor: grabbing;
 }
 
+/* Below the popover's comfortable width the arrows step down from 56px to
+   40px and the stage's gutter from 20px to 12px, returning the difference to
+   the plate. The layout at 900px and above keeps the roomy targets. */
+@media (max-width: 900px) {
+  .image-popover-stage {
+    gap: 12px;
+  }
+
+  .image-popover-arrow {
+    width: 40px;
+    height: 40px;
+    font-size: 1.15rem;
+  }
+
+  /* The scrim's auto track grows to the panel's own `96vw`, so a narrow
+     window loses its right gutter and below 600px the panel runs past the
+     viewport. One definite column bounds the track to the scrim's padding
+     box, and the content's existing `max-width: 100%` then keeps the panel
+     centred inside it. */
+  .image-popover-overlay {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* At the narrow end the arrows leave the tracks and sit at the stage's edges,
+   over the plate: the stage becomes one column, so the scan keeps the panel's
+   full width instead of shrinking between two columns of chrome. They keep
+   the 900px query's 40px target and ride above the image; nothing here
+   re-clips the plate. */
+@media (max-width: 700px) {
+  .image-popover-stage {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .image-popover-arrow {
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 3;
+  }
+
+  .image-popover-arrow:first-of-type {
+    left: 8px;
+  }
+
+  .image-popover-arrow:last-of-type {
+    right: 8px;
+  }
+}
+
 .slide-meta {
   display: grid;
   gap: 18px;

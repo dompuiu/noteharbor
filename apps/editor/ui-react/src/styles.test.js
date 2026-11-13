@@ -2916,4 +2916,88 @@ describe("image popover styles", () => {
     expect(rule[1]).toMatch(/filter:\s*drop-shadow\(/);
     expect(rule[1]).not.toMatch(/box-shadow:/);
   });
+
+  // The popover's width queries share their breakpoints with earlier blocks,
+  // so take the block that names the popover's stage rather than the first
+  // (or last) block with that header.
+  function popoverWidthRule(header) {
+    for (let from = 0; ; from += header.length) {
+      from = styles.indexOf(header, from);
+
+      if (from < 0) {
+        return null;
+      }
+
+      const block = atRule(styles.slice(from), header);
+
+      if (block?.includes(".image-popover-stage")) {
+        return block;
+      }
+    }
+  }
+
+  // A narrow window should not keep paying 56px per arrow: below 900px the
+  // targets step down to 40px and the stage's gutter tightens, while the
+  // layout at 900px and above keeps the roomy targets where space allows.
+  test("the arrows give way below 900px", () => {
+    const base = styles.match(/^\.image-popover-stage\s*\{([^}]*)\}/m);
+    expect(base).not.toBeNull();
+    expect(base[1]).toMatch(/gap:\s*20px/);
+
+    // Above the query the arrow has no size of its own: it keeps the shared
+    // 56px round target.
+    const arrowBase = styles.match(/^\.image-popover-arrow\s*\{([^}]*)\}/m);
+    expect(arrowBase).not.toBeNull();
+    expect(arrowBase[1]).not.toMatch(/width:|height:|position:/);
+
+    const narrow = popoverWidthRule("@media (max-width: 900px)");
+    expect(narrow).not.toBeNull();
+    expect(narrow).toMatch(/\.image-popover-stage\s*\{[^}]*gap:\s*12px/);
+
+    const arrow = narrow.match(/\.image-popover-arrow\s*\{([^}]*)\}/);
+    expect(arrow).not.toBeNull();
+    expect(arrow[1]).toMatch(/width:\s*40px/);
+    expect(arrow[1]).toMatch(/height:\s*40px/);
+
+    // The zoomed room keeps its own height rule: the width query must not
+    // reach in and reshape the stage rows.
+    expect(narrow).not.toMatch(/image-popover-(content|image-wrap)--zoomed/);
+
+    // The scrim's auto track grows to the panel's `96vw`, losing the right
+    // gutter (and running past the viewport below 600px); one definite
+    // column bounds it to the padding box so the panel stays centred.
+    expect(narrow).toMatch(
+      /\.image-popover-overlay\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    );
+  });
+
+  // At the narrow end the arrows overlay the plate so the scan keeps the
+  // panel's full width; the stage collapses to one column and nothing
+  // re-clips the plate.
+  test("below 700px the arrows overlay the plate", () => {
+    const narrow = popoverWidthRule("@media (max-width: 700px)");
+    expect(narrow).not.toBeNull();
+    expect(narrow).toMatch(
+      /\.image-popover-stage\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    );
+
+    const arrow = narrow.match(/\.image-popover-arrow\s*\{([^}]*)\}/);
+    expect(arrow).not.toBeNull();
+    expect(arrow[1]).toMatch(/position:\s*absolute/);
+    expect(arrow[1]).toMatch(/top:\s*50%/);
+    expect(arrow[1]).toMatch(/transform:\s*translateY\(-50%\)/);
+    // The arrows ride above the image, its thumbnail and the warming veil.
+    expect(arrow[1]).toMatch(/z-index:\s*3/);
+
+    expect(narrow).toMatch(
+      /\.image-popover-arrow:first-of-type\s*\{[^}]*left:\s*8px/,
+    );
+    expect(narrow).toMatch(
+      /\.image-popover-arrow:last-of-type\s*\{[^}]*right:\s*8px/,
+    );
+    expect(narrow).not.toMatch(
+      /\.image-popover-image-wrap[^{]*\{[^}]*(width|max-width|padding|overflow):/,
+    );
+    expect(narrow).not.toMatch(/image-popover-(content|image-wrap)--zoomed/);
+  });
 });
