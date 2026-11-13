@@ -5,9 +5,12 @@ import { ImagePopover } from "./Slideshow.jsx";
 
 const FRONT_1 = "/api/images/notes/1/front-full.jpg?v=1";
 const THUMB_1 = "/api/images/notes/1/front-thumbnail.jpg?v=1";
+const BACK_1 = "/api/images/notes/1/back-full.jpg?v=1";
+const BACK_THUMB_1 = "/api/images/notes/1/back-thumbnail.jpg?v=1";
 const THUMB_2 = "/api/images/notes/2/front-thumbnail.jpg?v=1";
 const FRONT_2 = "/api/images/notes/2/front-full.jpg?v=1";
 const FRONT_3 = "/api/images/notes/3/front-full.jpg?v=1";
+const THUMB_3 = "/api/images/notes/3/front-thumbnail.jpg?v=1";
 
 function popover(overrides = {}) {
   return (
@@ -17,6 +20,7 @@ function popover(overrides = {}) {
       canGoPrevious
       counterPosition={1}
       counterTotal={3}
+      noteKey="note-1"
       noteLabel="1 leu - Front"
       onClose={() => {}}
       onNext={() => {}}
@@ -254,6 +258,163 @@ describe("ImagePopover image loading", () => {
 });
 
 describe("ImagePopover zoom", () => {
+  test("keeps Fit enabled and pressed while the image sits at fit", async () => {
+    render(popover());
+    await finishDecode(FRONT_1);
+
+    measureImageBox(fullImage(), {
+      naturalWidth: 2000,
+      naturalHeight: 1000,
+      fitWidth: 500,
+      fitHeight: 250,
+    });
+    measurePopoverWrap({ width: 800, height: 600 });
+
+    const fit = screen.getByRole("button", { name: "Fit" });
+
+    // The active option is a choice, not a disabled state.
+    expect(fit).toBeEnabled();
+    expect(fit).toHaveAttribute("aria-pressed", "true");
+    expect(screen.getByRole("button", { name: "100%" })).toBeEnabled();
+  });
+
+  test("keeps the zoom across a note's faces and resets on another note", async () => {
+    const { rerender } = render(popover());
+    await finishDecode(FRONT_1);
+
+    measureImageBox(fullImage(), {
+      naturalWidth: 2000,
+      naturalHeight: 1000,
+      fitWidth: 500,
+      fitHeight: 250,
+    });
+    measurePopoverWrap({ width: 800, height: 600 });
+
+    fireEvent.click(zoomButton("Zoom in"));
+
+    expect(fullImage().style.width).toBe("625px");
+
+    // The back face of the same note keeps the chosen scale.
+    rerender(popover({ src: BACK_1, thumb: BACK_THUMB_1 }));
+    await finishDecode(BACK_1);
+
+    expect(fullImage()).toHaveAttribute("src", BACK_1);
+    expect(fullImage().style.width).toBe("625px");
+
+    // Another note starts again at Fit.
+    rerender(
+      popover({
+        noteKey: "note-2",
+        src: FRONT_3,
+        thumb: THUMB_3,
+      }),
+    );
+    await finishDecode(FRONT_3);
+
+    expect(fullImage()).toHaveAttribute("src", FRONT_3);
+    expect(fullImage().style.width).toBe("");
+    expect(screen.getByRole("button", { name: "Fit" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  test("re-measures the next face's fit before stepping the ladder", async () => {
+    const { rerender } = render(popover());
+    await finishDecode(FRONT_1);
+
+    const image = fullImage();
+
+    measureImageBox(image, {
+      naturalWidth: 2000,
+      naturalHeight: 1000,
+      fitWidth: 500,
+      fitHeight: 250,
+    });
+    measurePopoverWrap({ width: 800, height: 600 });
+
+    fireEvent.click(zoomButton("Zoom in"));
+
+    expect(image.style.width).toBe("625px");
+
+    // The back face is square and fits at 250px, so the ladder must step from
+    // that fit (1.5x = 375px), not from the front's stale 500px fit.
+    rerender(popover({ src: BACK_1, thumb: BACK_THUMB_1 }));
+    await finishDecode(BACK_1);
+    measureImageBox(image, {
+      naturalWidth: 1000,
+      naturalHeight: 1000,
+      fitWidth: 250,
+      fitHeight: 250,
+    });
+
+    expect(image.style.width).toBe("312.5px");
+    expect(image.style.height).toBe("312.5px");
+    expect(imageWrap()).toHaveClass("image-popover-image-wrap--zoomed");
+
+    fireEvent.click(zoomButton("Zoom in"));
+
+    expect(image.style.width).toBe("375px");
+  });
+
+  test("returns to Fit when a face's fit is larger than the retained zoom", async () => {
+    const { rerender } = render(popover());
+    await finishDecode(FRONT_1);
+
+    const image = fullImage();
+
+    measureImageBox(image, {
+      naturalWidth: 2000,
+      naturalHeight: 1000,
+      fitWidth: 500,
+      fitHeight: 250,
+    });
+    measurePopoverWrap({ width: 800, height: 600 });
+
+    fireEvent.click(zoomButton("Zoom in"));
+
+    expect(image.style.width).toBe("625px");
+
+    // This back already fits at 80% of its natural pixels, so keeping the
+    // front's 31% zoom would paint it below its own fit.
+    rerender(popover({ src: BACK_1, thumb: BACK_THUMB_1 }));
+    await finishDecode(BACK_1);
+    measureImageBox(image, {
+      naturalWidth: 1000,
+      naturalHeight: 1000,
+      fitWidth: 800,
+      fitHeight: 800,
+    });
+
+    expect(image.style.width).toBe("");
+    expect(screen.getByRole("button", { name: "Fit" })).toHaveAttribute(
+      "aria-pressed",
+      "true",
+    );
+  });
+
+  test("a same-note Home jump keeps the zoom", async () => {
+    render(popover({ onPreviewStart: () => true }));
+
+    await finishDecode(FRONT_1);
+
+    measureImageBox(fullImage(), {
+      naturalWidth: 2000,
+      naturalHeight: 1000,
+      fitWidth: 500,
+      fitHeight: 250,
+    });
+    measurePopoverWrap({ width: 800, height: 600 });
+
+    fireEvent.click(zoomButton("Zoom in"));
+
+    expect(fullImage().style.width).toBe("625px");
+
+    fireEvent.keyDown(window, { key: "Home" });
+
+    expect(fullImage().style.width).toBe("625px");
+  });
+
   test("steps from the fitted size and reports the level", async () => {
     render(popover());
     await finishDecode(FRONT_1);
@@ -352,10 +513,18 @@ describe("ImagePopover zoom", () => {
     });
     measurePopoverWrap({ width: 800, height: 600 });
 
+    // The Close hint must not promise a single Escape while zoomed.
+    expect(
+      screen.getByRole("button", { name: "Close preview" }),
+    ).toHaveAttribute("data-shortcut", "Esc");
+
     fireEvent.wheel(image, { deltaY: -100, clientX: 400, clientY: 300 });
 
     expect(image.style.width).toBe("625px");
     expect(zoomLevel()).toHaveTextContent("31%");
+    expect(
+      screen.getByRole("button", { name: "Close preview" }),
+    ).toHaveAttribute("data-shortcut", "Esc ×2");
 
     fireEvent.keyDown(window, { key: "Escape" });
 

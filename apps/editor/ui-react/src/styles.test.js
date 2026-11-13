@@ -2114,12 +2114,33 @@ describe("slideshow overlay styles", () => {
     expect(overlay[1]).toMatch(/overflow:\s*auto/);
   });
 
-  test("the image popover content holds its 1200px-viewport width", () => {
+  test("the image popover content fits a narrow window", () => {
     const content = styles.match(/\.image-popover-content\s*\{([^}]*)\}/);
     expect(content).not.toBeNull();
-    // Its width at a 1200px viewport: min(1400px, 96vw).
-    expect(content[1]).toMatch(/min-width:\s*1152px/);
+    // Fluid up to 1400px, but never wider than the overlay's padding box, so
+    // a 1024px window fits without a horizontal scroll.
+    expect(content[1]).toMatch(/width:\s*min\(1400px,\s*96vw\)/);
+    expect(content[1]).toMatch(/max-width:\s*100%/);
     expect(content[1]).toMatch(/margin:\s*auto/);
+    expect(content[1]).not.toMatch(/min-width:/);
+
+    const topbar = styles.match(/\.image-popover-topbar\s*\{([^}]*)\}/);
+    expect(topbar).not.toBeNull();
+    expect(topbar[1]).toMatch(/flex-wrap:\s*wrap/);
+  });
+
+  test("the image popover zoom is one 36px scale instrument", () => {
+    const zoom = styles.match(/\.image-popover-zoom\s*\{([^}]*)\}/);
+    expect(zoom).not.toBeNull();
+    expect(zoom[1]).toMatch(/height:\s*36px/);
+
+    // The known scales are one segmented block, split by a hairline, and the
+    // ladder stepper sits beside it.
+    const segments = styles.match(
+      /\.image-popover-zoom-segments\s*\{([^}]*)\}/,
+    );
+    expect(segments).not.toBeNull();
+    expect(segments[1]).toMatch(/border-right:\s*1px solid/);
   });
 
   test("the image popover content owns the on-dark text colour", () => {

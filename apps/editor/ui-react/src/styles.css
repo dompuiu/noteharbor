@@ -7106,12 +7106,12 @@ button.tag {
   scrollbar-color: var(--on-dark-border-strong) transparent;
 }
 
-/* The content holds its width at a 1200px viewport — min(1400px, 96vw) —
-   so smaller windows scroll the overlay instead of squeezing the stage. The
-   auto margins keep it centred with a reachable start when it overflows. */
+/* The content is fluid: it takes 96vw up to 1400px, and never wider than the
+   overlay's own padding box, so a 1024px window fits the whole panel. The auto
+   margins keep it centred in the scrim. */
 .image-popover-content {
   width: min(1400px, 96vw);
-  min-width: 1152px;
+  max-width: 100%;
   margin: auto;
   max-height: min(92vh, 960px);
   display: grid;
@@ -7134,15 +7134,19 @@ button.tag {
   grid-template-rows: auto minmax(0, 1fr);
 }
 
+/* The bar wraps rather than clipping: the label may take the first row and
+   the actions the second on a narrow window, so Close is always reachable. */
 .image-popover-topbar {
   display: flex;
   justify-content: space-between;
   align-items: center;
   gap: 16px;
+  flex-wrap: wrap;
 }
 
 .image-popover-meta {
   display: grid;
+  min-width: 0;
   gap: 2px;
 }
 
@@ -7165,21 +7169,40 @@ button.tag {
   flex-wrap: wrap;
 }
 
-/* The zoom cluster stays visible in both views: Fit and 100% jump to a known
-   scale, the steps walk the fitted-size ladder, and the level reads the
-   current scale against the image's natural pixels. */
+/* One scale instrument, 36px tall: a segmented Fit | 100% choice for the two
+   known scales, then a minus / level / plus stepper that walks the fitted-size
+   ladder. The active choice keeps full contrast and is never disabled; only
+   the stepper stops at the ladder's ends. */
 .image-popover-zoom {
   display: inline-flex;
-  align-items: center;
-  gap: 2px;
-  padding: 3px;
+  height: 36px;
+  padding: 2px;
   border: 1px solid var(--border-control);
   border-radius: var(--radius-control);
   background: var(--surface);
 }
 
+.image-popover-zoom-segments,
+.image-popover-zoom-stepper {
+  display: inline-flex;
+  gap: 2px;
+}
+
+/* The hairline splits the two ways to set the scale: pick a known one, or
+   step to the next. */
+.image-popover-zoom-segments {
+  padding-right: 4px;
+  border-right: 1px solid var(--border);
+}
+
+.image-popover-zoom-stepper {
+  padding-left: 4px;
+}
+
 .image-popover-zoom-button {
-  min-height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   padding: 0 9px;
   border: 0;
   border-radius: calc(var(--radius-control) - 3px);
@@ -7213,16 +7236,17 @@ button.tag {
   min-width: 28px;
   padding: 0;
   font-size: 1rem;
-  line-height: 1;
 }
 
 .image-popover-zoom-level {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
   min-width: 4.5ch;
   color: var(--on-dark-muted);
   font-size: 0.76rem;
   font-variant-numeric: tabular-nums;
   font-weight: 650;
-  text-align: center;
 }
 
 .image-popover-stage {
