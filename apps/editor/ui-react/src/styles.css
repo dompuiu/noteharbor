@@ -6986,12 +6986,6 @@ button.tag {
   margin: 0 auto;
 }
 
-.slideshow-screen--overlay .slide-meta {
-  min-height: 0;
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
-
 .slide-images,
 .image-popover-image-wrap {
   position: relative;
@@ -7146,9 +7140,9 @@ button.tag {
   color: var(--on-dark-label);
 }
 
-/* In the room the layout takes the panel's spare height, and the plate column
-   divides it between the faces: the room fits the viewport instead of
-   scrolling, so the plates shrink before anything is clipped. */
+/* In the room the layout takes the panel's spare height, and the card is the
+   page's one scroll region: the entry and the plates scroll together, while
+   the header and the foot stay put. Nothing else in the room scrolls. */
 .slideshow-screen--overlay .slideshow-layout {
   flex: 1 1 auto;
   grid-template-rows: minmax(0, 1fr);
@@ -7157,39 +7151,9 @@ button.tag {
 }
 
 .slideshow-screen--overlay .slide-card {
-  align-items: stretch;
-  overflow: hidden;
   min-height: 0;
-}
-
-.slideshow-screen--overlay .slide-images {
-  grid-auto-rows: minmax(0, 1fr);
-  align-items: stretch;
-  height: 100%;
-  min-height: 0;
-}
-
-.slideshow-screen--overlay .slide-thumb-btn {
-  height: 100%;
-  min-height: 0;
-  overflow: hidden;
-}
-
-.slideshow-screen--overlay .slide-plate {
-  position: relative;
-  flex: 1 1 auto;
-  min-height: 0;
-}
-
-/* The percentage height only binds against a definite box, so the scan is
-   pinned to the plate instead of letting its own ratio pick the height. */
-.slideshow-screen--overlay .slide-thumb-btn img {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  max-height: none;
-  height: 100%;
-  object-fit: contain;
+  overflow-y: auto;
+  scrollbar-width: thin;
 }
 
 /* A plate whose file is gone keeps the mat's geometry and says why, instead
@@ -7296,8 +7260,8 @@ button.tag {
 
 /* Below the card's two-column width the entry stacks above the plates, so the
    name, values and copy stay readable before the images take the full width.
-   The top bar wraps with the same breakpoint. The rows split the room's own
-   height — entry 2/5, plates 3/5 — so the stacked page fits too. */
+   The top bar wraps with the same breakpoint. The stacked page still scrolls
+   as one card, so there is no second bar beside the entry. */
 @media (max-width: 1100px) {
   .slide-card {
     grid-template-columns: minmax(0, 1fr);
@@ -7305,11 +7269,6 @@ button.tag {
 
   .slide-meta {
     order: -1;
-  }
-
-  .slideshow-screen--overlay .slide-card {
-    grid-template-rows: minmax(0, 1fr) minmax(0, 2fr);
-    overflow: hidden;
   }
 }
 

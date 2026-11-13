@@ -1983,10 +1983,10 @@ describe("slideshow overlay styles", () => {
     expect(panel[1]).toMatch(/height:\s*calc\(100vh - 32px\)/);
   });
 
-  // The room is the scrim's own frame: its bottom border keeps the same 16px
-  // gutter as the top, and the room itself never scrolls — the plates give up
-  // height instead.
-  test("the slideshow panel fits the scrim without scrolling", () => {
+  // The room is the scrim's own frame and keeps the same 16px gutter as the
+  // top. The header and foot stay put; the card is the page's one scroll
+  // region, so the entry and the plates scroll together.
+  test("the room scrolls one page inside the card", () => {
     const panel = styles.match(
       /\.slideshow-screen--overlay \.slideshow-panel\s*\{([^}]*)\}/,
     );
@@ -1995,18 +1995,16 @@ describe("slideshow overlay styles", () => {
     expect(panel[1]).toMatch(/display:\s*flex/);
     expect(panel[1]).toMatch(/overflow:\s*hidden/);
 
-    const images = styles.match(
-      /\.slideshow-screen--overlay \.slide-images\s*\{([^}]*)\}/,
+    const card = styles.match(
+      /\.slideshow-screen--overlay \.slide-card\s*\{([^}]*)\}/,
     );
-    expect(images).not.toBeNull();
-    expect(images[1]).toMatch(/grid-auto-rows:\s*minmax\(0,\s*1fr\)/);
+    expect(card).not.toBeNull();
+    expect(card[1]).toMatch(/overflow-y:\s*auto/);
 
-    const scan = styles.match(
-      /\.slideshow-screen--overlay \.slide-thumb-btn img\s*\{([^}]*)\}/,
-    );
-    expect(scan).not.toBeNull();
-    expect(scan[1]).toMatch(/position:\s*absolute/);
-    expect(scan[1]).toMatch(/object-fit:\s*contain/);
+    // The entry has no second bar beside it.
+    expect(
+      styles.match(/\.slideshow-screen--overlay \.slide-meta\s*\{/),
+    ).toBeNull();
   });
 
   // The slideshow is fluid: it has no floor, so a 1024px window keeps the
