@@ -212,7 +212,7 @@ void main() {
     await tester.tap(card(4));
     await tester.pumpAndSettle();
     expect(find.text('Back'), findsOneWidget);
-    expect(find.text('4 / 10'), findsOneWidget);
+    expect(find.text('Note 4 of 10'), findsOneWidget);
 
     await tester.tap(find.text('Back'));
     await tester.pumpAndSettle();

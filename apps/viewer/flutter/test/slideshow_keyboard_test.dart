@@ -75,7 +75,7 @@ void main() {
       NoteRecord.fromJson(slideNote(id: 1, denomination: 'A', withImages: true)),
     ];
     await pumpSlideshow(tester, notes);
-    expect(find.text('1 / 1'), findsOneWidget);
+    expect(find.text('Note 1 of 1'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
@@ -155,7 +155,7 @@ void main() {
 
     await tester.tap(find.text('Back'));
     await tester.pumpAndSettle();
-    expect(find.text('1 / 1'), findsOneWidget);
+    expect(find.text('Note 1 of 1'), findsOneWidget);
   });
 
   testWidgets('arrow left on the first slide wraps to the last', (
@@ -166,11 +166,11 @@ void main() {
       NoteRecord.fromJson(slideNote(id: 2, denomination: 'B', withImages: true)),
     ];
     await pumpSlideshow(tester, notes);
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Note 1 of 2'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.pumpAndSettle();
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('Note 2 of 2'), findsOneWidget);
     expect(find.text('B - KB-2'), findsOneWidget);
   });
 
@@ -182,11 +182,11 @@ void main() {
       NoteRecord.fromJson(slideNote(id: 2, denomination: 'B', withImages: true)),
     ];
     await pumpSlideshow(tester, notes, initialIndex: 1);
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('Note 2 of 2'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pumpAndSettle();
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Note 1 of 2'), findsOneWidget);
     expect(find.text('A - KB-1'), findsOneWidget);
   });
 
@@ -202,7 +202,7 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
-    expect(find.text('1 / 1'), findsOneWidget);
+    expect(find.text('Note 1 of 1'), findsOneWidget);
     expect(find.text('1 / 2'), findsNothing);
   });
 
@@ -215,23 +215,23 @@ void main() {
 
   testWidgets('home jumps to the first note', (WidgetTester tester) async {
     await pumpSlideshow(tester, manyNotes(5), initialIndex: 4);
-    expect(find.text('5 / 5'), findsOneWidget);
+    expect(find.text('Note 5 of 5'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.home);
     await tester.pumpAndSettle();
 
-    expect(find.text('1 / 5'), findsOneWidget);
+    expect(find.text('Note 1 of 5'), findsOneWidget);
     expect(find.text('N1 - KB-1'), findsOneWidget);
   });
 
   testWidgets('end jumps to the last note', (WidgetTester tester) async {
     await pumpSlideshow(tester, manyNotes(5));
-    expect(find.text('1 / 5'), findsOneWidget);
+    expect(find.text('Note 1 of 5'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.end);
     await tester.pumpAndSettle();
 
-    expect(find.text('5 / 5'), findsOneWidget);
+    expect(find.text('Note 5 of 5'), findsOneWidget);
     expect(find.text('N5 - KB-5'), findsOneWidget);
   });
 
@@ -247,12 +247,12 @@ void main() {
       ),
     ];
     await pumpSlideshow(tester, notes);
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Note 1 of 2'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.end);
     await tester.pumpAndSettle();
 
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('Note 2 of 2'), findsOneWidget);
     expect(find.text('N2 - KB-2'), findsOneWidget);
   });
 
@@ -261,29 +261,29 @@ void main() {
   ) async {
     // A collection large enough that animating to the end would be obvious.
     await pumpSlideshow(tester, manyNotes(40));
-    expect(find.text('1 / 40'), findsOneWidget);
+    expect(find.text('Note 1 of 40'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.end);
     // A single frame: an animated transition would still be in flight and the
     // index pill would not have moved to the endpoint yet.
     await tester.pump();
-    expect(find.text('40 / 40'), findsOneWidget);
+    expect(find.text('Note 40 of 40'), findsOneWidget);
   });
 
   testWidgets('a wrap-around glides across the seam like a swipe', (
     WidgetTester tester,
   ) async {
     await pumpSlideshow(tester, manyNotes(3));
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('Note 1 of 3'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     // A single frame: the wrap animates across the seam, so the index pill has
     // not reached the wrapped note yet (a jump would have moved it).
     await tester.pump();
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('Note 1 of 3'), findsOneWidget);
 
     await tester.pumpAndSettle();
-    expect(find.text('3 / 3'), findsOneWidget);
+    expect(find.text('Note 3 of 3'), findsOneWidget);
     expect(find.text('N3 - KB-3'), findsOneWidget);
   });
 
@@ -291,73 +291,73 @@ void main() {
     WidgetTester tester,
   ) async {
     await pumpSlideshow(tester, manyNotes(3), initialIndex: 1);
-    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('Note 2 of 3'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     // A single frame: the animated step is still in flight, so the index pill
     // has not reached the next note yet (a jump would have moved it).
     await tester.pump();
-    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('Note 2 of 3'), findsOneWidget);
 
     await tester.pumpAndSettle();
-    expect(find.text('3 / 3'), findsOneWidget);
+    expect(find.text('Note 3 of 3'), findsOneWidget);
   });
 
   testWidgets('arrows change nothing in a single-note collection', (
     WidgetTester tester,
   ) async {
     await pumpSlideshow(tester, manyNotes(1));
-    expect(find.text('1 / 1'), findsOneWidget);
+    expect(find.text('Note 1 of 1'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pumpAndSettle();
 
-    expect(find.text('1 / 1'), findsOneWidget);
+    expect(find.text('Note 1 of 1'), findsOneWidget);
   });
 
   testWidgets('home on the first note changes nothing', (
     WidgetTester tester,
   ) async {
     await pumpSlideshow(tester, manyNotes(5));
-    expect(find.text('1 / 5'), findsOneWidget);
+    expect(find.text('Note 1 of 5'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.home);
     await tester.pumpAndSettle();
 
-    expect(find.text('1 / 5'), findsOneWidget);
+    expect(find.text('Note 1 of 5'), findsOneWidget);
   });
 
   testWidgets('end on the last note changes nothing', (
     WidgetTester tester,
   ) async {
     await pumpSlideshow(tester, manyNotes(5), initialIndex: 4);
-    expect(find.text('5 / 5'), findsOneWidget);
+    expect(find.text('Note 5 of 5'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.end);
     await tester.pumpAndSettle();
 
-    expect(find.text('5 / 5'), findsOneWidget);
+    expect(find.text('Note 5 of 5'), findsOneWidget);
   });
 
   testWidgets('home and end change nothing in a single-note collection', (
     WidgetTester tester,
   ) async {
     await pumpSlideshow(tester, manyNotes(1));
-    expect(find.text('1 / 1'), findsOneWidget);
+    expect(find.text('Note 1 of 1'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.home);
     await tester.sendKeyEvent(LogicalKeyboardKey.end);
     await tester.pumpAndSettle();
 
-    expect(find.text('1 / 1'), findsOneWidget);
+    expect(find.text('Note 1 of 1'), findsOneWidget);
   });
 
   testWidgets('end works while the Back button holds focus', (
     WidgetTester tester,
   ) async {
     await pumpSlideshow(tester, manyNotes(5));
-    expect(find.text('1 / 5'), findsOneWidget);
+    expect(find.text('Note 1 of 5'), findsOneWidget);
 
     final backFocusNode = Focus.of(tester.element(find.text('Back')));
     backFocusNode.requestFocus();
@@ -367,12 +367,12 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.end);
     await tester.pumpAndSettle();
 
-    expect(find.text('5 / 5'), findsOneWidget);
+    expect(find.text('Note 5 of 5'), findsOneWidget);
   });
 
   testWidgets('modified home and end do nothing', (WidgetTester tester) async {
     await pumpSlideshow(tester, manyNotes(5), initialIndex: 2);
-    expect(find.text('3 / 5'), findsOneWidget);
+    expect(find.text('Note 3 of 5'), findsOneWidget);
 
     for (final modifier in const [
       LogicalKeyboardKey.controlLeft,
@@ -385,7 +385,7 @@ void main() {
       await tester.sendKeyUpEvent(modifier);
       await tester.pumpAndSettle();
 
-      expect(find.text('3 / 5'), findsOneWidget);
+      expect(find.text('Note 3 of 5'), findsOneWidget);
     }
   });
 
@@ -393,16 +393,16 @@ void main() {
     WidgetTester tester,
   ) async {
     await pumpSlideshow(tester, manyNotes(3), initialIndex: 1);
-    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('Note 2 of 3'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
     await tester.pumpAndSettle();
-    expect(find.text('3 / 3'), findsOneWidget);
+    expect(find.text('Note 3 of 3'), findsOneWidget);
     expect(find.text('N3 - KB-3'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
     await tester.pumpAndSettle();
-    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('Note 2 of 3'), findsOneWidget);
     expect(find.text('N2 - KB-2'), findsOneWidget);
   });
 
@@ -410,15 +410,15 @@ void main() {
     WidgetTester tester,
   ) async {
     await pumpSlideshow(tester, manyNotes(2));
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Note 1 of 2'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
     await tester.pumpAndSettle();
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('Note 2 of 2'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
     await tester.pumpAndSettle();
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Note 1 of 2'), findsOneWidget);
   });
 
   testWidgets('j and k scroll the slide like the arrows', (
@@ -465,7 +465,7 @@ void main() {
     WidgetTester tester,
   ) async {
     await pumpSlideshow(tester, manyNotes(3), initialIndex: 1);
-    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('Note 2 of 3'), findsOneWidget);
 
     for (final modifier in const [
       LogicalKeyboardKey.controlLeft,
@@ -488,7 +488,7 @@ void main() {
         await tester.sendKeyUpEvent(modifier);
         await tester.pumpAndSettle();
 
-        expect(find.text('2 / 3'), findsOneWidget);
+        expect(find.text('Note 2 of 3'), findsOneWidget);
         expect(maxSlideScroll(tester), 0);
       }
     }

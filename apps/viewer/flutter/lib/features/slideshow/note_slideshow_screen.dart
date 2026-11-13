@@ -65,23 +65,10 @@ const double _kMinPlatePairHeight = 88;
 /// never runs out of pages.
 const int _kVirtualPageOrigin = 1 << 20;
 
-const TextStyle _kLabelStyle = TextStyle(
-  fontFamily: 'Inter',
-  color: _kTextLabel,
-  fontSize: 11,
-  fontWeight: FontWeight.w700,
-  letterSpacing: 0.9,
-);
-
-const TextStyle _kDetailLabelStyle = TextStyle(
-  fontFamily: 'Inter',
-  color: _kTextLabel,
-  fontSize: 10.5,
-  fontWeight: FontWeight.w800,
-  letterSpacing: 1.1,
-);
-
 /// DESIGN.md "Presentation room label": 600, 0.68rem, 0.12em.
+///
+/// The room's one label voice: the plate chips, the slide eyebrow and the
+/// details field labels all take it.
 const TextStyle _kPlateLabelStyle = TextStyle(
   fontFamily: 'Inter',
   color: _kTextLabel,
@@ -128,7 +115,7 @@ const TextStyle _kStripNotesStyle = TextStyle(
   height: 1.45,
 );
 
-/// The three compositions chosen by the slide's width: the pair with a details
+/// The three compositions chosen from the window width: the pair with a details
 /// rail beside it, the pair with a details strip below it, or the stacked slide.
 enum _SlideTier { rail, strip, stack }
 
@@ -510,7 +497,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                                         'Note ${_currentIndex + 1} of '
                                         '${widget.notes.length}',
                                     child: Text(
-                                      '${_currentIndex + 1} / '
+                                      'Note ${_currentIndex + 1} of '
                                       '${widget.notes.length}',
                                       style: const TextStyle(
                                         fontFamily: 'Inter',
@@ -644,10 +631,14 @@ class _NoteSlideState extends State<_NoteSlide> {
     super.dispose();
   }
 
+  /// A scroll view counts as at its bottom once its offset reaches the last
+  /// pixel; the rounded max extent can leave a sub-pixel remainder.
+  bool _atBottomOf(double pixels, double maxScrollExtent) =>
+      pixels >= maxScrollExtent - 1;
+
   void _onScroll() {
-    final atBottom =
-        _scrollController.position.pixels >=
-        _scrollController.position.maxScrollExtent - 1;
+    final position = _scrollController.position;
+    final atBottom = _atBottomOf(position.pixels, position.maxScrollExtent);
     if (atBottom != _atBottom) setState(() => _atBottom = atBottom);
   }
 
@@ -656,7 +647,7 @@ class _NoteSlideState extends State<_NoteSlide> {
   /// below the fold.
   bool _onScrollMetrics(ScrollMetricsNotification notification) {
     final metrics = notification.metrics;
-    final atBottom = metrics.pixels >= metrics.maxScrollExtent - 1;
+    final atBottom = _atBottomOf(metrics.pixels, metrics.maxScrollExtent);
     if (atBottom == _atBottom) return false;
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (mounted && atBottom != _atBottom) {
@@ -902,8 +893,9 @@ class _RenderIgnoreIntrinsicHeight extends RenderProxyBox {
   double computeMaxIntrinsicHeight(double width) => 0;
 }
 
-/// The note's eyebrow — its grading company and issue date — over its
-/// denomination.
+/// The note's eyebrow over its denomination. The stacked slide keeps the issue
+/// date as its own line under the title; the pair tiers fold it into the
+/// eyebrow, where the details rail and strip have no room for it.
 class _SlideHeader extends StatelessWidget {
   const _SlideHeader({required this.note, this.centered = false});
 
@@ -920,13 +912,13 @@ class _SlideHeader extends StatelessWidget {
     final issueDate = note.issueDate.trim();
     final eyebrow = [
       if (company.isNotEmpty) company else 'Collection note',
-      if (issueDate.isNotEmpty) issueDate,
+      if (!centered && issueDate.isNotEmpty) issueDate,
     ].join(' · ');
     return Column(
       crossAxisAlignment: crossAxisAlignment,
       children: [
-        Text(eyebrow.toUpperCase(), style: _kLabelStyle, textAlign: align),
-        const SizedBox(height: 5),
+        Text(eyebrow.toUpperCase(), style: _kPlateLabelStyle, textAlign: align),
+        const SizedBox(height: 4),
         Text(
           note.title.toUpperCase(),
           style: const TextStyle(
@@ -939,6 +931,18 @@ class _SlideHeader extends StatelessWidget {
           ),
           textAlign: align,
         ),
+        if (centered && issueDate.isNotEmpty) ...[
+          const SizedBox(height: 8),
+          Text(
+            issueDate,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              color: _kTextLabel,
+              fontSize: 14,
+            ),
+            textAlign: align,
+          ),
+        ],
       ],
     );
   }
@@ -1048,11 +1052,6 @@ class _NotePlateState extends State<_NotePlate> {
     return _activateOnEnterOrSpace(event, widget.onTap);
   }
 
-  void _activate() {
-    _focusNode.requestFocus();
-    widget.onTap();
-  }
-
   void _reveal(String path) {
     widget.revealFolder(path).then((revealed) {
       if (!revealed && mounted) {
@@ -1063,7 +1062,9 @@ class _NotePlateState extends State<_NotePlate> {
     });
   }
 
-  Widget _imageError() {
+  /// The image's error builder: shows [notice] in place of the picture and
+  /// flips the plate to its failed state on the next frame.
+  Widget _imageError(Widget notice) {
     if (!_failed) {
       // The errorBuilder runs during build; flip the plate's action state on
       // the next frame instead of rebuilding around an in-flight frame. The
@@ -1075,10 +1076,7 @@ class _NotePlateState extends State<_NotePlate> {
         }
       });
     }
-    return _PlateNotice(
-      message: 'Could not load image',
-      reserveAction: widget.image?.filePath != null,
-    );
+    return notice;
   }
 
   @override
@@ -1093,6 +1091,10 @@ class _NotePlateState extends State<_NotePlate> {
     final focused = _focusNode.hasPrimaryFocus;
     final highlighted = _loaded && (focused || _hovered);
     final filePath = _failed ? image?.filePath : null;
+    final failedNotice = _PlateNotice(
+      message: 'Could not load image',
+      reserveAction: image?.filePath != null,
+    );
 
     return Stack(
       clipBehavior: Clip.none,
@@ -1123,7 +1125,10 @@ class _NotePlateState extends State<_NotePlate> {
               onEnter: (_) => setState(() => _hovered = true),
               onExit: (_) => setState(() => _hovered = false),
               child: GestureDetector(
-                onTap: _loaded ? _activate : null,
+                // A pointer tap does not request focus: the plate keeps the
+                // keyboard focus it was given, and a plain click leaves no
+                // focus ring behind. Tab, Enter and Space still show it.
+                onTap: _loaded ? widget.onTap : null,
                 child: AspectRatio(
                   aspectRatio: _kImageStageAspectRatio,
                   child: AnimatedContainer(
@@ -1152,15 +1157,13 @@ class _NotePlateState extends State<_NotePlate> {
                           child: image == null
                               ? const _PlateNotice(message: 'No image')
                               : _failed
-                              ? _PlateNotice(
-                                  message: 'Could not load image',
-                                  reserveAction: image.filePath != null,
-                                )
+                              ? failedNotice
                               : Image(
                                   image: createNoteImageProvider(image),
                                   fit: BoxFit.contain,
                                   excludeFromSemantics: true,
-                                  errorBuilder: (_, _, _) => _imageError(),
+                                  errorBuilder: (_, _, _) =>
+                                      _imageError(failedNotice),
                                 ),
                         ),
                         Positioned(
@@ -1241,7 +1244,7 @@ class _PlateNotice extends StatelessWidget {
               size: 22,
               color: _kTextLabel,
             ),
-            const SizedBox(height: 6),
+            const SizedBox(height: 8),
             Text(
               message,
               style: _kPlateNoticeStyle,
@@ -1287,6 +1290,9 @@ class _RevealInFolderButtonState extends State<_RevealInFolderButton> {
   @override
   Widget build(BuildContext context) {
     final focused = _focusNode.hasPrimaryFocus;
+    // Hover and focus share one state: the action wears the red wash and edge
+    // so it reads as a button rather than a static chip.
+    final highlighted = _hovered || focused;
     return Semantics(
       container: true,
       button: true,
@@ -1317,9 +1323,15 @@ class _RevealInFolderButtonState extends State<_RevealInFolderButton> {
                     vertical: 5,
                   ),
                   decoration: _plateOverlayDecoration(
-                    borderColor: _hovered
+                    borderColor: highlighted
                         ? ViewerPalette.accent
                         : ViewerPalette.borderSoft,
+                    color: highlighted
+                        ? Color.alphaBlend(
+                            ViewerPalette.accentSoft,
+                            ViewerPalette.roomSurface.withValues(alpha: 0.94),
+                          )
+                        : null,
                   ),
                   child: const Text(
                     'Reveal in folder',
@@ -1334,7 +1346,7 @@ class _RevealInFolderButtonState extends State<_RevealInFolderButton> {
                 if (focused)
                   const _AccentFocusRing(
                     key: ValueKey('revealFocusRing'),
-                    radius: ViewerPalette.radiusXs,
+                    radius: ViewerPalette.radiusSm,
                   ),
               ],
             ),
@@ -1363,10 +1375,11 @@ class _PlateZoomCue extends StatelessWidget {
 /// The small white overlay a plate's chip, zoom cue and reveal action share.
 BoxDecoration _plateOverlayDecoration({
   Color borderColor = ViewerPalette.borderSoft,
+  Color? color,
 }) {
   return BoxDecoration(
-    color: ViewerPalette.roomSurface.withValues(alpha: 0.94),
-    borderRadius: BorderRadius.circular(ViewerPalette.radiusXs),
+    color: color ?? ViewerPalette.roomSurface.withValues(alpha: 0.94),
+    borderRadius: BorderRadius.circular(ViewerPalette.radiusSm),
     border: Border.all(color: borderColor),
   );
 }
@@ -1448,7 +1461,7 @@ class _DetailsRail extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Text('Details', style: _kDetailLabelStyle),
+            const Text('Details', style: _kPlateLabelStyle),
             const Spacer(),
             if (catalog.isNotEmpty)
               SelectableText(
@@ -1503,8 +1516,8 @@ class _DetailsRail extends StatelessWidget {
         : _DetailField(
             label: 'Tags',
             value: Wrap(
-              spacing: 6,
-              runSpacing: 6,
+              spacing: 8,
+              runSpacing: 4,
               children: [
                 for (final tag in note.tags)
                   _TagChip(name: tag.name, onTap: () => onTagTap(tag.name)),
@@ -1628,7 +1641,7 @@ class _DetailField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label.toUpperCase(), style: _kDetailLabelStyle),
+        Text(label.toUpperCase(), style: _kPlateLabelStyle),
         const SizedBox(height: 3),
         value,
       ],

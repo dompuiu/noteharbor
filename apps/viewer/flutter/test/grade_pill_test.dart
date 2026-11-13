@@ -15,7 +15,7 @@ void main() {
     );
   }
 
-  BoxDecoration pillDecoration(WidgetTester tester, String grade) {
+  BoxDecoration pillDecoration(WidgetTester tester) {
     final pill = tester.widget<Container>(
       find.descendant(
         of: find.byType(GradePill),
@@ -44,7 +44,7 @@ void main() {
     for (final (grade, background, foreground) in bands) {
       await pumpPill(tester, GradePill(grade: grade));
 
-      expect(pillDecoration(tester, grade).color, background, reason: grade);
+      expect(pillDecoration(tester).color, background, reason: grade);
       expect(pillText(tester, grade).color, foreground, reason: grade);
     }
   });
@@ -58,7 +58,7 @@ void main() {
     expect(style.fontSize, 13);
     expect(style.fontWeight, FontWeight.w600);
     expect(
-      pillDecoration(tester, '66').borderRadius,
+      pillDecoration(tester).borderRadius,
       BorderRadius.circular(ViewerPalette.radiusPill),
     );
   });

@@ -132,10 +132,10 @@ void main() {
     );
   }
 
-  void expectEveryFactVisible() {
+  void expectEveryFactVisible({String eyebrow = 'PMG · 2013'}) {
     // The header's eyebrow and catalog join the field rows, so a tier that
     // drops any of them fails here.
-    expect(find.text('PMG · 2013'), findsOneWidget);
+    expect(find.text(eyebrow), findsOneWidget);
     expect(find.text('P-21a'), findsOneWidget);
     expect(find.text('GRADE'), findsOneWidget);
     expect(find.text('66 EPQ'), findsOneWidget);
@@ -203,7 +203,14 @@ void main() {
     await pumpAt(tester, const Size(390, 844));
 
     expectBothFacesVisible();
-    expectEveryFactVisible();
+    // The stack keeps the company as its eyebrow and the issue date as its own
+    // line under the title, as the pre-tier slide did.
+    expectEveryFactVisible(eyebrow: 'PMG');
+    expect(find.text('2013'), findsOneWidget);
+    expect(
+      tester.getTopLeft(find.text('2013')).dy,
+      greaterThan(tester.getTopLeft(find.text('FIVE POUNDS - P-21A')).dy),
+    );
 
     // The faces stack (the back under the front) with the details after them.
     expect(

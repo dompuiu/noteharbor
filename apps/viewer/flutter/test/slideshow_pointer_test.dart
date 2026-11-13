@@ -95,14 +95,14 @@ void main() {
     WidgetTester tester,
   ) async {
     await pumpSlideshow(tester, manyNotes(3), initialIndex: 1);
-    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('Note 2 of 3'), findsOneWidget);
 
     await mouseDrag(tester, const Offset(-600, 0));
-    expect(find.text('3 / 3'), findsOneWidget);
+    expect(find.text('Note 3 of 3'), findsOneWidget);
     expect(find.text('N3 - KB-3'), findsOneWidget);
 
     await mouseDrag(tester, const Offset(600, 0));
-    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('Note 2 of 3'), findsOneWidget);
     expect(find.text('N2 - KB-2'), findsOneWidget);
   });
 
@@ -110,11 +110,11 @@ void main() {
     WidgetTester tester,
   ) async {
     await pumpSlideshow(tester, manyNotes(3));
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('Note 1 of 3'), findsOneWidget);
 
     await mouseDrag(tester, const Offset(600, 0));
 
-    expect(find.text('3 / 3'), findsOneWidget);
+    expect(find.text('Note 3 of 3'), findsOneWidget);
     expect(find.text('N3 - KB-3'), findsOneWidget);
   });
 
@@ -122,25 +122,25 @@ void main() {
     WidgetTester tester,
   ) async {
     await pumpSlideshow(tester, manyNotes(3), initialIndex: 2);
-    expect(find.text('3 / 3'), findsOneWidget);
+    expect(find.text('Note 3 of 3'), findsOneWidget);
 
     await mouseDrag(tester, const Offset(-600, 0));
 
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('Note 1 of 3'), findsOneWidget);
     expect(find.text('N1 - KB-1'), findsOneWidget);
   });
 
   testWidgets('a touch swipe wraps at both ends', (WidgetTester tester) async {
     await pumpSlideshow(tester, manyNotes(3));
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('Note 1 of 3'), findsOneWidget);
 
     await tester.drag(find.byType(Image).first, const Offset(600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('3 / 3'), findsOneWidget);
+    expect(find.text('Note 3 of 3'), findsOneWidget);
 
     await tester.drag(find.byType(Image).first, const Offset(-600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('Note 1 of 3'), findsOneWidget);
   });
 
   testWidgets('a vertical mouse drag does not scroll the note card', (
@@ -148,12 +148,12 @@ void main() {
   ) async {
     await pumpSlideshow(tester, manyNotes(1));
     expect(maxSlideScroll(tester), 0);
-    expect(find.text('1 / 1'), findsOneWidget);
+    expect(find.text('Note 1 of 1'), findsOneWidget);
 
     await mouseDrag(tester, const Offset(0, -300));
 
     expect(maxSlideScroll(tester), 0);
-    expect(find.text('1 / 1'), findsOneWidget);
+    expect(find.text('Note 1 of 1'), findsOneWidget);
   });
 
   testWidgets('a click on a slide image still opens the popover', (

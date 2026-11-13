@@ -184,7 +184,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     expect(find.text('Back'), findsOneWidget);
-    expect(find.text('2 / 5'), findsOneWidget);
+    expect(find.text('Note 2 of 5'), findsOneWidget);
 
     await tester.tap(find.text('Back'));
     await tester.pumpAndSettle();
@@ -200,7 +200,7 @@ void main() {
     await tester.tap(find.text('Cello Note'));
     await tester.pumpAndSettle();
     expect(find.text('Back'), findsOneWidget);
-    expect(find.text('3 / 5'), findsOneWidget);
+    expect(find.text('Note 3 of 5'), findsOneWidget);
 
     // A mouse-opened note returns with the row selected, matching the Editor.
     await tester.tap(find.text('Back'));
@@ -1583,7 +1583,7 @@ void main() {
       // collection.
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pumpAndSettle();
-      expect(find.text('2 / 3'), findsOneWidget);
+      expect(find.text('Note 2 of 3'), findsOneWidget);
       expect(find.text('ALPHA TWO - P-11'), findsOneWidget);
 
       // Esc returns to the same row in the same All notes scope.
@@ -1613,7 +1613,7 @@ void main() {
       await tester.sendKeyEvent(LogicalKeyboardKey.enter);
       await tester.pumpAndSettle();
       // The slideshow walks only the two visible notes, in the table's order.
-      expect(find.text('1 / 2'), findsOneWidget);
+      expect(find.text('Note 1 of 2'), findsOneWidget);
       expect(find.text('ALPHA ONE - P-12'), findsOneWidget);
 
       await tester.sendKeyEvent(LogicalKeyboardKey.escape);

@@ -192,6 +192,23 @@ void main() {
     expect(find.text('2 / 2'), findsOneWidget);
   });
 
+  testWidgets('a pointer tap opens a plate without leaving its focus ring', (
+    WidgetTester tester,
+  ) async {
+    await pumpSlideshow(tester);
+
+    await tester.tap(find.byType(Image).first);
+    await tester.pumpAndSettle();
+    expect(find.text('1 / 2'), findsOneWidget);
+
+    await tester.tap(find.text('Back'));
+    await tester.pumpAndSettle();
+
+    // The click opened the picture, not the plate's focus state, so no ring
+    // is left painted on the slide.
+    expect(find.byKey(const ValueKey('plateFocusRing')), findsNothing);
+  });
+
   testWidgets('hovering a plate turns its hairline red and shows zoom', (
     WidgetTester tester,
   ) async {
@@ -229,13 +246,13 @@ void main() {
     expect(find.byKey(const ValueKey('plateZoomCue')), findsNothing);
   });
 
-  testWidgets('the counter says Note 3 of 3 but keeps the pill short', (
+  testWidgets('the counter pill says Note 3 of 3 and announces it once', (
     WidgetTester tester,
   ) async {
     final handle = tester.ensureSemantics();
     await pumpSlideshow(tester, noteCount: 3, initialIndex: 2);
 
-    expect(find.text('3 / 3'), findsOneWidget);
+    expect(find.text('Note 3 of 3'), findsOneWidget);
     expect(find.bySemanticsLabel('Note 3 of 3'), findsOneWidget);
     final data = tester
         .getSemantics(find.bySemanticsLabel('Note 3 of 3'))
@@ -244,7 +261,7 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.home);
     await tester.pumpAndSettle();
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('Note 1 of 3'), findsOneWidget);
     expect(find.bySemanticsLabel('Note 1 of 3'), findsOneWidget);
     handle.dispose();
   });
@@ -352,11 +369,11 @@ void main() {
     addTearDown(tester.platformDispatcher.clearAccessibilityFeaturesTestValue);
 
     await pumpSlideshow(tester, noteCount: 3);
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('Note 1 of 3'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pump();
-    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('Note 2 of 3'), findsOneWidget);
   });
 
   testWidgets('a missing image says so and offers no reveal without a file', (
@@ -489,7 +506,7 @@ void main() {
     await tabTo(tester, focusNodeOf(tester, find.text('FRONT')));
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pumpAndSettle();
-    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('Note 2 of 3'), findsOneWidget);
     expect(FocusManager.instance.primaryFocus?.debugLabel, 'noteSlideshow');
 
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
