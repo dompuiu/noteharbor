@@ -1983,16 +1983,50 @@ describe("slideshow overlay styles", () => {
     expect(panel[1]).toMatch(/min-height:\s*calc\(100vh/);
   });
 
-  // The slideshow and image popover size against the viewport and freeze
-  // their content at a desktop rendering. The Note editor is the exception:
-  // it reflows below its breakpoint instead of scrolling sideways.
-  test("the slideshow panel holds the 1200px floor", () => {
+  // The slideshow is fluid: it has no floor, so a 1024px window keeps the
+  // page and both turns reachable instead of scrolling the overlay sideways.
+  test("the slideshow panel is fluid instead of holding a floor", () => {
     const panel = styles.match(
       /\.slideshow-screen--overlay \.slideshow-panel\s*\{([^}]*)\}/,
     );
     expect(panel).not.toBeNull();
-    // 1200px minus the overlay's 16px side padding.
-    expect(panel[1]).toMatch(/min-width:\s*calc\(1200px - 32px\)/);
+    expect(panel[1]).not.toMatch(/min-width:\s*calc\(1200px - 32px\)/);
+    expect(panel[1]).toMatch(/width:\s*100%/);
+    expect(panel[1]).toMatch(/max-width:\s*1400px/);
+  });
+
+  // Below the card's two-column width the entry leads and the plates follow,
+  // so the catalogue values stay readable before the images take the width.
+  test("the slide card stacks the entry above the plates when narrow", () => {
+    const narrow = styles.match(
+      /@media \(max-width: 1100px\)\s*\{([\s\S]*?)\n\}/,
+    );
+    expect(narrow).not.toBeNull();
+    expect(narrow[1]).toMatch(
+      /\.slide-card\s*\{[^}]*grid-template-columns:\s*minmax\(0,\s*1fr\)/,
+    );
+    expect(narrow[1]).toMatch(/\.slide-meta\s*\{[^}]*order:\s*-1/);
+  });
+
+  // The top bar gives way instead of widening the room: both its halves wrap.
+  test("the slideshow top bar wraps", () => {
+    const topbar = styles.match(/\.slideshow-topbar\s*\{([^}]*)\}/);
+    expect(topbar).not.toBeNull();
+    expect(topbar[1]).toMatch(/flex-wrap:\s*wrap/);
+
+    const actions = styles.match(
+      /\.slideshow-topbar-actions\s*\{([^}]*)\}/,
+    );
+    expect(actions).not.toBeNull();
+    expect(actions[1]).toMatch(/flex-wrap:\s*wrap/);
+  });
+
+  // Both turns stay reachable at a short window: the foot sticks to the room.
+  test("the neighbour turns stay pinned to the room", () => {
+    const foot = styles.match(/\.slideshow-foot\s*\{([^}]*)\}/);
+    expect(foot).not.toBeNull();
+    expect(foot[1]).toMatch(/position:\s*sticky/);
+    expect(foot[1]).toMatch(/bottom:\s*0/);
   });
 
   test("the edit-note overlay keeps its own vertical scroll", () => {

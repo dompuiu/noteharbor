@@ -572,7 +572,7 @@ describe("All notes screen", () => {
       screen
         .getByRole("textbox", { name: "Note position" })
         .closest(".note-counter-value"),
-    ).toHaveTextContent("2 / 3");
+    ).toHaveTextContent("2 of 3");
 
     await user.keyboard("{Escape}");
     expect(screen.getByTestId("pathname")).toHaveTextContent(
@@ -598,7 +598,7 @@ describe("All notes screen", () => {
       screen
         .getByRole("textbox", { name: "Note position" })
         .closest(".note-counter-value"),
-    ).toHaveTextContent("1 / 1");
+    ).toHaveTextContent("1 of 1");
 
     await user.click(screen.getByRole("button", { name: "Close slideshow" }));
     expect(screen.getByTestId("pathname")).toHaveTextContent(
@@ -719,7 +719,7 @@ describe("All notes slideshow modal", () => {
 
     await user.click(screen.getByText("1 Leu"));
 
-    const dialog = screen.getByRole("dialog", { name: "Note slideshow" });
+    const dialog = screen.getByRole("dialog", { name: "1 Leu" });
     const screenBody = document.querySelector(
       ".all-notes-screen > .screen-body",
     );

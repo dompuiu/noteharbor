@@ -6548,13 +6548,15 @@ button.tag {
   border: 0;
 }
 
-/* The slideshow panel fills the scrim, so the slideshow uses the same estate the
-   old near-full-viewport panel did. It holds the 1200px app floor (minus the
-   overlay's 16px side padding), so the slide grid never squeezes on smaller
-   windows: the overlay scrolls instead. */
+/* The slideshow panel fills the scrim but is fluid: it has no floor, so a
+   1024px window keeps the page (and both turns) reachable instead of the
+   overlay scrolling sideways. The 1400px ceiling is where a catalogue page
+   stops stretching on a wide monitor. */
 .slideshow-screen--overlay .slideshow-panel {
-  min-width: calc(1200px - 32px);
+  width: 100%;
+  max-width: 1400px;
   min-height: calc(100vh - 32px);
+  margin: 0 auto;
   background: var(--on-dark-bg);
   border-radius: var(--radius-lg);
   border: 1px solid var(--on-dark-border-strong);
@@ -6817,10 +6819,54 @@ button.tag {
 
 .slideshow-topbar {
   display: flex;
-  justify-content: flex-end;
+  justify-content: space-between;
   gap: 16px;
-  align-items: center;
+  align-items: flex-end;
+  flex-wrap: wrap;
   margin-bottom: 24px;
+}
+
+/* The set's identity leads the page: what is being walked, then the
+   collection and any active filter. */
+.slideshow-heading {
+  display: grid;
+  gap: 4px;
+  min-width: 0;
+}
+
+.slideshow-heading .eyebrow {
+  margin: 0;
+}
+
+.slideshow-set {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  min-width: 0;
+}
+
+.slideshow-collection-name {
+  margin: 0;
+  font-size: 1.15rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--on-dark-text);
+}
+
+/* The filter rides the header as a value chip, exactly as it does in the
+   table rail (including a negation's danger ground); it is not a control
+   yet, so it is text only. */
+.slideshow-filter-chip {
+  display: inline-block;
+  height: auto;
+  padding: 2px 10px;
+  font-size: 0.78rem;
+  line-height: 1.4;
+  max-width: 26ch;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .slideshow-topbar-actions {
@@ -6828,6 +6874,48 @@ button.tag {
   align-items: center;
   gap: 12px;
   flex-wrap: wrap;
+  justify-content: flex-end;
+  min-width: 0;
+}
+
+/* The position and the thin rail are one unit: the count in the counter's
+   pill, the rail underneath its width. */
+.slideshow-progress {
+  display: grid;
+  gap: 5px;
+  justify-items: center;
+}
+
+.slideshow-progress-rail {
+  display: block;
+  width: 100%;
+  min-width: 112px;
+  height: 2px;
+  border-radius: var(--radius-pill);
+  background: var(--on-dark-border);
+  overflow: hidden;
+}
+
+.slideshow-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 0.15s ease;
+}
+
+/* Close is the quiet exit: it sits behind a hairline, out of the action
+   cluster, and keeps its Esc cue. */
+.slideshow-topbar-divider {
+  width: 1px;
+  height: 24px;
+  background: var(--on-dark-border);
+}
+
+.slideshow-close {
+  background: transparent;
+  border-color: transparent;
+  color: var(--on-dark-muted);
 }
 
 .counter-pill {
@@ -6869,7 +6957,7 @@ button.tag {
 
 .slideshow-layout {
   display: grid;
-  grid-template-columns: auto minmax(0, 1280px) auto;
+  grid-template-columns: minmax(0, 1fr);
   gap: 10px;
   align-items: start;
   justify-content: center;
@@ -6927,10 +7015,18 @@ button.tag {
 }
 
 /* A plate is a control like a table row or an outline pill: the red wash and
-   hairline mark the hover, and nothing lifts off the page. */
+   hairline mark the hover, and nothing lifts off the page. A plate whose file
+   is missing keeps the geometry but is not a control to open. */
 .slide-thumb-btn:hover {
   background: var(--accent-soft);
   border-color: var(--accent);
+}
+
+.slide-thumb-btn:disabled,
+.slide-thumb-btn:disabled:hover {
+  background: var(--on-dark-plate);
+  border-color: var(--on-dark-border);
+  cursor: default;
 }
 
 /* The plates take their height from the room, not a fixed 220px cap: two
@@ -7036,6 +7132,120 @@ button.tag {
   text-transform: uppercase;
   letter-spacing: 0.12em;
   color: var(--on-dark-label);
+}
+
+/* A plate whose file is gone keeps the mat's geometry and says why, instead
+   of leaving a broken-image glyph inside it. It shares the empty state's
+   dashed wash but stands a little shorter than the no-image placeholder. */
+.slide-plate--unavailable {
+  display: grid;
+  place-items: center;
+  align-content: center;
+  gap: 4px;
+  width: 100%;
+  min-height: 180px;
+  padding: 24px;
+  border-radius: var(--radius-md);
+  border: 1px dashed var(--on-dark-border);
+  background: var(--on-dark-wash);
+  text-align: center;
+}
+
+.slide-plate-unavailable-title {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: var(--on-dark-text);
+}
+
+.slide-plate-unavailable-file {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.78rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--on-dark-muted);
+}
+
+/* The catalogue page's foot names the two neighbours and is the only way to
+   turn the page. The walk stops at the ends, so an edge turn is inert and
+   reads "Start of set" / "End of set" rather than disappearing. It stays
+   pinned to the bottom of the room while the page scrolls, so both turns are
+   reachable at a short window without hunting below the plates. */
+.slideshow-foot {
+  position: sticky;
+  bottom: 0;
+  z-index: 2;
+  display: flex;
+  align-items: stretch;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 20px;
+  padding: 16px 0 4px;
+  border-top: 1px solid var(--on-dark-border);
+  background: var(--on-dark-bg);
+}
+
+/* The turn is an ordinary button with a little more room: only the box, the
+   two-way alignment and the inert edge are its own. */
+.slideshow-turn {
+  gap: 12px;
+  min-width: 0;
+  max-width: calc(50% - 6px);
+  padding: 10px 16px;
+  justify-content: flex-start;
+  text-align: left;
+}
+
+.slideshow-turn:disabled {
+  cursor: default;
+}
+
+.slideshow-turn--next {
+  margin-left: auto;
+  justify-content: flex-end;
+  text-align: right;
+}
+
+.slideshow-turn-arrow {
+  flex: none;
+  font-size: 1.3rem;
+  line-height: 1;
+}
+
+.slideshow-turn-text {
+  display: grid;
+  gap: 1px;
+  min-width: 0;
+}
+
+.slideshow-turn-direction {
+  font-size: 0.66rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--on-dark-label);
+}
+
+.slideshow-turn-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+/* Below the card's two-column width the entry stacks above the plates, so the
+   name, values and copy stay readable before the images take the full width.
+   The top bar wraps with the same breakpoint. */
+@media (max-width: 1100px) {
+  .slide-card {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .slide-meta {
+    order: -1;
+  }
 }
 
 .placeholder-card {

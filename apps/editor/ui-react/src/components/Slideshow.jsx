@@ -1,4 +1,5 @@
 import {
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -17,8 +18,10 @@ import {
   useImagePreload,
 } from "../lib/imagePreload.js";
 import { gradeTier } from "../lib/tableColumns.js";
+import { filterFieldLabel } from "../lib/tableFilters.js";
 import { usePacedMove } from "../lib/usePacedMove.js";
 import { NoteCounter } from "./NoteCounter.jsx";
+import { useToastHost } from "./Toast.jsx";
 
 function formatScrapedLabel(label) {
   return String(label ?? "")
@@ -50,6 +53,40 @@ function getNoteDisplayLabel(note) {
 
 function getNoteTitle(note) {
   return String(note?.denomination ?? "").trim() || "Untitled note";
+}
+
+// A neighbour turn names the note the way a catalogue page does: the
+// denomination and its issue year, not the internal index or the catalog
+// number the entry column already carries.
+function getNeighbourLabel(note) {
+  const denomination = String(note?.denomination ?? "").trim();
+  const issueDate = String(note?.issue_date ?? "").trim();
+
+  if (denomination && issueDate) {
+    return `${denomination} ${issueDate}`;
+  }
+
+  return denomination || issueDate || "Untitled note";
+}
+
+// The plate's file name, without the version/preview query the plate adds.
+function fileNameFromPath(path) {
+  const withoutQuery = String(path ?? "").split("?")[0];
+  const name = withoutQuery.split("/").filter(Boolean).pop() ?? "";
+
+  try {
+    return decodeURIComponent(name) || "Image file";
+  } catch {
+    return name || "Image file";
+  }
+}
+
+// A missing value reads as the table's muted dash, so an absent field never
+// looks like a different kind of thing in the room than it does in a row.
+function NoteValue({ value }) {
+  const text = String(value ?? "").trim();
+
+  return text ? text : <span className="muted">-</span>;
 }
 
 // The scraped labels that are worth a place on the slide itself. Each group
@@ -330,15 +367,41 @@ function getPreviewItems(note, { includeMissingSides = false } = {}) {
 // two preview downloads that the next key press throws away. The loaded
 // source is stored rather than a boolean, so a new note resets the layer
 // without an effect and a late load from the previous note cannot win.
-function SlidePlate({ alt, deferFull = false, paused = false, src, thumb }) {
+//
+// A file that is gone (an archive moved between machines, a scrape whose image
+// never landed) keeps the plate's geometry and names what is missing instead
+// of leaving the browser's broken-image glyph inside a mat.
+function SlidePlate({
+  alt,
+  deferFull = false,
+  fileName,
+  failed = false,
+  onError,
+  paused = false,
+  src,
+  thumb,
+}) {
   const [loadedFullSrc, setLoadedFullSrc] = useState(null);
+  const [failedFullSrc, setFailedFullSrc] = useState(null);
   const fullSrc = src && src !== thumb ? src : null;
   const fullLoaded = Boolean(fullSrc) && loadedFullSrc === fullSrc;
+  const fullBroken = Boolean(fullSrc) && failedFullSrc === fullSrc;
   // The popover covers the room, so a full scan still in flight behind it only
   // competes with the plate the reader opened. Once loaded, keep the layer so
   // closing the preview returns to a settled plate.
   const showFull =
-    Boolean(fullSrc) && (fullLoaded || (!deferFull && !paused));
+    Boolean(fullSrc) &&
+    !fullBroken &&
+    (fullLoaded || (!deferFull && !paused));
+
+  if (failed) {
+    return (
+      <span className="slide-plate slide-plate--unavailable">
+        <span className="slide-plate-unavailable-title">Image unavailable</span>
+        <span className="slide-plate-unavailable-file">{fileName}</span>
+      </span>
+    );
+  }
 
   return (
     <span className="slide-plate">
@@ -346,6 +409,7 @@ function SlidePlate({ alt, deferFull = false, paused = false, src, thumb }) {
         alt={alt}
         className="slide-plate-thumb"
         decoding="async"
+        onError={onError}
         src={thumb}
       />
       {showFull ? (
@@ -357,6 +421,7 @@ function SlidePlate({ alt, deferFull = false, paused = false, src, thumb }) {
             decoding="async"
             fetchPriority="low"
             key={fullSrc}
+            onError={() => setFailedFullSrc(fullSrc)}
             onLoad={() => setLoadedFullSrc(fullSrc)}
             src={fullSrc}
           />
@@ -1229,8 +1294,44 @@ function ImagePopover({
   );
 }
 
+// One foot turn. The two mirror each other, so the direction alone decides the
+// arrow side, the copy and the handler; the edge case stays visible and inert.
+function SlideshowTurn({ direction, edgeCopy, note, onTurn }) {
+  const next = direction === "next";
+  const directionLabel = next ? "Next" : "Previous";
+  const name = note ? getNeighbourLabel(note) : edgeCopy;
+
+  return (
+    <button
+      aria-label={`${directionLabel} note: ${name}`}
+      className={`button slideshow-turn slideshow-turn--${direction}`}
+      disabled={!note}
+      onClick={onTurn}
+      title={`${directionLabel} note (${next ? "→" : "←"})`}
+      type="button"
+    >
+      {next ? null : (
+        <span aria-hidden="true" className="slideshow-turn-arrow">
+          &larr;
+        </span>
+      )}
+      <span className="slideshow-turn-text">
+        <span className="slideshow-turn-direction">{directionLabel}</span>
+        <span className="slideshow-turn-name">{name}</span>
+      </span>
+      {next ? (
+        <span aria-hidden="true" className="slideshow-turn-arrow">
+          &rarr;
+        </span>
+      ) : null}
+    </button>
+  );
+}
+
 function Slideshow({
+  collectionName = "Notes",
   currentIndex,
+  filterConditions = [],
   keyboardDisabled = false,
   notes,
   onAdd,
@@ -1250,6 +1351,23 @@ function Slideshow({
 }) {
   const note = notes[currentIndex];
   const screenRef = useRef(null);
+  // Plates whose image file failed to load, keyed by the versioned source, so
+  // a replaced file gets its own attempt instead of inheriting the failure.
+  const [failedPlateSources, setFailedPlateSources] = useState(
+    () => new Set(),
+  );
+  const markPlateFailed = useCallback((source) => {
+    setFailedPlateSources((current) => {
+      if (current.has(source)) {
+        return current;
+      }
+
+      const next = new Set(current);
+      next.add(source);
+      return next;
+    });
+  }, []);
+  const shellToastRef = useToastHost();
   // The thumbnail the popover was opened from, so closing it returns the
   // keyboard to that control rather than the room's section.
   const previewTriggerRef = useRef(null);
@@ -1303,25 +1421,16 @@ function Slideshow({
 
   // The next/previous slides are what a held arrow key reaches for. Preload
   // their 500px thumbnails at idle: cheap enough that a walk is instant, and
-  // the visible slide never waits behind them.
+  // the visible slide never waits behind them. The walk stops at the ends, so
+  // an edge warms only the neighbour it can actually reach.
   const neighbouringThumbs = useMemo(() => {
-    const count = notes.length;
-
-    if (count < 2) {
-      return [];
-    }
-
+    const neighbours = [
+      notes[currentIndex - 1],
+      notes[currentIndex + 1],
+    ].filter(Boolean);
     const urls = [];
-    const neighbours = new Set([
-      notes[(currentIndex + 1) % count],
-      notes[(currentIndex - 1 + count) % count],
-    ]);
 
     neighbours.forEach((entry) => {
-      if (!entry) {
-        return;
-      }
-
       getPreviewItems(entry).forEach((item) => {
         if (item.thumb) {
           urls.push(item.thumb);
@@ -1359,10 +1468,21 @@ function Slideshow({
     }
   }
 
+  // The walk stops at the ends; it never wraps to the other end of the set.
+  // The bound check runs now for the two turns and the arrow keys, while the
+  // index clamp inside the updater keeps a move queued by the pacing window
+  // from overshooting the last note. Typed jumps still go through
+  // changeSlideshowIndex and keep their modulo clamp.
   function moveSlideshow(offset) {
+    const target = currentIndex + offset;
+
+    if (target < 0 || target >= notes.length) {
+      return;
+    }
+
     requestRoomMove(() =>
-      onChangeIndex(
-        (current) => (current + offset + notes.length) % notes.length,
+      onChangeIndex((current) =>
+        Math.min(Math.max(current + offset, 0), notes.length - 1),
       ),
     );
   }
@@ -1372,7 +1492,9 @@ function Slideshow({
 
     try {
       await copyTextToClipboard(clipboardValue);
+      // A success retires any earlier copy failure before confirming.
       onCopy?.(null);
+      shellToastRef?.current?.show("Note fields copied");
     } catch {
       onCopy?.("Could not copy note details to clipboard.");
     }
@@ -1510,7 +1632,9 @@ function Slideshow({
 
       if ((event.key === "Enter" || event.key === " ") && note) {
         const openableItem = previewItems.find(
-          (item) => item.kind === "front" || item.kind === "back",
+          (item) =>
+            (item.kind === "front" || item.kind === "back") &&
+            !failedPlateSources.has(item.thumb),
         );
 
         if (openableItem) {
@@ -1527,6 +1651,7 @@ function Slideshow({
   }, [
     cancelRoomMove,
     currentIndex,
+    failedPlateSources,
     keyboardDisabled,
     note,
     notes.length,
@@ -1554,6 +1679,15 @@ function Slideshow({
   const noteAnnouncement = note
     ? `note ${currentIndex + 1} of ${notes.length}, ${denomination || "Untitled note"}`
     : "";
+  // The walk does not wrap, so an edge has no neighbour to name: the turn is
+  // inert and says the set ends there.
+  const previousNote = currentIndex > 0 ? notes[currentIndex - 1] : null;
+  const nextNote =
+    currentIndex < notes.length - 1 ? notes[currentIndex + 1] : null;
+  const progressPercent = ((currentIndex + 1) / notes.length) * 100;
+  const walkingCopy = `Collection · walking ${notes.length} ${
+    notes.length === 1 ? "note" : "notes"
+  }`;
 
   // While an editor overlay is open the slideshow is a backdrop: it keeps
   // rendering, but `inert` takes its controls out of the tab order and stops
@@ -1563,7 +1697,7 @@ function Slideshow({
   // Image popover does not) while a plate is enlarged.
   return (
     <section
-      aria-label="Note slideshow"
+      aria-label={note ? getNoteTitle(note) : "Note slideshow"}
       aria-modal={previewItem ? undefined : "true"}
       className="slideshow-screen slideshow-screen--overlay"
       inert={keyboardDisabled}
@@ -1609,74 +1743,85 @@ function Slideshow({
       )}
 
       <div className="slideshow-panel" inert={Boolean(previewItem)}>
-        <div className="slideshow-topbar">
+        <header className="slideshow-topbar">
+          <div className="slideshow-heading">
+            <p className="eyebrow">{walkingCopy}</p>
+            <div className="slideshow-set">
+              <p className="slideshow-collection-name">{collectionName}</p>
+              {filterConditions.map((condition) => {
+                const fieldLabel = filterFieldLabel(condition.field);
+                const value = `${condition.negated ? "not " : ""}${condition.value}`;
+
+                return (
+                  <span
+                    className={`table-filter-chip slideshow-filter-chip${
+                      condition.negated ? " table-filter-chip--negated" : ""
+                    }`}
+                    key={condition.id}
+                    title={`Filter ${fieldLabel} ${value}`}
+                  >
+                    {fieldLabel} {value}
+                  </span>
+                );
+              })}
+            </div>
+          </div>
           <div className="slideshow-topbar-actions">
-            <NoteCounter
-              jumpLabel="Note position"
-              onJump={(position) => {
-                cancelRoomMove();
-                onJump?.(position);
-              }}
-              position={currentIndex + 1}
-              showArrows={false}
-              total={notes.length}
-              variant="dark"
-            />
+            <div className="slideshow-progress">
+              <NoteCounter
+                jumpLabel="Note position"
+                onJump={(position) => {
+                  cancelRoomMove();
+                  onJump?.(position);
+                }}
+                position={currentIndex + 1}
+                separator=" of "
+                showArrows={false}
+                total={notes.length}
+                variant="dark"
+              />
+              <span aria-hidden="true" className="slideshow-progress-rail">
+                <span
+                  className="slideshow-progress-fill"
+                  style={{ width: `${progressPercent}%` }}
+                />
+              </span>
+            </div>
             <button
-              aria-label="Copy note details"
-              className="icon-link"
+              aria-label="Copy fields"
+              className="button"
               onClick={handleCopyNoteDetails}
-              title="Copy note details"
+              title="Copy fields"
               type="button"
             >
-              <svg aria-hidden="true" height="16" viewBox="0 0 24 24" width="16">
-                <rect
-                  fill="none"
-                  height="10"
-                  rx="2"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  width="10"
-                  x="9"
-                  y="9"
-                />
-                <rect
-                  fill="none"
-                  height="10"
-                  rx="2"
-                  stroke="currentColor"
-                  strokeWidth="2"
-                  width="10"
-                  x="5"
-                  y="5"
-                />
-              </svg>
+              Copy fields
             </button>
             {readOnly ? null : (
               <>
                 <button
-                  aria-label="Add note"
-                  className="icon-link"
+                  aria-label="Add before this note"
+                  className="button"
                   onClick={() => onAdd?.(note.id)}
                   title="Add note before this one (a)"
                   type="button"
                 >
-                  Add note
+                  Add before
                 </button>
                 <button
                   aria-label="Edit note"
-                  className="icon-link"
+                  className="button button-primary"
                   onClick={() => onEdit?.(note.id)}
                   title="Edit note (e)"
                   type="button"
                 >
-                  Edit note
+                  Edit
                 </button>
               </>
             )}
+            <span aria-hidden="true" className="slideshow-topbar-divider" />
             <button
               aria-label="Close slideshow"
-              className="icon-link"
+              className="button slideshow-close"
               data-shortcut="Esc"
               onClick={onClose}
               title="Close slideshow"
@@ -1685,53 +1830,62 @@ function Slideshow({
               Close
             </button>
           </div>
-        </div>
-  
+        </header>
+
         <div className="slideshow-layout">
-          <button
-            aria-label="Previous note"
-            className="arrow-button"
-            onClick={() => moveSlideshow(-1)}
-            title="Previous note (←)"
-            type="button"
-          >
-            <span aria-hidden="true">&larr;</span>
-          </button>
-  
           <div className="slide-card">
             <div className="slide-images">
               {hasSlideImages ? (
-                previewItems.map((item) => (
-                  <button
-                    key={item.kind}
-                    aria-label={`Enlarge ${item.label.toLowerCase()} image`}
-                    className="slide-thumb-btn"
-                    onClick={(event) => {
-                      previewTriggerRef.current = event.currentTarget;
-                      cancelRoomMove();
-                      onOpenPreview?.(note.id, item.kind);
-                    }}
-                    onFocus={() => preloadPreviewItem(item)}
-                    onMouseEnter={() => preloadPreviewItem(item)}
-                    title="Click to enlarge"
-                    type="button"
-                  >
-                    {item.thumb ? (
-                      <SlidePlate
-                        alt={item.alt}
-                        deferFull={walking}
-                        paused={Boolean(previewItem)}
-                        src={item.slide}
-                        thumb={item.thumb}
-                      />
-                    ) : (
-                      <div className="slide-thumb-placeholder">
-                        No scraped image yet
-                      </div>
-                    )}
-                    <span className="slide-thumb-label">{item.label}</span>
-                  </button>
-                ))
+                previewItems.map((item) => {
+                  const plateFailed = failedPlateSources.has(item.thumb);
+                  const plateFileName = plateFailed
+                    ? fileNameFromPath(item.thumb)
+                    : null;
+
+                  return (
+                    <button
+                      key={item.kind}
+                      aria-label={
+                        plateFailed
+                          ? `${item.label} image unavailable: ${plateFileName}`
+                          : `Enlarge ${item.label.toLowerCase()} image`
+                      }
+                      className="slide-thumb-btn"
+                      disabled={plateFailed}
+                      onClick={(event) => {
+                        previewTriggerRef.current = event.currentTarget;
+                        cancelRoomMove();
+                        onOpenPreview?.(note.id, item.kind);
+                      }}
+                      onFocus={() => preloadPreviewItem(item)}
+                      onMouseEnter={() => preloadPreviewItem(item)}
+                      title={
+                        plateFailed
+                          ? "Image unavailable"
+                          : "Click to enlarge"
+                      }
+                      type="button"
+                    >
+                      {item.thumb ? (
+                        <SlidePlate
+                          alt={item.alt}
+                          deferFull={walking}
+                          failed={plateFailed}
+                          fileName={plateFileName ?? undefined}
+                          onError={() => markPlateFailed(item.thumb)}
+                          paused={Boolean(previewItem)}
+                          src={item.slide}
+                          thumb={item.thumb}
+                        />
+                      ) : (
+                        <div className="slide-thumb-placeholder">
+                          No scraped image yet
+                        </div>
+                      )}
+                      <span className="slide-thumb-label">{item.label}</span>
+                    </button>
+                  );
+                })
               ) : (
                 <div className="slide-empty-state">
                   <p className="eyebrow">No images</p>
@@ -1743,18 +1897,21 @@ function Slideshow({
                 </div>
               )}
             </div>
-  
+
             <div className="slide-meta">
               <div>
-                <p className="eyebrow">
-                  {note.grading_company || "Collection note"}
-                </p>
+                {note.grading_company ? (
+                  <p className="eyebrow">{note.grading_company}</p>
+                ) : null}
                 <h1>{getNoteTitle(note)}</h1>
-                <p className="slide-issue">{note.issue_date}</p>
+                <p className="slide-issue">
+                  <NoteValue value={note.issue_date} />
+                </p>
               </div>
               <div className="detail-grid">
                 <p>
-                  <strong>Catalog:</strong> {note.catalog_number || "-"}
+                  <strong>Catalog:</strong>{" "}
+                  <NoteValue value={note.catalog_number} />
                 </p>
                 <p>
                   <strong>Grade:</strong>{" "}
@@ -1765,14 +1922,15 @@ function Slideshow({
                       {note.grade}
                     </span>
                   ) : (
-                    "-"
+                    <span className="muted">-</span>
                   )}
                 </p>
                 <p>
-                  <strong>Serial:</strong> {note.serial || "-"}
+                  <strong>Serial:</strong> <NoteValue value={note.serial} />
                 </p>
                 <p>
-                  <strong>Watermark:</strong> {note.watermark || "-"}
+                  <strong>Watermark:</strong>{" "}
+                  <NoteValue value={note.watermark} />
                 </p>
               </div>
               {scrapedDetailEntries.length ? (
@@ -1836,7 +1994,9 @@ function Slideshow({
                   ) : null}
                 </div>
               ) : null}
-              <p className="slide-notes">{note.notes || "No extra notes."}</p>
+              {String(note.notes ?? "").trim() ? (
+                <p className="slide-notes">{note.notes}</p>
+              ) : null}
               <div className="tag-list">
                 {note.tags.map((tag) => (
                   <span className="tag" key={tag.id || tag.name}>
@@ -1846,17 +2006,22 @@ function Slideshow({
               </div>
             </div>
           </div>
-  
-          <button
-            aria-label="Next note"
-            className="arrow-button"
-            onClick={() => moveSlideshow(1)}
-            title="Next note (→)"
-            type="button"
-          >
-            <span aria-hidden="true">&rarr;</span>
-          </button>
         </div>
+
+        <footer className="slideshow-foot">
+          <SlideshowTurn
+            direction="previous"
+            edgeCopy="Start of set"
+            note={previousNote}
+            onTurn={() => moveSlideshow(-1)}
+          />
+          <SlideshowTurn
+            direction="next"
+            edgeCopy="End of set"
+            note={nextNote}
+            onTurn={() => moveSlideshow(1)}
+          />
+        </footer>
       </div>
     </section>
   );

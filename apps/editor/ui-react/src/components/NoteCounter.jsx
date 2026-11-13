@@ -26,6 +26,7 @@ function NoteCounter({
   onPrevious,
   position = null,
   previousLabel = "Edit previous note",
+  separator = " / ",
   showArrows = true,
   total = 0,
   variant = "light",
@@ -161,7 +162,7 @@ function NoteCounter({
             currentPosition
           )}
         </span>
-        {` / ${total}`}
+        {`${separator}${total}`}
       </span>
       {showArrowControls ? (
         <button
