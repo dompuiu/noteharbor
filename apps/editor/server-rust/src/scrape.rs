@@ -27,6 +27,7 @@ use crate::routes::bad_request;
 
 pub const DEFAULT_BROWSER_CDP_URL: &str = "http://localhost:9222";
 pub const DEFAULT_WAIT_SECONDS: f64 = 2.0;
+/// Keep in sync with SCRAPE_NAVIGATION_TIMEOUT_MS in ui-react/src/components/NoteEditForm.jsx.
 pub const DEFAULT_NAVIGATION_TIMEOUT_MS: u64 = 30_000;
 pub const MIN_NAVIGATION_TIMEOUT_MS: u64 = 5_000;
 pub const MAX_NAVIGATION_TIMEOUT_MS: u64 = 120_000;
@@ -1361,8 +1362,8 @@ mod tests {
     fn navigation_timeout_clamps_to_allowed_range() {
         assert_eq!(normalize_navigation_timeout_ms(Some(&json!(1000))), 5_000);
         assert_eq!(
-            normalize_navigation_timeout_ms(Some(&json!(60_000))),
-            60_000
+            normalize_navigation_timeout_ms(Some(&json!(90_000))),
+            90_000
         );
         assert_eq!(
             normalize_navigation_timeout_ms(Some(&json!(999_999))),

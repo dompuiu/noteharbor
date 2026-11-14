@@ -1,7 +1,7 @@
 import { MemoryRouter } from "react-router-dom";
-import { act, render, screen, waitFor, within } from "@testing-library/react";
+import { act, fireEvent, render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
-import { beforeEach, describe, expect, test, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, test, vi } from "vitest";
 
 vi.mock("../lib/api.js", () => ({
   createNote: vi.fn(),
@@ -97,6 +97,10 @@ beforeEach(() => {
   scrapePreview.mockReset().mockResolvedValue({ scraped_data: {}, images: [] });
 });
 
+afterEach(() => {
+  vi.useRealTimers();
+});
+
 describe("Note editor Autopopulate browser handling", () => {
   test("uses an already-available browser without launching Chrome", async () => {
     const user = userEvent.setup();
@@ -108,7 +112,7 @@ describe("Note editor Autopopulate browser handling", () => {
     await waitFor(() => expect(scrapePreview).toHaveBeenCalledTimes(1));
     expect(scrapePreview).toHaveBeenCalledWith(
       NOTE_URL,
-      expect.objectContaining({ timeoutMs: expect.any(Number) }),
+      expect.objectContaining({ timeoutMs: 30000 }),
     );
     expect(bridge.openScrapeBrowser).not.toHaveBeenCalled();
   });
@@ -123,6 +127,29 @@ describe("Note editor Autopopulate browser handling", () => {
 
     await waitFor(() => expect(bridge.openScrapeBrowser).toHaveBeenCalledTimes(1));
     await waitFor(() => expect(scrapePreview).toHaveBeenCalledTimes(1));
+  });
+
+  test("keeps waiting for Chrome past the old 10-second gate", async () => {
+    const button = await renderForm();
+    await waitFor(() => expect(bridge.getScrapeBrowserStatus).toHaveBeenCalled());
+
+    vi.useFakeTimers();
+    const startedAt = Date.now();
+    bridge.getScrapeBrowserStatus.mockImplementation(async () =>
+      Date.now() - startedAt >= 15000 ? availableStatus : unavailableStatus,
+    );
+    bridge.openScrapeBrowser.mockResolvedValue(unavailableStatus);
+
+    await act(async () => {
+      fireEvent.click(button);
+    });
+
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(16000);
+    });
+
+    expect(bridge.openScrapeBrowser).toHaveBeenCalledTimes(1);
+    expect(scrapePreview).toHaveBeenCalledTimes(1);
   });
 
   test("does not scrape when Chrome fails to launch", async () => {

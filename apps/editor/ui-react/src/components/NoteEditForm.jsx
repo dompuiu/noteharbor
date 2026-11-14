@@ -33,7 +33,8 @@ import { TagsField } from "./TagsField.jsx";
 import { Toast } from "./Toast.jsx";
 
 const SCRAPE_BROWSER_POLL_INTERVAL_MS = 500;
-const SCRAPE_BROWSER_POLL_TIMEOUT_MS = 10000;
+const SCRAPE_BROWSER_READY_TIMEOUT_MS = 30000;
+// Keep in sync with DEFAULT_NAVIGATION_TIMEOUT_MS in server-rust/src/scrape.rs.
 const SCRAPE_NAVIGATION_TIMEOUT_MS = 30000;
 const SCRAPE_FIELD_LABELS = {
   denomination: "Denomination",
@@ -483,7 +484,7 @@ function NoteEditForm({
       return true;
     }
 
-    if (Date.now() - startedAt >= SCRAPE_BROWSER_POLL_TIMEOUT_MS) {
+    if (Date.now() - startedAt >= SCRAPE_BROWSER_READY_TIMEOUT_MS) {
       return false;
     }
 
