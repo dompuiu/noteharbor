@@ -9,9 +9,11 @@ import 'package:flutter/services.dart';
 import '../../app/viewer_palette.dart';
 import '../../models/note_image.dart';
 import '../../models/note_record.dart';
+import '../../utils/reveal_in_folder.dart';
 import '../../widgets/mouse_drag_scroll_behavior.dart';
 import '../../widgets/note_image_provider.dart';
 import 'image_zoom_levels.dart';
+import 'slideshow_controls.dart';
 import 'slideshow_room_style.dart';
 
 /// The virtual page the first image is pinned to. The popover pages an
@@ -28,6 +30,15 @@ const String _kNoImageLabel = 'No image';
 /// the live region.
 const String _kMissingFileNotice =
     'This image file is missing from the current collection.';
+
+/// The quiet decoding state. A large scan takes a moment to decode; the mat
+/// says so in the same muted voice as the empty state, with no spinner.
+const String _kLoadingTitle = 'Loading image';
+const String _kLoadingDetail = 'The scan is still decoding.';
+
+/// The empty mat when there is no page at all: a defensive state the sequence
+/// should never reach, but the popover must still close cleanly if it does.
+const String _kNoImagesDetail = 'There are no images to show.';
 
 /// The page's hint at fit. Zoom is a gesture; the page's semantic tap performs
 /// the same toggle for a reader who cannot double-click the note image.
@@ -91,11 +102,16 @@ class ImageLightbox extends StatefulWidget {
   const ImageLightbox({
     required this.items,
     required this.initialIndex,
+    this.revealFolder = revealInFolder,
     super.key,
   });
 
   final List<ImageSequenceItem> items;
   final int initialIndex;
+
+  /// Opens a failed image's file in the OS file manager. Tests replace this so
+  /// the suite never opens a real window; the slideshow passes its own.
+  final RevealFolder revealFolder;
 
   @override
   State<ImageLightbox> createState() => _ImageLightboxState();
@@ -114,12 +130,16 @@ class _ImageLightboxState extends State<ImageLightbox> {
       ? 0
       : (_virtualIndex - _kVirtualPageOrigin) % widget.items.length;
 
+  /// Whether the window is large enough for the room's inset and border.
+  bool get _roomed => roomedFor(MediaQuery.sizeOf(context));
+
   void _closeWithCurrentNote() {
     if (!mounted) {
       return;
     }
 
-    Navigator.of(context).pop(widget.items[_currentIndex].note.id);
+    Navigator.of(context)
+        .pop(widget.items.isEmpty ? null : widget.items[_currentIndex].note.id);
   }
 
   @override
@@ -221,7 +241,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
   /// the state of the image when there is none to describe. The page owns these
   /// words; the header's copy is excluded from semantics so nothing is read
   /// twice.
-  String _pageLabel(int index, {String? state}) {
+  String _pageLabel(int index) {
     final item = widget.items[index];
     final date = item.note.issueDate.trim();
     return <String>[
@@ -230,7 +250,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
       item.faceLabel,
       _imagePositionLabel(index + 1, widget.items.length),
       ?item.notePositionLabel,
-      ?state,
+      if (item.image == null) _kNoImageLabel,
     ].join(', ');
   }
 
@@ -278,12 +298,6 @@ class _ImageLightboxState extends State<ImageLightbox> {
 
   @override
   Widget build(BuildContext context) {
-    final item = widget.items[_currentIndex];
-    final faces = _currentNoteFaces;
-    final roomed = roomedFor(MediaQuery.sizeOf(context));
-    final roomInset = roomed ? kRoomInset : 0.0;
-    final roomRadius = roomed ? ViewerPalette.radiusMd : 0.0;
-
     return Shortcuts(
       shortcuts: _kImageLightboxShortcuts,
       child: Actions(
@@ -364,202 +378,302 @@ class _ImageLightboxState extends State<ImageLightbox> {
 
               _closeWithCurrentNote();
             },
-            child: Scaffold(
-              backgroundColor: ViewerPalette.roomScrim,
-              body: Padding(
-                padding: EdgeInsets.all(roomInset),
-                child: DecoratedBox(
-                  key: const ValueKey('imageRoom'),
-                  decoration: BoxDecoration(
-                    color: ViewerPalette.roomBackground,
-                    borderRadius: BorderRadius.circular(roomRadius),
-                    border: roomed
-                        ? Border.all(color: ViewerPalette.roomBorderControl)
-                        : null,
-                    boxShadow: roomed ? ViewerPalette.shadowRoom : const [],
-                  ),
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(roomRadius),
-                    child: SafeArea(
-                      minimum: const EdgeInsets.only(bottom: 12),
-                      child: Column(
-                        children: [
-                          _ImagePopoverHeader(
-                            item: item,
-                            counterPosition: _currentIndex + 1,
-                            counterTotal: widget.items.length,
-                            canShowFront: faces.front >= 0,
-                            canShowBack: faces.back >= 0,
-                            onSelectFace: _selectFace,
-                            zoomController: _zoomController,
-                            onBack: _closeWithCurrentNote,
-                          ),
-                          Expanded(
-                            // The stage is the live region: it has real
-                            // geometry, so the semantics tree keeps it, and its
-                            // label changes with the page. Only what moved is
-                            // announced; the page's own label owns the note's
-                            // title and date. Zoom keeps its own readout so a
-                            // pinch never re-announces the page.
-                            child: ValueListenableBuilder<_ImageZoomState>(
-                              valueListenable: _zoomController.state,
-                              builder: (context, zoom, child) => Semantics(
-                                container: true,
-                                liveRegion: true,
-                                label: _pageAnnouncement(zoom),
-                                child: child,
-                              ),
-                              child: ScrollConfiguration(
-                                // A mouse drag pages the sequence at fit scale;
-                                // while zoomed the physics below are disabled so
-                                // the drag pans the image instead.
-                                behavior: const MouseDragScrollBehavior(),
-                                child: PageView.builder(
-                                  controller: _controller,
-                                  physics: _pageScrollEnabled
-                                      ? const PageScrollPhysics()
-                                      : const NeverScrollableScrollPhysics(),
-                                  itemCount: widget.items.isEmpty ? 0 : null,
-                                  onPageChanged: (value) => setState(() {
-                                    _virtualIndex = value;
-                                    _pageGeneration += 1;
-                                    _pageScrollEnabled = true;
-                                  }),
-                                  itemBuilder: (context, index) {
-                                    final itemIndex =
-                                        (index - _kVirtualPageOrigin) %
-                                        widget.items.length;
-                                    final imageItem = widget.items[itemIndex];
-                                    // The page's one label. An imaged page adds
-                                    // its load state from inside the page, where
-                                    // the failure is known.
-                                    final pageLabel = _pageLabel(
-                                      itemIndex,
-                                      state: imageItem.image == null
-                                          ? _kNoImageLabel
-                                          : null,
-                                    );
-                                    // The room's mat is the page; outside it,
-                                    // an imaged page hugs its artifact and paints
-                                    // its own plate on the canvas-soft stage, so
-                                    // a portrait window never shows a thumbnail
-                                    // in a metre of white.
-                                    final hugArtifact =
-                                        !roomed && imageItem.image != null;
-                                    final content = imageItem.image == null
-                                        ? const Center(
-                                            child: Text(
-                                              _kNoImageLabel,
-                                              style: TextStyle(
-                                                fontFamily: 'Inter',
-                                                color: ViewerPalette.roomMuted,
-                                                fontSize: 16,
-                                              ),
-                                            ),
-                                          )
-                                        : _ZoomableImagePage(
-                                            key: ValueKey(
-                                              '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
-                                            ),
-                                            image: imageItem.image!,
-                                            identity: _pageIdentity(imageItem),
-                                            semanticLabel: pageLabel,
-                                            faceLabel: imageItem.faceLabel,
-                                            hugArtifact: hugArtifact,
-                                            controller: _zoomController,
-                                            onPageScrollEnabledChanged:
-                                                _setPageScrollEnabled,
-                                          );
-
-                                    final page = Padding(
-                                      padding: const EdgeInsets.fromLTRB(
-                                        12,
-                                        4,
-                                        12,
-                                        0,
-                                      ),
-                                      child: MouseRegion(
-                                        cursor: imageItem.image == null
-                                            ? MouseCursor.defer
-                                            : SystemMouseCursors.zoomIn,
-                                        child: hugArtifact
-                                            ? content
-                                            : Container(
-                                                key: const ValueKey('imageMat'),
-                                                decoration: BoxDecoration(
-                                                  color:
-                                                      ViewerPalette.roomSurface,
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                        ViewerPalette.radiusMd,
-                                                      ),
-                                                  border: Border.all(
-                                                    color: ViewerPalette
-                                                        .roomBorder,
-                                                  ),
-                                                ),
-                                                clipBehavior: Clip.antiAlias,
-                                                child: Stack(
-                                                  children: [
-                                                    Positioned.fill(
-                                                      child: Padding(
-                                                        padding:
-                                                            const EdgeInsets.all(
-                                                              16,
-                                                            ),
-                                                        child: content,
-                                                      ),
-                                                    ),
-                                                    // The face sits on the mat
-                                                    // exactly as the slideshow's
-                                                    // plate chip does, so the image
-                                                    // never loses its name. It is
-                                                    // paint only: the page label
-                                                    // already names the face.
-                                                    Positioned(
-                                                      left: 8,
-                                                      top: 8,
-                                                      child: _FaceChip(
-                                                        face:
-                                                            imageItem.faceLabel,
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                      ),
-                                    );
-
-                                    if (imageItem.image != null) {
-                                      return page;
-                                    }
-
-                                    // A page with no image has no page widget to
-                                    // name it, so the mat names itself. It is not
-                                    // an image: there is no note image to show.
-                                    return Semantics(
-                                      container: true,
-                                      label: pageLabel,
-                                      excludeSemantics: true,
-                                      child: page,
-                                    );
-                                  },
-                                ),
-                              ),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
-                ),
-              ),
+            child: _roomShell(
+              child: widget.items.isEmpty ? _buildEmpty() : _buildPopover(),
             ),
           ),
         ),
       ),
     );
   }
+
+  /// The room's chrome, shared by the sequence and the empty case so both wear
+  /// the same inset, border and radius on a room-sized window.
+  Widget _roomShell({required Widget child}) {
+    final roomed = _roomed;
+    final roomInset = roomed ? kRoomInset : 0.0;
+    final roomRadius = roomed ? ViewerPalette.radiusMd : 0.0;
+    return Scaffold(
+      backgroundColor: ViewerPalette.roomScrim,
+      body: Padding(
+        padding: EdgeInsets.all(roomInset),
+        child: DecoratedBox(
+          key: const ValueKey('imageRoom'),
+          decoration: BoxDecoration(
+            color: ViewerPalette.roomBackground,
+            borderRadius: BorderRadius.circular(roomRadius),
+            border: roomed
+                ? Border.all(color: ViewerPalette.roomBorderControl)
+                : null,
+            boxShadow: roomed ? ViewerPalette.shadowRoom : const [],
+          ),
+          child: ClipRRect(
+            borderRadius: BorderRadius.circular(roomRadius),
+            child: SafeArea(
+              minimum: const EdgeInsets.only(bottom: 12),
+              child: child,
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// With no page at all, the popover still opens on one empty state and the
+  /// exit, never an empty pager. The sequence arrives filtered, so this is the
+  /// guard for a caller that hands over nothing.
+  Widget _buildEmpty() {
+    return Column(
+      children: [
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+          child: Row(
+            children: [
+              const Spacer(),
+              _backToNoteButton(_closeWithCurrentNote),
+            ],
+          ),
+        ),
+        Expanded(
+          child: Semantics(
+            container: true,
+            label: '$_kNoImageLabel, $_kNoImagesDetail',
+            child: const _MatNotice.noImage(detail: _kNoImagesDetail),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildPopover() {
+    final item = widget.items[_currentIndex];
+    final faces = _currentNoteFaces;
+    final roomed = _roomed;
+
+    return Column(
+      children: [
+        _ImagePopoverHeader(
+          item: item,
+          counterPosition: _currentIndex + 1,
+          counterTotal: widget.items.length,
+          canShowFront: faces.front >= 0,
+          canShowBack: faces.back >= 0,
+          onSelectFace: _selectFace,
+          zoomController: _zoomController,
+          onBack: _closeWithCurrentNote,
+        ),
+        Expanded(
+          // The stage is the live region: it has real geometry, so the
+          // semantics tree keeps it, and its label changes with the page. Only
+          // what moved is announced; the page's own label owns the note's title
+          // and date. Zoom keeps its own readout so a pinch never re-announces
+          // the page.
+          child: ValueListenableBuilder<_ImageZoomState>(
+            valueListenable: _zoomController.state,
+            builder: (context, zoom, child) => Semantics(
+              container: true,
+              liveRegion: true,
+              label: _pageAnnouncement(zoom),
+              child: child,
+            ),
+            child: ScrollConfiguration(
+              // A mouse drag pages the sequence at fit scale; while zoomed the
+              // physics below are disabled so the drag pans the image instead.
+              behavior: const MouseDragScrollBehavior(),
+              child: PageView.builder(
+                controller: _controller,
+                physics: _pageScrollEnabled
+                    ? const PageScrollPhysics()
+                    : const NeverScrollableScrollPhysics(),
+                itemCount: null,
+                onPageChanged: (value) => setState(() {
+                  _virtualIndex = value;
+                  _pageGeneration += 1;
+                  _pageScrollEnabled = true;
+                }),
+                itemBuilder: (context, index) {
+                  final itemIndex =
+                      (index - _kVirtualPageOrigin) % widget.items.length;
+                  final imageItem = widget.items[itemIndex];
+                  // The page's one label. An imaged page adds its load state
+                  // from inside the page, where the failure is known.
+                  final pageLabel = _pageLabel(itemIndex);
+                  // The room's mat is the page; outside it, an imaged page hugs
+                  // its artifact and paints its own plate on the canvas-soft
+                  // stage, so a portrait window never shows a thumbnail in a
+                  // metre of white.
+                  final hugArtifact = !roomed && imageItem.image != null;
+                  // The slideshow filters out notes with no image, so this page
+                  // only arrives from a caller that builds items by hand; it
+                  // still names the absence rather than failing on a null.
+                  final content = imageItem.image == null
+                      ? _MatNotice.noImage(
+                          detail:
+                              'This note has no ${imageItem.faceLabel.toLowerCase()} image.',
+                        )
+                      : _ZoomableImagePage(
+                          key: ValueKey(
+                            '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
+                          ),
+                          image: imageItem.image!,
+                          identity: _pageIdentity(imageItem),
+                          semanticLabel: pageLabel,
+                          faceLabel: imageItem.faceLabel,
+                          hugArtifact: hugArtifact,
+                          revealFolder: widget.revealFolder,
+                          controller: _zoomController,
+                          onPageScrollEnabledChanged: _setPageScrollEnabled,
+                        );
+
+                  final page = Padding(
+                    padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
+                    child: MouseRegion(
+                      cursor: imageItem.image == null
+                          ? MouseCursor.defer
+                          : SystemMouseCursors.zoomIn,
+                      child: hugArtifact
+                          ? content
+                          : Container(
+                              key: const ValueKey('imageMat'),
+                              decoration: BoxDecoration(
+                                color: ViewerPalette.roomSurface,
+                                borderRadius: BorderRadius.circular(
+                                  ViewerPalette.radiusMd,
+                                ),
+                                border: Border.all(
+                                  color: ViewerPalette.roomBorder,
+                                ),
+                              ),
+                              clipBehavior: Clip.antiAlias,
+                              child: Stack(
+                                children: [
+                                  Positioned.fill(
+                                    child: Padding(
+                                      padding: const EdgeInsets.all(16),
+                                      child: content,
+                                    ),
+                                  ),
+                                  // The face sits on the mat exactly as the
+                                  // slideshow's plate chip does, so the image
+                                  // never loses its name. It is paint only: the
+                                  // page label already names the face.
+                                  Positioned(
+                                    left: 8,
+                                    top: 8,
+                                    child: _FaceChip(face: imageItem.faceLabel),
+                                  ),
+                                ],
+                              ),
+                            ),
+                    ),
+                  );
+
+                  if (imageItem.image != null) {
+                    return page;
+                  }
+
+                  // A page with no image has no page widget to name it, so the
+                  // mat names itself. It is not an image: there is no note image
+                  // to show.
+                  return Semantics(
+                    container: true,
+                    label: pageLabel,
+                    excludeSemantics: true,
+                    child: page,
+                  );
+                },
+              ),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
+/// The mat's one quiet state: a muted title, one detail line and, when the
+/// note's scan has a file path, the Reveal in folder action. The same widget
+/// carries the empty record, the decode failure and the empty sequence, so two
+/// absences never read as two different things. Its words are paint only; the
+/// page label, the stage's live region or the caller's [Semantics] owns them.
+class _MatNotice extends StatelessWidget {
+  const _MatNotice({required this.title, required this.detail})
+    : icon = null,
+      action = null;
+
+  /// The popover's one absence: no image record, a failed decode or an empty
+  /// sequence, all wearing the same mat icon and title.
+  const _MatNotice.noImage({required this.detail, this.action})
+    : title = _kNoImageLabel,
+      icon = Icons.image_not_supported_outlined;
+
+  final String title;
+  final String detail;
+  final IconData? icon;
+  final Widget? action;
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      // A plate may be shorter than the notice at its smallest; scaling it
+      // down keeps the icon, words and action together without overflow.
+      child: FittedBox(
+        fit: BoxFit.scaleDown,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 320),
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ExcludeSemantics(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      if (icon != null) ...[
+                        Icon(icon, size: 22, color: ViewerPalette.roomMuted),
+                        const SizedBox(height: 8),
+                      ],
+                      Text(
+                        title,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: ViewerPalette.roomMuted,
+                          fontSize: 15,
+                          fontWeight: FontWeight.w600,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        detail,
+                        style: const TextStyle(
+                          fontFamily: 'Inter',
+                          color: ViewerPalette.roomMuted,
+                          fontSize: 13,
+                        ),
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
+                  ),
+                ),
+                if (action != null) ...[const SizedBox(height: 14), action!],
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The popover's one exit. The header and the empty sequence wear the same
+/// control so the way out never moves or changes size.
+Widget _backToNoteButton(VoidCallback onBack) {
+  return ConstrainedBox(
+    constraints: const BoxConstraints(minHeight: kRoomControlHeight),
+    child: OutlinedButton(onPressed: onBack, child: const Text('Back to note')),
+  );
 }
 
 /// The face on the mat, exactly as the slideshow's plate chip does, so the
@@ -643,13 +757,7 @@ class _ImagePopoverHeader extends StatelessWidget {
         valueListenable: zoomController.state,
         builder: (context, state, child) => _zoomInstrument(state),
       ),
-      ConstrainedBox(
-        constraints: const BoxConstraints(minHeight: kRoomControlHeight),
-        child: OutlinedButton(
-          onPressed: onBack,
-          child: const Text('Back to note'),
-        ),
-      ),
+      _backToNoteButton(onBack),
     ];
     final title = _titleBlock();
 
@@ -1275,6 +1383,7 @@ class _ZoomableImagePage extends StatefulWidget {
     required this.semanticLabel,
     required this.faceLabel,
     required this.hugArtifact,
+    required this.revealFolder,
     required this.controller,
     required this.onPageScrollEnabledChanged,
     super.key,
@@ -1299,6 +1408,9 @@ class _ZoomableImagePage extends StatefulWidget {
   /// portrait fit) instead of filling the room's mat. Once above fit the plate
   /// returns to the whole stage, so the zoom keeps its own overflow rules.
   final bool hugArtifact;
+
+  /// Opens a scan that will not decode in the OS file manager.
+  final RevealFolder revealFolder;
 
   final _ImageZoomController controller;
   final ValueChanged<bool> onPageScrollEnabledChanged;
@@ -1940,34 +2052,52 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
     zoomToActualSize(focalPoint: tapPosition);
   }
 
-  /// The missing-file message, shown when the scan cannot be loaded either by
-  /// this page's own stream or by the [Image] widget underneath it.
-  Widget _missingImageMessage() {
-    return const Padding(
-      padding: EdgeInsets.all(32),
-      child: Text(
-        _kMissingFileNotice,
-        style: TextStyle(color: ViewerPalette.roomMuted),
-        textAlign: TextAlign.center,
-      ),
+  /// The one empty state for a scan that cannot be shown, whether this page's
+  /// stream or the [Image] underneath it failed. It is centred in the mat and
+  /// offers Reveal in folder when the note image has a file path.
+  Widget _emptyState() {
+    final filePath = widget.image.filePath;
+    return _MatNotice.noImage(
+      detail: _kMissingFileNotice,
+      action: filePath == null
+          ? null
+          : RevealInFolderButton(
+              onPressed: () => revealInFolderWithFeedback(
+                context,
+                widget.revealFolder,
+                filePath,
+              ),
+            ),
     );
   }
 
-  /// The one node for the note image: the page's words, the double-click hint
-  /// and, on a failed load, the same sentence the mat shows. Its tap performs
-  /// the page's double-click toggle for a reader who cannot double-click.
+  /// The one node for the note image: the page's words and the double-click
+  /// hint. Its tap performs the page's double-click toggle for a reader who
+  /// cannot double-click. While the scan decodes, the node says so and offers
+  /// neither the hint nor a tap that would do nothing.
   Widget _pageSemantics(Widget child) {
-    final canZoom = !_loadFailed;
+    final loading = _intrinsicSize == null;
     final aboveFit = _scale > 1 + _kZoomEpsilon;
     return Semantics(
       container: true,
-      image: canZoom,
-      label: canZoom
-          ? widget.semanticLabel
-          : '${widget.semanticLabel}, $_kMissingFileNotice',
-      hint: canZoom ? (aboveFit ? _kPageFitHint : _kPageZoomHint) : null,
-      onTap: canZoom ? () => _handleDoubleTap(_viewport) : null,
+      image: !loading,
+      label: loading
+          ? '${widget.semanticLabel}, $_kLoadingTitle'
+          : widget.semanticLabel,
+      hint: loading ? null : (aboveFit ? _kPageFitHint : _kPageZoomHint),
+      onTap: loading ? null : () => _handleDoubleTap(_viewport),
       excludeSemantics: true,
+      child: child,
+    );
+  }
+
+  /// The failed page's node: the page's words plus the empty state's sentence,
+  /// with no tap because there is no image to zoom. The reveal action is left
+  /// out of the exclusion so Tab and a reader still reach it.
+  Widget _failedSemantics(Widget child) {
+    return Semantics(
+      container: true,
+      label: '${widget.semanticLabel}, $_kMissingFileNotice',
       child: child,
     );
   }
@@ -1986,8 +2116,8 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
         }
         final contentSize = _fittedContentSize(viewport);
         if (_loadFailed) {
-          return _pageSemantics(
-            _onPlate(viewport, contentSize, _missingImageMessage()),
+          return _failedSemantics(
+            _onPlate(viewport, contentSize, _emptyState()),
           );
         }
         final maxScale = math.max(_realSizeScale(viewport), _kMaxZoomCap);
@@ -2000,38 +2130,50 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
           _onPlate(
             viewport,
             contentSize,
-            Listener(
-              onPointerDown: _handlePointerDown,
-              onPointerMove: (event) =>
-                  _handlePointerMove(event, viewport, maxScale),
-              onPointerUp: _handlePointerEnd,
-              onPointerCancel: _handlePointerEnd,
-              onPointerSignal: _handlePointerSignal,
-              child: GestureDetector(
-                behavior: HitTestBehavior.opaque,
-                onDoubleTapDown: (details) {
-                  _lastDoubleTapPosition = details.localPosition;
-                },
-                onDoubleTap: () => _handleDoubleTap(viewport),
-                child: Center(
-                  child: Transform.translate(
-                    offset: _offset,
-                    child: Transform.scale(
-                      scale: _scale,
-                      child: SizedBox(
-                        width: contentSize.width,
-                        height: contentSize.height,
-                        child: Image(
-                          image: createNoteImageProvider(widget.image),
-                          fit: BoxFit.contain,
-                          errorBuilder: (context, error, stackTrace) =>
-                              _missingImageMessage(),
+            Stack(
+              fit: StackFit.expand,
+              children: [
+                Listener(
+                  onPointerDown: _handlePointerDown,
+                  onPointerMove: (event) =>
+                      _handlePointerMove(event, viewport, maxScale),
+                  onPointerUp: _handlePointerEnd,
+                  onPointerCancel: _handlePointerEnd,
+                  onPointerSignal: _handlePointerSignal,
+                  child: GestureDetector(
+                    behavior: HitTestBehavior.opaque,
+                    onDoubleTapDown: (details) {
+                      _lastDoubleTapPosition = details.localPosition;
+                    },
+                    onDoubleTap: () => _handleDoubleTap(viewport),
+                    child: Center(
+                      child: Transform.translate(
+                        offset: _offset,
+                        child: Transform.scale(
+                          scale: _scale,
+                          child: SizedBox(
+                            width: contentSize.width,
+                            height: contentSize.height,
+                            child: Image(
+                              image: createNoteImageProvider(widget.image),
+                              fit: BoxFit.contain,
+                              errorBuilder: (context, error, stackTrace) =>
+                                  _emptyState(),
+                            ),
+                          ),
                         ),
                       ),
                     ),
                   ),
                 ),
-              ),
+                // The large scan decodes for a moment; until its size is known
+                // the mat says so quietly instead of sitting blank.
+                if (_intrinsicSize == null)
+                  const _MatNotice(
+                    title: _kLoadingTitle,
+                    detail: _kLoadingDetail,
+                  ),
+              ],
             ),
           ),
         );
