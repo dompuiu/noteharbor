@@ -31,13 +31,17 @@ void main() {
     await loader.load();
   });
 
-  NoteRecord layoutNote({String file = landscapePath}) {
+  NoteRecord layoutNote({
+    String file = landscapePath,
+    int id = 1,
+    String catalog = 'KB-1',
+  }) {
     return NoteRecord.fromJson(<String, dynamic>{
-      'id': 1,
+      'id': id,
       'displayOrder': 1,
       'denomination': 'Test',
       'issueDate': '1993',
-      'catalogNumber': 'KB-1',
+      'catalogNumber': catalog,
       'gradingCompany': '',
       'grade': '',
       'watermark': '',
@@ -467,6 +471,99 @@ void main() {
     expect(shadow.offset, const Offset(0, 24));
     expect(shadow.blurRadius, 48);
     expect(shadow.color, const Color(0x5C000000));
+  });
+
+  /// Two notes, so the counter pill carries both its lines the way the app
+  /// shows it, pumped at [size].
+  Future<void> pumpTwoNotes(WidgetTester tester, Size size) async {
+    await seedScans(tester);
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+
+    final notes = [
+      layoutNote(id: 1, catalog: 'KB-1'),
+      layoutNote(id: 2, catalog: 'KB-2'),
+    ];
+    await tester.pumpWidget(
+      MaterialApp(
+        key: ValueKey<String>('header-$size'),
+        // The app themes every control in Inter; without it the test font
+        // makes the exit button wider than it is in the product.
+        theme: ThemeData(fontFamily: 'Inter'),
+        home: ImageLightbox(
+          items: [
+            for (var index = 0; index < notes.length; index++)
+              ImageSequenceItem(
+                note: notes[index],
+                image: notes[index].fullFor('front'),
+                face: 'front',
+                notePosition: index + 1,
+                noteTotal: notes.length,
+              ),
+          ],
+          initialIndex: 0,
+        ),
+      ),
+    );
+    await tester.pumpAndSettle();
+  }
+
+  final counter = find.byKey(const ValueKey('imageCounter'));
+
+  testWidgets('a stacked header keeps the counter beside the title', (
+    tester,
+  ) async {
+    await pumpTwoNotes(tester, const Size(555, 881));
+
+    final pill = tester.getRect(counter);
+    final heading = tester.getRect(find.text('TEST - KB-1'));
+
+    // The pill hugs its two lines instead of spanning the header, and it sits
+    // on the title's line at the right edge, as the slideshow's top bar does.
+    expect(pill.width, lessThan(240));
+    expect(pill.right, closeTo(555 - 16, 0.5));
+    expect(pill.left, greaterThan(heading.right));
+    expect((pill.top - heading.top).abs(), lessThan(16));
+
+    // The instruments and the exit take the line beneath the title.
+    final face = tester.getRect(find.text('Front'));
+    final exit = tester.getRect(find.text('Back to note'));
+    expect(face.top, greaterThan(heading.bottom - 1));
+    expect(exit.top, greaterThan(heading.bottom - 1));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a phone header wraps the exit instead of squeezing it', (
+    tester,
+  ) async {
+    await pumpTwoNotes(tester, const Size(393, 852));
+
+    final heading = tester.getRect(find.text('TEST - KB-1'));
+    final pill = tester.getRect(counter);
+    final exit = tester.getRect(find.text('Back to note'));
+
+    expect(pill.width, lessThan(393 - 32));
+    expect(pill.right, closeTo(393 - 16, 0.5));
+    expect(exit.top, greaterThan(heading.bottom - 1));
+    expect(exit.right, lessThanOrEqualTo(393 - 16 + 0.5));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a room header keeps one row', (tester) async {
+    await pumpTwoNotes(tester, const Size(1200, 800));
+
+    final pill = tester.getRect(counter);
+    final heading = tester.getRect(find.text('TEST - KB-1'));
+    final face = tester.getRect(find.text('Front'));
+    final exit = tester.getRect(find.text('Back to note'));
+
+    for (final rect in [pill, face, exit]) {
+      expect((rect.center.dy - heading.center.dy).abs(), lessThan(16));
+    }
+    expect(pill.left, greaterThan(heading.right));
+    expect(face.left, greaterThan(pill.right));
+    expect(exit.left, greaterThan(face.right));
   });
 }
 

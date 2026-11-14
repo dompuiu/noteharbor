@@ -737,6 +737,22 @@ const TextStyle _kRoomControlStyle = TextStyle(
   fontFeatures: [FontFeature.tabularFigures()],
 );
 
+/// One line of text's width at the reader's text scale, so the header can
+/// decide whether the title and the position pill share a line instead of
+/// letting the pill squeeze the title or the title clip.
+double _measuredWidth(BuildContext context, String text, TextStyle style) {
+  final painter = TextPainter(
+    text: TextSpan(text: text, style: style),
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+    maxLines: 1,
+  )..layout();
+
+  final width = painter.width;
+  painter.dispose();
+  return width;
+}
+
 /// The popover's top bar: the note title, then the counter, face toggle, zoom
 /// instrument and exit. On a narrow window the title keeps the full width and
 /// the controls wrap beneath it; a wide one puts them beside it, wrapping the
@@ -764,15 +780,13 @@ class _ImagePopoverHeader extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final controls = <Widget>[
-      _counterPill(),
-      _faceToggle(),
-      ValueListenableBuilder<_ImageZoomState>(
-        valueListenable: zoomController.state,
-        builder: (context, state, child) => _zoomInstrument(state),
-      ),
-      _backToNoteButton(onBack),
-    ];
+    final counter = _counterPill();
+    final faceToggle = _faceToggle();
+    final zoomInstrument = ValueListenableBuilder<_ImageZoomState>(
+      valueListenable: zoomController.state,
+      builder: (context, state, child) => _zoomInstrument(state),
+    );
+    final exit = _backToNoteButton(onBack);
     final title = _titleBlock();
 
     return Padding(
@@ -787,14 +801,50 @@ class _ImagePopoverHeader extends StatelessWidget {
               .scale(1)
               .clamp(1.0, 2.0);
           if (constraints.maxWidth < _kHeaderStackWidth * textScale) {
+            // The slideshow's bar is one right-aligned cluster. The popover
+            // keeps the note's identity on the left, with the position pill on
+            // the right of that line when the title and the pill both fit.
+            // A long headline, or a large text scale, needs the full line, so
+            // the pill drops beneath the title instead of squeezing it.
+            final titleWidth = _measuredWidth(
+              context,
+              item.label.toUpperCase(),
+              kPopoverHeadlineStyle,
+            );
+            final counterWidth = _measuredWidth(
+              context,
+              _imagePositionLabel(counterPosition, counterTotal),
+              kRoomCounterStyle,
+            );
+            final noteLine = item.notePositionLabel;
+            final noteWidth = noteLine == null
+                ? 0.0
+                : _measuredWidth(context, noteLine, _kCounterNoteStyle);
+            final beside =
+                titleWidth + 12 + math.max(counterWidth, noteWidth) + 26 <=
+                constraints.maxWidth;
+
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                title,
+                if (beside)
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Expanded(child: title),
+                      const SizedBox(width: 12),
+                      counter,
+                    ],
+                  )
+                else ...[
+                  title,
+                  const SizedBox(height: 6),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: counter,
+                  ),
+                ],
                 const SizedBox(height: 8),
-                // The Wrap keeps the controls on one line when they fit and
-                // sends them below the title when a large text size or a
-                // narrow phone leaves no room.
                 Align(
                   alignment: Alignment.centerRight,
                   child: Wrap(
@@ -802,7 +852,7 @@ class _ImagePopoverHeader extends StatelessWidget {
                     crossAxisAlignment: WrapCrossAlignment.center,
                     spacing: 10,
                     runSpacing: 8,
-                    children: controls,
+                    children: [faceToggle, zoomInstrument, exit],
                   ),
                 ),
               ],
@@ -829,7 +879,7 @@ class _ImagePopoverHeader extends StatelessWidget {
                   crossAxisAlignment: WrapCrossAlignment.center,
                   spacing: 8,
                   runSpacing: 8,
-                  children: controls,
+                  children: [counter, faceToggle, zoomInstrument, exit],
                 ),
               ),
             ],
@@ -874,15 +924,18 @@ class _ImagePopoverHeader extends StatelessWidget {
 
   Widget _counterPill() {
     // The page label repeats the counter's lines, so the pill is sight only.
+    // No `alignment` on the container: it hugs its two lines instead of
+    // stretching to the header's width when the header stacks.
     final notePosition = item.notePositionLabel;
     return ExcludeSemantics(
       child: Container(
+        key: const ValueKey('imageCounter'),
         constraints: const BoxConstraints(minHeight: kRoomControlHeight),
-        alignment: Alignment.center,
         padding: const EdgeInsets.symmetric(horizontal: 12),
         decoration: _pillDecoration(),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text(
               _imagePositionLabel(counterPosition, counterTotal),

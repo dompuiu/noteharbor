@@ -263,13 +263,14 @@ void main() {
     expect(find.text('Note 1 of 2'), findsOneWidget);
     expect(find.text('Back to note'), findsOneWidget);
 
-    // On phone the title owns the first line: the controls sit below it
-    // instead of squeezing its width, and nothing overflows.
-    final title = find.text('TEST - KB-1');
-    final counter = find.text('Note 1 of 2');
+    // The position pill hugs its own lines and sits at the header's right
+    // edge; the title keeps the left of the bar and nothing overflows.
+    final counter = find.byKey(const ValueKey('imageCounter'));
+    final stage = tester.getRect(find.byType(PageView));
+    expect(tester.getRect(counter).right, closeTo(stage.right - 16, 0.5));
     expect(
-      tester.getTopLeft(counter).dy,
-      greaterThan(tester.getBottomLeft(title).dy),
+      tester.getRect(find.text('TEST - KB-1')).left,
+      lessThan(tester.getRect(counter).left),
     );
     expect(tester.takeException(), isNull);
   });
@@ -1131,15 +1132,20 @@ void main() {
       expect(find.text('Back'), findsOneWidget, reason: '$size');
       expect(find.text('Back to note'), findsOneWidget, reason: '$size');
 
-      // The title keeps its width: the controls sit beneath it on a phone and
-      // beside it on a desktop.
+      // The position pill follows the title on every window; the exact one-
+      // row / two-row composition with the product's font is covered in
+      // image_lightbox_layout_test.
       final titleRect = tester.getRect(find.text('TEST - KB-1'));
-      final counterRect = tester.getRect(find.text('Image 1 of 1'));
-      if (size.width < 600) {
-        expect(titleRect.bottom, lessThanOrEqualTo(counterRect.top));
-      } else {
-        expect(counterRect.left, greaterThan(titleRect.right));
-      }
+      final counterRect = tester.getRect(
+        find.byKey(const ValueKey('imageCounter')),
+      );
+      final stageRect = tester.getRect(find.byType(PageView));
+      expect(counterRect.left, greaterThan(titleRect.left), reason: '$size');
+      expect(
+        counterRect.right,
+        lessThanOrEqualTo(stageRect.right),
+        reason: '$size',
+      );
     }
   });
 }

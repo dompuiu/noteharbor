@@ -16,7 +16,8 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ### Changed
 
-- Image popover: each page's mat now names its face, the position pill reads `Image 2 of 7` (adding `Note 3 of 214` when the sequence spans notes), and the exit reads `Back to note` so it no longer collides with the note's back face. On phone the title keeps its width and the controls sit below it.
+- Image popover: each page's mat now names its face, the position pill reads `Image 2 of 7` (adding `Note 3 of 214` when the sequence spans notes), and the exit reads `Back to note` so it no longer collides with the note's back face.
+- Image popover: the top bar reads like the slideshow's - the note title and date on the left with the position pill at the right of that line, then the face toggle and zoom instrument with `Back to note` as one right-aligned cluster beneath. The pill hugs its own lines instead of spanning the header, drops under the title when a long headline or a large text size needs the whole line, and the cluster wraps under itself on a phone.
 - Import screen: the archive's date and collection count are one inset summary strip instead of pills - label/value cells on a mist ground, split by a hairline, one row at 480 px and wider and two stacked rows below that, never wider than 720 px. The active collection's note count drops out of the strip because the collection select below already shows it, and a screen reader hears each cell as one `label: value`.
 - Import screen: the page caps its content in a centered 720 px column, so panels and copy keep a readable measure on wide windows instead of stretching across the page.
 - Import screen: one noun per concept — the file is an archive and what it holds is a collection. The app bar and import panel read Import archive, the Notes stat names its collection, and the two destructive panels collapse into one subordinate Remove section with a row per scope.
