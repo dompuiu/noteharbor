@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 // mocked. The other screens are stubbed so the assertions land on the canvas and
 // the picker popup, not on their unrelated data loads.
 vi.mock("./lib/api.js", () => ({
+  createCatalogEntry: vi.fn(),
   createCategory: vi.fn(),
   createCollection: vi.fn(),
   createShowcase: vi.fn(),
@@ -25,7 +26,9 @@ vi.mock("./lib/api.js", () => ({
   renameShowcase: vi.fn(),
   reorderCollections: vi.fn(),
   reorderShowcases: vi.fn(),
+  updateCatalogEntry: vi.fn(),
   updateNode: vi.fn(),
+  updateNodeNotes: vi.fn(),
   reorderNodes: vi.fn(),
 }));
 

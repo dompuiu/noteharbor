@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 // the web API mocked. A drag on a cell is observed through the API call it
 // makes and the on-screen order it leaves behind.
 vi.mock("./lib/api.js", () => ({
+  createCatalogEntry: vi.fn(),
   createCategory: vi.fn(),
   createCollection: vi.fn(),
   createShowcase: vi.fn(),
@@ -22,7 +23,9 @@ vi.mock("./lib/api.js", () => ({
   renameCollection: vi.fn(),
   reorderCollections: vi.fn(),
   reorderNodes: vi.fn(),
+  updateCatalogEntry: vi.fn(),
   updateNode: vi.fn(),
+  updateNodeNotes: vi.fn(),
 }));
 
 vi.mock("./components/NotesTable.jsx", () => ({

@@ -2,6 +2,13 @@
 // temporary (negative) ids; nothing touches the network until Save replays the
 // diff. Baseline is the last server tree, draft is what the canvas shows.
 
+import {
+  isCatalogEntry,
+  normalizeCatalogEntry,
+  sameCatalogEntry,
+  specimenPayload,
+} from "./showcaseTree.js";
+
 let nextTempId = -1;
 
 function resetTempIds() {
@@ -94,11 +101,58 @@ function makeDraftNoteNode({ note, parentId = null }) {
   };
 }
 
+// A Catalog entry is a leaf with its own metadata and an ordered specimen set;
+// it mirrors the tree payload so the canvas can render it before Save.
+function makeDraftCatalogEntryNode({
+  entry,
+  parentId = null,
+  specimens = [],
+  primaryNoteId = null,
+}) {
+  const specimenNotes = specimens.filter(Boolean);
+  const primary = specimenNotes.some((note) => note?.id === primaryNoteId)
+    ? primaryNoteId
+    : (specimenNotes[0]?.id ?? null);
+
+  return {
+    id: takeTempId(),
+    node_type: "catalog_entry",
+    name: null,
+    category_id: null,
+    parent_node_id: parentId,
+    note_id: null,
+    cover_note_id: null,
+    position: null,
+    note: null,
+    cover_note: null,
+    entry: normalizeCatalogEntry(entry),
+    specimens: specimenNotes,
+    primary_note_id: primary,
+    children: [],
+  };
+}
+
+function sameIdList(left, right) {
+  return (
+    left.length === right.length &&
+    left.every((id, index) => id === right[index])
+  );
+}
+
 // Replay a draft tree onto the server. New nodes carry negative ids; everything
-// else is an existing id. Creations run parents-before-children, notes batched
-// per parent, then deletions, updates, and reorders to the draft order.
+// else is an existing id. Creations run parents-before-children (groupings,
+// catalog entries, notes batched per parent), then deletions, updates,
+// specimen sets, and reorders to the draft order.
 async function saveShowcaseDraft({ showcaseId, baselineNodes, draftNodes, api }) {
-  const { createShowcaseNode, updateNode, deleteNode, reorderNodes } = api;
+  const {
+    createShowcaseNode,
+    createCatalogEntry,
+    updateNode,
+    updateCatalogEntry,
+    updateNodeNotes,
+    deleteNode,
+    reorderNodes,
+  } = api;
   const baselineById = buildIdMap(baselineNodes);
   const draftById = buildIdMap(draftNodes);
 
@@ -124,6 +178,10 @@ async function saveShowcaseDraft({ showcaseId, baselineNodes, draftNodes, api })
       return tempToReal.get(draftParentId) ?? null;
     }
     return draftParentId;
+  }
+
+  function realParentOfNode(node) {
+    return realParentOf(draftById.get(node.id)?.parentId ?? null);
   }
 
   // New categories first (roots, in draft order).
@@ -155,8 +213,7 @@ async function saveShowcaseDraft({ showcaseId, baselineNodes, draftNodes, api })
     if (!isTempId(node.id) || node.node_type !== "grouping") {
       continue;
     }
-    const draftParentId = draftById.get(node.id)?.parentId ?? null;
-    const realParentId = realParentOf(draftParentId);
+    const realParentId = realParentOfNode(node);
     if (realParentId == null) {
       continue;
     }
@@ -164,6 +221,29 @@ async function saveShowcaseDraft({ showcaseId, baselineNodes, draftNodes, api })
       type: "grouping",
       parent_id: realParentId,
       name: node.name,
+    });
+    if (created?.id != null) {
+      tempToReal.set(node.id, created.id);
+      recordCreation(realParentId, created.id);
+    }
+  }
+
+  // New catalog entries follow the groupings, so a new Grouping parent already
+  // has a real id. Creation carries the metadata and the ordered note_ids; the
+  // server makes the first note primary, and the specimen phase below corrects
+  // a draft that chose another one.
+  for (const node of bfs) {
+    if (!isTempId(node.id) || !isCatalogEntry(node)) {
+      continue;
+    }
+    const realParentId = realParentOfNode(node);
+    if (realParentId == null) {
+      continue;
+    }
+    const { node: created } = await createCatalogEntry(showcaseId, {
+      parentId: realParentId,
+      entry: node.entry ?? {},
+      noteIds: specimenPayload(node).note_ids,
     });
     if (created?.id != null) {
       tempToReal.set(node.id, created.id);
@@ -274,6 +354,12 @@ async function saveShowcaseDraft({ showcaseId, baselineNodes, draftNodes, api })
     ) {
       await updateNode(id, { cover_note_id: draftNode.cover_note_id ?? null });
     }
+    if (
+      isCatalogEntry(draftNode) &&
+      !sameCatalogEntry(draftNode.entry, baselineNode.entry)
+    ) {
+      await updateCatalogEntry(id, draftNode.entry ?? {});
+    }
   }
 
   // Cover set on newly created groupings (creation carries no cover).
@@ -282,6 +368,45 @@ async function saveShowcaseDraft({ showcaseId, baselineNodes, draftNodes, api })
     if (draftNode?.node_type === "grouping" && draftNode.cover_note_id != null) {
       await updateNode(realId, { cover_note_id: draftNode.cover_note_id });
     }
+  }
+
+  // Specimen sets come after every creation. An existing entry whose ordered
+  // set or primary changed issues one full-set call; a new entry needs one only
+  // when its draft primary is not the first specimen it was created with.
+  for (const [id, { node: draftNode }] of draftById.entries()) {
+    if (!isCatalogEntry(draftNode)) {
+      continue;
+    }
+
+    const payload = specimenPayload(draftNode);
+    const [firstNoteId] = payload.note_ids;
+
+    if (isTempId(id)) {
+      const realId = tempToReal.get(id);
+      if (realId == null) {
+        continue;
+      }
+      if (firstNoteId != null && payload.primary_note_id !== firstNoteId) {
+        await updateNodeNotes(realId, payload);
+      }
+      continue;
+    }
+
+    if (!baselineIds.has(id)) {
+      continue;
+    }
+
+    const baselineNode = baselineById.get(id).node;
+    const baselinePayload = specimenPayload(baselineNode);
+
+    if (
+      payload.primary_note_id === baselinePayload.primary_note_id &&
+      sameIdList(payload.note_ids, baselinePayload.note_ids)
+    ) {
+      continue;
+    }
+
+    await updateNodeNotes(id, payload);
   }
 
   // Reorders: bring every parent's server order to the draft order.
@@ -319,10 +444,8 @@ async function saveShowcaseDraft({ showcaseId, baselineNodes, draftNodes, api })
     // Server order after creates/deletes: surviving baseline in old order plus
     // created ids appended in creation order.
     const serverOrder = [...survivingBaseline, ...createdOrder];
-    const same =
-      serverOrder.length === draftOrder.length &&
-      serverOrder.every((id, index) => id === draftOrder[index]);
-    if (same) {
+
+    if (sameIdList(serverOrder, draftOrder)) {
       continue;
     }
     // No reorder for a single child or empty level.
@@ -363,6 +486,7 @@ export {
   childrenByParent,
   isTempId,
   makeDraftCategoryNode,
+  makeDraftCatalogEntryNode,
   makeDraftGroupingNode,
   makeDraftNoteNode,
   resetTempIds,

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 import {
   isTempId,
   makeDraftCategoryNode,
+  makeDraftCatalogEntryNode,
   makeDraftGroupingNode,
   makeDraftNoteNode,
   resetTempIds,
@@ -24,7 +25,12 @@ function api() {
       }
       return { node: { id: Math.floor(Math.random() * -1) || 900, ...payload } };
     }),
+    createCatalogEntry: vi.fn(async (_showcaseId, payload) => ({
+      node: { id: 801, node_type: "catalog_entry", ...payload },
+    })),
     updateNode: vi.fn(async () => ({ node: {} })),
+    updateCatalogEntry: vi.fn(async () => ({ node: {} })),
+    updateNodeNotes: vi.fn(async () => ({ node: {} })),
     deleteNode: vi.fn(async () => ({ success: true })),
     reorderNodes: vi.fn(async () => ({ nodes: [] })),
   };
@@ -44,6 +50,36 @@ describe("draft node makers", () => {
     expect(isTempId(grouping.id)).toBe(true);
     expect(isTempId(note.id)).toBe(true);
     expect(isTempId(10)).toBe(false);
+  });
+
+  test("a new catalog entry carries its metadata and the first specimen as primary", () => {
+    const entry = makeDraftCatalogEntryNode({
+      entry: { catalog_number: " 22a ", denomination: "20 lei", issue_date: "1877" },
+      parentId: 10,
+      specimens: [{ id: 101 }, { id: 102 }],
+    });
+
+    expect(isTempId(entry.id)).toBe(true);
+    expect(entry.node_type).toBe("catalog_entry");
+    expect(entry.entry).toEqual({
+      catalog_number: "22a",
+      denomination: "20 lei",
+      issue_date: "1877",
+      source: "",
+    });
+    expect(entry.primary_note_id).toBe(101);
+    expect(entry.children).toEqual([]);
+  });
+
+  test("a new catalog entry keeps a chosen primary", () => {
+    const entry = makeDraftCatalogEntryNode({
+      entry: { catalog_number: "22a" },
+      parentId: 10,
+      specimens: [{ id: 101 }, { id: 102 }],
+      primaryNoteId: 102,
+    });
+
+    expect(entry.primary_note_id).toBe(102);
   });
 });
 
@@ -215,6 +251,288 @@ describe("saveShowcaseDraft", () => {
       type: "notes",
       parent_id: 10,
       note_ids: [101, 102],
+    });
+  });
+});
+
+// ── Catalog entries ──────────────────────────────────────────────────────
+
+function catalogEntryNode(id, { noteIds = [], primaryId = null, entry = {} } = {}) {
+  return {
+    id,
+    node_type: "catalog_entry",
+    parent_node_id: 10,
+    entry: {
+      catalog_number: "22a",
+      denomination: "20 lei",
+      issue_date: "1877",
+      source: "Pick catalog",
+      ...entry,
+    },
+    specimens: noteIds.map((noteId) => ({ id: noteId, owned: true })),
+    primary_note_id: primaryId ?? noteIds[0] ?? null,
+    children: [],
+  };
+}
+
+function categoryWith(children) {
+  return {
+    id: 10,
+    node_type: "category",
+    name: "Summer",
+    category_id: 1,
+    children,
+  };
+}
+
+describe("saveShowcaseDraft catalog entries", () => {
+  test("a new entry posts its metadata and ordered note ids", async () => {
+    const mocks = api();
+    const entry = makeDraftCatalogEntryNode({
+      entry: { catalog_number: "22a", denomination: "20 lei", issue_date: "1877" },
+      parentId: 10,
+      specimens: [{ id: 101 }, { id: 102 }],
+    });
+
+    await saveShowcaseDraft({
+      showcaseId: 1,
+      baselineNodes: [categoryWith([])],
+      draftNodes: [categoryWith([entry])],
+      api: mocks,
+    });
+
+    expect(mocks.createCatalogEntry).toHaveBeenCalledWith(1, {
+      parentId: 10,
+      entry: {
+        catalog_number: "22a",
+        denomination: "20 lei",
+        issue_date: "1877",
+        source: "",
+      },
+      noteIds: [101, 102],
+    });
+    expect(mocks.updateNodeNotes).not.toHaveBeenCalled();
+    expect(mocks.updateCatalogEntry).not.toHaveBeenCalled();
+  });
+
+  test("a new entry created with another primary promotes it right after", async () => {
+    const mocks = api();
+    const entry = makeDraftCatalogEntryNode({
+      entry: { catalog_number: "22a" },
+      parentId: 10,
+      specimens: [{ id: 101 }, { id: 102 }],
+      primaryNoteId: 102,
+    });
+
+    await saveShowcaseDraft({
+      showcaseId: 1,
+      baselineNodes: [categoryWith([])],
+      draftNodes: [categoryWith([entry])],
+      api: mocks,
+    });
+
+    expect(mocks.updateNodeNotes).toHaveBeenCalledWith(801, {
+      note_ids: [101, 102],
+      primary_note_id: 102,
+    });
+  });
+
+  test("a changed specimen set issues the full-set call", async () => {
+    const mocks = api();
+    const baseline = [categoryWith([catalogEntryNode(20, { noteIds: [101] })])];
+    const draft = structuredClone(baseline);
+    draft[0].children[0].specimens.push({ id: 102, owned: true });
+
+    await saveShowcaseDraft({
+      showcaseId: 1,
+      baselineNodes: baseline,
+      draftNodes: draft,
+      api: mocks,
+    });
+
+    expect(mocks.updateNodeNotes).toHaveBeenCalledWith(20, {
+      note_ids: [101, 102],
+      primary_note_id: 101,
+    });
+  });
+
+  test("a changed primary alone issues the full-set call", async () => {
+    const mocks = api();
+    const baseline = [
+      categoryWith([catalogEntryNode(20, { noteIds: [101, 102], primaryId: 101 })]),
+    ];
+    const draft = structuredClone(baseline);
+    draft[0].children[0].primary_note_id = 102;
+
+    await saveShowcaseDraft({
+      showcaseId: 1,
+      baselineNodes: baseline,
+      draftNodes: draft,
+      api: mocks,
+    });
+
+    expect(mocks.updateNodeNotes).toHaveBeenCalledWith(20, {
+      note_ids: [101, 102],
+      primary_note_id: 102,
+    });
+  });
+
+  test("an unchanged specimen set calls nothing", async () => {
+    const mocks = api();
+    const baseline = [
+      categoryWith([catalogEntryNode(20, { noteIds: [101, 102], primaryId: 102 })]),
+    ];
+
+    await saveShowcaseDraft({
+      showcaseId: 1,
+      baselineNodes: baseline,
+      draftNodes: structuredClone(baseline),
+      api: mocks,
+    });
+
+    expect(mocks.updateNodeNotes).not.toHaveBeenCalled();
+  });
+
+  test("changed metadata posts an entry update without touching specimens", async () => {
+    const mocks = api();
+    const baseline = [categoryWith([catalogEntryNode(20, { noteIds: [101] })])];
+    const draft = structuredClone(baseline);
+    draft[0].children[0].entry.denomination = "100 lei";
+
+    await saveShowcaseDraft({
+      showcaseId: 1,
+      baselineNodes: baseline,
+      draftNodes: draft,
+      api: mocks,
+    });
+
+    expect(mocks.updateCatalogEntry).toHaveBeenCalledWith(20, {
+      catalog_number: "22a",
+      denomination: "100 lei",
+      issue_date: "1877",
+      source: "Pick catalog",
+    });
+    expect(mocks.updateNodeNotes).not.toHaveBeenCalled();
+  });
+
+  test("deleting an entry removes it and leaves the specimen set alone", async () => {
+    const mocks = api();
+    const baseline = [categoryWith([catalogEntryNode(20, { noteIds: [101] })])];
+
+    await saveShowcaseDraft({
+      showcaseId: 1,
+      baselineNodes: baseline,
+      draftNodes: [categoryWith([])],
+      api: mocks,
+    });
+
+    expect(mocks.deleteNode).toHaveBeenCalledWith(20);
+    expect(mocks.updateNodeNotes).not.toHaveBeenCalled();
+    expect(mocks.updateCatalogEntry).not.toHaveBeenCalled();
+  });
+
+  test("creations replay before specimen updates", async () => {
+    const mocks = api();
+    const baseline = [categoryWith([catalogEntryNode(20, { noteIds: [101] })])];
+    const draft = structuredClone(baseline);
+    draft[0].children[0].specimens.push({ id: 102, owned: true });
+    draft[0].children.push(
+      makeDraftCatalogEntryNode({
+        entry: { catalog_number: "22b" },
+        parentId: 10,
+        specimens: [{ id: 103 }],
+      }),
+    );
+
+    await saveShowcaseDraft({
+      showcaseId: 1,
+      baselineNodes: baseline,
+      draftNodes: draft,
+      api: mocks,
+    });
+
+    expect(mocks.createCatalogEntry).toHaveBeenCalledTimes(1);
+    expect(mocks.updateNodeNotes).toHaveBeenCalledTimes(1);
+    expect(
+      mocks.createCatalogEntry.mock.invocationCallOrder[0],
+    ).toBeLessThan(mocks.updateNodeNotes.mock.invocationCallOrder[0]);
+  });
+
+  test("a new entry under a new grouping waits for the grouping's real id", async () => {
+    const mocks = api();
+    mocks.createShowcaseNode.mockResolvedValueOnce({ node: { id: 900 } });
+    const grouping = makeDraftGroupingNode({ name: "1877", parentId: 10 });
+    grouping.children.push(
+      makeDraftCatalogEntryNode({
+        entry: { catalog_number: "22a" },
+        parentId: grouping.id,
+        specimens: [{ id: 101 }],
+      }),
+    );
+
+    await saveShowcaseDraft({
+      showcaseId: 1,
+      baselineNodes: [categoryWith([])],
+      draftNodes: [categoryWith([grouping])],
+      api: mocks,
+    });
+
+    expect(mocks.createCatalogEntry).toHaveBeenCalledWith(1, {
+      parentId: 900,
+      entry: {
+        catalog_number: "22a",
+        denomination: "",
+        issue_date: "",
+        source: "",
+      },
+      noteIds: [101],
+    });
+  });
+
+  test("a new entry with no specimens posts an empty set and no update", async () => {
+    const mocks = api();
+    const entry = makeDraftCatalogEntryNode({
+      entry: { catalog_number: "22a" },
+      parentId: 10,
+    });
+
+    await saveShowcaseDraft({
+      showcaseId: 1,
+      baselineNodes: [categoryWith([])],
+      draftNodes: [categoryWith([entry])],
+      api: mocks,
+    });
+
+    expect(mocks.createCatalogEntry).toHaveBeenCalledWith(1, {
+      parentId: 10,
+      entry: {
+        catalog_number: "22a",
+        denomination: "",
+        issue_date: "",
+        source: "",
+      },
+      noteIds: [],
+    });
+    expect(mocks.updateNodeNotes).not.toHaveBeenCalled();
+  });
+
+  test("a stale draft primary never reaches the specimen call", async () => {
+    const mocks = api();
+    const baseline = [categoryWith([catalogEntryNode(20, { noteIds: [101] })])];
+    const draft = structuredClone(baseline);
+    draft[0].children[0].specimens.push({ id: 102, owned: true });
+    draft[0].children[0].primary_note_id = 999;
+
+    await saveShowcaseDraft({
+      showcaseId: 1,
+      baselineNodes: baseline,
+      draftNodes: draft,
+      api: mocks,
+    });
+
+    expect(mocks.updateNodeNotes).toHaveBeenCalledWith(20, {
+      note_ids: [101, 102],
+      primary_note_id: 101,
     });
   });
 });

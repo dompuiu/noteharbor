@@ -9,6 +9,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 // connection state and the empty-library state; health serves the retry button
 // and the route/focus probes.
 vi.mock("./lib/api.js", () => ({
+  createCatalogEntry: vi.fn(),
   createCategory: vi.fn(),
   createCollection: vi.fn(),
   createShowcase: vi.fn(),
@@ -22,7 +23,9 @@ vi.mock("./lib/api.js", () => ({
   getShowcaseTree: vi.fn(),
   renameCollection: vi.fn(),
   reorderCollections: vi.fn(),
+  updateCatalogEntry: vi.fn(),
   updateNode: vi.fn(),
+  updateNodeNotes: vi.fn(),
 }));
 
 vi.mock("./components/CollectionScreen.jsx", () => ({

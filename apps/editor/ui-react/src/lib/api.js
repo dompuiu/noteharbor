@@ -527,6 +527,41 @@ async function updateNode(id, payload) {
   return handleResponse(response);
 }
 
+// Create a Catalog entry leaf: its own catalog metadata plus, optionally, the
+// first specimens. The server makes the first id primary, so a different
+// primary is a follow-up `updateNodeNotes` call.
+async function createCatalogEntry(showcaseId, { parentId, entry, noteIds } = {}) {
+  const payload = {
+    node_type: 'catalog_entry',
+    parent_id: parentId,
+    entry
+  };
+
+  if (Array.isArray(noteIds)) {
+    payload.note_ids = noteIds;
+  }
+
+  return createShowcaseNode(showcaseId, payload);
+}
+
+// Catalog metadata lives on the entry node, never on the linked Note.
+async function updateCatalogEntry(id, entry) {
+  return updateNode(id, { entry });
+}
+
+// Replace an entry's specimen set atomically. The payload is the full ordered
+// `{ note_ids, primary_note_id? }`: adding, removing, reordering, and promoting
+// are all this one call, so Undo is a repeat of the previous payload.
+async function updateNodeNotes(id, payload) {
+  const response = await request(`/api/nodes/${id}/notes`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(payload)
+  });
+
+  return handleResponse(response);
+}
+
 async function deleteNode(id) {
   const response = await request(`/api/nodes/${id}`, {
     method: 'DELETE'
@@ -625,6 +660,7 @@ async function scrapePreview(url, { timeoutMs } = {}) {
 
 export {
   clearAppData,
+  createCatalogEntry,
   createCategory,
   createCollection,
   createNote,
@@ -657,7 +693,9 @@ export {
   reorderShowcases,
   scrapePreview,
   scrapeTimeoutMessage,
+  updateCatalogEntry,
   updateNode,
+  updateNodeNotes,
   updateNote,
   updateNotesTags
 };

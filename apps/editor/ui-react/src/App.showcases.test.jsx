@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 // the web API mocked. The other screens are stubbed so assertions land on the
 // showcase behaviour, not on their unrelated data loads.
 vi.mock("./lib/api.js", () => ({
+  createCatalogEntry: vi.fn(),
   createCategory: vi.fn(),
   createCollection: vi.fn(),
   createShowcase: vi.fn(),
@@ -23,7 +24,9 @@ vi.mock("./lib/api.js", () => ({
   renameShowcase: vi.fn(),
   reorderCollections: vi.fn(),
   reorderShowcases: vi.fn(),
+  updateCatalogEntry: vi.fn(),
   updateNode: vi.fn(),
+  updateNodeNotes: vi.fn(),
   reorderNodes: vi.fn(),
 }));
 

@@ -1,12 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
 import {
+  createCatalogEntry,
   createShowcaseNode,
   deleteNode,
   getCategories,
   getShowcaseTree,
   reorderNodes,
+  updateCatalogEntry,
   updateNode,
+  updateNodeNotes,
 } from "../lib/api.js";
 import { isEditableElement } from "../lib/editableElement.js";
 import {
@@ -1044,7 +1047,15 @@ function ShowcaseScreen({ mode }) {
           showcaseId: created.id,
           baselineNodes: [],
           draftNodes: nodes,
-          api: { createShowcaseNode, updateNode, deleteNode, reorderNodes },
+          api: {
+            createShowcaseNode,
+            createCatalogEntry,
+            updateNode,
+            updateCatalogEntry,
+            updateNodeNotes,
+            deleteNode,
+            reorderNodes,
+          },
         });
         // createShowcase clears the pending draft; land on the real view.
         navigate({
@@ -1060,7 +1071,15 @@ function ShowcaseScreen({ mode }) {
         showcaseId,
         baselineNodes,
         draftNodes: nodes,
-        api: { createShowcaseNode, updateNode, deleteNode, reorderNodes },
+        api: {
+          createShowcaseNode,
+          createCatalogEntry,
+          updateNode,
+          updateCatalogEntry,
+          updateNodeNotes,
+          deleteNode,
+          reorderNodes,
+        },
       });
       // The mode switch remounts the screen (see the route keys), so view
       // loads the saved tree fresh; no local reset is needed here.

@@ -12,6 +12,7 @@ configure({ asyncUtilTimeout: 5000 });
 // mocked. Behavior is observed through focus and the route, never through the
 // screen's internals, so the table's model can be refactored freely.
 vi.mock("./lib/api.js", () => ({
+  createCatalogEntry: vi.fn(),
   createCategory: vi.fn(),
   createCollection: vi.fn(),
   createShowcase: vi.fn(),
@@ -28,7 +29,9 @@ vi.mock("./lib/api.js", () => ({
   renameCollection: vi.fn(),
   reorderCollections: vi.fn(),
   reorderNodes: vi.fn(),
+  updateCatalogEntry: vi.fn(),
   updateNode: vi.fn(),
+  updateNodeNotes: vi.fn(),
 }));
 
 vi.mock("./components/NotesTable.jsx", () => ({

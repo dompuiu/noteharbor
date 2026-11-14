@@ -1,14 +1,19 @@
 import { afterEach, describe, expect, test, vi } from "vitest";
 import {
+  createCatalogEntry,
   createShowcase,
   deleteShowcase,
   getShowcases,
   renameShowcase,
   reorderShowcases,
+  updateCatalogEntry,
+  updateNodeNotes,
 } from "./api.js";
 
 function stubFetch(implementation) {
-  vi.stubGlobal("fetch", vi.fn(implementation));
+  const fetchMock = vi.fn(implementation);
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
 }
 
 function jsonResponse(status, body) {
@@ -99,6 +104,103 @@ describe("showcase API calls", () => {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ ids: [2, 1, 3] }),
+    });
+  });
+});
+
+describe("catalog entry API calls", () => {
+  test("createCatalogEntry posts the metadata and the first specimens", async () => {
+    const fetchMock = stubFetch(async () =>
+      jsonResponse(201, { node: { id: 9, node_type: "catalog_entry" } }),
+    );
+
+    const entry = {
+      catalog_number: "22a",
+      denomination: "20 lei",
+      issue_date: "1877",
+      source: "Pick catalog",
+    };
+
+    await expect(
+      createCatalogEntry(3, { parentId: 7, entry, noteIds: [4, 5] }),
+    ).resolves.toEqual({ node: { id: 9, node_type: "catalog_entry" } });
+    expect(fetchMock).toHaveBeenCalledWith("/api/showcases/3/nodes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        node_type: "catalog_entry",
+        parent_id: 7,
+        entry,
+        note_ids: [4, 5],
+      }),
+    });
+  });
+
+  test("createCatalogEntry omits note_ids when no specimens are chosen", async () => {
+    const fetchMock = stubFetch(async () => jsonResponse(201, { node: { id: 9 } }));
+
+    const entry = {
+      catalog_number: "22a",
+      denomination: "",
+      issue_date: "",
+      source: "",
+    };
+
+    await createCatalogEntry(3, { parentId: 7, entry });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/showcases/3/nodes", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        node_type: "catalog_entry",
+        parent_id: 7,
+        entry,
+      }),
+    });
+  });
+
+  test("updateCatalogEntry PUTs the metadata without touching the note", async () => {
+    const fetchMock = stubFetch(async () => jsonResponse(200, { node: { id: 9 } }));
+
+    const entry = {
+      catalog_number: "22b",
+      denomination: "20 lei",
+      issue_date: "1877",
+      source: "My collection",
+    };
+
+    await updateCatalogEntry(9, entry);
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/nodes/9", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ entry }),
+    });
+  });
+
+  test("updateNodeNotes replaces the full ordered specimen set", async () => {
+    const fetchMock = stubFetch(async () =>
+      jsonResponse(200, { node: { id: 9, primary_note_id: 5 } }),
+    );
+
+    await updateNodeNotes(9, { note_ids: [4, 5], primary_note_id: 5 });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/nodes/9/notes", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note_ids: [4, 5], primary_note_id: 5 }),
+    });
+  });
+
+  test("updateNodeNotes can clear the set", async () => {
+    const fetchMock = stubFetch(async () => jsonResponse(200, { node: { id: 9 } }));
+
+    await updateNodeNotes(9, { note_ids: [] });
+
+    expect(fetchMock).toHaveBeenCalledWith("/api/nodes/9/notes", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ note_ids: [] }),
     });
   });
 });
