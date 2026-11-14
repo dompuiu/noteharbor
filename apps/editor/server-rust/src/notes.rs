@@ -100,7 +100,7 @@ pub struct Note {
     pub tags: Vec<Tag>,
 }
 
-const NOTE_FIELDS: &str = "id,
+pub(crate) const NOTE_FIELDS: &str = "id,
     collection_id,
     display_order,
     denomination,
@@ -126,7 +126,7 @@ fn parse_json_text(value: Option<String>) -> Value {
     }
 }
 
-fn map_note(row: &rusqlite::Row<'_>) -> rusqlite::Result<Note> {
+pub(crate) fn map_note(row: &rusqlite::Row<'_>) -> rusqlite::Result<Note> {
     let scraped_raw: Option<String> = row.get(12)?;
     let images_raw: Option<String> = row.get(13)?;
     let scraped = parse_json_text(scraped_raw);

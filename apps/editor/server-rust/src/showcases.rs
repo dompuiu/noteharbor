@@ -36,9 +36,8 @@ use serde_json::{Value, json};
 use crate::{
     AppState,
     db::{self, DbError, classify},
-    images,
     js_number,
-    notes::{Note, Tag, node_string},
+    notes::{NOTE_FIELDS, Note, Tag, map_note, node_string},
     routes::{bad_request, created, not_found, ok},
 };
 
@@ -79,6 +78,17 @@ pub struct CatalogEntry {
     pub source: String,
 }
 
+/// A Catalog entry's position fields: its own catalog metadata, the ordered
+/// specimens, and the primary. Flattened into `ShowcaseNode` so only a
+/// `catalog_entry` carries them. An entry with no specimens still sends
+/// `specimens: []` and `primary_note_id: null`.
+#[derive(Debug, Clone, Serialize)]
+pub struct CatalogEntryPayload {
+    pub entry: CatalogEntry,
+    pub specimens: Vec<Note>,
+    pub primary_note_id: Option<i64>,
+}
+
 #[derive(Debug, Clone, Serialize)]
 pub struct ShowcaseNode {
     pub id: i64,
@@ -91,14 +101,8 @@ pub struct ShowcaseNode {
     pub position: Option<i64>,
     pub note: Option<Note>,
     pub cover_note: Option<Note>,
-    /// Catalog entries carry their metadata, ordered specimens, and primary.
-    /// Other node kinds omit all three from the payload.
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub entry: Option<CatalogEntry>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub specimens: Option<Vec<Note>>,
-    #[serde(skip_serializing_if = "Option::is_none")]
-    pub primary_note_id: Option<i64>,
+    #[serde(flatten, skip_serializing_if = "Option::is_none")]
+    pub catalog: Option<CatalogEntryPayload>,
     pub children: Vec<ShowcaseNode>,
 }
 
@@ -137,7 +141,7 @@ fn map_node_row(row: &Row<'_>) -> rusqlite::Result<NodeRow> {
     })
 }
 
-const LIST_NODES_SQL: &str = "SELECT
+const NODE_SELECT: &str = "SELECT
         showcase_nodes.id,
         showcase_nodes.showcase_id,
         showcase_nodes.parent_node_id,
@@ -155,30 +159,16 @@ const LIST_NODES_SQL: &str = "SELECT
         showcase_nodes.issue_date,
         showcase_nodes.source
       FROM showcase_nodes
-      LEFT JOIN categories ON categories.id = showcase_nodes.category_id
-      WHERE showcase_nodes.showcase_id = ?1
-      ORDER BY showcase_nodes.position ASC, showcase_nodes.id ASC";
+      LEFT JOIN categories ON categories.id = showcase_nodes.category_id";
 
-const GET_NODE_SQL: &str = "SELECT
-        showcase_nodes.id,
-        showcase_nodes.showcase_id,
-        showcase_nodes.parent_node_id,
-        showcase_nodes.node_type,
-        showcase_nodes.category_id,
-        showcase_nodes.note_id,
-        showcase_nodes.cover_note_id,
-        showcase_nodes.position,
-        CASE
-          WHEN showcase_nodes.node_type = 'category' THEN categories.name
-          ELSE showcase_nodes.name
-        END AS name,
-        showcase_nodes.catalog_number,
-        showcase_nodes.denomination,
-        showcase_nodes.issue_date,
-        showcase_nodes.source
-      FROM showcase_nodes
-      LEFT JOIN categories ON categories.id = showcase_nodes.category_id
-      WHERE showcase_nodes.id = ?1";
+/// One node row, or every node of a Showcase, sharing the same 13 columns.
+fn node_rows_sql(tail: &str) -> String {
+    format!("{NODE_SELECT}\n      {tail}")
+}
+
+const LIST_NODES_TAIL: &str =
+    "WHERE showcase_nodes.showcase_id = ?1
+      ORDER BY showcase_nodes.position ASC, showcase_nodes.id ASC";
 
 // ---------------------------------------------------------------------------
 // Small helpers (mirror `db.js`)
@@ -518,32 +508,6 @@ pub fn rename_category(
 // Notes embedded in the tree (full `rowToNote` shapes with tags)
 // ---------------------------------------------------------------------------
 
-const NOTE_FIELDS: &str = "id,
-    collection_id,
-    display_order,
-    denomination,
-    issue_date,
-    catalog_number,
-    grading_company,
-    grade,
-    watermark,
-    serial,
-    url,
-    notes,
-    scraped_data,
-    images,
-    created_at,
-    updated_at,
-    owned";
-
-fn parse_json_text(value: Option<String>) -> Value {
-    match value {
-        None => Value::Null,
-        Some(text) if text.trim().is_empty() => Value::Null,
-        Some(text) => serde_json::from_str(&text).unwrap_or(Value::Null),
-    }
-}
-
 fn fetch_notes(conn: &Connection, ids: &[i64]) -> Result<HashMap<i64, Note>, DbError> {
     if ids.is_empty() {
         return Ok(HashMap::new());
@@ -552,31 +516,7 @@ fn fetch_notes(conn: &Connection, ids: &[i64]) -> Result<HashMap<i64, Note>, DbE
     let sql = format!("SELECT {NOTE_FIELDS} FROM banknotes WHERE id IN ({placeholders})");
     let mut stmt = conn.prepare(&sql).map_err(classify)?;
     let rows = stmt
-        .query_map(rusqlite::params_from_iter(ids.iter()), |row| {
-            let scraped_raw: Option<String> = row.get(12)?;
-            let images_raw: Option<String> = row.get(13)?;
-            let scraped = parse_json_text(scraped_raw);
-            Ok(Note {
-                id: row.get(0)?,
-                collection_id: row.get(1)?,
-                display_order: row.get(2)?,
-                denomination: row.get(3)?,
-                issue_date: row.get(4)?,
-                catalog_number: row.get(5)?,
-                grading_company: row.get(6)?,
-                grade: row.get(7)?,
-                watermark: row.get(8)?,
-                serial: row.get(9)?,
-                url: row.get(10)?,
-                notes: row.get(11)?,
-                owned: row.get::<_, i64>(16)? != 0,
-                scraped_data: if scraped.is_null() { None } else { Some(scraped) },
-                images: images::normalize_images(&parse_json_text(images_raw)),
-                created_at: row.get(14)?,
-                updated_at: row.get(15)?,
-                tags: Vec::new(),
-            })
-        })
+        .query_map(rusqlite::params_from_iter(ids.iter()), map_note)
         .map_err(classify)?
         .collect::<Result<Vec<_>, _>>()
         .map_err(classify)?;
@@ -632,29 +572,29 @@ struct SpecimenSet {
     primary: Option<i64>,
 }
 
-/// Every specimen in a Showcase in one query, grouped by its entry node.
-fn fetch_specimens(
+/// Specimen rows for a `showcase_nodes` filter column, grouped by entry node.
+/// `filter` is one of the two internal column paths below, never user input.
+fn query_specimens(
     conn: &Connection,
-    showcase_id: i64,
+    filter: &str,
+    key: i64,
 ) -> Result<HashMap<i64, SpecimenSet>, DbError> {
     let mut stmt = conn
-        .prepare(
+        .prepare(&format!(
             "SELECT showcase_catalog_notes.node_id,
                     showcase_catalog_notes.note_id,
                     showcase_catalog_notes.is_primary
              FROM showcase_catalog_notes
              INNER JOIN showcase_nodes
                ON showcase_nodes.id = showcase_catalog_notes.node_id
-             WHERE showcase_nodes.showcase_id = ?1
+             WHERE {filter} = ?1
              ORDER BY showcase_catalog_notes.node_id ASC,
                       showcase_catalog_notes.position ASC,
-                      showcase_catalog_notes.note_id ASC",
-        )
+                      showcase_catalog_notes.note_id ASC"
+        ))
         .map_err(classify)?;
     let rows: Vec<(i64, i64, bool)> = stmt
-        .query_map(params![showcase_id], |row| {
-            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
-        })
+        .query_map(params![key], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?)))
         .map_err(classify)?
         .collect::<Result<Vec<_>, _>>()
         .map_err(classify)?;
@@ -669,15 +609,29 @@ fn fetch_specimens(
     Ok(out)
 }
 
+/// Every specimen in a Showcase, grouped by its entry node.
+fn fetch_specimens(
+    conn: &Connection,
+    showcase_id: i64,
+) -> Result<HashMap<i64, SpecimenSet>, DbError> {
+    query_specimens(conn, "showcase_nodes.showcase_id", showcase_id)
+}
+
+/// One entry's specimens, without reading the rest of its Showcase.
+fn fetch_entry_specimens(conn: &Connection, node_id: i64) -> Result<SpecimenSet, DbError> {
+    Ok(query_specimens(conn, "showcase_catalog_notes.node_id", node_id)?
+        .remove(&node_id)
+        .unwrap_or_default())
+}
+
 fn node_from_row(
     row: NodeRow,
     notes: &HashMap<i64, Note>,
-    specimens: &HashMap<i64, SpecimenSet>,
+    specimens: Option<&SpecimenSet>,
 ) -> ShowcaseNode {
     // Only a catalog_entry carries the catalog payload; every other node kind
-    // omits `entry`, `specimens`, and `primary_note_id` from the wire.
+    // omits it from the wire.
     let is_entry = row.node_type == "catalog_entry";
-    let set = specimens.get(&row.id);
     ShowcaseNode {
         id: row.id,
         node_type: row.node_type,
@@ -689,22 +643,23 @@ fn node_from_row(
         position: row.position,
         note: row.note_id.and_then(|id| notes.get(&id).cloned()),
         cover_note: row.cover_note_id.and_then(|id| notes.get(&id).cloned()),
-        entry: is_entry.then(|| CatalogEntry {
-            catalog_number: row.catalog_number.unwrap_or_default(),
-            denomination: row.denomination.unwrap_or_default(),
-            issue_date: row.issue_date.unwrap_or_default(),
-            source: row.source.unwrap_or_default(),
+        catalog: is_entry.then(|| CatalogEntryPayload {
+            entry: CatalogEntry {
+                catalog_number: row.catalog_number.unwrap_or_default(),
+                denomination: row.denomination.unwrap_or_default(),
+                issue_date: row.issue_date.unwrap_or_default(),
+                source: row.source.unwrap_or_default(),
+            },
+            specimens: specimens
+                .map(|set| {
+                    set.ordered
+                        .iter()
+                        .filter_map(|id| notes.get(id).cloned())
+                        .collect()
+                })
+                .unwrap_or_default(),
+            primary_note_id: specimens.and_then(|set| set.primary),
         }),
-        specimens: is_entry.then(|| {
-            set.map(|set| {
-                set.ordered
-                    .iter()
-                    .filter_map(|id| notes.get(id).cloned())
-                    .collect()
-            })
-            .unwrap_or_default()
-        }),
-        primary_note_id: is_entry.then(|| set.and_then(|set| set.primary)).flatten(),
         children: Vec::new(),
     }
 }
@@ -718,9 +673,10 @@ fn build_tree(
     let mut parents: HashMap<i64, Option<i64>> = HashMap::new();
     let mut order: Vec<i64> = Vec::new();
     for row in rows {
-        order.push(row.id);
-        parents.insert(row.id, row.parent_node_id);
-        by_id.insert(row.id, node_from_row(row, notes, specimens));
+        let id = row.id;
+        order.push(id);
+        parents.insert(id, row.parent_node_id);
+        by_id.insert(id, node_from_row(row, notes, specimens.get(&id)));
     }
     // Rows arrive ordered `position, id`; appending in that order keeps every
     // sibling group ordered without a second sort.
@@ -757,53 +713,42 @@ fn build_tree(
 }
 
 fn get_tree(conn: &Connection, showcase_id: i64) -> Result<Vec<ShowcaseNode>, DbError> {
-    let mut stmt = conn.prepare(LIST_NODES_SQL).map_err(classify)?;
+    let mut stmt = conn
+        .prepare(&node_rows_sql(LIST_NODES_TAIL))
+        .map_err(classify)?;
     let rows = stmt
         .query_map(params![showcase_id], map_node_row)
         .map_err(classify)?
         .collect::<Result<Vec<_>, _>>()
         .map_err(classify)?;
     let specimens = fetch_specimens(conn, showcase_id)?;
-    let mut wanted: Vec<i64> = Vec::new();
-    for row in &rows {
-        for id in [row.note_id, row.cover_note_id].into_iter().flatten() {
-            if !wanted.contains(&id) {
-                wanted.push(id);
-            }
-        }
-    }
-    for set in specimens.values() {
-        for id in &set.ordered {
-            if !wanted.contains(id) {
-                wanted.push(*id);
-            }
-        }
-    }
+    let mut wanted: Vec<i64> = rows
+        .iter()
+        .flat_map(|row| [row.note_id, row.cover_note_id])
+        .flatten()
+        .collect();
+    wanted.extend(specimens.values().flat_map(|set| set.ordered.iter().copied()));
     let notes = fetch_notes(conn, &wanted)?;
     Ok(build_tree(rows, &notes, &specimens))
 }
 
 fn get_node(conn: &Connection, id: i64) -> Result<Option<ShowcaseNode>, DbError> {
-    let mut stmt = conn.prepare(GET_NODE_SQL).map_err(classify)?;
+    let mut stmt = conn
+        .prepare(&node_rows_sql("WHERE showcase_nodes.id = ?1"))
+        .map_err(classify)?;
     let row = match stmt.query_row(params![id], map_node_row) {
         Ok(row) => row,
         Err(rusqlite::Error::QueryReturnedNoRows) => return Ok(None),
         Err(error) => return Err(classify(error)),
     };
-    let specimens = fetch_specimens(conn, row.showcase_id)?;
-    let mut wanted = Vec::new();
-    for maybe in [row.note_id, row.cover_note_id].into_iter().flatten() {
-        wanted.push(maybe);
-    }
-    if let Some(set) = specimens.get(&id) {
-        for note_id in &set.ordered {
-            if !wanted.contains(note_id) {
-                wanted.push(*note_id);
-            }
-        }
-    }
+    let specimens = fetch_entry_specimens(conn, id)?;
+    let mut wanted: Vec<i64> = [row.note_id, row.cover_note_id]
+        .into_iter()
+        .flatten()
+        .collect();
+    wanted.extend(specimens.ordered.iter().copied());
     let notes = fetch_notes(conn, &wanted)?;
-    Ok(Some(node_from_row(row, &notes, &specimens)))
+    Ok(Some(node_from_row(row, &notes, Some(&specimens))))
 }
 
 fn next_position(
@@ -853,7 +798,9 @@ fn ensure_showcase(conn: &Connection, id: i64) -> Result<(), DbError> {
 }
 
 fn get_node_row(conn: &Connection, id: i64) -> Result<Option<NodeRow>, DbError> {
-    let mut stmt = conn.prepare(GET_NODE_SQL).map_err(classify)?;
+    let mut stmt = conn
+        .prepare(&node_rows_sql("WHERE showcase_nodes.id = ?1"))
+        .map_err(classify)?;
     match stmt.query_row(params![id], map_node_row) {
         Ok(row) => Ok(Some(row)),
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
@@ -956,6 +903,36 @@ fn add_grouping(
     get_node(conn, node_id)?.ok_or_else(|| DbError::Failed("Node not found.".to_owned()))
 }
 
+/// Resolve the placement parent for notes and Catalog entries: `parent_id`
+/// wins unless null, then `parent_node_id`. The row must exist in this
+/// Showcase; callers add their own node-type rule.
+fn resolve_parent(
+    conn: &Connection,
+    showcase_id: i64,
+    body: &Value,
+    missing_message: &str,
+) -> Result<NodeRow, DbError> {
+    let raw_parent = match body.get("parent_id") {
+        Some(value) if !value.is_null() => Some(value),
+        _ => body.get("parent_node_id"),
+    };
+    let Some(parent_value) = raw_parent.filter(|value| !value.is_null()) else {
+        return Err(DbError::Failed(missing_message.to_owned()));
+    };
+    let Some(parent_id) = js_number(parent_value).filter(|id| *id > 0) else {
+        return Err(DbError::Failed(
+            "A valid parent node is required.".to_owned(),
+        ));
+    };
+    let Some(parent) = get_node_row(conn, parent_id)? else {
+        return Err(DbError::Failed("Parent node not found.".to_owned()));
+    };
+    if parent.showcase_id != showcase_id {
+        return Err(DbError::Failed("Parent node not found.".to_owned()));
+    }
+    Ok(parent)
+}
+
 /// Notes batch under one parent, appended in the caller's order.
 fn add_notes_batch(
     conn: &mut Connection,
@@ -963,33 +940,13 @@ fn add_notes_batch(
     body: &Value,
 ) -> Result<Vec<ShowcaseNode>, DbError> {
     ensure_showcase(conn, showcase_id)?;
-    // `??`: `parent_id` wins unless null/missing, then `parent_node_id`.
-    let raw_parent = match body.get("parent_id") {
-        Some(value) if !value.is_null() => Some(value),
-        _ => body.get("parent_node_id"),
-    };
-    let Some(parent_value) = raw_parent.filter(|value| !value.is_null()) else {
-        return Err(DbError::Failed(
-            "A parent node is required for notes.".to_owned(),
-        ));
-    };
-    let Some(parent_id) = js_number(parent_value) else {
-        return Err(DbError::Failed(
-            "A valid parent node is required.".to_owned(),
-        ));
-    };
-    if parent_id <= 0 {
-        return Err(DbError::Failed(
-            "A valid parent node is required.".to_owned(),
-        ));
-    }
-    let parent = get_node_row(conn, parent_id)?;
-    let Some(parent) = parent else {
-        return Err(DbError::Failed("Parent node not found.".to_owned()));
-    };
-    if parent.showcase_id != showcase_id {
-        return Err(DbError::Failed("Parent node not found.".to_owned()));
-    }
+    let parent = resolve_parent(
+        conn,
+        showcase_id,
+        body,
+        "A parent node is required for notes.",
+    )?;
+    let parent_id = parent.id;
     if parent.node_type == "note" {
         return Err(DbError::Failed(
             "A note node cannot hold notes.".to_owned(),
@@ -1058,15 +1015,6 @@ struct CatalogEntryValues {
     source: Option<String>,
 }
 
-fn trimmed_text(value: Option<&Value>) -> String {
-    value
-        .filter(|value| !value.is_null())
-        .map(node_string)
-        .unwrap_or_default()
-        .trim()
-        .to_owned()
-}
-
 /// `{ entry: { catalog_number, denomination, issue_date, source } }` is
 /// required and replaced as a whole; a missing or non-object entry is a bad
 /// body.
@@ -1077,7 +1025,7 @@ fn parse_catalog_entry(body: &Value) -> Result<CatalogEntryValues, DbError> {
         ));
     };
     let field = |name: &str| {
-        let text = trimmed_text(entry.get(name));
+        let text = route_name(entry.get(name));
         (!text.is_empty()).then_some(text)
     };
     Ok(CatalogEntryValues {
@@ -1146,32 +1094,18 @@ fn add_catalog_entry(
     body: &Value,
 ) -> Result<ShowcaseNode, DbError> {
     ensure_showcase(conn, showcase_id)?;
-    // `??`, exactly like the notes batch: `parent_id` wins unless null.
-    let raw_parent = match body.get("parent_id") {
-        Some(value) if !value.is_null() => Some(value),
-        _ => body.get("parent_node_id"),
-    };
-    let Some(parent_value) = raw_parent.filter(|value| !value.is_null()) else {
-        return Err(DbError::Failed(
-            "A parent node is required for a catalog entry.".to_owned(),
-        ));
-    };
-    let Some(parent_id) = js_number(parent_value).filter(|id| *id > 0) else {
-        return Err(DbError::Failed(
-            "A valid parent node is required.".to_owned(),
-        ));
-    };
-    let Some(parent) = get_node_row(conn, parent_id)? else {
-        return Err(DbError::Failed("Parent node not found.".to_owned()));
-    };
-    if parent.showcase_id != showcase_id {
-        return Err(DbError::Failed("Parent node not found.".to_owned()));
-    }
+    let parent = resolve_parent(
+        conn,
+        showcase_id,
+        body,
+        "A parent node is required for a catalog entry.",
+    )?;
     if parent.node_type != "category" && parent.node_type != "grouping" {
         return Err(DbError::Failed(
             "A catalog entry must sit under a category or grouping.".to_owned(),
         ));
     }
+    let parent_id = parent.id;
     let entry = parse_catalog_entry(body)?;
     let note_ids = match body.get("note_ids") {
         None | Some(Value::Null) => Vec::new(),
@@ -1199,7 +1133,7 @@ fn add_catalog_entry(
     )
     .map_err(classify)?;
     let node_id = tx.last_insert_rowid();
-    insert_specimens(&tx, node_id, &note_ids, note_ids.first().copied())?;
+    insert_specimens(&tx, node_id, &note_ids, None)?;
     tx.commit().map_err(classify)?;
     get_node(conn, node_id)?.ok_or_else(|| DbError::Failed("Node not found.".to_owned()))
 }
@@ -1218,19 +1152,14 @@ fn replace_node_notes(
             "Only a catalog entry can hold specimens.".to_owned(),
         ));
     }
-    let Some(raw) = body.get("note_ids") else {
+    let Some(raw) = body.get("note_ids").filter(|value| !value.is_null()) else {
         return Err(DbError::Failed(
             "A list of note ids is required.".to_owned(),
         ));
     };
-    if raw.is_null() {
-        return Err(DbError::Failed(
-            "A list of note ids is required.".to_owned(),
-        ));
-    }
     let note_ids = parse_specimen_ids(conn, raw)?;
     let primary = match body.get("primary_note_id") {
-        None | Some(Value::Null) => note_ids.first().copied(),
+        None | Some(Value::Null) => None,
         Some(value) => match js_number(value).filter(|id| *id > 0) {
             Some(id) if note_ids.contains(&id) => Some(id),
             _ => {
@@ -1275,7 +1204,6 @@ fn add_showcase_node(
         "notes" => add_notes_batch(conn, showcase_id, body).map(AddNodeResult::Batch),
         "catalog_entry" => add_catalog_entry(conn, showcase_id, body)
             .map(|node| AddNodeResult::Single(Box::new(node))),
-
         _ => {
             let label = body
                 .get("type")
@@ -1669,7 +1597,7 @@ async fn update_node_notes_handler(
     let Some(id) = parse_id(&raw_id) else {
         return bad_request("Node id must be a positive integer.");
     };
-    let exists = match db::with_conn(&state.pool, move |conn| get_node(conn, id)).await {
+    let exists = match db::with_conn(&state.pool, move |conn| get_node_row(conn, id)).await {
         Ok(node) => node.is_some(),
         Err(error) => return db_failure(error),
     };

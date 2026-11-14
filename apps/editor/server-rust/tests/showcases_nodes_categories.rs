@@ -890,6 +890,35 @@ fn specimen_rows(dir: &tempfile::TempDir, node_id: i64) -> Vec<(i64, i64, bool)>
     rows
 }
 
+/// The specimen ids of a node payload, in wire order.
+fn specimen_ids(node: &Value) -> Vec<Value> {
+    node["specimens"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|specimen| specimen["id"].clone())
+        .collect()
+}
+
+/// Fetch the tree and return one direct child of the first root, by id.
+async fn tree_child(app: Router, showcase_id: i64, node_id: Value) -> Value {
+    let (status, tree) = call(
+        app,
+        "GET",
+        &format!("/api/showcases/{showcase_id}/tree"),
+        None,
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{tree:?}");
+    tree["nodes"][0]["children"]
+        .as_array()
+        .expect("root children")
+        .iter()
+        .find(|node| node["id"] == node_id)
+        .cloned()
+        .expect("node in tree")
+}
+
 #[tokio::test]
 async fn catalog_entry_creates_with_zero_one_and_many_specimens() {
     let (_dir, state) = fresh_state();
@@ -914,6 +943,7 @@ async fn catalog_entry_creates_with_zero_one_and_many_specimens() {
     assert_eq!(empty["entry"]["denomination"], json!("20 lei"));
     assert_eq!(empty["specimens"], json!([]));
     assert!(empty["primary_note_id"].is_null());
+    assert!(empty.as_object().unwrap().contains_key("primary_note_id"));
     assert_eq!(empty["children"], json!([]));
 
     // One specimen: it is the primary.
@@ -941,12 +971,7 @@ async fn catalog_entry_creates_with_zero_one_and_many_specimens() {
     .await;
     assert_eq!(status, StatusCode::CREATED, "{body:?}");
     let many = body["node"].clone();
-    let ordered: Vec<Value> = many["specimens"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|specimen| specimen["id"].clone())
-        .collect();
+    let ordered = specimen_ids(&many);
     assert_eq!(ordered, vec![third["id"].clone(), first["id"].clone(), second["id"].clone()]);
     assert_eq!(many["primary_note_id"], third["id"]);
 
@@ -1025,7 +1050,7 @@ async fn catalog_entry_metadata_update_leaves_the_note_alone() {
 
 #[tokio::test]
 async fn catalog_entry_notes_replace_reorder_promote_and_clear() {
-    let (_dir, state) = fresh_state();
+    let (dir, state) = fresh_state();
     let app = create_app(state);
     let showcase = create_showcase(app.clone(), Some("Specimen sets")).await;
     let showcase_id = showcase["id"].as_i64().unwrap();
@@ -1053,12 +1078,7 @@ async fn catalog_entry_notes_replace_reorder_promote_and_clear() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
-    let ids: Vec<Value> = body["node"]["specimens"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|specimen| specimen["id"].clone())
-        .collect();
+    let ids = specimen_ids(&body["node"]);
     assert_eq!(ids, vec![third["id"].clone(), first["id"].clone()]);
     assert_eq!(body["node"]["primary_note_id"], third["id"]);
 
@@ -1074,12 +1094,7 @@ async fn catalog_entry_notes_replace_reorder_promote_and_clear() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
-    let ids: Vec<Value> = body["node"]["specimens"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .map(|specimen| specimen["id"].clone())
-        .collect();
+    let ids = specimen_ids(&body["node"]);
     assert_eq!(ids, vec![first["id"].clone(), third["id"].clone()]);
     assert_eq!(body["node"]["primary_note_id"], third["id"]);
 
@@ -1109,6 +1124,19 @@ async fn catalog_entry_notes_replace_reorder_promote_and_clear() {
     assert_eq!(body["node"]["node_type"], json!("catalog_entry"));
     assert_eq!(body["node"]["specimens"], json!([]));
     assert!(body["node"]["primary_note_id"].is_null());
+    assert!(body["node"].as_object().unwrap().contains_key("primary_note_id"));
+
+    // Failed replacements leave the previous set untouched (atomic).
+    let (status, _) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/nodes/{node_id}/notes"),
+        Some(json!({ "note_ids": [first["id"], second["id"]], "primary_note_id": second["id"] })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK);
+    let before = specimen_rows(&dir, node_id);
+    assert_eq!(before.len(), 2);
 
     let outside = call(
         app.clone(),
@@ -1118,6 +1146,7 @@ async fn catalog_entry_notes_replace_reorder_promote_and_clear() {
     )
     .await;
     assert_eq!(outside.0, StatusCode::BAD_REQUEST);
+    assert_eq!(specimen_rows(&dir, node_id), before);
 
     let duplicated = call(
         app.clone(),
@@ -1127,6 +1156,7 @@ async fn catalog_entry_notes_replace_reorder_promote_and_clear() {
     )
     .await;
     assert_eq!(duplicated.0, StatusCode::BAD_REQUEST);
+    assert_eq!(specimen_rows(&dir, node_id), before);
 
     let unknown_note = call(
         app.clone(),
@@ -1136,6 +1166,7 @@ async fn catalog_entry_notes_replace_reorder_promote_and_clear() {
     )
     .await;
     assert_eq!(unknown_note.0, StatusCode::BAD_REQUEST);
+    assert_eq!(specimen_rows(&dir, node_id), before);
 
     let missing = call(
         app.clone(),
@@ -1145,6 +1176,7 @@ async fn catalog_entry_notes_replace_reorder_promote_and_clear() {
     )
     .await;
     assert_eq!(missing.0, StatusCode::BAD_REQUEST);
+    assert_eq!(specimen_rows(&dir, node_id), before);
 
     let unknown_node = call(
         app.clone(),
@@ -1155,15 +1187,15 @@ async fn catalog_entry_notes_replace_reorder_promote_and_clear() {
     .await;
     assert_eq!(unknown_node.0, StatusCode::NOT_FOUND);
 
-    // A note leaf is not a specimen set.
-    let note_node = call(
+    // A category placement is not a specimen set.
+    let category_node = call(
         app.clone(),
         "PUT",
         &format!("/api/nodes/{}/notes", category["id"]),
         Some(json!({ "note_ids": [first["id"]] })),
     )
     .await;
-    assert_eq!(note_node.0, StatusCode::BAD_REQUEST);
+    assert_eq!(category_node.0, StatusCode::BAD_REQUEST);
 }
 
 #[tokio::test]
@@ -1290,19 +1322,7 @@ async fn catalog_entry_survives_note_deletion_and_cascades_on_entry_delete() {
     )
     .await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
-    let (_, tree) = call(
-        app.clone(),
-        "GET",
-        &format!("/api/showcases/{showcase_id}/tree"),
-        None,
-    )
-    .await;
-    let entry = tree["nodes"][0]["children"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|node| node["id"] == entry_id)
-        .expect("entry survives the note delete");
+    let entry = tree_child(app.clone(), showcase_id, json!(entry_id)).await;
     assert_eq!(entry["specimens"].as_array().unwrap().len(), 1);
     assert_eq!(entry["specimens"][0]["id"], second["id"]);
     assert_eq!(entry["primary_note_id"], second["id"]);
@@ -1316,21 +1336,10 @@ async fn catalog_entry_survives_note_deletion_and_cascades_on_entry_delete() {
     )
     .await;
     assert_eq!(status, StatusCode::OK);
-    let (_, tree) = call(
-        app.clone(),
-        "GET",
-        &format!("/api/showcases/{showcase_id}/tree"),
-        None,
-    )
-    .await;
-    let lone_entry = tree["nodes"][0]["children"]
-        .as_array()
-        .unwrap()
-        .iter()
-        .find(|node| node["id"] == lone_entry_id)
-        .expect("entry degrades instead of disappearing");
+    let lone_entry = tree_child(app.clone(), showcase_id, json!(lone_entry_id)).await;
     assert_eq!(lone_entry["specimens"], json!([]));
     assert!(lone_entry["primary_note_id"].is_null());
+    assert!(lone_entry.as_object().unwrap().contains_key("primary_note_id"));
 
     // Deleting an entry cascades its join rows.
     assert_eq!(specimen_rows(&dir, entry_id).len(), 1);
@@ -1404,6 +1413,20 @@ async fn showcase_counts_positions_by_ownership() {
     assert_eq!(counted["catalog_entry_count"], json!(3));
     assert_eq!(counted["entry_count"], json!(5));
     assert_eq!(counted["owned_count"], json!(2));
+
+    // The single-showcase payload carries the same counts.
+    let (status, body) = call(
+        app.clone(),
+        "PUT",
+        &format!("/api/showcases/{showcase_id}"),
+        Some(json!({ "name": "Catalog counts renamed" })),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["showcase"]["note_count"], json!(2));
+    assert_eq!(body["showcase"]["catalog_entry_count"], json!(3));
+    assert_eq!(body["showcase"]["entry_count"], json!(5));
+    assert_eq!(body["showcase"]["owned_count"], json!(2));
 
     // The tree's note payloads carry the owned flag for leaves and specimens.
     let (_, tree) = call(
