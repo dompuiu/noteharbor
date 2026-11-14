@@ -106,11 +106,11 @@ void main() {
 
     await mouseDrag(tester, const Offset(-600, 0));
     expect(find.text('Image 3 of 3'), findsOneWidget);
-    expect(find.text('Test - KB-3'), findsOneWidget);
+    expect(find.text('TEST - KB-3'), findsOneWidget);
 
     await mouseDrag(tester, const Offset(600, 0));
     expect(find.text('Image 2 of 3'), findsOneWidget);
-    expect(find.text('Test - KB-2'), findsOneWidget);
+    expect(find.text('TEST - KB-2'), findsOneWidget);
   });
 
   testWidgets('a rightward mouse drag wraps from the first to the last image', (
@@ -122,7 +122,7 @@ void main() {
     await mouseDrag(tester, const Offset(600, 0));
 
     expect(find.text('Image 3 of 3'), findsOneWidget);
-    expect(find.text('Test - KB-3'), findsOneWidget);
+    expect(find.text('TEST - KB-3'), findsOneWidget);
   });
 
   testWidgets('a leftward mouse drag wraps from the last to the first image', (
@@ -134,7 +134,7 @@ void main() {
     await mouseDrag(tester, const Offset(-600, 0));
 
     expect(find.text('Image 1 of 3'), findsOneWidget);
-    expect(find.text('Test - KB-1'), findsOneWidget);
+    expect(find.text('TEST - KB-1'), findsOneWidget);
   });
 
   testWidgets('a touch swipe wraps at both ends', (WidgetTester tester) async {
@@ -155,7 +155,7 @@ void main() {
   ) async {
     await pumpLightbox(tester, count: 1, issueDate: '1966');
 
-    expect(find.text('Test - KB-1'), findsOneWidget);
+    expect(find.text('TEST - KB-1'), findsOneWidget);
     expect(find.text('1966'), findsOneWidget);
   });
 
@@ -164,7 +164,7 @@ void main() {
   ) async {
     await pumpLightbox(tester, count: 1);
 
-    expect(find.text('Test - KB-1'), findsOneWidget);
+    expect(find.text('TEST - KB-1'), findsOneWidget);
     expect(find.text('1966'), findsNothing);
   });
 }

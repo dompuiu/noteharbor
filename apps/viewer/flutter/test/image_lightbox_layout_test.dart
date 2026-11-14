@@ -440,6 +440,34 @@ void main() {
       );
     }
   });
+
+  testWidgets('the headline wears the popover step of the title voice', (
+    tester,
+  ) async {
+    await pumpPopover(tester, const Size(1200, 800));
+
+    // DESIGN.md's popover headline: 800, 1.2rem/1.3, -0.01em, uppercase — one
+    // step below the slideshow's 2.1rem denomination.
+    final title = tester.widget<Text>(find.text('TEST - KB-1'));
+    final style = title.style!;
+    expect(style.fontSize, 19.2);
+    expect(style.fontWeight, FontWeight.w800);
+    expect(style.letterSpacing, closeTo(-0.192, 1e-9));
+    expect(style.height, 1.3);
+  });
+
+  testWidgets('the room floats on the popover shadow step', (tester) async {
+    await pumpPopover(tester, const Size(1200, 800));
+
+    final decoration =
+        tester.widget<DecoratedBox>(room).decoration as BoxDecoration;
+    final shadow = decoration.boxShadow!.single;
+    // 0 24px 48px rgba(0, 0, 0, 0.36): the smaller step the slideshow's
+    // room shadow documents, not the room's own 0 30px 80px.
+    expect(shadow.offset, const Offset(0, 24));
+    expect(shadow.blurRadius, 48);
+    expect(shadow.color, const Color(0x5C000000));
+  });
 }
 
 Future<ui.Image> _solidImage(int width, int height) async {

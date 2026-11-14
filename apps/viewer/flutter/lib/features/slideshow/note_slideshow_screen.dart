@@ -221,7 +221,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
     }
     _pageController.animateToPage(
       page,
-      duration: const Duration(milliseconds: 220),
+      duration: kRoomPageStepDuration,
       curve: Curves.easeOut,
     );
   }
