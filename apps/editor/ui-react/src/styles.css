@@ -6817,7 +6817,8 @@ button.tag {
   opacity: 0.55;
 }
 
-/* A short sentence under a checkbox control, aligned with its label. */
+/* A short sentence under a checkbox control, aligned with its label:
+   15px checkbox + the .field-checkbox gap. */
 .field-checkbox-hint {
   margin: 0 0 0 23px;
   font-size: 0.8rem;

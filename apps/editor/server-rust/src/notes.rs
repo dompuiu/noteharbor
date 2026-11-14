@@ -731,14 +731,19 @@ fn payload_string(body: &Value, key: &str) -> String {
 
 /// `owned` is the Note's library-wide flag. A body that omits it keeps the
 /// schema default (owned); JSON booleans and numbers and the multipart form's
-/// `true`/`false` text all read the same way.
-pub fn payload_owned(body: &Value) -> bool {
+/// `true`/`false` text all read the same way. Anything else is an invalid
+/// body, reported as a 400 like an unparsable `scraped_data`.
+fn payload_owned(body: &Value) -> Result<bool, String> {
     match body.get("owned") {
-        None | Some(Value::Null) => true,
-        Some(Value::Bool(flag)) => *flag,
-        Some(Value::Number(number)) => number.as_f64().is_some_and(|value| value != 0.0),
-        Some(Value::String(text)) => parse_boolean_flag(Some(text)),
-        Some(_) => true,
+        None | Some(Value::Null) => Ok(true),
+        Some(Value::Bool(flag)) => Ok(*flag),
+        Some(Value::Number(number)) => Ok(number.as_f64().is_some_and(|value| value != 0.0)),
+        Some(Value::String(text)) => match text.trim().to_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => Ok(true),
+            "0" | "false" | "no" | "off" | "" => Ok(false),
+            _ => Err("owned must be a boolean.".to_owned()),
+        },
+        Some(_) => Err("owned must be a boolean.".to_owned()),
     }
 }
 
@@ -768,7 +773,7 @@ pub fn sanitize_payload(body: &Value) -> Result<NotePayload, String> {
         serial: payload_string(body, "serial"),
         url: payload_string(body, "url"),
         notes: payload_string(body, "notes"),
-        owned: payload_owned(body),
+        owned: payload_owned(body)?,
         tags: normalize_tags(body.get("tags")),
         scraped_data,
     })

@@ -142,7 +142,7 @@ async fn note_owned_defaults_true_when_the_payload_omits_it() {
     let collection = create_collection(app.clone(), "Notes Owned Default").await;
     let id = collection["id"].as_i64().unwrap();
 
-    let created = create_note(app.clone(), id, json!({ "denomination": "5 Lei" })).await;
+    let created = create_note(app.clone(), id, json!({})).await;
     assert_eq!(created["owned"], json!(true));
 
     let (_, reread) =
@@ -164,26 +164,57 @@ async fn note_owned_can_be_created_false_and_updated_both_ways() {
     let collection = create_collection(app.clone(), "Notes Owned Update").await;
     let id = collection["id"].as_i64().unwrap();
 
-    let created = create_note(app.clone(), id, json!({ "denomination": "5 Lei", "owned": false })).await;
+    let created = create_note(app.clone(), id, json!({ "owned": false })).await;
     assert_eq!(created["owned"], json!(false));
     let note_id = created["id"].as_i64().unwrap();
     let path = format!("/api/collections/{id}/notes/{note_id}");
 
-    let (status, body) =
-        call(app.clone(), "PUT", &path, Some(json!({ "denomination": "5 Lei", "owned": true }))).await;
+    // Both directions, so a default cannot mask an ignored write.
+    for owned in [true, false] {
+        let (status, body) =
+            call(app.clone(), "PUT", &path, Some(json!({ "denomination": "5 Lei", "owned": owned }))).await;
+        assert_eq!(status, StatusCode::OK, "{body:?}");
+        assert_eq!(body["note"]["owned"], json!(owned));
+
+        let (_, reread) = call(app.clone(), "GET", &path, None).await;
+        assert_eq!(reread["note"]["owned"], json!(owned));
+    }
+}
+
+#[tokio::test]
+async fn note_update_without_owned_restores_the_default() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let collection = create_collection(app.clone(), "Notes Owned Reset").await;
+    let id = collection["id"].as_i64().unwrap();
+    let created = create_note(app.clone(), id, json!({ "owned": false })).await;
+    let note_id = created["id"].as_i64().unwrap();
+
+    // An update replaces the whole payload, so an omitted flag falls back to
+    // the schema default rather than silently keeping the old value.
+    let (status, body) = call(
+        app.clone(), "PUT", &format!("/api/collections/{id}/notes/{note_id}"),
+        Some(json!({ "denomination": "5 Lei" })),
+    ).await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
     assert_eq!(body["note"]["owned"], json!(true));
+}
 
-    let (_, reread) = call(app.clone(), "GET", &path, None).await;
-    assert_eq!(reread["note"]["owned"], json!(true));
+#[tokio::test]
+async fn note_owned_rejects_a_non_boolean_body() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let collection = create_collection(app.clone(), "Notes Owned Invalid").await;
+    let id = collection["id"].as_i64().unwrap();
 
-    let (status, body) =
-        call(app.clone(), "PUT", &path, Some(json!({ "denomination": "5 Lei", "owned": false }))).await;
-    assert_eq!(status, StatusCode::OK, "{body:?}");
-    assert_eq!(body["note"]["owned"], json!(false));
-
-    let (_, reread) = call(app, "GET", &path, None).await;
-    assert_eq!(reread["note"]["owned"], json!(false));
+    for bad in [json!("maybe"), json!({}), json!([])] {
+        let (status, body) = call(
+            app.clone(), "POST", &format!("/api/collections/{id}/notes"),
+            Some(json!({ "denomination": "5 Lei", "owned": bad })),
+        ).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{body:?}");
+        assert!(body["error"].as_str().unwrap().contains("owned must be a boolean"), "{body:?}");
+    }
 }
 
 #[tokio::test]

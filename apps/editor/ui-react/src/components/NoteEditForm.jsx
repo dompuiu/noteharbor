@@ -1496,7 +1496,8 @@ function NoteEditForm({
   const notesInputId = fieldInputId("notes");
   const notesSourceId = `${notesInputId}-source`;
   const notesScrapedFrom = scrapedFieldSource("notes");
-  const ownedHintId = "edit-note-owned-hint";
+  const ownedInputId = fieldInputId("owned");
+  const ownedHintId = `${ownedInputId}-hint`;
   const scrapedCount = Object.keys(scrapeUndo ?? {}).length;
   // Create mode titles the screen with the mode's own wording; edit mode
   // titles it with the note's denomination, falling back the same way the
@@ -1948,11 +1949,11 @@ function NoteEditForm({
           {/* Ownership belongs to the Note itself, not to any one Showcase,
               so the label says nothing about where it appears. */}
           <div className="field-block full-span">
-            <label className="field-checkbox" htmlFor={fieldInputId("owned")}>
+            <label className="field-checkbox" htmlFor={ownedInputId}>
               <input
                 aria-describedby={ownedHintId}
                 checked={form.owned}
-                id={fieldInputId("owned")}
+                id={ownedInputId}
                 name="owned"
                 onChange={(event) =>
                   setForm((current) => ({
