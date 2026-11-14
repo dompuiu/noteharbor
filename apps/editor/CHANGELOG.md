@@ -4,6 +4,8 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.13.0] - 2026-11-14
+
 ### Changed
 
 - All notes: the filter bar opens on the Catalog field, like the Table screen and the Viewer's All notes scope, instead of All fields; every other field stays one pick away in the same menu.
