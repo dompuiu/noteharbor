@@ -259,24 +259,40 @@ mod catalog_schema {
         conn
     }
 
-    fn columns(conn: &Connection, table: &str) -> Vec<String> {
-        let mut stmt = conn
-            .prepare("SELECT name FROM pragma_table_info(?1)")
-            .expect("prepare columns");
-        stmt.query_map(params![table], |row| row.get::<_, String>(0))
-            .expect("query columns")
+    /// Runs the migrations, then hands back a raw connection to inspect them.
+    fn initialized(dir: &tempfile::TempDir) -> Connection {
+        let path = db_path(dir);
+        let pool = editor_server_rust::db::open_pool(&path).expect("pool opens");
+        drop(pool);
+        open(&path)
+    }
+
+    fn rows<T, P: rusqlite::Params>(
+        conn: &Connection,
+        sql: &str,
+        params: P,
+        map: impl FnMut(&rusqlite::Row<'_>) -> rusqlite::Result<T>,
+    ) -> Vec<T> {
+        let mut stmt = conn.prepare(sql).expect("prepare query");
+        stmt.query_map(params, map)
+            .expect("query rows")
             .collect::<Result<Vec<_>, _>>()
-            .expect("collect columns")
+            .expect("collect rows")
+    }
+
+    fn columns(conn: &Connection, table: &str) -> Vec<String> {
+        rows(conn, "SELECT name FROM pragma_table_info(?1)", params![table], |row| {
+            row.get(0)
+        })
     }
 
     fn objects(conn: &Connection, kind: &str) -> Vec<String> {
-        let mut stmt = conn
-            .prepare("SELECT name FROM sqlite_master WHERE type = ?1 ORDER BY name")
-            .expect("prepare objects");
-        stmt.query_map(params![kind], |row| row.get::<_, String>(0))
-            .expect("query objects")
-            .collect::<Result<Vec<_>, _>>()
-            .expect("collect objects")
+        rows(
+            conn,
+            "SELECT name FROM sqlite_master WHERE type = ?1 ORDER BY name",
+            params![kind],
+            |row| row.get(0),
+        )
     }
 
     fn table_sql(conn: &Connection, table: &str) -> String {
@@ -288,6 +304,30 @@ mod catalog_schema {
         .expect("table sql")
         .to_uppercase()
     }
+
+    fn sorted_columns(conn: &Connection, table: &str) -> Vec<String> {
+        let mut names = columns(conn, table);
+        names.sort();
+        names
+    }
+
+    const SHOWCASE_NODE_COLUMNS: [&str; 15] = [
+        "catalog_number",
+        "category_id",
+        "cover_note_id",
+        "created_at",
+        "denomination",
+        "id",
+        "issue_date",
+        "name",
+        "node_type",
+        "note_id",
+        "parent_node_id",
+        "position",
+        "showcase_id",
+        "source",
+        "updated_at",
+    ];
 
     fn seed_note(conn: &Connection, collection_id: i64, catalog_number: &str) -> i64 {
         conn.execute(
@@ -322,11 +362,11 @@ mod catalog_schema {
         (collection_id, conn.last_insert_rowid())
     }
 
-    fn specimen(conn: &Connection, node_id: i64, note_id: i64, position: i64) {
+    fn specimen(conn: &Connection, node_id: i64, note_id: i64, position: i64, primary: bool) {
         conn.execute(
-            "INSERT INTO showcase_catalog_notes (node_id, note_id, position)
-             VALUES (?1, ?2, ?3)",
-            params![node_id, note_id, position],
+            "INSERT INTO showcase_catalog_notes (node_id, note_id, position, is_primary)
+             VALUES (?1, ?2, ?3, ?4)",
+            params![node_id, note_id, position, primary],
         )
         .expect("insert specimen");
     }
@@ -341,26 +381,27 @@ mod catalog_schema {
         .ok()
     }
 
+    fn read_owned(conn: &Connection, id: i64) -> i64 {
+        conn.query_row("SELECT owned FROM banknotes WHERE id = ?1", params![id], |row| row.get(0))
+            .expect("read owned")
+    }
+
     #[test]
     fn fresh_database_has_the_catalog_schema() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let pool = editor_server_rust::db::open_pool(&db_path(&dir)).expect("pool opens");
-        drop(pool);
+        let conn = initialized(&dir);
 
-        let conn = open(&db_path(&dir));
-
-        assert!(columns(&conn, "banknotes").contains(&"owned".to_owned()));
+        assert!(columns(&conn, "banknotes").iter().any(|value| value == "owned"));
 
         assert!(
             table_sql(&conn, "showcase_nodes").contains("CATALOG_ENTRY"),
             "showcase_nodes must accept catalog_entry"
         );
-        for column in ["catalog_number", "denomination", "issue_date", "source"] {
-            assert!(
-                columns(&conn, "showcase_nodes").contains(&column.to_owned()),
-                "showcase_nodes is missing {column}"
-            );
-        }
+        assert_eq!(
+            sorted_columns(&conn, "showcase_nodes"),
+            SHOWCASE_NODE_COLUMNS,
+            "the fresh tree shape"
+        );
 
         let indexes = objects(&conn, "index");
         for index in [
@@ -369,26 +410,32 @@ mod catalog_schema {
             "idx_showcase_catalog_notes_primary",
             "idx_showcase_catalog_notes_position",
         ] {
-            assert!(indexes.contains(&index.to_owned()), "missing index {index}");
+            assert!(
+                indexes.iter().any(|value| value == index),
+                "missing index {index}"
+            );
         }
 
         let triggers = objects(&conn, "trigger");
         for trigger in [
+            "trg_showcase_catalog_notes_demote_insert",
+            "trg_showcase_catalog_notes_demote_update",
             "trg_showcase_catalog_notes_first_primary",
             "trg_showcase_catalog_notes_promote_primary",
         ] {
-            assert!(triggers.contains(&trigger.to_owned()), "missing trigger {trigger}");
+            assert!(
+                triggers.iter().any(|value| value == trigger),
+                "missing trigger {trigger}"
+            );
         }
 
-        let key_columns: Vec<(String, i64)> = {
-            let mut stmt = conn
-                .prepare("SELECT name, pk FROM pragma_table_info('showcase_catalog_notes') WHERE pk > 0 ORDER BY pk")
-                .expect("prepare pk");
-            stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
-                .expect("query pk")
-                .collect::<Result<Vec<_>, _>>()
-                .expect("collect pk")
-        };
+        let key_columns = rows(
+            &conn,
+            "SELECT name, pk FROM pragma_table_info('showcase_catalog_notes')
+             WHERE pk > 0 ORDER BY pk",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        );
         assert_eq!(
             key_columns,
             vec![("node_id".to_owned(), 1), ("note_id".to_owned(), 2)],
@@ -397,13 +444,9 @@ mod catalog_schema {
     }
 
     #[test]
-    fn notes_migrate_as_owned_and_keep_the_flag_across_reopens() {
+    fn owned_defaults_to_one_and_keeps_the_flag_across_reopens() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let path = db_path(&dir);
-        let pool = editor_server_rust::db::open_pool(&path).expect("pool opens");
-        drop(pool);
-
-        let conn = open(&path);
+        let conn = initialized(&dir);
         let collection_id = {
             conn.execute("INSERT INTO collections (name) VALUES ('Owned')", [])
                 .expect("insert collection");
@@ -414,75 +457,81 @@ mod catalog_schema {
         conn.execute("UPDATE banknotes SET owned = 0 WHERE id = ?1", params![seen])
             .expect("mark seen");
 
-        assert_eq!(read_owned_from(&conn, owned), 1, "existing notes migrate as owned");
-        assert_eq!(read_owned_from(&conn, seen), 0);
+        assert_eq!(read_owned(&conn, owned), 1, "existing notes migrate as owned");
+        assert_eq!(read_owned(&conn, seen), 0);
         drop(conn);
 
-        let pool = editor_server_rust::db::open_pool(&path).expect("pool reopens");
-        drop(pool);
-
-        let conn = open(&path);
-        assert_eq!(read_owned_from(&conn, owned), 1);
-        assert_eq!(read_owned_from(&conn, seen), 0);
-    }
-
-    fn read_owned_from(conn: &Connection, id: i64) -> i64 {
-        conn.query_row("SELECT owned FROM banknotes WHERE id = ?1", params![id], |row| row.get(0))
-            .expect("read owned")
+        let conn = initialized(&dir);
+        assert_eq!(read_owned(&conn, owned), 1);
+        assert_eq!(read_owned(&conn, seen), 0);
     }
 
     #[test]
     fn specimen_triggers_keep_exactly_one_primary() {
         let dir = tempfile::tempdir().expect("tempdir");
-        let pool = editor_server_rust::db::open_pool(&db_path(&dir)).expect("pool opens");
-        drop(pool);
-        let conn = open(&db_path(&dir));
+        let conn = initialized(&dir);
 
         let (collection_id, entry_id) = seed_entry(&conn);
         let first = seed_note(&conn, collection_id, "22a1");
         let second = seed_note(&conn, collection_id, "22a2");
         let third = seed_note(&conn, collection_id, "22a3");
+        let fourth = seed_note(&conn, collection_id, "22a4");
 
-        specimen(&conn, entry_id, second, 2);
-        assert_eq!(primary_note(&conn, entry_id), Some(second), "first specimen is primary");
-
-        specimen(&conn, entry_id, first, 1);
+        // An explicit primary inserted first wins; the following row keeps it.
+        specimen(&conn, entry_id, second, 2, true);
+        specimen(&conn, entry_id, first, 1, false);
         assert_eq!(
             primary_note(&conn, entry_id),
             Some(second),
-            "a later insert does not steal primacy"
+            "an explicit primary survives later inserts"
         );
 
-        let duplicate_primary = conn.execute(
+        // A later explicit primary takes over instead of colliding with the
+        // partial unique index: the schema demotes the old one.
+        specimen(&conn, entry_id, third, 3, true);
+        assert_eq!(primary_note(&conn, entry_id), Some(third), "an explicit primary takes over");
+        let primaries = rows(
+            &conn,
+            "SELECT note_id FROM showcase_catalog_notes WHERE node_id = ?1 AND is_primary = 1",
+            params![entry_id],
+            |row| row.get::<_, i64>(0),
+        );
+        assert_eq!(primaries, vec![third], "at most one primary");
+
+        let invalid_primary = conn.execute(
             "INSERT INTO showcase_catalog_notes (node_id, note_id, position, is_primary)
-             VALUES (?1, ?2, 3, 1)",
-            params![entry_id, third],
+             VALUES (?1, ?2, 4, 2)",
+            params![entry_id, fourth],
         );
-        assert!(
-            duplicate_primary.is_err(),
-            "a second primary must violate the partial unique index"
-        );
+        assert!(invalid_primary.is_err(), "is_primary is a 0/1 flag");
+
+        // Promoting by update moves primacy the same way.
+        conn.execute(
+            "UPDATE showcase_catalog_notes SET is_primary = 1
+             WHERE node_id = ?1 AND note_id = ?2",
+            params![entry_id, first],
+        )
+        .expect("promote by update");
+        assert_eq!(primary_note(&conn, entry_id), Some(first), "update promotes");
 
         // Removing the primary promotes the lowest-position specimen.
         conn.execute(
             "DELETE FROM showcase_catalog_notes WHERE node_id = ?1 AND note_id = ?2",
-            params![entry_id, second],
+            params![entry_id, first],
         )
         .expect("delete primary");
-        assert_eq!(primary_note(&conn, entry_id), Some(first), "promotion by position");
+        assert_eq!(primary_note(&conn, entry_id), Some(second), "promotion by position");
 
         // Deleting the Note from the library cascades and promotes as well.
-        specimen(&conn, entry_id, third, 3);
-        conn.execute("DELETE FROM banknotes WHERE id = ?1", params![first])
+        conn.execute("DELETE FROM banknotes WHERE id = ?1", params![second])
             .expect("delete note");
-        let remaining: i64 = conn
-            .query_row(
-                "SELECT COUNT(*) FROM showcase_catalog_notes WHERE node_id = ?1",
-                params![entry_id],
-                |row| row.get(0),
-            )
-            .expect("count specimens");
-        assert_eq!(remaining, 1, "only the other specimen survives");
+        let remaining = rows(
+            &conn,
+            "SELECT note_id FROM showcase_catalog_notes WHERE node_id = ?1",
+            params![entry_id],
+            |row| row.get::<_, i64>(0),
+        );
+        assert_eq!(remaining, vec![third], "only the other specimen survives");
         assert_eq!(primary_note(&conn, entry_id), Some(third), "cascade promotes");
 
         // The entry outlives its specimens: unseen, not deleted.
@@ -502,13 +551,13 @@ mod catalog_schema {
         assert_eq!(entry_type, "catalog_entry");
 
         // Deleting the entry takes its specimens with it.
-        specimen(&conn, entry_id, third, 1);
+        specimen(&conn, entry_id, third, 1, false);
         conn.execute("DELETE FROM showcase_nodes WHERE id = ?1", params![entry_id])
             .expect("delete entry");
-        let joins: i64 = conn
-            .query_row("SELECT COUNT(*) FROM showcase_catalog_notes", [], |row| row.get(0))
-            .expect("count joins");
-        assert_eq!(joins, 0, "node delete cascades the joins");
+        let joins = rows(&conn, "SELECT note_id FROM showcase_catalog_notes", [], |row| {
+            row.get::<_, i64>(0)
+        });
+        assert!(joins.is_empty(), "node delete cascades the joins");
     }
 
     /// A database written before catalog entries keeps its showcase tree, its
@@ -602,23 +651,17 @@ mod catalog_schema {
 
         // First open runs the migration; the second proves it is repeatable.
         for _ in 0..2 {
-            let pool = editor_server_rust::db::open_pool(&path).expect("pool opens");
-            drop(pool);
+            drop(initialized(&dir));
         }
 
-        let conn = open(&path);
-        let nodes: Vec<(i64, String, Option<i64>, Option<i64>)> = {
-            let mut stmt = conn
-                .prepare(
-                    "SELECT id, node_type, parent_node_id, note_id
-                     FROM showcase_nodes ORDER BY id ASC",
-                )
-                .expect("prepare nodes");
-            stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))
-                .expect("query nodes")
-                .collect::<Result<Vec<_>, _>>()
-                .expect("collect nodes")
-        };
+        let conn = initialized(&dir);
+        let nodes: Vec<(i64, String, Option<i64>, Option<i64>)> = rows(
+            &conn,
+            "SELECT id, node_type, parent_node_id, note_id
+             FROM showcase_nodes ORDER BY id ASC",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)),
+        );
         assert_eq!(
             nodes,
             vec![
@@ -634,21 +677,27 @@ mod catalog_schema {
             .expect("cover survives"),
             Some(7)
         );
-        assert_eq!(read_owned_from(&conn, 7), 1, "an old note is owned");
+        assert_eq!(read_owned(&conn, 7), 1, "an old note is owned");
+        assert_eq!(
+            sorted_columns(&conn, "showcase_nodes"),
+            SHOWCASE_NODE_COLUMNS,
+            "the rebuilt tree shape matches a fresh one"
+        );
 
         let indexes = objects(&conn, "index");
-        assert!(indexes.contains(&"idx_showcase_nodes_category_once".to_owned()));
-        assert!(indexes.contains(&"idx_showcase_nodes_parent".to_owned()));
+        for index in ["idx_showcase_nodes_category_once", "idx_showcase_nodes_parent"] {
+            assert!(
+                indexes.iter().any(|value| value == index),
+                "missing index {index}"
+            );
+        }
 
-        let mut foreign_keys: Vec<(String, String)> = {
-            let mut stmt = conn
-                .prepare("SELECT \"table\", \"from\" FROM pragma_foreign_key_list('showcase_nodes')")
-                .expect("prepare fks");
-            stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
-                .expect("query fks")
-                .collect::<Result<Vec<_>, _>>()
-                .expect("collect fks")
-        };
+        let mut foreign_keys: Vec<(String, String)> = rows(
+            &conn,
+            "SELECT \"table\", \"from\" FROM pragma_foreign_key_list('showcase_nodes')",
+            [],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        );
         foreign_keys.sort();
         for pair in [
             ("banknotes".to_owned(), "cover_note_id".to_owned()),
@@ -679,6 +728,119 @@ mod catalog_schema {
             )
             .is_err(),
             "a Category still appears once per Showcase"
+        );
+    }
+
+    /// A database from an intermediate build already accepts `catalog_entry`
+    /// but misses a metadata column; the migration adds it without a rebuild.
+    #[test]
+    fn a_partial_catalog_table_gains_its_missing_columns() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        {
+            let conn = open(&db_path(&dir));
+            conn.execute_batch(
+                "CREATE TABLE showcases (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   name TEXT NOT NULL,
+                   display_order INTEGER,
+                   created_at TEXT DEFAULT (datetime('now')),
+                   updated_at TEXT DEFAULT (datetime('now'))
+                 );
+
+                 CREATE TABLE categories (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   name TEXT NOT NULL,
+                   created_at TEXT DEFAULT (datetime('now')),
+                   updated_at TEXT DEFAULT (datetime('now'))
+                 );
+
+                 CREATE TABLE showcase_nodes (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   showcase_id INTEGER NOT NULL REFERENCES showcases(id) ON DELETE CASCADE,
+                   parent_node_id INTEGER REFERENCES showcase_nodes(id) ON DELETE CASCADE,
+                   node_type TEXT NOT NULL CHECK (node_type IN ('category','grouping','note','catalog_entry')),
+                   category_id INTEGER REFERENCES categories(id) ON DELETE RESTRICT,
+                   name TEXT,
+                   note_id INTEGER,
+                   cover_note_id INTEGER,
+                   catalog_number TEXT,
+                   denomination TEXT,
+                   issue_date TEXT,
+                   position INTEGER,
+                   created_at TEXT DEFAULT (datetime('now')),
+                   updated_at TEXT DEFAULT (datetime('now'))
+                 );
+
+                 INSERT INTO showcases (id, name) VALUES (1, 'Partial');
+                 INSERT INTO showcase_nodes
+                   (id, showcase_id, node_type, catalog_number, denomination, position)
+                 VALUES (5, 1, 'catalog_entry', '22a', '1 dollar', 1);",
+            )
+            .expect("partial schema");
+        }
+
+        let conn = initialized(&dir);
+        assert_eq!(
+            sorted_columns(&conn, "showcase_nodes"),
+            SHOWCASE_NODE_COLUMNS,
+            "the partial table gains the missing columns"
+        );
+        let entry: (String, Option<String>) = conn
+            .query_row(
+                "SELECT catalog_number, source FROM showcase_nodes WHERE id = 5",
+                [],
+                |row| Ok((row.get(0)?, row.get(1)?)),
+            )
+            .expect("the entry survives");
+        assert_eq!(entry, ("22a".to_owned(), None));
+    }
+
+    /// The one-time rebuild for a pre-collection database must keep an
+    /// `owned` flag rather than silently resetting every note to owned.
+    #[test]
+    fn owned_survives_the_legacy_banknotes_rebuild() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        {
+            let conn = open(&db_path(&dir));
+            conn.execute_batch(
+                "CREATE TABLE collections (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   name TEXT NOT NULL,
+                   display_order INTEGER,
+                   created_at TEXT DEFAULT (datetime('now')),
+                   updated_at TEXT DEFAULT (datetime('now'))
+                 );
+
+                 CREATE TABLE banknotes (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+                   display_order INTEGER,
+                   catalog_number TEXT,
+                   serial TEXT,
+                   owned INTEGER NOT NULL DEFAULT 1,
+                   UNIQUE(catalog_number,serial)
+                 );
+
+                 INSERT INTO collections (id, name, display_order) VALUES (1, 'Old', 1);
+                 INSERT INTO banknotes (id, collection_id, display_order, catalog_number, owned)
+                 VALUES (1, 1, 1, '22a', 0), (2, 1, 2, '22b', 1);",
+            )
+            .expect("legacy schema");
+        }
+
+        let conn = initialized(&dir);
+        assert_eq!(read_owned(&conn, 1), 0, "a seen note stays not owned");
+        assert_eq!(read_owned(&conn, 2), 1);
+        let foreign_keys = rows(&conn, "PRAGMA foreign_key_list(banknotes)", [], |row| {
+            let table: String = row.get("table")?;
+            let from: String = row.get("from")?;
+            Ok((table, from))
+        });
+        assert!(
+            foreign_keys
+                .iter()
+                .any(|(table, from)| table == "collections" && from == "collection_id"),
+            "the rebuild restores the collection foreign key"
         );
     }
 }
