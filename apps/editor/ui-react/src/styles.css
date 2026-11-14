@@ -6817,6 +6817,12 @@ button.tag {
   opacity: 0.55;
 }
 
+/* A short sentence under a checkbox control, aligned with its label. */
+.field-checkbox-hint {
+  margin: 0 0 0 23px;
+  font-size: 0.8rem;
+}
+
 /* The Move dialog reuses the confirmation shell, but holds fields rather than
    one destructive sentence, so it is a little wider and scrolls on a short
    window instead of clipping its position picker. */

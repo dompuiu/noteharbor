@@ -92,6 +92,7 @@ pub struct Note {
     pub serial: Option<String>,
     pub url: Option<String>,
     pub notes: Option<String>,
+    pub owned: bool,
     pub scraped_data: Option<Value>,
     pub images: Vec<ImageRecord>,
     pub created_at: Option<String>,
@@ -114,7 +115,8 @@ const NOTE_FIELDS: &str = "id,
     scraped_data,
     images,
     created_at,
-    updated_at";
+    updated_at,
+    owned";
 
 fn parse_json_text(value: Option<String>) -> Value {
     match value {
@@ -145,6 +147,7 @@ fn map_note(row: &rusqlite::Row<'_>) -> rusqlite::Result<Note> {
         images: images::normalize_images(&parse_json_text(images_raw)),
         created_at: row.get(14)?,
         updated_at: row.get(15)?,
+        owned: row.get::<_, i64>(16)? != 0,
         tags: Vec::new(),
     })
 }
@@ -236,6 +239,7 @@ enum ProjectedField {
     Serial,
     Url,
     Notes,
+    Owned,
     ScrapedData,
     Images,
     CreatedAt,
@@ -258,6 +262,7 @@ impl ProjectedField {
             "serial" => Self::Serial,
             "url" => Self::Url,
             "notes" => Self::Notes,
+            "owned" => Self::Owned,
             "scraped_data" => Self::ScrapedData,
             "images" => Self::Images,
             "created_at" => Self::CreatedAt,
@@ -282,6 +287,7 @@ impl ProjectedField {
             Self::Serial => "serial",
             Self::Url => "url",
             Self::Notes => "notes",
+            Self::Owned => "owned",
             Self::ScrapedData => "scraped_data",
             Self::Images => "images",
             Self::CreatedAt => "created_at",
@@ -362,6 +368,7 @@ fn projected_note(
             ProjectedField::Id => json!(id),
             ProjectedField::CollectionId => json!(row.get::<_, i64>(*index)?),
             ProjectedField::DisplayOrder => json!(row.get::<_, Option<i64>>(*index)?),
+            ProjectedField::Owned => json!(row.get::<_, i64>(*index)? != 0),
             ProjectedField::ScrapedData => {
                 let parsed = parse_json_text(row.get(*index)?);
                 if parsed.is_null() { Value::Null } else { parsed }
@@ -636,6 +643,7 @@ pub struct NotePayload {
     pub serial: String,
     pub url: String,
     pub notes: String,
+    pub owned: bool,
     pub tags: Vec<String>,
     pub scraped_data: Option<Value>,
 }
@@ -721,6 +729,19 @@ fn payload_string(body: &Value, key: &str) -> String {
     body.get(key).map(node_string).unwrap_or_default().trim().to_owned()
 }
 
+/// `owned` is the Note's library-wide flag. A body that omits it keeps the
+/// schema default (owned); JSON booleans and numbers and the multipart form's
+/// `true`/`false` text all read the same way.
+pub fn payload_owned(body: &Value) -> bool {
+    match body.get("owned") {
+        None | Some(Value::Null) => true,
+        Some(Value::Bool(flag)) => *flag,
+        Some(Value::Number(number)) => number.as_f64().is_some_and(|value| value != 0.0),
+        Some(Value::String(text)) => parse_boolean_flag(Some(text)),
+        Some(_) => true,
+    }
+}
+
 /// Sanitizes the note payload, including the falsy-`scraped_data` rule: a
 /// missing, null, empty-string, `false`, or numeric payload means null; a
 /// non-empty string must parse as JSON; any other object passes through.
@@ -747,6 +768,7 @@ pub fn sanitize_payload(body: &Value) -> Result<NotePayload, String> {
         serial: payload_string(body, "serial"),
         url: payload_string(body, "url"),
         notes: payload_string(body, "notes"),
+        owned: payload_owned(body),
         tags: normalize_tags(body.get("tags")),
         scraped_data,
     })
@@ -767,11 +789,11 @@ fn create_note_row(
         "INSERT INTO banknotes (
            collection_id, display_order, denomination, issue_date,
            catalog_number, grading_company, grade, watermark, serial, url,
-           notes, scraped_data, images, created_at, updated_at
+           notes, owned, scraped_data, images, created_at, updated_at
          )
          VALUES (
            ?1, (SELECT COALESCE(MAX(display_order), 0) + 1 FROM banknotes WHERE collection_id = ?1),
-           ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
+           ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
            datetime('now'), datetime('now')
          )",
         params![
@@ -785,6 +807,7 @@ fn create_note_row(
             payload.serial,
             payload.url,
             payload.notes,
+            payload.owned,
             scraped_data_json(payload),
             images_json,
         ],
@@ -813,9 +836,9 @@ fn update_note_row(
         "UPDATE banknotes
          SET denomination = ?1, issue_date = ?2, catalog_number = ?3,
              grading_company = ?4, grade = ?5, watermark = ?6, serial = ?7,
-             url = ?8, notes = ?9, scraped_data = ?10, images = ?11,
-             updated_at = datetime('now')
-         WHERE id = ?12",
+             url = ?8, notes = ?9, owned = ?10, scraped_data = ?11,
+             images = ?12, updated_at = datetime('now')
+         WHERE id = ?13",
         params![
             payload.denomination,
             payload.issue_date,
@@ -826,6 +849,7 @@ fn update_note_row(
             payload.serial,
             payload.url,
             payload.notes,
+            payload.owned,
             scraped_data_json(payload),
             images_json,
             note_id,

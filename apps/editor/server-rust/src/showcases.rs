@@ -471,7 +471,8 @@ const NOTE_FIELDS: &str = "id,
     scraped_data,
     images,
     created_at,
-    updated_at";
+    updated_at,
+    owned";
 
 fn parse_json_text(value: Option<String>) -> Value {
     match value {
@@ -506,6 +507,7 @@ fn fetch_notes(conn: &Connection, ids: &[i64]) -> Result<HashMap<i64, Note>, DbE
                 serial: row.get(9)?,
                 url: row.get(10)?,
                 notes: row.get(11)?,
+                owned: row.get::<_, i64>(16)? != 0,
                 scraped_data: if scraped.is_null() { None } else { Some(scraped) },
                 images: images::normalize_images(&parse_json_text(images_raw)),
                 created_at: row.get(14)?,
