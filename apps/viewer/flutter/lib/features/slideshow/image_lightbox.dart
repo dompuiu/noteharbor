@@ -20,9 +20,29 @@ import 'slideshow_room_style.dart';
 /// never runs out of pages.
 const int _kVirtualPageOrigin = 1 << 20;
 
-/// The counter's second line is a quiet step below the image position: it only
-/// appears when the sequence spans more than one note, so it never competes
-/// with the domain the pill is naming.
+/// The empty mat's words. The page's label and the live region borrow them so
+/// the screen reader hears the same sentence the mat shows.
+const String _kNoImageLabel = 'No image';
+
+/// The failed note image's words, again shared by the mat, the page label and
+/// the live region.
+const String _kMissingFileNotice =
+    'This image file is missing from the current collection.';
+
+/// The page's hint at fit. Zoom is a gesture; the page's semantic tap performs
+/// the same toggle for a reader who cannot double-click the note image.
+const String _kPageZoomHint = 'Double-click to zoom';
+
+/// The hint once the page is above fit, where the same tap returns to fit.
+const String _kPageFitHint = 'Double-click to fit';
+
+/// The counter's first line, shared by the visible pill and the page label so
+/// the popover has one vocabulary for the image's position.
+String _imagePositionLabel(int position, int total) =>
+    'Image $position of $total';
+
+/// A quiet step below the image position, so the note's position never
+/// competes with the domain the pill is naming.
 const TextStyle _kCounterNoteStyle = TextStyle(
   fontFamily: 'Inter',
   color: ViewerPalette.roomMuted,
@@ -61,6 +81,10 @@ class ImageSequenceItem {
 
   /// The face in the room's vocabulary: `Front` or `Back`.
   String get faceLabel => face == 'front' ? 'Front' : 'Back';
+
+  /// The counter's second line, or null when the sequence holds one note.
+  String? get notePositionLabel =>
+      noteTotal > 1 ? 'Note $notePosition of $noteTotal' : null;
 }
 
 class ImageLightbox extends StatefulWidget {
@@ -192,6 +216,56 @@ class _ImageLightboxState extends State<ImageLightbox> {
     return face == 'front' ? faces.front : faces.back;
   }
 
+  /// One label for the page at [index]: the words the visible header and mat
+  /// show — the note's title and date, the face, and the counter's lines — then
+  /// the state of the image when there is none to describe. The page owns these
+  /// words; the header's copy is excluded from semantics so nothing is read
+  /// twice.
+  String _pageLabel(int index, {String? state}) {
+    final item = widget.items[index];
+    final date = item.note.issueDate.trim();
+    return <String>[
+      item.label,
+      if (date.isNotEmpty) date,
+      item.faceLabel,
+      _imagePositionLabel(index + 1, widget.items.length),
+      ?item.notePositionLabel,
+      ?state,
+    ].join(', ');
+  }
+
+  /// The page's identity for the live region's failure guard: the note plus
+  /// the image, because a path-less image's cache key can repeat across notes.
+  String _pageIdentity(ImageSequenceItem item) =>
+      '${item.note.id}-${item.image!.cacheKey}';
+
+  /// The live region's words: what moved — the face, the image position and
+  /// the note position when shown — plus a state the page cannot name for
+  /// itself. The page label already carries the title and date, so they are
+  /// not repeated in the announcement.
+  ///
+  /// A failed note image belongs to the page that owns it, so its key must
+  /// match the page on screen; a state left over from the page just paged away
+  /// is never announced against the new one.
+  String _pageAnnouncement(_ImageZoomState zoom) {
+    final item = widget.items[_currentIndex];
+    final String? state;
+    if (item.image == null) {
+      state = _kNoImageLabel;
+    } else if (zoom.failed && zoom.pageKey == _pageIdentity(item)) {
+      state = _kMissingFileNotice;
+    } else {
+      state = null;
+    }
+
+    return <String>[
+      item.faceLabel,
+      _imagePositionLabel(_currentIndex + 1, widget.items.length),
+      ?item.notePositionLabel,
+      ?state,
+    ].join(', ');
+  }
+
   /// Jumps to the current note's [face].
   void _selectFace(String face) {
     final target = _faceIndex(face);
@@ -214,7 +288,9 @@ class _ImageLightboxState extends State<ImageLightbox> {
       shortcuts: _kImageLightboxShortcuts,
       child: Actions(
         actions: <Type, Action<Intent>>{
-          DismissIntent: CallbackAction<DismissIntent>(
+          // Escape's own intent; see _CloseImageIntent for why it is not the
+          // standard DismissIntent.
+          _CloseImageIntent: CallbackAction<_CloseImageIntent>(
             onInvoke: (intent) {
               if (_zoomController.fit()) {
                 return null;
@@ -318,109 +394,160 @@ class _ImageLightboxState extends State<ImageLightbox> {
                             onBack: _closeWithCurrentNote,
                           ),
                           Expanded(
-                            child: ScrollConfiguration(
-                              // A mouse drag pages the sequence at fit scale;
-                              // while zoomed the physics below are disabled so
-                              // the drag pans the image instead.
-                              behavior: const MouseDragScrollBehavior(),
-                              child: PageView.builder(
-                                controller: _controller,
-                                physics: _pageScrollEnabled
-                                    ? const PageScrollPhysics()
-                                    : const NeverScrollableScrollPhysics(),
-                                itemCount: widget.items.isEmpty ? 0 : null,
-                                onPageChanged: (value) => setState(() {
-                                  _virtualIndex = value;
-                                  _pageGeneration += 1;
-                                  _pageScrollEnabled = true;
-                                }),
-                                itemBuilder: (context, index) {
-                                  final imageItem =
-                                      widget.items[(index -
-                                              _kVirtualPageOrigin) %
-                                          widget.items.length];
-                                  return Padding(
-                                    padding: const EdgeInsets.fromLTRB(
-                                      12,
-                                      4,
-                                      12,
-                                      0,
-                                    ),
-                                    child: MouseRegion(
-                                      cursor: imageItem.image == null
-                                          ? MouseCursor.defer
-                                          : SystemMouseCursors.zoomIn,
-                                      child: Container(
-                                        decoration: BoxDecoration(
-                                          color: ViewerPalette.roomSurface,
-                                          borderRadius: BorderRadius.circular(
-                                            ViewerPalette.radiusMd,
-                                          ),
-                                          border: Border.all(
-                                            color: ViewerPalette.roomBorder,
-                                          ),
-                                        ),
-                                        clipBehavior: Clip.antiAlias,
-                                        child: Stack(
-                                          children: [
-                                            Positioned.fill(
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(
-                                                  16,
-                                                ),
-                                                child: imageItem.image == null
-                                                    ? const Center(
-                                                        child: Text(
-                                                          'No image',
-                                                          style: TextStyle(
-                                                            fontFamily: 'Inter',
-                                                            color: ViewerPalette
-                                                                .roomMuted,
-                                                            fontSize: 16,
-                                                          ),
-                                                        ),
-                                                      )
-                                                    : _ZoomableImagePage(
-                                                        key: ValueKey(
-                                                          '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
-                                                        ),
-                                                        image: imageItem.image!,
-                                                        controller:
-                                                            _zoomController,
-                                                        onPageScrollEnabledChanged:
-                                                            _setPageScrollEnabled,
-                                                      ),
-                                              ),
+                            // The stage is the live region: it has real
+                            // geometry, so the semantics tree keeps it, and its
+                            // label changes with the page. Only what moved is
+                            // announced; the page's own label owns the note's
+                            // title and date. Zoom keeps its own readout so a
+                            // pinch never re-announces the page.
+                            child: ValueListenableBuilder<_ImageZoomState>(
+                              valueListenable: _zoomController.state,
+                              builder: (context, zoom, child) => Semantics(
+                                container: true,
+                                liveRegion: true,
+                                label: _pageAnnouncement(zoom),
+                                child: child,
+                              ),
+                              child: ScrollConfiguration(
+                                // A mouse drag pages the sequence at fit scale;
+                                // while zoomed the physics below are disabled so
+                                // the drag pans the image instead.
+                                behavior: const MouseDragScrollBehavior(),
+                                child: PageView.builder(
+                                  controller: _controller,
+                                  physics: _pageScrollEnabled
+                                      ? const PageScrollPhysics()
+                                      : const NeverScrollableScrollPhysics(),
+                                  itemCount: widget.items.isEmpty ? 0 : null,
+                                  onPageChanged: (value) => setState(() {
+                                    _virtualIndex = value;
+                                    _pageGeneration += 1;
+                                    _pageScrollEnabled = true;
+                                  }),
+                                  itemBuilder: (context, index) {
+                                    final itemIndex =
+                                        (index - _kVirtualPageOrigin) %
+                                        widget.items.length;
+                                    final imageItem = widget.items[itemIndex];
+                                    // The page's one label. An imaged page adds
+                                    // its load state from inside the page, where
+                                    // the failure is known.
+                                    final pageLabel = _pageLabel(
+                                      itemIndex,
+                                      state: imageItem.image == null
+                                          ? _kNoImageLabel
+                                          : null,
+                                    );
+                                    final page = Padding(
+                                      padding: const EdgeInsets.fromLTRB(
+                                        12,
+                                        4,
+                                        12,
+                                        0,
+                                      ),
+                                      child: MouseRegion(
+                                        cursor: imageItem.image == null
+                                            ? MouseCursor.defer
+                                            : SystemMouseCursors.zoomIn,
+                                        child: Container(
+                                          decoration: BoxDecoration(
+                                            color: ViewerPalette.roomSurface,
+                                            borderRadius: BorderRadius.circular(
+                                              ViewerPalette.radiusMd,
                                             ),
-                                            // The face sits on the mat exactly as
-                                            // the slideshow's plate chip does, so
-                                            // the image never loses its name.
-                                            Positioned(
-                                              left: 8,
-                                              top: 8,
-                                              child: IgnorePointer(
-                                                child: Container(
-                                                  padding:
-                                                      const EdgeInsets.symmetric(
-                                                        horizontal: 7,
-                                                        vertical: 3,
+                                            border: Border.all(
+                                              color: ViewerPalette.roomBorder,
+                                            ),
+                                          ),
+                                          clipBehavior: Clip.antiAlias,
+                                          child: Stack(
+                                            children: [
+                                              Positioned.fill(
+                                                child: Padding(
+                                                  padding: const EdgeInsets.all(
+                                                    16,
+                                                  ),
+                                                  child: imageItem.image == null
+                                                      ? const Center(
+                                                          child: Text(
+                                                            _kNoImageLabel,
+                                                            style: TextStyle(
+                                                              fontFamily:
+                                                                  'Inter',
+                                                              color:
+                                                                  ViewerPalette
+                                                                      .roomMuted,
+                                                              fontSize: 16,
+                                                            ),
+                                                          ),
+                                                        )
+                                                      : _ZoomableImagePage(
+                                                          key: ValueKey(
+                                                            '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
+                                                          ),
+                                                          image:
+                                                              imageItem.image!,
+                                                          identity:
+                                                              _pageIdentity(
+                                                                imageItem,
+                                                              ),
+                                                          semanticLabel:
+                                                              pageLabel,
+                                                          controller:
+                                                              _zoomController,
+                                                          onPageScrollEnabledChanged:
+                                                              _setPageScrollEnabled,
+                                                        ),
+                                                ),
+                                              ),
+                                              // The face sits on the mat exactly as
+                                              // the slideshow's plate chip does, so
+                                              // the image never loses its name. It
+                                              // is paint only: the page label
+                                              // already names the face.
+                                              Positioned(
+                                                left: 8,
+                                                top: 8,
+                                                child: ExcludeSemantics(
+                                                  child: IgnorePointer(
+                                                    child: Container(
+                                                      padding:
+                                                          const EdgeInsets.symmetric(
+                                                            horizontal: 7,
+                                                            vertical: 3,
+                                                          ),
+                                                      decoration:
+                                                          plateOverlayDecoration(),
+                                                      child: Text(
+                                                        imageItem.faceLabel
+                                                            .toUpperCase(),
+                                                        style: kPlateLabelStyle,
                                                       ),
-                                                  decoration:
-                                                      plateOverlayDecoration(),
-                                                  child: Text(
-                                                    imageItem.faceLabel
-                                                        .toUpperCase(),
-                                                    style: kPlateLabelStyle,
+                                                    ),
                                                   ),
                                                 ),
                                               ),
-                                            ),
-                                          ],
+                                            ],
+                                          ),
                                         ),
                                       ),
-                                    ),
-                                  );
-                                },
+                                    );
+
+                                    if (imageItem.image != null) {
+                                      return page;
+                                    }
+
+                                    // A page with no image has no page widget to
+                                    // name it, so the mat names itself. It is not
+                                    // an image: there is no note image to show.
+                                    return Semantics(
+                                      container: true,
+                                      label: pageLabel,
+                                      excludeSemantics: true,
+                                      child: page,
+                                    );
+                                  },
+                                ),
                               ),
                             ),
                           ),
@@ -571,62 +698,67 @@ class _ImagePopoverHeader extends StatelessWidget {
   }
 
   Widget _titleBlock() {
-    return Align(
-      alignment: Alignment.centerLeft,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            item.label,
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              color: ViewerPalette.roomText,
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.2,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (item.note.issueDate.trim().isNotEmpty) ...[
-            const SizedBox(height: 2),
+    // The page label owns the title and the date; the header's copy is sight
+    // only so a reader does not hear the same words twice.
+    return ExcludeSemantics(
+      child: Align(
+        alignment: Alignment.centerLeft,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
             Text(
-              item.note.issueDate,
+              item.label,
               style: const TextStyle(
                 fontFamily: 'Inter',
-                color: ViewerPalette.roomMuted,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
+                color: ViewerPalette.roomText,
+                fontSize: 17,
+                fontWeight: FontWeight.w800,
+                letterSpacing: -0.2,
               ),
               overflow: TextOverflow.ellipsis,
             ),
+            if (item.note.issueDate.trim().isNotEmpty) ...[
+              const SizedBox(height: 2),
+              Text(
+                item.note.issueDate,
+                style: const TextStyle(
+                  fontFamily: 'Inter',
+                  color: ViewerPalette.roomMuted,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                ),
+                overflow: TextOverflow.ellipsis,
+              ),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
 
   Widget _counterPill() {
-    return Container(
-      constraints: const BoxConstraints(minHeight: kRoomControlHeight),
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: _pillDecoration(),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Image $counterPosition of $counterTotal',
-            style: kRoomCounterStyle,
-          ),
-          if (item.noteTotal > 1) ...[
-            const SizedBox(height: 1),
+    // The page label repeats the counter's lines, so the pill is sight only.
+    final notePosition = item.notePositionLabel;
+    return ExcludeSemantics(
+      child: Container(
+        constraints: const BoxConstraints(minHeight: kRoomControlHeight),
+        alignment: Alignment.center,
+        padding: const EdgeInsets.symmetric(horizontal: 12),
+        decoration: _pillDecoration(),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
             Text(
-              'Note ${item.notePosition} of ${item.noteTotal}',
-              style: _kCounterNoteStyle,
+              _imagePositionLabel(counterPosition, counterTotal),
+              style: kRoomCounterStyle,
             ),
+            if (notePosition != null) ...[
+              const SizedBox(height: 1),
+              Text(notePosition, style: _kCounterNoteStyle),
+            ],
           ],
-        ],
+        ),
       ),
     );
   }
@@ -693,8 +825,6 @@ class _ImagePopoverHeader extends StatelessWidget {
           label: 'Zoom out',
           glyph: '\u2212',
           title: 'Zoom out (-)',
-          selected: false,
-          toggle: false,
           onPressed: state.canStepOut ? zoomController.zoomOut : null,
         ),
         Semantics(
@@ -716,40 +846,35 @@ class _ImagePopoverHeader extends StatelessWidget {
           label: 'Zoom in',
           glyph: '+',
           title: 'Zoom in (+)',
-          selected: false,
-          toggle: false,
           onPressed: state.canStepIn ? zoomController.zoomIn : null,
         ),
       ]),
     );
   }
 
-  /// One focusable segment. A [toggle] takes the pressed mark and the
-  /// toggled button semantics; a step passes a [glyph] and keeps the spoken
-  /// name in [label].
+  /// One focusable segment. Every stop is a button in the tree: a toggle passes
+  /// [selected] and carries the pressed mark, a step passes a [glyph] and
+  /// leaves it null. The [Semantics] wrapper also owns the tap action so the
+  /// label, state and action stay one node, never the glyph and its parent
+  /// button separately.
   Widget _segment({
     required String label,
     required String title,
-    required bool selected,
     required VoidCallback? onPressed,
-    bool toggle = true,
+    bool? selected,
     String? glyph,
   }) {
     final button = Tooltip(
       message: title,
       child: TextButton(
         onPressed: onPressed,
-        style: _segmentStyle(selected: selected, enabled: onPressed != null),
-        child: Text(
-          glyph ?? label,
-          semanticsLabel: glyph == null ? null : label,
+        style: _segmentStyle(
+          selected: selected ?? false,
+          enabled: onPressed != null,
         ),
+        child: Text(glyph ?? label),
       ),
     );
-
-    if (!toggle) {
-      return button;
-    }
 
     return Semantics(
       container: true,
@@ -831,6 +956,7 @@ class _ImageZoomState {
     this.scale = 1,
     this.realScale = 1,
     this.topStop = 1,
+    this.pageKey,
   });
 
   /// Whether any image page is mounted. A page with no image mounts none, so
@@ -838,6 +964,10 @@ class _ImageZoomState {
   final bool hasPage;
   final bool ready;
   final bool failed;
+
+  /// The scan the state describes. A failed state must only be announced
+  /// against the page that owns it, never the one the reader just paged to.
+  final String? pageKey;
 
   /// The scale relative to the fit view: 1 is fit, [realScale] is 1:1.
   final double scale;
@@ -895,15 +1025,22 @@ class _ImageZoomState {
           other.failed == failed &&
           other.scale == scale &&
           other.realScale == realScale &&
-          other.topStop == topStop;
+          other.topStop == topStop &&
+          other.pageKey == pageKey;
 
   @override
   int get hashCode =>
-      Object.hash(hasPage, ready, failed, scale, realScale, topStop);
+      Object.hash(hasPage, ready, failed, scale, realScale, topStop, pageKey);
 }
 
 class _PreviousImageIntent extends Intent {
   const _PreviousImageIntent();
+}
+
+/// Escape's private intent. The standard [DismissIntent] is not used because a
+/// Scaffold's disabled drawer action shadows it once a control holds focus.
+class _CloseImageIntent extends Intent {
+  const _CloseImageIntent();
 }
 
 class _NextImageIntent extends Intent {
@@ -977,7 +1114,7 @@ final Map<ShortcutActivator, Intent> _kImageLightboxShortcuts =
 
 Map<ShortcutActivator, Intent> _buildImageLightboxShortcuts() {
   final shortcuts = <ShortcutActivator, Intent>{
-    const SingleActivator(LogicalKeyboardKey.escape): const DismissIntent(),
+    const SingleActivator(LogicalKeyboardKey.escape): const _CloseImageIntent(),
     const SingleActivator(LogicalKeyboardKey.arrowLeft):
         const _PreviousImageIntent(),
     const SingleActivator(LogicalKeyboardKey.keyH):
@@ -1111,12 +1248,24 @@ class _ImageZoomController {
 class _ZoomableImagePage extends StatefulWidget {
   const _ZoomableImagePage({
     required this.image,
+    required this.identity,
+    required this.semanticLabel,
     required this.controller,
     required this.onPageScrollEnabledChanged,
     super.key,
   });
 
   final NoteImage image;
+
+  /// The note plus the image, used to keep this page's failure from being
+  /// announced against the page the reader paged to.
+  final String identity;
+
+  /// The page's words: the note, face and counter, without the image's state.
+  /// The page adds a failed note image from its own load, where that state
+  /// lives.
+  final String semanticLabel;
+
   final _ImageZoomController controller;
   final ValueChanged<bool> onPageScrollEnabledChanged;
 
@@ -1338,9 +1487,10 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
     }
 
     final ready = !_viewport.isEmpty && _intrinsicSize != null && !_loadFailed;
+    final pageKey = widget.identity;
     if (!ready) {
       widget.controller.publish(
-        _ImageZoomState(hasPage: true, failed: _loadFailed),
+        _ImageZoomState(hasPage: true, failed: _loadFailed, pageKey: pageKey),
       );
       return;
     }
@@ -1354,6 +1504,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
         scale: _scale,
         realScale: realScale,
         topStop: stops.isEmpty ? 1 : stops.last,
+        pageKey: pageKey,
       ),
     );
   }
@@ -1685,10 +1836,29 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
     return const Padding(
       padding: EdgeInsets.all(32),
       child: Text(
-        'This image file is missing from the current collection.',
+        _kMissingFileNotice,
         style: TextStyle(color: ViewerPalette.roomMuted),
         textAlign: TextAlign.center,
       ),
+    );
+  }
+
+  /// The one node for the note image: the page's words, the double-click hint
+  /// and, on a failed load, the same sentence the mat shows. Its tap performs
+  /// the page's double-click toggle for a reader who cannot double-click.
+  Widget _pageSemantics(Widget child) {
+    final canZoom = !_loadFailed;
+    final aboveFit = _scale > 1 + _kZoomEpsilon;
+    return Semantics(
+      container: true,
+      image: canZoom,
+      label: canZoom
+          ? widget.semanticLabel
+          : '${widget.semanticLabel}, $_kMissingFileNotice',
+      hint: canZoom ? (aboveFit ? _kPageFitHint : _kPageZoomHint) : null,
+      onTap: canZoom ? () => _handleDoubleTap(_viewport) : null,
+      excludeSemantics: true,
+      child: child,
     );
   }
 
@@ -1706,7 +1876,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
         }
         final contentSize = _fittedContentSize(viewport);
         if (_loadFailed) {
-          return _missingImageMessage();
+          return _pageSemantics(_missingImageMessage());
         }
         final maxScale = math.max(_realSizeScale(viewport), _kMaxZoomCap);
         _isPannable =
@@ -1714,32 +1884,34 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
             (contentSize.width * _scale > viewport.width + 0.5 ||
                 contentSize.height * _scale > viewport.height + 0.5);
 
-        return Listener(
-          onPointerDown: _handlePointerDown,
-          onPointerMove: (event) =>
-              _handlePointerMove(event, viewport, maxScale),
-          onPointerUp: _handlePointerEnd,
-          onPointerCancel: _handlePointerEnd,
-          onPointerSignal: _handlePointerSignal,
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onDoubleTapDown: (details) {
-              _lastDoubleTapPosition = details.localPosition;
-            },
-            onDoubleTap: () => _handleDoubleTap(viewport),
-            child: Center(
-              child: Transform.translate(
-                offset: _offset,
-                child: Transform.scale(
-                  scale: _scale,
-                  child: SizedBox(
-                    width: contentSize.width,
-                    height: contentSize.height,
-                    child: Image(
-                      image: createNoteImageProvider(widget.image),
-                      fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) =>
-                          _missingImageMessage(),
+        return _pageSemantics(
+          Listener(
+            onPointerDown: _handlePointerDown,
+            onPointerMove: (event) =>
+                _handlePointerMove(event, viewport, maxScale),
+            onPointerUp: _handlePointerEnd,
+            onPointerCancel: _handlePointerEnd,
+            onPointerSignal: _handlePointerSignal,
+            child: GestureDetector(
+              behavior: HitTestBehavior.opaque,
+              onDoubleTapDown: (details) {
+                _lastDoubleTapPosition = details.localPosition;
+              },
+              onDoubleTap: () => _handleDoubleTap(viewport),
+              child: Center(
+                child: Transform.translate(
+                  offset: _offset,
+                  child: Transform.scale(
+                    scale: _scale,
+                    child: SizedBox(
+                      width: contentSize.width,
+                      height: contentSize.height,
+                      child: Image(
+                        image: createNoteImageProvider(widget.image),
+                        fit: BoxFit.contain,
+                        errorBuilder: (context, error, stackTrace) =>
+                            _missingImageMessage(),
+                      ),
                     ),
                   ),
                 ),
