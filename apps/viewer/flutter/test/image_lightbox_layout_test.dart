@@ -1,11 +1,14 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_harbor_viewer/features/slideshow/image_lightbox.dart';
+import 'package:note_harbor_viewer/features/slideshow/note_slideshow_screen.dart';
 import 'package:note_harbor_viewer/models/note_record.dart';
 
 /// The Image popover's composition, not its chrome: where the mat sits on the
@@ -15,13 +18,25 @@ import 'package:note_harbor_viewer/models/note_record.dart';
 void main() {
   const landscapePath = 'noteharbor-layout-landscape.png';
   const portraitPath = 'noteharbor-layout-portrait.png';
+  const widePath = 'noteharbor-layout-wide.png';
+
+  final plate = find.byKey(const ValueKey('imagePlate'));
+  final mat = find.byKey(const ValueKey('imageMat'));
+  final room = find.byKey(const ValueKey('imageRoom'));
+
+  setUpAll(() async {
+    // The slideshow comparison measures with Inter's real line widths.
+    final loader = FontLoader('Inter')
+      ..addFont(rootBundle.load('assets/fonts/InterVariable.ttf'));
+    await loader.load();
+  });
 
   NoteRecord layoutNote({String file = landscapePath}) {
     return NoteRecord.fromJson(<String, dynamic>{
       'id': 1,
       'displayOrder': 1,
       'denomination': 'Test',
-      'issueDate': '',
+      'issueDate': '1993',
       'catalogNumber': 'KB-1',
       'gradingCompany': '',
       'grade': '',
@@ -40,8 +55,8 @@ void main() {
   }
 
   /// Seeds the image cache so the page can measure a scan without touching
-  /// disk. The real dataset is nearly all 3:2 landscape; the tall scan proves
-  /// the plate still fits a portrait artifact whole.
+  /// disk. The real dataset is nearly all 3:2 landscape; the tall and the wide
+  /// scans prove the plate fits unusual artifacts whole.
   Future<void> seedImage(
     WidgetTester tester,
     String path,
@@ -57,7 +72,15 @@ void main() {
     );
   }
 
-  Future<void> pumpPopover(
+  Future<void> seedScans(WidgetTester tester) async {
+    await seedImage(tester, landscapePath, 1600, 1000);
+    await seedImage(tester, portraitPath, 800, 2000);
+    await seedImage(tester, widePath, 4000, 1000);
+  }
+
+  /// Pumps the popover at [size], without touching the image cache, so a test
+  /// can hold its own image load.
+  Future<void> pumpLightbox(
     WidgetTester tester,
     Size size, {
     String file = landscapePath,
@@ -66,14 +89,12 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
-    await seedImage(tester, landscapePath, 1600, 1000);
-    await seedImage(tester, portraitPath, 800, 2000);
-
     final note = layoutNote(file: file);
     await tester.pumpWidget(
       MaterialApp(
+        // A new window size remounts the popover, so each case starts at fit.
         key: ValueKey<String>('$size-$file'),
-        home: _LightboxLauncher(
+        home: ImageLightbox(
           items: [
             ImageSequenceItem(
               note: note,
@@ -81,27 +102,67 @@ void main() {
               face: 'front',
             ),
           ],
+          initialIndex: 0,
         ),
       ),
     );
-    await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
   }
 
-  Finder plate() => find.byKey(const ValueKey('imagePlate'));
+  Future<void> pumpPopover(
+    WidgetTester tester,
+    Size size, {
+    String file = landscapePath,
+  }) async {
+    await seedScans(tester);
+    await pumpLightbox(tester, size, file: file);
+  }
 
-  /// The box a page fits its scan into: the stage minus the page's own 12px
-  /// side and 4px top padding, on the stage as measured.
-  Size fitBox(WidgetTester tester, {required bool plateHugs}) {
+  /// The stage's box for a page: the stage minus the page's own 12px sides and
+  /// 4px top padding.
+  Rect stageArea(WidgetTester tester) {
     final stage = tester.getRect(find.byType(PageView));
-    final width = stage.width - 24 - (plateHugs ? 32 : 0);
-    final height = stage.height - 4 - (plateHugs ? 32 : 0);
-    return Size(width, height);
+    return Rect.fromLTRB(
+      stage.left + 12,
+      stage.top + 4,
+      stage.right - 12,
+      stage.bottom,
+    );
+  }
+
+  /// The box a portrait page fits its scan into: the stage area inside the
+  /// plate's 16px padding.
+  Size hugBox(WidgetTester tester) {
+    final area = stageArea(tester);
+    return Size(area.width - 32, area.height - 32);
   }
 
   Size fittedScan(Size box, Size scan) {
     final scale = math.min(box.width / scan.width, box.height / scan.height);
     return Size(scan.width * scale, scan.height * scale);
+  }
+
+  /// The picture size the Note slideshow gives the same scan on this window:
+  /// its plate's inner box, with the scan fitted the way the plate fits it.
+  Future<Size> slideshowPicture(
+    WidgetTester tester,
+    Size size,
+    NoteRecord note,
+  ) async {
+    tester.view.physicalSize = size;
+    tester.view.devicePixelRatio = 1.0;
+    addTearDown(tester.view.reset);
+    await tester.pumpWidget(
+      MaterialApp(
+        key: ValueKey<String>('slideshow-$size'),
+        home: NoteSlideshowScreen(notes: [note], initialIndex: 0),
+      ),
+    );
+    await tester.pumpAndSettle();
+    return fittedScan(
+      tester.getRect(find.byType(Image).first).size,
+      const Size(1600, 1000),
+    );
   }
 
   for (final size in const [Size(578, 1096), Size(390, 844)]) {
@@ -111,16 +172,12 @@ void main() {
       await pumpPopover(tester, size);
 
       final imageRect = tester.getRect(find.byType(Image).first);
-      final plateRect = tester.getRect(plate().first);
-      final expected = fittedScan(
-        fitBox(tester, plateHugs: true),
-        const Size(1600, 1000),
-      );
+      final plateRect = tester.getRect(plate.first);
+      final expected = fittedScan(hugBox(tester), const Size(1600, 1000));
 
       // The scan is fitted into the stage inside the plate's padding.
       expect(imageRect.width, closeTo(expected.width, 0.5));
       expect(imageRect.height, closeTo(expected.height, 0.5));
-      expect(imageRect.width / imageRect.height, closeTo(1.6, 0.001));
 
       // The plate is the artifact plus 16px on every side, not the stage.
       expect(plateRect.width, closeTo(imageRect.width + 32, 0.5));
@@ -133,10 +190,6 @@ void main() {
       final stage = tester.getRect(find.byType(PageView));
       expect(plateRect.height, lessThan(stage.height * 0.6));
 
-      // It still reads larger than one plate of the slideshow's pair, which
-      // splits the slide's width in two on the same window.
-      expect(imageRect.width, greaterThan(size.width * 0.6));
-
       // The face chip sits on the plate's corner, as the slideshow's does.
       final chipRect = tester.getRect(find.text('FRONT'));
       expect(plateRect.contains(chipRect.center), isTrue);
@@ -144,6 +197,24 @@ void main() {
       expect(chipRect.top - plateRect.top, lessThan(24));
       expect(tester.takeException(), isNull);
     });
+
+    testWidgets(
+      'the note reads at least as large as the slideshow plate at $size',
+      (tester) async {
+        final note = layoutNote();
+        final slideshow = await slideshowPicture(tester, size, note);
+
+        await pumpPopover(tester, size);
+        final imageRect = tester.getRect(find.byType(Image).first);
+
+        // The popover's page padding (12+12) plus plate padding (16+16) keeps it
+        // a couple of pixels ahead of the slideshow's 20px slide and 8px plate
+        // padding. Never behind, which is the brief's floor.
+        expect(imageRect.width, greaterThanOrEqualTo(slideshow.width - 0.5));
+        expect(imageRect.height, greaterThanOrEqualTo(slideshow.height - 0.5));
+        expect(tester.takeException(), isNull);
+      },
+    );
   }
 
   testWidgets('a scan taller than the stage still fits whole in portrait', (
@@ -153,12 +224,9 @@ void main() {
     await pumpPopover(tester, size, file: portraitPath);
 
     final imageRect = tester.getRect(find.byType(Image).first);
-    final plateRect = tester.getRect(plate().first);
+    final plateRect = tester.getRect(plate.first);
     final stage = tester.getRect(find.byType(PageView));
-    final expected = fittedScan(
-      fitBox(tester, plateHugs: true),
-      const Size(800, 2000),
-    );
+    final expected = fittedScan(hugBox(tester), const Size(800, 2000));
 
     expect(imageRect.height, closeTo(expected.height, 0.5));
     expect(imageRect.height, lessThanOrEqualTo(stage.height));
@@ -171,28 +239,145 @@ void main() {
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a zoomed portrait page still pans inside the whole stage', (
+  testWidgets('a very wide scan still fits whole in portrait', (tester) async {
+    const size = Size(390, 844);
+    await pumpPopover(tester, size, file: widePath);
+
+    final imageRect = tester.getRect(find.byType(Image).first);
+    final plateRect = tester.getRect(plate.first);
+    final stage = tester.getRect(find.byType(PageView));
+    final expected = fittedScan(hugBox(tester), const Size(4000, 1000));
+
+    expect(imageRect.width, closeTo(expected.width, 0.5));
+    expect(plateRect.width, closeTo(imageRect.width + 32, 0.5));
+    expect(plateRect.height, closeTo(imageRect.height + 32, 0.5));
+    expect(plateRect.left, greaterThanOrEqualTo(stage.left - 0.5));
+    expect(plateRect.right, lessThanOrEqualTo(stage.right + 0.5));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a wide but short window hugs the mat too', (tester) async {
+    // Wide enough for the room, too short for it: the guard is an and.
+    const size = Size(1024, 520);
+    await pumpPopover(tester, size);
+
+    expect(mat, findsNothing);
+    final imageRect = tester.getRect(find.byType(Image).first);
+    final plateRect = tester.getRect(plate.first);
+    expect(plateRect.width, closeTo(imageRect.width + 32, 0.5));
+    expect(plateRect.height, closeTo(imageRect.height + 32, 0.5));
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('the portrait page keeps one label and a working zoom', (
     tester,
   ) async {
+    final handle = tester.ensureSemantics();
     const size = Size(390, 844);
     await pumpPopover(tester, size);
 
-    final fittedRect = tester.getRect(find.byType(Image).first);
-    final stage = tester.getRect(find.byType(PageView));
+    // The page is one image node: the chip inside the page adds no words.
+    final page = find.byWidgetPredicate(
+      (widget) =>
+          widget is Semantics &&
+          widget.properties.image == true &&
+          widget.properties.label == 'Test - KB-1, 1993, Front, Image 1 of 1',
+    );
+    expect(page, findsOneWidget);
+    expect(find.bySemanticsLabel('FRONT'), findsNothing);
 
+    // The zoom instrument still reaches 1:1 and back to the hugged plate.
     await tester.tap(find.text('1:1'));
     await tester.pumpAndSettle();
-
-    // The plate stops hugging: the stage is the card once the page is above
-    // fit, so the zoom pans against the room rather than a thumbnail card.
-    final plateRect = tester.getRect(plate().first);
-    expect(plateRect.width, closeTo(stage.width - 24, 0.5));
-    expect(plateRect.height, closeTo(stage.height - 4, 0.5));
+    expect(tester.widget<Text>(find.textContaining('%')).data, '100%');
     expect(
-      tester.getRect(find.byType(Image).first).width,
-      greaterThan(fittedRect.width),
+      tester.getRect(plate.first).width,
+      closeTo(stageArea(tester).width, 0.5),
     );
+
+    await tester.tap(find.text('Fit'));
+    await tester.pumpAndSettle();
+    final imageRect = tester.getRect(find.byType(Image).first);
+    final plateRect = tester.getRect(plate.first);
+    expect(tester.widget<Text>(find.textContaining('%')).data, isNot('100%'));
+    expect(plateRect.width, closeTo(imageRect.width + 32, 0.5));
+    expect(plateRect.height, closeTo(imageRect.height + 32, 0.5));
     expect(tester.takeException(), isNull);
+    handle.dispose();
+  });
+
+  testWidgets('the plate follows the window across the guard', (tester) async {
+    await pumpPopover(tester, const Size(740, 800));
+    expect(plate, findsOneWidget);
+    expect(mat, findsNothing);
+
+    tester.view.physicalSize = const Size(800, 810);
+    await tester.pumpAndSettle();
+    expect(plate, findsNothing);
+    expect(mat, findsOneWidget);
+
+    tester.view.physicalSize = const Size(739, 800);
+    await tester.pumpAndSettle();
+    expect(plate, findsOneWidget);
+    expect(mat, findsNothing);
+    expect(tester.takeException(), isNull);
+  });
+
+  /// Puts a completer in the image cache for [landscapePath] so a test can hold
+  /// the scan's load open, evicting anything a previous test seeded.
+  Completer<ImageInfo> holdScan() {
+    final completer = Completer<ImageInfo>();
+    final provider = FileImage(File(landscapePath));
+    PaintingBinding.instance.imageCache.evict(provider);
+    PaintingBinding.instance.imageCache.putIfAbsent(
+      provider,
+      () => OneFrameImageStreamCompleter(completer.future),
+    );
+    addTearDown(() => PaintingBinding.instance.imageCache.evict(provider));
+    return completer;
+  }
+
+  testWidgets('no plate is painted until there is a scan to fit', (
+    tester,
+  ) async {
+    // A first decode is not synchronous; the stage must not flash a full mat
+    // that then shrinks around the scan.
+    final completer = holdScan();
+
+    await pumpLightbox(tester, const Size(390, 844));
+    expect(plate, findsNothing);
+
+    final image = await tester.runAsync(() => _solidImage(1600, 1000));
+    completer.complete(ImageInfo(image: image!));
+    await tester.pumpAndSettle();
+
+    final imageRect = tester.getRect(find.byType(Image).first);
+    expect(plate, findsOneWidget);
+    expect(
+      tester.getRect(plate.first).width,
+      closeTo(imageRect.width + 32, 0.5),
+    );
+  });
+
+  testWidgets('a scan that will not load keeps the stage plate', (
+    tester,
+  ) async {
+    // With no artifact to fit, the mat stands as the room's: the plate is the
+    // whole stage and the notice names the failure.
+    final completer = holdScan();
+
+    await pumpLightbox(tester, const Size(390, 844));
+    completer.completeError(Exception('missing image'));
+    await tester.pumpAndSettle();
+
+    expect(
+      find.textContaining('missing from the current collection'),
+      findsOneWidget,
+    );
+    final plateRect = tester.getRect(plate.first);
+    final area = stageArea(tester);
+    expect(plateRect.width, closeTo(area.width, 0.5));
+    expect(plateRect.height, closeTo(area.height, 0.5));
   });
 
   for (final size in const [Size(1440, 900), Size(1024, 768)]) {
@@ -202,14 +387,14 @@ void main() {
       await pumpPopover(tester, size);
 
       // The room wears its 16px inset and the mat is the page, not the scan.
-      final roomRect = tester.getRect(find.byKey(const ValueKey('imageRoom')));
+      final roomRect = tester.getRect(room);
       expect(roomRect.left, closeTo(16, 0.5));
       expect(roomRect.top, closeTo(16, 0.5));
       expect(roomRect.width, closeTo(size.width - 32, 0.5));
       expect(roomRect.height, closeTo(size.height - 32, 0.5));
 
-      expect(plate(), findsNothing);
-      final matRect = tester.getRect(find.byKey(const ValueKey('imageMat')));
+      expect(plate, findsNothing);
+      final matRect = tester.getRect(mat);
       final stage = tester.getRect(find.byType(PageView));
       expect(matRect.left, closeTo(stage.left + 12, 0.5));
       expect(matRect.right, closeTo(stage.right - 12, 0.5));
@@ -239,7 +424,7 @@ void main() {
       (Size(700, 1000), false),
     ]) {
       await pumpPopover(tester, size);
-      final roomRect = tester.getRect(find.byKey(const ValueKey('imageRoom')));
+      final roomRect = tester.getRect(room);
       expect(
         roomRect,
         roomed ? const Rect.fromLTWH(16, 16, 728, 528) : Offset.zero & size,
@@ -258,26 +443,4 @@ Future<ui.Image> _solidImage(int width, int height) async {
   );
   final picture = recorder.endRecording();
   return picture.toImage(width, height);
-}
-
-class _LightboxLauncher extends StatelessWidget {
-  const _LightboxLauncher({required this.items});
-
-  final List<ImageSequenceItem> items;
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      body: Center(
-        child: ElevatedButton(
-          onPressed: () => Navigator.of(context).push<int>(
-            MaterialPageRoute<int>(
-              builder: (_) => ImageLightbox(items: items, initialIndex: 0),
-            ),
-          ),
-          child: const Text('open'),
-        ),
-      ),
-    );
-  }
 }

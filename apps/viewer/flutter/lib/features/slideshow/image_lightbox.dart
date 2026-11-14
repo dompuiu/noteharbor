@@ -486,18 +486,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
                                             ? content
                                             : Container(
                                                 key: const ValueKey('imageMat'),
-                                                decoration: BoxDecoration(
-                                                  color:
-                                                      ViewerPalette.roomSurface,
-                                                  borderRadius:
-                                                      BorderRadius.circular(
-                                                        ViewerPalette.radiusMd,
-                                                      ),
-                                                  border: Border.all(
-                                                    color: ViewerPalette
-                                                        .roomBorder,
-                                                  ),
-                                                ),
+                                                decoration: _matDecoration(),
                                                 clipBehavior: Clip.antiAlias,
                                                 child: Stack(
                                                   children: [
@@ -505,17 +494,11 @@ class _ImageLightboxState extends State<ImageLightbox> {
                                                       child: Padding(
                                                         padding:
                                                             const EdgeInsets.all(
-                                                              16,
+                                                              _kPlatePadding,
                                                             ),
                                                         child: content,
                                                       ),
                                                     ),
-                                                    // The face sits on the mat
-                                                    // exactly as the slideshow's
-                                                    // plate chip does, so the image
-                                                    // never loses its name. It is
-                                                    // paint only: the page label
-                                                    // already names the face.
                                                     Positioned(
                                                       left: 8,
                                                       top: 8,
@@ -560,6 +543,16 @@ class _ImageLightboxState extends State<ImageLightbox> {
       ),
     );
   }
+}
+
+/// The white ground a note image sits on: the room's mat and the portrait
+/// plate share the same surface, hairline and radius.
+BoxDecoration _matDecoration() {
+  return BoxDecoration(
+    color: ViewerPalette.roomSurface,
+    borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
+    border: Border.all(color: ViewerPalette.roomBorder),
+  );
 }
 
 /// The face on the mat, exactly as the slideshow's plate chip does, so the
@@ -1167,7 +1160,8 @@ Map<ShortcutActivator, Intent> _buildImageLightboxShortcuts() {
 /// How close two scales must be before they count as the same stop.
 const double _kZoomEpsilon = 1e-3;
 
-/// The white plate's padding around the scan when the page hugs its artifact.
+/// The white padding a mat or plate keeps around the scan. On a page that hugs
+/// its artifact the plate is the scan plus this padding on every side.
 const double _kPlatePadding = 16;
 
 /// Routes zoom/pan intents from the lightbox (which owns keyboard focus) to the
@@ -1383,6 +1377,9 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
 
   // --- Zoom / pan entry points (driven by the lightbox keyboard shortcuts) ---
 
+  /// Whether the page is at the fit view, the one state the plate hugs.
+  bool get _atFit => _scale <= 1 + _kZoomEpsilon;
+
   void zoomIn() => _changeZoom(1);
 
   void zoomOut() => _changeZoom(-1);
@@ -1390,7 +1387,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
   /// Returns to the fit view, which also re-enables paging. Returns whether
   /// the page moved.
   bool fit() {
-    if (_scale <= 1 + _kZoomEpsilon) {
+    if (_atFit) {
       return false;
     }
 
@@ -1508,7 +1505,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
       math.max(_viewport.isEmpty ? 1 : _realSizeScale(_viewport), _kMaxZoomCap);
 
   void _syncPageScroll() {
-    final enabled = _activePointers.length < 2 && _scale <= 1 + _kZoomEpsilon;
+    final enabled = _activePointers.length < 2 && _atFit;
     widget.onPageScrollEnabledChanged(enabled);
   }
 
@@ -1809,13 +1806,18 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
     );
   }
 
-  /// The plate's size on a page that hugs its artifact: the scan plus 16px on
-  /// every side at fit, the whole stage once above fit (or without a measured
-  /// scan), so it never exceeds the stage.
-  Size _plateSize(Size viewport, Size contentSize) {
-    final atFit =
-        _scale <= 1 + _kZoomEpsilon && !_loadFailed && _intrinsicSize != null;
-    if (!atFit) {
+  /// The plate's size on a page that hugs its artifact, or null while there is
+  /// no measured scan to frame. At fit it is the scan plus 16px on every side
+  /// (the hairline is drawn inside that padding); above fit, and for a scan
+  /// that would not load, it is the whole stage, so it never exceeds it.
+  Size? _plateSize(Size viewport, Size contentSize) {
+    if (_loadFailed) {
+      return viewport;
+    }
+    if (_intrinsicSize == null) {
+      return null;
+    }
+    if (!_atFit) {
       return viewport;
     }
 
@@ -1828,41 +1830,34 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
   /// Lays [content] on the page's white plate when it hugs the artifact, with
   /// the face chip on the plate's corner above the scan. In the room the mat is
   /// the page container outside this widget, so the content stands alone.
-  Widget _onPlate(Size viewport, Size contentSize, Widget content) {
+  Widget _onPlate(Size viewport, Widget content) {
     if (!widget.hugArtifact) {
       return content;
     }
 
-    final plate = _plateSize(viewport, contentSize);
-    const duration = Duration(milliseconds: 150);
-    const curve = Curves.easeOut;
-    final left = (viewport.width - plate.width) / 2 + 8;
-    final top = (viewport.height - plate.height) / 2 + 8;
+    final plate = _plateSize(viewport, _fittedContentSize(viewport));
+    if (plate == null) {
+      // Still decoding: no plate until there is an artifact to fit, so the
+      // stage never flashes a full mat that then shrinks.
+      return content;
+    }
 
     return ClipRect(
       child: Stack(
         fit: StackFit.expand,
         children: [
           Center(
-            child: AnimatedContainer(
+            child: Container(
               key: const ValueKey('imagePlate'),
-              duration: duration,
-              curve: curve,
               width: plate.width,
               height: plate.height,
-              decoration: BoxDecoration(
-                color: ViewerPalette.roomSurface,
-                borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
-                border: Border.all(color: ViewerPalette.roomBorder),
-              ),
+              decoration: _matDecoration(),
             ),
           ),
           content,
-          AnimatedPositioned(
-            duration: duration,
-            curve: curve,
-            left: left,
-            top: top,
+          Positioned(
+            left: (viewport.width - plate.width) / 2 + 8,
+            top: (viewport.height - plate.height) / 2 + 8,
             child: _FaceChip(face: widget.faceLabel),
           ),
         ],
@@ -1932,7 +1927,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
 
   void _handleDoubleTap(Size viewport) {
     final tapPosition = _lastDoubleTapPosition ?? viewport.center(Offset.zero);
-    if (_scale > 1 + _kZoomEpsilon) {
+    if (!_atFit) {
       _resetZoom();
       return;
     }
@@ -1958,7 +1953,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
   /// the page's double-click toggle for a reader who cannot double-click.
   Widget _pageSemantics(Widget child) {
     final canZoom = !_loadFailed;
-    final aboveFit = _scale > 1 + _kZoomEpsilon;
+    final aboveFit = !_atFit;
     return Semantics(
       container: true,
       image: canZoom,
@@ -1986,20 +1981,17 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
         }
         final contentSize = _fittedContentSize(viewport);
         if (_loadFailed) {
-          return _pageSemantics(
-            _onPlate(viewport, contentSize, _missingImageMessage()),
-          );
+          return _pageSemantics(_onPlate(viewport, _missingImageMessage()));
         }
         final maxScale = math.max(_realSizeScale(viewport), _kMaxZoomCap);
         _isPannable =
-            _scale > 1 + _kZoomEpsilon &&
+            !_atFit &&
             (contentSize.width * _scale > viewport.width + 0.5 ||
                 contentSize.height * _scale > viewport.height + 0.5);
 
         return _pageSemantics(
           _onPlate(
             viewport,
-            contentSize,
             Listener(
               onPointerDown: _handlePointerDown,
               onPointerMove: (event) =>
