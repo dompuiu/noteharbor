@@ -34,11 +34,6 @@ const _kArrowScrollOffset = 120.0;
 /// centers the error so letterboxing stays small on every slide.
 const _kImageStageAspectRatio = 3 / 2;
 
-/// The room's inset and border only appear once the window can hold them.
-const double _kRoomMinWidth = 760;
-const double _kRoomMinHeight = 560;
-const double _kRoomInset = 16;
-
 /// Width at which the pair gains a details rail beside it, and the width below
 /// which the pair drops back to the stacked slide.
 const double _kRailTierMinWidth = 1000;
@@ -352,9 +347,8 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final roomed =
-        size.width >= _kRoomMinWidth && size.height >= _kRoomMinHeight;
-    final roomInset = roomed ? _kRoomInset : 0.0;
+    final roomed = roomedFor(size);
+    final roomInset = roomed ? kRoomInset : 0.0;
     final roomRadius = roomed ? ViewerPalette.radiusMd : 0.0;
     return Shortcuts(
       // h/j/k/l alias the arrows. The activators stay plain (no modifiers), so

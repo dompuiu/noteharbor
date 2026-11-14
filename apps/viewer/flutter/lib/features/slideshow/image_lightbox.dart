@@ -280,9 +280,9 @@ class _ImageLightboxState extends State<ImageLightbox> {
   Widget build(BuildContext context) {
     final item = widget.items[_currentIndex];
     final faces = _currentNoteFaces;
-    final compact = MediaQuery.sizeOf(context).shortestSide < 600;
-    final roomInset = compact ? 0.0 : 16.0;
-    final roomRadius = compact ? 0.0 : ViewerPalette.radiusMd;
+    final roomed = roomedFor(MediaQuery.sizeOf(context));
+    final roomInset = roomed ? kRoomInset : 0.0;
+    final roomRadius = roomed ? ViewerPalette.radiusMd : 0.0;
 
     return Shortcuts(
       shortcuts: _kImageLightboxShortcuts,
@@ -369,13 +369,14 @@ class _ImageLightboxState extends State<ImageLightbox> {
               body: Padding(
                 padding: EdgeInsets.all(roomInset),
                 child: DecoratedBox(
+                  key: const ValueKey('imageRoom'),
                   decoration: BoxDecoration(
                     color: ViewerPalette.roomBackground,
                     borderRadius: BorderRadius.circular(roomRadius),
-                    border: compact
-                        ? null
-                        : Border.all(color: ViewerPalette.roomBorderControl),
-                    boxShadow: compact ? const [] : ViewerPalette.shadowRoom,
+                    border: roomed
+                        ? Border.all(color: ViewerPalette.roomBorderControl)
+                        : null,
+                    boxShadow: roomed ? ViewerPalette.shadowRoom : const [],
                   ),
                   child: ClipRRect(
                     borderRadius: BorderRadius.circular(roomRadius),
@@ -438,6 +439,38 @@ class _ImageLightboxState extends State<ImageLightbox> {
                                           ? _kNoImageLabel
                                           : null,
                                     );
+                                    // The room's mat is the page; outside it,
+                                    // an imaged page hugs its artifact and paints
+                                    // its own plate on the canvas-soft stage, so
+                                    // a portrait window never shows a thumbnail
+                                    // in a metre of white.
+                                    final hugArtifact =
+                                        !roomed && imageItem.image != null;
+                                    final content = imageItem.image == null
+                                        ? const Center(
+                                            child: Text(
+                                              _kNoImageLabel,
+                                              style: TextStyle(
+                                                fontFamily: 'Inter',
+                                                color: ViewerPalette.roomMuted,
+                                                fontSize: 16,
+                                              ),
+                                            ),
+                                          )
+                                        : _ZoomableImagePage(
+                                            key: ValueKey(
+                                              '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
+                                            ),
+                                            image: imageItem.image!,
+                                            identity: _pageIdentity(imageItem),
+                                            semanticLabel: pageLabel,
+                                            faceLabel: imageItem.faceLabel,
+                                            hugArtifact: hugArtifact,
+                                            controller: _zoomController,
+                                            onPageScrollEnabledChanged:
+                                                _setPageScrollEnabled,
+                                          );
+
                                     final page = Padding(
                                       padding: const EdgeInsets.fromLTRB(
                                         12,
@@ -449,87 +482,51 @@ class _ImageLightboxState extends State<ImageLightbox> {
                                         cursor: imageItem.image == null
                                             ? MouseCursor.defer
                                             : SystemMouseCursors.zoomIn,
-                                        child: Container(
-                                          decoration: BoxDecoration(
-                                            color: ViewerPalette.roomSurface,
-                                            borderRadius: BorderRadius.circular(
-                                              ViewerPalette.radiusMd,
-                                            ),
-                                            border: Border.all(
-                                              color: ViewerPalette.roomBorder,
-                                            ),
-                                          ),
-                                          clipBehavior: Clip.antiAlias,
-                                          child: Stack(
-                                            children: [
-                                              Positioned.fill(
-                                                child: Padding(
-                                                  padding: const EdgeInsets.all(
-                                                    16,
+                                        child: hugArtifact
+                                            ? content
+                                            : Container(
+                                                key: const ValueKey('imageMat'),
+                                                decoration: BoxDecoration(
+                                                  color:
+                                                      ViewerPalette.roomSurface,
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                        ViewerPalette.radiusMd,
+                                                      ),
+                                                  border: Border.all(
+                                                    color: ViewerPalette
+                                                        .roomBorder,
                                                   ),
-                                                  child: imageItem.image == null
-                                                      ? const Center(
-                                                          child: Text(
-                                                            _kNoImageLabel,
-                                                            style: TextStyle(
-                                                              fontFamily:
-                                                                  'Inter',
-                                                              color:
-                                                                  ViewerPalette
-                                                                      .roomMuted,
-                                                              fontSize: 16,
-                                                            ),
-                                                          ),
-                                                        )
-                                                      : _ZoomableImagePage(
-                                                          key: ValueKey(
-                                                            '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
-                                                          ),
-                                                          image:
-                                                              imageItem.image!,
-                                                          identity:
-                                                              _pageIdentity(
-                                                                imageItem,
-                                                              ),
-                                                          semanticLabel:
-                                                              pageLabel,
-                                                          controller:
-                                                              _zoomController,
-                                                          onPageScrollEnabledChanged:
-                                                              _setPageScrollEnabled,
-                                                        ),
                                                 ),
-                                              ),
-                                              // The face sits on the mat exactly as
-                                              // the slideshow's plate chip does, so
-                                              // the image never loses its name. It
-                                              // is paint only: the page label
-                                              // already names the face.
-                                              Positioned(
-                                                left: 8,
-                                                top: 8,
-                                                child: ExcludeSemantics(
-                                                  child: IgnorePointer(
-                                                    child: Container(
-                                                      padding:
-                                                          const EdgeInsets.symmetric(
-                                                            horizontal: 7,
-                                                            vertical: 3,
-                                                          ),
-                                                      decoration:
-                                                          plateOverlayDecoration(),
-                                                      child: Text(
-                                                        imageItem.faceLabel
-                                                            .toUpperCase(),
-                                                        style: kPlateLabelStyle,
+                                                clipBehavior: Clip.antiAlias,
+                                                child: Stack(
+                                                  children: [
+                                                    Positioned.fill(
+                                                      child: Padding(
+                                                        padding:
+                                                            const EdgeInsets.all(
+                                                              16,
+                                                            ),
+                                                        child: content,
                                                       ),
                                                     ),
-                                                  ),
+                                                    // The face sits on the mat
+                                                    // exactly as the slideshow's
+                                                    // plate chip does, so the image
+                                                    // never loses its name. It is
+                                                    // paint only: the page label
+                                                    // already names the face.
+                                                    Positioned(
+                                                      left: 8,
+                                                      top: 8,
+                                                      child: _FaceChip(
+                                                        face:
+                                                            imageItem.faceLabel,
+                                                      ),
+                                                    ),
+                                                  ],
                                                 ),
                                               ),
-                                            ],
-                                          ),
-                                        ),
                                       ),
                                     );
 
@@ -559,6 +556,29 @@ class _ImageLightboxState extends State<ImageLightbox> {
               ),
             ),
           ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The face on the mat, exactly as the slideshow's plate chip does, so the
+/// image never loses its name. It is paint only: the page label already names
+/// the face.
+class _FaceChip extends StatelessWidget {
+  const _FaceChip({required this.face});
+
+  /// The room's vocabulary: `Front` or `Back`.
+  final String face;
+
+  @override
+  Widget build(BuildContext context) {
+    return ExcludeSemantics(
+      child: IgnorePointer(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+          decoration: plateOverlayDecoration(),
+          child: Text(face.toUpperCase(), style: kPlateLabelStyle),
         ),
       ),
     );
@@ -1147,6 +1167,9 @@ Map<ShortcutActivator, Intent> _buildImageLightboxShortcuts() {
 /// How close two scales must be before they count as the same stop.
 const double _kZoomEpsilon = 1e-3;
 
+/// The white plate's padding around the scan when the page hugs its artifact.
+const double _kPlatePadding = 16;
+
 /// Routes zoom/pan intents from the lightbox (which owns keyboard focus) to the
 /// currently visible [_ZoomableImagePage], and publishes the live scale so the
 /// header can show it without guessing from a rebuild.
@@ -1250,6 +1273,8 @@ class _ZoomableImagePage extends StatefulWidget {
     required this.image,
     required this.identity,
     required this.semanticLabel,
+    required this.faceLabel,
+    required this.hugArtifact,
     required this.controller,
     required this.onPageScrollEnabledChanged,
     super.key,
@@ -1265,6 +1290,15 @@ class _ZoomableImagePage extends StatefulWidget {
   /// The page adds a failed note image from its own load, where that state
   /// lives.
   final String semanticLabel;
+
+  /// The room's vocabulary: `Front` or `Back`, painted on the page's own
+  /// plate when it hugs the artifact.
+  final String faceLabel;
+
+  /// Whether this page paints a plate sized to the scan and its padding (the
+  /// portrait fit) instead of filling the room's mat. Once above fit the plate
+  /// returns to the whole stage, so the zoom keeps its own overflow rules.
+  final bool hugArtifact;
 
   final _ImageZoomController controller;
   final ValueChanged<bool> onPageScrollEnabledChanged;
@@ -1748,16 +1782,92 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
       return viewport;
     }
 
+    final box = _fitBox(viewport);
     final devicePixelRatio = MediaQuery.devicePixelRatioOf(context);
     final logicalSize = Size(
       intrinsicSize.width / devicePixelRatio,
       intrinsicSize.height / devicePixelRatio,
     );
     final fitScale = math.min(
-      viewport.width / logicalSize.width,
-      viewport.height / logicalSize.height,
+      box.width / logicalSize.width,
+      box.height / logicalSize.height,
     );
     return Size(logicalSize.width * fitScale, logicalSize.height * fitScale);
+  }
+
+  /// The box the scan fits into: the whole stage in the room, or the stage
+  /// inside the plate's padding when the page hugs its artifact, so the plate
+  /// never exceeds the stage.
+  Size _fitBox(Size viewport) {
+    if (!widget.hugArtifact) {
+      return viewport;
+    }
+
+    return Size(
+      math.max(0, viewport.width - _kPlatePadding * 2),
+      math.max(0, viewport.height - _kPlatePadding * 2),
+    );
+  }
+
+  /// The plate's size on a page that hugs its artifact: the scan plus 16px on
+  /// every side at fit, the whole stage once above fit (or without a measured
+  /// scan), so it never exceeds the stage.
+  Size _plateSize(Size viewport, Size contentSize) {
+    final atFit =
+        _scale <= 1 + _kZoomEpsilon && !_loadFailed && _intrinsicSize != null;
+    if (!atFit) {
+      return viewport;
+    }
+
+    return Size(
+      math.min(viewport.width, contentSize.width + _kPlatePadding * 2),
+      math.min(viewport.height, contentSize.height + _kPlatePadding * 2),
+    );
+  }
+
+  /// Lays [content] on the page's white plate when it hugs the artifact, with
+  /// the face chip on the plate's corner above the scan. In the room the mat is
+  /// the page container outside this widget, so the content stands alone.
+  Widget _onPlate(Size viewport, Size contentSize, Widget content) {
+    if (!widget.hugArtifact) {
+      return content;
+    }
+
+    final plate = _plateSize(viewport, contentSize);
+    const duration = Duration(milliseconds: 150);
+    const curve = Curves.easeOut;
+    final left = (viewport.width - plate.width) / 2 + 8;
+    final top = (viewport.height - plate.height) / 2 + 8;
+
+    return ClipRect(
+      child: Stack(
+        fit: StackFit.expand,
+        children: [
+          Center(
+            child: AnimatedContainer(
+              key: const ValueKey('imagePlate'),
+              duration: duration,
+              curve: curve,
+              width: plate.width,
+              height: plate.height,
+              decoration: BoxDecoration(
+                color: ViewerPalette.roomSurface,
+                borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
+                border: Border.all(color: ViewerPalette.roomBorder),
+              ),
+            ),
+          ),
+          content,
+          AnimatedPositioned(
+            duration: duration,
+            curve: curve,
+            left: left,
+            top: top,
+            child: _FaceChip(face: widget.faceLabel),
+          ),
+        ],
+      ),
+    );
   }
 
   /// The scale, relative to the fit view, at which the scan shows one image
@@ -1876,7 +1986,9 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
         }
         final contentSize = _fittedContentSize(viewport);
         if (_loadFailed) {
-          return _pageSemantics(_missingImageMessage());
+          return _pageSemantics(
+            _onPlate(viewport, contentSize, _missingImageMessage()),
+          );
         }
         final maxScale = math.max(_realSizeScale(viewport), _kMaxZoomCap);
         _isPannable =
@@ -1885,32 +1997,36 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
                 contentSize.height * _scale > viewport.height + 0.5);
 
         return _pageSemantics(
-          Listener(
-            onPointerDown: _handlePointerDown,
-            onPointerMove: (event) =>
-                _handlePointerMove(event, viewport, maxScale),
-            onPointerUp: _handlePointerEnd,
-            onPointerCancel: _handlePointerEnd,
-            onPointerSignal: _handlePointerSignal,
-            child: GestureDetector(
-              behavior: HitTestBehavior.opaque,
-              onDoubleTapDown: (details) {
-                _lastDoubleTapPosition = details.localPosition;
-              },
-              onDoubleTap: () => _handleDoubleTap(viewport),
-              child: Center(
-                child: Transform.translate(
-                  offset: _offset,
-                  child: Transform.scale(
-                    scale: _scale,
-                    child: SizedBox(
-                      width: contentSize.width,
-                      height: contentSize.height,
-                      child: Image(
-                        image: createNoteImageProvider(widget.image),
-                        fit: BoxFit.contain,
-                        errorBuilder: (context, error, stackTrace) =>
-                            _missingImageMessage(),
+          _onPlate(
+            viewport,
+            contentSize,
+            Listener(
+              onPointerDown: _handlePointerDown,
+              onPointerMove: (event) =>
+                  _handlePointerMove(event, viewport, maxScale),
+              onPointerUp: _handlePointerEnd,
+              onPointerCancel: _handlePointerEnd,
+              onPointerSignal: _handlePointerSignal,
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onDoubleTapDown: (details) {
+                  _lastDoubleTapPosition = details.localPosition;
+                },
+                onDoubleTap: () => _handleDoubleTap(viewport),
+                child: Center(
+                  child: Transform.translate(
+                    offset: _offset,
+                    child: Transform.scale(
+                      scale: _scale,
+                      child: SizedBox(
+                        width: contentSize.width,
+                        height: contentSize.height,
+                        child: Image(
+                          image: createNoteImageProvider(widget.image),
+                          fit: BoxFit.contain,
+                          errorBuilder: (context, error, stackTrace) =>
+                              _missingImageMessage(),
+                        ),
                       ),
                     ),
                   ),
