@@ -10,6 +10,7 @@ import '../../models/note_record.dart';
 import '../../widgets/mouse_drag_scroll_behavior.dart';
 import '../../widgets/note_image_provider.dart';
 import 'image_zoom_levels.dart';
+import 'slideshow_room_style.dart';
 
 /// The virtual page the first image is pinned to. The popover pages an
 /// unbounded [PageView] so that a swipe past either end wraps with no visible
@@ -17,20 +18,47 @@ import 'image_zoom_levels.dart';
 /// never runs out of pages.
 const int _kVirtualPageOrigin = 1 << 20;
 
-/// Fixed height shared by the popover's counter pill and Back control, matching
-/// the Note slideshow's top bar.
-const double _kRoomControlHeight = 40;
+/// The counter's second line is a quiet step below the image position: it only
+/// appears when the sequence spans more than one note, so it never competes
+/// with the domain the pill is naming.
+const TextStyle _kCounterNoteStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: ViewerPalette.roomMuted,
+  fontWeight: FontWeight.w600,
+  fontSize: 10.88,
+  fontFeatures: [FontFeature.tabularFigures()],
+);
 
 class ImageSequenceItem {
-  const ImageSequenceItem({
+  ImageSequenceItem({
     required this.note,
     required this.image,
-  });
+    required this.face,
+    this.notePosition = 1,
+    this.noteTotal = 1,
+  }) : assert(
+         image == null || image.type == face,
+         'face must name the image it carries',
+       );
 
   final NoteRecord note;
   final NoteImage? image;
 
+  /// `front` or `back`; the mat chip names the face from it even when [image]
+  /// is missing, and it must agree with [image] when one is present.
+  final String face;
+
+  /// The note's 1-based position in the sequence, in the order it was opened.
+  /// Never re-derived from a sort of the notes.
+  final int notePosition;
+
+  /// How many notes the sequence spans.
+  final int noteTotal;
+
   String get label => note.title;
+
+  /// The face in the room's vocabulary: `Front` or `Back`.
+  String get faceLabel => face == 'front' ? 'Front' : 'Back';
 }
 
 class ImageLightbox extends StatefulWidget {
@@ -133,6 +161,111 @@ class _ImageLightboxState extends State<ImageLightbox> {
     }
 
     setState(() => _pageScrollEnabled = enabled);
+  }
+
+  Widget _buildHeader(ImageSequenceItem item, {required bool compact}) {
+    final titleBlock = Align(
+      alignment: Alignment.centerLeft,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item.label,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              color: ViewerPalette.roomText,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (item.note.issueDate.trim().isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              item.note.issueDate,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                color: ViewerPalette.roomMuted,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+
+    final counterPill = Container(
+      constraints: const BoxConstraints(minHeight: kRoomControlHeight),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        color: ViewerPalette.roomSurface,
+        borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
+        border: Border.all(color: ViewerPalette.roomBorderControl),
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Image ${_currentIndex + 1} of ${widget.items.length}',
+            style: kRoomCounterStyle,
+          ),
+          if (item.noteTotal > 1) ...[
+            const SizedBox(height: 1),
+            Text(
+              'Note ${item.notePosition} of ${item.noteTotal}',
+              style: _kCounterNoteStyle,
+            ),
+          ],
+        ],
+      ),
+    );
+
+    final exitButton = ConstrainedBox(
+      constraints: const BoxConstraints(minHeight: kRoomControlHeight),
+      child: OutlinedButton(
+        onPressed: _closeWithCurrentNote,
+        child: const Text('Back to note'),
+      ),
+    );
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: compact
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                titleBlock,
+                const SizedBox(height: 8),
+                // The Wrap keeps the controls on one line when they fit and
+                // sends the exit below the counter when a large text size or a
+                // narrow phone leaves no room.
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    spacing: 10,
+                    runSpacing: 8,
+                    children: [counterPill, exitButton],
+                  ),
+                ),
+              ],
+            )
+          : Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                Expanded(child: titleBlock),
+                const SizedBox(width: 12),
+                counterPill,
+                const SizedBox(width: 10),
+                exitButton,
+              ],
+            ),
+    );
   }
 
   @override
@@ -239,89 +372,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
                       minimum: const EdgeInsets.only(bottom: 12),
                       child: Column(
                         children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-                            child: Row(
-                              crossAxisAlignment: CrossAxisAlignment.center,
-                              children: [
-                                  Expanded(
-                                    child: Align(
-                                      alignment: Alignment.centerLeft,
-                                      child: Column(
-                                        mainAxisSize: MainAxisSize.min,
-                                        crossAxisAlignment:
-                                            CrossAxisAlignment.start,
-                                        children: [
-                                          Text(
-                                            item.label,
-                                            style: const TextStyle(
-                                              fontFamily: 'Inter',
-                                              color: ViewerPalette.roomText,
-                                              fontSize: 17,
-                                              fontWeight: FontWeight.w800,
-                                              letterSpacing: -0.2,
-                                            ),
-                                            overflow: TextOverflow.ellipsis,
-                                          ),
-                                          if (item.note.issueDate
-                                              .trim()
-                                              .isNotEmpty) ...[
-                                            const SizedBox(height: 2),
-                                            Text(
-                                              item.note.issueDate,
-                                              style: const TextStyle(
-                                                fontFamily: 'Inter',
-                                                color: ViewerPalette.roomMuted,
-                                                fontSize: 13,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                              overflow: TextOverflow.ellipsis,
-                                            ),
-                                          ],
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Container(
-                                    height: _kRoomControlHeight,
-                                    alignment: Alignment.center,
-                                    padding: const EdgeInsets.symmetric(
-                                      horizontal: 12,
-                                    ),
-                                    decoration: BoxDecoration(
-                                      color: ViewerPalette.roomSurface,
-                                      borderRadius: BorderRadius.circular(
-                                        ViewerPalette.radiusPill,
-                                      ),
-                                      border: Border.all(
-                                        color: ViewerPalette.roomBorderControl,
-                                      ),
-                                    ),
-                                    child: Text(
-                                      '${_currentIndex + 1} / ${widget.items.length}',
-                                      style: const TextStyle(
-                                        fontFamily: 'Inter',
-                                        color: ViewerPalette.roomText,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13,
-                                        fontFeatures: [
-                                          FontFeature.tabularFigures(),
-                                        ],
-                                      ),
-                                    ),
-                                  ),
-                                  const SizedBox(width: 10),
-                                  SizedBox(
-                                    height: _kRoomControlHeight,
-                                    child: OutlinedButton(
-                                      onPressed: _closeWithCurrentNote,
-                                      child: const Text('Back'),
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
+                          _buildHeader(item, compact: compact),
                           Expanded(
                             child: ScrollConfiguration(
                               // A mouse drag pages the sequence at fit scale;
@@ -362,29 +413,60 @@ class _ImageLightboxState extends State<ImageLightbox> {
                                         ),
                                       ),
                                       clipBehavior: Clip.antiAlias,
-                                      child: Padding(
-                                        padding: const EdgeInsets.all(16),
-                                        child: imageItem.image == null
-                                            ? const Center(
-                                                child: Text(
-                                                  'No image',
-                                                  style: TextStyle(
-                                                    fontFamily: 'Inter',
-                                                    color:
-                                                        ViewerPalette.roomMuted,
-                                                    fontSize: 16,
-                                                  ),
-                                                ),
-                                              )
-                                            : _ZoomableImagePage(
-                                                key: ValueKey(
-                                                  '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
-                                                ),
-                                                image: imageItem.image!,
-                                                controller: _zoomController,
-                                                onPageScrollEnabledChanged:
-                                                    _setPageScrollEnabled,
+                                      child: Stack(
+                                        children: [
+                                          Positioned.fill(
+                                            child: Padding(
+                                              padding: const EdgeInsets.all(
+                                                16,
                                               ),
+                                              child: imageItem.image == null
+                                                  ? const Center(
+                                                      child: Text(
+                                                        'No image',
+                                                        style: TextStyle(
+                                                          fontFamily: 'Inter',
+                                                          color: ViewerPalette
+                                                              .roomMuted,
+                                                          fontSize: 16,
+                                                        ),
+                                                      ),
+                                                    )
+                                                  : _ZoomableImagePage(
+                                                      key: ValueKey(
+                                                        '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
+                                                      ),
+                                                      image: imageItem.image!,
+                                                      controller: _zoomController,
+                                                      onPageScrollEnabledChanged:
+                                                          _setPageScrollEnabled,
+                                                    ),
+                                            ),
+                                          ),
+                                          // The face sits on the mat exactly as
+                                          // the slideshow's plate chip does, so
+                                          // the image never loses its name.
+                                          Positioned(
+                                            left: 8,
+                                            top: 8,
+                                            child: IgnorePointer(
+                                              child: Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 7,
+                                                      vertical: 3,
+                                                    ),
+                                                decoration:
+                                                    plateOverlayDecoration(),
+                                                child: Text(
+                                                  imageItem.faceLabel
+                                                      .toUpperCase(),
+                                                  style: kPlateLabelStyle,
+                                                ),
+                                              ),
+                                            ),
+                                          ),
+                                        ],
                                       ),
                                     ),
                                   );

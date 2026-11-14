@@ -54,56 +54,37 @@ void main() {
     );
   }
 
-  Future<void> pumpPopover(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(800, 600);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
-
-    await seedLargeImage(tester);
-
-    final note = zoomNote();
-    final items = <ImageSequenceItem>[
-      ImageSequenceItem(note: note, image: note.fullFor('front')),
-    ];
-
-    await tester.pumpWidget(
-      MaterialApp(home: _LightboxLauncher(items: items)),
-    );
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
-  }
-
-  Future<void> pumpMultiItemPopover(WidgetTester tester) async {
-    tester.view.physicalSize = const Size(800, 600);
-    tester.view.devicePixelRatio = 1.0;
-    addTearDown(tester.view.reset);
-
-    await seedLargeImage(tester);
-
-    final notes = [zoomNote(id: 1), zoomNote(id: 2)];
-    final items = <ImageSequenceItem>[
-      for (final note in notes)
-        ImageSequenceItem(note: note, image: note.fullFor('front')),
-    ];
-
-    await tester.pumpWidget(
-      MaterialApp(home: _LightboxLauncher(items: items)),
-    );
-    await tester.tap(find.text('open'));
-    await tester.pumpAndSettle();
-  }
-
-  List<ImageSequenceItem> frontImageItems(List<NoteRecord> notes) => [
-        for (final note in notes)
-          ImageSequenceItem(note: note, image: note.fullFor('front')),
+  /// The popover's sequence over [notes], one page per face in [faces], in the
+  /// order the Note slideshow opens them.
+  List<ImageSequenceItem> imageItems(
+    List<NoteRecord> notes, {
+    List<String> faces = const ['front'],
+  }) =>
+      [
+        for (var index = 0; index < notes.length; index++)
+          for (final face in faces)
+            ImageSequenceItem(
+              note: notes[index],
+              image: notes[index].fullFor(face),
+              face: face,
+              notePosition: index + 1,
+              noteTotal: notes.length,
+            ),
       ];
+
+  /// Both faces of every note, in the order the Note slideshow opens them.
+  List<ImageSequenceItem> faceItems(List<NoteRecord> notes) =>
+      imageItems(notes, faces: const ['front', 'back']);
 
   Future<void> pumpSequence(
     WidgetTester tester,
     List<ImageSequenceItem> items, {
     int initialIndex = 0,
+    Size size = const Size(800, 600),
+    ValueChanged<int?>? onResult,
+    double textScale = 1,
   }) async {
-    tester.view.physicalSize = const Size(800, 600);
+    tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
@@ -111,12 +92,32 @@ void main() {
 
     await tester.pumpWidget(
       MaterialApp(
-        home: _LightboxLauncher(items: items, initialIndex: initialIndex),
+        builder: textScale == 1
+            ? null
+            : (context, child) => MediaQuery(
+                data: MediaQuery.of(
+                  context,
+                ).copyWith(textScaler: TextScaler.linear(textScale)),
+                child: child!,
+              ),
+        home: _LightboxLauncher(
+          items: items,
+          initialIndex: initialIndex,
+          onResult: onResult,
+        ),
       ),
     );
     await tester.tap(find.text('open'));
     await tester.pumpAndSettle();
   }
+
+  Future<void> pumpPopover(WidgetTester tester) =>
+      pumpSequence(tester, imageItems([zoomNote()]));
+
+  Future<void> pumpMultiItemPopover(WidgetTester tester) => pumpSequence(
+        tester,
+        imageItems([zoomNote(id: 1), zoomNote(id: 2)]),
+      );
 
   /// Opens the popover on a sequence of [count] imaged pages.
   Future<void> pumpManyItemPopover(
@@ -129,7 +130,7 @@ void main() {
     ];
     await pumpSequence(
       tester,
-      frontImageItems(notes),
+      imageItems(notes),
       initialIndex: initialIndex,
     );
   }
@@ -138,8 +139,124 @@ void main() {
   /// image, mirroring a Note whose Note image is missing.
   Future<void> pumpPopoverEndingWithoutImage(WidgetTester tester) async {
     final notes = [zoomNote(id: 1), zoomNote(id: 2, withImage: false)];
-    await pumpSequence(tester, frontImageItems(notes));
+    await pumpSequence(tester, imageItems(notes));
   }
+
+  testWidgets('the mat names the face of the image on screen', (tester) async {
+    await pumpSequence(tester, faceItems([zoomNote(id: 1)]));
+
+    expect(find.text('Image 1 of 2'), findsOneWidget);
+    expect(find.text('FRONT'), findsOneWidget);
+    expect(find.text('BACK'), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pumpAndSettle();
+
+    expect(find.text('Image 2 of 2'), findsOneWidget);
+    expect(find.text('BACK'), findsOneWidget);
+    expect(find.text('FRONT'), findsNothing);
+  });
+
+  testWidgets('one note keeps the counter to the image position', (
+    tester,
+  ) async {
+    await pumpSequence(tester, faceItems([zoomNote(id: 1)]));
+
+    expect(find.text('Image 1 of 2'), findsOneWidget);
+    expect(find.textContaining('Note '), findsNothing);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.pumpAndSettle();
+    expect(find.text('Image 2 of 2'), findsOneWidget);
+    expect(find.textContaining('Note '), findsNothing);
+  });
+
+  testWidgets('the counter names the note only when the sequence spans notes', (
+    tester,
+  ) async {
+    final notes = [zoomNote(id: 1), zoomNote(id: 2)];
+    await pumpSequence(tester, faceItems(notes));
+
+    expect(find.text('Image 1 of 4'), findsOneWidget);
+    expect(find.text('Note 1 of 2'), findsOneWidget);
+
+    // The note position follows the sequence, not the image's face.
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.pumpAndSettle();
+    expect(find.text('Image 2 of 4'), findsOneWidget);
+    expect(find.text('Note 1 of 2'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.pumpAndSettle();
+    expect(find.text('Image 3 of 4'), findsOneWidget);
+    expect(find.text('Note 2 of 2'), findsOneWidget);
+  });
+
+  testWidgets('Back to note returns the note the user ended on', (
+    tester,
+  ) async {
+    int? closedNoteId;
+    final notes = [zoomNote(id: 1), zoomNote(id: 2)];
+    await pumpSequence(
+      tester,
+      faceItems(notes),
+      onResult: (noteId) => closedNoteId = noteId,
+    );
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
+    await tester.pumpAndSettle();
+    expect(find.text('Image 3 of 4'), findsOneWidget);
+
+    await tester.tap(find.text('Back to note'));
+    await tester.pumpAndSettle();
+
+    expect(closedNoteId, 2);
+    expect(find.text('open'), findsOneWidget);
+  });
+
+  testWidgets('the phone header keeps the face, counter and exit', (
+    tester,
+  ) async {
+    final notes = [zoomNote(id: 1), zoomNote(id: 2)];
+    await pumpSequence(
+      tester,
+      faceItems(notes),
+      size: const Size(390, 844),
+    );
+
+    expect(find.text('FRONT'), findsOneWidget);
+    expect(find.text('Image 1 of 4'), findsOneWidget);
+    expect(find.text('Note 1 of 2'), findsOneWidget);
+    expect(find.text('Back to note'), findsOneWidget);
+
+    // On phone the title owns the first line: the controls sit below it
+    // instead of squeezing its width, and nothing overflows.
+    final title = find.text('Test - KB-1');
+    final counter = find.text('Note 1 of 2');
+    expect(
+      tester.getTopLeft(counter).dy,
+      greaterThan(tester.getBottomLeft(title).dy),
+    );
+    expect(tester.takeException(), isNull);
+  });
+
+  testWidgets('a two-line counter grows instead of overflowing at large text', (
+    tester,
+  ) async {
+    final notes = [zoomNote(id: 1), zoomNote(id: 2)];
+    await pumpSequence(
+      tester,
+      faceItems(notes),
+      size: const Size(390, 844),
+      textScale: 2,
+    );
+
+    expect(find.text('Image 1 of 4'), findsOneWidget);
+    expect(find.text('Note 1 of 2'), findsOneWidget);
+    expect(tester.takeException(), isNull);
+  });
 
   testWidgets('mouse wheel zooms in, and back out', (tester) async {
     await pumpPopover(tester);
@@ -205,7 +322,7 @@ void main() {
     // The sequence is swipeable again without a reset.
     await tester.drag(find.byType(PageView), const Offset(-600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('Image 2 of 2'), findsOneWidget);
   });
 
   testWidgets('a narrowing pinch within 20% of fit snaps back to fit', (
@@ -242,7 +359,7 @@ void main() {
     // The sequence is swipeable again without a reset.
     await tester.drag(find.byType(PageView), const Offset(-600, 0));
     await tester.pumpAndSettle();
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('Image 2 of 2'), findsOneWidget);
   });
 
   testWidgets('a narrowing pinch can still stop at a real zoom stop', (
@@ -326,22 +443,22 @@ void main() {
 
   testWidgets('h/l page between images', (tester) async {
     await pumpMultiItemPopover(tester);
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Image 1 of 2'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.keyL);
     await tester.pumpAndSettle();
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('Image 2 of 2'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.keyH);
     await tester.pumpAndSettle();
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Image 1 of 2'), findsOneWidget);
   });
 
   testWidgets('modified horizontal keys page in fit view, vertical stay put', (
     tester,
   ) async {
     await pumpMultiItemPopover(tester);
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Image 1 of 2'), findsOneWidget);
 
     // Vertical modified presses pan nothing and page nothing.
     for (final modifier in const [
@@ -356,7 +473,7 @@ void main() {
         LogicalKeyboardKey.keyJ,
       ]) {
         await _pressWithModifier(tester, modifier, key);
-        expect(find.text('1 / 2'), findsOneWidget, reason: '$modifier + $key');
+        expect(find.text('Image 1 of 2'), findsOneWidget, reason: '$modifier + $key');
       }
     }
 
@@ -372,11 +489,11 @@ void main() {
         (LogicalKeyboardKey.keyL, LogicalKeyboardKey.keyH),
       ]) {
         await _pressWithModifier(tester, modifier, next);
-        expect(find.text('2 / 2'), findsOneWidget, reason: '$modifier + $next');
+        expect(find.text('Image 2 of 2'), findsOneWidget, reason: '$modifier + $next');
 
         await _pressWithModifier(tester, modifier, previous);
         expect(
-          find.text('1 / 2'),
+          find.text('Image 1 of 2'),
           findsOneWidget,
           reason: '$modifier + $previous',
         );
@@ -386,15 +503,15 @@ void main() {
 
   testWidgets('plain Left and Right page in both directions', (tester) async {
     await pumpManyItemPopover(tester, 3, initialIndex: 1);
-    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('Image 2 of 3'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.pumpAndSettle();
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('Image 1 of 3'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pumpAndSettle();
-    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('Image 2 of 3'), findsOneWidget);
   });
 
   testWidgets('alt + any arrow or h/j/k/l stays inert', (tester) async {
@@ -410,12 +527,12 @@ void main() {
     ];
 
     await pumpMultiItemPopover(tester);
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Image 1 of 2'), findsOneWidget);
 
     // In fit view even the keys that would page stay inert.
     for (final key in altKeys) {
       await _pressWithModifier(tester, LogicalKeyboardKey.altLeft, key);
-      expect(find.text('1 / 2'), findsOneWidget, reason: 'fit, alt + $key');
+      expect(find.text('Image 1 of 2'), findsOneWidget, reason: 'fit, alt + $key');
     }
 
     await _zoomInWithKeyboard(tester);
@@ -424,7 +541,7 @@ void main() {
     for (final key in altKeys) {
       await _pressWithModifier(tester, LogicalKeyboardKey.altLeft, key);
       expect(_imageTranslation(tester), before, reason: 'zoom, alt + $key');
-      expect(find.text('1 / 2'), findsOneWidget, reason: 'zoom, alt + $key');
+      expect(find.text('Image 1 of 2'), findsOneWidget, reason: 'zoom, alt + $key');
     }
   });
 
@@ -436,7 +553,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
     expect(_maxZoom(tester), closeTo(1.0, 0.001));
-    expect(find.text('Back'), findsOneWidget);
+    expect(find.text('Back to note'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.escape);
     await tester.pumpAndSettle();
@@ -447,11 +564,11 @@ void main() {
     tester,
   ) async {
     await pumpMultiItemPopover(tester);
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Image 1 of 2'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     await tester.pumpAndSettle();
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('Image 2 of 2'), findsOneWidget);
   });
 
   testWidgets('arrow right on the last image wraps to the first image', (
@@ -461,32 +578,32 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pumpAndSettle();
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('Image 2 of 2'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     await tester.pumpAndSettle();
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Image 1 of 2'), findsOneWidget);
   });
 
   testWidgets('home jumps to the first page', (tester) async {
     await pumpManyItemPopover(tester, 5, initialIndex: 4);
-    expect(find.text('5 / 5'), findsOneWidget);
+    expect(find.text('Image 5 of 5'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.home);
     await tester.pumpAndSettle();
 
-    expect(find.text('1 / 5'), findsOneWidget);
+    expect(find.text('Image 1 of 5'), findsOneWidget);
     expect(find.text('Test - KB-1'), findsOneWidget);
   });
 
   testWidgets('end jumps to the last page', (tester) async {
     await pumpManyItemPopover(tester, 5);
-    expect(find.text('1 / 5'), findsOneWidget);
+    expect(find.text('Image 1 of 5'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.end);
     await tester.pumpAndSettle();
 
-    expect(find.text('5 / 5'), findsOneWidget);
+    expect(find.text('Image 5 of 5'), findsOneWidget);
     expect(find.text('Test - KB-5'), findsOneWidget);
   });
 
@@ -494,12 +611,12 @@ void main() {
     tester,
   ) async {
     await pumpPopoverEndingWithoutImage(tester);
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Image 1 of 2'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.end);
     await tester.pumpAndSettle();
 
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('Image 2 of 2'), findsOneWidget);
     expect(find.text('Test - KB-2'), findsOneWidget);
     expect(find.text('No image'), findsOneWidget);
   });
@@ -509,29 +626,29 @@ void main() {
   ) async {
     // A collection large enough that animating to the end would be obvious.
     await pumpManyItemPopover(tester, 40);
-    expect(find.text('1 / 40'), findsOneWidget);
+    expect(find.text('Image 1 of 40'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.end);
     // A single frame: an animated transition would still be in flight and the
     // index pill would not have moved to the endpoint yet.
     await tester.pump();
-    expect(find.text('40 / 40'), findsOneWidget);
+    expect(find.text('Image 40 of 40'), findsOneWidget);
   });
 
   testWidgets('a wrap-around glides across the seam like a swipe', (
     tester,
   ) async {
     await pumpManyItemPopover(tester, 3);
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('Image 1 of 3'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowLeft);
     // A single frame: the wrap animates across the seam, so the index pill has
     // not reached the wrapped page yet (a jump would have moved it).
     await tester.pump();
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('Image 1 of 3'), findsOneWidget);
 
     await tester.pumpAndSettle();
-    expect(find.text('3 / 3'), findsOneWidget);
+    expect(find.text('Image 3 of 3'), findsOneWidget);
     expect(find.text('Test - KB-3'), findsOneWidget);
   });
 
@@ -539,16 +656,16 @@ void main() {
     tester,
   ) async {
     await pumpManyItemPopover(tester, 3, initialIndex: 1);
-    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('Image 2 of 3'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
     // A single frame: the animated step is still in flight, so the index pill
     // has not reached the next page yet (a jump would have moved it).
     await tester.pump();
-    expect(find.text('2 / 3'), findsOneWidget);
+    expect(find.text('Image 2 of 3'), findsOneWidget);
 
     await tester.pumpAndSettle();
-    expect(find.text('3 / 3'), findsOneWidget);
+    expect(find.text('Image 3 of 3'), findsOneWidget);
   });
 
   testWidgets('home and end still move between pages while zoomed', (
@@ -560,51 +677,51 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.end);
     await tester.pumpAndSettle();
-    expect(find.text('3 / 3'), findsOneWidget);
+    expect(find.text('Image 3 of 3'), findsOneWidget);
     expect(find.text('Test - KB-3'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.home);
     await tester.pumpAndSettle();
-    expect(find.text('1 / 3'), findsOneWidget);
+    expect(find.text('Image 1 of 3'), findsOneWidget);
     expect(find.text('Test - KB-1'), findsOneWidget);
   });
 
   testWidgets('home on the first page changes nothing', (tester) async {
     await pumpManyItemPopover(tester, 5);
-    expect(find.text('1 / 5'), findsOneWidget);
+    expect(find.text('Image 1 of 5'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.home);
     await tester.pumpAndSettle();
 
-    expect(find.text('1 / 5'), findsOneWidget);
+    expect(find.text('Image 1 of 5'), findsOneWidget);
   });
 
   testWidgets('end on the last page changes nothing', (tester) async {
     await pumpManyItemPopover(tester, 5, initialIndex: 4);
-    expect(find.text('5 / 5'), findsOneWidget);
+    expect(find.text('Image 5 of 5'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.end);
     await tester.pumpAndSettle();
 
-    expect(find.text('5 / 5'), findsOneWidget);
+    expect(find.text('Image 5 of 5'), findsOneWidget);
   });
 
   testWidgets('home and end change nothing with a single page', (
     tester,
   ) async {
     await pumpPopover(tester);
-    expect(find.text('1 / 1'), findsOneWidget);
+    expect(find.text('Image 1 of 1'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.home);
     await tester.sendKeyEvent(LogicalKeyboardKey.end);
     await tester.pumpAndSettle();
 
-    expect(find.text('1 / 1'), findsOneWidget);
+    expect(find.text('Image 1 of 1'), findsOneWidget);
   });
 
   testWidgets('modified home and end do nothing', (tester) async {
     await pumpManyItemPopover(tester, 5, initialIndex: 2);
-    expect(find.text('3 / 5'), findsOneWidget);
+    expect(find.text('Image 3 of 5'), findsOneWidget);
 
     for (final modifier in const [
       LogicalKeyboardKey.controlLeft,
@@ -617,7 +734,7 @@ void main() {
       await tester.sendKeyUpEvent(modifier);
       await tester.pumpAndSettle();
 
-      expect(find.text('3 / 5'), findsOneWidget);
+      expect(find.text('Image 3 of 5'), findsOneWidget);
     }
   });
 }
@@ -677,22 +794,32 @@ Offset _imageTranslation(WidgetTester tester) {
 }
 
 class _LightboxLauncher extends StatelessWidget {
-  const _LightboxLauncher({required this.items, this.initialIndex = 0});
+  const _LightboxLauncher({
+    required this.items,
+    this.initialIndex = 0,
+    this.onResult,
+  });
 
   final List<ImageSequenceItem> items;
   final int initialIndex;
+  final ValueChanged<int?>? onResult;
+
+  Future<void> _open(BuildContext context) async {
+    final noteId = await Navigator.of(context).push<int>(
+      MaterialPageRoute<int>(
+        builder: (_) =>
+            ImageLightbox(items: items, initialIndex: initialIndex),
+      ),
+    );
+    onResult?.call(noteId);
+  }
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
       body: Center(
         child: ElevatedButton(
-          onPressed: () => Navigator.of(context).push(
-            MaterialPageRoute<int>(
-              builder: (_) =>
-                  ImageLightbox(items: items, initialIndex: initialIndex),
-            ),
-          ),
+          onPressed: () => _open(context),
           child: const Text('open'),
         ),
       ),

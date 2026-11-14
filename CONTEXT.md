@@ -45,7 +45,7 @@ A full-screen overlay that presents one note at a time — its images, metadata,
 _Avoid_: Detail view, presentation mode
 
 **Image popover**:
-The enlarged, single-image view opened from a note's image in the Note slideshow, navigable over that note's images. Shown in fit view by default, or in **Zoom view** on command. Its position pill names the domain — **Image 3 / 7** — so it never reads like the slideshow's note counter.
+The enlarged, single-image view opened from a note's image in the Note slideshow, navigable over the current view's images - front and back of each note. Shown in fit view by default, or in **Zoom view** on command. Its position pill names the domain — **Image 2 of 7** — so it never reads like the slideshow's note counter; when the sequence spans notes, a second line names the note. Each page's mat carries its face, and the exit reads **Back to note**.
 _Avoid_: Lightbox, 2nd level slideshow
 
 **Zoom view**:
