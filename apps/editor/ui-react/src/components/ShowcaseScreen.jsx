@@ -78,6 +78,7 @@ import { ShowcaseGroupingEditor } from "./ShowcaseGroupingEditor.jsx";
 import { ShowcaseNoteCard } from "./ShowcaseNoteCard.jsx";
 import { ShowcaseNoteEditor } from "./ShowcaseNoteEditor.jsx";
 import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
+import { ShowcaseSpecimenManager } from "./ShowcaseSpecimenManager.jsx";
 import { ShowcasePhotoSizeControl } from "./ShowcasePhotoSizeControl.jsx";
 import { ShowcaseReorderableCell } from "./ShowcaseReorderableCell.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
@@ -186,6 +187,15 @@ function ShowcaseScreen({ mode }) {
   // The unseen Catalog entry whose card opened the finder. Filling it is a
   // specimen-set write, not a new child, so it gets its own picker target.
   const [entryPickerNodeId, setEntryPickerNodeId] = useState(null);
+  // The Catalog entry whose specimen manager is open. The manager reads the
+  // entry from the tree on every render, so a write repaints the list in place.
+  const [managerNodeId, setManagerNodeId] = useState(null);
+  // The last specimen write's failure, shown inside the manager rather than on
+  // the screen behind its backdrop.
+  const [managerError, setManagerError] = useState("");
+  // Where focus goes when the manager closes: the strip or check that opened
+  // it, or the card when a write removed that trigger.
+  const managerReturnRef = useRef(null);
   // The catalog filter. Counts always read the full tree; the filter only
   // narrows what the grid paints.
   const [catalogFilter, setCatalogFilter] = useState("all");
@@ -209,6 +219,10 @@ function ShowcaseScreen({ mode }) {
   const restoreFocusNodeIdRef = useRef(null);
 
   const [nodes, setNodes] = useState([]);
+  // Async Undo callbacks fire after later renders, so they read the tree from a
+  // ref instead of a closure that predates the write they are undoing.
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
   const [baselineNodes, setBaselineNodes] = useState([]);
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -1154,23 +1168,96 @@ function ShowcaseScreen({ mode }) {
     applyNoteOwnership(note, owned, { nodeId });
   }
 
-  // The unseen card's finder fills the entry: the picker's selected ids join
-  // the existing specimen set, and the first id becomes primary when the entry
-  // had none. T119's manager reuses the same full-set payload.
-  async function handleAddEntrySpecimens(noteIds, allNotes = []) {
-    const entryNode =
-      entryPickerNodeId == null
-        ? null
-        : findNodeById(nodes, entryPickerNodeId);
+  // ── Specimens (view mode) ──────────────────────────────────────────────
+  // Every specimen change is the same full-set write: the ordered ids plus the
+  // primary. Add, promote, remove, and Undo all funnel through one call, and
+  // the entry is replaced from the server's response so a promotion on removal
+  // is the server's, never a guess. The manager and the unseen card's finder
+  // share these handlers.
+  function findCatalogEntry(entryId) {
+    const entry = findNodeById(nodesRef.current, entryId);
 
-    if (!entryNode || !isCatalogEntry(entryNode)) {
+    return entry && isCatalogEntry(entry) ? entry : null;
+  }
+
+  async function undoEntrySpecimens(entryId, specimens, payload) {
+    const entry = findCatalogEntry(entryId);
+
+    if (!entry) {
+      return;
+    }
+
+    await commitEntrySpecimens(entry, specimens, payload).catch(() => {});
+  }
+
+  function entrySpecimenLabel(note) {
+    return showcaseNoteDisplayParts(note).join(" · ") || "this note";
+  }
+
+  async function commitEntrySpecimens(entry, specimens, payload, message) {
+    const optimistic = {
+      ...entry,
+      specimens,
+      primary_note_id: payload.primary_note_id ?? null,
+    };
+
+    setNodes((current) =>
+      updateNodeTree(current, entry.id, () => optimistic),
+    );
+    setSaveError("");
+    setManagerError("");
+
+    try {
+      const result = await updateNodeNotes(entry.id, payload);
+      const saved = result?.node;
+
+      if (saved) {
+        setNodes((current) =>
+          updateNodeTree(current, entry.id, (currentEntry) => ({
+            ...currentEntry,
+            ...saved,
+            children: currentEntry.children,
+          })),
+        );
+      }
+
+      setManagerError("");
+
+      if (message) {
+        const previousSpecimens = entry.specimens ?? [];
+        const previousPayload = specimenPayload(entry);
+
+        toastHost?.current?.show(message, "success", {
+          label: "Undo",
+          onClick: () =>
+            undoEntrySpecimens(entry.id, previousSpecimens, previousPayload),
+        });
+      }
+    } catch (error) {
+      const text =
+        error.message || "Could not update this entry's notes.";
+
+      setNodes((current) =>
+        updateNodeTree(current, entry.id, () => entry),
+      );
+      setSaveError(text);
+      setManagerError(text);
+      throw error;
+    }
+  }
+
+  async function addSpecimensToEntry(entryId, noteIds, allNotes = []) {
+    const entryNode = findCatalogEntry(entryId);
+
+    if (!entryNode) {
       return;
     }
 
     const byId = new Map((allNotes ?? []).map((note) => [note.id, note]));
     const existingIds = specimenNoteIds(entryNode);
-    const addedIds = (noteIds ?? []).filter(
-      (noteId) => !existingIds.includes(noteId),
+    const addedIds = [...new Set(noteIds ?? [])].filter(
+      (noteId) =>
+        Number.isInteger(noteId) && !existingIds.includes(noteId),
     );
 
     if (!addedIds.length) {
@@ -1178,47 +1265,136 @@ function ShowcaseScreen({ mode }) {
     }
 
     const added = addedIds.map((noteId) => byId.get(noteId) ?? { id: noteId });
-    const optimistic = {
-      ...entryNode,
-      specimens: [...(entryNode.specimens ?? []), ...added],
-    };
-    const payload = specimenPayload(optimistic);
+    const specimens = [...(entryNode.specimens ?? []), ...added];
+    // `specimenPayload` gives the first id primary when the entry had none, so
+    // the first note added to an empty entry is the one the card shows.
+    const payload = specimenPayload({ ...entryNode, specimens });
 
-    setNodes((current) =>
-      updateNodeTree(current, entryNode.id, () => optimistic),
+    await commitEntrySpecimens(
+      entryNode,
+      specimens,
+      payload,
+      `Added ${addedIds.length === 1 ? "1 note" : `${addedIds.length} notes`} to ${catalogEntryIdentity(entryNode.entry)}`,
     );
-    setSaveError("");
+  }
 
-    try {
-      const result = await updateNodeNotes(entryNode.id, payload);
-      const saved = result?.node;
-
-      if (saved) {
-        setNodes((current) =>
-          updateNodeTree(current, entryNode.id, (entry) => ({
-            ...entry,
-            ...saved,
-            children: entry.children,
-          })),
-        );
-      }
-    } catch (error) {
-      setNodes((current) =>
-        updateNodeTree(current, entryNode.id, () => entryNode),
-      );
-      setSaveError(error.message || "Could not add the note to this entry.");
-      throw error;
+  async function handleAddEntrySpecimens(noteIds, allNotes = []) {
+    if (entryPickerNodeId == null) {
+      return;
     }
+
+    await addSpecimensToEntry(entryPickerNodeId, noteIds, allNotes);
+  }
+
+  async function promoteEntrySpecimen(entryId, noteId) {
+    const entryNode = findCatalogEntry(entryId);
+    const specimens = entryNode?.specimens ?? [];
+    const target = specimens.find((specimen) => specimen?.id === noteId);
+
+    if (!entryNode || !target || entryNode.primary_note_id === noteId) {
+      return;
+    }
+
+    const payload = {
+      note_ids: specimenNoteIds(entryNode),
+      primary_note_id: noteId,
+    };
+
+    await commitEntrySpecimens(
+      entryNode,
+      specimens,
+      payload,
+      `Primary set to ${entrySpecimenLabel(target)}`,
+    );
+  }
+
+  async function removeEntrySpecimen(entryId, noteId) {
+    const entryNode = findCatalogEntry(entryId);
+    const specimens = entryNode?.specimens ?? [];
+    const removed = specimens.find((specimen) => specimen?.id === noteId);
+
+    if (!entryNode || !removed) {
+      return;
+    }
+
+    const remaining = specimens.filter((specimen) => specimen?.id !== noteId);
+    // Removing the primary selects the first remaining specimen, the same rule
+    // the server applies; the response carries the final order and primary.
+    const payload = specimenPayload({
+      ...entryNode,
+      specimens: remaining,
+      primary_note_id:
+        entryNode.primary_note_id === noteId
+          ? null
+          : entryNode.primary_note_id,
+    });
+
+    await commitEntrySpecimens(
+      entryNode,
+      remaining,
+      payload,
+      `Removed ${entrySpecimenLabel(removed)} from ${catalogEntryIdentity(entryNode.entry)}`,
+    );
   }
 
   function openEntryFinder(node) {
     setEntryPickerNodeId(node.id);
   }
 
-  // T119 mounts the specimen manager here. The strip and the ownership menu's
-  // "Notes on this entry" item both call this one stable seam, so the manager
-  // can land without changing either trigger.
-  function openSpecimenManager() {}
+  // The strip and the ownership menu's "Notes on this entry" item both call
+  // this one seam. Remember which control opened the manager so closing hands
+  // focus back to the strip or the check even after a write replaces them.
+  function openSpecimenManager(node) {
+    if (!node || !isCatalogEntry(node) || editMode) {
+      return;
+    }
+
+    managerReturnRef.current = {
+      nodeId: node.id,
+      trigger:
+        document.activeElement instanceof HTMLElement
+          ? document.activeElement
+          : null,
+    };
+    setManagerError("");
+    setManagerNodeId(node.id);
+  }
+
+  function closeSpecimenManager() {
+    setManagerNodeId(null);
+  }
+
+  // Closing the manager hands focus back to the control that opened it. A write
+  // can remove that control (the strip disappears at one specimen), so the
+  // fallback is the same card's check or ownership footer.
+  useEffect(() => {
+    if (managerNodeId != null) {
+      return;
+    }
+
+    const target = managerReturnRef.current;
+
+    if (!target) {
+      return;
+    }
+
+    managerReturnRef.current = null;
+
+    if (target.trigger?.isConnected) {
+      requestAnimationFrame(() => target.trigger.focus?.());
+      return;
+    }
+
+    const cell = `.showcase-catalog-cell[data-showcase-node-id="${target.nodeId}"]`;
+    const control = `${cell} [data-showcase-focus="check"], ${cell} [data-showcase-focus="ownership"]`;
+
+    focusShowcaseControl(
+      sectionRef,
+      sectionRef.current?.querySelector(control)
+        ? control
+        : `${cell} .showcase-card`,
+    );
+  }, [managerNodeId]);
 
   function openPresentation(nodeId = null) {
     if (!presentationNotes.length || editMode) {
@@ -1618,6 +1794,7 @@ function ShowcaseScreen({ mode }) {
         showShortcutsHelp ||
         pickerNodeId != null ||
         entryPickerNodeId != null ||
+        managerNodeId != null ||
         confirmOpen ||
         presentIndex != null
       ) {
@@ -1803,6 +1980,7 @@ function ShowcaseScreen({ mode }) {
     guardShowcaseExit,
     isNew,
     location.search,
+    managerNodeId,
     navigate,
     nodes,
     pickerNodeId,
@@ -1861,6 +2039,8 @@ function ShowcaseScreen({ mode }) {
     entryPickerNodeId == null
       ? null
       : findNodeById(nodes, entryPickerNodeId);
+  const managerEntry =
+    managerNodeId == null ? null : findNodeById(nodes, managerNodeId);
   // The catalog header's owned-over-total progress. A presentation-only
   // showcase never paints it.
   const ownedPercent = catalogTotals.total
@@ -2379,6 +2559,24 @@ function ShowcaseScreen({ mode }) {
           }}
           onAdd={handleAddEntrySpecimens}
           onClose={() => setEntryPickerNodeId(null)}
+        />
+      ) : null}
+
+      {managerEntry && isCatalogEntry(managerEntry) ? (
+        <ShowcaseSpecimenManager
+          collections={collections}
+          entry={managerEntry}
+          error={managerError}
+          onAdd={(noteIds, allNotes) =>
+            addSpecimensToEntry(managerEntry.id, noteIds, allNotes)
+          }
+          onClose={closeSpecimenManager}
+          onPromote={(noteId) => {
+            promoteEntrySpecimen(managerEntry.id, noteId).catch(() => {});
+          }}
+          onRemove={(noteId) => {
+            removeEntrySpecimen(managerEntry.id, noteId).catch(() => {});
+          }}
         />
       ) : null}
 

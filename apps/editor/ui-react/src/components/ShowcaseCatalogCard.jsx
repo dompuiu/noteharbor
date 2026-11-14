@@ -310,6 +310,7 @@ function ShowcaseCatalogCard({
         aria-haspopup="dialog"
         aria-label={`${specimenCount} notes on this entry. Choose the primary`}
         className="showcase-catalog-strip"
+        data-showcase-focus="strip"
         onClick={() => onOpenManager?.(node)}
         type="button"
       >

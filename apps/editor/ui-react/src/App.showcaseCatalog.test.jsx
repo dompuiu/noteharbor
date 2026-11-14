@@ -638,3 +638,407 @@ describe("the catalog checklist", () => {
     ).toBeInTheDocument();
   });
 });
+
+describe("the specimen manager", () => {
+  test("lists the entry's specimens with chips and hands focus back to the strip", async () => {
+    const user = userEvent.setup();
+    await openShowcase();
+
+    const strip = screen.getByRole("button", {
+      name: "2 notes on this entry. Choose the primary",
+    });
+    await user.click(strip);
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Notes on Pick 22a",
+    });
+    const radios = within(dialog).getAllByRole("radio");
+    expect(radios).toHaveLength(2);
+    expect(radios[0]).toBeChecked();
+    expect(radios[1]).not.toBeChecked();
+    expect(
+      within(dialog).getByRole("radio", {
+        name: "1 leu reference · Pick 22a · 1917, seen",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      [...dialog.querySelectorAll(".showcase-manager-chip")].map(
+        (chip) => chip.textContent,
+      ),
+    ).toEqual(["Owned", "Seen"]);
+    expect(
+      within(dialog).getByRole("button", {
+        name: "Remove 1 leu reference · Pick 22a · 1917 from this entry",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).queryByRole("status"),
+    ).not.toBeInTheDocument();
+
+    await user.click(within(dialog).getByRole("button", { name: "Done" }));
+
+    await waitFor(() => expect(strip).toHaveFocus());
+    expect(
+      screen.queryByRole("dialog", { name: "Notes on Pick 22a" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("promotes a new primary and Undo restores the previous one", async () => {
+    const user = userEvent.setup();
+    updateNodeNotes
+      .mockResolvedValueOnce({
+        node: entryNode(
+          20,
+          {
+            catalog_number: "22a",
+            specimens: [OWNED_NOTE, REFERENCE_NOTE],
+            primary: REFERENCE_NOTE.id,
+          },
+          1,
+        ),
+      })
+      .mockResolvedValueOnce({
+        node: entryNode(
+          20,
+          {
+            catalog_number: "22a",
+            specimens: [OWNED_NOTE, REFERENCE_NOTE],
+            primary: OWNED_NOTE.id,
+          },
+          1,
+        ),
+      });
+    await openShowcase();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "2 notes on this entry. Choose the primary",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Notes on Pick 22a",
+    });
+
+    await user.click(
+      within(dialog).getByRole("radio", {
+        name: "1 leu reference · Pick 22a · 1917, seen",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(updateNodeNotes).toHaveBeenCalledWith(20, {
+        note_ids: [OWNED_NOTE.id, REFERENCE_NOTE.id],
+        primary_note_id: REFERENCE_NOTE.id,
+      }),
+    );
+    expect(
+      within(dialog).getByRole("radio", {
+        name: "1 leu reference · Pick 22a · 1917, seen",
+      }),
+    ).toBeChecked();
+
+    const strip = await screen.findByRole("button", {
+      name: "2 notes on this entry. Choose the primary",
+    });
+    expect(strip).toHaveTextContent("seen primary");
+    // The card and the slideshow both read the primary, so the promoted
+    // reference is now the image behind them.
+    expect(
+      screen
+        .getByRole("button", { name: "Present 1 leu · Pick 22a · 1917" })
+        .querySelector("img")
+        .getAttribute("src"),
+    ).toContain(`/notes/${REFERENCE_NOTE.id}/`);
+
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+
+    await waitFor(() => expect(updateNodeNotes).toHaveBeenCalledTimes(2));
+    expect(updateNodeNotes).toHaveBeenLastCalledWith(20, {
+      note_ids: [OWNED_NOTE.id, REFERENCE_NOTE.id],
+      primary_note_id: OWNED_NOTE.id,
+    });
+    expect(
+      within(dialog).getByRole("radio", {
+        name: "1 leu · Pick 22a · 1917, owned",
+      }),
+    ).toBeChecked();
+    expect(
+      screen
+        .getByRole("button", { name: "Present 1 leu · Pick 22a · 1917" })
+        .querySelector("img")
+        .getAttribute("src"),
+    ).toContain(`/notes/${OWNED_NOTE.id}/`);
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", {
+          name: "2 notes on this entry. Choose the primary",
+        }),
+      ).toHaveTextContent("2 notes · primary"),
+    );
+  });
+
+  test("removing the primary reflects the server's promotion", async () => {
+    const user = userEvent.setup();
+    updateNodeNotes
+      .mockResolvedValueOnce({
+        node: entryNode(
+          20,
+          {
+            catalog_number: "22a",
+            specimens: [REFERENCE_NOTE],
+            primary: REFERENCE_NOTE.id,
+          },
+          1,
+        ),
+      })
+      .mockResolvedValueOnce({
+        node: entryNode(
+          20,
+          {
+            catalog_number: "22a",
+            specimens: [OWNED_NOTE, REFERENCE_NOTE],
+            primary: OWNED_NOTE.id,
+          },
+          1,
+        ),
+      });
+    await openShowcase();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "1 leu · Pick 22a · 1917 is owned. Open ownership options",
+      }),
+    );
+    await user.click(
+      screen.getByRole("menuitem", { name: /Notes on this entry \(2\)/ }),
+    );
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Notes on Pick 22a",
+    });
+    await user.click(
+      within(dialog).getByRole("button", {
+        name: "Remove 1 leu · Pick 22a · 1917 from this entry",
+      }),
+    );
+
+    await waitFor(() =>
+      expect(updateNodeNotes).toHaveBeenCalledWith(20, {
+        note_ids: [REFERENCE_NOTE.id],
+        primary_note_id: REFERENCE_NOTE.id,
+      }),
+    );
+    const radios = within(dialog).getAllByRole("radio");
+    expect(radios).toHaveLength(1);
+    expect(radios[0]).toBeChecked();
+    expect(radios[0]).toHaveAccessibleName(
+      "1 leu reference · Pick 22a · 1917, seen",
+    );
+
+    await user.click(within(dialog).getByRole("button", { name: "Done" }));
+    // One unowned specimen: the entry is Seen, and the strip is gone.
+    expect(
+      await screen.findByRole("button", {
+        name: "1 leu · Pick 22a · 1917 is seen. Open ownership options",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: /notes on this entry\. Choose the primary/,
+      }),
+    ).not.toBeInTheDocument();
+
+    await user.click(await screen.findByRole("button", { name: "Undo" }));
+
+    await waitFor(() => expect(updateNodeNotes).toHaveBeenCalledTimes(2));
+    expect(updateNodeNotes).toHaveBeenLastCalledWith(20, {
+      note_ids: [OWNED_NOTE.id, REFERENCE_NOTE.id],
+      primary_note_id: OWNED_NOTE.id,
+    });
+    expect(
+      await screen.findByRole("button", {
+        name: "1 leu · Pick 22a · 1917 is owned. Open ownership options",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  test("adds a note from the embedded finder and hides it from the next search", async () => {
+    const user = userEvent.setup();
+    getAllNotes.mockResolvedValue({ notes: [PICKER_NOTE] });
+    updateNodeNotes.mockResolvedValueOnce({
+      node: entryNode(
+        20,
+        {
+          catalog_number: "22a",
+          specimens: [OWNED_NOTE, REFERENCE_NOTE, PICKER_NOTE],
+          primary: OWNED_NOTE.id,
+        },
+        1,
+      ),
+    });
+    await openShowcase();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "2 notes on this entry. Choose the primary",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Notes on Pick 22a",
+    });
+
+    await user.click(
+      await within(dialog).findByRole("checkbox", { name: /10 lei/ }),
+    );
+    await user.click(
+      within(dialog).getByRole("button", { name: "Add selected (1)" }),
+    );
+
+    await waitFor(() =>
+      expect(updateNodeNotes).toHaveBeenCalledWith(20, {
+        note_ids: [OWNED_NOTE.id, REFERENCE_NOTE.id, PICKER_NOTE.id],
+        primary_note_id: OWNED_NOTE.id,
+      }),
+    );
+    expect(within(dialog).getAllByRole("radio")).toHaveLength(3);
+    expect(
+      within(dialog).queryByRole("checkbox", { name: /10 lei/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "3 notes on this entry. Choose the primary",
+      }),
+    ).toHaveTextContent("3 notes · primary");
+  });
+
+  test("the first note added to an emptied entry becomes its primary", async () => {
+    const user = userEvent.setup();
+    getAllNotes.mockResolvedValue({ notes: [PICKER_NOTE] });
+    updateNodeNotes
+      .mockResolvedValueOnce({
+        node: entryNode(
+          21,
+          {
+            catalog_number: "24c",
+            denomination: "5 lei",
+            issue_date: "1920",
+            specimens: [],
+            primary: null,
+          },
+          2,
+        ),
+      })
+      .mockResolvedValueOnce({
+        node: entryNode(
+          21,
+          {
+            catalog_number: "24c",
+            denomination: "5 lei",
+            issue_date: "1920",
+            specimens: [PICKER_NOTE],
+            primary: PICKER_NOTE.id,
+          },
+          2,
+        ),
+      });
+    await openShowcase();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "5 lei · Pick 24c · 1920 is seen. Open ownership options",
+      }),
+    );
+    await user.click(
+      screen.getByRole("menuitem", { name: /Notes on this entry \(1\)/ }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Notes on Pick 24c",
+    });
+
+    await user.click(
+      within(dialog).getByRole("button", {
+        name: "Remove 5 lei · Pick 24c · 1920 from this entry",
+      }),
+    );
+    await waitFor(() =>
+      expect(updateNodeNotes).toHaveBeenCalledWith(21, { note_ids: [] }),
+    );
+
+    await user.click(
+      await within(dialog).findByRole("checkbox", { name: /10 lei/ }),
+    );
+    await user.click(
+      within(dialog).getByRole("button", { name: "Add selected (1)" }),
+    );
+
+    await waitFor(() =>
+      expect(updateNodeNotes).toHaveBeenLastCalledWith(21, {
+        note_ids: [PICKER_NOTE.id],
+        primary_note_id: PICKER_NOTE.id,
+      }),
+    );
+    const radio = within(dialog).getByRole("radio", {
+      name: "10 lei · Pick 25d · 1921, owned",
+    });
+    expect(radio).toBeChecked();
+    await waitFor(() => expect(radio).toHaveFocus());
+  });
+
+  test("a failed write stays inside the manager and reverts the row", async () => {
+    const user = userEvent.setup();
+    updateNodeNotes.mockRejectedValueOnce(new Error("Server said no."));
+    await openShowcase();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "2 notes on this entry. Choose the primary",
+      }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Notes on Pick 22a",
+    });
+
+    await user.click(
+      within(dialog).getByRole("button", {
+        name: "Remove 1 leu · Pick 22a · 1917 from this entry",
+      }),
+    );
+
+    expect(
+      await within(dialog).findByRole("alert"),
+    ).toHaveTextContent("Server said no.");
+    expect(within(dialog).getAllByRole("radio")).toHaveLength(2);
+  });
+
+  test("warns when an owned entry presents a seen reference", async () => {
+    const user = userEvent.setup();
+    const tree = [
+      categoryNode([
+        entryNode(
+          20,
+          {
+            catalog_number: "22a",
+            specimens: [OWNED_NOTE, REFERENCE_NOTE],
+            primary: REFERENCE_NOTE.id,
+          },
+          1,
+        ),
+      ]),
+    ];
+    await openShowcase(tree);
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "2 notes on this entry. Choose the primary",
+      }),
+    );
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Notes on Pick 22a",
+    });
+    const warning = within(dialog).getByRole("status");
+    expect(warning).toHaveTextContent("This entry is owned");
+    expect(warning).toHaveTextContent("entry stays owned");
+    expect(warning).toHaveTextContent("slideshow shows that photo");
+  });
+});
