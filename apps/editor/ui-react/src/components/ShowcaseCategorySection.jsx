@@ -1,5 +1,6 @@
 import { ShowcaseGrid } from "./ShowcaseGrid.jsx";
 import { ShowcaseAddTiles } from "./ShowcaseAddTiles.jsx";
+import { ShowcaseCatalogCard } from "./ShowcaseCatalogCard.jsx";
 import { ShowcaseGroupingCard } from "./ShowcaseGroupingCard.jsx";
 import { ShowcaseGroupingEditor } from "./ShowcaseGroupingEditor.jsx";
 import { ShowcaseNoteCard } from "./ShowcaseNoteCard.jsx";
@@ -7,7 +8,11 @@ import { ShowcaseNoteEditor } from "./ShowcaseNoteEditor.jsx";
 import { ShowcaseNodeEditor } from "./ShowcaseNodeEditor.jsx";
 import { ShowcaseReorderableCell } from "./ShowcaseReorderableCell.jsx";
 import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
-import { countNoteNodes, visibleChildNodes } from "../lib/showcaseTree.js";
+import {
+  categoryCardCount,
+  isCatalogEntry,
+  visibleChildNodes,
+} from "../lib/showcaseTree.js";
 import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 
 // One top-level Category rendered always expanded: a section header plus the
@@ -22,12 +27,17 @@ function noteNodeLabel(node) {
 
 function ShowcaseCategorySection({
   category,
+  catalogMode = false,
   editMode,
   photoSize,
   onAddGrouping,
   onAddNotes,
+  onOpenFinder,
   onOpenGrouping,
+  onOpenManager,
   onOpenNote,
+  onOwnershipToggle,
+  onPresent,
   onRemoveGrouping,
   onRemoveNote,
   onRemoveCategory,
@@ -45,9 +55,13 @@ function ShowcaseCategorySection({
     onReorder: (orderedIds) => onReorder(category.id, orderedIds),
   });
 
-  // View mode never presents an empty Category: no notes anywhere beneath it
-  // means no section at all. Edit mode keeps it so it can be filled.
-  if (!editMode && countNoteNodes(children) === 0) {
+  // View mode never presents an empty Category: no cards anywhere beneath it
+  // means no section at all. In a catalog a position with no specimens is a
+  // card, so the entry count keeps the section. Edit mode keeps it so it can be
+  // filled.
+  const contentCount = categoryCardCount(category, catalogMode);
+
+  if (!editMode && contentCount === 0) {
     return null;
   }
 
@@ -83,6 +97,24 @@ function ShowcaseCategorySection({
       {children.length > 0 ? (
         <ShowcaseGrid size={photoSize}>
           {visibleChildren.map((node) => {
+            if (
+              catalogMode &&
+              !editMode &&
+              (isCatalogEntry(node) || node.node_type === "note")
+            ) {
+              return (
+                <ShowcaseCatalogCard
+                  key={node.id}
+                  node={node}
+                  onOpenFinder={onOpenFinder}
+                  onOpenManager={onOpenManager}
+                  onOpenNote={onOpenNote}
+                  onPresent={onPresent}
+                  onToggleOwned={onOwnershipToggle}
+                />
+              );
+            }
+
             if (node.node_type === "grouping") {
               return editMode ? (
                 <ShowcaseReorderableCell

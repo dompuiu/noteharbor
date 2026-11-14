@@ -3,6 +3,7 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useCollections } from "../lib/collections.jsx";
 import { ownsPrintableShortcut } from "../lib/editableElement.js";
 import { useShowcases } from "../lib/showcases.jsx";
+import { showcaseCountLabel } from "../lib/showcaseTree.js";
 import { loadSidebarPinned, saveSidebarPinned } from "../lib/sidebarPin.js";
 import { APP_VERSION } from "../lib/version.js";
 import { useToastHost } from "./Toast.jsx";
@@ -127,6 +128,18 @@ function initialsOf(name) {
 function railIdentity(item) {
   if (Number.isFinite(item.count)) {
     return String(item.count);
+  }
+
+  // A catalog row counts owned over total entries; the collapsed mark drops
+  // the spaces so the fraction fits the same slot as a note count. Only a
+  // showcase label is a string here; a collection's count stays numeric (or
+  // falls back to initials when its payload omitted one).
+  if (
+    item.showcaseId != null &&
+    typeof item.count === "string" &&
+    item.count.trim()
+  ) {
+    return item.count.replace(/\s+/g, "");
   }
 
   return initialsOf(item.label);
@@ -284,8 +297,9 @@ function Sidebar({ pageFocusRef }) {
     label: showcase.name,
     to: SHOWCASE_ROUTES.showcase(showcase.id),
     // No new fetch from the rail: only a count the list payload already
-    // carries reaches the collapsed mark.
-    count: showcase.note_count,
+    // carries reaches the collapsed mark. A catalog showcase paints
+    // owned / entry_count; a presentation-only one keeps its note count.
+    count: showcaseCountLabel(showcase),
     matches: (pathname) =>
       pathname === SHOWCASE_ROUTES.showcase(showcase.id) ||
       pathname === SHOWCASE_ROUTES.showcaseEdit(showcase.id),

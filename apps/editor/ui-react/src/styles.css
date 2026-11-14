@@ -2110,6 +2110,490 @@ input[type="radio"] {
   gap: 4px;
 }
 
+/* ── Catalog checklist ────────────────────────────────────────────────
+   Catalog chrome only exists when the tree holds Catalog entries. The
+   summary speaks in counts and one quiet progress rail; the filters are
+   pills with their own counts; a card keeps the existing showcase card
+   metrics and adds only the three state cues (check, SEEN tag, empty well). */
+
+.showcase-summary {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  flex-wrap: wrap;
+  color: var(--text-muted);
+  font-size: 0.85rem;
+}
+
+.showcase-summary-item strong {
+  color: var(--text);
+  font-weight: 700;
+}
+
+.showcase-summary-dot {
+  flex: none;
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: var(--border-control);
+}
+
+.showcase-progress {
+  flex: none;
+  width: 128px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--surface-4);
+}
+
+.showcase-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 160ms ease;
+}
+
+.showcase-summary-pct {
+  color: var(--text-faint);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+.showcase-complete-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid rgba(21, 122, 58, 0.22);
+  border-radius: var(--radius-pill);
+  background: var(--success-bg);
+  color: var(--success);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.showcase-complete-mark {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.showcase-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 0 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border-soft);
+  flex-wrap: wrap;
+}
+
+.showcase-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.showcase-filter-chip:hover,
+.showcase-filter-chip:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.showcase-filter-chip[aria-pressed="true"] {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+  color: var(--accent-ink);
+}
+
+.showcase-filter-count {
+  min-width: 20px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.showcase-filter-chip[aria-pressed="true"] .showcase-filter-count {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--accent-ink);
+}
+
+/* The wrapper keeps the card and its siblings (check, strip) one grid item,
+   and anchors the check over the photo's corner. */
+.showcase-catalog-cell {
+  position: relative;
+  gap: 0;
+}
+
+.showcase-card--catalog {
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 10px 10px 6px;
+  align-items: stretch;
+}
+
+/* Seen: the photo is real, so the card keeps it, but it is desaturated and
+   tagged. Nothing here is behind glass. */
+.showcase-card-image--seen img {
+  filter: grayscale(0.6) contrast(0.95);
+  opacity: 0.78;
+}
+
+.showcase-card-image--seen::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    180deg,
+    rgba(242, 242, 242, 0.08),
+    rgba(37, 40, 43, 0.1)
+  );
+  pointer-events: none;
+}
+
+.showcase-seen-tag {
+  position: absolute;
+  top: 7px;
+  left: 7px;
+  z-index: 2;
+  padding: 2px 6px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.93);
+  color: var(--text-muted);
+  font-size: 0.53rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  text-transform: uppercase;
+}
+
+/* The owned check: a white disc over a busy photo, so the state survives any
+   banknote colour. */
+.showcase-catalog-check {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  z-index: 2;
+}
+
+.showcase-card-check {
+  display: grid;
+  place-items: center;
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  border: 1px solid rgba(37, 40, 43, 0.2);
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--success);
+  box-shadow: 0 1px 3px rgba(37, 40, 43, 0.14);
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    background 0.12s ease;
+}
+
+.showcase-card-check:hover,
+.showcase-card-check:focus-visible {
+  transform: scale(1.08);
+  background: var(--success-bg);
+}
+
+/* The ownership footer is the seen card's call to action; the card itself is
+   the menu trigger, so the footer is one visual row inside it. */
+.showcase-catalog-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 28px;
+  margin-top: 1px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border-soft);
+  color: var(--accent-strong);
+  font-size: 0.79rem;
+  font-weight: 700;
+}
+
+.showcase-check-empty {
+  display: block;
+  width: 15px;
+  height: 15px;
+  border: 1.5px dashed currentColor;
+  border-radius: 50%;
+  opacity: 0.75;
+}
+
+.showcase-catalog-caret {
+  flex: none;
+  opacity: 0.85;
+}
+
+.showcase-catalog-arrow {
+  display: inline-block;
+  font-size: 0.9rem;
+  transition: transform 0.14s ease;
+}
+
+.showcase-card--unseen:hover .showcase-catalog-arrow,
+.showcase-card--unseen:focus-visible .showcase-catalog-arrow {
+  transform: translateX(3px);
+}
+
+/* A position with no record is a recessed specimen well, not an error: the
+   catalogue identity sits in the middle and the dashed inset reads as a place
+   waiting to be filled. */
+.showcase-catalog-well {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(135deg, rgba(37, 40, 43, 0.018) 25%, transparent 25%) 0 0 /
+      10px 10px,
+    linear-gradient(315deg, rgba(37, 40, 43, 0.018) 25%, transparent 25%) 0 0 /
+      10px 10px,
+    var(--surface-2);
+}
+
+.showcase-catalog-well::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1.5px dashed var(--border-control);
+  border-radius: 4px;
+  pointer-events: none;
+  transition: border-color 0.14s ease;
+}
+
+.showcase-card--unseen:hover .showcase-catalog-well::after,
+.showcase-card--unseen:focus-visible .showcase-catalog-well::after {
+  border-color: var(--text-faint);
+}
+
+.showcase-catalog-eyebrow {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  z-index: 1;
+  color: var(--text-faint);
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.showcase-catalog-glyph {
+  width: 64px;
+  max-width: 60%;
+  color: var(--text-faint);
+}
+
+.showcase-catalog-identity {
+  position: relative;
+  z-index: 1;
+  max-width: 85%;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* One entry, several notes: a quiet strip, never a wall of badges. */
+.showcase-catalog-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  min-height: 26px;
+  margin-top: 2px;
+  padding: 6px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border-soft);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.showcase-catalog-strip:hover,
+.showcase-catalog-strip:focus-visible {
+  color: var(--accent-strong);
+}
+
+.showcase-catalog-strip-icon {
+  flex: none;
+}
+
+/* The ownership menu: a header naming the state, then the library-wide
+   ownership item and the specimen-manager entry. */
+.showcase-ownership-menu {
+  position: fixed;
+  z-index: 115;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 250px;
+  max-width: 320px;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-md);
+}
+
+.showcase-ownership-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 6px 10px 8px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.showcase-ownership-identity {
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.82rem;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase-ownership-state {
+  flex: none;
+  padding: 1px 7px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+}
+
+.showcase-ownership-state--owned {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.showcase-ownership-item {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.showcase-ownership-item:hover,
+.showcase-ownership-item:focus-visible {
+  background: var(--accent-soft);
+}
+
+.showcase-ownership-item small {
+  color: var(--text-faint);
+  font-size: 0.68rem;
+  line-height: 1.3;
+}
+
+.showcase-ownership-item b {
+  font-size: 0.8rem;
+  font-weight: 700;
+  line-height: 1.35;
+}
+
+.showcase-ownership-item em {
+  color: var(--text-faint);
+  font-size: 0.68rem;
+  font-style: normal;
+  line-height: 1.35;
+}
+
+/* The Undo affordance rides inside the transient toast. */
+.toast-action {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.toast-action:hover,
+.toast-action:focus-visible {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* Two columns at phone width, and the check stays inside the card's corner. */
+@media (max-width: 560px) {
+  .showcase-screen:not(.showcase-screen--edit) .showcase-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .showcase-card--catalog {
+    padding: 6px 6px 4px;
+    gap: 6px;
+  }
+
+  .showcase-catalog-check {
+    top: 9px;
+    right: 9px;
+  }
+
+  .showcase-card-check {
+    width: 24px;
+    height: 24px;
+  }
+
+  .showcase-summary,
+  .showcase-filter-bar {
+    gap: 6px;
+  }
+}
+
 /* The edit-mode contents of one node nest in the parent grid. The stacked
    `+` actions fill one grid cell, so the pair reads as a single note-sized
    tile whether it sits beside notes or wraps onto its own row. The minimum
@@ -2397,6 +2881,20 @@ input[type="radio"] {
 
   .showcase-card-face {
     transition: none;
+  }
+
+  .showcase-progress-fill,
+  .showcase-card-check,
+  .showcase-catalog-well::after,
+  .showcase-catalog-arrow {
+    transition: none;
+  }
+
+  .showcase-card-check:hover,
+  .showcase-card-check:focus-visible,
+  .showcase-card--unseen:hover .showcase-catalog-arrow,
+  .showcase-card--unseen:focus-visible .showcase-catalog-arrow {
+    transform: none;
   }
 
   .slide-thumb-btn {

@@ -1,0 +1,640 @@
+import { MemoryRouter } from "react-router-dom";
+import { render, screen, waitFor, within } from "@testing-library/react";
+import userEvent from "@testing-library/user-event";
+import { beforeEach, describe, expect, test, vi } from "vitest";
+
+// The catalog checklist tests drive the real shell (sidebar + routes) with the
+// web API mocked. The other screens are stubbed so the assertions land on the
+// showcase canvas, the ownership menu, the finder, and Present.
+vi.mock("./lib/api.js", () => ({
+  createCatalogEntry: vi.fn(),
+  createCategory: vi.fn(),
+  createCollection: vi.fn(),
+  createShowcase: vi.fn(),
+  createShowcaseNode: vi.fn(),
+  deleteCollection: vi.fn(),
+  deleteNode: vi.fn(),
+  deleteShowcase: vi.fn(),
+  getCategories: vi.fn(),
+  getCollections: vi.fn(),
+  getHealth: vi.fn(),
+  getAllNotes: vi.fn(),
+  getShowcases: vi.fn(),
+  getShowcaseTree: vi.fn(),
+  renameCategory: vi.fn(),
+  renameCollection: vi.fn(),
+  renameShowcase: vi.fn(),
+  reorderCollections: vi.fn(),
+  reorderShowcases: vi.fn(),
+  updateCatalogEntry: vi.fn(),
+  updateNode: vi.fn(),
+  updateNote: vi.fn(),
+  updateNodeNotes: vi.fn(),
+  reorderNodes: vi.fn(),
+}));
+
+vi.mock("./components/NotesTable.jsx", () => ({
+  NotesTable: () => <div>Banknotes screen</div>,
+}));
+
+vi.mock("./components/CollectionScreen.jsx", () => ({
+  CollectionScreen: () => <div>Collection screen</div>,
+}));
+
+vi.mock("./components/ImportScreen.jsx", () => ({
+  ImportScreen: () => <div>Import and export screen</div>,
+}));
+
+vi.mock("./components/NoteEditForm.jsx", () => ({
+  NoteEditForm: () => <div>Note editor screen</div>,
+}));
+
+import { ShellContent } from "./App.jsx";
+import {
+  getAllNotes,
+  getCategories,
+  getCollections,
+  getHealth,
+  getShowcases,
+  getShowcaseTree,
+  updateNodeNotes,
+  updateNote,
+} from "./lib/api.js";
+import { CollectionsProvider } from "./lib/collections.jsx";
+import { ShowcasesProvider } from "./lib/showcases.jsx";
+import { SHOWCASE_ROUTES } from "./lib/routes.js";
+
+const FRONT = (id) => ({
+  type: "front",
+  variant: "thumbnail",
+  localPath: `/api/images/notes/${id}/front.jpg`,
+});
+
+function note(id, { owned = true, denomination, catalog_number, issue_date }) {
+  return {
+    collection_id: 1,
+    id,
+    catalog_number,
+    denomination,
+    issue_date,
+    images: [FRONT(id)],
+    owned,
+    tags: [],
+    updated_at: `rev-${id}`,
+  };
+}
+
+const OWNED_NOTE = note(101, {
+  catalog_number: "22a",
+  denomination: "1 leu",
+  issue_date: "1917",
+});
+const SECOND_OWNED_ENTRY_NOTE = note(105, {
+  catalog_number: "23b",
+  denomination: "2 lei",
+  issue_date: "1919",
+});
+const REFERENCE_NOTE = note(102, {
+  catalog_number: "22a",
+  denomination: "1 leu reference",
+  issue_date: "1917",
+  owned: false,
+});
+const SEEN_NOTE = note(103, {
+  catalog_number: "24c",
+  denomination: "5 lei",
+  issue_date: "1920",
+  owned: false,
+});
+const PICKER_NOTE = note(201, {
+  catalog_number: "25d",
+  denomination: "10 lei",
+  issue_date: "1921",
+});
+
+function noteNode(id, theNote, position = 1) {
+  return {
+    id,
+    node_type: "note",
+    name: null,
+    category_id: null,
+    parent_node_id: 10,
+    note_id: theNote.id,
+    cover_note_id: null,
+    position,
+    note: theNote,
+    cover_note: null,
+    children: [],
+  };
+}
+
+function entryNode(
+  id,
+  { catalog_number, specimens = [], primary = null, denomination = "1 leu", issue_date = "1917" },
+  position = 1,
+) {
+  return {
+    id,
+    node_type: "catalog_entry",
+    name: null,
+    category_id: null,
+    parent_node_id: 10,
+    note_id: null,
+    cover_note_id: null,
+    position,
+    note: null,
+    cover_note: null,
+    children: [],
+    entry: {
+      catalog_number,
+      denomination,
+      issue_date,
+      source: "",
+    },
+    specimens,
+    primary_note_id: primary,
+  };
+}
+
+function categoryNode(children = []) {
+  return {
+    id: 10,
+    node_type: "category",
+    name: "Summer",
+    category_id: 1,
+    parent_node_id: null,
+    note_id: null,
+    cover_note_id: null,
+    position: 1,
+    note: null,
+    cover_note: null,
+    children,
+  };
+}
+
+function catalogTree() {
+  return [
+    categoryNode([
+      // Owned through an owned primary, with a seen reference beside it.
+      entryNode(
+        20,
+        {
+          catalog_number: "22a",
+          specimens: [OWNED_NOTE, REFERENCE_NOTE],
+          primary: OWNED_NOTE.id,
+        },
+        1,
+      ),
+      // Seen: specimens exist, none owned.
+      entryNode(
+        21,
+        {
+          catalog_number: "24c",
+          denomination: "5 lei",
+          issue_date: "1920",
+          specimens: [SEEN_NOTE],
+          primary: SEEN_NOTE.id,
+        },
+        2,
+      ),
+      // Unseen: a position with no record at all.
+      entryNode(
+        22,
+        {
+          catalog_number: "25d",
+          denomination: "10 lei",
+          issue_date: "1921",
+        },
+        3,
+      ),
+      // A second owned entry, for the presentation count.
+      entryNode(
+        23,
+        {
+          catalog_number: "23b",
+          denomination: "2 lei",
+          issue_date: "1919",
+          specimens: [SECOND_OWNED_ENTRY_NOTE],
+          primary: SECOND_OWNED_ENTRY_NOTE.id,
+        },
+        4,
+      ),
+    ]),
+  ];
+}
+
+function renderAt(path) {
+  return render(
+    <MemoryRouter initialEntries={[path]}>
+      <CollectionsProvider>
+        <ShowcasesProvider>
+          <ShellContent />
+        </ShowcasesProvider>
+      </CollectionsProvider>
+    </MemoryRouter>,
+  );
+}
+
+async function openShowcase(tree = catalogTree()) {
+  getShowcaseTree.mockResolvedValue({ showcase_id: 1, nodes: tree });
+  const result = renderAt(SHOWCASE_ROUTES.showcase(1));
+  await screen.findByRole("heading", { name: "Summer" });
+  return result;
+}
+
+function summary(container) {
+  return container.querySelector(".showcase-summary");
+}
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  window.localStorage.clear();
+  getHealth.mockResolvedValue({ connected: true });
+  getCollections.mockResolvedValue({
+    collections: [{ id: 1, is_default: 1, name: "Default" }],
+  });
+  getShowcases.mockResolvedValue({
+    showcases: [
+      {
+        id: 1,
+        name: "My showcase",
+        catalog_entry_count: 4,
+        entry_count: 4,
+        note_count: 0,
+        owned_count: 3,
+      },
+    ],
+  });
+  getCategories.mockResolvedValue({ categories: [] });
+  getAllNotes.mockResolvedValue({ notes: [PICKER_NOTE] });
+  updateNote.mockImplementation(async (id, payload) => ({
+    note: { ...OWNED_NOTE, ...payload, id },
+  }));
+  updateNodeNotes.mockResolvedValue({ node: null });
+});
+
+describe("a presentation-only showcase", () => {
+  test("keeps its existing chrome without catalog counts or filters", async () => {
+    await openShowcase([categoryNode([noteNode(400, OWNED_NOTE, 1)])]);
+
+    expect(
+      screen.queryByRole("progressbar", { name: "Owned cards" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("group", { name: "Catalog filters" }),
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Present" }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("1 notes")).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "1 leu, Pick 22a, 1917" }),
+    ).toBeInTheDocument();
+  });
+});
+
+describe("the catalog checklist", () => {
+  test("paints the three card states and the header counts", async () => {
+    const { container } = await openShowcase();
+
+    expect(screen.getByRole("progressbar", { name: "Owned cards" })).toHaveAttribute(
+      "aria-valuenow",
+      "2",
+    );
+    expect(screen.getByRole("progressbar", { name: "Owned cards" })).toHaveAttribute(
+      "aria-valuemax",
+      "4",
+    );
+    expect(summary(container)).toHaveTextContent("2 owned");
+    expect(summary(container)).toHaveTextContent("1 seen");
+    expect(summary(container)).toHaveTextContent("1 unseen");
+    expect(summary(container)).toHaveTextContent("50%");
+
+    // Owned: primary photo, a Present action, and the ownership check.
+    expect(
+      screen.getByRole("button", { name: "Present 1 leu · Pick 22a · 1917" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "1 leu · Pick 22a · 1917 is owned. Open ownership options",
+      }),
+    ).toBeInTheDocument();
+    // Seen: the same photo treatment plus the SEEN tag and its footer menu.
+    expect(
+      screen.getByRole("button", {
+        name: "5 lei · Pick 24c · 1920 is seen. Open ownership options",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      container.querySelector(".showcase-seen-tag"),
+    ).toHaveTextContent("Seen");
+    // Unseen: the neutral well and the whole card opening the finder.
+    expect(
+      screen.getByRole("button", {
+        name: "10 lei · Pick 25d · 1921 is unseen. Add notes",
+      }),
+    ).toBeInTheDocument();
+
+    // The multi-specimen strip stays quiet and names the primary.
+    expect(
+      screen.getByRole("button", {
+        name: "2 notes on this entry. Choose the primary",
+      }),
+    ).toHaveTextContent("2 notes · primary");
+  });
+
+  test("the sidebar counts owned over total entries", async () => {
+    const { container } = await openShowcase();
+    const marks = [...container.querySelectorAll(".sidebar-link-mark")];
+
+    expect(marks.map((mark) => mark.textContent)).toContain("3/4");
+  });
+
+  test("filters narrow the grid and keep an empty filter calm", async () => {
+    const user = userEvent.setup();
+    const tree = [
+      categoryNode([
+        entryNode(
+          20,
+          {
+            catalog_number: "22a",
+            specimens: [OWNED_NOTE],
+            primary: OWNED_NOTE.id,
+          },
+          1,
+        ),
+        entryNode(
+          22,
+          {
+            catalog_number: "25d",
+            denomination: "10 lei",
+            issue_date: "1921",
+          },
+          2,
+        ),
+      ]),
+    ];
+    await openShowcase(tree);
+
+    await user.click(screen.getByRole("button", { name: /^Owned/ }));
+    expect(
+      screen.getByRole("button", { name: "Present 1 leu · Pick 22a · 1917" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", {
+        name: "10 lei · Pick 25d · 1921 is unseen. Add notes",
+      }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^Seen/ }));
+    expect(screen.getByText("No seen cards.")).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: "Present 1 leu · Pick 22a · 1917" }),
+    ).not.toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: /^All/ }));
+    expect(
+      screen.getByRole("button", {
+        name: "10 lei · Pick 25d · 1921 is unseen. Add notes",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  test("the ownership menu marks the displayed note and Undo restores it", async () => {
+    const user = userEvent.setup();
+    await openShowcase();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "1 leu · Pick 22a · 1917 is owned. Open ownership options",
+      }),
+    );
+
+    const menu = screen.getByRole("menu", {
+      name: "Ownership options for 1 leu · Pick 22a · 1917",
+    });
+    expect(within(menu).getByText("Owned")).toBeInTheDocument();
+    expect(
+      within(menu).getByText("Mark this note as not owned"),
+    ).toBeInTheDocument();
+    expect(
+      within(menu).getByText("1 leu · Pick 22a · 1917"),
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(menu).getByRole("menuitem", {
+        name: /Mark this note as not owned/,
+      }),
+    );
+
+    await waitFor(() => expect(updateNote).toHaveBeenCalledTimes(1));
+    expect(updateNote).toHaveBeenCalledWith(
+      OWNED_NOTE.id,
+      expect.objectContaining({ owned: false }),
+      1,
+    );
+    // The other specimen is a seen reference, so the entry drops to Seen.
+    expect(
+      await screen.findByRole("button", {
+        name: "1 leu · Pick 22a · 1917 is seen. Open ownership options",
+      }),
+    ).toBeInTheDocument();
+
+    const undo = await screen.findByRole("button", { name: "Undo" });
+    await user.click(undo);
+
+    await waitFor(() => expect(updateNote).toHaveBeenCalledTimes(2));
+    expect(updateNote).toHaveBeenLastCalledWith(
+      OWNED_NOTE.id,
+      expect.objectContaining({ owned: true }),
+      1,
+    );
+  });
+
+  test("an unseen card opens the finder and picking an owned note fills it", async () => {
+    const user = userEvent.setup();
+    updateNodeNotes.mockResolvedValue({
+      node: entryNode(
+        22,
+        {
+          catalog_number: "25d",
+          denomination: "10 lei",
+          issue_date: "1921",
+          specimens: [PICKER_NOTE],
+          primary: PICKER_NOTE.id,
+        },
+        3,
+      ),
+    });
+    await openShowcase();
+
+    await user.click(
+      screen.getByRole("button", {
+        name: "10 lei · Pick 25d · 1921 is unseen. Add notes",
+      }),
+    );
+
+    const dialog = await screen.findByRole("dialog", { name: "Add notes" });
+    expect(
+      within(dialog).getByText("Add notes to “Pick 25d”"),
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(dialog).getByRole("checkbox", { name: /10 lei/ }),
+    );
+    await user.click(
+      within(dialog).getByRole("button", { name: "Add & close" }),
+    );
+
+    await waitFor(() =>
+      expect(updateNodeNotes).toHaveBeenCalledWith(22, {
+        note_ids: [PICKER_NOTE.id],
+        primary_note_id: PICKER_NOTE.id,
+      }),
+    );
+    expect(
+      await screen.findByRole("button", {
+        name: "Present 10 lei · Pick 25d · 1921",
+      }),
+    ).toBeInTheDocument();
+  });
+
+  test("the ownership menu navigates by keyboard and returns focus to the check", async () => {
+    const user = userEvent.setup();
+    await openShowcase();
+
+    const check = screen.getByRole("button", {
+      name: "1 leu · Pick 22a · 1917 is owned. Open ownership options",
+    });
+    expect(check).toHaveAttribute("aria-haspopup", "menu");
+
+    await user.click(check);
+    const menu = screen.getByRole("menu", {
+      name: "Ownership options for 1 leu · Pick 22a · 1917",
+    });
+    const items = within(menu).getAllByRole("menuitem");
+    await waitFor(() => expect(items[0]).toHaveFocus());
+
+    await user.keyboard("{ArrowDown}");
+    expect(items[1]).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+    expect(check).toHaveFocus();
+  });
+
+  test("Present lists only owned entries and uses the primary", async () => {
+    const user = userEvent.setup();
+    await openShowcase();
+
+    await user.click(screen.getByRole("button", { name: "Present" }));
+
+    const slideshow = await screen.findByRole("dialog", { name: "1 leu" });
+    expect(
+      within(slideshow).getByText(/1 of 2/),
+    ).toBeInTheDocument();
+    // The seen entry's note is skipped entirely.
+    expect(within(slideshow).queryByText(/5 lei/)).not.toBeInTheDocument();
+
+    await user.click(
+      within(slideshow).getByRole("button", { name: "Close slideshow" }),
+    );
+    await waitFor(() =>
+      expect(
+        screen.queryByRole("dialog", { name: "1 leu" }),
+      ).not.toBeInTheDocument(),
+    );
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", {
+          name: "Present 1 leu · Pick 22a · 1917",
+        }),
+      ).toHaveFocus(),
+    );
+  });
+
+  test("keeps the check when the primary is a seen reference", async () => {
+    const tree = [
+      categoryNode([
+        entryNode(
+          20,
+          {
+            catalog_number: "22a",
+            specimens: [OWNED_NOTE, REFERENCE_NOTE],
+            primary: REFERENCE_NOTE.id,
+          },
+          1,
+        ),
+      ]),
+    ];
+    await openShowcase(tree);
+
+    expect(
+      screen.getByRole("button", {
+        name: "1 leu · Pick 22a · 1917 is owned. Open ownership options",
+      }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", {
+        name: "2 notes on this entry. Choose the primary",
+      }),
+    ).toHaveTextContent("2 notes · seen primary");
+  });
+
+  test("a complete catalog wears the Complete chip", async () => {
+    const tree = [
+      categoryNode([
+        entryNode(
+          20,
+          {
+            catalog_number: "22a",
+            specimens: [OWNED_NOTE],
+            primary: OWNED_NOTE.id,
+          },
+          1,
+        ),
+      ]),
+    ];
+    const { container } = await openShowcase(tree);
+
+    expect(summary(container)).toHaveTextContent("Complete");
+    expect(
+      screen.queryByRole("button", {
+        name: "1 leu · Pick 22a · 1917 is seen. Open ownership options",
+      }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("a note leaf in a catalog gets the state treatment but no manager", async () => {
+    const user = userEvent.setup();
+    const tree = [
+      categoryNode([
+        entryNode(
+          20,
+          {
+            catalog_number: "22a",
+            specimens: [OWNED_NOTE],
+            primary: OWNED_NOTE.id,
+          },
+          1,
+        ),
+        noteNode(400, SEEN_NOTE, 2),
+      ]),
+    ];
+    await openShowcase(tree);
+
+    const seenLeaf = screen.getByRole("button", {
+      name: "5 lei · Pick 24c · 1920 is seen. Open ownership options",
+    });
+    await user.click(seenLeaf);
+
+    const menu = screen.getByRole("menu", {
+      name: "Ownership options for 5 lei · Pick 24c · 1920",
+    });
+    expect(
+      within(menu).queryByRole("menuitem", { name: /Notes on this entry/ }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(menu).getByRole("menuitem", { name: /Mark this note owned/ }),
+    ).toBeInTheDocument();
+  });
+});

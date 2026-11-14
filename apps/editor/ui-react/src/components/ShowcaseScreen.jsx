@@ -10,6 +10,7 @@ import {
   updateCatalogEntry,
   updateNode,
   updateNodeNotes,
+  updateNote,
 } from "../lib/api.js";
 import { isEditableElement } from "../lib/editableElement.js";
 import {
@@ -26,12 +27,24 @@ import {
 } from "../lib/routes.js";
 import {
   appendChildren,
+  catalogCounts,
+  catalogEntryIdentity,
+  catalogPresentationNotes,
+  categoryCardCount,
   countNoteNodes,
+  filterCatalogTree,
   findNodeById,
+  findNodeIdForNote,
   findNodeIdPath,
   findNodePath,
+  hasCatalogEntries,
+  isCatalogEntry,
+  noteOwnedInTree,
   removeNodeTree,
   reorderNodeTree,
+  setNoteOwned,
+  specimenNoteIds,
+  specimenPayload,
   updateNodeTree,
   visibleChildNodes,
 } from "../lib/showcaseTree.js";
@@ -55,6 +68,7 @@ import { useCollections } from "../lib/collections.jsx";
 import { SHOWCASE_DRAFT_DISCARDED } from "../lib/draftMessages.js";
 import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
 import { ShowcaseCategorySection } from "./ShowcaseCategorySection.jsx";
+import { ShowcaseCatalogCard } from "./ShowcaseCatalogCard.jsx";
 import { ShowcaseCategoryTile } from "./ShowcaseCategoryTile.jsx";
 import { ShowcaseAddTiles } from "./ShowcaseAddTiles.jsx";
 import { ShowcaseBreadcrumb } from "./ShowcaseBreadcrumb.jsx";
@@ -67,7 +81,7 @@ import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
 import { ShowcasePhotoSizeControl } from "./ShowcasePhotoSizeControl.jsx";
 import { ShowcaseReorderableCell } from "./ShowcaseReorderableCell.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
-import { ImagePopover } from "./Slideshow.jsx";
+import { ImagePopover, Slideshow } from "./Slideshow.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 import { useToastHost } from "./Toast.jsx";
 
@@ -83,6 +97,41 @@ function noteNodeLabel(node) {
   );
 }
 
+// Focus a control inside the showcase canvas on the next frame. Closers and
+// state flips remount the trigger, so the lookup waits for the committed DOM.
+function focusShowcaseControl(sectionRef, selector) {
+  requestAnimationFrame(() => {
+    sectionRef.current?.querySelector(selector)?.focus?.();
+  });
+}
+
+// The four catalog filters, in header order. `all` paints every card and has
+// no empty state: a catalog always holds at least one entry when it appears.
+// `seen`/`unseen` stay in the bar at zero so the counts stay honest, and their
+// calm empty copy says why there is nothing to show.
+const CATALOG_FILTERS = [
+  { value: "all", label: "All" },
+  {
+    value: "owned",
+    label: "Owned",
+    emptyText:
+      "Mark a seen note owned, or add a catalog entry, to start the checklist.",
+    emptyTitle: "No owned cards.",
+  },
+  {
+    value: "seen",
+    label: "Seen",
+    emptyText: "Every card in this showcase is owned or waiting for its first note.",
+    emptyTitle: "No seen cards.",
+  },
+  {
+    value: "unseen",
+    label: "Unseen",
+    emptyText: "Every catalog position already has a note.",
+    emptyTitle: "No unseen cards.",
+  },
+];
+
 function ShowcaseScreen({ mode }) {
   const { id } = useParams();
   const location = useLocation();
@@ -96,6 +145,7 @@ function ShowcaseScreen({ mode }) {
     beginPendingShowcase,
     updatePendingShowcaseName,
     discardPendingShowcase,
+    refreshShowcases,
   } = useShowcases();
   // `new` is the not-yet-saved draft from `+ New showcase`: no server row,
   // no tree load; Save POSTs it, Cancel discards it.
@@ -133,6 +183,20 @@ function ShowcaseScreen({ mode }) {
   // The picker's target node id (not the node object) so the open popup reads
   // the node's current children after an add updates the tree.
   const [pickerNodeId, setPickerNodeId] = useState(null);
+  // The unseen Catalog entry whose card opened the finder. Filling it is a
+  // specimen-set write, not a new child, so it gets its own picker target.
+  const [entryPickerNodeId, setEntryPickerNodeId] = useState(null);
+  // The catalog filter. Counts always read the full tree; the filter only
+  // narrows what the grid paints.
+  const [catalogFilter, setCatalogFilter] = useState("all");
+  // The open presentation's index into `catalogPresentationNotes`. Null means
+  // closed; view mode only, a catalog showcase only.
+  const [presentIndex, setPresentIndex] = useState(null);
+  // The node whose card opened the presentation, so closing returns focus there.
+  const presentReturnNodeIdRef = useRef(null);
+  // The card state a just-finished ownership write should focus: the check on
+  // an owned card, the seen card's footer on an unowned one.
+  const ownershipFocusRef = useRef(null);
   // The photo size is a per-browser preference shared by view and edit mode.
   const [photoSize, setPhotoSize] = usePhotoSize();
   // The shortcut help overlay. `?` opens it; it guards the card shortcuts.
@@ -544,6 +608,11 @@ function ShowcaseScreen({ mode }) {
   const currentParentId = currentNode ? currentNode.id : null;
   const currentChildren = currentNode ? (currentNode.children ?? []) : nodes;
 
+  // A Showcase becomes a catalog the moment its tree holds a Catalog entry.
+  // Until then every rule below hands the presentation its existing path.
+  const catalogMode = hasCatalogEntries(nodes);
+  // The checklist itself is view-mode only: edit mode keeps its draft canvas.
+  const checklistMode = catalogMode && !editMode;
   // Categories always render expanded at the root, so a drill that lands on a
   // Category (an old `?node=<categoryId>` link, or an edit drill from before)
   // is shown as the expanded root instead of a single-category level.
@@ -553,22 +622,45 @@ function ShowcaseScreen({ mode }) {
   const displayChildren = displayNode
     ? (displayNode.children ?? [])
     : nodes;
+  // The filter narrows what the grid paints; drill resolution above still uses
+  // the full tree, so a filtered level never loses its breadcrumb.
+  const filteredDisplayChildren = checklistMode
+    ? filterCatalogTree(displayChildren, catalogFilter)
+    : displayChildren;
   const isRootExpanded = displayNode == null;
-  // View mode hides empty Categories (no notes anywhere beneath them) so the
-  // presentation never shows an empty section; edit mode keeps them so they
-  // can be filled.
+  // View mode hides empty Categories (no cards anywhere beneath them) so the
+  // presentation never shows an empty section; in a catalog an entry is a card
+  // even with no specimens. Edit mode keeps empty sections so they can be
+  // filled.
   const visibleRootNodes =
     isRootExpanded && !editMode
-      ? nodes.filter((node) =>
-          node.node_type !== "category"
-            ? true
-            : countNoteNodes([node]) > 0,
+      ? filteredDisplayChildren.filter(
+          (node) =>
+            node.node_type !== "category" ||
+            categoryCardCount(node, catalogMode) > 0,
         )
       : nodes;
   const rootCategories = visibleRootNodes.filter(
     (node) => node.node_type === "category",
   );
   const showCategoryMove = editMode && rootCategories.length > 1;
+  // A filter with nothing left is a calm empty state, not an empty grid.
+  // `filterCatalogTree` drops a container unless a match survives beneath it,
+  // so an empty filtered list is exactly "no matches".
+  const filterEmpty =
+    checklistMode &&
+    catalogFilter !== "all" &&
+    filteredDisplayChildren.length === 0;
+  const activeFilter =
+    CATALOG_FILTERS.find((filter) => filter.value === catalogFilter) ??
+    CATALOG_FILTERS[0];
+  // The one slide list a catalog presents: owned cards only, each entry with
+  // its primary and each note leaf with its own record.
+  const presentationNotes = useMemo(
+    () => (checklistMode ? catalogPresentationNotes(nodes) : []),
+    [checklistMode, nodes],
+  );
+  const catalogTotals = catalogCounts(nodes);
 
   // Showcase-wide image preview (view mode only): `?preview=<nodeId>:<kind>`
   // alongside `?node=`. The slideshow flattens every visible note in display
@@ -761,13 +853,10 @@ function ShowcaseScreen({ mode }) {
       restorePreviewFocusNodeIdRef.current = null;
 
       if (nodeId != null) {
-        requestAnimationFrame(() => {
-          sectionRef.current
-            ?.querySelector(
-              `.showcase-card[data-showcase-node-id="${nodeId}"]`,
-            )
-            ?.focus?.();
-        });
+        focusShowcaseControl(
+          sectionRef,
+          `.showcase-card[data-showcase-node-id="${nodeId}"]`,
+        );
       }
     }
 
@@ -814,7 +903,7 @@ function ShowcaseScreen({ mode }) {
   // the showcase itself.
   // View mode hides empty Groupings (no notes beneath them); edit mode keeps
   // them so they can be filled.
-  const visibleDisplayChildren = visibleChildNodes(displayChildren, editMode);
+  const visibleDisplayChildren = visibleChildNodes(filteredDisplayChildren, editMode);
   const announcedCount = isRootExpanded ? visibleRootNodes.length : visibleDisplayChildren.length;
   useEffect(() => {
     if (loading) {
@@ -977,6 +1066,221 @@ function ShowcaseScreen({ mode }) {
     setTreeDirty(true);
     setSaveError("");
   }
+
+  // ── Catalog checklist (view mode) ─────────────────────────────────────
+  // Marking ownership is a library edit: it updates the Note everywhere, not
+  // just this card. View mode saves it immediately and offers Undo, because a
+  // checklist is reviewed quickly. The payload carries every note field the
+  // PUT route replaces, so a flag flip never blanks the record.
+  function noteOwnershipPayload(note, owned) {
+    return {
+      catalog_number: note.catalog_number ?? "",
+      denomination: note.denomination ?? "",
+      grading_company: note.grading_company ?? "",
+      grade: note.grade ?? "",
+      issue_date: note.issue_date ?? "",
+      notes: note.notes ?? "",
+      owned,
+      scraped_data: note.scraped_data ?? null,
+      serial: note.serial ?? "",
+      tags: (Array.isArray(note.tags) ? note.tags : [])
+        .map((tag) => (typeof tag === "string" ? tag : tag?.name))
+        .filter(Boolean),
+      url: note.url ?? "",
+      watermark: note.watermark ?? "",
+    };
+  }
+
+  async function applyNoteOwnership(
+    note,
+    owned,
+    { nodeId = null, announce = true } = {},
+  ) {
+    const previous = noteOwnedInTree(nodes, note.id) ?? note.owned;
+    const targetNodeId = nodeId ?? findNodeIdForNote(nodes, note.id);
+    const label =
+      showcaseNoteDisplayParts(note).join(" · ") || "Note";
+
+    setNodes((current) => setNoteOwned(current, note.id, owned));
+    ownershipFocusRef.current = {
+      nodeId: targetNodeId,
+      role: owned ? "check" : "ownership",
+    };
+
+    try {
+      await updateNote(
+        note.id,
+        noteOwnershipPayload(note, owned),
+        note.collection_id,
+      );
+
+      // The rail's owned/total fraction reads the list payload; refresh it
+      // without blocking the checklist on a second request.
+      refreshShowcases?.().catch(() => {});
+
+      if (!announce) {
+        return;
+      }
+
+      toastHost?.current?.show(
+        `${label} marked ${owned ? "owned" : "not owned"}`,
+        "success",
+        {
+          label: "Undo",
+          onClick: () => {
+            applyNoteOwnership(note, previous, {
+              announce: false,
+              nodeId: targetNodeId,
+            });
+          },
+        },
+      );
+    } catch (error) {
+      // Put the tree back the way it was; a failed library edit must not keep
+      // painting success.
+      setNodes((current) => setNoteOwned(current, note.id, previous));
+      toastHost?.current?.show(
+        error.message || "Could not update ownership.",
+        "danger",
+      );
+    }
+  }
+
+  function handleOwnershipToggle(note, owned, nodeId = null) {
+    if (!note) {
+      return;
+    }
+
+    applyNoteOwnership(note, owned, { nodeId });
+  }
+
+  // The unseen card's finder fills the entry: the picker's selected ids join
+  // the existing specimen set, and the first id becomes primary when the entry
+  // had none. T119's manager reuses the same full-set payload.
+  async function handleAddEntrySpecimens(noteIds, allNotes = []) {
+    const entryNode =
+      entryPickerNodeId == null
+        ? null
+        : findNodeById(nodes, entryPickerNodeId);
+
+    if (!entryNode || !isCatalogEntry(entryNode)) {
+      return;
+    }
+
+    const byId = new Map((allNotes ?? []).map((note) => [note.id, note]));
+    const existingIds = specimenNoteIds(entryNode);
+    const addedIds = (noteIds ?? []).filter(
+      (noteId) => !existingIds.includes(noteId),
+    );
+
+    if (!addedIds.length) {
+      return;
+    }
+
+    const added = addedIds.map((noteId) => byId.get(noteId) ?? { id: noteId });
+    const optimistic = {
+      ...entryNode,
+      specimens: [...(entryNode.specimens ?? []), ...added],
+    };
+    const payload = specimenPayload(optimistic);
+
+    setNodes((current) =>
+      updateNodeTree(current, entryNode.id, () => optimistic),
+    );
+    setSaveError("");
+
+    try {
+      const result = await updateNodeNotes(entryNode.id, payload);
+      const saved = result?.node;
+
+      if (saved) {
+        setNodes((current) =>
+          updateNodeTree(current, entryNode.id, (entry) => ({
+            ...entry,
+            ...saved,
+            children: entry.children,
+          })),
+        );
+      }
+    } catch (error) {
+      setNodes((current) =>
+        updateNodeTree(current, entryNode.id, () => entryNode),
+      );
+      setSaveError(error.message || "Could not add the note to this entry.");
+      throw error;
+    }
+  }
+
+  function openEntryFinder(node) {
+    setEntryPickerNodeId(node.id);
+  }
+
+  // T119 mounts the specimen manager here. The strip and the ownership menu's
+  // "Notes on this entry" item both call this one stable seam, so the manager
+  // can land without changing either trigger.
+  function openSpecimenManager() {}
+
+  function openPresentation(nodeId = null) {
+    if (!presentationNotes.length || editMode) {
+      return;
+    }
+
+    const index =
+      nodeId == null
+        ? 0
+        : presentationNotes.findIndex((item) => item.nodeId === nodeId);
+    const resolved = index >= 0 ? index : 0;
+
+    presentReturnNodeIdRef.current =
+      presentationNotes[resolved]?.nodeId ?? null;
+    setPresentIndex(resolved);
+  }
+
+  function closePresentation() {
+    setPresentIndex(null);
+  }
+
+  // Closing Present returns the keyboard to the card that opened it, matching
+  // the image preview's own hand-back.
+  useEffect(() => {
+    if (presentIndex != null) {
+      return;
+    }
+
+    const nodeId = presentReturnNodeIdRef.current;
+
+    if (nodeId == null) {
+      return;
+    }
+
+    presentReturnNodeIdRef.current = null;
+    focusShowcaseControl(
+      sectionRef,
+      `.showcase-card[data-showcase-node-id="${nodeId}"]`,
+    );
+  }, [presentIndex]);
+
+  // A quick ownership flip can turn a seen card into an owned one (or back),
+  // replacing its trigger. Focus follows the state to the same card's new
+  // control rather than falling to the page.
+  useEffect(() => {
+    const target = ownershipFocusRef.current;
+
+    if (!target || target.nodeId == null || loading) {
+      return;
+    }
+
+    ownershipFocusRef.current = null;
+    const targetSelector =
+      `.showcase-catalog-cell[data-showcase-node-id="${target.nodeId}"] ` +
+      `[data-showcase-focus="${target.role}"]`;
+    // Un-marking under the Owned filter unmounts the card that was focused.
+    // The filter chip is then the honest place to land, not <body>.
+    const selector = sectionRef.current?.querySelector(targetSelector)
+      ? targetSelector
+      : `[data-showcase-filter="${catalogFilter}"]`;
+    focusShowcaseControl(sectionRef, selector);
+  }, [catalogFilter, loading, nodes]);
 
   // Set the current Grouping's manual cover to a direct-child note (user story
   // 37). Draft only: the cover persists on Save.
@@ -1310,7 +1614,13 @@ function ShowcaseScreen({ mode }) {
   // sidebar, and a Meta/Ctrl/Alt chord.
   useEffect(() => {
     function handleGlobalKeyDown(event) {
-      if (showShortcutsHelp || pickerNodeId != null || confirmOpen) {
+      if (
+        showShortcutsHelp ||
+        pickerNodeId != null ||
+        entryPickerNodeId != null ||
+        confirmOpen ||
+        presentIndex != null
+      ) {
         return;
       }
 
@@ -1488,6 +1798,7 @@ function ShowcaseScreen({ mode }) {
     discardPendingShowcase,
     drillDepth,
     editMode,
+    entryPickerNodeId,
     exitEditModeToRoot,
     guardShowcaseExit,
     isNew,
@@ -1495,6 +1806,7 @@ function ShowcaseScreen({ mode }) {
     navigate,
     nodes,
     pickerNodeId,
+    presentIndex,
     previewOpen,
     showcaseId,
     showcases,
@@ -1545,6 +1857,15 @@ function ShowcaseScreen({ mode }) {
 
   const pickerNode =
     pickerNodeId == null ? null : findNodeById(nodes, pickerNodeId);
+  const entryPickerNode =
+    entryPickerNodeId == null
+      ? null
+      : findNodeById(nodes, entryPickerNodeId);
+  // The catalog header's owned-over-total progress. A presentation-only
+  // showcase never paints it.
+  const ownedPercent = catalogTotals.total
+    ? Math.round((catalogTotals.owned / catalogTotals.total) * 100)
+    : 0;
 
   const showEmpty = !loading && !loadError && nodes.length === 0;
   // Both modes share the dashed empty-state box so view mode never reads as
@@ -1562,7 +1883,7 @@ function ShowcaseScreen({ mode }) {
     !loadError &&
     displayNode != null &&
     visibleDisplayChildren.length === 0;
-  const showViewEmptyNode = showEmptyNode && !editMode;
+  const showViewEmptyNode = showEmptyNode && !editMode && !filterEmpty;
   // A label can be placed at most once per Showcase, so do not suggest the ones
   // already on the canvas (including staged draft placements by name).
   const placedCategoryIds = new Set(
@@ -1612,7 +1933,45 @@ function ShowcaseScreen({ mode }) {
             ) : (
               <h1>{showcaseName}</h1>
             )}
-            <p className="muted showcase-note-count">{`${noteCount} notes`}</p>
+            {catalogMode ? (
+              <div className="showcase-summary">
+                <span className="showcase-summary-item">
+                  <strong>{catalogTotals.owned}</strong> owned
+                </span>
+                <span aria-hidden="true" className="showcase-summary-dot" />
+                <span className="showcase-summary-item">
+                  <strong>{catalogTotals.seen}</strong> seen
+                </span>
+                <span aria-hidden="true" className="showcase-summary-dot" />
+                <span className="showcase-summary-item">
+                  <strong>{catalogTotals.unseen}</strong> unseen
+                </span>
+                <span
+                  aria-label="Owned cards"
+                  aria-valuemax={catalogTotals.total}
+                  aria-valuemin={0}
+                  aria-valuenow={catalogTotals.owned}
+                  className="showcase-progress"
+                  role="progressbar"
+                >
+                  <span
+                    className="showcase-progress-fill"
+                    style={{ width: `${ownedPercent}%` }}
+                  />
+                </span>
+                <span className="showcase-summary-pct">{`${ownedPercent}%`}</span>
+                {catalogTotals.complete ? (
+                  <span className="showcase-complete-chip">
+                    <span aria-hidden="true" className="showcase-complete-mark">
+                      ✓
+                    </span>
+                    Complete
+                  </span>
+                ) : null}
+              </div>
+            ) : (
+              <p className="muted showcase-note-count">{`${noteCount} notes`}</p>
+            )}
             {editMode && dirty && !loading ? (
               <p className="muted showcase-dirty">Unsaved changes</p>
             ) : null}
@@ -1658,15 +2017,32 @@ function ShowcaseScreen({ mode }) {
                   </button>
                 </>
               ) : (
-                <Link
-                  className="button"
-                  to={{
-                    pathname: SHOWCASE_ROUTES.showcaseEdit(showcaseId),
-                    search: location.search,
-                  }}
-                >
-                  Edit
-                </Link>
+                <>
+                  {catalogMode ? (
+                    <button
+                      className="button"
+                      disabled={catalogTotals.owned === 0}
+                      onClick={() => openPresentation()}
+                      title={
+                        catalogTotals.owned
+                          ? "Present the notes you own"
+                          : "Add an owned note to present"
+                      }
+                      type="button"
+                    >
+                      Present
+                    </button>
+                  ) : null}
+                  <Link
+                    className="button"
+                    to={{
+                      pathname: SHOWCASE_ROUTES.showcaseEdit(showcaseId),
+                      search: location.search,
+                    }}
+                  >
+                    Edit
+                  </Link>
+                </>
               )}
             </div>
           </div>
@@ -1697,6 +2073,36 @@ function ShowcaseScreen({ mode }) {
           <p className="showcase-error" role="alert">
             {loadError}
           </p>
+        ) : null}
+
+        {!loading && !loadError && checklistMode ? (
+          <div
+            aria-label="Catalog filters"
+            className="showcase-filter-bar"
+            role="group"
+          >
+            {CATALOG_FILTERS.map((filter) => {
+              const count =
+                filter.value === "all"
+                  ? catalogTotals.total
+                  : catalogTotals[filter.value];
+
+              return (
+                <button
+                  aria-label={`${filter.label} (${count})`}
+                  aria-pressed={catalogFilter === filter.value}
+                  className="showcase-filter-chip"
+                  data-showcase-filter={filter.value}
+                  key={filter.value}
+                  onClick={() => setCatalogFilter(filter.value)}
+                  type="button"
+                >
+                  <span>{filter.label}</span>
+                  <span className="showcase-filter-count">{count}</span>
+                </button>
+              );
+            })}
+          </div>
         ) : null}
 
         {showViewEmpty ? (
@@ -1767,6 +2173,23 @@ function ShowcaseScreen({ mode }) {
           </div>
         ) : null}
 
+        {!loading && !loadError && displayNode ? (
+          <ShowcaseBreadcrumb
+            showcaseName={showcaseName}
+            onNavigate={navigateTo}
+            path={displayPath}
+          />
+        ) : null}
+
+        {filterEmpty ? (
+          <div className="showcase-empty-box">
+            <p className="showcase-empty-title">{activeFilter.emptyTitle}</p>
+            <p className="showcase-empty-text muted">
+              {activeFilter.emptyText}
+            </p>
+          </div>
+        ) : null}
+
         {showViewEmptyNode ? (
           <div className="showcase-empty-box">
             <p className="showcase-empty-title">No notes here yet.</p>
@@ -1777,16 +2200,8 @@ function ShowcaseScreen({ mode }) {
           </div>
         ) : null}
 
-        {!loading && !loadError ? (
+        {!loading && !loadError && !filterEmpty ? (
           <>
-            {displayNode ? (
-              <ShowcaseBreadcrumb
-                showcaseName={showcaseName}
-                onNavigate={navigateTo}
-                path={displayPath}
-              />
-            ) : null}
-
             {editMode && displayNode?.node_type === "grouping" ? (
               <div className="showcase-node-cover">
                 <span className="muted">
@@ -1820,12 +2235,17 @@ function ShowcaseScreen({ mode }) {
                   return (
                     <ShowcaseCategorySection
                       category={node}
+                      catalogMode={catalogMode}
                       editMode={editMode}
                       key={node.id}
                       onAddGrouping={handleAddGroupingFor}
                       onAddNotes={handleOpenNotePicker}
+                      onOpenFinder={openEntryFinder}
                       onOpenGrouping={openNode}
+                      onOpenManager={openSpecimenManager}
                       onOpenNote={openShowcasePreview}
+                      onOwnershipToggle={handleOwnershipToggle}
+                      onPresent={(target) => openPresentation(target.id)}
                       onRemoveCategory={handleRemoveCategory}
                       onRemoveGrouping={handleRemoveGrouping}
                       onRemoveNote={handleRemoveNote}
@@ -1855,6 +2275,23 @@ function ShowcaseScreen({ mode }) {
             ) : (
               <ShowcaseGrid size={photoSize}>
                 {visibleDisplayChildren.map((node) => {
+                  if (
+                    checklistMode &&
+                    (isCatalogEntry(node) || node.node_type === "note")
+                  ) {
+                    return (
+                      <ShowcaseCatalogCard
+                        key={node.id}
+                        node={node}
+                        onOpenFinder={openEntryFinder}
+                        onOpenManager={openSpecimenManager}
+                        onOpenNote={openShowcasePreview}
+                        onPresent={(target) => openPresentation(target.id)}
+                        onToggleOwned={handleOwnershipToggle}
+                      />
+                    );
+                  }
+
                   if (node.node_type === "grouping") {
                     return editMode ? (
                       <ShowcaseReorderableCell
@@ -1930,6 +2367,30 @@ function ShowcaseScreen({ mode }) {
           node={pickerNode}
           onAdd={handleAddNotes}
           onClose={() => setPickerNodeId(null)}
+        />
+      ) : null}
+
+      {entryPickerNode && isCatalogEntry(entryPickerNode) ? (
+        <ShowcaseNotePicker
+          collections={collections}
+          node={{
+            ...entryPickerNode,
+            name: catalogEntryIdentity(entryPickerNode.entry),
+          }}
+          onAdd={handleAddEntrySpecimens}
+          onClose={() => setEntryPickerNodeId(null)}
+        />
+      ) : null}
+
+      {presentIndex != null && presentationNotes[presentIndex] ? (
+        <Slideshow
+          collectionName={showcaseName}
+          currentIndex={presentIndex}
+          notes={presentationNotes.map((item) => item.note)}
+          onChangeIndex={setPresentIndex}
+          onClose={closePresentation}
+          onJump={(position) => setPresentIndex(position - 1)}
+          readOnly
         />
       ) : null}
 

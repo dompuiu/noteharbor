@@ -3,13 +3,16 @@ import {
   appendChildren,
   applyChildOrder,
   catalogCounts,
+  catalogEntryIdentity,
   catalogEntryLabel,
   catalogEntryState,
   catalogMergeKey,
   catalogPresentationNotes,
+  categoryCardCount,
   countNoteNodes,
   filterCatalogTree,
   findNodeById,
+  findNodeIdForNote,
   findNodeIdPath,
   findNodePath,
   hasCatalogEntries,
@@ -17,10 +20,12 @@ import {
   nodeCatalogState,
   normalizeCatalogEntry,
   planCatalogMerge,
+  noteOwnedInTree,
   primarySpecimen,
   removeNodeTree,
   reorderNodeTree,
   sameCatalogEntry,
+  setNoteOwned,
   showcaseCountLabel,
   showcaseNoteState,
   specimenNoteIds,
@@ -537,6 +542,14 @@ describe("filterCatalogTree", () => {
   });
 });
 
+describe("catalogEntryIdentity", () => {
+  test("keeps only the catalog value, with the denomination as fallback", () => {
+    expect(catalogEntryIdentity({ catalog_number: "P22a" })).toBe("Pick 22a");
+    expect(catalogEntryIdentity({ denomination: "20 lei" })).toBe("20 lei");
+    expect(catalogEntryIdentity({})).toBe("Unidentified");
+  });
+});
+
 describe("catalogEntryLabel", () => {
   test("names the entry by catalog value, denomination, and date", () => {
     expect(
@@ -692,5 +705,78 @@ describe("showcaseCountLabel", () => {
   test("a payload without counts falls back", () => {
     expect(showcaseCountLabel({ name: "Draft" })).toBeNull();
     expect(showcaseCountLabel(null)).toBeNull();
+  });
+});
+
+describe("categoryCardCount", () => {
+  test("counts entries and note leaves in a catalog, notes only otherwise", () => {
+    const section = category(1, [
+      entryNode(20, []),
+      noteLeaf(3, true),
+    ]);
+
+    expect(categoryCardCount(section, true)).toBe(2);
+    expect(categoryCardCount(section, false)).toBe(1);
+  });
+});
+
+describe("findNodeIdForNote", () => {
+  test("finds a note leaf and a specimen's card", () => {
+    const tree = [
+      category(1, [
+        entryNode(20, [seenSpecimen(201)]),
+        noteLeaf(3, true),
+      ]),
+    ];
+
+    expect(findNodeIdForNote(tree, 201)).toBe(20);
+    expect(findNodeIdForNote(tree, 103)).toBe(3);
+    expect(findNodeIdForNote(tree, 999)).toBeNull();
+  });
+});
+
+describe("noteOwnedInTree", () => {
+  test("reads the live flag from a note leaf or a specimen", () => {
+    const tree = [
+      category(1, [
+        entryNode(20, [seenSpecimen(201)]),
+        noteLeaf(3, true),
+      ]),
+    ];
+
+    expect(noteOwnedInTree(tree, 201)).toBe(false);
+    expect(noteOwnedInTree(tree, 103)).toBe(true);
+    expect(noteOwnedInTree(tree, 999)).toBeUndefined();
+  });
+});
+
+describe("setNoteOwned", () => {
+  test("marks a specimen in every entry that shows the note", () => {
+    const tree = [
+      category(1, [
+        entryNode(20, [seenSpecimen(201), ownedSpecimen(202)]),
+        noteLeaf(3, false),
+      ]),
+    ];
+    const next = setNoteOwned(tree, 201, true);
+
+    expect(next).not.toBe(tree);
+    expect(next[0].children[0].specimens[0]).toEqual({ id: 201, owned: true });
+    expect(next[0].children[0].specimens[1]).toEqual({ id: 202, owned: true });
+    expect(next[0].children[1].note).toEqual({ id: 103, owned: false });
+  });
+
+  test("marks a note leaf by the Note's own id", () => {
+    const tree = [category(1, [noteLeaf(3, true)])];
+    const next = setNoteOwned(tree, 103, false);
+
+    expect(next[0].children[0].note).toEqual({ id: 103, owned: false });
+  });
+
+  test("keeps the same tree when nothing carries the flag", () => {
+    const tree = [category(1, [noteLeaf(3, true)])];
+
+    expect(setNoteOwned(tree, 999, false)).toBe(tree);
+    expect(setNoteOwned(tree, 103, true)).toBe(tree);
   });
 });

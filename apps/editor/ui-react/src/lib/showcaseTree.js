@@ -62,6 +62,29 @@ function findNodeById(nodes, nodeId) {
   return null;
 }
 
+// The card node that displays a Note, whether it is a note leaf or a Catalog
+// entry's specimen. Ownership is per Note, so a mark repaints the tree at this
+// node; `null` when the Note is not in this Showcase.
+function findNodeIdForNote(nodes, noteId) {
+  for (const node of nodes ?? []) {
+    if (node.node_type === "note" && node.note?.id === noteId) {
+      return node.id;
+    }
+
+    if ((node.specimens ?? []).some((specimen) => specimen?.id === noteId)) {
+      return node.id;
+    }
+
+    const nested = findNodeIdForNote(node.children, noteId);
+
+    if (nested != null) {
+      return nested;
+    }
+  }
+
+  return null;
+}
+
 // Replace one node anywhere in the tree, keeping the same references when the
 // id is not present so React does not re-render untouched branches.
 function updateNodeTree(nodes, nodeId, update) {
@@ -327,6 +350,15 @@ function catalogCounts(nodes) {
   return counts;
 }
 
+// How many cards one Category (or Grouping) holds. In a catalog an entry is a
+// card even with no specimens; in a presentation only note leaves count. Both
+// the root's empty-section rule and a section's own guard read this.
+function categoryCardCount(node, catalogMode) {
+  return catalogMode
+    ? catalogCounts([node]).total
+    : countNoteNodes([node]);
+}
+
 // Apply one of the catalog filters without losing the containers that hold a
 // match. Entries and note leaves match by state; a Grouping survives only when
 // a match sits beneath it, and an empty Category drops out so no section
@@ -363,6 +395,16 @@ function filterCatalogTree(nodes, filter) {
   return keep(nodes);
 }
 
+// The entry's shortest identity, for the empty specimen well and a manager's
+// heading: the catalog value, else the denomination, else "Unidentified".
+function catalogEntryIdentity(entry) {
+  return (
+    formatShowcaseCatalogNumber(entry?.catalog_number) ||
+    String(entry?.denomination ?? "").trim() ||
+    "Unidentified"
+  );
+}
+
 // The entry's identity for accessible names and managers: its own catalog
 // metadata, never the primary Note, because the position and the record are
 // independent. Falls back to the denomination, then to "Unidentified".
@@ -370,7 +412,7 @@ function catalogEntryLabel(entry) {
   const catalog = formatShowcaseCatalogNumber(entry?.catalog_number);
   const denomination = String(entry?.denomination ?? "").trim();
   const issueDate = String(entry?.issue_date ?? "").trim();
-  const identity = catalog || denomination || "Unidentified";
+  const identity = catalogEntryIdentity(entry);
   const details = [catalog ? denomination : "", issueDate].filter(Boolean);
 
   return [identity, ...details].join(", ");
@@ -428,6 +470,81 @@ function specimenPayload(node) {
   }
 
   return payload;
+}
+
+// Mark one Note owned or not owned everywhere the tree shows it: its note
+// leaves and its Catalog specimens. The flag is the library record's, so one
+// change repaints every card in every Showcase that displays the same note.
+// Returns the same tree when the note is absent or already carries the flag.
+function setNoteOwned(nodes, noteId, owned) {
+  const list = nodes ?? [];
+  let changed = false;
+
+  const next = list.map((node) => {
+    let updated = node;
+
+    if (
+      node.node_type === "note" &&
+      node.note?.id === noteId &&
+      node.note.owned !== owned
+    ) {
+      updated = { ...node, note: { ...node.note, owned } };
+    }
+
+    if (
+      Array.isArray(node.specimens) &&
+      node.specimens.some(
+        (specimen) => specimen?.id === noteId && specimen.owned !== owned,
+      )
+    ) {
+      updated = {
+        ...updated,
+        specimens: updated.specimens.map((specimen) =>
+          specimen?.id === noteId ? { ...specimen, owned } : specimen,
+        ),
+      };
+    }
+
+    if (node.children?.length) {
+      const children = setNoteOwned(node.children, noteId, owned);
+
+      if (children !== node.children) {
+        updated = { ...updated, children };
+      }
+    }
+
+    if (updated !== node) {
+      changed = true;
+    }
+
+    return updated;
+  });
+
+  return changed ? next : list;
+}
+
+// The Note's owned flag as the tree currently holds it. An ownership write
+// reads this, not the render-time Note, so a second write (Undo) reverts from
+// the live value rather than from the value before the first write.
+function noteOwnedInTree(nodes, noteId) {
+  const nodeId = findNodeIdForNote(nodes, noteId);
+
+  if (nodeId == null) {
+    return undefined;
+  }
+
+  const node = findNodeById(nodes, nodeId);
+
+  if (!node) {
+    return undefined;
+  }
+
+  if (node.node_type === "note") {
+    return node.note?.owned;
+  }
+
+  return (node.specimens ?? []).find((specimen) => specimen?.id === noteId)
+    ?.owned;
 }
 
 function entryFromNote(note) {
@@ -541,13 +658,16 @@ export {
   appendChildren,
   applyChildOrder,
   catalogCounts,
+  catalogEntryIdentity,
   catalogEntryLabel,
   catalogEntryState,
   catalogMergeKey,
   catalogPresentationNotes,
+  categoryCardCount,
   countNoteNodes,
   filterCatalogTree,
   findNodeById,
+  findNodeIdForNote,
   findNodeIdPath,
   findNodePath,
   hasCatalogEntries,
@@ -555,11 +675,13 @@ export {
   isCatalogEntry,
   nodeCatalogState,
   normalizeCatalogEntry,
+  noteOwnedInTree,
   planCatalogMerge,
   primarySpecimen,
   removeNodeTree,
   reorderNodeTree,
   sameCatalogEntry,
+  setNoteOwned,
   showcaseCountLabel,
   showcaseNoteState,
   specimenNoteIds,
