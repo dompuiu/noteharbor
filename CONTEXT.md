@@ -63,19 +63,35 @@ The Editor's presentation hub in the sidebar; it lists the workspace's Showcases
 _Avoid_: Portfolio
 
 **Showcase**:
-A named presentation tree the Editor author builds from notes across collections, made of Categories and Groupings.
+A named presentation tree the Editor author builds from notes across collections, made of Categories, Groupings, notes, and Catalog entries.
 _Avoid_: Album, gallery
 
 **Category**:
-A reusable label from the workspace's shared pool; placing it into a Showcase creates a Placement that holds that showcase's own notes and groupings.
+A reusable label from the workspace's shared pool; placing it into a Showcase creates a Placement that holds that showcase's own notes, groupings, and catalog entries.
 _Avoid_: Tag, group
 
 **Grouping**:
-A standalone node inside a Showcase that nests further Groupings and notes; owned by its parent and never shared between Categories or Showcases.
+A standalone node inside a Showcase that nests further Groupings, notes, and Catalog entries; owned by its parent and never shared between Categories or Showcases.
 
 **Placement**:
-One occurrence of a Category inside a Showcase, owning the notes and groupings shown there.
+One occurrence of a Category inside a Showcase, owning the notes, groupings, and Catalog entries shown there.
 _Avoid_: Instance, occurrence
+
+**Catalog entry**:
+A Showcase leaf that represents one Catalog value, carrying its own catalog metadata and holding zero or more specimens. A Showcase with catalog entries reads as a catalog checklist; without them it stays a presentation-only Showcase.
+_Avoid_: Slot, want
+
+**Specimen**:
+A Note attached to a Catalog entry: the Note's role in that entry, not a copy of the library record. The same Note may be a specimen in several entries and Showcases.
+_Avoid_: Item, sample, copy
+
+**Primary specimen**:
+The one specimen whose image and metadata the card and the Note slideshow show; display-only, it never decides ownership.
+_Avoid_: Default note
+
+**Owned / Seen / Unseen**:
+The state of a Note or Catalog entry. **Owned**: the Note is owned, or at least one specimen is. **Seen**: a Note that is not owned, or a Catalog entry with specimens but none owned. **Unseen**: a Catalog entry with no specimens. **Missing** is the umbrella for Seen and Unseen.
+_Avoid_: Have / want, present / absent (as states)
 
 **Cover image**:
 The one note image shown for a Grouping card; the Grouping may set its own, otherwise it derives the first note beneath it. Categories have no cover image — a Category card shows its name only.
@@ -92,12 +108,16 @@ _Avoid_: All notes screen (that is the Editor's), library
 ## Domain
 
 **Note**:
-One physical banknote (or banknote group) in the collection: its denomination, issue date, catalog number, grading, and associated images.
+One physical banknote (or banknote group) in the collection: its denomination, issue date, catalog number, grading, associated images, and whether it is owned.
 _Avoid_: Banknote, note_record, banknote row
 
 **Catalog family**:
 The set of notes whose catalog number shares a base number, each optionally followed by a single trailing letter: `22`, `22a`, `22b`, and `22s` are one family, while `220` and `221` are not.
 _Avoid_: Variation set
+
+**Catalog value**:
+The normalized catalog number that identifies a Catalog entry: `22a` and `22b` are different values in one Catalog family.
+_Avoid_: Variation, family (as the identity)
 
 **Collection**:
 A named group of notes forming one archive. Each note belongs to exactly one collection, and a collection's notes have an order.
