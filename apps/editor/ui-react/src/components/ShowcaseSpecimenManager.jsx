@@ -20,6 +20,7 @@ function specimenLabel(note) {
 
 function ShowcaseSpecimenManager({
   collections = [],
+  draft = false,
   entry,
   error = "",
   onAdd,
@@ -223,7 +224,9 @@ function ShowcaseSpecimenManager({
 
         <div className="showcase-manager-foot">
           <span className="muted showcase-manager-foot-note">
-            Changes save as you go.
+            {draft
+              ? "Changes save with the showcase."
+              : "Changes save as you go."}
           </span>
           <button
             className="button"

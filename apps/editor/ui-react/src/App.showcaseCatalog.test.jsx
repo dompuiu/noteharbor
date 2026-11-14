@@ -51,12 +51,15 @@ vi.mock("./components/NoteEditForm.jsx", () => ({
 
 import { ShellContent } from "./App.jsx";
 import {
+  createCatalogEntry,
+  deleteNode,
   getAllNotes,
   getCategories,
   getCollections,
   getHealth,
   getShowcases,
   getShowcaseTree,
+  updateCatalogEntry,
   updateNodeNotes,
   updateNote,
 } from "./lib/api.js";
@@ -1040,5 +1043,434 @@ describe("the specimen manager", () => {
     expect(warning).toHaveTextContent("This entry is owned");
     expect(warning).toHaveTextContent("entry stays owned");
     expect(warning).toHaveTextContent("slideshow shows that photo");
+  });
+});
+
+// ── Edit mode: catalog entries are draft blocks ─────────────────────────
+
+async function openEdit(tree = catalogTree()) {
+  getShowcaseTree.mockResolvedValue({ showcase_id: 1, nodes: tree });
+  const user = userEvent.setup();
+  renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+  await screen.findByLabelText("Showcase name");
+  return user;
+}
+
+function editCatalogTree() {
+  return [
+    categoryNode([
+      entryNode(
+        20,
+        {
+          catalog_number: "22a",
+          specimens: [OWNED_NOTE, REFERENCE_NOTE],
+          primary: OWNED_NOTE.id,
+        },
+        1,
+      ),
+    ]),
+  ];
+}
+
+describe("edit mode catalog entries", () => {
+  test("Add catalog entry stages one unseen position per catalog number", async () => {
+    createCatalogEntry
+      .mockResolvedValueOnce({ node: { id: 501 } })
+      .mockResolvedValueOnce({ node: { id: 502 } });
+    const user = await openEdit([categoryNode([])]);
+
+    await user.click(
+      screen.getByRole("button", { name: "Add catalog entry" }),
+    );
+
+    const dialog = await screen.findByRole("dialog", {
+      name: "Add catalog entries",
+    });
+    await user.type(
+      within(dialog).getByLabelText("Catalog numbers"),
+      "22a, 22b",
+    );
+    await user.type(within(dialog).getByLabelText("Denomination"), "20 lei");
+    await user.type(within(dialog).getByLabelText("Issue date"), "1877");
+    await user.type(
+      within(dialog).getByLabelText("Source"),
+      "Pick catalog",
+    );
+
+    // The preview repaints while the form is typed.
+    expect(
+      within(dialog).getByText("Pick 22a"),
+    ).toBeInTheDocument();
+    expect(
+      within(dialog).getByText("2 unseen entries will be added to Summer."),
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(dialog).getByRole("button", { name: "Add 2 entries" }),
+    );
+
+    // Closing the form hands focus back to the tile that opened it.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Add catalog entry" }),
+      ).toHaveFocus(),
+    );
+    expect(
+      screen.getByText("20 lei · Pick 22a · 1877"),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText("20 lei · Pick 22b · 1877"),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+    expect(createCatalogEntry).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(createCatalogEntry).toHaveBeenCalledTimes(2),
+    );
+    expect(createCatalogEntry).toHaveBeenNthCalledWith(1, 1, {
+      parentId: 10,
+      entry: {
+        catalog_number: "22a",
+        denomination: "20 lei",
+        issue_date: "1877",
+        source: "Pick catalog",
+      },
+      noteIds: [],
+    });
+    expect(createCatalogEntry).toHaveBeenNthCalledWith(2, 1, {
+      parentId: 10,
+      entry: {
+        catalog_number: "22b",
+        denomination: "20 lei",
+        issue_date: "1877",
+        source: "Pick catalog",
+      },
+      noteIds: [],
+    });
+  });
+
+  test("Add notes in Catalog entries mode merges by catalog value and reports the skips", async () => {
+    const MERGE_NOTE = note(202, {
+      catalog_number: "22a",
+      denomination: "2 lei",
+      issue_date: "1917",
+    });
+    const NO_CATALOG_NOTE = note(203, {
+      catalog_number: "",
+      denomination: "3 lei",
+      issue_date: "1920",
+    });
+    getAllNotes.mockResolvedValue({
+      notes: [OWNED_NOTE, MERGE_NOTE, NO_CATALOG_NOTE],
+    });
+    const user = await openEdit(editCatalogTree());
+
+    await user.click(screen.getAllByRole("button", { name: "Add notes" })[0]);
+    const dialog = await screen.findByRole("dialog", { name: "Add notes" });
+
+    await user.click(
+      within(dialog).getByRole("button", { name: "Catalog entries" }),
+    );
+    await user.click(
+      within(dialog).getByRole("checkbox", { name: /2 lei · 1917/ }),
+    );
+    await user.click(
+      within(dialog).getByRole("checkbox", { name: /3 lei · 1920/ }),
+    );
+    await user.click(
+      within(dialog).getByRole("button", { name: "Add selected (2)" }),
+    );
+
+    expect(
+      within(dialog).getByRole("status"),
+    ).toHaveTextContent(
+      "Skipped 1 note with no catalog number. Add it in Notes mode instead.",
+    );
+
+    await user.click(within(dialog).getByRole("button", { name: "Done" }));
+
+    expect(screen.getByText("3 notes · primary")).toBeInTheDocument();
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(updateNodeNotes).toHaveBeenCalledWith(20, {
+        note_ids: [101, 102, 202],
+        primary_note_id: 101,
+      }),
+    );
+    expect(createCatalogEntry).not.toHaveBeenCalled();
+  });
+
+  test("Catalog entries mode creates an entry when no value matches", async () => {
+    const user = await openEdit([categoryNode([])]);
+    getAllNotes.mockResolvedValue({
+      notes: [
+        PICKER_NOTE,
+        note(203, { catalog_number: "", denomination: "3 lei", issue_date: "1920" }),
+      ],
+    });
+    createCatalogEntry.mockResolvedValueOnce({ node: { id: 501 } });
+
+    await user.click(screen.getAllByRole("button", { name: "Add notes" })[0]);
+    const dialog = await screen.findByRole("dialog", { name: "Add notes" });
+    await user.click(
+      within(dialog).getByRole("button", { name: "Catalog entries" }),
+    );
+    await user.click(
+      within(dialog).getByRole("checkbox", { name: /10 lei · 1921/ }),
+    );
+    await user.click(
+      within(dialog).getByRole("checkbox", { name: /3 lei · 1920/ }),
+    );
+    await user.click(
+      within(dialog).getByRole("button", { name: "Add selected (2)" }),
+    );
+
+    expect(
+      within(dialog).getByRole("status"),
+    ).toHaveTextContent(
+      "Skipped 1 note with no catalog number. Add it in Notes mode instead.",
+    );
+    await user.click(within(dialog).getByRole("button", { name: "Done" }));
+
+    expect(
+      screen.getByText("10 lei · Pick 25d · 1921"),
+    ).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(createCatalogEntry).toHaveBeenCalledWith(1, {
+        parentId: 10,
+        entry: {
+          catalog_number: "25d",
+          denomination: "10 lei",
+          issue_date: "1921",
+          source: "",
+        },
+        noteIds: [201],
+      }),
+    );
+    expect(updateNodeNotes).not.toHaveBeenCalled();
+  });
+
+  test("editing an entry's metadata leaves the linked note alone", async () => {
+    const user = await openEdit(editCatalogTree());
+
+    await user.click(screen.getByRole("button", { name: "Edit details" }));
+    const dialog = await screen.findByRole("dialog", {
+      name: "Edit catalog entry",
+    });
+
+    expect(within(dialog).getByLabelText("Catalog number")).toHaveValue("22a");
+    await user.clear(within(dialog).getByLabelText("Denomination"));
+    await user.type(within(dialog).getByLabelText("Denomination"), "100 lei");
+    await user.type(
+      within(dialog).getByLabelText("Source"),
+      "Pick catalog",
+    );
+    await user.click(
+      within(dialog).getByRole("button", { name: "Save entry" }),
+    );
+
+    // The form hands focus back to the control that opened it.
+    await waitFor(() =>
+      expect(
+        screen.getByRole("button", { name: "Edit details" }),
+      ).toHaveFocus(),
+    );
+    expect(
+      screen.getByRole("button", {
+        name: /100 lei · Pick 22a · 1917/,
+      }),
+    ).toBeInTheDocument();
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(updateCatalogEntry).toHaveBeenCalledWith(20, {
+        catalog_number: "22a",
+        denomination: "100 lei",
+        issue_date: "1917",
+        source: "Pick catalog",
+      }),
+    );
+    expect(updateNote).not.toHaveBeenCalled();
+    expect(updateNodeNotes).not.toHaveBeenCalled();
+  });
+
+  test("removing the primary specimen stays local until Save", async () => {
+    const user = await openEdit(editCatalogTree());
+
+    await user.click(
+      screen.getByRole("button", {
+        name: /1 leu · Pick 22a · 1917\. 2 notes · primary/,
+      }),
+    );
+    const manager = await screen.findByRole("dialog", {
+      name: "Notes on Pick 22a",
+    });
+    expect(
+      within(manager).getByText("Changes save with the showcase."),
+    ).toBeInTheDocument();
+
+    await user.click(
+      within(manager).getByRole("button", {
+        name: "Remove 1 leu · Pick 22a · 1917 from this entry",
+      }),
+    );
+
+    expect(
+      within(manager).getByText("1 leu reference · Pick 22a · 1917"),
+    ).toBeInTheDocument();
+    expect(updateNodeNotes).not.toHaveBeenCalled();
+
+    await user.click(within(manager).getByRole("button", { name: "Done" }));
+    expect(screen.getByText("1 note · primary")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(updateNodeNotes).toHaveBeenCalledWith(20, {
+        note_ids: [102],
+        primary_note_id: 102,
+      }),
+    );
+  });
+
+  test("Cancel discards a staged catalog entry", async () => {
+    const user = await openEdit([categoryNode([])]);
+
+    await user.click(
+      screen.getByRole("button", { name: "Add catalog entry" }),
+    );
+    const dialog = await screen.findByRole("dialog", {
+      name: "Add catalog entries",
+    });
+    await user.type(
+      within(dialog).getByLabelText("Catalog numbers"),
+      "22a",
+    );
+    await user.click(
+      within(dialog).getByRole("button", { name: "Add 1 entry" }),
+    );
+    await user.click(screen.getByRole("button", { name: "Cancel" }));
+
+    const confirmDialog = await screen.findByRole("dialog", {
+      name: "Discard changes?",
+    });
+    await user.click(
+      within(confirmDialog).getByRole("button", { name: "Discard" }),
+    );
+
+    await screen.findByRole("heading", { name: "My showcase" });
+    expect(createCatalogEntry).not.toHaveBeenCalled();
+    expect(updateCatalogEntry).not.toHaveBeenCalled();
+  });
+
+  test("a staged entry's first specimen rides the creation on Save", async () => {
+    getAllNotes.mockResolvedValue({ notes: [PICKER_NOTE] });
+    createCatalogEntry.mockResolvedValueOnce({ node: { id: 501 } });
+    const user = await openEdit([categoryNode([])]);
+
+    await user.click(
+      screen.getByRole("button", { name: "Add catalog entry" }),
+    );
+    const form = await screen.findByRole("dialog", {
+      name: "Add catalog entries",
+    });
+    await user.type(within(form).getByLabelText("Catalog numbers"), "22a");
+    await user.type(within(form).getByLabelText("Denomination"), "20 lei");
+    await user.click(
+      within(form).getByRole("button", { name: "Add 1 entry" }),
+    );
+
+    await user.click(
+      screen.getByRole("button", { name: /20 lei · Pick 22a/ }),
+    );
+    const manager = await screen.findByRole("dialog", {
+      name: "Notes on Pick 22a",
+    });
+    await user.click(
+      within(manager).getByRole("checkbox", { name: /10 lei · 1921/ }),
+    );
+    await user.click(
+      within(manager).getByRole("button", { name: "Add selected (1)" }),
+    );
+    await user.click(within(manager).getByRole("button", { name: "Done" }));
+
+    expect(screen.getByText("1 note · primary")).toBeInTheDocument();
+    expect(updateNodeNotes).not.toHaveBeenCalled();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() =>
+      expect(createCatalogEntry).toHaveBeenCalledWith(1, {
+        parentId: 10,
+        entry: {
+          catalog_number: "22a",
+          denomination: "20 lei",
+          issue_date: "",
+          source: "",
+        },
+        noteIds: [201],
+      }),
+    );
+    expect(updateNodeNotes).not.toHaveBeenCalled();
+  });
+
+  test("removing a staged entry deletes it on Save", async () => {
+    const user = await openEdit(editCatalogTree());
+
+    await user.click(
+      screen.getByRole("button", { name: "Remove catalog entry Pick 22a" }),
+    );
+    expect(
+      screen.queryByRole("button", { name: /1 leu · Pick 22a/ }),
+    ).not.toBeInTheDocument();
+    expect(screen.getByText("Unsaved changes")).toBeInTheDocument();
+
+    await user.click(screen.getByRole("button", { name: "Save" }));
+
+    await waitFor(() => expect(deleteNode).toHaveBeenCalledWith(20));
+    expect(createCatalogEntry).not.toHaveBeenCalled();
+    expect(updateNodeNotes).not.toHaveBeenCalled();
+  });
+
+  test("the a shortcut never opens the note picker on an entry", async () => {
+    const user = await openEdit(editCatalogTree());
+    const card = screen.getByRole("button", {
+      name: /1 leu · Pick 22a · 1917\. 2 notes · primary/,
+    });
+
+    card.focus();
+    await user.keyboard("a");
+
+    expect(
+      screen.queryByRole("dialog", { name: "Add notes" }),
+    ).not.toBeInTheDocument();
+  });
+
+  test("Tab stays inside the entry form", async () => {
+    const user = await openEdit([categoryNode([])]);
+
+    await user.click(
+      screen.getByRole("button", { name: "Add catalog entry" }),
+    );
+    const form = await screen.findByRole("dialog", {
+      name: "Add catalog entries",
+    });
+    expect(within(form).getByLabelText("Catalog numbers")).toHaveFocus();
+
+    await user.tab({ shift: true });
+
+    expect(
+      within(form).getByRole("button", { name: "Cancel" }),
+    ).toHaveFocus();
   });
 });

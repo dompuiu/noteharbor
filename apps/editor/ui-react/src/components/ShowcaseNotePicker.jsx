@@ -33,6 +33,11 @@ import { SelectField } from "./SelectField.jsx";
 // attached (`excludeNoteIds`), chips each row Owned/Seen, and sorts owned
 // matches first so a library record is one click away. Selection, filtering,
 // and virtualization are the same as the standalone picker.
+//
+// Edit mode passes `mode`/`onModeChange`/`notice` to add the Notes ↔ Catalog
+// entries switch and the inline skipped-notes line; `onAdd` then receives the
+// active mode as its third argument. The append-mode finder leaves all three
+// out.
 const COLUMNS = [
   {
     value: "collection",
@@ -94,8 +99,11 @@ function ShowcaseNotePicker({
   collections = [],
   embedded = false,
   excludeNoteIds,
+  mode = "notes",
+  notice = "",
   onAdd,
   onClose,
+  onModeChange = null,
 }) {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -374,7 +382,7 @@ function ShowcaseNotePicker({
     setAddError("");
 
     try {
-      await onAdd(ids, notes);
+      await onAdd(ids, notes, mode);
       setSelectedIds(new Set());
       setBusy(false);
 
@@ -522,11 +530,48 @@ function ShowcaseNotePicker({
         </button>
       </div>
 
+      {onModeChange ? (
+        <div
+          aria-label="Add notes as"
+          className="showcase-picker-modes"
+          role="group"
+        >
+          <button
+            aria-pressed={mode === "notes"}
+            className="showcase-picker-mode"
+            onClick={() => onModeChange("notes")}
+            type="button"
+          >
+            Notes
+          </button>
+          <button
+            aria-pressed={mode === "catalog"}
+            className="showcase-picker-mode"
+            onClick={() => onModeChange("catalog")}
+            type="button"
+          >
+            Catalog entries
+          </button>
+        </div>
+      ) : null}
+
       <p className="showcase-picker-hint">
-        {column === "catalog"
-          ? "The catalog filter keeps the family rule: 22 matches 22, 22a, 22b, and 22s — never 220."
-          : "The selection carries across filter changes, so you can pick notes from several collections."}
+        {mode === "catalog"
+          ? "A note joins the entry with the same catalog value in this block; a note without one is skipped."
+          : column === "catalog"
+            ? "The catalog filter keeps the family rule: 22 matches 22, 22a, 22b, and 22s — never 220."
+            : "The selection carries across filter changes, so you can pick notes from several collections."}
       </p>
+
+      {notice ? (
+        <p
+          aria-live="polite"
+          className="showcase-picker-notice"
+          role="status"
+        >
+          {notice}
+        </p>
+      ) : null}
 
       {!loading && !loadError ? (
         <p aria-live="polite" className="muted showcase-picker-count">

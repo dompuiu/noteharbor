@@ -20,6 +20,9 @@ import {
   nodeCatalogState,
   normalizeCatalogEntry,
   planCatalogMerge,
+  planSpecimenAdd,
+  planSpecimenPromote,
+  planSpecimenRemove,
   noteOwnedInTree,
   primarySpecimen,
   removeNodeTree,
@@ -676,6 +679,65 @@ describe("planCatalogMerge", () => {
 
     expect(plan.merges[0].nodeId).toBe(-4);
     expect(plan.merges[0].noteIds).toEqual([101, 102]);
+  });
+});
+
+describe("specimen plans", () => {
+  test("adding appends new notes and makes the first one primary on an empty entry", () => {
+    const plan = planSpecimenAdd(entryNode(20, []), [101, 102], [
+      { id: 102, owned: false },
+    ]);
+
+    expect(plan.addedIds).toEqual([101, 102]);
+    expect(plan.specimens.map((specimen) => specimen.id)).toEqual([101, 102]);
+    expect(plan.payload).toEqual({
+      note_ids: [101, 102],
+      primary_note_id: 101,
+    });
+  });
+
+  test("adding skips notes already on the entry and ignores duplicates", () => {
+    const plan = planSpecimenAdd(
+      entryNode(20, [ownedSpecimen(101)], { primaryId: 101 }),
+      [101, 101, 102],
+      [{ id: 102, owned: false }],
+    );
+
+    expect(plan.addedIds).toEqual([102]);
+    expect(plan.payload).toEqual({
+      note_ids: [101, 102],
+      primary_note_id: 101,
+    });
+    expect(
+      planSpecimenAdd(entryNode(20, [ownedSpecimen(101)]), [101], []),
+    ).toBeNull();
+  });
+
+  test("promoting keeps the set and names the new primary", () => {
+    const entry = entryNode(20, [seenSpecimen(101), ownedSpecimen(102)], {
+      primaryId: 101,
+    });
+    const plan = planSpecimenPromote(entry, 102);
+
+    expect(plan.payload).toEqual({
+      note_ids: [101, 102],
+      primary_note_id: 102,
+    });
+    expect(planSpecimenPromote(entry, 101)).toBeNull();
+    expect(planSpecimenPromote(entry, 999)).toBeNull();
+  });
+
+  test("removing the primary promotes the first remaining specimen", () => {
+    const entry = entryNode(20, [ownedSpecimen(101), seenSpecimen(102)]);
+    const plan = planSpecimenRemove(entry, 101);
+
+    expect(plan.removed.id).toBe(101);
+    expect(plan.specimens.map((specimen) => specimen.id)).toEqual([102]);
+    expect(plan.payload).toEqual({
+      note_ids: [102],
+      primary_note_id: 102,
+    });
+    expect(planSpecimenRemove(entry, 999)).toBeNull();
   });
 });
 

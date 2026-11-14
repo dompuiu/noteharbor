@@ -77,7 +77,7 @@ describe("showcase note/grouping card heights", () => {
     // notes than under groupings. The inner card absorbs the row height so
     // every cell ends on the same uniform bottom pad.
     const fill = styles.match(
-      /\.showcase-reorder-cell > \.showcase-cell > \.showcase-card--note,[\s\S]*?\.showcase-grouping-editcard\s*\{([^}]*)\}/,
+      /\.showcase-reorder-cell > \.showcase-cell > \.showcase-card--note,[\s\S]*?\.showcase-catalog-editcard\s*\{([^}]*)\}/,
     );
     expect(fill).not.toBeNull();
     expect(fill[1]).toMatch(/flex:\s*1/);

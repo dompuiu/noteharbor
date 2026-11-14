@@ -3,12 +3,14 @@ import { handleMenuNavigation } from "../lib/menuNavigation.js";
 import { firstAvailableNoteImage } from "../lib/showcaseImages.js";
 import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 import {
+  catalogEntryCaption,
   catalogEntryIdentity,
-  hasSeenPrimary,
   isCatalogEntry,
   nodeCatalogState,
   primarySpecimen,
+  specimenSummary,
 } from "../lib/showcaseTree.js";
+import { ShowcaseCatalogWell } from "./ShowcaseCatalogWell.jsx";
 
 // One card in a catalog Showcase. A Catalog entry and a note leaf share the
 // three states the checklist paints (owned, seen, unseen); they differ only in
@@ -32,8 +34,7 @@ function noteLabel(note) {
 // well keeps the shorter catalog value.
 function cardLabel(node) {
   return isCatalogEntry(node)
-    ? showcaseNoteDisplayParts(node.entry).join(" · ") ||
-        catalogEntryIdentity(node.entry)
+    ? catalogEntryCaption(node.entry)
     : noteLabel(node?.note);
 }
 
@@ -215,7 +216,6 @@ function ShowcaseCatalogCard({
   const image = firstAvailableNoteImage(note);
   const label = cardLabel(node);
   const specimenCount = entry ? (node?.specimens ?? []).length : 0;
-  const seenPrimary = entry && hasSeenPrimary(node);
 
   if (state === "unseen") {
     return (
@@ -231,37 +231,9 @@ function ShowcaseCatalogCard({
           onClick={() => onOpenFinder?.(node)}
           type="button"
         >
-          <span className="showcase-catalog-well">
-            <span className="showcase-catalog-eyebrow">Unseen</span>
-            <svg
-              aria-hidden="true"
-              className="showcase-catalog-glyph"
-              focusable="false"
-              viewBox="0 0 64 34"
-            >
-              <rect
-                fill="none"
-                height="31"
-                rx="3"
-                stroke="currentColor"
-                strokeDasharray="3 3"
-                strokeWidth="1.3"
-                width="61"
-                x="1.5"
-                y="1.5"
-              />
-              <circle cx="32" cy="17" fill="none" r="8" stroke="currentColor" />
-              <path
-                d="M8 26c4-6 9-9 15-9M56 8c-4 6-9 9-15 9"
-                fill="none"
-                stroke="currentColor"
-                strokeLinecap="round"
-              />
-            </svg>
-            <span className="showcase-catalog-identity">
-              {entry ? catalogEntryIdentity(node.entry) : label}
-            </span>
-          </span>
+          <ShowcaseCatalogWell
+            identity={entry ? catalogEntryIdentity(node.entry) : label}
+          />
           <span className="showcase-card-caption-row">
             <span className="showcase-card-caption">{label}</span>
           </span>
@@ -315,7 +287,7 @@ function ShowcaseCatalogCard({
         type="button"
       >
         <StackIcon />
-        <span>{`${specimenCount} notes · ${seenPrimary ? "seen primary" : "primary"}`}</span>
+        <span>{specimenSummary(node)}</span>
       </button>
     ) : null;
 

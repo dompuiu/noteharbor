@@ -1544,7 +1544,8 @@ input[type="radio"] {
    The leftover row height lands inside the card below its caption, where the
    single-line caption and fixed 2/1 image well keep it invisible. */
 .showcase-reorder-cell > .showcase-cell > .showcase-card--note,
-.showcase-reorder-cell > .showcase-cell > .showcase-grouping-editcard {
+.showcase-reorder-cell > .showcase-cell > .showcase-grouping-editcard,
+.showcase-reorder-cell > .showcase-cell > .showcase-catalog-editcard {
   flex: 1 1 auto;
 }
 
@@ -2458,6 +2459,109 @@ input[type="radio"] {
   flex: none;
 }
 
+/* Edit mode's Catalog entry card: the same body as the checklist card, with a
+   draft-local remove icon, a details action, and a quiet specimen line that
+   opens the local manager. */
+.showcase-catalog-editcard {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 10px 6px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.showcase-catalog-edit-open {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  align-items: stretch;
+}
+
+.showcase-catalog-edit-open .showcase-card-caption-row {
+  justify-content: center;
+}
+
+.showcase-catalog-edit-source {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 0.72rem;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The add/edit entry form: fields on the left, the live unseen-card preview on
+   the right. It reuses the manager shell, so the backdrop, scrolling body, and
+   sticky footer (including the phone bottom sheet) stay identical. */
+.showcase-manager.showcase-entry-dialog {
+  width: min(720px, 100%);
+}
+
+.showcase-entry-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 250px);
+  gap: 16px;
+}
+
+.showcase-entry-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.showcase-entry-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.showcase-entry-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.showcase-entry-preview-label {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.showcase-entry-preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.showcase-entry-count {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 560px) {
+  .showcase-entry-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
 /* The ownership menu: a header naming the state, then the library-wide
    ownership item and the specimen-manager entry. */
 .showcase-ownership-menu {
@@ -2614,22 +2718,24 @@ input[type="radio"] {
 .showcase-add-tiles {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
   width: 100%;
   height: 100%;
   min-height: calc(var(--showcase-card-min, 200px) / 2 + 67px);
 }
 
+/* The three add actions share one cell at the grid minimum, so each keeps a
+   compact row rather than the old half-cell height. */
 .showcase-add-tiles > .showcase-tile {
   flex: 1 1 0;
   height: auto;
-  min-height: 72px;
+  min-height: 48px;
 }
 
 .showcase-add-tiles > .showcase-category-combobox {
   flex: 1 1 0;
   height: auto;
-  min-height: 72px;
+  min-height: 48px;
 }
 
 .showcase-tile--note {
@@ -2709,6 +2815,46 @@ input[type="radio"] {
   margin: 0;
   color: var(--text-muted);
   font-size: 0.82rem;
+}
+
+/* Add notes can stage note leaves or catalog positions; the switch sits under
+   the filter row and keeps the picked notes when it flips. */
+.showcase-picker-modes {
+  display: flex;
+  gap: 2px;
+  align-self: flex-start;
+  padding: 2px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+}
+
+.showcase-picker-mode {
+  padding: 4px 12px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.showcase-picker-mode[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--accent-strong);
+  box-shadow: 0 0 0 1px var(--border-control);
+}
+
+.showcase-picker-notice {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 0.8rem;
 }
 
 .showcase-picker-count {

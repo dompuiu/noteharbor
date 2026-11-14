@@ -6,7 +6,10 @@
 // objects. Catalog state (owned/seen/unseen, counts, filters, the primary, and
 // the merge key) is derived from the flags the server supplies.
 
-import { formatShowcaseCatalogNumber } from "./showcaseNoteLabels.js";
+import {
+  formatShowcaseCatalogNumber,
+  showcaseNoteDisplayParts,
+} from "./showcaseNoteLabels.js";
 
 // Walk the tree by the drilled node ids. A stale id (e.g. a node removed in
 // another tab) stops the walk at the last resolvable level.
@@ -405,6 +408,23 @@ function catalogEntryIdentity(entry) {
   );
 }
 
+// The entry's one-line caption for cards, previews, and the editor:
+// denomination · catalog value · date, falling back to the identity when the
+// entry carries no details. The position's own metadata, never the specimen.
+function catalogEntryCaption(entry) {
+  return showcaseNoteDisplayParts(entry).join(" · ") || catalogEntryIdentity(entry);
+}
+
+// The quiet specimen line a multi-note entry carries: how many notes and
+// whether the primary is a seen reference on an owned entry.
+function specimenSummary(node) {
+  const count = specimenNoteIds(node).length;
+
+  return `${count} ${count === 1 ? "note" : "notes"} · ${
+    hasSeenPrimary(node) ? "seen primary" : "primary"
+  }`;
+}
+
 // The entry's identity for accessible names and managers: its own catalog
 // metadata, never the primary Note, because the position and the record are
 // independent. Falls back to the denomination, then to "Unidentified".
@@ -470,6 +490,75 @@ function specimenPayload(node) {
   }
 
   return payload;
+}
+
+// Plan the next specimen set for an add. Notes already on the entry are
+// ignored; `notes` supplies the records the new ids attach. A null plan means
+// nothing would be added.
+function planSpecimenAdd(entry, noteIds, notes = []) {
+  const existingIds = specimenNoteIds(entry);
+  const addedIds = [...new Set(noteIds ?? [])].filter(
+    (noteId) =>
+      Number.isInteger(noteId) && !existingIds.includes(noteId),
+  );
+
+  if (!addedIds.length) {
+    return null;
+  }
+
+  const byId = new Map((notes ?? []).map((note) => [note.id, note]));
+  const specimens = [
+    ...(entry?.specimens ?? []),
+    ...addedIds.map((noteId) => byId.get(noteId) ?? { id: noteId }),
+  ];
+
+  return {
+    addedIds,
+    specimens,
+    payload: specimenPayload({ ...entry, specimens }),
+  };
+}
+
+// Plan a primary change. A missing specimen or the current primary is a no-op.
+function planSpecimenPromote(entry, noteId) {
+  const specimens = entry?.specimens ?? [];
+
+  if (
+    !specimens.some((specimen) => specimen?.id === noteId) ||
+    entry?.primary_note_id === noteId
+  ) {
+    return null;
+  }
+
+  return {
+    specimens,
+    payload: specimenPayload({ ...entry, primary_note_id: noteId }),
+  };
+}
+
+// Plan a removal, promoting the first remaining specimen when the primary is
+// the one leaving. The server applies the same rule; this keeps the draft
+// about to be saved identical to what it would return.
+function planSpecimenRemove(entry, noteId) {
+  const specimens = entry?.specimens ?? [];
+  const removed = specimens.find((specimen) => specimen?.id === noteId);
+
+  if (!removed) {
+    return null;
+  }
+
+  const remaining = specimens.filter((specimen) => specimen?.id !== noteId);
+
+  return {
+    removed,
+    specimens: remaining,
+    payload: specimenPayload({
+      ...entry,
+      specimens: remaining,
+      primary_note_id:
+        entry?.primary_note_id === noteId ? null : entry?.primary_note_id,
+    }),
+  };
 }
 
 // Mark one Note owned or not owned everywhere the tree shows it: its note
@@ -658,6 +747,7 @@ export {
   appendChildren,
   applyChildOrder,
   catalogCounts,
+  catalogEntryCaption,
   catalogEntryIdentity,
   catalogEntryLabel,
   catalogEntryState,
@@ -677,6 +767,9 @@ export {
   normalizeCatalogEntry,
   noteOwnedInTree,
   planCatalogMerge,
+  planSpecimenAdd,
+  planSpecimenPromote,
+  planSpecimenRemove,
   primarySpecimen,
   removeNodeTree,
   reorderNodeTree,
@@ -686,6 +779,7 @@ export {
   showcaseNoteState,
   specimenNoteIds,
   specimenPayload,
+  specimenSummary,
   updateNodeTree,
   visibleChildNodes,
 };

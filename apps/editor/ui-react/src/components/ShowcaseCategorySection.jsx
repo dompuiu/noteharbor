@@ -1,6 +1,7 @@
 import { ShowcaseGrid } from "./ShowcaseGrid.jsx";
 import { ShowcaseAddTiles } from "./ShowcaseAddTiles.jsx";
 import { ShowcaseCatalogCard } from "./ShowcaseCatalogCard.jsx";
+import { ShowcaseCatalogCell } from "./ShowcaseCatalogCell.jsx";
 import { ShowcaseGroupingCard } from "./ShowcaseGroupingCard.jsx";
 import { ShowcaseGroupingEditor } from "./ShowcaseGroupingEditor.jsx";
 import { ShowcaseNoteCard } from "./ShowcaseNoteCard.jsx";
@@ -30,14 +31,17 @@ function ShowcaseCategorySection({
   catalogMode = false,
   editMode,
   photoSize,
+  onAddCatalogEntry,
   onAddGrouping,
   onAddNotes,
+  onEditCatalogEntry,
   onOpenFinder,
   onOpenGrouping,
   onOpenManager,
   onOpenNote,
   onOwnershipToggle,
   onPresent,
+  onRemoveCatalogEntry,
   onRemoveGrouping,
   onRemoveNote,
   onRemoveCategory,
@@ -100,7 +104,7 @@ function ShowcaseCategorySection({
             if (
               catalogMode &&
               !editMode &&
-              (isCatalogEntry(node) || node.node_type === "note")
+              node.node_type === "note"
             ) {
               return (
                 <ShowcaseCatalogCard
@@ -111,6 +115,24 @@ function ShowcaseCategorySection({
                   onOpenNote={onOpenNote}
                   onPresent={onPresent}
                   onToggleOwned={onOwnershipToggle}
+                />
+              );
+            }
+
+            if (isCatalogEntry(node)) {
+              return (
+                <ShowcaseCatalogCell
+                  editMode={editMode}
+                  key={node.id}
+                  node={node}
+                  onEditDetails={onEditCatalogEntry}
+                  onOpenFinder={onOpenFinder}
+                  onOpenManager={onOpenManager}
+                  onOpenNote={onOpenNote}
+                  onPresent={onPresent}
+                  onRemove={onRemoveCatalogEntry}
+                  onToggleOwned={onOwnershipToggle}
+                  reorder={reorder}
                 />
               );
             }
@@ -166,6 +188,8 @@ function ShowcaseCategorySection({
 
           {editMode ? (
             <ShowcaseAddTiles
+              catalogParentId={category.id}
+              onAddCatalogEntry={() => onAddCatalogEntry(category)}
               onAddGrouping={(name) => onAddGrouping(category.id, name)}
               onAddNotes={() => onAddNotes(category)}
             />
@@ -174,6 +198,8 @@ function ShowcaseCategorySection({
       ) : editMode ? (
         <ShowcaseGrid size={photoSize}>
           <ShowcaseAddTiles
+            catalogParentId={category.id}
+            onAddCatalogEntry={() => onAddCatalogEntry(category)}
             onAddGrouping={(name) => onAddGrouping(category.id, name)}
             onAddNotes={() => onAddNotes(category)}
           />

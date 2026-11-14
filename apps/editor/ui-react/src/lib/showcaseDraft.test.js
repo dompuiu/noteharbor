@@ -315,6 +315,33 @@ describe("saveShowcaseDraft catalog entries", () => {
     expect(mocks.updateCatalogEntry).not.toHaveBeenCalled();
   });
 
+  test("a new entry with no specimens posts an empty note list", async () => {
+    const mocks = api();
+    const entry = makeDraftCatalogEntryNode({
+      entry: { catalog_number: "22b", denomination: "2 lei" },
+      parentId: 10,
+    });
+
+    await saveShowcaseDraft({
+      showcaseId: 1,
+      baselineNodes: [categoryWith([])],
+      draftNodes: [categoryWith([entry])],
+      api: mocks,
+    });
+
+    expect(mocks.createCatalogEntry).toHaveBeenCalledWith(1, {
+      parentId: 10,
+      entry: {
+        catalog_number: "22b",
+        denomination: "2 lei",
+        issue_date: "",
+        source: "",
+      },
+      noteIds: [],
+    });
+    expect(mocks.updateNodeNotes).not.toHaveBeenCalled();
+  });
+
   test("a new entry created with another primary promotes it right after", async () => {
     const mocks = api();
     const entry = makeDraftCatalogEntryNode({

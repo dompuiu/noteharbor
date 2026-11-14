@@ -40,10 +40,13 @@ import {
   hasCatalogEntries,
   isCatalogEntry,
   noteOwnedInTree,
+  planCatalogMerge,
+  planSpecimenAdd,
+  planSpecimenPromote,
+  planSpecimenRemove,
   removeNodeTree,
   reorderNodeTree,
   setNoteOwned,
-  specimenNoteIds,
   specimenPayload,
   updateNodeTree,
   visibleChildNodes,
@@ -58,6 +61,7 @@ import {
 import {
   isTempId,
   makeDraftCategoryNode,
+  makeDraftCatalogEntryNode,
   makeDraftGroupingNode,
   makeDraftNoteNode,
   resetTempIds,
@@ -69,6 +73,8 @@ import { SHOWCASE_DRAFT_DISCARDED } from "../lib/draftMessages.js";
 import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
 import { ShowcaseCategorySection } from "./ShowcaseCategorySection.jsx";
 import { ShowcaseCatalogCard } from "./ShowcaseCatalogCard.jsx";
+import { ShowcaseCatalogCell } from "./ShowcaseCatalogCell.jsx";
+import { ShowcaseCatalogEntryForm } from "./ShowcaseCatalogEntryForm.jsx";
 import { ShowcaseCategoryTile } from "./ShowcaseCategoryTile.jsx";
 import { ShowcaseAddTiles } from "./ShowcaseAddTiles.jsx";
 import { ShowcaseBreadcrumb } from "./ShowcaseBreadcrumb.jsx";
@@ -184,6 +190,14 @@ function ShowcaseScreen({ mode }) {
   // The picker's target node id (not the node object) so the open popup reads
   // the node's current children after an add updates the tree.
   const [pickerNodeId, setPickerNodeId] = useState(null);
+  // Add notes stages either ordinary note leaves or catalog positions; catalog
+  // mode merges by exact catalog value inside the picker's parent and reports
+  // the notes it skipped inline.
+  const [pickerMode, setPickerMode] = useState("notes");
+  const [pickerNotice, setPickerNotice] = useState("");
+  // The open Catalog entry form: `{ mode: "add", parentId, parentLabel }` or
+  // `{ mode: "edit", nodeId }`. Both submit only to the draft.
+  const [entryForm, setEntryForm] = useState(null);
   // The unseen Catalog entry whose card opened the finder. Filling it is a
   // specimen-set write, not a new child, so it gets its own picker target.
   const [entryPickerNodeId, setEntryPickerNodeId] = useState(null);
@@ -1051,6 +1065,16 @@ function ShowcaseScreen({ mode }) {
   }
 
   function handleOpenNotePicker(node) {
+    // Only Categories and Groupings hold note leaves. A Catalog entry's notes
+    // are specimens, added through its manager.
+    if (
+      !node ||
+      (node.node_type !== "category" && node.node_type !== "grouping")
+    ) {
+      return;
+    }
+    setPickerMode("notes");
+    setPickerNotice("");
     setPickerNodeId(node.id);
   }
 
@@ -1073,6 +1097,246 @@ function ShowcaseScreen({ mode }) {
     setNodes((current) => appendChildren(current, pickerNodeId, drafts));
     setTreeDirty(true);
     setSaveError("");
+  }
+
+  // Add notes → Catalog entries: notes group by exact catalog number. A group
+  // that matches an entry under the same parent appends to its specimen set;
+  // otherwise one new entry is staged with the group's first catalog metadata.
+  // Notes without a catalog number, and notes already attached to the matching
+  // entry, are reported in the picker; they can still be added as notes.
+  function addNotesAsCatalogEntries(noteIds, allNotes) {
+    const parent = findNodeById(nodesRef.current, pickerNodeId);
+
+    if (!parent) {
+      return;
+    }
+
+    const byId = new Map((allNotes ?? []).map((note) => [note.id, note]));
+    const notes = [...new Set(noteIds ?? [])]
+      .map((noteId) => byId.get(noteId))
+      .filter(Boolean);
+
+    if (!notes.length) {
+      return;
+    }
+
+    const plan = planCatalogMerge(parent.children ?? [], notes);
+    const drafts = plan.additions.map((addition) =>
+      makeDraftCatalogEntryNode({
+        entry: addition.entry,
+        parentId: parent.id,
+        specimens: addition.noteIds.map(
+          (noteId) => byId.get(noteId) ?? { id: noteId },
+        ),
+      }),
+    );
+
+    setNodes((current) => {
+      let next = current;
+
+      for (const merge of plan.merges) {
+        next = updateNodeTree(next, merge.nodeId, (entry) => {
+          const existingById = new Map(
+            (entry.specimens ?? []).map((specimen) => [specimen.id, specimen]),
+          );
+          const specimens = merge.noteIds.map(
+            (noteId) =>
+              existingById.get(noteId) ?? byId.get(noteId) ?? { id: noteId },
+          );
+
+          return {
+            ...entry,
+            specimens,
+            primary_note_id: merge.primaryNoteId,
+          };
+        });
+      }
+
+      return drafts.length ? appendChildren(next, parent.id, drafts) : next;
+    });
+
+    // A selection of only skippable notes changes nothing, so it must not mark
+    // the showcase dirty or make Cancel ask to discard.
+    if (plan.merges.length || plan.additions.length) {
+      setTreeDirty(true);
+      setSaveError("");
+    }
+
+    setPickerNotice(skippedNotesMessage(plan.skipped));
+  }
+
+  function skippedNotesMessage(skipped) {
+    const counts = { "no-catalog-number": 0, "already-on-entry": 0 };
+
+    for (const item of skipped ?? []) {
+      if (item.reason in counts) {
+        counts[item.reason] += 1;
+      }
+    }
+
+    const noteCount = (count) => `${count} ${count === 1 ? "note" : "notes"}`;
+    const parts = [];
+
+    if (counts["no-catalog-number"]) {
+      parts.push(
+        `${noteCount(counts["no-catalog-number"])} with no catalog number`,
+      );
+    }
+
+    if (counts["already-on-entry"]) {
+      parts.push(
+        `${noteCount(counts["already-on-entry"])} already on that entry`,
+      );
+    }
+
+    if (!parts.length) {
+      return "";
+    }
+
+    const unnumbered = counts["no-catalog-number"];
+    const hint = unnumbered
+      ? ` Add ${unnumbered === 1 ? "it" : "them"} in Notes mode instead.`
+      : "";
+
+    return `Skipped ${parts.join(" and ")}.${hint}`;
+  }
+
+  // ── Catalog entries (edit mode) ────────────────────────────────────────
+  // Every catalog change below is a local draft edit: new positions, metadata,
+  // and specimen sets land in `nodes` and Save replays the diff.
+  function openAddCatalogEntry(parent) {
+    setEntryForm({
+      mode: "add",
+      parentId: parent.id,
+      parentLabel: parent.name ?? "this block",
+    });
+  }
+
+  function openEditCatalogEntry(node) {
+    setEntryForm({ mode: "edit", nodeId: node.id });
+  }
+
+  // Closing returns focus to the add tile or the card's Edit details control.
+  // A submit can append cards before the tile, remounting it, so the target is
+  // looked up fresh in the committed DOM rather than held as an element.
+  function closeEntryForm() {
+    const form = entryForm;
+    setEntryForm(null);
+
+    if (!form) {
+      return;
+    }
+
+    focusShowcaseControl(
+      sectionRef,
+      form.mode === "edit"
+        ? `.showcase-cell[data-showcase-node-id="${form.nodeId}"] [data-showcase-action="edit-entry"]`
+        : `[aria-label="Add catalog entry"][data-showcase-add-parent="${form.parentId}"]`,
+    );
+  }
+
+  function handleAddCatalogEntries(entries) {
+    if (entryForm?.mode !== "add" || entryForm.parentId == null) {
+      return;
+    }
+
+    const drafts = (entries ?? []).map((entry) =>
+      makeDraftCatalogEntryNode({
+        entry,
+        parentId: entryForm.parentId,
+      }),
+    );
+
+    if (!drafts.length) {
+      return;
+    }
+
+    setNodes((current) =>
+      appendChildren(current, entryForm.parentId, drafts),
+    );
+    setTreeDirty(true);
+    setSaveError("");
+  }
+
+  function handleEditCatalogEntry(entry) {
+    if (entryForm?.mode !== "edit" || entryForm.nodeId == null) {
+      return;
+    }
+
+    setNodes((current) =>
+      updateNodeTree(current, entryForm.nodeId, (node) => ({
+        ...node,
+        entry,
+      })),
+    );
+    setTreeDirty(true);
+    setSaveError("");
+  }
+
+  function handleRemoveCatalogEntry(node) {
+    setNodes((current) => removeNodeTree(current, node.id));
+    setTreeDirty(true);
+    setSaveError("");
+  }
+
+  function commitDraftSpecimens(entryId, { specimens, primaryNoteId }) {
+    setNodes((current) =>
+      updateNodeTree(current, entryId, (entry) => ({
+        ...entry,
+        specimens,
+        primary_note_id: primaryNoteId ?? null,
+      })),
+    );
+    setTreeDirty(true);
+    setSaveError("");
+  }
+
+  function addDraftSpecimens(entryId, noteIds, allNotes = []) {
+    const entryNode = findCatalogEntry(entryId);
+    const plan = entryNode
+      ? planSpecimenAdd(entryNode, noteIds, allNotes)
+      : null;
+
+    if (!plan) {
+      return;
+    }
+
+    commitDraftSpecimens(entryId, {
+      specimens: plan.specimens,
+      primaryNoteId: plan.payload.primary_note_id,
+    });
+  }
+
+  function promoteDraftSpecimen(entryId, noteId) {
+    const entryNode = findCatalogEntry(entryId);
+    const plan = entryNode
+      ? planSpecimenPromote(entryNode, noteId)
+      : null;
+
+    if (!plan) {
+      return;
+    }
+
+    commitDraftSpecimens(entryId, {
+      specimens: plan.specimens,
+      primaryNoteId: plan.payload.primary_note_id,
+    });
+  }
+
+  function removeDraftSpecimen(entryId, noteId) {
+    const entryNode = findCatalogEntry(entryId);
+    const plan = entryNode
+      ? planSpecimenRemove(entryNode, noteId)
+      : null;
+
+    if (!plan) {
+      return;
+    }
+
+    commitDraftSpecimens(entryId, {
+      specimens: plan.specimens,
+      primaryNoteId: plan.payload.primary_note_id,
+    });
   }
 
   async function handleRemoveNote(noteNode) {
@@ -1248,33 +1512,19 @@ function ShowcaseScreen({ mode }) {
 
   async function addSpecimensToEntry(entryId, noteIds, allNotes = []) {
     const entryNode = findCatalogEntry(entryId);
+    const plan = entryNode
+      ? planSpecimenAdd(entryNode, noteIds, allNotes)
+      : null;
 
-    if (!entryNode) {
+    if (!plan) {
       return;
     }
-
-    const byId = new Map((allNotes ?? []).map((note) => [note.id, note]));
-    const existingIds = specimenNoteIds(entryNode);
-    const addedIds = [...new Set(noteIds ?? [])].filter(
-      (noteId) =>
-        Number.isInteger(noteId) && !existingIds.includes(noteId),
-    );
-
-    if (!addedIds.length) {
-      return;
-    }
-
-    const added = addedIds.map((noteId) => byId.get(noteId) ?? { id: noteId });
-    const specimens = [...(entryNode.specimens ?? []), ...added];
-    // `specimenPayload` gives the first id primary when the entry had none, so
-    // the first note added to an empty entry is the one the card shows.
-    const payload = specimenPayload({ ...entryNode, specimens });
 
     await commitEntrySpecimens(
       entryNode,
-      specimens,
-      payload,
-      `Added ${addedIds.length === 1 ? "1 note" : `${addedIds.length} notes`} to ${catalogEntryIdentity(entryNode.entry)}`,
+      plan.specimens,
+      plan.payload,
+      `Added ${plan.addedIds.length === 1 ? "1 note" : `${plan.addedIds.length} notes`} to ${catalogEntryIdentity(entryNode.entry)}`,
     );
   }
 
@@ -1288,52 +1538,41 @@ function ShowcaseScreen({ mode }) {
 
   async function promoteEntrySpecimen(entryId, noteId) {
     const entryNode = findCatalogEntry(entryId);
-    const specimens = entryNode?.specimens ?? [];
-    const target = specimens.find((specimen) => specimen?.id === noteId);
+    const plan = entryNode
+      ? planSpecimenPromote(entryNode, noteId)
+      : null;
 
-    if (!entryNode || !target || entryNode.primary_note_id === noteId) {
+    if (!plan) {
       return;
     }
 
-    const payload = {
-      note_ids: specimenNoteIds(entryNode),
-      primary_note_id: noteId,
-    };
+    const target = plan.specimens.find(
+      (specimen) => specimen?.id === noteId,
+    );
 
     await commitEntrySpecimens(
       entryNode,
-      specimens,
-      payload,
+      plan.specimens,
+      plan.payload,
       `Primary set to ${entrySpecimenLabel(target)}`,
     );
   }
 
   async function removeEntrySpecimen(entryId, noteId) {
     const entryNode = findCatalogEntry(entryId);
-    const specimens = entryNode?.specimens ?? [];
-    const removed = specimens.find((specimen) => specimen?.id === noteId);
+    const plan = entryNode
+      ? planSpecimenRemove(entryNode, noteId)
+      : null;
 
-    if (!entryNode || !removed) {
+    if (!plan) {
       return;
     }
 
-    const remaining = specimens.filter((specimen) => specimen?.id !== noteId);
-    // Removing the primary selects the first remaining specimen, the same rule
-    // the server applies; the response carries the final order and primary.
-    const payload = specimenPayload({
-      ...entryNode,
-      specimens: remaining,
-      primary_note_id:
-        entryNode.primary_note_id === noteId
-          ? null
-          : entryNode.primary_note_id,
-    });
-
     await commitEntrySpecimens(
       entryNode,
-      remaining,
-      payload,
-      `Removed ${entrySpecimenLabel(removed)} from ${catalogEntryIdentity(entryNode.entry)}`,
+      plan.specimens,
+      plan.payload,
+      `Removed ${entrySpecimenLabel(plan.removed)} from ${catalogEntryIdentity(entryNode.entry)}`,
     );
   }
 
@@ -1342,10 +1581,12 @@ function ShowcaseScreen({ mode }) {
   }
 
   // The strip and the ownership menu's "Notes on this entry" item both call
-  // this one seam. Remember which control opened the manager so closing hands
-  // focus back to the strip or the check even after a write replaces them.
+  // this one seam. Edit mode's entry card calls it too, with draft-only
+  // handlers, so the manager's focus and error behaviour stay the same.
+  // Remember which control opened the manager so closing hands focus back to
+  // the strip or the check even after a write replaces them.
   function openSpecimenManager(node) {
-    if (!node || !isCatalogEntry(node) || editMode) {
+    if (!node || !isCatalogEntry(node)) {
       return;
     }
 
@@ -1674,12 +1915,12 @@ function ShowcaseScreen({ mode }) {
 
   // The arrow-key sequence is every card (`.showcase-card`), every
   // edit-mode category header (`.showcase-category-focus`), plus every
-  // edit-mode add tile (`.showcase-tile`: Add notes, Add grouping, Create a
-  // category), in DOM order — which is the grid's reading order. An open
-  // create tile is a form, not a tile button, so it drops out of the sequence
-  // while its field (an editable) owns the arrows anyway. All sequence
-  // members are natively focusable (no roving tabindex); the shortcuts only
-  // move `document.activeElement`.
+  // edit-mode add tile (`.showcase-tile`: Add notes, Add catalog entry, Add
+  // grouping, Create a category), in DOM order — which is the grid's reading
+  // order. An open create tile is a form, not a tile button, so it drops out of
+  // the sequence while its field (an editable) owns the arrows anyway. All
+  // sequence members are natively focusable (no roving tabindex); the shortcuts
+  // only move `document.activeElement`.
   function showcaseCardElements() {
     const root = sectionRef.current;
 
@@ -1795,6 +2036,7 @@ function ShowcaseScreen({ mode }) {
         pickerNodeId != null ||
         entryPickerNodeId != null ||
         managerNodeId != null ||
+        entryForm != null ||
         confirmOpen ||
         presentIndex != null
       ) {
@@ -1901,8 +2143,9 @@ function ShowcaseScreen({ mode }) {
       }
 
       // Edit mode's single-key actions act on the focused card: `a` opens the
-      // note picker for that card's node (a Category or Grouping; a note cannot
-      // hold notes), `e` its rename field, `d` its remove control. `g` is the
+      // note picker for a Category or Grouping (neither a note nor a Catalog
+      // entry can hold note leaves; an entry's notes go through its specimen
+      // manager), `e` its rename field, `d` its remove control. `g` is the
       // current level's add-grouping tile, which is not inside a cell.
       // View mode's `e` with no card focused enters edit mode on the same
       // level (mirroring the table's `e` editing the collection when no row
@@ -1949,8 +2192,11 @@ function ShowcaseScreen({ mode }) {
             ? findNodeById(nodes, nodeId)
             : null;
 
-          if (node && node.node_type !== "note") {
-            setPickerNodeId(node.id);
+          if (
+            node &&
+            (node.node_type === "category" || node.node_type === "grouping")
+          ) {
+            handleOpenNotePicker(node);
           }
 
           return;
@@ -1975,6 +2221,7 @@ function ShowcaseScreen({ mode }) {
     discardPendingShowcase,
     drillDepth,
     editMode,
+    entryForm,
     entryPickerNodeId,
     exitEditModeToRoot,
     guardShowcaseExit,
@@ -2041,6 +2288,40 @@ function ShowcaseScreen({ mode }) {
       : findNodeById(nodes, entryPickerNodeId);
   const managerEntry =
     managerNodeId == null ? null : findNodeById(nodes, managerNodeId);
+  // The entry being edited, read from the tree so the form always prefills the
+  // draft's current metadata.
+  const entryFormEntry =
+    entryForm?.mode === "edit" && entryForm.nodeId != null
+      ? findNodeById(nodes, entryForm.nodeId)
+      : null;
+  const entryFormOpen =
+    entryForm != null &&
+    (entryForm.mode === "add" || entryFormEntry != null);
+  // The manager runs the same add/promote/remove rules in both modes; only the
+  // commit differs (an immediate write with Undo, or the local draft). View
+  // mode swallows a write failure after `commitEntrySpecimens` has shown it.
+  const managerCallbacks =
+    managerEntry == null
+      ? null
+      : editMode
+        ? {
+            onAdd: (noteIds, allNotes) =>
+              addDraftSpecimens(managerEntry.id, noteIds, allNotes),
+            onPromote: (noteId) =>
+              promoteDraftSpecimen(managerEntry.id, noteId),
+            onRemove: (noteId) =>
+              removeDraftSpecimen(managerEntry.id, noteId),
+          }
+        : {
+            onAdd: (noteIds, allNotes) =>
+              addSpecimensToEntry(managerEntry.id, noteIds, allNotes),
+            onPromote: (noteId) => {
+              promoteEntrySpecimen(managerEntry.id, noteId).catch(() => {});
+            },
+            onRemove: (noteId) => {
+              removeEntrySpecimen(managerEntry.id, noteId).catch(() => {});
+            },
+          };
   // The catalog header's owned-over-total progress. A presentation-only
   // showcase never paints it.
   const ownedPercent = catalogTotals.total
@@ -2418,14 +2699,17 @@ function ShowcaseScreen({ mode }) {
                       catalogMode={catalogMode}
                       editMode={editMode}
                       key={node.id}
+                      onAddCatalogEntry={openAddCatalogEntry}
                       onAddGrouping={handleAddGroupingFor}
                       onAddNotes={handleOpenNotePicker}
+                      onEditCatalogEntry={openEditCatalogEntry}
                       onOpenFinder={openEntryFinder}
                       onOpenGrouping={openNode}
                       onOpenManager={openSpecimenManager}
                       onOpenNote={openShowcasePreview}
                       onOwnershipToggle={handleOwnershipToggle}
                       onPresent={(target) => openPresentation(target.id)}
+                      onRemoveCatalogEntry={handleRemoveCatalogEntry}
                       onRemoveCategory={handleRemoveCategory}
                       onRemoveGrouping={handleRemoveGrouping}
                       onRemoveNote={handleRemoveNote}
@@ -2455,9 +2739,27 @@ function ShowcaseScreen({ mode }) {
             ) : (
               <ShowcaseGrid size={photoSize}>
                 {visibleDisplayChildren.map((node) => {
+                  if (isCatalogEntry(node)) {
+                    return (
+                      <ShowcaseCatalogCell
+                        editMode={editMode}
+                        key={node.id}
+                        node={node}
+                        onEditDetails={openEditCatalogEntry}
+                        onOpenFinder={openEntryFinder}
+                        onOpenManager={openSpecimenManager}
+                        onOpenNote={openShowcasePreview}
+                        onPresent={(target) => openPresentation(target.id)}
+                        onRemove={handleRemoveCatalogEntry}
+                        onToggleOwned={handleOwnershipToggle}
+                        reorder={reorder}
+                      />
+                    );
+                  }
+
                   if (
                     checklistMode &&
-                    (isCatalogEntry(node) || node.node_type === "note")
+                    node.node_type === "note"
                   ) {
                     return (
                       <ShowcaseCatalogCard
@@ -2531,6 +2833,8 @@ function ShowcaseScreen({ mode }) {
 
                 {editMode && displayNode ? (
                   <ShowcaseAddTiles
+                    catalogParentId={displayNode.id}
+                    onAddCatalogEntry={() => openAddCatalogEntry(displayNode)}
                     onAddGrouping={handleAddGrouping}
                     onAddNotes={() => handleOpenNotePicker(displayNode)}
                   />
@@ -2544,9 +2848,23 @@ function ShowcaseScreen({ mode }) {
       {pickerNode ? (
         <ShowcaseNotePicker
           collections={collections}
+          mode={pickerMode}
           node={pickerNode}
-          onAdd={handleAddNotes}
-          onClose={() => setPickerNodeId(null)}
+          notice={pickerNotice}
+          onAdd={
+            pickerMode === "catalog"
+              ? addNotesAsCatalogEntries
+              : handleAddNotes
+          }
+          onClose={() => {
+            setPickerNodeId(null);
+            setPickerMode("notes");
+            setPickerNotice("");
+          }}
+          onModeChange={(mode) => {
+            setPickerMode(mode);
+            setPickerNotice("");
+          }}
         />
       ) : null}
 
@@ -2564,19 +2882,22 @@ function ShowcaseScreen({ mode }) {
 
       {managerEntry && isCatalogEntry(managerEntry) ? (
         <ShowcaseSpecimenManager
+          {...managerCallbacks}
           collections={collections}
+          draft={editMode}
           entry={managerEntry}
           error={managerError}
-          onAdd={(noteIds, allNotes) =>
-            addSpecimensToEntry(managerEntry.id, noteIds, allNotes)
-          }
           onClose={closeSpecimenManager}
-          onPromote={(noteId) => {
-            promoteEntrySpecimen(managerEntry.id, noteId).catch(() => {});
-          }}
-          onRemove={(noteId) => {
-            removeEntrySpecimen(managerEntry.id, noteId).catch(() => {});
-          }}
+        />
+      ) : null}
+
+      {entryFormOpen ? (
+        <ShowcaseCatalogEntryForm
+          entry={entryFormEntry?.entry ?? null}
+          onAdd={handleAddCatalogEntries}
+          onClose={closeEntryForm}
+          onSave={handleEditCatalogEntry}
+          parentLabel={entryForm.parentLabel}
         />
       ) : null}
 
