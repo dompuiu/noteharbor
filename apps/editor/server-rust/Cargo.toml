@@ -37,3 +37,4 @@ webp = "0.3"
 zip = "2"
 
 [dev-dependencies]
+rusqlite = { version = "0.40", features = ["bundled"] }

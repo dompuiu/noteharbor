@@ -127,7 +127,8 @@ fn table_columns(conn: &Connection, table: &str) -> Result<Vec<String>, rusqlite
     rows.collect()
 }
 
-fn table_sql(conn: &Connection, table: &str) -> Result<String, DbError> {    match conn.query_row(
+fn table_sql(conn: &Connection, table: &str) -> Result<String, DbError> {
+    match conn.query_row(
         "SELECT sql FROM sqlite_master WHERE type = 'table' AND name = ?1",
         params![table],
         |row| row.get::<_, Option<String>>(0),
@@ -136,6 +137,13 @@ fn table_sql(conn: &Connection, table: &str) -> Result<String, DbError> {    mat
         Err(rusqlite::Error::QueryReturnedNoRows) => Ok(String::new()),
         Err(error) => Err(classify(error)),
     }
+}
+
+fn has_column(conn: &Connection, table: &str, column: &str) -> Result<bool, DbError> {
+    Ok(table_columns(conn, table)
+        .map_err(classify)?
+        .iter()
+        .any(|name| name == column))
 }
 
 /// Runs a parameter-free SELECT and collects every row. (Chaining
@@ -420,6 +428,7 @@ fn migrate_banknotes_foreign_key(conn: &mut Connection) -> Result<(), DbError> {
         "scrape_error",
         "created_at",
         "updated_at",
+        "owned",
     ];
     let existing: HashSet<String> = table_columns(conn, "banknotes")
         .map_err(classify)?
@@ -453,7 +462,8 @@ fn migrate_banknotes_foreign_key(conn: &mut Connection) -> Result<(), DbError> {
            scrape_status TEXT DEFAULT 'pending',
            scrape_error TEXT,
            created_at TEXT DEFAULT (datetime('now')),
-           updated_at TEXT DEFAULT (datetime('now'))
+           updated_at TEXT DEFAULT (datetime('now')),
+           owned INTEGER NOT NULL DEFAULT 1
          );
 
          INSERT INTO banknotes_new ({column_list})
@@ -468,8 +478,20 @@ fn migrate_banknotes_foreign_key(conn: &mut Connection) -> Result<(), DbError> {
     Ok(())
 }
 
-// The Showcases node tree (ADR 0001). Additive and idempotent: only
-// `CREATE ... IF NOT EXISTS`, so an existing database keeps its rows.
+/// `banknotes.owned`: whether the collector holds the physical note. Added last
+/// so the legacy rebuilds above (which copy only columns they know about)
+/// cannot drop it; every existing row migrates as owned.
+fn ensure_banknotes_owned(conn: &mut Connection) -> Result<(), DbError> {
+    if !has_column(conn, "banknotes", "owned")? {
+        conn.execute_batch("ALTER TABLE banknotes ADD COLUMN owned INTEGER NOT NULL DEFAULT 1")
+            .map_err(classify)?;
+    }
+    Ok(())
+}
+
+// The Showcases node tree (ADR 0001) and its catalog extension. Additive and
+// idempotent: `CREATE ... IF NOT EXISTS` everywhere, plus a one-time rebuild
+// of `showcase_nodes` for databases written before `catalog_entry`.
 fn ensure_showcases_schema(conn: &mut Connection) -> Result<(), DbError> {
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS categories (
@@ -494,29 +516,23 @@ fn ensure_showcases_schema(conn: &mut Connection) -> Result<(), DbError> {
            ON showcases(name COLLATE NOCASE);
 
          CREATE INDEX IF NOT EXISTS idx_showcases_display_order
-           ON showcases(display_order, id);
+           ON showcases(display_order, id);",
+    )
+    .map_err(classify)?;
 
-         CREATE TABLE IF NOT EXISTS showcase_nodes (
-           id INTEGER PRIMARY KEY AUTOINCREMENT,
-           showcase_id INTEGER NOT NULL REFERENCES showcases(id) ON DELETE CASCADE,
-           parent_node_id INTEGER REFERENCES showcase_nodes(id) ON DELETE CASCADE,
-           node_type TEXT NOT NULL CHECK (node_type IN ('category','grouping','note')),
-           category_id INTEGER REFERENCES categories(id) ON DELETE RESTRICT,
-           name TEXT,
-           note_id INTEGER REFERENCES banknotes(id) ON DELETE CASCADE,
-           cover_note_id INTEGER REFERENCES banknotes(id) ON DELETE SET NULL,
-           position INTEGER,
-           created_at TEXT DEFAULT (datetime('now')),
-           updated_at TEXT DEFAULT (datetime('now'))
-         );
+    ensure_showcase_nodes_table(conn)?;
 
-         CREATE UNIQUE INDEX IF NOT EXISTS idx_showcase_nodes_category_once
+    // Recreated after the rebuild, which drops the old table's indexes.
+    conn.execute_batch(
+        "CREATE UNIQUE INDEX IF NOT EXISTS idx_showcase_nodes_category_once
            ON showcase_nodes(showcase_id, category_id) WHERE node_type = 'category';
 
          CREATE INDEX IF NOT EXISTS idx_showcase_nodes_parent
            ON showcase_nodes(parent_node_id, position, id);",
     )
     .map_err(classify)?;
+
+    ensure_showcase_catalog_notes(conn)?;
 
     // Fill a null position, per sibling group, in id order. Only self-heals a
     // partially written tree.
@@ -551,6 +567,143 @@ fn ensure_showcases_schema(conn: &mut Connection) -> Result<(), DbError> {
         .map_err(classify)?;
     }
     tx.commit().map_err(classify)?;
+    Ok(())
+}
+
+/// `showcase_nodes`, in the shape that allows `catalog_entry` and carries the
+/// entry metadata. Shared by the fresh create and the legacy rebuild so both
+/// shapes stay identical.
+fn showcase_nodes_definition(table: &str) -> String {
+    format!(
+        "CREATE TABLE IF NOT EXISTS {table} (
+           id INTEGER PRIMARY KEY AUTOINCREMENT,
+           showcase_id INTEGER NOT NULL REFERENCES showcases(id) ON DELETE CASCADE,
+           parent_node_id INTEGER REFERENCES showcase_nodes(id) ON DELETE CASCADE,
+           node_type TEXT NOT NULL CHECK (node_type IN ('category','grouping','note','catalog_entry')),
+           category_id INTEGER REFERENCES categories(id) ON DELETE RESTRICT,
+           name TEXT,
+           note_id INTEGER REFERENCES banknotes(id) ON DELETE CASCADE,
+           cover_note_id INTEGER REFERENCES banknotes(id) ON DELETE SET NULL,
+           catalog_number TEXT,
+           denomination TEXT,
+           issue_date TEXT,
+           source TEXT,
+           position INTEGER,
+           created_at TEXT DEFAULT (datetime('now')),
+           updated_at TEXT DEFAULT (datetime('now'))
+         )"
+    )
+}
+
+fn ensure_showcase_nodes_table(conn: &mut Connection) -> Result<(), DbError> {
+    conn.execute_batch(&showcase_nodes_definition("showcase_nodes"))
+        .map_err(classify)?;
+
+    if table_sql(conn, "showcase_nodes")?
+        .to_uppercase()
+        .contains("CATALOG_ENTRY")
+    {
+        // A database from an intermediate build may carry the new CHECK but
+        // miss a metadata column; add it rather than rebuilding again.
+        for column in ["catalog_number", "denomination", "issue_date", "source"] {
+            if !has_column(conn, "showcase_nodes", column)? {
+                conn.execute_batch(&format!(
+                    "ALTER TABLE showcase_nodes ADD COLUMN {column} TEXT"
+                ))
+                .map_err(classify)?;
+            }
+        }
+        return Ok(());
+    }
+
+    // Rebuild for the wider CHECK and the new columns. The rows, the unique
+    // category index, and the sibling index survive; the indexes are created
+    // again by the caller once the rename is done. The transaction keeps an
+    // interrupted migration from leaving half a table behind.
+    conn.execute_batch(&format!(
+        "PRAGMA foreign_keys = OFF;
+
+         BEGIN;
+
+         DROP TABLE IF EXISTS showcase_nodes_new;
+
+         {new_table};
+
+         INSERT INTO showcase_nodes_new (
+           id, showcase_id, parent_node_id, node_type, category_id, name,
+           note_id, cover_note_id, position, created_at, updated_at
+         )
+         SELECT
+           id, showcase_id, parent_node_id, node_type, category_id, name,
+           note_id, cover_note_id, position, created_at, updated_at
+         FROM showcase_nodes;
+
+         DROP TABLE showcase_nodes;
+         ALTER TABLE showcase_nodes_new RENAME TO showcase_nodes;
+
+         COMMIT;
+
+         PRAGMA foreign_keys = ON;",
+        new_table = showcase_nodes_definition("showcase_nodes_new"),
+    ))
+    .map_err(classify)?;
+    Ok(())
+}
+
+/// The catalog join: a Note attached to a Catalog entry. Specimens cascade
+/// from the node and from the note, so an entry degrades to unseen instead of
+/// disappearing when its last note goes.
+fn ensure_showcase_catalog_notes(conn: &mut Connection) -> Result<(), DbError> {
+    conn.execute_batch(
+        "CREATE TABLE IF NOT EXISTS showcase_catalog_notes (
+           node_id INTEGER NOT NULL REFERENCES showcase_nodes(id) ON DELETE CASCADE,
+           note_id INTEGER NOT NULL REFERENCES banknotes(id) ON DELETE CASCADE,
+           position INTEGER NOT NULL DEFAULT 0,
+           is_primary INTEGER NOT NULL DEFAULT 0 CHECK (is_primary IN (0, 1)),
+           PRIMARY KEY (node_id, note_id)
+         );
+
+         CREATE INDEX IF NOT EXISTS idx_showcase_catalog_notes_position
+           ON showcase_catalog_notes(node_id, position, note_id);
+
+         CREATE UNIQUE INDEX IF NOT EXISTS idx_showcase_catalog_notes_primary
+           ON showcase_catalog_notes(node_id) WHERE is_primary = 1;
+
+         CREATE TRIGGER IF NOT EXISTS trg_showcase_catalog_notes_first_primary
+         AFTER INSERT ON showcase_catalog_notes
+         FOR EACH ROW
+         WHEN NEW.is_primary = 0
+          AND NOT EXISTS (
+            SELECT 1 FROM showcase_catalog_notes
+            WHERE node_id = NEW.node_id AND is_primary = 1
+          )
+         BEGIN
+           UPDATE showcase_catalog_notes
+           SET is_primary = 1
+           WHERE node_id = NEW.node_id AND note_id = NEW.note_id;
+         END;
+
+         CREATE TRIGGER IF NOT EXISTS trg_showcase_catalog_notes_promote_primary
+         AFTER DELETE ON showcase_catalog_notes
+         FOR EACH ROW
+         WHEN OLD.is_primary = 1
+         BEGIN
+           UPDATE showcase_catalog_notes
+           SET is_primary = 1
+           WHERE node_id = OLD.node_id
+             AND note_id = (
+               SELECT note_id FROM showcase_catalog_notes
+               WHERE node_id = OLD.node_id
+               ORDER BY position ASC, note_id ASC
+               LIMIT 1
+             )
+             AND NOT EXISTS (
+               SELECT 1 FROM showcase_catalog_notes
+               WHERE node_id = OLD.node_id AND is_primary = 1
+             );
+         END;",
+    )
+    .map_err(classify)?;
     Ok(())
 }
 
@@ -655,6 +808,7 @@ fn initialize_schema(conn: &mut Connection) -> Result<(), DbError> {
     migrate_banknotes_for_collection_scope(conn, first_collection_id)?;
     migrate_tags_for_collection_scope(conn, first_collection_id)?;
     migrate_banknotes_foreign_key(conn)?;
+    ensure_banknotes_owned(conn)?;
 
     conn.execute_batch(
         "CREATE INDEX IF NOT EXISTS idx_banknotes_collection_display_order

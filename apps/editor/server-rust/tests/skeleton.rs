@@ -242,3 +242,443 @@ async fn request_path_cannot_escape_static_root() {
     assert_ne!(bytes, b"secret");
     assert!(status == StatusCode::OK || status == StatusCode::NOT_FOUND);
 }
+
+/// The catalog schema ships as migrations, not as a new database: fresh and
+/// repeated opens must land on the same shape, and an existing presentation
+/// showcase must come through untouched.
+mod catalog_schema {
+    use rusqlite::{Connection, params};
+
+    fn db_path(dir: &tempfile::TempDir) -> std::path::PathBuf {
+        dir.path().join("banknotes.db")
+    }
+
+    fn open(db_path: &std::path::Path) -> Connection {
+        let conn = Connection::open(db_path).expect("raw connection");
+        conn.execute_batch("PRAGMA foreign_keys = ON;").expect("foreign keys on");
+        conn
+    }
+
+    fn columns(conn: &Connection, table: &str) -> Vec<String> {
+        let mut stmt = conn
+            .prepare("SELECT name FROM pragma_table_info(?1)")
+            .expect("prepare columns");
+        stmt.query_map(params![table], |row| row.get::<_, String>(0))
+            .expect("query columns")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("collect columns")
+    }
+
+    fn objects(conn: &Connection, kind: &str) -> Vec<String> {
+        let mut stmt = conn
+            .prepare("SELECT name FROM sqlite_master WHERE type = ?1 ORDER BY name")
+            .expect("prepare objects");
+        stmt.query_map(params![kind], |row| row.get::<_, String>(0))
+            .expect("query objects")
+            .collect::<Result<Vec<_>, _>>()
+            .expect("collect objects")
+    }
+
+    fn table_sql(conn: &Connection, table: &str) -> String {
+        conn.query_row(
+            "SELECT COALESCE(sql, '') FROM sqlite_master WHERE type = 'table' AND name = ?1",
+            params![table],
+            |row| row.get::<_, String>(0),
+        )
+        .expect("table sql")
+        .to_uppercase()
+    }
+
+    fn seed_note(conn: &Connection, collection_id: i64, catalog_number: &str) -> i64 {
+        conn.execute(
+            "INSERT INTO banknotes (collection_id, catalog_number) VALUES (?1, ?2)",
+            params![collection_id, catalog_number],
+        )
+        .expect("insert note");
+        conn.last_insert_rowid()
+    }
+
+    fn seed_entry(conn: &Connection) -> (i64, i64) {
+        conn.execute("INSERT INTO collections (name) VALUES ('Holder')", [])
+            .expect("insert collection");
+        let collection_id = conn.last_insert_rowid();
+        conn.execute("INSERT INTO showcases (name) VALUES ('Catalog')", [])
+            .expect("insert showcase");
+        let showcase_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO showcase_nodes (showcase_id, node_type, name, position)
+             VALUES (?1, 'grouping', 'Group', 1)",
+            params![showcase_id],
+        )
+        .expect("insert grouping");
+        let parent_id = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO showcase_nodes
+               (showcase_id, parent_node_id, node_type, catalog_number, denomination, position)
+             VALUES (?1, ?2, 'catalog_entry', '22a', '1 dollar', 1)",
+            params![showcase_id, parent_id],
+        )
+        .expect("insert catalog entry");
+        (collection_id, conn.last_insert_rowid())
+    }
+
+    fn specimen(conn: &Connection, node_id: i64, note_id: i64, position: i64) {
+        conn.execute(
+            "INSERT INTO showcase_catalog_notes (node_id, note_id, position)
+             VALUES (?1, ?2, ?3)",
+            params![node_id, note_id, position],
+        )
+        .expect("insert specimen");
+    }
+
+    fn primary_note(conn: &Connection, node_id: i64) -> Option<i64> {
+        conn.query_row(
+            "SELECT note_id FROM showcase_catalog_notes
+             WHERE node_id = ?1 AND is_primary = 1",
+            params![node_id],
+            |row| row.get(0),
+        )
+        .ok()
+    }
+
+    #[test]
+    fn fresh_database_has_the_catalog_schema() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let pool = editor_server_rust::db::open_pool(&db_path(&dir)).expect("pool opens");
+        drop(pool);
+
+        let conn = open(&db_path(&dir));
+
+        assert!(columns(&conn, "banknotes").contains(&"owned".to_owned()));
+
+        assert!(
+            table_sql(&conn, "showcase_nodes").contains("CATALOG_ENTRY"),
+            "showcase_nodes must accept catalog_entry"
+        );
+        for column in ["catalog_number", "denomination", "issue_date", "source"] {
+            assert!(
+                columns(&conn, "showcase_nodes").contains(&column.to_owned()),
+                "showcase_nodes is missing {column}"
+            );
+        }
+
+        let indexes = objects(&conn, "index");
+        for index in [
+            "idx_showcase_nodes_category_once",
+            "idx_showcase_nodes_parent",
+            "idx_showcase_catalog_notes_primary",
+            "idx_showcase_catalog_notes_position",
+        ] {
+            assert!(indexes.contains(&index.to_owned()), "missing index {index}");
+        }
+
+        let triggers = objects(&conn, "trigger");
+        for trigger in [
+            "trg_showcase_catalog_notes_first_primary",
+            "trg_showcase_catalog_notes_promote_primary",
+        ] {
+            assert!(triggers.contains(&trigger.to_owned()), "missing trigger {trigger}");
+        }
+
+        let key_columns: Vec<(String, i64)> = {
+            let mut stmt = conn
+                .prepare("SELECT name, pk FROM pragma_table_info('showcase_catalog_notes') WHERE pk > 0 ORDER BY pk")
+                .expect("prepare pk");
+            stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+                .expect("query pk")
+                .collect::<Result<Vec<_>, _>>()
+                .expect("collect pk")
+        };
+        assert_eq!(
+            key_columns,
+            vec![("node_id".to_owned(), 1), ("note_id".to_owned(), 2)],
+            "the specimen key must be (node_id, note_id)"
+        );
+    }
+
+    #[test]
+    fn notes_migrate_as_owned_and_keep_the_flag_across_reopens() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = db_path(&dir);
+        let pool = editor_server_rust::db::open_pool(&path).expect("pool opens");
+        drop(pool);
+
+        let conn = open(&path);
+        let collection_id = {
+            conn.execute("INSERT INTO collections (name) VALUES ('Owned')", [])
+                .expect("insert collection");
+            conn.last_insert_rowid()
+        };
+        let owned = seed_note(&conn, collection_id, "1");
+        let seen = seed_note(&conn, collection_id, "2");
+        conn.execute("UPDATE banknotes SET owned = 0 WHERE id = ?1", params![seen])
+            .expect("mark seen");
+
+        assert_eq!(read_owned_from(&conn, owned), 1, "existing notes migrate as owned");
+        assert_eq!(read_owned_from(&conn, seen), 0);
+        drop(conn);
+
+        let pool = editor_server_rust::db::open_pool(&path).expect("pool reopens");
+        drop(pool);
+
+        let conn = open(&path);
+        assert_eq!(read_owned_from(&conn, owned), 1);
+        assert_eq!(read_owned_from(&conn, seen), 0);
+    }
+
+    fn read_owned_from(conn: &Connection, id: i64) -> i64 {
+        conn.query_row("SELECT owned FROM banknotes WHERE id = ?1", params![id], |row| row.get(0))
+            .expect("read owned")
+    }
+
+    #[test]
+    fn specimen_triggers_keep_exactly_one_primary() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let pool = editor_server_rust::db::open_pool(&db_path(&dir)).expect("pool opens");
+        drop(pool);
+        let conn = open(&db_path(&dir));
+
+        let (collection_id, entry_id) = seed_entry(&conn);
+        let first = seed_note(&conn, collection_id, "22a1");
+        let second = seed_note(&conn, collection_id, "22a2");
+        let third = seed_note(&conn, collection_id, "22a3");
+
+        specimen(&conn, entry_id, second, 2);
+        assert_eq!(primary_note(&conn, entry_id), Some(second), "first specimen is primary");
+
+        specimen(&conn, entry_id, first, 1);
+        assert_eq!(
+            primary_note(&conn, entry_id),
+            Some(second),
+            "a later insert does not steal primacy"
+        );
+
+        let duplicate_primary = conn.execute(
+            "INSERT INTO showcase_catalog_notes (node_id, note_id, position, is_primary)
+             VALUES (?1, ?2, 3, 1)",
+            params![entry_id, third],
+        );
+        assert!(
+            duplicate_primary.is_err(),
+            "a second primary must violate the partial unique index"
+        );
+
+        // Removing the primary promotes the lowest-position specimen.
+        conn.execute(
+            "DELETE FROM showcase_catalog_notes WHERE node_id = ?1 AND note_id = ?2",
+            params![entry_id, second],
+        )
+        .expect("delete primary");
+        assert_eq!(primary_note(&conn, entry_id), Some(first), "promotion by position");
+
+        // Deleting the Note from the library cascades and promotes as well.
+        specimen(&conn, entry_id, third, 3);
+        conn.execute("DELETE FROM banknotes WHERE id = ?1", params![first])
+            .expect("delete note");
+        let remaining: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM showcase_catalog_notes WHERE node_id = ?1",
+                params![entry_id],
+                |row| row.get(0),
+            )
+            .expect("count specimens");
+        assert_eq!(remaining, 1, "only the other specimen survives");
+        assert_eq!(primary_note(&conn, entry_id), Some(third), "cascade promotes");
+
+        // The entry outlives its specimens: unseen, not deleted.
+        conn.execute(
+            "DELETE FROM showcase_catalog_notes WHERE node_id = ?1",
+            params![entry_id],
+        )
+        .expect("delete specimens");
+        assert_eq!(primary_note(&conn, entry_id), None);
+        let entry_type: String = conn
+            .query_row(
+                "SELECT node_type FROM showcase_nodes WHERE id = ?1",
+                params![entry_id],
+                |row| row.get(0),
+            )
+            .expect("entry survives");
+        assert_eq!(entry_type, "catalog_entry");
+
+        // Deleting the entry takes its specimens with it.
+        specimen(&conn, entry_id, third, 1);
+        conn.execute("DELETE FROM showcase_nodes WHERE id = ?1", params![entry_id])
+            .expect("delete entry");
+        let joins: i64 = conn
+            .query_row("SELECT COUNT(*) FROM showcase_catalog_notes", [], |row| row.get(0))
+            .expect("count joins");
+        assert_eq!(joins, 0, "node delete cascades the joins");
+    }
+
+    /// A database written before catalog entries keeps its showcase tree, its
+    /// indexes, and its notes when it is opened by this build.
+    #[test]
+    fn existing_presentation_showcase_survives_the_migration() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let path = db_path(&dir);
+        {
+            let conn = open(&path);
+            conn.execute_batch(
+                "CREATE TABLE collections (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   name TEXT NOT NULL,
+                   display_order INTEGER,
+                   created_at TEXT DEFAULT (datetime('now')),
+                   updated_at TEXT DEFAULT (datetime('now'))
+                 );
+                 CREATE UNIQUE INDEX idx_collections_name_nocase
+                   ON collections(name COLLATE NOCASE);
+
+                 CREATE TABLE banknotes (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   collection_id INTEGER NOT NULL REFERENCES collections(id) ON DELETE CASCADE,
+                   display_order INTEGER,
+                   denomination TEXT,
+                   issue_date TEXT,
+                   catalog_number TEXT,
+                   grading_company TEXT,
+                   grade TEXT,
+                   watermark TEXT,
+                   serial TEXT,
+                   url TEXT,
+                   notes TEXT,
+                   scraped_data TEXT,
+                   images TEXT,
+                   scrape_status TEXT DEFAULT 'pending',
+                   scrape_error TEXT,
+                   created_at TEXT DEFAULT (datetime('now')),
+                   updated_at TEXT DEFAULT (datetime('now'))
+                 );
+
+                 CREATE TABLE categories (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   name TEXT NOT NULL,
+                   created_at TEXT DEFAULT (datetime('now')),
+                   updated_at TEXT DEFAULT (datetime('now'))
+                 );
+
+                 CREATE TABLE showcases (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   name TEXT NOT NULL,
+                   display_order INTEGER,
+                   created_at TEXT DEFAULT (datetime('now')),
+                   updated_at TEXT DEFAULT (datetime('now'))
+                 );
+
+                 CREATE TABLE showcase_nodes (
+                   id INTEGER PRIMARY KEY AUTOINCREMENT,
+                   showcase_id INTEGER NOT NULL REFERENCES showcases(id) ON DELETE CASCADE,
+                   parent_node_id INTEGER REFERENCES showcase_nodes(id) ON DELETE CASCADE,
+                   node_type TEXT NOT NULL CHECK (node_type IN ('category','grouping','note')),
+                   category_id INTEGER REFERENCES categories(id) ON DELETE RESTRICT,
+                   name TEXT,
+                   note_id INTEGER REFERENCES banknotes(id) ON DELETE CASCADE,
+                   cover_note_id INTEGER REFERENCES banknotes(id) ON DELETE SET NULL,
+                   position INTEGER,
+                   created_at TEXT DEFAULT (datetime('now')),
+                   updated_at TEXT DEFAULT (datetime('now'))
+                 );
+
+                 CREATE UNIQUE INDEX idx_showcase_nodes_category_once
+                   ON showcase_nodes(showcase_id, category_id) WHERE node_type = 'category';
+                 CREATE INDEX idx_showcase_nodes_parent
+                   ON showcase_nodes(parent_node_id, position, id);
+
+                 INSERT INTO collections (id, name, display_order) VALUES (1, 'Archive', 1);
+                 INSERT INTO banknotes (id, collection_id, display_order, catalog_number)
+                   VALUES (7, 1, 1, '22a');
+                 INSERT INTO categories (id, name) VALUES (3, 'Issue');
+                 INSERT INTO showcases (id, name, display_order) VALUES (2, 'Presentation', 1);
+                 INSERT INTO showcase_nodes (id, showcase_id, node_type, category_id, position)
+                   VALUES (10, 2, 'category', 3, 1);
+                 INSERT INTO showcase_nodes (id, showcase_id, parent_node_id, node_type, name, position)
+                   VALUES (11, 2, 10, 'grouping', 'Types', 1);
+                 INSERT INTO showcase_nodes (id, showcase_id, parent_node_id, node_type, note_id, cover_note_id, position)
+                   VALUES (12, 2, 11, 'note', 7, 7, 1);",
+            )
+            .expect("legacy schema");
+        }
+
+        // First open runs the migration; the second proves it is repeatable.
+        for _ in 0..2 {
+            let pool = editor_server_rust::db::open_pool(&path).expect("pool opens");
+            drop(pool);
+        }
+
+        let conn = open(&path);
+        let nodes: Vec<(i64, String, Option<i64>, Option<i64>)> = {
+            let mut stmt = conn
+                .prepare(
+                    "SELECT id, node_type, parent_node_id, note_id
+                     FROM showcase_nodes ORDER BY id ASC",
+                )
+                .expect("prepare nodes");
+            stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))
+                .expect("query nodes")
+                .collect::<Result<Vec<_>, _>>()
+                .expect("collect nodes")
+        };
+        assert_eq!(
+            nodes,
+            vec![
+                (10, "category".to_owned(), None, None),
+                (11, "grouping".to_owned(), Some(10), None),
+                (12, "note".to_owned(), Some(11), Some(7)),
+            ]
+        );
+        assert_eq!(
+            conn.query_row("SELECT cover_note_id FROM showcase_nodes WHERE id = 12", [], |row| {
+                row.get::<_, Option<i64>>(0)
+            })
+            .expect("cover survives"),
+            Some(7)
+        );
+        assert_eq!(read_owned_from(&conn, 7), 1, "an old note is owned");
+
+        let indexes = objects(&conn, "index");
+        assert!(indexes.contains(&"idx_showcase_nodes_category_once".to_owned()));
+        assert!(indexes.contains(&"idx_showcase_nodes_parent".to_owned()));
+
+        let mut foreign_keys: Vec<(String, String)> = {
+            let mut stmt = conn
+                .prepare("SELECT \"table\", \"from\" FROM pragma_foreign_key_list('showcase_nodes')")
+                .expect("prepare fks");
+            stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?)))
+                .expect("query fks")
+                .collect::<Result<Vec<_>, _>>()
+                .expect("collect fks")
+        };
+        foreign_keys.sort();
+        for pair in [
+            ("banknotes".to_owned(), "cover_note_id".to_owned()),
+            ("banknotes".to_owned(), "note_id".to_owned()),
+            ("showcase_nodes".to_owned(), "parent_node_id".to_owned()),
+        ] {
+            assert!(
+                foreign_keys.contains(&pair),
+                "the rebuild must keep the {pair:?} foreign key"
+            );
+        }
+
+        // The rebuilt CHECK accepts a catalog entry under the grouping.
+        conn.execute(
+            "INSERT INTO showcase_nodes
+               (showcase_id, parent_node_id, node_type, catalog_number, position)
+             VALUES (2, 11, 'catalog_entry', '22b', 2)",
+            [],
+        )
+        .expect("catalog entries fit the new CHECK");
+
+        // The unique category index still holds.
+        assert!(
+            conn.execute(
+                "INSERT INTO showcase_nodes (showcase_id, node_type, category_id, position)
+                 VALUES (2, 'category', 3, 2)",
+                [],
+            )
+            .is_err(),
+            "a Category still appears once per Showcase"
+        );
+    }
+}
