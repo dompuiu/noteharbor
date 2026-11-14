@@ -716,6 +716,9 @@ class _FaceChip extends StatelessWidget {
 /// The header's segmented controls sit inside a 40px pill with a 2px inset.
 const double _kSegmentHeight = kRoomControlHeight - 4;
 
+/// The breath between two stops in a segment pill.
+const double _kSegmentGap = 3;
+
 /// Dense chrome clamps the reader's text scale so the five-stop instrument
 /// still fits a phone; the title, counter and exit keep the full scale.
 const double _kSegmentTextScale = 1.4;
@@ -728,6 +731,11 @@ const double _kHeaderStackWidth = 900;
 /// The title's share beside the controls on a wide window; the controls wrap
 /// rather than squeeze it past this.
 const double _kHeaderTitleMinWidth = 160;
+
+/// What the exit needs on the title's line: the `Back to note` label plus the
+/// button's own padding, at the reader's text scale. Measured against the title
+/// so the exit never pushes the headline to an ellipsis.
+const double _kHeaderExitReserve = 132;
 
 /// The ink and figures every header control shares.
 const TextStyle _kRoomControlStyle = TextStyle(
@@ -801,11 +809,12 @@ class _ImagePopoverHeader extends StatelessWidget {
               .scale(1)
               .clamp(1.0, 2.0);
           if (constraints.maxWidth < _kHeaderStackWidth * textScale) {
-            // The slideshow's bar is one right-aligned cluster. The popover
-            // keeps the note's identity on the left, with the position pill on
-            // the right of that line when the title and the pill both fit.
-            // A long headline, or a large text scale, needs the full line, so
-            // the pill drops beneath the title instead of squeezing it.
+            // The slideshow's bar reads the same way: the note's identity on
+            // the left, then the position pill and the exit on that line. The
+            // instruments keep the line beneath it, so the face and the scale
+            // stay reachable without crowding the exit. A long headline or a
+            // large text scale needs the whole line, so the pill and the exit
+            // drop beneath it instead of squeezing the title.
             final titleWidth = _measuredWidth(
               context,
               item.label.toUpperCase(),
@@ -820,20 +829,27 @@ class _ImagePopoverHeader extends StatelessWidget {
             final noteWidth = noteLine == null
                 ? 0.0
                 : _measuredWidth(context, noteLine, _kCounterNoteStyle);
-            final beside =
-                titleWidth + 12 + math.max(counterWidth, noteWidth) + 26 <=
+            final pillWidth = math.max(counterWidth, noteWidth) + 34;
+            final sharesTitleLine =
+                titleWidth +
+                    12 +
+                    pillWidth +
+                    10 +
+                    _kHeaderExitReserve * textScale <=
                 constraints.maxWidth;
 
             return Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (beside)
+                if (sharesTitleLine)
                   Row(
                     crossAxisAlignment: CrossAxisAlignment.center,
                     children: [
                       Expanded(child: title),
                       const SizedBox(width: 12),
                       counter,
+                      const SizedBox(width: 10),
+                      exit,
                     ],
                   )
                 else ...[
@@ -841,7 +857,13 @@ class _ImagePopoverHeader extends StatelessWidget {
                   const SizedBox(height: 6),
                   Align(
                     alignment: Alignment.centerRight,
-                    child: counter,
+                    child: Wrap(
+                      alignment: WrapAlignment.end,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      spacing: 10,
+                      runSpacing: 8,
+                      children: [counter, exit],
+                    ),
                   ),
                 ],
                 const SizedBox(height: 8),
@@ -852,7 +874,7 @@ class _ImagePopoverHeader extends StatelessWidget {
                     crossAxisAlignment: WrapCrossAlignment.center,
                     spacing: 10,
                     runSpacing: 8,
-                    children: [faceToggle, zoomInstrument, exit],
+                    children: [faceToggle, zoomInstrument],
                   ),
                 ),
               ],
@@ -930,20 +952,27 @@ class _ImagePopoverHeader extends StatelessWidget {
     return ExcludeSemantics(
       child: Container(
         key: const ValueKey('imageCounter'),
+        // The block's height is the room's control height at the normal scale,
+        // so it matches the exit beside it; the lines are tight, and the box is
+        // free to grow with the reader's text scale.
         constraints: const BoxConstraints(minHeight: kRoomControlHeight),
-        padding: const EdgeInsets.symmetric(horizontal: 12),
+        padding: const EdgeInsets.symmetric(horizontal: 18),
         decoration: _pillDecoration(),
         child: Column(
           mainAxisSize: MainAxisSize.min,
+          mainAxisAlignment: MainAxisAlignment.center,
           crossAxisAlignment: CrossAxisAlignment.center,
           children: [
             Text(
               _imagePositionLabel(counterPosition, counterTotal),
-              style: kRoomCounterStyle,
+              style: kRoomCounterStyle.copyWith(height: 1.1),
             ),
             if (notePosition != null) ...[
               const SizedBox(height: 1),
-              Text(notePosition, style: _kCounterNoteStyle),
+              Text(
+                notePosition,
+                style: _kCounterNoteStyle.copyWith(height: 1.1),
+              ),
             ],
           ],
         ),
@@ -1006,7 +1035,6 @@ class _ImagePopoverHeader extends StatelessWidget {
         Container(
           width: 1,
           height: 18,
-          margin: const EdgeInsets.symmetric(horizontal: 3),
           color: ViewerPalette.roomBorder,
         ),
         _segment(
@@ -1098,7 +1126,13 @@ class _ImagePopoverHeader extends StatelessWidget {
       decoration: _pillDecoration(),
       child: MediaQuery.withClampedTextScaling(
         maxScaleFactor: _kSegmentTextScale,
-        child: Row(mainAxisSize: MainAxisSize.min, children: children),
+        // A breath between stops: a pressed or hovered pill keeps its own
+        // stadium instead of touching its neighbour's.
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          spacing: _kSegmentGap,
+          children: children,
+        ),
       ),
     );
   }
@@ -1120,7 +1154,7 @@ class _ImagePopoverHeader extends StatelessWidget {
 
     return TextButton.styleFrom(
       minimumSize: const Size(0, _kSegmentHeight),
-      padding: const EdgeInsets.symmetric(horizontal: 10),
+      padding: const EdgeInsets.symmetric(horizontal: 12),
       tapTargetSize: MaterialTapTargetSize.shrinkWrap,
       foregroundColor: color,
       backgroundColor: background,

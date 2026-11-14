@@ -511,41 +511,46 @@ void main() {
 
   final counter = find.byKey(const ValueKey('imageCounter'));
 
-  testWidgets('a stacked header keeps the counter beside the title', (
+  testWidgets('a stacked header keeps the counter and exit on the title line', (
     tester,
   ) async {
     await pumpTwoNotes(tester, const Size(555, 881));
 
     final pill = tester.getRect(counter);
     final heading = tester.getRect(find.text('TEST - KB-1'));
+    final exit = tester.getRect(
+      find.widgetWithText(OutlinedButton, 'Back to note'),
+    );
 
-    // The pill hugs its two lines instead of spanning the header, and it sits
-    // on the title's line at the right edge, as the slideshow's top bar does.
+    // The pill hugs its two lines, rides on the title's line with the exit,
+    // and the exit keeps the header's right edge as the slideshow's does.
     expect(pill.width, lessThan(240));
-    expect(pill.right, closeTo(555 - 16, 0.5));
-    expect(pill.left, greaterThan(heading.right));
     expect((pill.top - heading.top).abs(), lessThan(16));
+    expect(pill.left, greaterThan(heading.right));
+    expect(exit.right, closeTo(555 - 16, 0.5));
+    expect(pill.right, lessThan(exit.left));
 
-    // The instruments and the exit take the line beneath the title.
+    // The instruments take the line beneath it, right aligned with the exit.
     final face = tester.getRect(find.text('Front'));
-    final exit = tester.getRect(find.text('Back to note'));
+    final plus = tester.getRect(find.text('+'));
     expect(face.top, greaterThan(heading.bottom - 1));
-    expect(exit.top, greaterThan(heading.bottom - 1));
+    expect(face.top, greaterThan(pill.bottom - 1));
+    expect(plus.right, greaterThan(555 - 16 - 30));
     expect(tester.takeException(), isNull);
   });
 
-  testWidgets('a phone header wraps the exit instead of squeezing it', (
-    tester,
-  ) async {
+  testWidgets('a phone drops the pill and exit under the title', (tester) async {
     await pumpTwoNotes(tester, const Size(393, 852));
 
     final heading = tester.getRect(find.text('TEST - KB-1'));
     final pill = tester.getRect(counter);
-    final exit = tester.getRect(find.text('Back to note'));
+    final exit = tester.getRect(
+      find.widgetWithText(OutlinedButton, 'Back to note'),
+    );
 
-    expect(pill.width, lessThan(393 - 32));
-    expect(pill.right, closeTo(393 - 16, 0.5));
-    expect(exit.top, greaterThan(heading.bottom - 1));
+    expect(pill.top, greaterThan(heading.bottom - 1));
+    expect(pill.right, lessThan(exit.left));
+    expect(exit.right, closeTo(393 - 16, 0.5));
     expect(exit.right, lessThanOrEqualTo(393 - 16 + 0.5));
     expect(tester.takeException(), isNull);
   });

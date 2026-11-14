@@ -263,14 +263,15 @@ void main() {
     expect(find.text('Note 1 of 2'), findsOneWidget);
     expect(find.text('Back to note'), findsOneWidget);
 
-    // The position pill hugs its own lines and sits at the header's right
-    // edge; the title keeps the left of the bar and nothing overflows.
+    // The position pill hugs its own lines and stays inside the header with
+    // the exit; the title keeps the left of the bar.
     final counter = find.byKey(const ValueKey('imageCounter'));
     final stage = tester.getRect(find.byType(PageView));
-    expect(tester.getRect(counter).right, closeTo(stage.right - 16, 0.5));
+    final counterRect = tester.getRect(counter);
+    expect(counterRect.right, lessThanOrEqualTo(stage.right - 16 + 0.5));
     expect(
       tester.getRect(find.text('TEST - KB-1')).left,
-      lessThan(tester.getRect(counter).left),
+      lessThan(counterRect.left),
     );
     expect(tester.takeException(), isNull);
   });
@@ -1143,7 +1144,7 @@ void main() {
       expect(counterRect.left, greaterThan(titleRect.left), reason: '$size');
       expect(
         counterRect.right,
-        lessThanOrEqualTo(stageRect.right),
+        lessThanOrEqualTo(stageRect.right - 16 + 0.5),
         reason: '$size',
       );
     }
