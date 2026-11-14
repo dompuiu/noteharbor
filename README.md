@@ -598,9 +598,9 @@ first row of the sidebar's Catalog group:
   scrollbar, filter chips, Find bar and Columns picker, with editing-only
   options (selection, bulk actions, drag reorder, row actions) omitted
 - one row per note across collections, with a sticky Collection column
-- the Table screen's filter chips, with `All fields` selected by default, plus a
-  collection picker, a `Reset view` action, and a `Clear filters` recovery in
-  the empty state
+- the Table screen's filter chips, with the `Catalog` field selected by default,
+  plus a collection picker, a `Reset view` action, and a `Clear filters`
+  recovery in the empty state
 - sortable headers, including Collection in sidebar order
 - filter, collection and sort state in the URL, so Back from a note restores the
   same view

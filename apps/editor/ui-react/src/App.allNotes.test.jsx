@@ -129,9 +129,9 @@ function catalogLinks() {
   );
 }
 
-async function commitFilter(user, value) {
+async function commitFilter(user, value, field = "Catalog") {
   await user.type(
-    screen.getByRole("searchbox", { name: "Filter All fields" }),
+    screen.getByRole("searchbox", { name: `Filter ${field}` }),
     `${value}{Enter}`,
   );
 }
@@ -186,23 +186,26 @@ describe("All notes screen", () => {
     expect(getAllNotes).toHaveBeenCalledWith(COLLECTIONS, allNotesListFields);
   });
 
-  test("All fields is the default and finds a note by catalog, serial and tag", async () => {
+  test("Catalog is the default filter field and finds a note by catalog number", async () => {
     const user = userEvent.setup();
     renderAllNotes();
     await screen.findByText("Fr. 2300");
 
-    expect(filterFieldButton()).toHaveTextContent("All fields");
+    expect(filterFieldButton()).toHaveTextContent("Catalog");
     expect(
-      screen.getByRole("searchbox", { name: "Filter All fields" }),
-    ).toHaveAttribute("placeholder", "Search every visible field…");
+      screen.getByRole("searchbox", { name: "Filter Catalog" }),
+    ).toHaveAttribute("placeholder", "Filter catalog…");
 
     await commitFilter(user, "P-22a");
     expect(catalogLinks()).toEqual(["P-22a"]);
 
-    await commitFilter(user, "SER-2");
+    // The all-fields scope stays one pick away and finds serials and tags.
+    await user.click(screen.getByRole("button", { name: "Clear all" }));
+    await chooseFilterField(user, "All fields");
+    await commitFilter(user, "SER-2", "All fields");
     expect(catalogLinks()).toEqual(["Fr. 500"]);
 
-    await commitFilter(user, "rare");
+    await commitFilter(user, "rare", "All fields");
     expect(catalogLinks()).toEqual(["P-22a"]);
   });
 
@@ -251,7 +254,7 @@ describe("All notes screen", () => {
     expect(catalogLinks()).toEqual(["Fr. 2300", "Fr. 500", "P-22a"]);
     expect(picker).toHaveValue("All collections (3)");
     expect(
-      screen.getByRole("searchbox", { name: "Filter All fields" }),
+      screen.getByRole("searchbox", { name: "Filter Catalog" }),
     ).toHaveValue("");
   });
 
@@ -357,7 +360,9 @@ describe("All notes screen", () => {
     await commitFilter(user, "P-22a");
 
     expect(screen.getByTestId("navigation-type")).toHaveTextContent("REPLACE");
-    expect(screen.getByTestId("search").textContent).toContain("fc=all%3AP-22a");
+    expect(screen.getByTestId("search").textContent).toContain(
+      "fc=catalog_number%3AP-22a",
+    );
   });
 
   test("loading and a failed load both keep the card shape, and Try again recovers", async () => {

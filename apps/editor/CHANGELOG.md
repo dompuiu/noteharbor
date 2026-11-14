@@ -6,6 +6,7 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ### Changed
 
+- All notes: the filter bar opens on the Catalog field, like the Table screen and the Viewer's All notes scope, instead of All fields; every other field stays one pick away in the same menu.
 - Image preview: the wheel zooms at the pointer again with no modifier held, and the popover's **Close** wears the slideshow's close treatment — muted ink at rest, the same red pill on hover.
 - Image preview: the popover is now fluid — `min(1400px, 96vw)` with a wrapping top bar — so it fits a 1024px window instead of scrolling sideways, and its five-button zoom cluster is one 36px scale control: a segmented **Fit**/**1:1** choice beside a minus/level/plus stepper. Zoom keeps its scale when a note's front and back are swapped and returns to Fit on another note, and the Close hint now says **Esc ×2** while zoomed; a visually hidden hint spells out that the first Escape returns a zoomed image to Fit.
 - Image preview: the position pill now names its domain — **Image 3 / 7** instead of a bare **3 / 7** that reads like the slide's note counter — so the two counters no longer say different things with the same shape.

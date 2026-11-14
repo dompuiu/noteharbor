@@ -366,7 +366,6 @@ export function AllNotesTable({
       emptyView={notes.length === 0 && !rowsPending}
       filterBar={{
         conditions,
-        defaultField: "all",
         hasRows: notes.length > 0,
         onConditionsChange,
         searchColumns,

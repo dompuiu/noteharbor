@@ -347,6 +347,30 @@ void main() {
     expect(tester.getSize(find.byType(TextField)).width, greaterThan(180));
   });
 
+  testWidgets('All notes opens on the Catalog filter scope', (tester) async {
+    final controller = await _pumpAllNotes(tester, allNotes: false);
+
+    // Leave a collection scope on another field: entering All notes resets the
+    // filter field to its own default, the same one a collection opens on.
+    await tester.tap(find.byKey(const ValueKey('filterScope')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Denomination').last);
+    await tester.pumpAndSettle();
+
+    await controller.showAllNotes();
+    await tester.pumpAndSettle();
+
+    expect(
+      tester
+          .widget<DropdownButton<String>>(
+            find.byKey(const ValueKey('filterScope')),
+          )
+          .value,
+      'catalogNumber',
+    );
+    expect(find.text('Filter catalog…'), findsOneWidget);
+  });
+
   testWidgets('All fields matches a collection name in All notes', (
     tester,
   ) async {
