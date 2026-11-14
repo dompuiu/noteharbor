@@ -79,7 +79,7 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Image 1 of 2'), findsOneWidget);
   });
 
   testWidgets('space opens the image popover for the current slide', (
@@ -92,7 +92,7 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.space);
     await tester.pumpAndSettle();
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Image 1 of 2'), findsOneWidget);
   });
 
   double maxSlideScroll(WidgetTester tester) {
@@ -119,7 +119,7 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.arrowDown);
     await tester.pumpAndSettle();
-    expect(find.text('1 / 2'), findsNothing);
+    expect(find.text('Image 1 of 2'), findsNothing);
     expect(maxSlideScroll(tester), greaterThan(0));
   });
 
@@ -151,9 +151,9 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Image 1 of 2'), findsOneWidget);
 
-    await tester.tap(find.text('Back'));
+    await tester.tap(find.text('Back to note'));
     await tester.pumpAndSettle();
     expect(find.text('Note 1 of 1'), findsOneWidget);
   });
@@ -203,7 +203,7 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pump();
     expect(find.text('Note 1 of 1'), findsOneWidget);
-    expect(find.text('1 / 2'), findsNothing);
+    expect(find.text('Image 1 of 2'), findsNothing);
   });
 
   List<NoteRecord> manyNotes(int count) => [
@@ -457,7 +457,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(maxSlideScroll(tester), 0);
-      expect(find.text('1 / 2'), findsNothing);
+      expect(find.text('Image 1 of 2'), findsNothing);
     }
   });
 

@@ -13,6 +13,7 @@ import '../../widgets/grade_pill.dart';
 import '../../widgets/mouse_drag_scroll_behavior.dart';
 import '../../widgets/note_image_provider.dart';
 import 'image_lightbox.dart';
+import 'slideshow_room_style.dart';
 
 const _kBg = ViewerPalette.roomBackground;
 const _kCardBg = ViewerPalette.roomSurface;
@@ -24,9 +25,6 @@ const _kTextLabel = ViewerPalette.roomMuted;
 const _kTagChipBg = ViewerPalette.tagBackground;
 const _kTagChipBorder = ViewerPalette.tagBorder;
 const _kTagChipText = ViewerPalette.tagText;
-
-/// Fixed height shared by the slideshow's counter pill and Back control.
-const double _kRoomControlHeight = 40;
 
 /// Keyboard scroll step for the slide content, in logical pixels.
 const _kArrowScrollOffset = 120.0;
@@ -64,18 +62,6 @@ const double _kMinPlatePairHeight = 88;
 /// seam; this leaves enough room behind the first note that a backwards wrap
 /// never runs out of pages.
 const int _kVirtualPageOrigin = 1 << 20;
-
-/// DESIGN.md "Presentation room label": 600, 0.68rem, 0.12em.
-///
-/// The room's one label voice: the plate chips, the slide eyebrow and the
-/// details field labels all take it.
-const TextStyle _kPlateLabelStyle = TextStyle(
-  fontFamily: 'Inter',
-  color: _kTextLabel,
-  fontSize: 10.88,
-  fontWeight: FontWeight.w600,
-  letterSpacing: 1.31,
-);
 
 const TextStyle _kPlateNoticeStyle = TextStyle(
   fontFamily: 'Inter',
@@ -202,14 +188,17 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
     super.dispose();
   }
 
-  List<ImageSequenceItem> _buildImageSequence(List<NoteRecord> notes) {
-    final items = <ImageSequenceItem>[];
-    for (final note in notes) {
-      items.add(ImageSequenceItem(note: note, image: note.fullFor('front')));
-      items.add(ImageSequenceItem(note: note, image: note.fullFor('back')));
-    }
-    return items;
-  }
+  List<ImageSequenceItem> _buildImageSequence(List<NoteRecord> notes) => [
+        for (var index = 0; index < notes.length; index++)
+          for (final face in const ['front', 'back'])
+            ImageSequenceItem(
+              note: notes[index],
+              image: notes[index].fullFor(face),
+              face: face,
+              notePosition: index + 1,
+              noteTotal: notes.length,
+            ),
+      ];
 
   /// Animates to the virtual page [page], used by a single-step arrow move.
   /// A reader that asked for reduced motion gets the page change instantly.
@@ -475,7 +464,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                               children: [
                                 const Spacer(),
                                 Container(
-                                  height: _kRoomControlHeight,
+                                  height: kRoomControlHeight,
                                   alignment: Alignment.center,
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 12,
@@ -499,21 +488,13 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                                     child: Text(
                                       'Note ${_currentIndex + 1} of '
                                       '${widget.notes.length}',
-                                      style: const TextStyle(
-                                        fontFamily: 'Inter',
-                                        color: _kTextPrimary,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13,
-                                        fontFeatures: [
-                                          FontFeature.tabularFigures(),
-                                        ],
-                                      ),
+                                      style: kRoomCounterStyle,
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 10),
                                 SizedBox(
-                                  height: _kRoomControlHeight,
+                                  height: kRoomControlHeight,
                                   child: OutlinedButton(
                                     onPressed: _close,
                                     child: const Text('Back'),
@@ -917,7 +898,7 @@ class _SlideHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: crossAxisAlignment,
       children: [
-        Text(eyebrow.toUpperCase(), style: _kPlateLabelStyle, textAlign: align),
+        Text(eyebrow.toUpperCase(), style: kPlateLabelStyle, textAlign: align),
         const SizedBox(height: 4),
         Text(
           note.title.toUpperCase(),
@@ -1174,10 +1155,10 @@ class _NotePlateState extends State<_NotePlate> {
                               horizontal: 7,
                               vertical: 3,
                             ),
-                            decoration: _plateOverlayDecoration(),
+                            decoration: plateOverlayDecoration(),
                             child: Text(
                               widget.label.toUpperCase(),
-                              style: _kPlateLabelStyle,
+                              style: kPlateLabelStyle,
                             ),
                           ),
                         ),
@@ -1322,7 +1303,7 @@ class _RevealInFolderButtonState extends State<_RevealInFolderButton> {
                     horizontal: 10,
                     vertical: 5,
                   ),
-                  decoration: _plateOverlayDecoration(
+                  decoration: plateOverlayDecoration(
                     borderColor: highlighted
                         ? ViewerPalette.accent
                         : ViewerPalette.borderSoft,
@@ -1366,22 +1347,10 @@ class _PlateZoomCue extends StatelessWidget {
     return Container(
       key: const ValueKey('plateZoomCue'),
       padding: const EdgeInsets.all(6),
-      decoration: _plateOverlayDecoration(),
+      decoration: plateOverlayDecoration(),
       child: const Icon(Icons.zoom_in, size: 18, color: _kTextPrimary),
     );
   }
-}
-
-/// The small white overlay a plate's chip, zoom cue and reveal action share.
-BoxDecoration _plateOverlayDecoration({
-  Color borderColor = ViewerPalette.borderSoft,
-  Color? color,
-}) {
-  return BoxDecoration(
-    color: color ?? ViewerPalette.roomSurface.withValues(alpha: 0.94),
-    borderRadius: BorderRadius.circular(ViewerPalette.radiusSm),
-    border: Border.all(color: borderColor),
-  );
 }
 
 /// Enter, numpad Enter and Space activate a custom button like a real one; a
@@ -1461,7 +1430,7 @@ class _DetailsRail extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Text('Details', style: _kPlateLabelStyle),
+            const Text('Details', style: kPlateLabelStyle),
             const Spacer(),
             if (catalog.isNotEmpty)
               SelectableText(
@@ -1641,7 +1610,7 @@ class _DetailField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label.toUpperCase(), style: _kPlateLabelStyle),
+        Text(label.toUpperCase(), style: kPlateLabelStyle),
         const SizedBox(height: 3),
         value,
       ],
