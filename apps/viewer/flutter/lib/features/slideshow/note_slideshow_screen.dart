@@ -43,6 +43,26 @@ const double _kPairTierMinWidth = 760;
 /// The details rail's fixed column width in the widest tier.
 const double _kDetailsRailWidth = 300;
 
+/// The slide card stops growing here, so wide windows open a gutter on either
+/// side instead of stretching the note across the whole room.
+const double _kMaxSlideCardWidth = 1040;
+
+/// The page's own side margin, kept when the card is not capped.
+const double _kSlideSideMargin = 12;
+
+/// The edge chevron's diameter and the air between it and the card edge.
+const double _kChevronSize = 46;
+const double _kChevronEdgeGap = 24;
+
+/// The narrowest gutter that can hold a chevron with a little air around it.
+/// Narrower pages keep the card but drop the chevrons: there is no room for
+/// them outside the note.
+const double _kMinChevronGutter = _kChevronEdgeGap + _kChevronSize + 8;
+
+/// A resting chevron reads as available without competing with the slide; the
+/// pointer brings it to full strength.
+const double _kChevronRestOpacity = 0.35;
+
 /// Padding inside the white slide card.
 const double _kSlidePadding = 20;
 
@@ -106,6 +126,17 @@ _SlideTier _tierFor(double width) {
   if (width >= _kPairTierMinWidth) return _SlideTier.strip;
   return _SlideTier.stack;
 }
+
+/// The white card's width inside a page [available] logical pixels wide.
+///
+/// The card keeps the page's own 12 px side margins until it reaches
+/// [_kMaxSlideCardWidth]; past that the leftover becomes the gutter the edge
+/// chevrons live in. The page area and each page call this, so the chevrons
+/// and the card can never disagree about where the card ends.
+double _slideCardWidth(double available) => math.max(
+  0,
+  math.min(available - _kSlideSideMargin * 2, _kMaxSlideCardWidth),
+);
 
 class NoteSlideshowResult {
   const NoteSlideshowResult({required this.noteId, this.tagName});
@@ -540,46 +571,81 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                             ),
                           ),
                           Expanded(
-                            child: Stack(
-                              children: [
-                                ScrollConfiguration(
-                                  // A mouse drag pages the slide; the note card
-                                  // opts back out below so it does not also
-                                  // drag-scroll.
-                                  behavior: const MouseDragScrollBehavior(),
-                                  child: Focus(
-                                    focusNode: _pageFocusNode,
-                                    canRequestFocus: false,
-                                    child: PageView.builder(
-                                      controller: _pageController,
-                                      itemCount: widget.notes.isEmpty
-                                          ? 0
-                                          : null,
-                                      onPageChanged: (i) {
-                                        setState(() => _virtualIndex = i);
-                                        _keepKeyboardAfterPageChange();
-                                      },
-                                      itemBuilder: (context, index) {
-                                        return _NoteSlide(
-                                          index: index,
-                                          note:
-                                              widget.notes[(index -
-                                                      _kVirtualPageOrigin) %
-                                                  widget.notes.length],
-                                          onTapImage: _openImageViewer,
-                                          onTagTap: (tagName) =>
-                                              _close(tagName: tagName),
-                                          revealFolder: widget.revealFolder,
-                                          onAttached: _registerSlide,
-                                          onDetached: _unregisterSlide,
-                                        );
-                                      },
+                            child: LayoutBuilder(
+                              builder: (context, page) {
+                                // The chevrons sit in the gutter the capped
+                                // card opens, so they never cover the plate or
+                                // take its taps. A page too narrow for that
+                                // gutter drops them entirely.
+                                final cardWidth = _slideCardWidth(
+                                  page.maxWidth,
+                                );
+                                final gutter = (page.maxWidth - cardWidth) / 2;
+                                final showChevrons =
+                                    gutter >= _kMinChevronGutter &&
+                                    widget.notes.length > 1;
+                                return Stack(
+                                  children: [
+                                    ScrollConfiguration(
+                                      // A mouse drag pages the slide; the note
+                                      // card opts back out below so it does not
+                                      // also drag-scroll.
+                                      behavior: const MouseDragScrollBehavior(),
+                                      child: Focus(
+                                        focusNode: _pageFocusNode,
+                                        canRequestFocus: false,
+                                        child: PageView.builder(
+                                          controller: _pageController,
+                                          itemCount: widget.notes.isEmpty
+                                              ? 0
+                                              : null,
+                                          onPageChanged: (i) {
+                                            setState(() => _virtualIndex = i);
+                                            _keepKeyboardAfterPageChange();
+                                          },
+                                          itemBuilder: (context, index) {
+                                            return _NoteSlide(
+                                              index: index,
+                                              note:
+                                                  widget.notes[(index -
+                                                          _kVirtualPageOrigin) %
+                                                      widget.notes.length],
+                                              onTapImage: _openImageViewer,
+                                              onTagTap: (tagName) =>
+                                                  _close(tagName: tagName),
+                                              revealFolder: widget.revealFolder,
+                                              onAttached: _registerSlide,
+                                              onDetached: _unregisterSlide,
+                                            );
+                                          },
+                                        ),
+                                      ),
                                     ),
-                                  ),
-                                ),
-                                _EdgeChevron(left: true, onTap: _goPrevious),
-                                _EdgeChevron(left: false, onTap: _goNext),
-                              ],
+                                    if (showChevrons) ...[
+                                      _EdgeChevron(
+                                        key: const ValueKey(
+                                          'slideChevronPrevious',
+                                        ),
+                                        left: true,
+                                        distanceFromEdge:
+                                            gutter -
+                                            _kChevronEdgeGap -
+                                            _kChevronSize,
+                                        onTap: _goPrevious,
+                                      ),
+                                      _EdgeChevron(
+                                        key: const ValueKey('slideChevronNext'),
+                                        left: false,
+                                        distanceFromEdge:
+                                            gutter -
+                                            _kChevronEdgeGap -
+                                            _kChevronSize,
+                                        onTap: _goNext,
+                                      ),
+                                    ],
+                                  ],
+                                );
+                              },
                             ),
                           ),
                         ],
@@ -827,66 +893,76 @@ class _NoteSlideState extends State<_NoteSlide> {
   @override
   Widget build(BuildContext context) {
     final tier = _tierFor(MediaQuery.sizeOf(context).width);
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 0),
-      child: Stack(
-        children: [
-          // Scrollable content clipped inside card background
-          Positioned.fill(
-            child: Container(
-              margin: const EdgeInsets.all(1),
-              decoration: BoxDecoration(
-                color: _kCardBg,
-                borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: Stack(
-                children: [
-                  Positioned.fill(child: _buildScrollBody(tier)),
-                  Positioned(
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    child: AnimatedOpacity(
-                      opacity: _atBottom ? 0.0 : 1.0,
-                      duration: const Duration(milliseconds: 250),
-                      child: IgnorePointer(
-                        child: Container(
-                          height: 104,
-                          decoration: BoxDecoration(
-                            gradient: LinearGradient(
-                              begin: Alignment.topCenter,
-                              end: Alignment.bottomCenter,
-                              colors: [
-                                _kCardBg.withValues(alpha: 0),
-                                _kCardBg.withValues(alpha: 0.82),
-                                _kCardBg,
-                                _kCardBg,
-                              ],
-                              stops: const [0.0, 0.45, 0.75, 1.0],
+    return LayoutBuilder(
+      builder: (context, page) {
+        // Centred at the capped width, so the margin the page leaves on either
+        // side matches the gutter the chevrons are placed in.
+        final side = (page.maxWidth - _slideCardWidth(page.maxWidth)) / 2;
+        return Padding(
+          padding: EdgeInsets.fromLTRB(side, 4, side, 0),
+          child: Stack(
+            children: [
+              // Scrollable content clipped inside card background
+              Positioned.fill(
+                child: Container(
+                  key: const ValueKey('slideCard'),
+                  margin: const EdgeInsets.all(1),
+                  decoration: BoxDecoration(
+                    color: _kCardBg,
+                    borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
+                  ),
+                  clipBehavior: Clip.antiAlias,
+                  child: Stack(
+                    children: [
+                      Positioned.fill(child: _buildScrollBody(tier)),
+                      Positioned(
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        child: AnimatedOpacity(
+                          opacity: _atBottom ? 0.0 : 1.0,
+                          duration: const Duration(milliseconds: 250),
+                          child: IgnorePointer(
+                            child: Container(
+                              height: 104,
+                              decoration: BoxDecoration(
+                                gradient: LinearGradient(
+                                  begin: Alignment.topCenter,
+                                  end: Alignment.bottomCenter,
+                                  colors: [
+                                    _kCardBg.withValues(alpha: 0),
+                                    _kCardBg.withValues(alpha: 0.82),
+                                    _kCardBg,
+                                    _kCardBg,
+                                  ],
+                                  stops: const [0.0, 0.45, 0.75, 1.0],
+                                ),
+                              ),
                             ),
                           ),
                         ),
                       ),
-                    ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-          ),
-          // Border always rendered on top
-          Positioned.fill(
-            child: IgnorePointer(
-              child: DecoratedBox(
-                decoration: BoxDecoration(
-                  borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
-                  border: Border.all(color: _kBorder),
                 ),
               ),
-            ),
+              // Border always rendered on top
+              Positioned.fill(
+                child: IgnorePointer(
+                  child: DecoratedBox(
+                    decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(
+                        ViewerPalette.radiusMd,
+                      ),
+                      border: Border.all(color: _kBorder),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
@@ -1613,12 +1689,26 @@ class _TagChipState extends State<_TagChip> {
   }
 }
 
-/// Hover-revealed previous/next affordance floating over the slide edges.
-/// Paint-only on touch devices (no hover): it stays invisible and inert.
+/// Previous/next affordance parked in the gutter beside the card.
+///
+/// It rests at [_kChevronRestOpacity] so the way through the sequence is
+/// legible before the pointer arrives, and takes the accent ring at full
+/// strength on hover. Sitting outside the card keeps it off the plate, so it
+/// never covers the note or swallows a plate tap. The slideshow only builds it
+/// when the page is wide enough to hold a gutter and the collection has more
+/// than one note.
 class _EdgeChevron extends StatefulWidget {
-  const _EdgeChevron({required this.left, required this.onTap});
+  const _EdgeChevron({
+    required this.left,
+    required this.distanceFromEdge,
+    required this.onTap,
+    super.key,
+  });
 
   final bool left;
+
+  /// How far the circle's outer edge sits from the page's left/right edge.
+  final double distanceFromEdge;
   final VoidCallback onTap;
 
   @override
@@ -1631,23 +1721,29 @@ class _EdgeChevronState extends State<_EdgeChevron> {
   @override
   Widget build(BuildContext context) {
     return Positioned(
-      left: widget.left ? 20 : null,
-      right: widget.left ? null : 20,
+      left: widget.left ? widget.distanceFromEdge : null,
+      right: widget.left ? null : widget.distanceFromEdge,
       top: 0,
       bottom: 0,
       child: Center(
-        child: MouseRegion(
-          onEnter: (_) => setState(() => _hovered = true),
-          onExit: (_) => setState(() => _hovered = false),
-          child: AnimatedOpacity(
-            opacity: _hovered ? 1.0 : 0.0,
-            duration: const Duration(milliseconds: 160),
-            curve: Curves.easeOut,
-            child: IgnorePointer(
-              ignoring: !_hovered,
+        child: Semantics(
+          button: true,
+          label: widget.left ? 'Previous note' : 'Next note',
+          child: MouseRegion(
+            cursor: SystemMouseCursors.click,
+            onEnter: (_) => setState(() => _hovered = true),
+            onExit: (_) => setState(() => _hovered = false),
+            child: AnimatedOpacity(
+              opacity: _hovered ? 1.0 : _kChevronRestOpacity,
+              duration: const Duration(milliseconds: 160),
+              curve: Curves.easeOut,
               child: GestureDetector(
                 onTap: widget.onTap,
-                child: DecoratedBox(
+                behavior: HitTestBehavior.opaque,
+                child: Container(
+                  width: _kChevronSize,
+                  height: _kChevronSize,
+                  alignment: Alignment.center,
                   decoration: BoxDecoration(
                     color: _hovered
                         ? ViewerPalette.accentSoft
@@ -1661,17 +1757,14 @@ class _EdgeChevronState extends State<_EdgeChevron> {
                           : ViewerPalette.roomBorderControl,
                     ),
                   ),
-                  child: Padding(
-                    padding: const EdgeInsets.all(10),
-                    child: Icon(
-                      widget.left
-                          ? Icons.chevron_left_rounded
-                          : Icons.chevron_right_rounded,
-                      color: _hovered
-                          ? ViewerPalette.roomAccent
-                          : ViewerPalette.roomText,
-                      size: 26,
-                    ),
+                  child: Icon(
+                    widget.left
+                        ? Icons.chevron_left_rounded
+                        : Icons.chevron_right_rounded,
+                    color: _hovered
+                        ? ViewerPalette.roomAccent
+                        : ViewerPalette.roomText,
+                    size: 26,
                   ),
                 ),
               ),
