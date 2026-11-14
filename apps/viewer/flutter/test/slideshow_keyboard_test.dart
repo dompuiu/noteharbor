@@ -82,6 +82,38 @@ void main() {
     expect(find.text('Image 1 of 2'), findsOneWidget);
   });
 
+  testWidgets('a note with no image takes no page and keeps its place', (
+    WidgetTester tester,
+  ) async {
+    final notes = [
+      NoteRecord.fromJson(slideNote(id: 1, denomination: 'A', withImages: true)),
+      NoteRecord.fromJson(
+        slideNote(id: 2, denomination: 'B', withImages: false),
+      ),
+      NoteRecord.fromJson(slideNote(id: 3, denomination: 'C', withImages: true)),
+    ];
+    await pumpSlideshow(tester, notes);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+
+    // Note 2 has no face to show, so the sequence holds only Notes 1 and 3.
+    expect(find.text('Image 1 of 4'), findsOneWidget);
+    expect(find.text('Note 1 of 2'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.pumpAndSettle();
+    expect(find.text('Image 4 of 4'), findsOneWidget);
+    expect(find.text('Note 2 of 2'), findsOneWidget);
+    expect(find.text('C - KB-3'), findsOneWidget);
+
+    // The dropped note never becomes the note the exit returns.
+    await tester.tap(find.text('Back to note'));
+    await tester.pumpAndSettle();
+    expect(find.text('Note 3 of 3'), findsOneWidget);
+    expect(find.text('C - KB-3'), findsOneWidget);
+  });
+
   testWidgets('space opens the image popover for the current slide', (
     WidgetTester tester,
   ) async {
@@ -190,7 +222,7 @@ void main() {
     expect(find.text('A - KB-1'), findsOneWidget);
   });
 
-  testWidgets('enter does nothing when the slide has no images', (
+  testWidgets('enter opens the empty popover when the collection has no images', (
     WidgetTester tester,
   ) async {
     final notes = [
@@ -201,9 +233,35 @@ void main() {
     await pumpSlideshow(tester, notes);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
-    await tester.pump();
+    await tester.pumpAndSettle();
+
+    // One empty state and the exit, never an empty pager.
+    expect(find.text('No image'), findsOneWidget);
+    expect(find.text('There are no images to show.'), findsOneWidget);
+    expect(find.byType(PageView), findsNothing);
+
+    await tester.tap(find.text('Back to note'));
+    await tester.pumpAndSettle();
     expect(find.text('Note 1 of 1'), findsOneWidget);
-    expect(find.text('Image 1 of 2'), findsNothing);
+  });
+
+  testWidgets('enter does nothing on a note with no image when others have one', (
+    WidgetTester tester,
+  ) async {
+    final notes = [
+      NoteRecord.fromJson(
+        slideNote(id: 1, denomination: 'A', withImages: false),
+      ),
+      NoteRecord.fromJson(slideNote(id: 2, denomination: 'B', withImages: true)),
+    ];
+    await pumpSlideshow(tester, notes);
+
+    // The popover pages the notes that do have images, so opening it here
+    // would show a different note than the one on screen.
+    await tester.sendKeyEvent(LogicalKeyboardKey.enter);
+    await tester.pumpAndSettle();
+    expect(find.text('Note 1 of 2'), findsOneWidget);
+    expect(find.text('Back to note'), findsNothing);
   });
 
   List<NoteRecord> manyNotes(int count) => [
