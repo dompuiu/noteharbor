@@ -142,6 +142,12 @@ abstract final class ViewerPalette {
     BoxShadow(blurRadius: 80, offset: Offset(0, 30), color: Color(0x5C000000)),
   ];
 
+  /// The Image popover's room panel: the `0 24px 48px` step of the room
+  /// shadow ladder.
+  static const List<BoxShadow> shadowPopover = [
+    BoxShadow(blurRadius: 48, offset: Offset(0, 24), color: Color(0x5C000000)),
+  ];
+
   // ── Shape scale ───────────────────────────────────────────────────
   static const double radiusXs = 4;
   static const double radiusSm = 8;

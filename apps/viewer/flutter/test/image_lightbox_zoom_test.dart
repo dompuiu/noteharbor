@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:io';
 import 'dart:math' as math;
 import 'dart:ui' as ui;
@@ -19,11 +20,13 @@ void main() {
     bool withImage = true,
     bool withBack = false,
     String? file,
+    String? backFile,
+    String denomination = 'Test',
   }) {
     return NoteRecord.fromJson(<String, dynamic>{
       'id': id,
       'displayOrder': id,
-      'denomination': 'Test',
+      'denomination': denomination,
       'issueDate': '',
       'catalogNumber': 'KB-$id',
       'gradingCompany': '',
@@ -46,7 +49,7 @@ void main() {
                 <String, dynamic>{
                   'type': 'back',
                   'variant': 'full',
-                  'filePath': file ?? imagePath,
+                  'filePath': backFile ?? file ?? imagePath,
                 },
             ]
           : <dynamic>[],
@@ -70,6 +73,19 @@ void main() {
         Future<ImageInfo>.value(ImageInfo(image: image!)),
       ),
     );
+  }
+
+  /// Holds [path]'s image load open so a test can fail it after the page has
+  /// subscribed, without waiting on real file I/O.
+  Completer<ImageInfo> holdImage(String path) {
+    final completer = Completer<ImageInfo>();
+    final provider = FileImage(File(path));
+    PaintingBinding.instance.imageCache.putIfAbsent(
+      provider,
+      () => OneFrameImageStreamCompleter(completer.future),
+    );
+    addTearDown(() => PaintingBinding.instance.imageCache.evict(provider));
+    return completer;
   }
 
   /// The popover's sequence over [notes], one page per face in [faces], in the
@@ -100,6 +116,7 @@ void main() {
     Size size = const Size(800, 600),
     ValueChanged<int?>? onResult,
     double textScale = 1,
+    bool disableAnimations = false,
   }) async {
     tester.view.physicalSize = size;
     tester.view.devicePixelRatio = 1.0;
@@ -111,12 +128,18 @@ void main() {
       MaterialApp(
         // The key remounts the tree when a test pumps another size, so each
         // sequence starts in the launcher instead of on the old route.
-        key: ValueKey<String>('$size-$initialIndex-$textScale'),
-        builder: textScale == 1
+        key: ValueKey<String>(
+          '$size-$initialIndex-$textScale-$disableAnimations',
+        ),
+        builder: textScale == 1 && !disableAnimations
             ? null
             : (context, child) => MediaQuery(
-                data: MediaQuery.of(context)
-                    .copyWith(textScaler: TextScaler.linear(textScale)),
+                data: MediaQuery.of(context).copyWith(
+                  textScaler: textScale == 1
+                      ? null
+                      : TextScaler.linear(textScale),
+                  disableAnimations: disableAnimations,
+                ),
                 child: child!,
               ),
         home: _LightboxLauncher(
@@ -242,7 +265,7 @@ void main() {
 
     // On phone the title owns the first line: the controls sit below it
     // instead of squeezing its width, and nothing overflows.
-    final title = find.text('Test - KB-1');
+    final title = find.text('TEST - KB-1');
     final counter = find.text('Note 1 of 2');
     expect(
       tester.getTopLeft(counter).dy,
@@ -629,7 +652,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Image 1 of 5'), findsOneWidget);
-    expect(find.text('Test - KB-1'), findsOneWidget);
+    expect(find.text('TEST - KB-1'), findsOneWidget);
   });
 
   testWidgets('end jumps to the last page', (tester) async {
@@ -640,7 +663,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Image 5 of 5'), findsOneWidget);
-    expect(find.text('Test - KB-5'), findsOneWidget);
+    expect(find.text('TEST - KB-5'), findsOneWidget);
   });
 
   testWidgets('end lands on the last page even when it renders no image', (
@@ -653,7 +676,7 @@ void main() {
     await tester.pumpAndSettle();
 
     expect(find.text('Image 2 of 2'), findsOneWidget);
-    expect(find.text('Test - KB-2'), findsOneWidget);
+    expect(find.text('TEST - KB-2'), findsOneWidget);
     expect(find.text('No image'), findsOneWidget);
   });
 
@@ -685,7 +708,29 @@ void main() {
 
     await tester.pumpAndSettle();
     expect(find.text('Image 3 of 3'), findsOneWidget);
-    expect(find.text('Test - KB-3'), findsOneWidget);
+    expect(find.text('TEST - KB-3'), findsOneWidget);
+  });
+
+  testWidgets('reduced motion swaps pages without sliding', (tester) async {
+    await pumpSequence(
+      tester,
+      faceItems([zoomNote(withBack: true)]),
+      disableAnimations: true,
+    );
+    expect(find.text('Image 1 of 2'), findsOneWidget);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    // A single frame: the reduced-motion step jumps instead of sliding, so the
+    // pill has already reached the next page.
+    await tester.pump();
+    expect(find.text('Image 2 of 2'), findsOneWidget);
+    await tester.pumpAndSettle();
+    expect(find.text('BACK'), findsOneWidget);
+
+    // Direct manipulation is not an animated step: a swipe still pages.
+    await tester.drag(find.byType(PageView), const Offset(600, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Image 1 of 2'), findsOneWidget);
   });
 
   testWidgets('an adjacent arrow step animates rather than jumping', (
@@ -714,12 +759,12 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.end);
     await tester.pumpAndSettle();
     expect(find.text('Image 3 of 3'), findsOneWidget);
-    expect(find.text('Test - KB-3'), findsOneWidget);
+    expect(find.text('TEST - KB-3'), findsOneWidget);
 
     await tester.sendKeyEvent(LogicalKeyboardKey.home);
     await tester.pumpAndSettle();
     expect(find.text('Image 1 of 3'), findsOneWidget);
-    expect(find.text('Test - KB-1'), findsOneWidget);
+    expect(find.text('TEST - KB-1'), findsOneWidget);
   });
 
   testWidgets('home on the first page changes nothing', (tester) async {
@@ -875,6 +920,97 @@ void main() {
     expect(find.text('Image 1 of 2'), findsOneWidget);
   });
 
+  testWidgets('the note keeps its zoom across its faces, never across notes', (
+    tester,
+  ) async {
+    final notes = [zoomNote(id: 1, withBack: true), zoomNote(id: 2)];
+    await pumpSequence(tester, faceItems(notes));
+    final fitLevel = _levelText(tester);
+    await _zoomInWithKeyboard(tester);
+
+    final zoomed = _maxZoom(tester);
+    final level = _levelText(tester);
+    expect(zoomed, greaterThan(1.0));
+
+    // The same note's other face continues at the scale the reader left its
+    // front at.
+    await tester.tap(find.text('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('Image 2 of 4'), findsOneWidget);
+    expect(_maxZoom(tester), closeTo(zoomed, 0.001));
+    expect(_levelText(tester), level);
+
+    // The inherited zoom keeps the sequence unswipeable, exactly as a gesture
+    // zoom does.
+    await tester.drag(find.byType(PageView), const Offset(-600, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Image 2 of 4'), findsOneWidget);
+
+    // Returning to the first face keeps the note's level too.
+    await tester.tap(find.text('Front'));
+    await tester.pumpAndSettle();
+    expect(find.text('Image 1 of 4'), findsOneWidget);
+    expect(_levelText(tester), level);
+
+    // The next note opens at fit: the zoom belongs to the note it was set on.
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.arrowRight);
+    await tester.pumpAndSettle();
+    expect(find.text('Image 3 of 4'), findsOneWidget);
+    expect(_maxZoom(tester), closeTo(1.0, 0.001));
+    expect(_levelText(tester), fitLevel);
+  });
+
+  testWidgets('a face that will not decode keeps the note\'s other level', (
+    tester,
+  ) async {
+    const missingBack = 'noteharbor-missing-back-face.png';
+    final held = holdImage(missingBack);
+    final note = zoomNote(withBack: true, backFile: missingBack);
+    await pumpSequence(tester, faceItems([note]));
+    await _zoomInWithKeyboard(tester);
+    final zoomed = _maxZoom(tester);
+
+    await tester.tap(find.text('Back'));
+    await tester.pumpAndSettle();
+    held.completeError(Exception('missing image'));
+    await tester.pumpAndSettle();
+
+    // A face with no pixels returns to fit, so the sequence stays swipeable
+    // and the inert zoom cluster agrees with the plate.
+    expect(
+      find.textContaining('missing from the current collection'),
+      findsOneWidget,
+    );
+    expect(_maxZoom(tester), closeTo(1.0, 0.001));
+
+    // The note's level survives the failed face.
+    await tester.tap(find.text('Front'));
+    await tester.pumpAndSettle();
+    expect(_maxZoom(tester), closeTo(zoomed, 0.001));
+  });
+
+  testWidgets('a long headline wraps in the bar instead of overflowing', (
+    tester,
+  ) async {
+    final note = zoomNote(
+      denomination: 'Ten thousand pesos commemorative series',
+    );
+    await pumpSequence(
+      tester,
+      imageItems([note]),
+      size: const Size(390, 844),
+      textScale: 2,
+    );
+
+    expect(tester.takeException(), isNull);
+    final headline = find.textContaining('TEN THOUSAND PESOS');
+    expect(headline, findsOneWidget);
+    // The bar grows with the wrapped headline rather than clipping it.
+    expect(tester.getSize(headline).height, greaterThan(19.2 * 2 * 1.3));
+  });
+
   testWidgets('a face the note does not carry is disabled', (tester) async {
     await pumpSequence(tester, imageItems([zoomNote(), zoomNote(id: 2)]));
 
@@ -997,7 +1133,7 @@ void main() {
 
       // The title keeps its width: the controls sit beneath it on a phone and
       // beside it on a desktop.
-      final titleRect = tester.getRect(find.text('Test - KB-1'));
+      final titleRect = tester.getRect(find.text('TEST - KB-1'));
       final counterRect = tester.getRect(find.text('Image 1 of 1'));
       if (size.width < 600) {
         expect(titleRect.bottom, lessThanOrEqualTo(counterRect.top));

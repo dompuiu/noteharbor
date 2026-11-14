@@ -5,6 +5,10 @@ import '../../app/viewer_palette.dart';
 /// Fixed height shared by the room's counter pill and exit control.
 const double kRoomControlHeight = 40;
 
+/// The room's one page-step duration, shared by the slideshow and the Image
+/// popover so a reduced-motion reader gets the same instant step in both.
+const Duration kRoomPageStepDuration = Duration(milliseconds: 220);
+
 /// The room's inset and border only appear once the window can hold them. Both
 /// presentation screens take this guard, so the slideshow and the Image popover
 /// wear the room's chrome on the same windows.
@@ -26,6 +30,19 @@ const TextStyle kPlateLabelStyle = TextStyle(
   fontSize: 10.88,
   fontWeight: FontWeight.w600,
   letterSpacing: 1.31,
+);
+
+/// DESIGN.md "Popover headline": 800, 1.2rem/1.3, -0.01em, uppercase.
+///
+/// The Image popover's note label, one step below the slideshow's 2.1rem
+/// denomination so the bar stays lighter than a screen heading.
+const TextStyle kPopoverHeadlineStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: ViewerPalette.roomText,
+  fontSize: 19.2,
+  fontWeight: FontWeight.w800,
+  letterSpacing: -0.192,
+  height: 1.3,
 );
 
 /// The room's counter: the slideshow's note position and the Image popover's

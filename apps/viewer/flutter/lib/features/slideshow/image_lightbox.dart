@@ -122,7 +122,6 @@ class _ImageLightboxState extends State<ImageLightbox> {
   late final PageController _controller;
   late int _virtualIndex;
   bool _pageScrollEnabled = true;
-  int _pageGeneration = 0;
 
   /// The image currently on screen, derived from the virtual page so paging
   /// past either end wraps without a seam.
@@ -157,10 +156,15 @@ class _ImageLightboxState extends State<ImageLightbox> {
   }
 
   /// Animates to the virtual page [page], used by a single-step arrow move.
+  /// A reader that asked for reduced motion gets the page change instantly.
   void _animateToPage(int page) {
+    if (MediaQuery.disableAnimationsOf(context)) {
+      _jumpToPage(page);
+      return;
+    }
     _controller.animateToPage(
       page,
-      duration: const Duration(milliseconds: 220),
+      duration: kRoomPageStepDuration,
       curve: Curves.easeOut,
     );
   }
@@ -178,15 +182,17 @@ class _ImageLightboxState extends State<ImageLightbox> {
   bool get _atLastPage =>
       widget.items.isEmpty || _currentIndex >= widget.items.length - 1;
 
-  /// Moves one image back. The step always animates, so the wrap from the first
-  /// image to the last glides across the seam exactly like a swipe does.
+  /// Moves one image back. The step animates, so the wrap from the first image
+  /// to the last glides across the seam exactly like a swipe does; a reader that
+  /// asked for reduced motion gets the change instantly.
   void _goPrevious() {
     if (widget.items.length < 2) return;
     _animateToPage(_virtualIndex - 1);
   }
 
-  /// Moves one image forward. The step always animates, so the wrap from the last
-  /// image to the first glides across the seam exactly like a swipe does.
+  /// Moves one image forward. The step animates, so the wrap from the last image
+  /// to the first glides across the seam exactly like a swipe does; a reader
+  /// that asked for reduced motion gets the change instantly.
   void _goNext() {
     if (widget.items.length < 2) return;
     _animateToPage(_virtualIndex + 1);
@@ -405,7 +411,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
             border: roomed
                 ? Border.all(color: ViewerPalette.roomBorderControl)
                 : null,
-            boxShadow: roomed ? ViewerPalette.shadowRoom : const [],
+            boxShadow: roomed ? ViewerPalette.shadowPopover : const [],
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(roomRadius),
@@ -488,7 +494,6 @@ class _ImageLightboxState extends State<ImageLightbox> {
                 itemCount: null,
                 onPageChanged: (value) => setState(() {
                   _virtualIndex = value;
-                  _pageGeneration += 1;
                   _pageScrollEnabled = true;
                 }),
                 itemBuilder: (context, index) {
@@ -511,12 +516,13 @@ class _ImageLightboxState extends State<ImageLightbox> {
                           detail:
                               'This note has no ${imageItem.faceLabel.toLowerCase()} image.',
                         )
+                      // Keyless on purpose: a page resets on an identity change
+                      // in didUpdateWidget, so a note's zoom survives a header
+                      // rebuild instead of remounting at fit.
                       : _ZoomableImagePage(
-                          key: ValueKey(
-                            '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
-                          ),
                           image: imageItem.image!,
                           identity: _pageIdentity(imageItem),
+                          noteId: imageItem.note.id,
                           semanticLabel: pageLabel,
                           faceLabel: imageItem.faceLabel,
                           hugArtifact: hugArtifact,
@@ -844,15 +850,8 @@ class _ImagePopoverHeader extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
-              item.label,
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                color: ViewerPalette.roomText,
-                fontSize: 17,
-                fontWeight: FontWeight.w800,
-                letterSpacing: -0.2,
-              ),
-              overflow: TextOverflow.ellipsis,
+              item.label.toUpperCase(),
+              style: kPopoverHeadlineStyle,
             ),
             if (item.note.issueDate.trim().isNotEmpty) ...[
               const SizedBox(height: 2),
@@ -1081,8 +1080,9 @@ class _ImagePopoverHeader extends StatelessWidget {
   }
 }
 
-/// What the header needs to know about the page on screen: the live scale, the
-/// stops around it, and whether there are pixels to step through at all.
+/// What the header and a mounting page know about the page on screen: the live
+/// scale, the stops around it, whether there are pixels to step through at all,
+/// and the note that owns it.
 @immutable
 class _ImageZoomState {
   const _ImageZoomState({
@@ -1092,6 +1092,7 @@ class _ImageZoomState {
     this.scale = 1,
     this.realScale = 1,
     this.topStop = 1,
+    this.noteId,
     this.pageKey,
   });
 
@@ -1100,6 +1101,9 @@ class _ImageZoomState {
   final bool hasPage;
   final bool ready;
   final bool failed;
+
+  /// The note the page belongs to.
+  final int? noteId;
 
   /// The scan the state describes. A failed state must only be announced
   /// against the page that owns it, never the one the reader just paged to.
@@ -1298,6 +1302,15 @@ class _ImageZoomController {
   /// The live state for the header. Read-only so only the active page writes.
   ValueListenable<_ImageZoomState> get state => _state;
 
+  int? _rememberedNoteId;
+  double _rememberedScale = 1;
+
+  /// The magnification the reader last left [noteId] at, or 1 for any other
+  /// note. Only a page whose scan is ready records its scale, so a face that
+  /// fails to decode never erases the level the note was left at.
+  double rememberedScaleFor(int noteId) =>
+      _rememberedNoteId == noteId ? _rememberedScale : 1;
+
   _ZoomableImagePageState? _active;
   bool _publishScheduled = false;
   bool _disposed = false;
@@ -1357,6 +1370,10 @@ class _ImageZoomController {
       return;
     }
 
+    if (next.ready && next.noteId != null) {
+      _rememberedNoteId = next.noteId;
+      _rememberedScale = next.scale;
+    }
     _state.value = next;
   }
 
@@ -1389,13 +1406,13 @@ class _ZoomableImagePage extends StatefulWidget {
   const _ZoomableImagePage({
     required this.image,
     required this.identity,
+    required this.noteId,
     required this.semanticLabel,
     required this.faceLabel,
     required this.hugArtifact,
     required this.revealFolder,
     required this.controller,
     required this.onPageScrollEnabledChanged,
-    super.key,
   });
 
   final NoteImage image;
@@ -1403,6 +1420,10 @@ class _ZoomableImagePage extends StatefulWidget {
   /// The note plus the image, used to keep this page's failure from being
   /// announced against the page the reader paged to.
   final String identity;
+
+  /// The note this page belongs to. The lightbox carries a note's zoom across
+  /// its two faces.
+  final int noteId;
 
   /// The page's words: the note, face and counter, without the image's state.
   /// The page adds a failed note image from its own load, where that state
@@ -1464,8 +1485,39 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
   @override
   void initState() {
     super.initState();
+    _adoptRememberedScale();
     widget.controller.attach(this);
     _resolveImage();
+  }
+
+  /// Continues at the magnification the note's last page was left at, if this
+  /// page is that same note's other face. The pan resets: the two faces can
+  /// have different shapes, so the fit-relative magnification is what carries,
+  /// not the real-size percentage. A zoom inherited here keeps the sequence
+  /// unswipeable exactly as a gesture zoom does, so the page re-syncs paging
+  /// once it is laid out.
+  ///
+  /// The carry relies on a page mounting only when it becomes visible: the
+  /// PageView keeps no cache extent, and a pre-built neighbour would never
+  /// re-run this.
+  void _adoptRememberedScale() {
+    final remembered = widget.controller.rememberedScaleFor(widget.noteId);
+    if (remembered <= 1 + _kZoomEpsilon) {
+      return;
+    }
+
+    _scale = remembered;
+    _syncPageScrollAfterFrame();
+  }
+
+  /// Paging is parent state, so the page cannot re-sync it from its own
+  /// build/update; the frame boundary keeps the lightbox out of a build.
+  void _syncPageScrollAfterFrame() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) {
+        _syncPageScroll();
+      }
+    });
   }
 
   @override
@@ -1475,7 +1527,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
       oldWidget.controller.detach(this);
       widget.controller.attach(this);
     }
-    if (oldWidget.image.cacheKey != widget.image.cacheKey) {
+    if (oldWidget.identity != widget.identity) {
       _removeImageListener();
       _activePointers.clear();
       _intrinsicSize = null;
@@ -1488,8 +1540,9 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
       _pinchStartScale = null;
       _cancelDrag();
       _isPannable = false;
+      _adoptRememberedScale();
       _resolveImage();
-      _syncPageScroll();
+      _syncPageScrollAfterFrame();
       publishZoomState();
     }
   }
@@ -1498,7 +1551,6 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
   void dispose() {
     widget.controller.detach(this);
     _removeImageListener();
-    widget.onPageScrollEnabledChanged(true);
     super.dispose();
   }
 
@@ -1648,7 +1700,13 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
     final pageKey = widget.identity;
     if (!ready) {
       widget.controller.publish(
-        _ImageZoomState(hasPage: true, failed: _loadFailed, pageKey: pageKey),
+        _ImageZoomState(
+          hasPage: true,
+          failed: _loadFailed,
+          scale: _scale,
+          noteId: widget.noteId,
+          pageKey: pageKey,
+        ),
       );
       return;
     }
@@ -1662,6 +1720,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
         scale: _scale,
         realScale: realScale,
         topStop: stops.isEmpty ? 1 : stops.last,
+        noteId: widget.noteId,
         pageKey: pageKey,
       ),
     );
@@ -1697,7 +1756,10 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
         }
 
         setState(() => _loadFailed = true);
-        publishZoomState();
+        // A face that will not decode has no pixels to pan: return it to fit
+        // so the sequence stays swipeable and the inert zoom cluster agrees
+        // with the plate.
+        _resetZoom();
       },
     );
     stream.addListener(_imageStreamListener!);
