@@ -486,7 +486,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
                                             ? content
                                             : Container(
                                                 key: const ValueKey('imageMat'),
-                                                decoration: _matDecoration(),
+                                                decoration: _kMatDecoration,
                                                 clipBehavior: Clip.antiAlias,
                                                 child: Stack(
                                                   children: [
@@ -547,13 +547,11 @@ class _ImageLightboxState extends State<ImageLightbox> {
 
 /// The white ground a note image sits on: the room's mat and the portrait
 /// plate share the same surface, hairline and radius.
-BoxDecoration _matDecoration() {
-  return BoxDecoration(
-    color: ViewerPalette.roomSurface,
-    borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
-    border: Border.all(color: ViewerPalette.roomBorder),
-  );
-}
+final BoxDecoration _kMatDecoration = BoxDecoration(
+  color: ViewerPalette.roomSurface,
+  borderRadius: BorderRadius.circular(ViewerPalette.radiusMd),
+  border: Border.all(color: ViewerPalette.roomBorder),
+);
 
 /// The face on the mat, exactly as the slideshow's plate chip does, so the
 /// image never loses its name. It is paint only: the page label already names
@@ -1851,7 +1849,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
               key: const ValueKey('imagePlate'),
               width: plate.width,
               height: plate.height,
-              decoration: _matDecoration(),
+              decoration: _kMatDecoration,
             ),
           ),
           content,

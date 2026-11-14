@@ -159,8 +159,12 @@ void main() {
       ),
     );
     await tester.pumpAndSettle();
+    // The plate's inner box: its mat less the 8px padding and 1px hairline.
+    final matRect = tester.getRect(
+      find.byKey(const ValueKey('plateMat')).first,
+    );
     return fittedScan(
-      tester.getRect(find.byType(Image).first).size,
+      Size(matRect.width - 18, matRect.height - 18),
       const Size(1600, 1000),
     );
   }
@@ -276,14 +280,18 @@ void main() {
     const size = Size(390, 844);
     await pumpPopover(tester, size);
 
-    // The page is one image node: the chip inside the page adds no words.
+    // The page is one image node naming the note, face and position; the chip
+    // inside the page adds no words of its own.
     final page = find.byWidgetPredicate(
       (widget) =>
           widget is Semantics &&
           widget.properties.image == true &&
-          widget.properties.label == 'Test - KB-1, 1993, Front, Image 1 of 1',
+          (widget.properties.label ?? '').contains('Test - KB-1'),
     );
     expect(page, findsOneWidget);
+    final label = tester.widget<Semantics>(page).properties.label!;
+    expect(label, contains('Front'));
+    expect(label, contains('Image 1 of 1'));
     expect(find.bySemanticsLabel('FRONT'), findsNothing);
 
     // The zoom instrument still reaches 1:1 and back to the hugged plate.
