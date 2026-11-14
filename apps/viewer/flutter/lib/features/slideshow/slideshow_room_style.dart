@@ -5,6 +5,17 @@ import '../../app/viewer_palette.dart';
 /// Fixed height shared by the room's counter pill and exit control.
 const double kRoomControlHeight = 40;
 
+/// The room's inset and border only appear once the window can hold them. Both
+/// presentation screens take this guard, so the slideshow and the Image popover
+/// wear the room's chrome on the same windows.
+const double kRoomMinWidth = 760;
+const double kRoomMinHeight = 560;
+const double kRoomInset = 16;
+
+/// Whether a window this size wears the room: its inset, border and radius.
+bool roomedFor(Size size) =>
+    size.width >= kRoomMinWidth && size.height >= kRoomMinHeight;
+
 /// DESIGN.md "Presentation room label": 600, 0.68rem, 0.12em.
 ///
 /// The room's one label voice: the plate chips, the slide eyebrow and the
