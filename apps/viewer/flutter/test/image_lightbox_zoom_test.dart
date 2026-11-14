@@ -12,8 +12,14 @@ import 'package:note_harbor_viewer/models/note_record.dart';
 
 void main() {
   const imagePath = 'noteharbor-zoom-test.png';
+  const smallImagePath = 'noteharbor-small-zoom-test.png';
 
-  NoteRecord zoomNote({int id = 1, bool withImage = true}) {
+  NoteRecord zoomNote({
+    int id = 1,
+    bool withImage = true,
+    bool withBack = false,
+    String? file,
+  }) {
     return NoteRecord.fromJson(<String, dynamic>{
       'id': id,
       'displayOrder': id,
@@ -34,20 +40,32 @@ void main() {
               <String, dynamic>{
                 'type': 'front',
                 'variant': 'full',
-                'filePath': imagePath,
+                'filePath': file ?? imagePath,
               },
+              if (withBack)
+                <String, dynamic>{
+                  'type': 'back',
+                  'variant': 'full',
+                  'filePath': file ?? imagePath,
+                },
             ]
           : <dynamic>[],
       'scrapedData': null,
     });
   }
 
-  /// Seeds the image cache with a large in-memory image so the popover sees a
-  /// natural size much larger than the test viewport, without touching disk.
-  Future<void> seedLargeImage(WidgetTester tester) async {
-    final image = await tester.runAsync(() => _solidImage(1600, 1000));
+  /// Seeds the image cache with an in-memory image so the popover can measure a
+  /// scan without touching disk. A large one is shrunk by fit; a small one is
+  /// enlarged by it.
+  Future<void> seedImage(
+    WidgetTester tester,
+    String path,
+    int width,
+    int height,
+  ) async {
+    final image = await tester.runAsync(() => _solidImage(width, height));
     PaintingBinding.instance.imageCache.putIfAbsent(
-      FileImage(File(imagePath)),
+      FileImage(File(path)),
       () => OneFrameImageStreamCompleter(
         Future<ImageInfo>.value(ImageInfo(image: image!)),
       ),
@@ -59,18 +77,17 @@ void main() {
   List<ImageSequenceItem> imageItems(
     List<NoteRecord> notes, {
     List<String> faces = const ['front'],
-  }) =>
-      [
-        for (var index = 0; index < notes.length; index++)
-          for (final face in faces)
-            ImageSequenceItem(
-              note: notes[index],
-              image: notes[index].fullFor(face),
-              face: face,
-              notePosition: index + 1,
-              noteTotal: notes.length,
-            ),
-      ];
+  }) => [
+    for (var index = 0; index < notes.length; index++)
+      for (final face in faces)
+        ImageSequenceItem(
+          note: notes[index],
+          image: notes[index].fullFor(face),
+          face: face,
+          notePosition: index + 1,
+          noteTotal: notes.length,
+        ),
+  ];
 
   /// Both faces of every note, in the order the Note slideshow opens them.
   List<ImageSequenceItem> faceItems(List<NoteRecord> notes) =>
@@ -88,16 +105,18 @@ void main() {
     tester.view.devicePixelRatio = 1.0;
     addTearDown(tester.view.reset);
 
-    await seedLargeImage(tester);
+    await seedImage(tester, imagePath, 1600, 1000);
 
     await tester.pumpWidget(
       MaterialApp(
+        // The key remounts the tree when a test pumps another size, so each
+        // sequence starts in the launcher instead of on the old route.
+        key: ValueKey<String>('$size-$initialIndex-$textScale'),
         builder: textScale == 1
             ? null
             : (context, child) => MediaQuery(
-                data: MediaQuery.of(
-                  context,
-                ).copyWith(textScaler: TextScaler.linear(textScale)),
+                data: MediaQuery.of(context)
+                    .copyWith(textScaler: TextScaler.linear(textScale)),
                 child: child!,
               ),
         home: _LightboxLauncher(
@@ -114,10 +133,8 @@ void main() {
   Future<void> pumpPopover(WidgetTester tester) =>
       pumpSequence(tester, imageItems([zoomNote()]));
 
-  Future<void> pumpMultiItemPopover(WidgetTester tester) => pumpSequence(
-        tester,
-        imageItems([zoomNote(id: 1), zoomNote(id: 2)]),
-      );
+  Future<void> pumpMultiItemPopover(WidgetTester tester) =>
+      pumpSequence(tester, imageItems([zoomNote(id: 1), zoomNote(id: 2)]));
 
   /// Opens the popover on a sequence of [count] imaged pages.
   Future<void> pumpManyItemPopover(
@@ -128,11 +145,7 @@ void main() {
     final notes = <NoteRecord>[
       for (var id = 1; id <= count; id++) zoomNote(id: id),
     ];
-    await pumpSequence(
-      tester,
-      imageItems(notes),
-      initialIndex: initialIndex,
-    );
+    await pumpSequence(tester, imageItems(notes), initialIndex: initialIndex);
   }
 
   /// Opens the popover on a two-page sequence whose final page renders no
@@ -220,11 +233,7 @@ void main() {
     tester,
   ) async {
     final notes = [zoomNote(id: 1), zoomNote(id: 2)];
-    await pumpSequence(
-      tester,
-      faceItems(notes),
-      size: const Size(390, 844),
-    );
+    await pumpSequence(tester, faceItems(notes), size: const Size(390, 844));
 
     expect(find.text('FRONT'), findsOneWidget);
     expect(find.text('Image 1 of 4'), findsOneWidget);
@@ -255,12 +264,18 @@ void main() {
 
     expect(find.text('Image 1 of 4'), findsOneWidget);
     expect(find.text('Note 1 of 2'), findsOneWidget);
+    // The dense instrument clamps its own text scale, so it still renders its
+    // whole set of stops instead of overflowing.
+    for (final label in const ['Fit', '1:1', '\u2212', '+']) {
+      expect(find.text(label), findsOneWidget, reason: '$label at 2x text');
+    }
     expect(tester.takeException(), isNull);
   });
 
   testWidgets('mouse wheel zooms in, and back out', (tester) async {
     await pumpPopover(tester);
     expect(_maxZoom(tester), closeTo(1.0, 0.001));
+    final fitLevel = _levelText(tester);
 
     final pointer = TestPointer(1, PointerDeviceKind.mouse);
     pointer.hover(tester.getCenter(find.byType(Image).first));
@@ -269,10 +284,12 @@ void main() {
 
     final zoomedIn = _maxZoom(tester);
     expect(zoomedIn, greaterThan(1.0));
+    expect(_percentOf(_levelText(tester)), greaterThan(_percentOf(fitLevel)));
 
     await tester.sendEventToBinding(pointer.scroll(const Offset(0, 120)));
     await tester.pump();
     expect(_maxZoom(tester), closeTo(1.0, 0.001));
+    expect(_levelText(tester), fitLevel);
   });
 
   testWidgets('plus and minus keys zoom in and out', (tester) async {
@@ -294,7 +311,8 @@ void main() {
   ) async {
     await pumpMultiItemPopover(tester);
     await _zoomInWithKeyboard(tester);
-    expect(_maxZoom(tester), greaterThan(1.0));
+    final zoomedIn = _maxZoom(tester);
+    expect(zoomedIn, greaterThan(1.0));
 
     final center = tester.getCenter(find.byType(PageView));
     final first = await tester.startGesture(
@@ -306,11 +324,12 @@ void main() {
       pointer: 2,
     );
 
-    // Draw the fingers together until the image is within the snap margin of
-    // fit but not all the way: without the snap this rests just above 1 and
-    // leaves the sequence unswipeable until a double tap.
-    await first.moveTo(center + const Offset(-95, 0));
-    await second.moveTo(center + const Offset(95, 0));
+    // Draw the fingers together until the image is close to fit but not all
+    // the way. The span is derived from the zoom the popover reached, so the
+    // arithmetic does not depend on the window's fitted size.
+    final halfSpan = 200 * (1.05 / zoomedIn);
+    await first.moveTo(center + Offset(-halfSpan, 0));
+    await second.moveTo(center + Offset(halfSpan, 0));
     await tester.pump();
 
     expect(_maxZoom(tester), closeTo(1.0, 0.001));
@@ -330,7 +349,8 @@ void main() {
   ) async {
     await pumpMultiItemPopover(tester);
     await _zoomInWithKeyboard(tester);
-    expect(_maxZoom(tester), greaterThan(1.0));
+    final zoomedIn = _maxZoom(tester);
+    expect(zoomedIn, greaterThan(1.0));
 
     final center = tester.getCenter(find.byType(PageView));
     final first = await tester.startGesture(
@@ -343,11 +363,11 @@ void main() {
     );
 
     // Draw the fingers together until the image is within 20% of fit but
-    // outside the old 10% margin (span 200 of 400 halves the natural-size
-    // zoom of ~2.2 down to ~1.1): without the widened snap this rests above
+    // outside the old 10% margin: without the widened snap this rests above
     // fit and leaves the sequence unswipeable until a double tap.
-    await first.moveTo(center + const Offset(-100, 0));
-    await second.moveTo(center + const Offset(100, 0));
+    final halfSpan = 200 * (1.15 / zoomedIn);
+    await first.moveTo(center + Offset(-halfSpan, 0));
+    await second.moveTo(center + Offset(halfSpan, 0));
     await tester.pump();
 
     expect(_maxZoom(tester), closeTo(1.0, 0.001));
@@ -473,7 +493,11 @@ void main() {
         LogicalKeyboardKey.keyJ,
       ]) {
         await _pressWithModifier(tester, modifier, key);
-        expect(find.text('Image 1 of 2'), findsOneWidget, reason: '$modifier + $key');
+        expect(
+          find.text('Image 1 of 2'),
+          findsOneWidget,
+          reason: '$modifier + $key',
+        );
       }
     }
 
@@ -489,7 +513,11 @@ void main() {
         (LogicalKeyboardKey.keyL, LogicalKeyboardKey.keyH),
       ]) {
         await _pressWithModifier(tester, modifier, next);
-        expect(find.text('Image 2 of 2'), findsOneWidget, reason: '$modifier + $next');
+        expect(
+          find.text('Image 2 of 2'),
+          findsOneWidget,
+          reason: '$modifier + $next',
+        );
 
         await _pressWithModifier(tester, modifier, previous);
         expect(
@@ -532,7 +560,11 @@ void main() {
     // In fit view even the keys that would page stay inert.
     for (final key in altKeys) {
       await _pressWithModifier(tester, LogicalKeyboardKey.altLeft, key);
-      expect(find.text('Image 1 of 2'), findsOneWidget, reason: 'fit, alt + $key');
+      expect(
+        find.text('Image 1 of 2'),
+        findsOneWidget,
+        reason: 'fit, alt + $key',
+      );
     }
 
     await _zoomInWithKeyboard(tester);
@@ -541,7 +573,11 @@ void main() {
     for (final key in altKeys) {
       await _pressWithModifier(tester, LogicalKeyboardKey.altLeft, key);
       expect(_imageTranslation(tester), before, reason: 'zoom, alt + $key');
-      expect(find.text('Image 1 of 2'), findsOneWidget, reason: 'zoom, alt + $key');
+      expect(
+        find.text('Image 1 of 2'),
+        findsOneWidget,
+        reason: 'zoom, alt + $key',
+      );
     }
   });
 
@@ -706,9 +742,7 @@ void main() {
     expect(find.text('Image 5 of 5'), findsOneWidget);
   });
 
-  testWidgets('home and end change nothing with a single page', (
-    tester,
-  ) async {
+  testWidgets('home and end change nothing with a single page', (tester) async {
     await pumpPopover(tester);
     expect(find.text('Image 1 of 1'), findsOneWidget);
 
@@ -737,6 +771,268 @@ void main() {
       expect(find.text('Image 3 of 5'), findsOneWidget);
     }
   });
+
+  testWidgets('the header shows the whole zoom instrument', (tester) async {
+    await pumpPopover(tester);
+
+    expect(find.text('Fit'), findsOneWidget);
+    expect(find.text('1:1'), findsOneWidget);
+    expect(find.text('\u2212'), findsOneWidget);
+    expect(find.text('+'), findsOneWidget);
+    expect(find.textContaining('%'), findsOneWidget);
+    expect(find.text('Back to note'), findsOneWidget);
+  });
+
+  testWidgets('the fit view disables Fit and Zoom out, not 1:1 or Zoom in', (
+    tester,
+  ) async {
+    await pumpPopover(tester);
+
+    expect(_headerButton(tester, 'Fit').onPressed, isNull);
+    expect(_headerButton(tester, '1:1').onPressed, isNotNull);
+    expect(_headerButton(tester, '\u2212').onPressed, isNull);
+    expect(_headerButton(tester, '+').onPressed, isNotNull);
+  });
+
+  testWidgets('1:1 lands on the real size and reads 100%', (tester) async {
+    await pumpPopover(tester);
+
+    await tester.tap(find.text('1:1'));
+    await tester.pumpAndSettle();
+
+    expect(_levelText(tester), '100%');
+    expect(_headerButton(tester, '1:1').onPressed, isNull);
+    expect(_headerButton(tester, 'Fit').onPressed, isNotNull);
+  });
+
+  testWidgets('the plus and minus buttons step the level and its readout', (
+    tester,
+  ) async {
+    await pumpPopover(tester);
+    final fitLevel = _levelText(tester);
+
+    await tester.tap(find.text('+'));
+    await tester.pumpAndSettle();
+    final steppedLevel = _levelText(tester);
+    expect(steppedLevel, isNot(fitLevel));
+    expect(_percentOf(steppedLevel), greaterThan(_percentOf(fitLevel)));
+    expect(_headerButton(tester, '\u2212').onPressed, isNotNull);
+
+    await tester.tap(find.text('\u2212'));
+    await tester.pumpAndSettle();
+
+    expect(_levelText(tester), fitLevel);
+    expect(_headerButton(tester, '\u2212').onPressed, isNull);
+  });
+
+  testWidgets('plus disables at the top stop', (tester) async {
+    await pumpPopover(tester);
+
+    var taps = 0;
+    while (_headerButton(tester, '+').onPressed != null) {
+      await tester.tap(find.text('+'));
+      await tester.pumpAndSettle();
+      taps += 1;
+      expect(taps, lessThan(20), reason: 'the ladder must end');
+    }
+
+    expect(_headerButton(tester, 'Fit').onPressed, isNotNull);
+  });
+
+  testWidgets('Fit steps back from 1:1 and re-enables paging', (tester) async {
+    await pumpManyItemPopover(tester, 2);
+
+    await tester.tap(find.text('1:1'));
+    await tester.pumpAndSettle();
+    expect(_levelText(tester), '100%');
+
+    // The zoomed plate holds the drag, so the sequence does not page.
+    await tester.drag(find.byType(PageView), const Offset(-600, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Image 1 of 2'), findsOneWidget);
+
+    await tester.tap(find.text('Fit'));
+    await tester.pumpAndSettle();
+    expect(_levelText(tester), isNot('100%'));
+
+    await tester.drag(find.byType(PageView), const Offset(-600, 0));
+    await tester.pumpAndSettle();
+    expect(find.text('Image 2 of 2'), findsOneWidget);
+  });
+
+  testWidgets('the side toggle jumps between the faces of the current note', (
+    tester,
+  ) async {
+    await pumpSequence(tester, faceItems([zoomNote(withBack: true)]));
+    expect(find.text('Image 1 of 2'), findsOneWidget);
+
+    await tester.tap(find.text('Back'));
+    await tester.pumpAndSettle();
+    expect(find.text('Image 2 of 2'), findsOneWidget);
+
+    await tester.tap(find.text('Front'));
+    await tester.pumpAndSettle();
+    expect(find.text('Image 1 of 2'), findsOneWidget);
+  });
+
+  testWidgets('a face the note does not carry is disabled', (tester) async {
+    await pumpSequence(tester, imageItems([zoomNote(), zoomNote(id: 2)]));
+
+    expect(_headerButton(tester, 'Back').onPressed, isNull);
+    expect(_headerButton(tester, 'Front').onPressed, isNotNull);
+  });
+
+  testWidgets('the zoom cluster is inert on a page with no image', (
+    tester,
+  ) async {
+    await pumpPopoverEndingWithoutImage(tester);
+
+    await tester.sendKeyEvent(LogicalKeyboardKey.end);
+    await tester.pumpAndSettle();
+
+    expect(find.text('No image'), findsOneWidget);
+    expectInstrumentInert(tester);
+    expect(find.text('\u2014'), findsOneWidget);
+  });
+
+  testWidgets('the zoom cluster is inert when the image fails to load', (
+    tester,
+  ) async {
+    await pumpSequence(
+      tester,
+      imageItems([zoomNote(file: 'noteharbor-missing-image.png')]),
+    );
+
+    // The file read is real I/O; let it fail outside the fake async zone.
+    await tester.runAsync(
+      () => Future<void>.delayed(const Duration(milliseconds: 20)),
+    );
+    await tester.pumpAndSettle();
+
+    expectInstrumentInert(tester);
+    expect(find.text('\u2014'), findsOneWidget);
+    expect(
+      find.textContaining('missing from the current collection'),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('a scan smaller than the plate reports its real level', (
+    tester,
+  ) async {
+    await seedImage(tester, smallImagePath, 200, 120);
+    await pumpSequence(tester, imageItems([zoomNote(file: smallImagePath)]));
+
+    // Fit already draws the scan larger than its real size, so the level must
+    // not claim 100%, and the 1:1 stop has nothing to return to.
+    expect(_percentOf(_levelText(tester)), greaterThan(100));
+    expect(_headerButton(tester, '1:1').onPressed, isNull);
+  });
+
+  testWidgets('the pressed fit stop and the current face are announced', (
+    tester,
+  ) async {
+    await pumpPopover(tester);
+
+    expect(
+      tester.getSemantics(find.text('Fit')),
+      isSemantics(isButton: true, isToggled: true),
+    );
+    expect(
+      tester.getSemantics(find.text('Front')),
+      isSemantics(isButton: true, isToggled: true),
+    );
+  });
+
+  testWidgets('the mat offers a zoom-in cursor', (tester) async {
+    await pumpPopover(tester);
+
+    expect(
+      find.byWidgetPredicate(
+        (widget) =>
+            widget is MouseRegion && widget.cursor == SystemMouseCursors.zoomIn,
+      ),
+      findsOneWidget,
+    );
+  });
+
+  testWidgets('the header never overflows at large text', (tester) async {
+    const sizes = [Size(1000, 800), Size(1200, 800), Size(1440, 900)];
+    for (final textScale in const [1.0, 2.0]) {
+      for (final size in sizes) {
+        await pumpSequence(
+          tester,
+          imageItems([zoomNote()]),
+          size: size,
+          textScale: textScale,
+        );
+
+        final reason = '$size at ${textScale}x';
+        expect(tester.takeException(), isNull, reason: reason);
+        for (final label in const [
+          'Fit',
+          '1:1',
+          'Front',
+          'Back',
+          'Back to note',
+        ]) {
+          expect(find.text(label), findsOneWidget, reason: '$reason: $label');
+        }
+      }
+    }
+  });
+
+  testWidgets('the header holds together on a phone and a desktop', (
+    tester,
+  ) async {
+    for (final size in const [Size(390, 844), Size(1440, 900)]) {
+      await pumpSequence(tester, imageItems([zoomNote()]), size: size);
+
+      expect(tester.takeException(), isNull, reason: '$size');
+      expect(find.text('Fit'), findsOneWidget, reason: '$size');
+      expect(find.text('1:1'), findsOneWidget, reason: '$size');
+      expect(find.text('Front'), findsOneWidget, reason: '$size');
+      expect(find.text('Back'), findsOneWidget, reason: '$size');
+      expect(find.text('Back to note'), findsOneWidget, reason: '$size');
+
+      // The title keeps its width: the controls sit beneath it on a phone and
+      // beside it on a desktop.
+      final titleRect = tester.getRect(find.text('Test - KB-1'));
+      final counterRect = tester.getRect(find.text('Image 1 of 1'));
+      if (size.width < 600) {
+        expect(titleRect.bottom, lessThanOrEqualTo(counterRect.top));
+      } else {
+        expect(counterRect.left, greaterThan(titleRect.right));
+      }
+    }
+  });
+}
+
+String _levelText(WidgetTester tester) {
+  final finder = find.textContaining('%');
+  expect(finder, findsOneWidget);
+  return tester.widget<Text>(finder).data!;
+}
+
+int _percentOf(String level) => int.parse(level.replaceAll('%', ''));
+
+/// Every stop of the zoom instrument refuses input.
+void expectInstrumentInert(WidgetTester tester) {
+  for (final label in const ['Fit', '1:1', '\u2212', '+']) {
+    expect(
+      _headerButton(tester, label).onPressed,
+      isNull,
+      reason: '$label stays inert',
+    );
+  }
+}
+
+TextButton _headerButton(WidgetTester tester, String label) {
+  return tester.widget<TextButton>(
+    find
+        .ancestor(of: find.text(label), matching: find.byType(TextButton))
+        .first,
+  );
 }
 
 Future<void> _zoomInWithKeyboard(WidgetTester tester) async {
@@ -807,8 +1103,7 @@ class _LightboxLauncher extends StatelessWidget {
   Future<void> _open(BuildContext context) async {
     final noteId = await Navigator.of(context).push<int>(
       MaterialPageRoute<int>(
-        builder: (_) =>
-            ImageLightbox(items: items, initialIndex: initialIndex),
+        builder: (_) => ImageLightbox(items: items, initialIndex: initialIndex),
       ),
     );
     onResult?.call(noteId);

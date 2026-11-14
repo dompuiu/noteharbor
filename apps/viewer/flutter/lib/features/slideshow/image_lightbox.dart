@@ -1,7 +1,9 @@
 import 'dart:math' as math;
 
+import 'package:flutter/foundation.dart';
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter/services.dart';
 
 import '../../app/viewer_palette.dart';
@@ -105,6 +107,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
 
   @override
   void dispose() {
+    _zoomController.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -163,114 +166,46 @@ class _ImageLightboxState extends State<ImageLightbox> {
     setState(() => _pageScrollEnabled = enabled);
   }
 
-  Widget _buildHeader(ImageSequenceItem item, {required bool compact}) {
-    final titleBlock = Align(
-      alignment: Alignment.centerLeft,
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            item.label,
-            style: const TextStyle(
-              fontFamily: 'Inter',
-              color: ViewerPalette.roomText,
-              fontSize: 17,
-              fontWeight: FontWeight.w800,
-              letterSpacing: -0.2,
-            ),
-            overflow: TextOverflow.ellipsis,
-          ),
-          if (item.note.issueDate.trim().isNotEmpty) ...[
-            const SizedBox(height: 2),
-            Text(
-              item.note.issueDate,
-              style: const TextStyle(
-                fontFamily: 'Inter',
-                color: ViewerPalette.roomMuted,
-                fontSize: 13,
-                fontWeight: FontWeight.w600,
-              ),
-              overflow: TextOverflow.ellipsis,
-            ),
-          ],
-        ],
-      ),
-    );
+  /// The current note's front and back pages, or -1 for a face it does not
+  /// carry. One pass, because the header asks for both on every build.
+  ({int front, int back}) get _currentNoteFaces {
+    final noteId = widget.items[_currentIndex].note.id;
+    var front = -1;
+    var back = -1;
+    for (var index = 0; index < widget.items.length; index++) {
+      final item = widget.items[index];
+      if (item.note.id != noteId || item.image == null) {
+        continue;
+      }
+      if (item.face == 'front' && front < 0) {
+        front = index;
+      } else if (item.face == 'back' && back < 0) {
+        back = index;
+      }
+    }
+    return (front: front, back: back);
+  }
 
-    final counterPill = Container(
-      constraints: const BoxConstraints(minHeight: kRoomControlHeight),
-      alignment: Alignment.center,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        color: ViewerPalette.roomSurface,
-        borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
-        border: Border.all(color: ViewerPalette.roomBorderControl),
-      ),
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Text(
-            'Image ${_currentIndex + 1} of ${widget.items.length}',
-            style: kRoomCounterStyle,
-          ),
-          if (item.noteTotal > 1) ...[
-            const SizedBox(height: 1),
-            Text(
-              'Note ${item.notePosition} of ${item.noteTotal}',
-              style: _kCounterNoteStyle,
-            ),
-          ],
-        ],
-      ),
-    );
+  /// Index of the current note's [face] page, or -1 when it has none.
+  int _faceIndex(String face) {
+    final faces = _currentNoteFaces;
+    return face == 'front' ? faces.front : faces.back;
+  }
 
-    final exitButton = ConstrainedBox(
-      constraints: const BoxConstraints(minHeight: kRoomControlHeight),
-      child: OutlinedButton(
-        onPressed: _closeWithCurrentNote,
-        child: const Text('Back to note'),
-      ),
-    );
+  /// Jumps to the current note's [face].
+  void _selectFace(String face) {
+    final target = _faceIndex(face);
+    if (target < 0 || target == _currentIndex) {
+      return;
+    }
 
-    return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
-      child: compact
-          ? Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                titleBlock,
-                const SizedBox(height: 8),
-                // The Wrap keeps the controls on one line when they fit and
-                // sends the exit below the counter when a large text size or a
-                // narrow phone leaves no room.
-                Align(
-                  alignment: Alignment.centerRight,
-                  child: Wrap(
-                    alignment: WrapAlignment.end,
-                    spacing: 10,
-                    runSpacing: 8,
-                    children: [counterPill, exitButton],
-                  ),
-                ),
-              ],
-            )
-          : Row(
-              crossAxisAlignment: CrossAxisAlignment.center,
-              children: [
-                Expanded(child: titleBlock),
-                const SizedBox(width: 12),
-                counterPill,
-                const SizedBox(width: 10),
-                exitButton,
-              ],
-            ),
-    );
+    _jumpToPage(_virtualIndex - _currentIndex + target);
   }
 
   @override
   Widget build(BuildContext context) {
     final item = widget.items[_currentIndex];
+    final faces = _currentNoteFaces;
     final compact = MediaQuery.sizeOf(context).shortestSide < 600;
     final roomInset = compact ? 0.0 : 16.0;
     final roomRadius = compact ? 0.0 : ViewerPalette.radiusMd;
@@ -281,7 +216,7 @@ class _ImageLightboxState extends State<ImageLightbox> {
         actions: <Type, Action<Intent>>{
           DismissIntent: CallbackAction<DismissIntent>(
             onInvoke: (intent) {
-              if (_zoomController.resetZoom()) {
+              if (_zoomController.fit()) {
                 return null;
               }
               _closeWithCurrentNote();
@@ -372,7 +307,16 @@ class _ImageLightboxState extends State<ImageLightbox> {
                       minimum: const EdgeInsets.only(bottom: 12),
                       child: Column(
                         children: [
-                          _buildHeader(item, compact: compact),
+                          _ImagePopoverHeader(
+                            item: item,
+                            counterPosition: _currentIndex + 1,
+                            counterTotal: widget.items.length,
+                            canShowFront: faces.front >= 0,
+                            canShowBack: faces.back >= 0,
+                            onSelectFace: _selectFace,
+                            zoomController: _zoomController,
+                            onBack: _closeWithCurrentNote,
+                          ),
                           Expanded(
                             child: ScrollConfiguration(
                               // A mouse drag pages the sequence at fit scale;
@@ -402,71 +346,77 @@ class _ImageLightboxState extends State<ImageLightbox> {
                                       12,
                                       0,
                                     ),
-                                    child: Container(
-                                      decoration: BoxDecoration(
-                                        color: ViewerPalette.roomSurface,
-                                        borderRadius: BorderRadius.circular(
-                                          ViewerPalette.radiusMd,
-                                        ),
-                                        border: Border.all(
-                                          color: ViewerPalette.roomBorder,
-                                        ),
-                                      ),
-                                      clipBehavior: Clip.antiAlias,
-                                      child: Stack(
-                                        children: [
-                                          Positioned.fill(
-                                            child: Padding(
-                                              padding: const EdgeInsets.all(
-                                                16,
-                                              ),
-                                              child: imageItem.image == null
-                                                  ? const Center(
-                                                      child: Text(
-                                                        'No image',
-                                                        style: TextStyle(
-                                                          fontFamily: 'Inter',
-                                                          color: ViewerPalette
-                                                              .roomMuted,
-                                                          fontSize: 16,
-                                                        ),
-                                                      ),
-                                                    )
-                                                  : _ZoomableImagePage(
-                                                      key: ValueKey(
-                                                        '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
-                                                      ),
-                                                      image: imageItem.image!,
-                                                      controller: _zoomController,
-                                                      onPageScrollEnabledChanged:
-                                                          _setPageScrollEnabled,
-                                                    ),
-                                            ),
+                                    child: MouseRegion(
+                                      cursor: imageItem.image == null
+                                          ? MouseCursor.defer
+                                          : SystemMouseCursors.zoomIn,
+                                      child: Container(
+                                        decoration: BoxDecoration(
+                                          color: ViewerPalette.roomSurface,
+                                          borderRadius: BorderRadius.circular(
+                                            ViewerPalette.radiusMd,
                                           ),
-                                          // The face sits on the mat exactly as
-                                          // the slideshow's plate chip does, so
-                                          // the image never loses its name.
-                                          Positioned(
-                                            left: 8,
-                                            top: 8,
-                                            child: IgnorePointer(
-                                              child: Container(
-                                                padding:
-                                                    const EdgeInsets.symmetric(
-                                                      horizontal: 7,
-                                                      vertical: 3,
-                                                    ),
-                                                decoration:
-                                                    plateOverlayDecoration(),
-                                                child: Text(
-                                                  imageItem.faceLabel
-                                                      .toUpperCase(),
-                                                  style: kPlateLabelStyle,
+                                          border: Border.all(
+                                            color: ViewerPalette.roomBorder,
+                                          ),
+                                        ),
+                                        clipBehavior: Clip.antiAlias,
+                                        child: Stack(
+                                          children: [
+                                            Positioned.fill(
+                                              child: Padding(
+                                                padding: const EdgeInsets.all(
+                                                  16,
+                                                ),
+                                                child: imageItem.image == null
+                                                    ? const Center(
+                                                        child: Text(
+                                                          'No image',
+                                                          style: TextStyle(
+                                                            fontFamily: 'Inter',
+                                                            color: ViewerPalette
+                                                                .roomMuted,
+                                                            fontSize: 16,
+                                                          ),
+                                                        ),
+                                                      )
+                                                    : _ZoomableImagePage(
+                                                        key: ValueKey(
+                                                          '${imageItem.image!.cacheKey}-$index-$_pageGeneration',
+                                                        ),
+                                                        image: imageItem.image!,
+                                                        controller:
+                                                            _zoomController,
+                                                        onPageScrollEnabledChanged:
+                                                            _setPageScrollEnabled,
+                                                      ),
+                                              ),
+                                            ),
+                                            // The face sits on the mat exactly as
+                                            // the slideshow's plate chip does, so
+                                            // the image never loses its name.
+                                            Positioned(
+                                              left: 8,
+                                              top: 8,
+                                              child: IgnorePointer(
+                                                child: Container(
+                                                  padding:
+                                                      const EdgeInsets.symmetric(
+                                                        horizontal: 7,
+                                                        vertical: 3,
+                                                      ),
+                                                  decoration:
+                                                      plateOverlayDecoration(),
+                                                  child: Text(
+                                                    imageItem.faceLabel
+                                                        .toUpperCase(),
+                                                    style: kPlateLabelStyle,
+                                                  ),
                                                 ),
                                               ),
                                             ),
-                                          ),
-                                        ],
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   );
@@ -486,6 +436,470 @@ class _ImageLightboxState extends State<ImageLightbox> {
       ),
     );
   }
+}
+
+/// The header's segmented controls sit inside a 40px pill with a 2px inset.
+const double _kSegmentHeight = kRoomControlHeight - 4;
+
+/// Dense chrome clamps the reader's text scale so the five-stop instrument
+/// still fits a phone; the title, counter and exit keep the full scale.
+const double _kSegmentTextScale = 1.4;
+
+/// Below this width the controls and a readable title cannot share one row, so
+/// the title keeps the full width and the controls wrap beneath it. The test
+/// grows with the reader's text scale, because the controls do too.
+const double _kHeaderStackWidth = 900;
+
+/// The title's share beside the controls on a wide window; the controls wrap
+/// rather than squeeze it past this.
+const double _kHeaderTitleMinWidth = 160;
+
+/// The ink and figures every header control shares.
+const TextStyle _kRoomControlStyle = TextStyle(
+  fontFamily: 'Inter',
+  fontWeight: FontWeight.w600,
+  fontSize: 13,
+  fontFeatures: [FontFeature.tabularFigures()],
+);
+
+/// The popover's top bar: the note title, then the counter, face toggle, zoom
+/// instrument and exit. On a narrow window the title keeps the full width and
+/// the controls wrap beneath it; a wide one puts them beside it, wrapping the
+/// controls into another run rather than shrinking the title to nothing.
+class _ImagePopoverHeader extends StatelessWidget {
+  const _ImagePopoverHeader({
+    required this.item,
+    required this.counterPosition,
+    required this.counterTotal,
+    required this.canShowFront,
+    required this.canShowBack,
+    required this.onSelectFace,
+    required this.zoomController,
+    required this.onBack,
+  });
+
+  final ImageSequenceItem item;
+  final int counterPosition;
+  final int counterTotal;
+  final bool canShowFront;
+  final bool canShowBack;
+  final ValueChanged<String> onSelectFace;
+  final _ImageZoomController zoomController;
+  final VoidCallback onBack;
+
+  @override
+  Widget build(BuildContext context) {
+    final controls = <Widget>[
+      _counterPill(),
+      _faceToggle(),
+      ValueListenableBuilder<_ImageZoomState>(
+        valueListenable: zoomController.state,
+        builder: (context, state, child) => _zoomInstrument(state),
+      ),
+      ConstrainedBox(
+        constraints: const BoxConstraints(minHeight: kRoomControlHeight),
+        child: OutlinedButton(
+          onPressed: onBack,
+          child: const Text('Back to note'),
+        ),
+      ),
+    ];
+    final title = _titleBlock();
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 8),
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          // A narrow window, or a large text scale on any window, cannot hold
+          // the title and all four controls on one row. The threshold grows
+          // with the text scale because the controls grow with it; past 2x the
+          // stack holds on every sensible width.
+          final textScale = MediaQuery.textScalerOf(context)
+              .scale(1)
+              .clamp(1.0, 2.0);
+          if (constraints.maxWidth < _kHeaderStackWidth * textScale) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                title,
+                const SizedBox(height: 8),
+                // The Wrap keeps the controls on one line when they fit and
+                // sends them below the title when a large text size or a
+                // narrow phone leaves no room.
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: Wrap(
+                    alignment: WrapAlignment.end,
+                    crossAxisAlignment: WrapCrossAlignment.center,
+                    spacing: 10,
+                    runSpacing: 8,
+                    children: controls,
+                  ),
+                ),
+              ],
+            );
+          }
+
+          return Row(
+            crossAxisAlignment: CrossAxisAlignment.center,
+            children: [
+              Expanded(child: title),
+              const SizedBox(width: 12),
+              // The controls take what they need up to a cap that keeps the
+              // title readable; past it they wrap into a second run instead of
+              // pushing the row past the window.
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: math.max(
+                    0,
+                    constraints.maxWidth - 12 - _kHeaderTitleMinWidth,
+                  ),
+                ),
+                child: Wrap(
+                  alignment: WrapAlignment.end,
+                  crossAxisAlignment: WrapCrossAlignment.center,
+                  spacing: 8,
+                  runSpacing: 8,
+                  children: controls,
+                ),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
+  Widget _titleBlock() {
+    return Align(
+      alignment: Alignment.centerLeft,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            item.label,
+            style: const TextStyle(
+              fontFamily: 'Inter',
+              color: ViewerPalette.roomText,
+              fontSize: 17,
+              fontWeight: FontWeight.w800,
+              letterSpacing: -0.2,
+            ),
+            overflow: TextOverflow.ellipsis,
+          ),
+          if (item.note.issueDate.trim().isNotEmpty) ...[
+            const SizedBox(height: 2),
+            Text(
+              item.note.issueDate,
+              style: const TextStyle(
+                fontFamily: 'Inter',
+                color: ViewerPalette.roomMuted,
+                fontSize: 13,
+                fontWeight: FontWeight.w600,
+              ),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _counterPill() {
+    return Container(
+      constraints: const BoxConstraints(minHeight: kRoomControlHeight),
+      alignment: Alignment.center,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: _pillDecoration(),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            'Image $counterPosition of $counterTotal',
+            style: kRoomCounterStyle,
+          ),
+          if (item.noteTotal > 1) ...[
+            const SizedBox(height: 1),
+            Text(
+              'Note ${item.notePosition} of ${item.noteTotal}',
+              style: _kCounterNoteStyle,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  /// A side toggle: pressing the other face jumps to it instead of walking
+  /// the sequence.
+  Widget _faceToggle() {
+    return _segmentPill([
+      _segment(
+        label: 'Front',
+        title: canShowFront
+            ? 'Show the front image'
+            : 'No front image for this note',
+        selected: item.face == 'front',
+        onPressed: canShowFront ? () => onSelectFace('front') : null,
+      ),
+      _segment(
+        label: 'Back',
+        title: canShowBack
+            ? 'Show the back image'
+            : 'No back image for this note',
+        selected: item.face == 'back',
+        onPressed: canShowBack ? () => onSelectFace('back') : null,
+      ),
+    ]);
+  }
+
+  /// The Editor's scale instrument: Fit | 1:1, then - level +.
+  Widget _zoomInstrument(_ImageZoomState state) {
+    final enabled = state.zoomable;
+    final atFit = enabled && state.atFit;
+    final atActualSize = enabled && state.atActualSize;
+    final levelPercent = state.levelPercent;
+    final levelColor = enabled
+        ? ViewerPalette.roomMuted
+        : ViewerPalette.controlDisabledText;
+
+    return Semantics(
+      container: true,
+      label: 'Image zoom',
+      explicitChildNodes: true,
+      child: _segmentPill([
+        _segment(
+          label: 'Fit',
+          title: 'Fit the image to the plate',
+          selected: atFit,
+          onPressed: state.canStepOut ? zoomController.fit : null,
+        ),
+        _segment(
+          label: '1:1',
+          title: state.actualSizeTitle,
+          selected: atActualSize,
+          onPressed: state.canShowActualSize
+              ? () => zoomController.zoomToActualSize()
+              : null,
+        ),
+        Container(
+          width: 1,
+          height: 18,
+          margin: const EdgeInsets.symmetric(horizontal: 3),
+          color: ViewerPalette.roomBorder,
+        ),
+        _segment(
+          label: 'Zoom out',
+          glyph: '\u2212',
+          title: 'Zoom out (-)',
+          selected: false,
+          toggle: false,
+          onPressed: state.canStepOut ? zoomController.zoomOut : null,
+        ),
+        Semantics(
+          container: true,
+          liveRegion: true,
+          excludeSemantics: true,
+          label: 'Zoom level',
+          value: levelPercent == null ? 'unknown' : '$levelPercent%',
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(minWidth: 42),
+            child: Text(
+              levelPercent == null ? '\u2014' : '$levelPercent%',
+              textAlign: TextAlign.center,
+              style: _kRoomControlStyle.copyWith(color: levelColor),
+            ),
+          ),
+        ),
+        _segment(
+          label: 'Zoom in',
+          glyph: '+',
+          title: 'Zoom in (+)',
+          selected: false,
+          toggle: false,
+          onPressed: state.canStepIn ? zoomController.zoomIn : null,
+        ),
+      ]),
+    );
+  }
+
+  /// One focusable segment. A [toggle] takes the pressed mark and the
+  /// toggled button semantics; a step passes a [glyph] and keeps the spoken
+  /// name in [label].
+  Widget _segment({
+    required String label,
+    required String title,
+    required bool selected,
+    required VoidCallback? onPressed,
+    bool toggle = true,
+    String? glyph,
+  }) {
+    final button = Tooltip(
+      message: title,
+      child: TextButton(
+        onPressed: onPressed,
+        style: _segmentStyle(selected: selected, enabled: onPressed != null),
+        child: Text(
+          glyph ?? label,
+          semanticsLabel: glyph == null ? null : label,
+        ),
+      ),
+    );
+
+    if (!toggle) {
+      return button;
+    }
+
+    return Semantics(
+      container: true,
+      button: true,
+      enabled: onPressed != null,
+      toggled: selected,
+      label: label,
+      tooltip: title,
+      onTap: onPressed,
+      excludeSemantics: true,
+      child: button,
+    );
+  }
+
+  BoxDecoration _pillDecoration() {
+    return BoxDecoration(
+      color: ViewerPalette.roomSurface,
+      borderRadius: BorderRadius.circular(ViewerPalette.radiusPill),
+      border: Border.all(color: ViewerPalette.roomBorderControl),
+    );
+  }
+
+  /// A 40px pill with a 2px inset holding one row of segments.
+  ///
+  /// The pill is dense chrome with five stops, so the reader's text scale is
+  /// clamped here: at 200% the instrument is wider than a phone and could only
+  /// wrap into an unreadable stack. The title, counter and exit keep the full
+  /// scale.
+  Widget _segmentPill(List<Widget> children) {
+    return Container(
+      height: kRoomControlHeight,
+      padding: const EdgeInsets.all(2),
+      decoration: _pillDecoration(),
+      child: MediaQuery.withClampedTextScaling(
+        maxScaleFactor: _kSegmentTextScale,
+        child: Row(mainAxisSize: MainAxisSize.min, children: children),
+      ),
+    );
+  }
+
+  /// A pressed stop keeps its accent mark even when it is also disabled, so
+  /// "you are here" and "nothing to do" read as one state.
+  ButtonStyle _segmentStyle({required bool selected, required bool enabled}) {
+    final Color color;
+    if (selected) {
+      color = ViewerPalette.roomAccent;
+    } else if (enabled) {
+      color = ViewerPalette.roomText;
+    } else {
+      color = ViewerPalette.controlDisabledText;
+    }
+    final background = selected
+        ? ViewerPalette.roomSelection
+        : Colors.transparent;
+
+    return TextButton.styleFrom(
+      minimumSize: const Size(0, _kSegmentHeight),
+      padding: const EdgeInsets.symmetric(horizontal: 10),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      foregroundColor: color,
+      backgroundColor: background,
+      disabledForegroundColor: color,
+      disabledBackgroundColor: background,
+      overlayColor: ViewerPalette.accentSoft,
+      shape: const StadiumBorder(),
+      textStyle: _kRoomControlStyle,
+    ).copyWith(side: const WidgetStatePropertyAll(BorderSide.none));
+  }
+}
+
+/// What the header needs to know about the page on screen: the live scale, the
+/// stops around it, and whether there are pixels to step through at all.
+@immutable
+class _ImageZoomState {
+  const _ImageZoomState({
+    this.hasPage = false,
+    this.ready = false,
+    this.failed = false,
+    this.scale = 1,
+    this.realScale = 1,
+    this.topStop = 1,
+  });
+
+  /// Whether any image page is mounted. A page with no image mounts none, so
+  /// this is what tells "no image here" apart from "the scan is still loading".
+  final bool hasPage;
+  final bool ready;
+  final bool failed;
+
+  /// The scale relative to the fit view: 1 is fit, [realScale] is 1:1.
+  final double scale;
+  final double realScale;
+
+  /// The ladder's highest stop above fit. Pinch can go past it up to the cap;
+  /// the stepper stops here.
+  final double topStop;
+
+  /// A page is mounted with a known size and no load failure.
+  bool get available => hasPage && ready && !failed;
+
+  bool get zoomable => available && topStop > 1 + _kZoomEpsilon;
+
+  bool get atFit => scale <= 1 + _kZoomEpsilon;
+
+  bool get atActualSize =>
+      scale > 1 + _kZoomEpsilon && (scale - realScale).abs() < _kZoomEpsilon;
+
+  /// The 1:1 stop is inert when the fit is already actual size, and pressed
+  /// once the reader is there; otherwise it lands on the scan's real size.
+  bool get canShowActualSize =>
+      zoomable && realScale > 1 + _kZoomEpsilon && !atActualSize;
+
+  /// Whether the reader can step down to fit or up one stop.
+  bool get canStepOut => zoomable && !atFit;
+
+  bool get canStepIn => zoomable && scale < topStop - _kZoomEpsilon;
+
+  /// The live level as a percentage of the scan's real size.
+  int? get levelPercent => available ? (scale / realScale * 100).round() : null;
+
+  String get actualSizeTitle {
+    if (!hasPage || failed) {
+      return 'Image unavailable';
+    }
+    if (!ready) {
+      return 'The image is still loading';
+    }
+    if (realScale <= 1 + _kZoomEpsilon) {
+      return 'The fit view already shows the image at its real size or larger';
+    }
+    if (atActualSize) {
+      return 'The image already shows one image pixel per screen pixel';
+    }
+    return 'Show the image at one image pixel per screen pixel';
+  }
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is _ImageZoomState &&
+          other.hasPage == hasPage &&
+          other.ready == ready &&
+          other.failed == failed &&
+          other.scale == scale &&
+          other.realScale == realScale &&
+          other.topStop == topStop;
+
+  @override
+  int get hashCode =>
+      Object.hash(hasPage, ready, failed, scale, realScale, topStop);
 }
 
 class _PreviousImageIntent extends Intent {
@@ -593,31 +1007,105 @@ Map<ShortcutActivator, Intent> _buildImageLightboxShortcuts() {
   return shortcuts;
 }
 
+/// How close two scales must be before they count as the same stop.
+const double _kZoomEpsilon = 1e-3;
+
 /// Routes zoom/pan intents from the lightbox (which owns keyboard focus) to the
-/// currently visible [_ZoomableImagePage].
+/// currently visible [_ZoomableImagePage], and publishes the live scale so the
+/// header can show it without guessing from a rebuild.
 class _ImageZoomController {
+  final ValueNotifier<_ImageZoomState> _state = ValueNotifier<_ImageZoomState>(
+    const _ImageZoomState(),
+  );
+
+  /// The live state for the header. Read-only so only the active page writes.
+  ValueListenable<_ImageZoomState> get state => _state;
+
   _ZoomableImagePageState? _active;
+  bool _publishScheduled = false;
+  bool _disposed = false;
 
   void attach(_ZoomableImagePageState page) {
     _active = page;
+    // A page mounts during the PageView's build, so its first state must wait
+    // for the frame; notifying a ValueListenableBuilder mid-build is an error.
+    requestPublish();
   }
 
   void detach(_ZoomableImagePageState page) {
-    if (identical(_active, page)) {
-      _active = null;
+    if (!identical(_active, page)) {
+      return;
     }
+
+    _active = null;
+    // Disposal also runs while the PageView rebuilds; defer the reset so the
+    // header is not marked dirty during that build.
+    requestPublish();
   }
+
+  /// Publishes the active page's current state after the frame. Pages attach,
+  /// detach and resize inside a build, and a paused frame may queue several
+  /// requests; one pull at the boundary always reads the latest state.
+  void requestPublish() {
+    if (_publishScheduled || _disposed) {
+      return;
+    }
+
+    _publishScheduled = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _publishScheduled = false;
+      if (_disposed) {
+        return;
+      }
+
+      final active = _active;
+      if (active == null) {
+        _state.value = const _ImageZoomState();
+      } else {
+        active.publishZoomState();
+      }
+    });
+  }
+
+  void publish(_ImageZoomState next) {
+    if (_disposed) {
+      return;
+    }
+
+    // A cached image answers its listener synchronously while the page mounts,
+    // so a publish that lands inside build waits for the frame boundary.
+    if (WidgetsBinding.instance.schedulerPhase ==
+        SchedulerPhase.persistentCallbacks) {
+      requestPublish();
+      return;
+    }
+
+    _state.value = next;
+  }
+
+  /// Whether [page] is the one the header is describing. A page that has been
+  /// paged away may still answer a late image or pinch event; its level must
+  /// not overwrite the visible page's.
+  bool isActive(_ZoomableImagePageState page) => identical(_active, page);
 
   void zoomIn() => _active?.zoomIn();
 
   void zoomOut() => _active?.zoomOut();
 
+  /// Returns the active page to the fit view, telling whether it moved.
+  bool fit() => _active?.fit() ?? false;
+
+  /// Lands the active page on the scan's real size.
+  void zoomToActualSize() => _active?.zoomToActualSize();
+
   /// Pans the active page. Returns whether the image is pannable; when it is
   /// not, the caller falls back to paging on the horizontal axis.
   bool pan(double dx, double dy) => _active?.pan(dx, dy) ?? false;
 
-  /// Resets the zoom if zoomed. Returns whether a reset was performed.
-  bool resetZoom() => _active?.resetZoom() ?? false;
+  void dispose() {
+    _disposed = true;
+    _state.dispose();
+  }
 }
 
 class _ZoomableImagePage extends StatefulWidget {
@@ -639,7 +1127,6 @@ class _ZoomableImagePage extends StatefulWidget {
 class _ZoomableImagePageState extends State<_ZoomableImagePage> {
   static const double _kMaxZoomCap = 12;
   static const double _kMinSpan = 1;
-  static const double _kZoomEpsilon = 1e-3;
   static const double _kPanOverflowFraction = 0.05;
 
   /// How close to the fit size (as a fraction of it) a narrowing pinch must
@@ -659,6 +1146,9 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
   Offset _offset = Offset.zero;
   Offset? _lastFocalPoint;
   double? _lastSpan;
+  // A scan can be missing from the collection; the header's zoom cluster says
+  // so by going inert rather than stepping through pixels that are not there.
+  bool _loadFailed = false;
   // The scale when the current pinch began, so a pinch that narrows the image
   // can be told apart from one that enlarges it.
   double? _pinchStartScale;
@@ -685,6 +1175,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
       _removeImageListener();
       _activePointers.clear();
       _intrinsicSize = null;
+      _loadFailed = false;
       _lastDoubleTapPosition = null;
       _scale = 1;
       _offset = Offset.zero;
@@ -695,6 +1186,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
       _isPannable = false;
       _resolveImage();
       _syncPageScroll();
+      publishZoomState();
     }
   }
 
@@ -712,6 +1204,34 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
 
   void zoomOut() => _changeZoom(-1);
 
+  /// Returns to the fit view, which also re-enables paging. Returns whether
+  /// the page moved.
+  bool fit() {
+    if (_scale <= 1 + _kZoomEpsilon) {
+      return false;
+    }
+
+    _resetZoom();
+    return true;
+  }
+
+  /// Lands on the scan's real size: one image pixel per screen pixel.
+  void zoomToActualSize({Offset? focalPoint}) {
+    if (_viewport.isEmpty) {
+      return;
+    }
+
+    final target = _realSizeScale(_viewport).clamp(1.0, _maxScale);
+    if (target <= 1 + _kZoomEpsilon) {
+      return;
+    }
+
+    _applyScale(
+      target,
+      focalPoint: focalPoint ?? _viewport.center(Offset.zero),
+    );
+  }
+
   /// Pans by [dx]/[dy] steps of 5% of the overflow. Returns whether the image
   /// is pannable; when it is not (i.e. in fit view) the caller falls back to
   /// paging.
@@ -721,10 +1241,14 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
     }
 
     final contentSize = _fittedContentSize(_viewport);
-    final overflowX =
-        math.max(0.0, contentSize.width * _scale - _viewport.width);
-    final overflowY =
-        math.max(0.0, contentSize.height * _scale - _viewport.height);
+    final overflowX = math.max(
+      0.0,
+      contentSize.width * _scale - _viewport.width,
+    );
+    final overflowY = math.max(
+      0.0,
+      contentSize.height * _scale - _viewport.height,
+    );
     final delta = Offset(
       dx * overflowX * _kPanOverflowFraction,
       dy * overflowY * _kPanOverflowFraction,
@@ -742,22 +1266,13 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
     return true;
   }
 
-  /// Resets the zoom if zoomed. Returns whether a reset was performed.
-  bool resetZoom() {
-    if (_scale <= 1 + _kZoomEpsilon) {
-      return false;
-    }
-
-    _resetZoom();
-    return true;
-  }
-
   void _resetZoom() {
     setState(() {
       _scale = 1;
       _offset = Offset.zero;
     });
     _syncPageScroll();
+    publishZoomState();
   }
 
   void _changeZoom(int direction, {Offset? focalPoint}) {
@@ -803,16 +1318,44 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
       _offset = nextOffset;
     });
     _syncPageScroll();
+    publishZoomState();
   }
 
-  double get _maxScale => math.max(
-        _viewport.isEmpty ? 1 : _realSizeScale(_viewport),
-        _kMaxZoomCap,
-      );
+  double get _maxScale =>
+      math.max(_viewport.isEmpty ? 1 : _realSizeScale(_viewport), _kMaxZoomCap);
 
   void _syncPageScroll() {
     final enabled = _activePointers.length < 2 && _scale <= 1 + _kZoomEpsilon;
     widget.onPageScrollEnabledChanged(enabled);
+  }
+
+  /// Publishes the live scale so the header's readout and stops follow the
+  /// image rather than a rebuild guess. Called after every scale change and
+  /// once the viewport or the image's own size is known.
+  void publishZoomState() {
+    if (!mounted || !widget.controller.isActive(this)) {
+      return;
+    }
+
+    final ready = !_viewport.isEmpty && _intrinsicSize != null && !_loadFailed;
+    if (!ready) {
+      widget.controller.publish(
+        _ImageZoomState(hasPage: true, failed: _loadFailed),
+      );
+      return;
+    }
+
+    final realScale = _realSizeScale(_viewport);
+    final stops = imageZoomStops(realSizeScale: realScale, maxScale: _maxScale);
+    widget.controller.publish(
+      _ImageZoomState(
+        hasPage: true,
+        ready: true,
+        scale: _scale,
+        realScale: realScale,
+        topStop: stops.isEmpty ? 1 : stops.last,
+      ),
+    );
   }
 
   void _cancelDrag() {
@@ -825,18 +1368,29 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
     final provider = createNoteImageProvider(widget.image);
     final stream = provider.resolve(const ImageConfiguration());
     _imageStream = stream;
-    _imageStreamListener = ImageStreamListener((imageInfo, _) {
-      if (!mounted) {
-        return;
-      }
+    _imageStreamListener = ImageStreamListener(
+      (imageInfo, _) {
+        if (!mounted) {
+          return;
+        }
 
-      setState(() {
-        _intrinsicSize = Size(
-          imageInfo.image.width.toDouble(),
-          imageInfo.image.height.toDouble(),
-        );
-      });
-    });
+        setState(() {
+          _intrinsicSize = Size(
+            imageInfo.image.width.toDouble(),
+            imageInfo.image.height.toDouble(),
+          );
+        });
+        publishZoomState();
+      },
+      onError: (error, stackTrace) {
+        if (!mounted) {
+          return;
+        }
+
+        setState(() => _loadFailed = true);
+        publishZoomState();
+      },
+    );
     stream.addListener(_imageStreamListener!);
   }
 
@@ -869,7 +1423,10 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
   }
 
   void _handlePointerMove(
-      PointerMoveEvent event, Size viewport, double maxScale) {
+    PointerMoveEvent event,
+    Size viewport,
+    double maxScale,
+  ) {
     if (!_activePointers.containsKey(event.pointer)) {
       return;
     }
@@ -914,7 +1471,8 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
     // [_kFitSnapFraction] of fit is drawn the rest of the way, so releasing it
     // leaves the image swipeable instead of a few pixels above fit.
     final startScale = _pinchStartScale;
-    final snapToFit = startScale != null &&
+    final snapToFit =
+        startScale != null &&
         _pinchSettlesToFit(scale: nextScale, startScale: startScale);
     if (snapToFit) {
       nextScale = 1;
@@ -945,6 +1503,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
     _lastFocalPoint = focalPoint;
     _lastSpan = math.max(span, _kMinSpan);
     _syncPageScroll();
+    publishZoomState();
   }
 
   void _handlePointerEnd(PointerEvent event) {
@@ -971,10 +1530,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
       return;
     }
 
-    setState(() {
-      _scale = 1;
-      _offset = Offset.zero;
-    });
+    _resetZoom();
   }
 
   /// Whether a pinch that started at [startScale] and has been drawn down to
@@ -984,8 +1540,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
   bool _pinchSettlesToFit({
     required double scale,
     required double startScale,
-  }) =>
-      scale < startScale && scale <= 1 + _kFitSnapFraction;
+  }) => scale < startScale && scale <= 1 + _kFitSnapFraction;
 
   void _handlePointerSignal(PointerSignalEvent event) {
     if (event is! PointerScrollEvent) {
@@ -1007,8 +1562,10 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
 
   Offset _currentFocalPoint() {
     final positions = _activePointers.values.toList(growable: false);
-    final sum =
-        positions.fold<Offset>(Offset.zero, (total, value) => total + value);
+    final sum = positions.fold<Offset>(
+      Offset.zero,
+      (total, value) => total + value,
+    );
     return sum / positions.length.toDouble();
   }
 
@@ -1049,12 +1606,12 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
       viewport.width / logicalSize.width,
       viewport.height / logicalSize.height,
     );
-    return Size(
-      logicalSize.width * fitScale,
-      logicalSize.height * fitScale,
-    );
+    return Size(logicalSize.width * fitScale, logicalSize.height * fitScale);
   }
 
+  /// The scale, relative to the fit view, at which the scan shows one image
+  /// pixel per screen pixel. Below 1 when fit has already enlarged a small
+  /// scan, so the readout stays truthful about the real size.
   double _realSizeScale(Size viewport) {
     final contentSize = _fittedContentSize(viewport);
     final logicalSize = _imageLogicalSize(context);
@@ -1064,7 +1621,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
 
     final widthScale = logicalSize.width / contentSize.width;
     final heightScale = logicalSize.height / contentSize.height;
-    return math.max(1.0, math.max(widthScale, heightScale));
+    return math.max(widthScale, heightScale);
   }
 
   Offset _offsetForScale({
@@ -1112,29 +1669,27 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
     );
   }
 
-  void _handleDoubleTap(Size viewport, double maxScale) {
+  void _handleDoubleTap(Size viewport) {
     final tapPosition = _lastDoubleTapPosition ?? viewport.center(Offset.zero);
-    final contentSize = _fittedContentSize(viewport);
     if (_scale > 1 + _kZoomEpsilon) {
       _resetZoom();
       return;
     }
 
-    final targetScale = _realSizeScale(viewport).clamp(1.0, maxScale);
-    final targetOffset = _offsetForScale(
-      focalPoint: tapPosition,
-      viewport: viewport,
-      contentSize: contentSize,
-      currentScale: 1,
-      nextScale: targetScale,
-      currentOffset: Offset.zero,
-    );
+    zoomToActualSize(focalPoint: tapPosition);
+  }
 
-    setState(() {
-      _scale = targetScale;
-      _offset = targetOffset;
-    });
-    _syncPageScroll();
+  /// The missing-file message, shown when the scan cannot be loaded either by
+  /// this page's own stream or by the [Image] widget underneath it.
+  Widget _missingImageMessage() {
+    return const Padding(
+      padding: EdgeInsets.all(32),
+      child: Text(
+        'This image file is missing from the current collection.',
+        style: TextStyle(color: ViewerPalette.roomMuted),
+        textAlign: TextAlign.center,
+      ),
+    );
   }
 
   @override
@@ -1142,10 +1697,20 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final viewport = constraints.biggest;
+        final viewportChanged = viewport != _viewport;
         _viewport = viewport;
+        if (viewportChanged) {
+          // The header's percentage follows the fitted size, but notifying it
+          // from build would rebuild a widget mid-layout, so wait a frame.
+          widget.controller.requestPublish();
+        }
         final contentSize = _fittedContentSize(viewport);
+        if (_loadFailed) {
+          return _missingImageMessage();
+        }
         final maxScale = math.max(_realSizeScale(viewport), _kMaxZoomCap);
-        _isPannable = _scale > 1 + _kZoomEpsilon &&
+        _isPannable =
+            _scale > 1 + _kZoomEpsilon &&
             (contentSize.width * _scale > viewport.width + 0.5 ||
                 contentSize.height * _scale > viewport.height + 0.5);
 
@@ -1161,7 +1726,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
             onDoubleTapDown: (details) {
               _lastDoubleTapPosition = details.localPosition;
             },
-            onDoubleTap: () => _handleDoubleTap(viewport, maxScale),
+            onDoubleTap: () => _handleDoubleTap(viewport),
             child: Center(
               child: Transform.translate(
                 offset: _offset,
@@ -1173,16 +1738,8 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
                     child: Image(
                       image: createNoteImageProvider(widget.image),
                       fit: BoxFit.contain,
-                      errorBuilder: (context, error, stackTrace) {
-                        return const Padding(
-                          padding: EdgeInsets.all(32),
-                          child: Text(
-                            'This image file is missing from the current collection.',
-                            style: TextStyle(color: ViewerPalette.roomMuted),
-                            textAlign: TextAlign.center,
-                          ),
-                        );
-                      },
+                      errorBuilder: (context, error, stackTrace) =>
+                          _missingImageMessage(),
                     ),
                   ),
                 ),
