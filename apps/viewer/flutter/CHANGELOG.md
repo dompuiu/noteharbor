@@ -4,6 +4,8 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ## [Unreleased]
 
+## [1.15.0] - 2026-11-14
+
 ### Added
 
 - Image popover: each page is one screen-reader label - the note, its date, the face and the counter's words - with image semantics and a `Double-click to zoom` hint that the page's own action performs.
