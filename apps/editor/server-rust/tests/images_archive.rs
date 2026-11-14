@@ -3,6 +3,7 @@ use axum::{
     body::Body,
     http::{Request, StatusCode},
 };
+use std::io::Write;
 use tower::ServiceExt;
 
 use editor_server_rust::{AppState, DbPool, create_app, db};
@@ -831,4 +832,501 @@ async fn delete_data_empties_the_workspace() {
         serde_json::from_slice::<serde_json::Value>(&bytes).expect("json"),
         serde_json::json!({ "collections": [] })
     );
+}
+
+// ---------------------------------------------------------------------------
+// Catalog specimens through the archive seam
+// ---------------------------------------------------------------------------
+
+struct CatalogFixture {
+    keep: i64,
+    showcase: i64,
+    kept_note: i64,
+    dropped_note: i64,
+    entry: i64,
+}
+
+/// Seeds two collections (`Keep`/`Drop`), one note in each, and a showcase
+/// holding a catalog entry under a category. Specimen links are seeded by the
+/// test so each one can choose its primary.
+async fn seed_catalog_fixture(pool: &DbPool) -> CatalogFixture {
+    let pool = pool.clone();
+    tokio::task::spawn_blocking(move || {
+        let conn = pool.get().expect("conn");
+        conn.execute(
+            "INSERT INTO collections (name, display_order) VALUES ('Keep', 1), ('Drop', 2)",
+            [],
+        )
+        .expect("collections");
+        let keep: i64 = conn
+            .query_row("SELECT id FROM collections WHERE name = 'Keep'", [], |row| row.get(0))
+            .expect("keep id");
+        let drop_id: i64 = conn
+            .query_row("SELECT id FROM collections WHERE name = 'Drop'", [], |row| row.get(0))
+            .expect("drop id");
+        conn.execute(
+            "INSERT INTO banknotes (collection_id, display_order, denomination, images)
+             VALUES (?1, 1, 'Kept Note', '[]'), (?2, 1, 'Dropped Note', '[]')",
+            [keep, drop_id],
+        )
+        .expect("notes");
+        let kept_note: i64 = conn
+            .query_row(
+                "SELECT id FROM banknotes WHERE denomination = 'Kept Note'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("kept note");
+        let dropped_note: i64 = conn
+            .query_row(
+                "SELECT id FROM banknotes WHERE denomination = 'Dropped Note'",
+                [],
+                |row| row.get(0),
+            )
+            .expect("dropped note");
+        conn.execute("INSERT INTO categories (name) VALUES ('Romania')", [])
+            .expect("category");
+        let category: i64 = conn.last_insert_rowid();
+        conn.execute("INSERT INTO showcases (name, display_order) VALUES ('Catalog Show', 1)", [])
+            .expect("showcase");
+        let showcase: i64 = conn
+            .query_row("SELECT id FROM showcases WHERE name = 'Catalog Show'", [], |row| {
+                row.get(0)
+            })
+            .expect("showcase id");
+        conn.execute(
+            "INSERT INTO showcase_nodes
+               (showcase_id, parent_node_id, node_type, category_id, name, position)
+             VALUES (?1, NULL, 'category', ?2, NULL, 1)",
+            [showcase, category],
+        )
+        .expect("category node");
+        let parent = conn.last_insert_rowid();
+        conn.execute(
+            "INSERT INTO showcase_nodes
+               (showcase_id, parent_node_id, node_type, name, position,
+                catalog_number, denomination, issue_date, source)
+             VALUES (?1, ?2, 'catalog_entry', NULL, 1, '22a', '10 Lei', '2020', 'BNR')",
+            [showcase, parent],
+        )
+        .expect("catalog entry");
+        let entry = conn.last_insert_rowid();
+        CatalogFixture { keep, showcase, kept_note, dropped_note, entry }
+    })
+    .await
+    .expect("join")
+}
+
+fn archive_db_file(zip_bytes: &[u8]) -> tempfile::NamedTempFile {
+    let mut archive =
+        zip::ZipArchive::new(std::io::Cursor::new(zip_bytes)).expect("valid zip");
+    let mut file = tempfile::NamedTempFile::new().expect("temp db");
+    {
+        let mut entry = archive.by_name("banknotes.db").expect("banknotes.db entry");
+        std::io::copy(&mut entry, file.as_file_mut()).expect("db copies");
+    }
+    file
+}
+
+fn archive_database(zip_bytes: &[u8]) -> (tempfile::NamedTempFile, rusqlite::Connection) {
+    let file = archive_db_file(zip_bytes);
+    let conn = rusqlite::Connection::open(file.path()).expect("exported db opens");
+    (file, conn)
+}
+
+fn zip_with_modified_db(zip_bytes: &[u8], modify: impl FnOnce(&rusqlite::Connection)) -> Vec<u8> {
+    let mut archive =
+        zip::ZipArchive::new(std::io::Cursor::new(zip_bytes)).expect("valid zip");
+    let db_file = archive_db_file(zip_bytes);
+    let mut rebuilt = std::io::Cursor::new(Vec::new());
+    {
+        let mut writer = zip::ZipWriter::new(&mut rebuilt);
+        let options = zip::write::SimpleFileOptions::default();
+        let conn = rusqlite::Connection::open(db_file.path()).expect("db opens");
+        modify(&conn);
+        let db_bytes = std::fs::read(db_file.path()).expect("db reads");
+        writer.start_file("banknotes.db", options).expect("db entry");
+        writer.write_all(&db_bytes).expect("db writes");
+        for index in 0..archive.len() {
+            let mut entry = archive.by_index(index).expect("entry");
+            if entry.name() == "banknotes.db" {
+                continue;
+            }
+            let name = entry.name().to_owned();
+            if entry.is_dir() {
+                writer.add_directory(name, options).expect("dir starts");
+                continue;
+            }
+            let mut bytes = Vec::new();
+            std::io::copy(&mut entry, &mut bytes).expect("entry copies");
+            writer.start_file(name, options).expect("entry starts");
+            writer.write_all(&bytes).expect("entry writes");
+        }
+        writer.finish().expect("zip finishes");
+    }
+    rebuilt.into_inner()
+}
+
+fn zip_without_table(zip_bytes: &[u8], table: &str) -> Vec<u8> {
+    zip_with_modified_db(zip_bytes, |conn| {
+        conn.execute(&format!("DROP TABLE {table}"), []).expect("table drops");
+    })
+}
+
+type Specimen = (i64, String, i64, i64);
+
+fn catalog_specimens(conn: &rusqlite::Connection) -> Vec<Specimen> {
+    let mut stmt = conn
+        .prepare(
+            "SELECT showcase_catalog_notes.node_id, banknotes.denomination,
+                    showcase_catalog_notes.position, showcase_catalog_notes.is_primary
+             FROM showcase_catalog_notes
+             INNER JOIN banknotes ON banknotes.id = showcase_catalog_notes.note_id
+             ORDER BY showcase_catalog_notes.position ASC, banknotes.denomination ASC",
+        )
+        .expect("stmt");
+    stmt.query_map([], |row| Ok((row.get(0)?, row.get(1)?, row.get(2)?, row.get(3)?)))
+        .expect("rows")
+        .collect::<Result<Vec<_>, _>>()
+        .expect("collect")
+}
+
+async fn export_zip(state: AppState, query: &str) -> (StatusCode, axum::http::HeaderMap, Vec<u8>) {
+    let request = Request::builder()
+        .uri(format!("/api/archive/export{query}"))
+        .body(Body::from(()))
+        .expect("request builds");
+    response_parts(send(create_app(state), request).await).await
+}
+
+async fn import_bytes(state: AppState, zip_bytes: &[u8], mode: &str) -> (StatusCode, Vec<u8>) {
+    let boundary = "catalogboundary";
+    let body = multipart_body(
+        boundary,
+        vec![("file", Some("noteharbor-archive.zip"), zip_bytes, "application/zip")],
+    );
+    let request = Request::builder()
+        .method("POST")
+        .uri(format!("/api/archive/import?mode={mode}"))
+        .header("content-type", format!("multipart/form-data; boundary={boundary}"))
+        .body(Body::from(body))
+        .expect("request builds");
+    let (status, _headers, bytes) = response_parts(send(create_app(state), request).await).await;
+    (status, bytes)
+}
+
+async fn seed_specimens(state: &AppState, rows: Vec<(i64, i64, i64, i64)>) {
+    let pool = state.pool.clone();
+    tokio::task::spawn_blocking(move || {
+        let conn = pool.get().expect("conn");
+        for (node_id, note_id, position, is_primary) in rows {
+            conn.execute(
+                "INSERT INTO showcase_catalog_notes (node_id, note_id, position, is_primary)
+                 VALUES (?1, ?2, ?3, ?4)",
+                rusqlite::params![node_id, note_id, position, is_primary],
+            )
+            .expect("specimen");
+        }
+    })
+    .await
+    .expect("join");
+}
+
+#[tokio::test]
+async fn import_round_trip_keeps_specimens_and_the_non_first_primary() {
+    let (_dir, state) = archive_state();
+    let fixture = seed_catalog_fixture(&state.pool).await;
+    seed_specimens(
+        &state,
+        vec![
+            (fixture.entry, fixture.kept_note, 1, 0),
+            (fixture.entry, fixture.dropped_note, 2, 1),
+        ],
+    )
+    .await;
+
+    let (status, headers, zip_bytes) = export_zip(state.clone(), "").await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(omitted_names(&headers), Vec::<String>::new());
+
+    // Merge without wiping so the imported notes get fresh ids, proving the
+    // join rows are remapped rather than copied verbatim.
+    let (status, bytes) = import_bytes(state.clone(), &zip_bytes, "merge").await;
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&bytes));
+
+    let pool = state.pool.clone();
+    let (catalog_number, entry_id, specimens, primaries): (String, i64, Vec<Specimen>, i64) =
+        tokio::task::spawn_blocking(move || {
+            let conn = pool.get().expect("conn");
+            let (catalog_number, entry_id): (String, i64) = conn
+                .query_row(
+                    "SELECT catalog_number, id FROM showcase_nodes
+                     WHERE node_type = 'catalog_entry'",
+                    [],
+                    |row| Ok((row.get(0)?, row.get(1)?)),
+                )
+                .expect("entry metadata");
+            let primaries: i64 = conn
+                .query_row(
+                    "SELECT COUNT(*) FROM showcase_catalog_notes WHERE is_primary = 1",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("primary count");
+            (catalog_number, entry_id, catalog_specimens(&conn), primaries)
+        })
+        .await
+        .expect("join");
+
+    assert_eq!(catalog_number, "22a");
+    assert_eq!(primaries, 1);
+    for specimen in &specimens {
+        assert_eq!(specimen.0, entry_id, "specimen must hang off the entry node");
+    }
+    let stripped: Vec<(String, i64, i64)> = specimens
+        .into_iter()
+        .map(|(_, denomination, position, primary)| (denomination, position, primary))
+        .collect();
+    assert_eq!(
+        stripped,
+        vec![("Kept Note".to_owned(), 1, 0), ("Dropped Note".to_owned(), 2, 1)]
+    );
+}
+
+#[tokio::test]
+async fn filtered_export_drops_an_unkept_specimen_without_omitting_the_showcase() {
+    let (_dir, state) = archive_state();
+    let fixture = seed_catalog_fixture(&state.pool).await;
+    seed_specimens(
+        &state,
+        vec![
+            (fixture.entry, fixture.kept_note, 1, 0),
+            (fixture.entry, fixture.dropped_note, 2, 1),
+        ],
+    )
+    .await;
+
+    let (status, headers, zip_bytes) =
+        export_zip(state, &format!("?collectionIds={}", fixture.keep)).await;
+    assert_eq!(status, StatusCode::OK);
+    assert_eq!(omitted_names(&headers), Vec::<String>::new());
+
+    let (_db, conn) = archive_database(&zip_bytes);
+    let showcases: i64 = conn
+        .query_row("SELECT COUNT(*) FROM showcases", [], |row| row.get(0))
+        .expect("showcases");
+    assert_eq!(showcases, 1);
+    let entry: i64 = conn
+        .query_row(
+            "SELECT id FROM showcase_nodes WHERE node_type = 'catalog_entry'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("entry");
+    assert_eq!(
+        catalog_specimens(&conn),
+        vec![(entry, "Kept Note".to_owned(), 1, 1)]
+    );
+}
+
+#[tokio::test]
+async fn selected_showcase_with_only_catalog_specimens_exports_without_the_collection() {
+    let (_dir, state) = archive_state();
+    let fixture = seed_catalog_fixture(&state.pool).await;
+    // The entry's only specimen lives in the collection left out of the export.
+    seed_specimens(&state, vec![(fixture.entry, fixture.dropped_note, 1, 1)]).await;
+
+    let (status, headers, zip_bytes) = export_zip(
+        state,
+        &format!(
+            "?collectionIds={}&showcaseIds={}",
+            fixture.keep, fixture.showcase
+        ),
+    )
+    .await;
+    assert_eq!(status, StatusCode::OK, "{:?}", headers);
+    assert_eq!(omitted_names(&headers), Vec::<String>::new());
+
+    let (_db, conn) = archive_database(&zip_bytes);
+    let showcases: i64 = conn
+        .query_row("SELECT COUNT(*) FROM showcases", [], |row| row.get(0))
+        .expect("showcases");
+    assert_eq!(showcases, 1);
+    let entry: i64 = conn
+        .query_row(
+            "SELECT COUNT(*) FROM showcase_nodes WHERE node_type = 'catalog_entry'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("entry");
+    assert_eq!(entry, 1);
+    assert!(catalog_specimens(&conn).is_empty());
+}
+
+#[tokio::test]
+async fn import_accepts_an_archive_without_the_specimen_table() {
+    let (_dir, state) = archive_state();
+    let fixture = seed_catalog_fixture(&state.pool).await;
+    seed_specimens(&state, vec![(fixture.entry, fixture.kept_note, 1, 1)]).await;
+
+    let (status, _headers, zip_bytes) = export_zip(state.clone(), "").await;
+    assert_eq!(status, StatusCode::OK);
+    let older_zip = zip_without_table(&zip_bytes, "showcase_catalog_notes");
+
+    let delete = Request::builder()
+        .method("DELETE")
+        .uri("/api/archive/data")
+        .body(Body::from(()))
+        .expect("request builds");
+    let (status, _, _) = response_parts(send(create_app(state.clone()), delete).await).await;
+    assert_eq!(status, StatusCode::OK);
+
+    let (status, bytes) = import_bytes(state.clone(), &older_zip, "replace").await;
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&bytes));
+
+    let pool = state.pool.clone();
+    let (showcases, catalog_number, specimens): (i64, String, i64) =
+        tokio::task::spawn_blocking(move || {
+            let conn = pool.get().expect("conn");
+            let showcases: i64 = conn
+                .query_row("SELECT COUNT(*) FROM showcases", [], |row| row.get(0))
+                .expect("showcases");
+            let catalog_number: String = conn
+                .query_row(
+                    "SELECT catalog_number FROM showcase_nodes WHERE node_type = 'catalog_entry'",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("entry metadata");
+            let specimens: i64 = conn
+                .query_row("SELECT COUNT(*) FROM showcase_catalog_notes", [], |row| row.get(0))
+                .expect("specimens");
+            (showcases, catalog_number, specimens)
+        })
+        .await
+        .expect("join");
+    assert_eq!(showcases, 1);
+    assert_eq!(catalog_number, "22a");
+    assert_eq!(specimens, 0);
+}
+
+async fn seed_seen_note(state: &AppState) -> i64 {
+    let pool = state.pool.clone();
+    tokio::task::spawn_blocking(move || {
+        let conn = pool.get().expect("conn");
+        conn.execute("INSERT INTO collections (name, display_order) VALUES ('Ownership', 1)", [])
+            .expect("collection");
+        let collection: i64 = conn
+            .query_row("SELECT id FROM collections WHERE name = 'Ownership'", [], |row| row.get(0))
+            .expect("collection id");
+        conn.execute(
+            "INSERT INTO banknotes (collection_id, display_order, denomination, images, owned)
+             VALUES (?1, 1, 'Seen Note', '[]', 0)",
+            [collection],
+        )
+        .expect("note");
+        conn.query_row("SELECT id FROM banknotes WHERE denomination = 'Seen Note'", [], |row| {
+            row.get(0)
+        })
+        .expect("note id")
+    })
+    .await
+    .expect("join")
+}
+
+async fn stored_owned(state: &AppState) -> i64 {
+    let pool = state.pool.clone();
+    tokio::task::spawn_blocking(move || {
+        let conn = pool.get().expect("conn");
+        conn.query_row(
+            "SELECT owned FROM banknotes WHERE denomination = 'Seen Note'",
+            [],
+            |row| row.get(0),
+        )
+        .expect("owned flag")
+    })
+    .await
+    .expect("join")
+}
+
+async fn wipe_live(state: &AppState) {
+    let delete = Request::builder()
+        .method("DELETE")
+        .uri("/api/archive/data")
+        .body(Body::from(()))
+        .expect("request builds");
+    let (status, _, _) = response_parts(send(create_app(state.clone()), delete).await).await;
+    assert_eq!(status, StatusCode::OK);
+}
+
+#[tokio::test]
+async fn import_round_trip_keeps_a_seen_note_seen() {
+    let (_dir, state) = archive_state();
+    seed_seen_note(&state).await;
+
+    let (status, _headers, zip_bytes) = export_zip(state.clone(), "").await;
+    assert_eq!(status, StatusCode::OK);
+    wipe_live(&state).await;
+
+    let (status, bytes) = import_bytes(state.clone(), &zip_bytes, "replace").await;
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&bytes));
+    assert_eq!(stored_owned(&state).await, 0);
+}
+
+#[tokio::test]
+async fn import_restores_notes_owned_when_the_archive_predates_the_column() {
+    let (_dir, state) = archive_state();
+    seed_seen_note(&state).await;
+
+    let (status, _headers, zip_bytes) = export_zip(state.clone(), "").await;
+    assert_eq!(status, StatusCode::OK);
+    let older_zip = zip_with_modified_db(&zip_bytes, |conn| {
+        conn.execute("ALTER TABLE banknotes DROP COLUMN owned", []).expect("column drops");
+    });
+    wipe_live(&state).await;
+
+    let (status, bytes) = import_bytes(state.clone(), &older_zip, "replace").await;
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&bytes));
+    assert_eq!(stored_owned(&state).await, 1);
+}
+
+#[tokio::test]
+async fn import_accepts_an_archive_without_node_metadata_columns() {
+    let (_dir, state) = archive_state();
+    let fixture = seed_catalog_fixture(&state.pool).await;
+    seed_specimens(&state, vec![(fixture.entry, fixture.kept_note, 1, 1)]).await;
+
+    let (status, _headers, zip_bytes) = export_zip(state.clone(), "").await;
+    assert_eq!(status, StatusCode::OK);
+    let older_zip = zip_with_modified_db(&zip_bytes, |conn| {
+        for column in ["catalog_number", "denomination", "issue_date", "source"] {
+            conn.execute(&format!("ALTER TABLE showcase_nodes DROP COLUMN {column}"), [])
+                .expect("column drops");
+        }
+    });
+    wipe_live(&state).await;
+
+    let (status, bytes) = import_bytes(state.clone(), &older_zip, "replace").await;
+    assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&bytes));
+
+    let pool = state.pool.clone();
+    let (catalog_number, specimens): (Option<String>, i64) =
+        tokio::task::spawn_blocking(move || {
+            let conn = pool.get().expect("conn");
+            let catalog_number: Option<String> = conn
+                .query_row(
+                    "SELECT catalog_number FROM showcase_nodes WHERE node_type = 'catalog_entry'",
+                    [],
+                    |row| row.get(0),
+                )
+                .expect("entry survives");
+            let specimens: i64 = conn
+                .query_row("SELECT COUNT(*) FROM showcase_catalog_notes", [], |row| row.get(0))
+                .expect("specimens");
+            (catalog_number, specimens)
+        })
+        .await
+        .expect("join");
+    assert_eq!(catalog_number, None);
+    assert_eq!(specimens, 1);
 }
