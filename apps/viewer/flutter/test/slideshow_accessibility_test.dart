@@ -178,7 +178,7 @@ void main() {
 
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Image 1 of 2'), findsOneWidget);
   });
 
   testWidgets('space opens the focused plate', (WidgetTester tester) async {
@@ -189,7 +189,7 @@ void main() {
     await tester.pumpAndSettle();
 
     // The back plate opens the second image of the slide's sequence.
-    expect(find.text('2 / 2'), findsOneWidget);
+    expect(find.text('Image 2 of 2'), findsOneWidget);
   });
 
   testWidgets('a pointer tap opens a plate without leaving its focus ring', (
@@ -199,9 +199,9 @@ void main() {
 
     await tester.tap(find.byType(Image).first);
     await tester.pumpAndSettle();
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Image 1 of 2'), findsOneWidget);
 
-    await tester.tap(find.text('Back'));
+    await tester.tap(find.text('Back to note'));
     await tester.pumpAndSettle();
 
     // The click opened the picture, not the plate's focus state, so no ring
@@ -470,7 +470,7 @@ void main() {
 
     expect(revealed, ['/nope/front.png']);
     // The plate is no longer a button, so Enter must not open the popover.
-    expect(find.text('1 / 2'), findsNothing);
+    expect(find.text('Image 1 of 2'), findsNothing);
   });
 
   testWidgets('a refused reveal reports it instead of doing nothing', (
@@ -512,6 +512,6 @@ void main() {
     await tester.sendKeyEvent(LogicalKeyboardKey.enter);
     await tester.pumpAndSettle();
     // Note 2's front is the third image of the six in the sequence.
-    expect(find.text('3 / 6'), findsOneWidget);
+    expect(find.text('Image 3 of 6'), findsOneWidget);
   });
 }

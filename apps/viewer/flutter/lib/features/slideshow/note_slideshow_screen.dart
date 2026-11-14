@@ -13,6 +13,8 @@ import '../../widgets/grade_pill.dart';
 import '../../widgets/mouse_drag_scroll_behavior.dart';
 import '../../widgets/note_image_provider.dart';
 import 'image_lightbox.dart';
+import 'slideshow_controls.dart';
+import 'slideshow_room_style.dart';
 
 const _kBg = ViewerPalette.roomBackground;
 const _kCardBg = ViewerPalette.roomSurface;
@@ -25,9 +27,6 @@ const _kTagChipBg = ViewerPalette.tagBackground;
 const _kTagChipBorder = ViewerPalette.tagBorder;
 const _kTagChipText = ViewerPalette.tagText;
 
-/// Fixed height shared by the slideshow's counter pill and Back control.
-const double _kRoomControlHeight = 40;
-
 /// Keyboard scroll step for the slide content, in logical pixels.
 const _kArrowScrollOffset = 120.0;
 
@@ -35,11 +34,6 @@ const _kArrowScrollOffset = 120.0;
 /// dataset (914 full images, avg ratio ~1.55, all but 6 landscape), 3:2
 /// centers the error so letterboxing stays small on every slide.
 const _kImageStageAspectRatio = 3 / 2;
-
-/// The room's inset and border only appear once the window can hold them.
-const double _kRoomMinWidth = 760;
-const double _kRoomMinHeight = 560;
-const double _kRoomInset = 16;
 
 /// Width at which the pair gains a details rail beside it, and the width below
 /// which the pair drops back to the stacked slide.
@@ -64,18 +58,6 @@ const double _kMinPlatePairHeight = 88;
 /// seam; this leaves enough room behind the first note that a backwards wrap
 /// never runs out of pages.
 const int _kVirtualPageOrigin = 1 << 20;
-
-/// DESIGN.md "Presentation room label": 600, 0.68rem, 0.12em.
-///
-/// The room's one label voice: the plate chips, the slide eyebrow and the
-/// details field labels all take it.
-const TextStyle _kPlateLabelStyle = TextStyle(
-  fontFamily: 'Inter',
-  color: _kTextLabel,
-  fontSize: 10.88,
-  fontWeight: FontWeight.w600,
-  letterSpacing: 1.31,
-);
 
 const TextStyle _kPlateNoticeStyle = TextStyle(
   fontFamily: 'Inter',
@@ -202,13 +184,32 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
     super.dispose();
   }
 
+  /// One page per face that has an image, in the order the notes were opened.
+  /// A note missing a face contributes no page, so the sequence never carries a
+  /// blank; the note position is then recomputed over the pages that remain, so
+  /// the counter still names the note the reader is actually looking at.
   List<ImageSequenceItem> _buildImageSequence(List<NoteRecord> notes) {
-    final items = <ImageSequenceItem>[];
-    for (final note in notes) {
-      items.add(ImageSequenceItem(note: note, image: note.fullFor('front')));
-      items.add(ImageSequenceItem(note: note, image: note.fullFor('back')));
-    }
-    return items;
+    final shown = [
+      for (final note in notes)
+        if (note.fullFor('front') != null || note.fullFor('back') != null) note,
+    ];
+    final position = <int, int>{
+      for (var index = 0; index < shown.length; index++)
+        shown[index].id: index + 1,
+    };
+
+    return [
+      for (final note in shown)
+        for (final face in const ['front', 'back'])
+          if (note.fullFor(face) case final image?)
+            ImageSequenceItem(
+              note: note,
+              image: image,
+              face: face,
+              notePosition: position[note.id]!,
+              noteTotal: shown.length,
+            ),
+    ];
   }
 
   /// Animates to the virtual page [page], used by a single-step arrow move.
@@ -220,7 +221,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
     }
     _pageController.animateToPage(
       page,
-      duration: const Duration(milliseconds: 220),
+      duration: kRoomPageStepDuration,
       curve: Curves.easeOut,
     );
   }
@@ -312,8 +313,30 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   void _openCurrentImageViewer() {
     if (widget.notes.isEmpty) return;
     final note = widget.notes[_currentIndex];
-    final type = note.fullFor('front') != null ? 'front' : 'back';
-    _openImageViewer(note, type);
+    final front = note.fullFor('front');
+    final image = front ?? note.fullFor('back');
+    if (image == null) {
+      // The collection has no image at all to page through, so the popover
+      // opens on its one empty state and the exit instead of doing nothing.
+      if (_imageSequence.isEmpty) {
+        _openEmptyImageViewer();
+      }
+      return;
+    }
+
+    _openImageViewer(note, image.type);
+  }
+
+  Future<void> _openEmptyImageViewer() async {
+    await Navigator.of(context).push<int>(
+      MaterialPageRoute<int>(
+        builder: (context) => ImageLightbox(
+          items: const [],
+          initialIndex: 0,
+          revealFolder: widget.revealFolder,
+        ),
+      ),
+    );
   }
 
   void _openImageFromKeyboard() {
@@ -341,8 +364,11 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
 
     final selectedNoteId = await Navigator.of(context).push<int>(
       MaterialPageRoute<int>(
-        builder: (context) =>
-            ImageLightbox(items: _imageSequence, initialIndex: initialIndex),
+        builder: (context) => ImageLightbox(
+          items: _imageSequence,
+          initialIndex: initialIndex,
+          revealFolder: widget.revealFolder,
+        ),
       ),
     );
 
@@ -363,9 +389,8 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
   @override
   Widget build(BuildContext context) {
     final size = MediaQuery.sizeOf(context);
-    final roomed =
-        size.width >= _kRoomMinWidth && size.height >= _kRoomMinHeight;
-    final roomInset = roomed ? _kRoomInset : 0.0;
+    final roomed = roomedFor(size);
+    final roomInset = roomed ? kRoomInset : 0.0;
     final roomRadius = roomed ? ViewerPalette.radiusMd : 0.0;
     return Shortcuts(
       // h/j/k/l alias the arrows. The activators stay plain (no modifiers), so
@@ -475,7 +500,7 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                               children: [
                                 const Spacer(),
                                 Container(
-                                  height: _kRoomControlHeight,
+                                  height: kRoomControlHeight,
                                   alignment: Alignment.center,
                                   padding: const EdgeInsets.symmetric(
                                     horizontal: 12,
@@ -499,21 +524,13 @@ class _NoteSlideshowScreenState extends State<NoteSlideshowScreen> {
                                     child: Text(
                                       'Note ${_currentIndex + 1} of '
                                       '${widget.notes.length}',
-                                      style: const TextStyle(
-                                        fontFamily: 'Inter',
-                                        color: _kTextPrimary,
-                                        fontWeight: FontWeight.w600,
-                                        fontSize: 13,
-                                        fontFeatures: [
-                                          FontFeature.tabularFigures(),
-                                        ],
-                                      ),
+                                      style: kRoomCounterStyle,
                                     ),
                                   ),
                                 ),
                                 const SizedBox(width: 10),
                                 SizedBox(
-                                  height: _kRoomControlHeight,
+                                  height: kRoomControlHeight,
                                   child: OutlinedButton(
                                     onPressed: _close,
                                     child: const Text('Back'),
@@ -917,7 +934,7 @@ class _SlideHeader extends StatelessWidget {
     return Column(
       crossAxisAlignment: crossAxisAlignment,
       children: [
-        Text(eyebrow.toUpperCase(), style: _kPlateLabelStyle, textAlign: align),
+        Text(eyebrow.toUpperCase(), style: kPlateLabelStyle, textAlign: align),
         const SizedBox(height: 4),
         Text(
           note.title.toUpperCase(),
@@ -1049,17 +1066,7 @@ class _NotePlateState extends State<_NotePlate> {
 
   KeyEventResult _handleKey(FocusNode _, KeyEvent event) {
     if (!_loaded) return KeyEventResult.ignored;
-    return _activateOnEnterOrSpace(event, widget.onTap);
-  }
-
-  void _reveal(String path) {
-    widget.revealFolder(path).then((revealed) {
-      if (!revealed && mounted) {
-        ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-          const SnackBar(content: Text('Could not open the image folder.')),
-        );
-      }
-    });
+    return activateOnEnterOrSpace(event, widget.onTap);
   }
 
   /// The image's error builder: shows [notice] in place of the picture and
@@ -1174,10 +1181,10 @@ class _NotePlateState extends State<_NotePlate> {
                               horizontal: 7,
                               vertical: 3,
                             ),
-                            decoration: _plateOverlayDecoration(),
+                            decoration: plateOverlayDecoration(),
                             child: Text(
                               widget.label.toUpperCase(),
-                              style: _kPlateLabelStyle,
+                              style: kPlateLabelStyle,
                             ),
                           ),
                         ),
@@ -1198,7 +1205,7 @@ class _NotePlateState extends State<_NotePlate> {
         // The ring sits 2 px outside the mat, paint only, so focusing cannot
         // change the plate's size.
         if (focused)
-          const _AccentFocusRing(
+          const AccentFocusRing(
             key: ValueKey('plateFocusRing'),
             radius: ViewerPalette.radiusMd,
           ),
@@ -1210,7 +1217,13 @@ class _NotePlateState extends State<_NotePlate> {
             right: 0,
             bottom: 8,
             child: Center(
-              child: _RevealInFolderButton(onPressed: () => _reveal(filePath)),
+              child: RevealInFolderButton(
+                onPressed: () => revealInFolderWithFeedback(
+                  context,
+                  widget.revealFolder,
+                  filePath,
+                ),
+              ),
             ),
           ),
       ],
@@ -1258,105 +1271,6 @@ class _PlateNotice extends StatelessWidget {
   }
 }
 
-/// The failed plate's one action. It is its own focus stop and button so Tab
-/// reaches it and Enter or Space work even though it sits over the plate.
-class _RevealInFolderButton extends StatefulWidget {
-  const _RevealInFolderButton({required this.onPressed});
-
-  final VoidCallback onPressed;
-
-  @override
-  State<_RevealInFolderButton> createState() => _RevealInFolderButtonState();
-}
-
-class _RevealInFolderButtonState extends State<_RevealInFolderButton> {
-  final FocusNode _focusNode = FocusNode(debugLabel: 'revealInFolder');
-  bool _hovered = false;
-
-  KeyEventResult _handleKey(FocusNode _, KeyEvent event) =>
-      _activateOnEnterOrSpace(event, widget.onPressed);
-
-  void _activate() {
-    _focusNode.requestFocus();
-    widget.onPressed();
-  }
-
-  @override
-  void dispose() {
-    _focusNode.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final focused = _focusNode.hasPrimaryFocus;
-    // Hover and focus share one state: the action wears the red wash and edge
-    // so it reads as a button rather than a static chip.
-    final highlighted = _hovered || focused;
-    return Semantics(
-      container: true,
-      button: true,
-      label: 'Reveal in folder',
-      onTap: widget.onPressed,
-      excludeSemantics: true,
-      child: Focus(
-        focusNode: _focusNode,
-        onFocusChange: (_) {
-          if (mounted) setState(() {});
-        },
-        onKeyEvent: _handleKey,
-        child: MouseRegion(
-          cursor: SystemMouseCursors.click,
-          onEnter: (_) => setState(() => _hovered = true),
-          onExit: (_) => setState(() => _hovered = false),
-          child: GestureDetector(
-            behavior: HitTestBehavior.opaque,
-            onTap: _activate,
-            child: Stack(
-              clipBehavior: Clip.none,
-              children: [
-                AnimatedContainer(
-                  duration: const Duration(milliseconds: 150),
-                  curve: Curves.easeOut,
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 5,
-                  ),
-                  decoration: _plateOverlayDecoration(
-                    borderColor: highlighted
-                        ? ViewerPalette.accent
-                        : ViewerPalette.borderSoft,
-                    color: highlighted
-                        ? Color.alphaBlend(
-                            ViewerPalette.accentSoft,
-                            ViewerPalette.roomSurface.withValues(alpha: 0.94),
-                          )
-                        : null,
-                  ),
-                  child: const Text(
-                    'Reveal in folder',
-                    style: TextStyle(
-                      fontFamily: 'Inter',
-                      color: _kTextAccent,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w600,
-                    ),
-                  ),
-                ),
-                if (focused)
-                  const _AccentFocusRing(
-                    key: ValueKey('revealFocusRing'),
-                    radius: ViewerPalette.radiusSm,
-                  ),
-              ],
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 /// The hover/focus affordance over a live plate; decorative, never announced.
 class _PlateZoomCue extends StatelessWidget {
   const _PlateZoomCue();
@@ -1366,63 +1280,8 @@ class _PlateZoomCue extends StatelessWidget {
     return Container(
       key: const ValueKey('plateZoomCue'),
       padding: const EdgeInsets.all(6),
-      decoration: _plateOverlayDecoration(),
+      decoration: plateOverlayDecoration(),
       child: const Icon(Icons.zoom_in, size: 18, color: _kTextPrimary),
-    );
-  }
-}
-
-/// The small white overlay a plate's chip, zoom cue and reveal action share.
-BoxDecoration _plateOverlayDecoration({
-  Color borderColor = ViewerPalette.borderSoft,
-  Color? color,
-}) {
-  return BoxDecoration(
-    color: color ?? ViewerPalette.roomSurface.withValues(alpha: 0.94),
-    borderRadius: BorderRadius.circular(ViewerPalette.radiusSm),
-    border: Border.all(color: borderColor),
-  );
-}
-
-/// Enter, numpad Enter and Space activate a custom button like a real one; a
-/// held key must not fire again on every repeat.
-KeyEventResult _activateOnEnterOrSpace(
-  KeyEvent event,
-  VoidCallback onActivate,
-) {
-  if (event is! KeyDownEvent) return KeyEventResult.ignored;
-  final key = event.logicalKey;
-  if (key == LogicalKeyboardKey.enter ||
-      key == LogicalKeyboardKey.numpadEnter ||
-      key == LogicalKeyboardKey.space) {
-    onActivate();
-    return KeyEventResult.handled;
-  }
-  return KeyEventResult.ignored;
-}
-
-/// The app's focus ring: 2 px red at a 2 px offset, paint only so focusing
-/// never changes a control's size. It takes the control's own corner radius.
-class _AccentFocusRing extends StatelessWidget {
-  const _AccentFocusRing({required this.radius, super.key});
-
-  final double radius;
-
-  @override
-  Widget build(BuildContext context) {
-    return Positioned.fill(
-      left: -4,
-      top: -4,
-      right: -4,
-      bottom: -4,
-      child: IgnorePointer(
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            borderRadius: BorderRadius.circular(radius + 4),
-            border: Border.all(color: ViewerPalette.accent, width: 2),
-          ),
-        ),
-      ),
     );
   }
 }
@@ -1461,7 +1320,7 @@ class _DetailsRail extends StatelessWidget {
       children: [
         Row(
           children: [
-            const Text('Details', style: _kPlateLabelStyle),
+            const Text('Details', style: kPlateLabelStyle),
             const Spacer(),
             if (catalog.isNotEmpty)
               SelectableText(
@@ -1641,7 +1500,7 @@ class _DetailField extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(label.toUpperCase(), style: _kPlateLabelStyle),
+        Text(label.toUpperCase(), style: kPlateLabelStyle),
         const SizedBox(height: 3),
         value,
       ],
@@ -1670,7 +1529,7 @@ class _TagChipState extends State<_TagChip> {
   }
 
   KeyEventResult _handleKey(FocusNode _, KeyEvent event) =>
-      _activateOnEnterOrSpace(event, widget.onTap);
+      activateOnEnterOrSpace(event, widget.onTap);
 
   void _activate() {
     _focusNode.requestFocus();
@@ -1741,7 +1600,7 @@ class _TagChipState extends State<_TagChip> {
                 ),
                 // The focus ring is paint only, so Tab never resizes a chip.
                 if (focused)
-                  const _AccentFocusRing(
+                  const AccentFocusRing(
                     key: ValueKey('tagFocusRing'),
                     radius: ViewerPalette.radiusChip,
                   ),

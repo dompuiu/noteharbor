@@ -164,6 +164,6 @@ void main() {
     await tester.tap(find.byType(Image).first);
     await tester.pumpAndSettle();
 
-    expect(find.text('1 / 2'), findsOneWidget);
+    expect(find.text('Image 1 of 2'), findsOneWidget);
   });
 }
