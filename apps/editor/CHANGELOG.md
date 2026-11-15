@@ -4,6 +4,12 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.13.1] - 2026-11-14
+
+### Fixed
+
+- Image preview: the popover keeps one size when you step the zoom ladder or switch to 1:1, cropping inside the frame the fit view already holds instead of resizing the room, and it keeps that fit when the window only loses height.
+
 ## [2.13.0] - 2026-11-14
 
 ### Changed
