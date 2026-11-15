@@ -5,7 +5,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 
 // The catalog checklist tests drive the real shell (sidebar + routes) with the
 // web API mocked. The other screens are stubbed so the assertions land on the
-// showcase canvas, the ownership menu, the finder, and Present.
+// showcase canvas, the ownership menu, the finder, and Slideshow.
 vi.mock("./lib/api.js", () => ({
   createCatalogEntry: vi.fn(),
   createCategory: vi.fn(),
@@ -248,7 +248,7 @@ async function openShowcase(tree = catalogTree()) {
 }
 
 function summary(container) {
-  return container.querySelector(".showcase-summary");
+  return container.querySelector(".showcase-filter-progress");
 }
 
 beforeEach(() => {
@@ -289,7 +289,7 @@ describe("a presentation-only showcase", () => {
       screen.queryByRole("group", { name: "Catalog filters" }),
     ).not.toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Present" }),
+      screen.queryByRole("button", { name: "Slideshow" }),
     ).not.toBeInTheDocument();
     expect(screen.getByText("1 notes")).toBeInTheDocument();
     expect(
@@ -310,24 +310,35 @@ describe("the catalog checklist", () => {
       "aria-valuemax",
       "4",
     );
-    expect(summary(container)).toHaveTextContent("2 owned");
-    expect(summary(container)).toHaveTextContent("1 seen");
-    expect(summary(container)).toHaveTextContent("1 unseen");
+    // The filter chips are the one place the three counts appear; the rail
+    // beside them adds only the owned share.
+    expect(
+      screen.getByRole("button", { name: "All (4)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Owned (2)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Seen (1)" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByRole("button", { name: "Unseen (1)" }),
+    ).toBeInTheDocument();
     expect(summary(container)).toHaveTextContent("50%");
 
-    // Owned: primary photo, a Present action, and the OWNED state label.
+    // Owned: primary photo, a Slideshow action, and the OWNED state label.
     expect(
-      screen.getByRole("button", { name: "Present 1 leu · Pick 22a · 1917" }),
+      screen.getByRole("button", { name: "Slideshow from Pick 22a · 1917 · 1 leu" }),
     ).toBeInTheDocument();
     expect(
       screen.getByRole("button", {
-        name: "1 leu · Pick 22a · 1917 is owned. Mark as not owned",
+        name: "Pick 22a · 1917 · 1 leu is owned. Mark as not owned",
       }),
     ).toHaveTextContent("Owned");
     // Seen: the same photo (no dimming) and the same label treatment.
     expect(
       screen.getByRole("button", {
-        name: "5 lei · Pick 24c · 1920 is seen. Mark as owned",
+        name: "Pick 24c · 1920 · 5 lei is seen. Mark as owned",
       }),
     ).toHaveTextContent("Seen");
     expect(container.querySelector(".showcase-card-state--seen")).not.toBeNull();
@@ -337,16 +348,17 @@ describe("the catalog checklist", () => {
     expect(screen.queryByText("Mark owned")).not.toBeInTheDocument();
     expect(screen.queryByText(/Add notes/)).not.toBeInTheDocument();
     // The identity lives in the cell's window bar, not under the photo, so a
-    // card never repeats its caption and the bar stays the drag surface.
+    // card never repeats its caption and the bar stays the drag surface. The
+    // default grid is Small, which takes the compact `P22a` catalog prefix.
     expect(
       [...container.querySelectorAll(".showcase-reorder-title")].map(
         (title) => title.textContent,
       ),
     ).toEqual([
-      "1 leu · Pick 22a · 1917",
-      "5 lei · Pick 24c · 1920",
-      "10 lei · Pick 25d · 1921",
-      "2 lei · Pick 23b · 1919",
+      "P22a · 1917 · 1 leu",
+      "P24c · 1920 · 5 lei",
+      "P25d · 1921 · 10 lei",
+      "P23b · 1919 · 2 lei",
     ]);
     expect(
       container.querySelector(".showcase-catalog-cell .showcase-card-caption"),
@@ -354,9 +366,23 @@ describe("the catalog checklist", () => {
     // Unseen: the neutral well and the whole card opening the finder.
     expect(
       screen.getByRole("button", {
-        name: "10 lei · Pick 25d · 1921 is unseen. Add notes",
+        name: "Pick 25d · 1921 · 10 lei is unseen. Add notes",
       }),
     ).toBeInTheDocument();
+  });
+
+  test("the bar title compacts Pick to P at Small and keeps it at Medium and Large", async () => {
+    const user = userEvent.setup();
+    const { container } = await openShowcase();
+    const firstTitle = () => container.querySelector(".showcase-reorder-title");
+
+    expect(firstTitle()).toHaveTextContent("P22a · 1917 · 1 leu");
+
+    await user.click(screen.getByRole("radio", { name: "Large" }));
+    expect(firstTitle()).toHaveTextContent("Pick 22a · 1917 · 1 leu");
+
+    await user.click(screen.getByRole("radio", { name: "Medium" }));
+    expect(firstTitle()).toHaveTextContent("Pick 22a · 1917 · 1 leu");
   });
 
   test("the sidebar counts owned over total entries", async () => {
@@ -394,24 +420,24 @@ describe("the catalog checklist", () => {
 
     await user.click(screen.getByRole("button", { name: /^Owned/ }));
     expect(
-      screen.getByRole("button", { name: "Present 1 leu · Pick 22a · 1917" }),
+      screen.getByRole("button", { name: "Slideshow from Pick 22a · 1917 · 1 leu" }),
     ).toBeInTheDocument();
     expect(
       screen.queryByRole("button", {
-        name: "10 lei · Pick 25d · 1921 is unseen. Add notes",
+        name: "Pick 25d · 1921 · 10 lei is unseen. Add notes",
       }),
     ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /^Seen/ }));
     expect(screen.getByText("No seen cards.")).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Present 1 leu · Pick 22a · 1917" }),
+      screen.queryByRole("button", { name: "Slideshow from Pick 22a · 1917 · 1 leu" }),
     ).not.toBeInTheDocument();
 
     await user.click(screen.getByRole("button", { name: /^All/ }));
     expect(
       screen.getByRole("button", {
-        name: "10 lei · Pick 25d · 1921 is unseen. Add notes",
+        name: "Pick 25d · 1921 · 10 lei is unseen. Add notes",
       }),
     ).toBeInTheDocument();
   });
@@ -421,7 +447,7 @@ describe("the catalog checklist", () => {
     await openShowcase();
 
     const label = screen.getByRole("button", {
-      name: "1 leu · Pick 22a · 1917 is owned. Mark as not owned",
+      name: "Pick 22a · 1917 · 1 leu is owned. Mark as not owned",
     });
     expect(label).not.toHaveAttribute("aria-haspopup", "menu");
 
@@ -437,7 +463,7 @@ describe("the catalog checklist", () => {
     // The other specimen is a seen reference, so the entry drops to Seen.
     expect(
       await screen.findByRole("button", {
-        name: "1 leu · Pick 22a · 1917 is seen. Mark as owned",
+        name: "Pick 22a · 1917 · 1 leu is seen. Mark as owned",
       }),
     ).toBeInTheDocument();
 
@@ -471,7 +497,7 @@ describe("the catalog checklist", () => {
     await openShowcase(tree);
 
     await user.click(
-      screen.getByRole("button", { name: "5 lei · Pick 24c · 1920" }),
+      screen.getByRole("button", { name: "Pick 24c · 1920 · 5 lei" }),
     );
 
     expect(updateNote).not.toHaveBeenCalled();
@@ -489,7 +515,7 @@ describe("the catalog checklist", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "10 lei · Pick 25d · 1921 is unseen. Add notes",
+        name: "Pick 25d · 1921 · 10 lei is unseen. Add notes",
       }),
     );
 
@@ -512,7 +538,7 @@ describe("the catalog checklist", () => {
       ),
     );
     expect(
-      await screen.findByRole("button", { name: "10 lei · Pick 25d · 1921" }),
+      await screen.findByRole("button", { name: "Pick 25d · 1921 · 10 lei" }),
     ).toBeInTheDocument();
   });
 
@@ -535,7 +561,7 @@ describe("the catalog checklist", () => {
 
     await user.click(
       screen.getByRole("button", {
-        name: "10 lei · Pick 25d · 1921 is unseen. Add notes",
+        name: "Pick 25d · 1921 · 10 lei is unseen. Add notes",
       }),
     );
     const dialog = await screen.findByRole("dialog", { name: "Add notes" });
@@ -553,7 +579,7 @@ describe("the catalog checklist", () => {
     ).not.toBeInTheDocument();
     expect(
       screen.getByRole("button", {
-        name: "10 lei · Pick 25d · 1921 is unseen. Add notes",
+        name: "Pick 25d · 1921 · 10 lei is unseen. Add notes",
       }),
     ).toBeInTheDocument();
   });
@@ -584,16 +610,16 @@ describe("the catalog checklist", () => {
     );
     expect(
       await screen.findByRole("button", {
-        name: "1 leu · Pick 22a · 1917 is seen. Mark as owned",
+        name: "Pick 22a · 1917 · 1 leu is seen. Mark as owned",
       }),
     ).toBeInTheDocument();
   });
 
-  test("Present lists only owned entries and uses the primary", async () => {
+  test("Slideshow lists only owned entries and uses the primary", async () => {
     const user = userEvent.setup();
     await openShowcase();
 
-    await user.click(screen.getByRole("button", { name: "Present" }));
+    await user.click(screen.getByRole("button", { name: "Slideshow" }));
 
     const slideshow = await screen.findByRole("dialog", { name: "1 leu" });
     expect(
@@ -613,7 +639,7 @@ describe("the catalog checklist", () => {
     await waitFor(() =>
       expect(
         screen.getByRole("button", {
-          name: "Present 1 leu · Pick 22a · 1917",
+          name: "Slideshow from Pick 22a · 1917 · 1 leu",
         }),
       ).toHaveFocus(),
     );
@@ -637,7 +663,7 @@ describe("the catalog checklist", () => {
 
     expect(
       screen.getByRole("button", {
-        name: "1 leu · Pick 22a · 1917 is owned. Mark as not owned",
+        name: "Pick 22a · 1917 · 1 leu is owned. Mark as not owned",
       }),
     ).toBeInTheDocument();  });
 
@@ -660,7 +686,7 @@ describe("the catalog checklist", () => {
     expect(summary(container)).toHaveTextContent("Complete");
     expect(
       screen.queryByRole("button", {
-        name: "1 leu · Pick 22a · 1917 is seen. Mark as owned",
+        name: "Pick 22a · 1917 · 1 leu is seen. Mark as owned",
       }),
     ).not.toBeInTheDocument();
   });
@@ -684,7 +710,7 @@ describe("the catalog checklist", () => {
     await openShowcase(tree);
 
     const seenLeaf = screen.getByRole("button", {
-      name: "5 lei · Pick 24c · 1920 is seen. Mark as owned",
+      name: "Pick 24c · 1920 · 5 lei is seen. Mark as owned",
     });
     await user.click(seenLeaf);
     await waitFor(() =>
@@ -758,10 +784,10 @@ describe("catalog shells in the one view", () => {
       },
     });
     expect(
-      await screen.findByRole("button", { name: /20 lei · Pick 22a · 1917 is unseen/ }),
+      await screen.findByRole("button", { name: /Pick 22a · 1917 · 20 lei is unseen/ }),
     ).toBeInTheDocument();
     expect(
-      screen.getByRole("button", { name: /20 lei · Pick 22b · 1917 is unseen/ }),
+      screen.getByRole("button", { name: /Pick 22b · 1917 · 20 lei is unseen/ }),
     ).toBeInTheDocument();
   });
 
@@ -832,7 +858,7 @@ describe("catalog shells in the one view", () => {
         source: "Pick catalog",
       }),
     );
-    expect(await screen.findByText("100 lei · Pick 25d · 1921")).toBeInTheDocument();
+    expect(await screen.findByText("P25d · 1921 · 100 lei")).toBeInTheDocument();
   });
 
   test("removing a shell confirms and deletes immediately", async () => {

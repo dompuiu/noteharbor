@@ -36,4 +36,15 @@ describe("showcase photo size styles", () => {
     expect(rule[1]).toMatch(/height:\s*28px/);
     expect(rule[1]).toMatch(/border-radius:\s*var\(--radius-pill\)/);
   });
+
+  // A Small card is 200px wide at its narrowest, so its title bar has to give
+  // the caption more of that width or the denomination falls off the end.
+  test("tightens the card title's inset on a Small grid", () => {
+    const rule = styles.match(
+      /\.showcase-grid\[data-photo-size="small"\] \.showcase-reorder-title\s*\{([^}]*)\}/,
+    );
+    expect(rule).not.toBeNull();
+    expect(rule[1]).toMatch(/right:\s*32px/);
+    expect(rule[1]).toMatch(/left:\s*32px/);
+  });
 });

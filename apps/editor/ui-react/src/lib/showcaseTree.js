@@ -8,7 +8,7 @@
 
 import {
   formatShowcaseCatalogNumber,
-  showcaseNoteDisplayParts,
+  showcaseNoteTitleParts,
 } from "./showcaseNoteLabels.js";
 
 // Walk the tree by the drilled node ids. A stale id (e.g. a node removed in
@@ -426,11 +426,15 @@ function catalogEntryIdentity(entry) {
   );
 }
 
-// The entry's one-line caption for cards, previews, and the editor:
-// denomination · catalog value · date, falling back to the identity when the
-// entry carries no details. The position's own metadata, never the specimen.
-function catalogEntryCaption(entry) {
-  return showcaseNoteDisplayParts(entry).join(" · ") || catalogEntryIdentity(entry);
+// The entry's one-line caption for cards, previews, and the editor: catalog
+// value · date · denomination, falling back to the identity when the entry
+// carries no details. The position's own metadata, never the specimen.
+// `compact` is the small card's `P17` form of the catalog value.
+function catalogEntryCaption(entry, options = {}) {
+  return (
+    showcaseNoteTitleParts(entry, options).join(" · ") ||
+    catalogEntryIdentity(entry)
+  );
 }
 
 // The quiet specimen line a multi-note entry carries: how many notes and

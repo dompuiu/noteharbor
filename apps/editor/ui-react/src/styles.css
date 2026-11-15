@@ -1586,6 +1586,15 @@ input[type="radio"] {
   user-select: none;
 }
 
+/* A Small card is narrow enough that the title's leading and trailing inset is
+   the difference between `P17 · 03/12/1915 · 1 Leu` fitting and losing the
+   denomination to the ellipsis. Three pixels still separate the text from the
+   grip and the menu. */
+.showcase-grid[data-photo-size="small"] .showcase-reorder-title {
+  right: 32px;
+  left: 32px;
+}
+
 .showcase-reorder-cell > .showcase-cell {
   gap: 0;
   border: 0;
@@ -2153,36 +2162,15 @@ input[type="radio"] {
 }
 
 /* ── Catalog checklist ────────────────────────────────────────────────
-   Catalog chrome only exists when the tree holds Catalog entries. The
-   summary speaks in counts and one quiet progress rail; the filters are
-   pills with their own counts; a card keeps the existing showcase card
-   metrics and adds only the three state cues (check, SEEN tag, empty well). */
-
-.showcase-summary {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  flex-wrap: wrap;
-  color: var(--text-muted);
-  font-size: 0.85rem;
-}
-
-.showcase-summary-item strong {
-  color: var(--text);
-  font-weight: 700;
-}
-
-.showcase-summary-dot {
-  flex: none;
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: var(--border-control);
-}
+   Catalog chrome only exists when the tree holds Catalog entries. One row
+   carries every count: the filters are pills with their own counts, and the
+   rail at the far end is the single owned-share reading. A card keeps the
+   existing showcase card metrics and adds only the three state cues (check,
+   SEEN tag, empty well). */
 
 .showcase-progress {
   flex: none;
-  width: 128px;
+  width: 120px;
   height: 4px;
   overflow: hidden;
   border-radius: var(--radius-pill);
@@ -2197,11 +2185,35 @@ input[type="radio"] {
   transition: width 160ms ease;
 }
 
-.showcase-summary-pct {
+/* The rail rides the filter row's far end, beside the view controls, so the
+   chips are the only place the three counts appear. */
+.showcase-filter-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+}
+
+.showcase-progress-pct {
   color: var(--text-faint);
   font-size: 0.72rem;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
+}
+
+/* Photo size and Slideshow keep the header's trailing cluster, moved down to
+   the checklist row so the counts, the rail, and the view controls read as one
+   toolbar. */
+.showcase-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.showcase-filter-actions .button {
+  min-height: 34px;
+  padding: 0 14px;
 }
 
 .showcase-complete-chip {
@@ -2229,6 +2241,13 @@ input[type="radio"] {
   padding: 11px 0 12px;
   margin-bottom: 4px;
   border-bottom: 1px solid var(--border-soft);
+  flex-wrap: wrap;
+}
+
+.showcase-filter-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   flex-wrap: wrap;
 }
 
@@ -2618,9 +2637,17 @@ input[type="radio"] {
     left: 9px;
   }
 
-  .showcase-summary,
   .showcase-filter-bar {
     gap: 6px;
+  }
+
+  /* The rail joins the chips' flow instead of holding the far right alone. */
+  .showcase-filter-progress {
+    margin-left: 0;
+  }
+
+  .showcase-filter-actions {
+    margin-left: auto;
   }
 }
 

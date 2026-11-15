@@ -5,7 +5,8 @@ import {
   nodeCatalogState,
   primarySpecimen,
 } from "../lib/showcaseTree.js";
-import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
+import { normalizePhotoSize } from "../lib/photoSize.js";
+import { showcaseNoteDisplayParts, showcaseNoteTitleParts } from "../lib/showcaseNoteLabels.js";
 import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
 import { ShowcaseAddTiles } from "./ShowcaseAddTiles.jsx";
 import { ShowcaseCatalogCard } from "./ShowcaseCatalogCard.jsx";
@@ -20,9 +21,12 @@ function noteLabel(node) {
 }
 
 // The catalog card's visible identity, now carried by the cell's title bar
-// instead of a footer under the photo.
-function noteCaption(node) {
-  return showcaseNoteDisplayParts(node.note).join(" · ") || "Untitled note";
+// instead of a footer under the photo. It reads catalog · date · denomination,
+// the same order (and the same small-card `P17` form) as a catalog entry.
+function noteCaption(node, { compact = false } = {}) {
+  return (
+    showcaseNoteTitleParts(node.note, { compact }).join(" · ") || "Untitled note"
+  );
 }
 
 // One level's cards in the always-editable canvas. Every item is draggable and
@@ -52,6 +56,9 @@ function ShowcaseItemsGrid({
   onSetCover,
   onClearCover,
 }) {
+  // The bar's title has room for `Pick 22a` at Medium and Large; a Small card
+  // has about 130px and takes the compact `P22a` instead.
+  const compactTitle = normalizePhotoSize(photoSize) === "small";
   const reorder = useShowcaseReorder({
     nodes: items,
     onReorder: (orderedIds) => onReorder(parent?.id ?? null, orderedIds),
@@ -148,7 +155,7 @@ function ShowcaseItemsGrid({
               menu={menuFor(node, { isShell: true })}
               nodeId={node.id}
               reorder={reorderEnabled ? reorder : null}
-              title={catalogEntryCaption(node.entry)}
+              title={catalogEntryCaption(node.entry, { compact: compactTitle })}
             >
               <ShowcaseCatalogCard
                 node={node}
@@ -185,7 +192,7 @@ function ShowcaseItemsGrid({
               menu={menuFor(node)}
               nodeId={node.id}
               reorder={reorderEnabled ? reorder : null}
-              title={catalogMode ? noteCaption(node) : null}
+              title={catalogMode ? noteCaption(node, { compact: compactTitle }) : null}
             >
               {catalogMode ? (
                 <ShowcaseCatalogCard

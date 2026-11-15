@@ -857,6 +857,9 @@ function ShowcaseScreen() {
     ? currentPath[currentPath.length - 1]
     : null;
   const catalogMode = hasCatalogEntries(nodes);
+  // Catalog chrome waits for the tree, so the trailing controls never render
+  // in one place and then jump to another as the data lands.
+  const catalogChrome = catalogMode && !loading && !loadError;
   const displayNode =
     currentNode?.node_type === "category" ? null : currentNode;
   const displayPath = displayNode ? currentPath : [];
@@ -1547,43 +1550,7 @@ function ShowcaseScreen() {
                 ) : null}
               </div>
             )}
-            {catalogMode ? (
-              <div className="showcase-summary">
-                <span className="showcase-summary-item">
-                  <strong>{catalogTotals.owned}</strong> owned
-                </span>
-                <span aria-hidden="true" className="showcase-summary-dot" />
-                <span className="showcase-summary-item">
-                  <strong>{catalogTotals.seen}</strong> seen
-                </span>
-                <span aria-hidden="true" className="showcase-summary-dot" />
-                <span className="showcase-summary-item">
-                  <strong>{catalogTotals.unseen}</strong> unseen
-                </span>
-                <span
-                  aria-label="Owned cards"
-                  aria-valuemax={catalogTotals.total}
-                  aria-valuemin={0}
-                  aria-valuenow={catalogTotals.owned}
-                  className="showcase-progress"
-                  role="progressbar"
-                >
-                  <span
-                    className="showcase-progress-fill"
-                    style={{ width: `${ownedPercent}%` }}
-                  />
-                </span>
-                <span className="showcase-summary-pct">{`${ownedPercent}%`}</span>
-                {catalogTotals.complete ? (
-                  <span className="showcase-complete-chip">
-                    <span aria-hidden="true" className="showcase-complete-mark">
-                      ✓
-                    </span>
-                    Complete
-                  </span>
-                ) : null}
-              </div>
-            ) : (
+            {catalogMode ? null : (
               <p className="muted showcase-note-count">{`${noteCount} notes`}</p>
             )}
             {nameError ? (
@@ -1592,32 +1559,17 @@ function ShowcaseScreen() {
               </p>
             ) : null}
           </div>
-          <div className="showcase-header-controls">
-            <div className="showcase-photo-size">
-              <ShowcasePhotoSizeControl
-                onArrowDown={() => focusCardAt(0)}
-                onChange={setPhotoSize}
-                value={photoSize}
-              />
+          {catalogChrome ? null : (
+            <div className="showcase-header-controls">
+              <div className="showcase-photo-size">
+                <ShowcasePhotoSizeControl
+                  onArrowDown={() => focusCardAt(0)}
+                  onChange={setPhotoSize}
+                  value={photoSize}
+                />
+              </div>
             </div>
-            <div className="panel-heading-actions">
-              {catalogMode ? (
-                <button
-                  className="button"
-                  disabled={catalogTotals.owned === 0}
-                  onClick={() => openPresentation()}
-                  title={
-                    catalogTotals.owned
-                      ? "Present the notes you own"
-                      : "Add an owned note to present"
-                  }
-                  type="button"
-                >
-                  Present
-                </button>
-              ) : null}
-            </div>
-          </div>
+          )}
         </div>
 
         <p aria-live="polite" className="showcase-announcer" role="status">
@@ -1640,33 +1592,85 @@ function ShowcaseScreen() {
           </p>
         ) : null}
 
-        {!loading && !loadError && catalogMode ? (
-          <div
-            aria-label="Catalog filters"
-            className="showcase-filter-bar"
-            role="group"
-          >
-            {CATALOG_FILTERS.map((filter) => {
-              const count =
-                filter.value === "all"
-                  ? catalogTotals.total
-                  : catalogTotals[filter.value];
+        {catalogChrome ? (
+          <div className="showcase-filter-bar">
+            <div
+              aria-label="Catalog filters"
+              className="showcase-filter-chips"
+              role="group"
+            >
+              {CATALOG_FILTERS.map((filter) => {
+                const count =
+                  filter.value === "all"
+                    ? catalogTotals.total
+                    : catalogTotals[filter.value];
 
-              return (
-                <button
-                  aria-label={`${filter.label} (${count})`}
-                  aria-pressed={catalogFilter === filter.value}
-                  className="showcase-filter-chip"
-                  data-showcase-filter={filter.value}
-                  key={filter.value}
-                  onClick={() => setCatalogFilter(filter.value)}
-                  type="button"
-                >
-                  <span>{filter.label}</span>
-                  <span className="showcase-filter-count">{count}</span>
-                </button>
-              );
-            })}
+                return (
+                  <button
+                    aria-label={`${filter.label} (${count})`}
+                    aria-pressed={catalogFilter === filter.value}
+                    className="showcase-filter-chip"
+                    data-showcase-filter={filter.value}
+                    key={filter.value}
+                    onClick={() => setCatalogFilter(filter.value)}
+                    type="button"
+                  >
+                    <span>{filter.label}</span>
+                    <span className="showcase-filter-count">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {/* The one progress reading for the checklist: the chips carry
+                the three counts, so the rail adds only the owned share. */}
+            <span className="showcase-filter-progress">
+              <span
+                aria-label="Owned cards"
+                aria-valuemax={catalogTotals.total}
+                aria-valuemin={0}
+                aria-valuenow={catalogTotals.owned}
+                aria-valuetext={`${catalogTotals.owned} of ${catalogTotals.total} owned`}
+                className="showcase-progress"
+                role="progressbar"
+                title={`${catalogTotals.owned} of ${catalogTotals.total} owned`}
+              >
+                <span
+                  className="showcase-progress-fill"
+                  style={{ width: `${ownedPercent}%` }}
+                />
+              </span>
+              <span aria-hidden="true" className="showcase-progress-pct">
+                {`${ownedPercent}%`}
+              </span>
+              {catalogTotals.complete ? (
+                <span className="showcase-complete-chip">
+                  <span aria-hidden="true" className="showcase-complete-mark">
+                    ✓
+                  </span>
+                  Complete
+                </span>
+              ) : null}
+            </span>
+            <div className="showcase-filter-actions">
+              <ShowcasePhotoSizeControl
+                onArrowDown={() => focusCardAt(0)}
+                onChange={setPhotoSize}
+                value={photoSize}
+              />
+              <button
+                className="button"
+                disabled={catalogTotals.owned === 0}
+                onClick={() => openPresentation()}
+                title={
+                  catalogTotals.owned
+                    ? "Show the notes you own as a slideshow"
+                    : "Add an owned note to start a slideshow"
+                }
+                type="button"
+              >
+                Slideshow
+              </button>
+            </div>
           </div>
         ) : null}
 

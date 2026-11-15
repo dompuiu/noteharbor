@@ -1,5 +1,5 @@
 import { firstAvailableNoteImage } from "../lib/showcaseImages.js";
-import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
+import { showcaseNoteTitleParts } from "../lib/showcaseNoteLabels.js";
 import {
   catalogEntryCaption,
   isCatalogEntry,
@@ -17,12 +17,12 @@ import { ShowcaseCatalogWell } from "./ShowcaseCatalogWell.jsx";
 // changes opacity or colour: a seen note keeps its real image, because only the
 // label says whether the record is owned.
 function noteLabel(note) {
-  return showcaseNoteDisplayParts(note).join(" · ") || "Untitled note";
+  return showcaseNoteTitleParts(note).join(" · ") || "Untitled note";
 }
 
 // A card's visible identity: the entry's own catalog metadata, never the
 // primary Note, because the position and the record are independent. The full
-// line (denomination · catalog · date) is the cell's title bar, so the card
+// line (catalog · date · denomination) is the cell's title bar, so the card
 // body carries only the photo or the unseen well.
 function cardLabel(node) {
   return isCatalogEntry(node)
@@ -128,7 +128,7 @@ function ShowcaseCatalogCard({
         state={state}
       />
       <button
-        aria-label={entry ? `Present ${label}` : label}
+        aria-label={entry ? `Slideshow from ${label}` : label}
         className={`showcase-card showcase-card--catalog showcase-card--${state}`}
         data-showcase-node-id={node?.id}
         onClick={openBody}

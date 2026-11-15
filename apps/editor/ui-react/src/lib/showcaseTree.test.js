@@ -3,6 +3,7 @@ import {
   appendChildren,
   applyChildOrder,
   catalogCounts,
+  catalogEntryCaption,
   catalogEntryIdentity,
   catalogEntryLabel,
   catalogEntryState,
@@ -553,8 +554,27 @@ describe("catalogEntryIdentity", () => {
   });
 });
 
-describe("catalogEntryLabel", () => {
-  test("names the entry by catalog value, denomination, and date", () => {
+describe("catalogEntryCaption", () => {
+  test("reads catalog · date · denomination, with the compact form on request", () => {
+    const entry = {
+      catalog_number: "17",
+      denomination: "1 Leu",
+      issue_date: "03/12/1915",
+    };
+
+    expect(catalogEntryCaption(entry)).toBe("Pick 17 · 03/12/1915 · 1 Leu");
+    expect(catalogEntryCaption(entry, { compact: true })).toBe(
+      "P17 · 03/12/1915 · 1 Leu",
+    );
+  });
+
+  test("falls back to the identity when the entry carries no details", () => {
+    expect(catalogEntryCaption({})).toBe("Unidentified");
+    expect(catalogEntryCaption(null)).toBe("Unidentified");
+  });
+});
+
+describe("catalogEntryLabel", () => {  test("names the entry by catalog value, denomination, and date", () => {
     expect(
       catalogEntryLabel({
         catalog_number: "22a",

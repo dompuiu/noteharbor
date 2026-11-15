@@ -2,6 +2,7 @@ import { describe, expect, test } from "vitest";
 import {
   formatShowcaseCatalogNumber,
   showcaseNoteDisplayParts,
+  showcaseNoteTitleParts,
 } from "./showcaseNoteLabels.js";
 
 describe("formatShowcaseCatalogNumber", () => {
@@ -25,6 +26,16 @@ describe("formatShowcaseCatalogNumber", () => {
     expect(formatShowcaseCatalogNumber("")).toBe("");
     expect(formatShowcaseCatalogNumber(null)).toBe("");
   });
+
+  test("compact shortens the prefix for a small card", () => {
+    expect(formatShowcaseCatalogNumber("17", { compact: true })).toBe("P17");
+    expect(formatShowcaseCatalogNumber("22a", { compact: true })).toBe("P22a");
+    expect(formatShowcaseCatalogNumber("Pick 22a", { compact: true })).toBe(
+      "P22a",
+    );
+    expect(formatShowcaseCatalogNumber("p22a", { compact: true })).toBe("P22a");
+    expect(formatShowcaseCatalogNumber("", { compact: true })).toBe("");
+  });
 });
 
 describe("showcaseNoteDisplayParts", () => {
@@ -42,5 +53,37 @@ describe("showcaseNoteDisplayParts", () => {
     expect(
       showcaseNoteDisplayParts({ denomination: "1 leu", issue_date: "1917" }),
     ).toEqual(["1 leu", "1917"]);
+  });
+});
+
+describe("showcaseNoteTitleParts", () => {
+  test("leads with the catalog number, then the date, then the denomination", () => {
+    expect(
+      showcaseNoteTitleParts({
+        denomination: "1 Leu",
+        catalog_number: "17",
+        issue_date: "03/12/1915",
+      }),
+    ).toEqual(["Pick 17", "03/12/1915", "1 Leu"]);
+  });
+
+  test("compacts the Pick prefix to P for a small card", () => {
+    expect(
+      showcaseNoteTitleParts(
+        {
+          denomination: "1 Leu",
+          catalog_number: "17",
+          issue_date: "03/12/1915",
+        },
+        { compact: true },
+      ),
+    ).toEqual(["P17", "03/12/1915", "1 Leu"]);
+  });
+
+  test("omits missing parts and needs no catalog value", () => {
+    expect(
+      showcaseNoteTitleParts({ denomination: "1 leu", issue_date: "1917" }),
+    ).toEqual(["1917", "1 leu"]);
+    expect(showcaseNoteTitleParts({ denomination: "1 leu" })).toEqual(["1 leu"]);
   });
 });
