@@ -2285,89 +2285,78 @@ input[type="radio"] {
   gap: 8px;
   padding: 10px 10px 6px;
   align-items: stretch;
+  transition:
+    border-color 0.14s ease,
+    box-shadow 0.14s ease;
 }
 
-/* Seen: the photo is real, so the card keeps it, but it is desaturated and
-   tagged. Nothing here is behind glass. */
-.showcase-card-image--seen img {
-  filter: grayscale(0.6) contrast(0.95);
-  opacity: 0.78;
+.showcase-card--catalog:hover {
+  border-color: var(--border-control);
+  box-shadow: 0 3px 10px rgba(37, 40, 43, 0.08);
 }
 
-.showcase-card-image--seen::after {
-  content: "";
+/* The state label: Seen and Owned are one pill in the photo's corner, so the
+   two states read as the same kind of thing. The label is the ownership
+   toggle; the card body opens the note. The photo never changes opacity or
+   colour, because the label alone carries the state. */
+.showcase-card-state {
   position: absolute;
-  inset: 0;
-  background: linear-gradient(
-    180deg,
-    rgba(242, 242, 242, 0.08),
-    rgba(37, 40, 43, 0.1)
-  );
-  pointer-events: none;
-}
-
-.showcase-seen-tag {
-  position: absolute;
-  top: 7px;
-  left: 7px;
+  top: 14px;
+  left: 14px;
   z-index: 2;
-  padding: 2px 6px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  padding: 1px 7px;
   border: 1px solid var(--border);
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.93);
+  background: rgba(255, 255, 255, 0.94);
   color: var(--text-muted);
-  font-size: 0.53rem;
+  font: inherit;
+  font-size: 0.55rem;
   font-weight: 800;
   letter-spacing: 0.12em;
   line-height: 1.4;
   text-transform: uppercase;
-}
-
-/* The check is a direct ownership toggle, not a menu trigger: a white disc
-   over a busy photo by default, turning solid green on hover/focus so the
-   mark reads clearly against any banknote colour. */
-.showcase-catalog-check {
-  position: absolute;
-  top: 14px;
-  right: 14px;
-  z-index: 2;
-}
-
-.showcase-card-check {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  padding: 0;
-  border: 1px solid rgba(21, 122, 58, 0.42);
-  border-radius: 50%;
-  background: #fff;
-  color: var(--success);
-  box-shadow:
-    0 0 0 2px rgba(255, 255, 255, 0.78),
-    0 2px 6px rgba(37, 40, 43, 0.28);
   cursor: pointer;
   transition:
-    transform 0.12s ease,
-    background 0.12s ease,
     border-color 0.12s ease,
-    box-shadow 0.12s ease,
-    color 0.12s ease;
+    background 0.12s ease,
+    color 0.12s ease,
+    box-shadow 0.12s ease;
 }
 
-.showcase-card-check:hover,
-.showcase-card-check:focus-visible {
+.showcase-card-state-icon {
+  display: block;
+  flex: none;
+}
+
+.showcase-card-state--owned {
+  border-color: rgba(21, 122, 58, 0.4);
+  color: var(--success);
+}
+
+/* The label turns into the "change ownership" affordance on hover/focus: the
+   mark fills in, so the click target reads as the toggle it is. */
+.showcase-card-state--seen:hover,
+.showcase-card-state--seen:focus-visible {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+  color: var(--accent-ink);
+  box-shadow: 0 2px 6px rgba(37, 40, 43, 0.22);
+}
+
+.showcase-card-state--owned:hover,
+.showcase-card-state--owned:focus-visible {
   border-color: var(--success);
   background: var(--success);
   color: #fff;
-  box-shadow:
-    0 0 0 2px rgba(255, 255, 255, 0.9),
-    0 3px 9px rgba(21, 122, 58, 0.42);
-  transform: scale(1.1);
+  box-shadow: 0 2px 6px rgba(21, 122, 58, 0.32);
 }
 
-/* The ownership footer is the seen card's call to action; the card itself is
-   the toggle, so the footer is one visual row inside it. */
+/* The ownership footer is the shell form's call to action; the card itself is
+   the toggle, so the grid never paints a second row. */
 .showcase-catalog-foot {
   display: flex;
   align-items: center;
@@ -2383,24 +2372,10 @@ input[type="radio"] {
   font-weight: 700;
 }
 
-.showcase-check-empty {
-  display: block;
-  width: 15px;
-  height: 15px;
-  border: 1.5px dashed currentColor;
-  border-radius: 50%;
-  opacity: 0.75;
-}
-
 .showcase-catalog-arrow {
   display: inline-block;
   font-size: 0.9rem;
   transition: transform 0.14s ease;
-}
-
-.showcase-card--unseen:hover .showcase-catalog-arrow,
-.showcase-card--unseen:focus-visible .showcase-catalog-arrow {
-  transform: translateX(3px);
 }
 
 /* A position with no record is a recessed specimen well, not an error: the
@@ -2635,14 +2610,9 @@ input[type="radio"] {
     gap: 6px;
   }
 
-  .showcase-catalog-check {
+  .showcase-card-state {
     top: 9px;
-    right: 9px;
-  }
-
-  .showcase-card-check {
-    width: 24px;
-    height: 24px;
+    left: 9px;
   }
 
   .showcase-summary,
@@ -3200,17 +3170,10 @@ input[type="radio"] {
   }
 
   .showcase-progress-fill,
-  .showcase-card-check,
+  .showcase-card-state,
   .showcase-catalog-well::after,
   .showcase-catalog-arrow {
     transition: none;
-  }
-
-  .showcase-card-check:hover,
-  .showcase-card-check:focus-visible,
-  .showcase-card--unseen:hover .showcase-catalog-arrow,
-  .showcase-card--unseen:focus-visible .showcase-catalog-arrow {
-    transform: none;
   }
 
   .slide-thumb-btn {
@@ -9635,13 +9598,8 @@ td.table-col-collection {
   color: var(--accent-strong);
 }
 
-/* The owned check shares the top-right corner with the menu; in one view the
-   menu owns that corner, so the check drops below it. */
-.showcase-reorder-cell .showcase-catalog-check {
-  top: 38px;
-  right: 10px;
-}
-
+/* The menu owns the top-right corner; the state label stays top-left, so the
+   two never compete. */
 .showcase-item-menu {
   position: fixed;
   z-index: 170;

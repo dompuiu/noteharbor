@@ -315,7 +315,7 @@ describe("the catalog checklist", () => {
     expect(summary(container)).toHaveTextContent("1 unseen");
     expect(summary(container)).toHaveTextContent("50%");
 
-    // Owned: primary photo, a Present action, and the ownership check.
+    // Owned: primary photo, a Present action, and the OWNED state label.
     expect(
       screen.getByRole("button", { name: "Present 1 leu · Pick 22a · 1917" }),
     ).toBeInTheDocument();
@@ -323,16 +323,19 @@ describe("the catalog checklist", () => {
       screen.getByRole("button", {
         name: "1 leu · Pick 22a · 1917 is owned. Mark as not owned",
       }),
-    ).toBeInTheDocument();
-    // Seen: the same photo treatment plus the SEEN tag and a direct toggle.
+    ).toHaveTextContent("Owned");
+    // Seen: the same photo (no dimming) and the same label treatment.
     expect(
       screen.getByRole("button", {
         name: "5 lei · Pick 24c · 1920 is seen. Mark as owned",
       }),
-    ).toBeInTheDocument();
-    expect(
-      container.querySelector(".showcase-seen-tag"),
     ).toHaveTextContent("Seen");
+    expect(container.querySelector(".showcase-card-state--seen")).not.toBeNull();
+    expect(container.querySelector(".showcase-card-image--seen")).toBeNull();
+    // Both labels carry the state; the card no longer paints an action row.
+    expect(container.querySelector(".showcase-catalog-foot")).toBeNull();
+    expect(screen.queryByText("Mark owned")).not.toBeInTheDocument();
+    expect(screen.queryByText(/Add notes/)).not.toBeInTheDocument();
     // Unseen: the neutral well and the whole card opening the finder.
     expect(
       screen.getByRole("button", {
@@ -398,16 +401,16 @@ describe("the catalog checklist", () => {
     ).toBeInTheDocument();
   });
 
-  test("the owned check marks the displayed note not owned and Undo restores it", async () => {
+  test("the owned label marks the displayed note not owned and Undo restores it", async () => {
     const user = userEvent.setup();
     await openShowcase();
 
-    const check = screen.getByRole("button", {
+    const label = screen.getByRole("button", {
       name: "1 leu · Pick 22a · 1917 is owned. Mark as not owned",
     });
-    expect(check).not.toHaveAttribute("aria-haspopup", "menu");
+    expect(label).not.toHaveAttribute("aria-haspopup", "menu");
 
-    await user.click(check);
+    await user.click(label);
     expect(screen.queryByRole("menu")).not.toBeInTheDocument();
 
     await waitFor(() => expect(updateNote).toHaveBeenCalledTimes(1));
@@ -432,6 +435,34 @@ describe("the catalog checklist", () => {
       expect.objectContaining({ owned: true }),
       1,
     );
+  });
+
+  test("clicking a seen card opens the note instead of marking it owned", async () => {
+    const user = userEvent.setup();
+    const tree = [
+      categoryNode([
+        entryNode(
+          22,
+          {
+            catalog_number: "25d",
+            denomination: "10 lei",
+            issue_date: "1921",
+          },
+          1,
+        ),
+        noteNode(400, SEEN_NOTE, 2),
+      ]),
+    ];
+    await openShowcase(tree);
+
+    await user.click(
+      screen.getByRole("button", { name: "5 lei · Pick 24c · 1920" }),
+    );
+
+    expect(updateNote).not.toHaveBeenCalled();
+    expect(
+      await screen.findByRole("dialog", { name: /5 lei.*Pick 24c/ }),
+    ).toBeInTheDocument();
   });
 
   test("an unseen shell opens the finder and a picked note replaces it", async () => {

@@ -9,16 +9,14 @@ import {
 } from "../lib/showcaseTree.js";
 import { ShowcaseCatalogWell } from "./ShowcaseCatalogWell.jsx";
 
-// One card in a catalog Showcase. A real note leaf is owned or seen; a catalog
-// shell is always unseen. The card itself is one button so keyboard navigation
-// still sees one card per grid cell; the ownership control sits beside it as a
-// direct toggle, never a second menu (the item menu carries the same action).
+// One card in a catalog Showcase. A note leaf is owned or seen; a catalog shell
+// is always unseen. The card body is one button that opens the note (or the
+// shell's finder), so keyboard navigation still sees one card per grid cell.
 //
-// Owned: the note photo and a white check disc that marks it not owned.
-// Seen: the note photo desaturated, a SEEN tag, and the card itself marks it
-// owned.
-// Unseen: a recessed shell well carrying the catalog identity; the whole card
-// opens the finder that replaces the shell with a note.
+// The state is a label pinned to the photo's corner: Seen and Owned share the
+// same pill, and the label is the ownership toggle. The photo itself never
+// changes opacity or colour: a seen note keeps its real image, because only the
+// label says whether the record is owned.
 function noteLabel(note) {
   return showcaseNoteDisplayParts(note).join(" · ") || "Untitled note";
 }
@@ -37,10 +35,11 @@ function CheckIcon() {
   return (
     <svg
       aria-hidden="true"
+      className="showcase-card-state-icon"
       focusable="false"
-      height="15"
+      height="11"
       viewBox="0 0 24 24"
-      width="15"
+      width="11"
     >
       <path
         d="m5 12.5 4.5 4.5L19 7"
@@ -48,9 +47,30 @@ function CheckIcon() {
         stroke="currentColor"
         strokeLinecap="round"
         strokeLinejoin="round"
-        strokeWidth="2.4"
+        strokeWidth="3.2"
       />
     </svg>
+  );
+}
+
+// The Seen and Owned labels are the toggle: clicking the picture never changes
+// ownership, clicking the label always does. `data-showcase-focus` keeps the
+// screen's post-write focus restore landing on the same control.
+function StateLabel({ label, node, note, onToggleOwned, state }) {
+  const owned = state === "owned";
+
+  return (
+    <button
+      aria-label={`${label} is ${state}. Mark as ${owned ? "not owned" : "owned"}`}
+      className={`showcase-card-state showcase-card-state--${state}`}
+      data-showcase-focus={owned ? "check" : "ownership"}
+      onClick={() => onToggleOwned?.(note, !owned, node.id)}
+      title={owned ? "Owned — mark as not owned" : "Seen — mark as owned"}
+      type="button"
+    >
+      {owned ? <CheckIcon /> : null}
+      {owned ? "Owned" : "Seen"}
+    </button>
   );
 }
 
@@ -87,43 +107,10 @@ function ShowcaseCatalogCard({
           <span className="showcase-card-caption-row">
             <span className="showcase-card-caption">{label}</span>
           </span>
-          <span className="showcase-catalog-foot">
-            <span aria-hidden="true" className="showcase-check-empty" />
-            <span>Add notes</span>
-            <span aria-hidden="true" className="showcase-catalog-arrow">
-              →
-            </span>
-          </span>
         </button>
       </div>
     );
   }
-
-  const body = (
-    <>
-      <span
-        className={`showcase-card-image${state === "seen" ? " showcase-card-image--seen" : ""}`}
-      >
-        {image ? (
-          <img alt={label} src={image.path} />
-        ) : (
-          <span className="showcase-card-no-image">No image</span>
-        )}
-        {state === "seen" ? (
-          <span className="showcase-seen-tag">Seen</span>
-        ) : null}
-      </span>
-      <span className="showcase-card-caption-row">
-        <span className="showcase-card-caption">{label}</span>
-      </span>
-      {state === "seen" ? (
-        <span className="showcase-catalog-foot">
-          <span aria-hidden="true" className="showcase-check-empty" />
-          <span>Mark owned</span>
-        </span>
-      ) : null}
-    </>
-  );
 
   const openBody = () => {
     if (entry) {
@@ -134,52 +121,36 @@ function ShowcaseCatalogCard({
     onOpenNote?.(node, "front");
   };
 
-  if (state === "seen") {
-    return (
-      <div
-        className="showcase-cell showcase-catalog-cell"
-        data-showcase-node-id={node?.id}
-      >
-        <button
-          aria-label={`${label} is seen. Mark as owned`}
-          className="showcase-card showcase-card--catalog showcase-card--seen"
-          data-showcase-focus="ownership"
-          data-showcase-node-id={node?.id}
-          onClick={() => onToggleOwned?.(note, true, node.id)}
-          type="button"
-        >
-          {body}
-        </button>
-      </div>
-    );
-  }
-
   return (
     <div
       className="showcase-cell showcase-catalog-cell"
       data-showcase-node-id={node?.id}
     >
+      <StateLabel
+        label={label}
+        node={node}
+        note={note}
+        onToggleOwned={onToggleOwned}
+        state={state}
+      />
       <button
         aria-label={entry ? `Present ${label}` : label}
-        className="showcase-card showcase-card--catalog showcase-card--owned"
+        className={`showcase-card showcase-card--catalog showcase-card--${state}`}
         data-showcase-node-id={node?.id}
         onClick={openBody}
         type="button"
       >
-        {body}
+        <span className="showcase-card-image">
+          {image ? (
+            <img alt={label} src={image.path} />
+          ) : (
+            <span className="showcase-card-no-image">No image</span>
+          )}
+        </span>
+        <span className="showcase-card-caption-row">
+          <span className="showcase-card-caption">{label}</span>
+        </span>
       </button>
-      <span className="showcase-catalog-check">
-        <button
-          aria-label={`${label} is owned. Mark as not owned`}
-          className="showcase-card-check"
-          data-showcase-focus="check"
-          onClick={() => onToggleOwned?.(note, false, node.id)}
-          title="Owned — mark as not owned"
-          type="button"
-        >
-          <CheckIcon />
-        </button>
-      </span>
     </div>
   );
 }
