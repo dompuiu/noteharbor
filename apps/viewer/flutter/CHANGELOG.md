@@ -4,9 +4,12 @@ All notable changes to the Note Harbor Viewer (Flutter app) are documented in th
 
 ## [Unreleased]
 
+## [1.15.1] - 2026-11-14
+
 ### Changed
 
-- Image popover: the wheel, `+`/`-` and the stepper now step up from the fitted image in the Editor's ladder - 1.25×, 1.5×, 2×, 3× and 4× - instead of throwing the first step straight to 1:1, which for a large scan is far above the fit view. The ladder ends at 4× fit, and the `1:1` stop still lands on the scan's real size from any level.
+- Image popover: the wheel, `+`/`-` and the stepper now step up from the fitted image in the Editor's ladder - 1.25×, 1.5×, 2×, 3× and 4× - instead of throwing the first step straight to 1:1, which for a large scan is far above the fit view. The ladder ends at 4× fit, and the `1:1` stop still lands on the scan's real size from any level; a scan the fit view already enlarges stays unzoomable.
+- Dependencies: `screen_retriever` 0.4 and `window_manager` 0.7.
 
 ## [1.15.0] - 2026-11-14
 
