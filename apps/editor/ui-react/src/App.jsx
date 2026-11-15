@@ -26,6 +26,7 @@ import { ShowcasesProvider, useShowcases } from "./lib/showcases.jsx";
 import {
   CATALOG_ROUTES,
   DEFAULT_DESTINATION,
+  NEW_SHOWCASE_ID,
   SHOWCASE_ROUTES,
 } from "./lib/routes.js";
 
@@ -100,8 +101,8 @@ function CollectionHomeRedirect() {
 }
 
 // A bare `/portfolio/showcases/:id` URL (the pre-`view`-segment shape, and any
-// hand-typed mode-less link) lands on the view mode with the query kept, so a
-// `?node=` deep link still drills.
+// hand-typed mode-less link) lands on the showcase view with the query kept, so
+// a `?node=` deep link still drills.
 function LegacyShowcaseRedirect() {
   const { id } = useParams();
   const location = useLocation();
@@ -109,6 +110,25 @@ function LegacyShowcaseRedirect() {
     <Navigate
       replace
       to={{ pathname: SHOWCASE_ROUTES.showcase(id), search: location.search }}
+    />
+  );
+}
+
+// The retired `/edit` segment lands on the same always-editable view. A
+// `new` draft URL has no server row to show; it returns to the Showcases hub.
+function ShowcaseEditRedirect() {
+  const { id } = useParams();
+  const location = useLocation();
+  return (
+    <Navigate
+      replace
+      to={{
+        pathname:
+          id === NEW_SHOWCASE_ID
+            ? SHOWCASE_ROUTES.showcases
+            : SHOWCASE_ROUTES.showcase(id),
+        search: location.search,
+      }}
     />
   );
 }
@@ -286,11 +306,11 @@ function ShellContent() {
                   path={CATALOG_ROUTES.noteEdit(":id")}
                 />
                 <Route
-                  element={<ShowcaseScreen key="view" mode="view" />}
+                  element={<ShowcaseScreen />}
                   path={SHOWCASE_ROUTES.showcase(":id")}
                 />
                 <Route
-                  element={<ShowcaseScreen key="edit" mode="edit" />}
+                  element={<ShowcaseEditRedirect />}
                   path={SHOWCASE_ROUTES.showcaseEdit(":id")}
                 />
                 <Route

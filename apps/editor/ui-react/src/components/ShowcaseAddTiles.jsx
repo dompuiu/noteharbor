@@ -1,17 +1,19 @@
-import { ShowcaseGroupingTile } from "./ShowcaseGroupingTile.jsx";
-import { ShowcaseNoteTile } from "./ShowcaseNoteTile.jsx";
-
-// The edit-only `+` actions for one grid level. The two tiles stack vertically
-// inside a single grid cell so `+ Add notes` never stretches beside a note
-// while `+ Add grouping` sits small on the next row. The container fills its
-// grid cell and keeps a note-sized minimum height, so it reads as one note
-// even when it wraps onto its own row.
-function ShowcaseAddTiles({ onAddNotes, onAddGrouping }) {
+// The one `+ Add` block at the end of a level. It opens the merged add dialog
+// (notes or catalog shell); grouping creation lives in the same dialog's item
+// menus, so the canvas no longer needs a stack of edit-only tiles.
+function ShowcaseAddTiles({ onClick }) {
   return (
-    <div className="showcase-add-tiles">
-      <ShowcaseNoteTile onClick={onAddNotes} />
-      <ShowcaseGroupingTile onAdd={onAddGrouping} />
-    </div>
+    <button
+      aria-label="Add to this level"
+      className="showcase-tile showcase-tile--add"
+      onClick={onClick}
+      type="button"
+    >
+      <span aria-hidden="true" className="showcase-tile-plus">
+        +
+      </span>
+      Add
+    </button>
   );
 }
 

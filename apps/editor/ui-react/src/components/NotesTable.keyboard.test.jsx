@@ -1277,7 +1277,7 @@ describe("Selection actions tab cycle", () => {
     expect(moveDown).toHaveFocus();
   });
 
-  test("Tab walks Move down, Tags, Delete, Clear, then the last selected row's checkbox", async () => {
+  test("Tab walks Move down, Tags, Ownership, Delete, Clear, then the last selected row's checkbox", async () => {
     const user = userEvent.setup();
     getNotes.mockResolvedValue({ notes: threeNotes });
     renderTable();
@@ -1291,6 +1291,9 @@ describe("Selection actions tab cycle", () => {
       name: "Move 1 selected note down",
     });
     const tagsButton = within(bar).getByRole("button", { name: "Tags…" });
+    const ownershipButton = within(bar).getByRole("button", {
+      name: "Ownership…",
+    });
     const deleteButton = within(bar).getByRole("button", { name: "Delete" });
     const clearButton = within(bar).getByRole("button", {
       name: "Clear selection",
@@ -1301,6 +1304,9 @@ describe("Selection actions tab cycle", () => {
 
     await user.tab();
     expect(tagsButton).toHaveFocus();
+
+    await user.tab();
+    expect(ownershipButton).toHaveFocus();
 
     await user.tab();
     expect(deleteButton).toHaveFocus();
@@ -1345,12 +1351,17 @@ describe("Selection actions tab cycle", () => {
 
     // After the bar, focus returns to the row the cursor now sits on.
     const tagsButton = within(bar).getByRole("button", { name: "Tags…" });
+    const ownershipButton = within(bar).getByRole("button", {
+      name: "Ownership…",
+    });
     const deleteButton = within(bar).getByRole("button", { name: "Delete" });
     const clearButton = within(bar).getByRole("button", {
       name: "Clear selection",
     });
     await user.tab();
     expect(tagsButton).toHaveFocus();
+    await user.tab();
+    expect(ownershipButton).toHaveFocus();
     await user.tab();
     expect(deleteButton).toHaveFocus();
     await user.tab();
@@ -1372,6 +1383,9 @@ describe("Selection actions tab cycle", () => {
       name: "Selection actions",
     });
     const tagsButton = within(bar).getByRole("button", { name: "Tags…" });
+    const ownershipButton = within(bar).getByRole("button", {
+      name: "Ownership…",
+    });
     const deleteButton = within(bar).getByRole("button", { name: "Delete" });
     const clearButton = within(bar).getByRole("button", {
       name: "Clear selection",
@@ -1379,6 +1393,9 @@ describe("Selection actions tab cycle", () => {
 
     await user.tab();
     expect(tagsButton).toHaveFocus();
+
+    await user.tab();
+    expect(ownershipButton).toHaveFocus();
 
     await user.tab();
     expect(deleteButton).toHaveFocus();
@@ -1682,6 +1699,12 @@ describe("Escape clears the selection before the row cursor", () => {
     expect(
       within(bar).getByRole("button", {
         name: "Tags…",
+      }),
+    ).toHaveFocus();
+    await user.tab();
+    expect(
+      within(bar).getByRole("button", {
+        name: "Ownership…",
       }),
     ).toHaveFocus();
     await user.tab();

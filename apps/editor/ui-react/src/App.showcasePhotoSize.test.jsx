@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 // API mocked. The other screens are stubbed so the assertions land on the
 // showcase header control and its shared grid.
 vi.mock("./lib/api.js", () => ({
+  createCatalogEntry: vi.fn(),
   createCategory: vi.fn(),
   createCollection: vi.fn(),
   createShowcase: vi.fn(),
@@ -23,7 +24,9 @@ vi.mock("./lib/api.js", () => ({
   renameShowcase: vi.fn(),
   reorderCollections: vi.fn(),
   reorderShowcases: vi.fn(),
+  updateCatalogEntry: vi.fn(),
   updateNode: vi.fn(),
+  updateNodeNotes: vi.fn(),
   reorderNodes: vi.fn(),
 }));
 
@@ -163,5 +166,14 @@ describe("the showcase photo size control", () => {
     await screen.findByRole("group", { name: "Photo size" });
     expect(photoSizeGroup().getByRole("radio", { name: "Small" })).toBeChecked();
     expect(gridMinWidth()).toBe("200px");
+  });
+
+  test("prints each size as the S / M / L letter in the pill", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    const group = await screen.findByRole("group", { name: "Photo size" });
+    expect(within(group).getByText("S")).toBeInTheDocument();
+    expect(within(group).getByText("M")).toBeInTheDocument();
+    expect(within(group).getByText("L")).toBeInTheDocument();
   });
 });

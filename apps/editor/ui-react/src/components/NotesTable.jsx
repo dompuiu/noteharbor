@@ -15,6 +15,7 @@ import {
   getNotes,
   getTags,
   reorderNotes as saveNotesOrder,
+  updateNotesOwned,
   updateNotesTags,
 } from "../lib/api.js";
 import {
@@ -62,6 +63,7 @@ import {
 import { noteThumbnailPath } from "../lib/tableCells.jsx";
 import { makeCondition, parseFilterInput } from "../lib/tableFilters.js";
 import { useConfirmation } from "./ConfirmDialog.jsx";
+import { BulkOwnershipPanel } from "./BulkOwnershipPanel.jsx";
 import { BulkTagPanel } from "./BulkTagPanel.jsx";
 import { NoteEditForm } from "./NoteEditForm.jsx";
 import { NoCollectionsPrompt } from "./NoCollectionsPrompt.jsx";
@@ -779,12 +781,20 @@ function NotesTable({
   const [tagsSaving, setTagsSaving] = useState(false);
   const [tagsError, setTagsError] = useState("");
   const bulkTagsButtonRef = useRef(null);
+  // The bulk Ownership panel follows the same shape: one panel, one staged
+  // choice, one write. It replaces the old Mark owned / Mark unowned pair.
+  const [ownershipOpen, setOwnershipOpen] = useState(false);
+  const [ownershipSaving, setOwnershipSaving] = useState(false);
+  const [ownershipError, setOwnershipError] = useState("");
+  const bulkOwnershipButtonRef = useRef(null);
 
-  // A staged Tag change belongs to the selection it was built against: any
-  // row checkbox or Select all change closes the panel and discards it.
+  // A staged change belongs to the selection it was built against: any row
+  // checkbox or Select all change closes the open panel and discards it.
   useEffect(() => {
     setTagsOpen(false);
     setTagsError("");
+    setOwnershipOpen(false);
+    setOwnershipError("");
   }, [selectedIds]);
 
   useEffect(() => {
@@ -3270,6 +3280,10 @@ function NotesTable({
     setTagVocabulary([]);
     setTagVocabularyError("");
     setTagsError("");
+    // One anchored panel at a time: the bar can carry two now, and stacking
+    // them would hide the table they both describe.
+    setOwnershipOpen(false);
+    setOwnershipError("");
     setTagsOpen(true);
   }
 
@@ -3286,6 +3300,28 @@ function NotesTable({
     }
 
     openTagsPanel();
+  }
+
+  function openOwnershipPanel() {
+    setOwnershipError("");
+    setTagsOpen(false);
+    setTagsError("");
+    setOwnershipOpen(true);
+  }
+
+  function closeOwnershipPanel() {
+    setOwnershipOpen(false);
+    setOwnershipError("");
+    requestAnimationFrame(() => bulkOwnershipButtonRef.current?.focus());
+  }
+
+  function toggleOwnershipPanel() {
+    if (ownershipOpen) {
+      closeOwnershipPanel();
+      return;
+    }
+
+    openOwnershipPanel();
   }
 
   async function applyTags({ add, remove }) {
@@ -3322,6 +3358,47 @@ function NotesTable({
       `Tags updated on ${noteIds.length} note${noteIds.length === 1 ? "" : "s"}`,
     );
     requestAnimationFrame(() => bulkTagsButtonRef.current?.focus());
+  }
+
+  async function applyOwnership(owned) {
+    if (ownershipSaving) {
+      return;
+    }
+
+    const noteIds = selectedNotes.map((note) => note.id);
+
+    if (!noteIds.length) {
+      return;
+    }
+
+    setActionError("");
+    setOwnershipError("");
+    setOwnershipSaving(true);
+
+    try {
+      await updateNotesOwned(collectionId, noteIds, owned);
+    } catch (actionError) {
+      // Keep the panel and its staged choice so the collector can retry.
+      setOwnershipError(actionError.message);
+      setOwnershipSaving(false);
+      return;
+    }
+
+    try {
+      // Repaint from the server so the rows carry the flag the write landed,
+      // not just the one the panel asked for.
+      await loadNotes();
+    } catch (loadFailure) {
+      // The write landed; a failed repaint must not read as a failed write.
+      setActionError(loadFailure.message);
+    }
+
+    setOwnershipOpen(false);
+    setOwnershipSaving(false);
+    toastRef.current?.show(
+      `Marked ${noteIds.length} note${noteIds.length === 1 ? "" : "s"} as ${owned ? "owned" : "unowned"}`,
+    );
+    requestAnimationFrame(() => bulkOwnershipButtonRef.current?.focus());
   }
 
   async function handleClearAllTags(tagNames) {
@@ -4576,6 +4653,17 @@ function NotesTable({
           />
         ) : null}
 
+        {ownershipOpen && selectedNotes.length ? (
+          <BulkOwnershipPanel
+            anchorRef={bulkBarRef}
+            error={ownershipError}
+            notes={selectedNotes}
+            onApply={applyOwnership}
+            onClose={closeOwnershipPanel}
+            saving={ownershipSaving}
+          />
+        ) : null}
+
         {tagsOpen && selectedNotes.length ? (
           <BulkTagPanel
             anchorRef={bulkBarRef}
@@ -4634,6 +4722,7 @@ function NotesTable({
                   onMove={openMoveForSelection}
                   onMoveSelectionDown={() => handleSelectionReorder(1)}
                   onMoveSelectionUp={() => handleSelectionReorder(-1)}
+                  onOwnership={toggleOwnershipPanel}
                   onTags={toggleTagsPanel}
                   onLeaveBackward={() => {
                     selectionTabArmedRef.current = false;
@@ -4646,6 +4735,9 @@ function NotesTable({
                   selectedCount={selectedIds.length}
                   selectionContiguous={selectionReorderRun != null}
                   saving={reorderLoading}
+                  ownershipButtonRef={bulkOwnershipButtonRef}
+                  ownershipOpen={ownershipOpen}
+                  ownershipSaving={ownershipSaving}
                   tagsButtonRef={bulkTagsButtonRef}
                   tagsOpen={tagsOpen}
                   tagsSaving={tagsSaving}

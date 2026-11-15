@@ -88,6 +88,7 @@ const emptyForm = {
   serial: "",
   url: "",
   notes: "",
+  owned: false,
   tags: [],
 };
 
@@ -565,6 +566,7 @@ function NoteEditForm({
             serial: notePayload.note.serial ?? "",
             url: notePayload.note.url ?? "",
             notes: notePayload.note.notes ?? "",
+            owned: notePayload.note.owned ?? false,
             tags: notePayload.note.tags.map((tag) => tag.name),
           });
           setCurrentImages(notePayload.note.images ?? []);
@@ -1494,6 +1496,8 @@ function NoteEditForm({
   const notesInputId = fieldInputId("notes");
   const notesSourceId = `${notesInputId}-source`;
   const notesScrapedFrom = scrapedFieldSource("notes");
+  const ownedInputId = fieldInputId("owned");
+  const ownedHintId = `${ownedInputId}-hint`;
   const scrapedCount = Object.keys(scrapeUndo ?? {}).length;
   // Create mode titles the screen with the mode's own wording; edit mode
   // titles it with the note's denomination, falling back the same way the
@@ -1940,6 +1944,30 @@ function NoteEditForm({
               rows="4"
               value={form.notes}
             />
+          </div>
+
+          {/* Ownership belongs to the Note itself, not to any one Showcase,
+              so the label says nothing about where it appears. */}
+          <div className="field-block full-span">
+            <label className="field-checkbox" htmlFor={ownedInputId}>
+              <input
+                aria-describedby={ownedHintId}
+                checked={form.owned}
+                id={ownedInputId}
+                name="owned"
+                onChange={(event) =>
+                  setForm((current) => ({
+                    ...current,
+                    owned: event.target.checked,
+                  }))
+                }
+                type="checkbox"
+              />
+              <span>I own this note</span>
+            </label>
+            <p className="muted field-checkbox-hint" id={ownedHintId}>
+              Ownership applies to the note across the library.
+            </p>
           </div>
 
           {/* One group for the four Note images, so each card's image

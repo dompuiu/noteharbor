@@ -27,6 +27,17 @@ import { SelectField } from "./SelectField.jsx";
 // (front thumbnail, then front full, then back) and lazy-load; the hover
 // preview reuses the table's thumb-preview pattern (a positioned bubble that
 // only mounts the full-size image while visible, clamped inside the list).
+//
+// Embedded is the specimen manager's append mode: the finder sits inline below
+// the entry's specimens instead of owning a modal shell. It hides notes already
+// attached (`excludeNoteIds`), chips each row Owned/Seen, and sorts owned
+// matches first so a library record is one click away. Selection, filtering,
+// and virtualization are the same as the standalone picker.
+//
+// Edit mode passes `mode`/`onModeChange`/`notice` to add the Notes ↔ Catalog
+// entries switch and the inline skipped-notes line; `onAdd` then receives the
+// active mode as its third argument. The append-mode finder leaves all three
+// out.
 const COLUMNS = [
   {
     value: "collection",
@@ -83,7 +94,18 @@ function noteCaption(note) {
     .join(" · ");
 }
 
-function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
+function ShowcaseNotePicker({
+  node,
+  collections = [],
+  embedded = false,
+  excludeNoteIds,
+  mode = "notes",
+  notice = "",
+  singleSelect = false,
+  onAdd,
+  onClose,
+  onModeChange = null,
+}) {
   const [notes, setNotes] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
@@ -124,8 +146,13 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
 
   // Escape dismisses the popup, matching the shortcuts overlay and the image
   // popover. A click on the backdrop does the same; clicks inside the dialog
-  // stop propagation so selecting notes never closes it.
+  // stop propagation so selecting notes never closes it. Embedded, the
+  // manager's dialog owns Escape and the backdrop.
   useEffect(() => {
+    if (embedded) {
+      return undefined;
+    }
+
     function handleEscape(event) {
       if (event.key === "Escape") {
         event.preventDefault();
@@ -135,7 +162,7 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
 
     window.addEventListener("keydown", handleEscape);
     return () => window.removeEventListener("keydown", handleEscape);
-  }, [onClose]);
+  }, [embedded, onClose]);
 
   useEffect(() => {
     let active = true;
@@ -184,13 +211,44 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
     [node],
   );
 
+  // The manager's append mode hides the entry's own specimens instead of
+  // showing them disabled: there is nothing to pick on a note that is already
+  // attached. A missing list keeps the standalone finder unchanged.
+  const excludedIds = useMemo(
+    () => new Set(excludeNoteIds ?? []),
+    [excludeNoteIds],
+  );
+
+  const availableNotes = useMemo(
+    () => notes.filter((note) => !excludedIds.has(note.id)),
+    [excludedIds, notes],
+  );
+
   const filtered = useMemo(
-    () => filterNotes(notes, column, value),
-    [notes, column, value],
+    () => filterNotes(availableNotes, column, value),
+    [availableNotes, column, value],
+  );
+
+  // The catalog finder (the manager's append mode and an unseen card's finder)
+  // treats owned records as the likely pick: their rows chip Owned/Seen and
+  // owned matches lead. The draft finder keeps its plain collection order.
+  const catalogFinder = embedded || node?.node_type === "catalog_entry";
+
+  // In append mode a library record is the likelier pick, so owned notes lead.
+  // The sort is stable: within each group the collection order is untouched.
+  const visible = useMemo(
+    () =>
+      catalogFinder
+        ? [...filtered].sort(
+            (left, right) =>
+              Number(Boolean(right.owned)) - Number(Boolean(left.owned)),
+          )
+        : filtered,
+    [catalogFinder, filtered],
   );
 
   const rowVirtualizer = useVirtualizer({
-    count: filtered.length,
+    count: visible.length,
     estimateSize: () => 64,
     getScrollElement: () => listRef.current,
     overscan: 10,
@@ -272,6 +330,10 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
     }
 
     setSelectedIds((current) => {
+      if (singleSelect) {
+        return current.has(noteId) ? new Set() : new Set([noteId]);
+      }
+
       const next = new Set(current);
 
       if (next.has(noteId)) {
@@ -292,7 +354,7 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
     setSelectedIds((current) => {
       const next = new Set(current);
 
-      filtered.forEach((note) => {
+      visible.forEach((note) => {
         if (!addedIds.has(note.id)) {
           next.add(note.id);
         }
@@ -306,7 +368,7 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
     setSelectedIds((current) => {
       const next = new Set(current);
 
-      filtered.forEach((note) => {
+      visible.forEach((note) => {
         next.delete(note.id);
       });
 
@@ -325,7 +387,7 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
     setAddError("");
 
     try {
-      await onAdd(ids, notes);
+      await onAdd(ids, notes, mode);
       setSelectedIds(new Set());
       setBusy(false);
 
@@ -407,6 +469,17 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
           {note.catalog_number || "—"}
         </span>
         <span className="showcase-note-row-pill">{note.collection_name}</span>
+        {catalogFinder ? (
+          <span
+            className={`showcase-note-row-pill ${
+              note.owned
+                ? "showcase-note-row-pill--owned"
+                : "showcase-note-row-pill--seen"
+            }`}
+          >
+            {note.owned ? "Owned" : "Seen"}
+          </span>
+        ) : null}
         {isAdded ? (
           <span className="showcase-note-row-pill showcase-note-row-pill--added">
             added
@@ -421,6 +494,228 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
   // visible and selectable. A measured browser always takes the virtual path.
   const useVirtualList = virtualRows.length > 0;
 
+  const pickerBody = (
+    <>
+      {embedded ? (
+        <h3 className="showcase-picker-title showcase-picker-title--embedded">
+          Add notes
+        </h3>
+      ) : (
+        <div className="showcase-picker-head">
+          <h2 className="showcase-picker-title">
+            {singleSelect
+              ? `Replace “${nodeLabel}” with a note`
+              : `Add notes to “${nodeLabel}”`}
+          </h2>
+          <button className="button" onClick={onClose} type="button">
+            Done
+          </button>
+        </div>
+      )}
+
+      <div className="showcase-picker-filter">
+        <SelectField
+          ariaLabel="Filter column"
+          onChange={setColumn}
+          options={COLUMNS}
+          value={column}
+          wrapperClassName="showcase-picker-column"
+        />
+        <input
+          aria-label="Filter value"
+          autoFocus={!embedded}
+          className="showcase-picker-value"
+          onChange={(event) => setValue(event.target.value)}
+          placeholder={activeColumn.placeholder}
+          ref={filterRef}
+          type="text"
+          value={value}
+        />
+        {singleSelect ? null : (
+          <>
+            <button className="button" onClick={selectAll} type="button">
+              Select all
+            </button>
+            <button className="button" onClick={deselectAll} type="button">
+              Deselect all
+            </button>
+          </>
+        )}
+      </div>
+
+      {onModeChange ? (
+        <div
+          aria-label="Add notes as"
+          className="showcase-picker-modes"
+          role="group"
+        >
+          <button
+            aria-pressed={mode === "notes"}
+            className="showcase-picker-mode"
+            onClick={() => onModeChange("notes")}
+            type="button"
+          >
+            Notes
+          </button>
+          <button
+            aria-pressed={mode === "catalog"}
+            className="showcase-picker-mode"
+            onClick={() => onModeChange("catalog")}
+            type="button"
+          >
+            Catalog entries
+          </button>
+        </div>
+      ) : null}
+
+      <p className="showcase-picker-hint">
+        {mode === "catalog"
+          ? "A note joins the entry with the same catalog value in this block; a note without one is skipped."
+          : column === "catalog"
+            ? "The catalog filter keeps the family rule: 22 matches 22, 22a, 22b, and 22s — never 220."
+            : "The selection carries across filter changes, so you can pick notes from several collections."}
+      </p>
+
+      {notice ? (
+        <p
+          aria-live="polite"
+          className="showcase-picker-notice"
+          role="status"
+        >
+          {notice}
+        </p>
+      ) : null}
+
+      {!loading && !loadError ? (
+        <p aria-live="polite" className="muted showcase-picker-count">
+          {filtered.length === availableNotes.length
+            ? `${availableNotes.length} notes`
+            : `${filtered.length} of ${availableNotes.length} notes`}
+          {selectedIds.size ? ` · ${selectedIds.size} selected` : ""}
+        </p>
+      ) : null}
+
+      <div className="showcase-picker-list" ref={listRef}>
+        {loading ? (
+          <p className="muted showcase-picker-empty">Loading notes…</p>
+        ) : null}
+
+        {!loading && loadError ? (
+          <p className="showcase-error" role="alert">
+            {loadError}
+          </p>
+        ) : null}
+
+        {!loading && !loadError && visible.length === 0 ? (
+          <p className="muted showcase-picker-empty">
+            {availableNotes.length === 0 && notes.length > 0
+              ? "Every note is already on this entry."
+              : "No notes match."}
+          </p>
+        ) : null}
+
+        {!loading && !loadError && visible.length > 0 ? (
+          useVirtualList ? (
+            <div
+              className="showcase-picker-virtual"
+              style={{ height: `${totalSize}px` }}
+            >
+              {virtualRows.map((virtualRow) => {
+                const note = visible[virtualRow.index];
+
+                if (!note) {
+                  return null;
+                }
+
+                // Each virtual row is translated, which creates its own
+                // stacking context: without a lift, a later sibling row
+                // paints above this row's preview bubble. Raise the row
+                // carrying the open preview so the bubble stays on top.
+                const isPreviewOpen = thumbPreview?.noteId === note.id;
+
+                return (
+                  <div
+                    className="showcase-picker-virtual-row"
+                    data-index={virtualRow.index}
+                    key={note.id}
+                    ref={(element) => {
+                      if (element) {
+                        rowVirtualizer.measureElement(element);
+                      }
+                    }}
+                    style={{
+                      transform: `translateY(${virtualRow.start}px)`,
+                      zIndex: isPreviewOpen ? 10 : undefined,
+                    }}
+                  >
+                    {renderNoteLabel(note)}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            visible.map((note) => {
+              const isPreviewOpen = thumbPreview?.noteId === note.id;
+
+              return (
+                <div
+                  key={note.id}
+                  style={
+                    isPreviewOpen
+                      ? { position: "relative", zIndex: 10 }
+                      : undefined
+                  }
+                >
+                  {renderNoteLabel(note)}
+                </div>
+              );
+            })
+          )
+        ) : null}
+      </div>
+
+      <div className="showcase-picker-actions">
+        <button
+          className="button"
+          disabled={!selectedIds.size || busy}
+          onClick={() => add(false)}
+          type="button"
+        >
+          {singleSelect
+            ? "Use selected note"
+            : `Add selected (${selectedIds.size})`}
+        </button>
+        {embedded || singleSelect ? null : (
+          <button
+            className="button button-primary"
+            disabled={!selectedIds.size || busy}
+            onClick={() => add(true)}
+            type="button"
+          >
+            Add &amp; close
+          </button>
+        )}
+
+        {addError ? (
+          <p className="showcase-error" role="alert">
+            {addError}
+          </p>
+        ) : null}
+      </div>
+    </>
+  );
+
+  if (embedded) {
+    return (
+      <section
+        aria-label="Add notes"
+        className="showcase-picker showcase-picker--embedded"
+      >
+        {pickerBody}
+      </section>
+    );
+  }
+
   return (
     <div className="showcase-picker-backdrop" onClick={onClose} role="presentation">
       <div
@@ -430,153 +725,7 @@ function ShowcaseNotePicker({ node, collections = [], onAdd, onClose }) {
         onClick={(event) => event.stopPropagation()}
         role="dialog"
       >
-        <div className="showcase-picker-head">
-          <h2 className="showcase-picker-title">Add notes to “{nodeLabel}”</h2>
-          <button className="button" onClick={onClose} type="button">
-            Done
-          </button>
-        </div>
-
-        <div className="showcase-picker-filter">
-          <SelectField
-            ariaLabel="Filter column"
-            onChange={setColumn}
-            options={COLUMNS}
-            value={column}
-            wrapperClassName="showcase-picker-column"
-          />
-          <input
-            aria-label="Filter value"
-            autoFocus
-            className="showcase-picker-value"
-            onChange={(event) => setValue(event.target.value)}
-            placeholder={activeColumn.placeholder}
-            ref={filterRef}
-            type="text"
-            value={value}
-          />
-          <button className="button" onClick={selectAll} type="button">
-            Select all
-          </button>
-          <button className="button" onClick={deselectAll} type="button">
-            Deselect all
-          </button>
-        </div>
-
-        <p className="showcase-picker-hint">
-          {column === "catalog"
-            ? "The catalog filter keeps the family rule: 22 matches 22, 22a, 22b, and 22s — never 220."
-            : "The selection carries across filter changes, so you can pick notes from several collections."}
-        </p>
-
-        {!loading && !loadError ? (
-          <p aria-live="polite" className="muted showcase-picker-count">
-            {filtered.length === notes.length
-              ? `${notes.length} notes`
-              : `${filtered.length} of ${notes.length} notes`}
-            {selectedIds.size ? ` · ${selectedIds.size} selected` : ""}
-          </p>
-        ) : null}
-
-        <div className="showcase-picker-list" ref={listRef}>
-          {loading ? (
-            <p className="muted showcase-picker-empty">Loading notes…</p>
-          ) : null}
-
-          {!loading && loadError ? (
-            <p className="showcase-error" role="alert">
-              {loadError}
-            </p>
-          ) : null}
-
-          {!loading && !loadError && filtered.length === 0 ? (
-            <p className="muted showcase-picker-empty">No notes match.</p>
-          ) : null}
-
-          {!loading && !loadError && filtered.length > 0 ? (
-            useVirtualList ? (
-              <div
-                className="showcase-picker-virtual"
-                style={{ height: `${totalSize}px` }}
-              >
-                {virtualRows.map((virtualRow) => {
-                  const note = filtered[virtualRow.index];
-
-                  if (!note) {
-                    return null;
-                  }
-
-                  // Each virtual row is translated, which creates its own
-                  // stacking context: without a lift, a later sibling row
-                  // paints above this row's preview bubble. Raise the row
-                  // carrying the open preview so the bubble stays on top.
-                  const isPreviewOpen = thumbPreview?.noteId === note.id;
-
-                  return (
-                    <div
-                      className="showcase-picker-virtual-row"
-                      data-index={virtualRow.index}
-                      key={note.id}
-                      ref={(element) => {
-                        if (element) {
-                          rowVirtualizer.measureElement(element);
-                        }
-                      }}
-                      style={{
-                        transform: `translateY(${virtualRow.start}px)`,
-                        zIndex: isPreviewOpen ? 10 : undefined,
-                      }}
-                    >
-                      {renderNoteLabel(note)}
-                    </div>
-                  );
-                })}
-              </div>
-            ) : (
-              filtered.map((note) => {
-                const isPreviewOpen = thumbPreview?.noteId === note.id;
-
-                return (
-                  <div
-                    key={note.id}
-                    style={
-                      isPreviewOpen
-                        ? { position: "relative", zIndex: 10 }
-                        : undefined
-                    }
-                  >
-                    {renderNoteLabel(note)}
-                  </div>
-                );
-              })
-            )
-          ) : null}
-        </div>
-
-        <div className="showcase-picker-actions">
-          <button
-            className="button"
-            disabled={!selectedIds.size || busy}
-            onClick={() => add(false)}
-            type="button"
-          >
-            Add selected ({selectedIds.size})
-          </button>
-          <button
-            className="button button-primary"
-            disabled={!selectedIds.size || busy}
-            onClick={() => add(true)}
-            type="button"
-          >
-            Add &amp; close
-          </button>
-
-          {addError ? (
-            <p className="showcase-error" role="alert">
-              {addError}
-            </p>
-          ) : null}
-        </div>
+        {pickerBody}
       </div>
     </div>
   );

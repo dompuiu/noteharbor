@@ -18,12 +18,33 @@ describe("showcase photo size styles", () => {
     expect(rule[1]).toMatch(/gap:\s*16px/);
   });
 
-  test("marks the chosen size with the accent family", () => {
+  test("marks the chosen size with the surface disc and its own ring", () => {
     const rule = styles.match(
       /\.showcase-photo-size-option:has\(input:checked\)\s*\{([^}]*)\}/,
     );
     expect(rule).not.toBeNull();
-    expect(rule[1]).toMatch(/background:\s*var\(--accent-soft\)/);
-    expect(rule[1]).toMatch(/color:\s*var\(--accent-strong\)/);
+    expect(rule[1]).toMatch(/background:\s*var\(--surface\)/);
+    expect(rule[1]).toMatch(
+      /box-shadow:\s*inset 0 0 0 1px var\(--border-control\)/,
+    );
+  });
+
+  test("draws each option as a pill-sized disc in one pill", () => {
+    const rule = styles.match(/\n\.showcase-photo-size-option\s*\{([^}]*)\}/);
+    expect(rule).not.toBeNull();
+    expect(rule[1]).toMatch(/width:\s*28px/);
+    expect(rule[1]).toMatch(/height:\s*28px/);
+    expect(rule[1]).toMatch(/border-radius:\s*var\(--radius-pill\)/);
+  });
+
+  // A Small card is 200px wide at its narrowest, so its title bar has to give
+  // the caption more of that width or the denomination falls off the end.
+  test("tightens the card title's inset on a Small grid", () => {
+    const rule = styles.match(
+      /\.showcase-grid\[data-photo-size="small"\] \.showcase-reorder-title\s*\{([^}]*)\}/,
+    );
+    expect(rule).not.toBeNull();
+    expect(rule[1]).toMatch(/right:\s*32px/);
+    expect(rule[1]).toMatch(/left:\s*32px/);
   });
 });

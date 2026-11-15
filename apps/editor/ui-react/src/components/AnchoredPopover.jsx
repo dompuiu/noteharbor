@@ -27,8 +27,9 @@ import { useAnchoredPopover } from "../lib/useAnchoredPopover.js";
 // `onClick={(event) => { event.stopPropagation(); triggerProps.onClick(event); }}`.
 // `initialFocus(panel)` names the control to focus when the panel opens; the
 // panel itself is the fallback. `children` may be a function that receives
-// `{ close }` when a control inside the panel has to dismiss it; that close
-// leaves focus where the caller puts it. Focus moving from the panel back to
+// `{ close }` when a control inside the panel has to dismiss it. `close()`
+// leaves focus where the caller puts it; `close({ returnFocus: true })`
+// returns focus to the trigger. Focus moving from the panel back to
 // the trigger keeps the panel open; leaving the trigger for anything outside
 // the panel closes it.
 //
@@ -185,7 +186,7 @@ export const AnchoredPopover = forwardRef(function AnchoredPopover(
               tabIndex={-1}
             >
               {typeof children === "function"
-                ? children({ close: () => setOpen(false) })
+                ? children({ close: (options) => closePanel(options) })
                 : children}
             </div>,
             document.body,

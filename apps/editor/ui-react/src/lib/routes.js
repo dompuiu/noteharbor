@@ -9,11 +9,9 @@ export const CATALOG_ROUTES = {
   noteEdit: (id) => `/catalog/notes/${id}/edit`,
 };
 
-// The Showcases hub's routes. View mode is read-only; edit mode adds the
-// authoring controls. Both modes hang off the same showcase path with a
-// trailing `view` / `edit` segment, so switching modes is a one-word swap that
-// stays on the same screen. The `portfolio` prefix is kept for continuity with
-// the Catalog prefix, but the old `categories` / `groupings` destinations retire.
+// The Showcases hub's routes. A showcase is one always-editable view: the
+// canvas saves each add, rename, remove, and reorder as it happens. The old
+// `edit` segment survives only as a redirect for bookmarks.
 export const SHOWCASE_ROUTES = {
   showcases: "/portfolio/showcases",
   showcase: (id) => `/portfolio/showcases/${id}/view`,
@@ -26,10 +24,8 @@ export function showcaseNodeSearch(nodeId) {
   return nodeId == null ? "" : `?node=${nodeId}`;
 }
 
-// A not-yet-saved showcase lives at this id. `+ New showcase` opens
-// `/portfolio/showcases/new/edit` with a sidebar draft row; Save POSTs the
-// showcase and navigates to its real id, while Cancel (or leaving the route)
-// discards the draft without touching the server.
+// The retired `new` draft id. `+ New showcase` now posts immediately and opens
+// the real id; this constant only redirects old `/new/edit` bookmarks.
 export const NEW_SHOWCASE_ID = "new";
 
 // A not-yet-saved collection lives at this id. `+ New collection` opens

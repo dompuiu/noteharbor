@@ -63,19 +63,27 @@ The Editor's presentation hub in the sidebar; it lists the workspace's Showcases
 _Avoid_: Portfolio
 
 **Showcase**:
-A named presentation tree the Editor author builds from notes across collections, made of Categories and Groupings.
+A named presentation tree the Editor author builds from notes across collections, made of Categories, Groupings, notes, and Catalog entries.
 _Avoid_: Album, gallery
 
 **Category**:
-A reusable label from the workspace's shared pool; placing it into a Showcase creates a Placement that holds that showcase's own notes and groupings.
+A reusable label from the workspace's shared pool; placing it into a Showcase creates a Placement that holds that showcase's own notes, groupings, and catalog entries.
 _Avoid_: Tag, group
 
 **Grouping**:
-A standalone node inside a Showcase that nests further Groupings and notes; owned by its parent and never shared between Categories or Showcases.
+A standalone node inside a Showcase that nests further Groupings, notes, and Catalog entries; owned by its parent and never shared between Categories or Showcases.
 
 **Placement**:
-One occurrence of a Category inside a Showcase, owning the notes and groupings shown there.
+One occurrence of a Category inside a Showcase, owning the notes, groupings, and Catalog entries shown there.
 _Avoid_: Instance, occurrence
+
+**Catalog shell**:
+A planned Showcase leaf that represents one Catalog value. It carries catalog metadata only, never notes: it is a placeholder that becomes that note card in place once the collector picks a library note. A Showcase with catalog shells reads as a catalog checklist; without them it stays a presentation-only Showcase.
+_Avoid_: Slot, want, specimen container
+
+**Owned / Seen / Unseen**:
+The state of a Note or Catalog shell. **Owned**: the Note is owned. **Seen**: a Note that is not owned. **Unseen**: a Catalog shell that still has no note. **Missing** is the umbrella for Seen and Unseen.
+_Avoid_: Have / want, present / absent (as states)
 
 **Cover image**:
 The one note image shown for a Grouping card; the Grouping may set its own, otherwise it derives the first note beneath it. Categories have no cover image — a Category card shows its name only.
@@ -92,12 +100,16 @@ _Avoid_: All notes screen (that is the Editor's), library
 ## Domain
 
 **Note**:
-One physical banknote (or banknote group) in the collection: its denomination, issue date, catalog number, grading, and associated images.
+One physical banknote (or banknote group) in the collection: its denomination, issue date, catalog number, grading, associated images, and whether it is owned.
 _Avoid_: Banknote, note_record, banknote row
 
 **Catalog family**:
 The set of notes whose catalog number shares a base number, each optionally followed by a single trailing letter: `22`, `22a`, `22b`, and `22s` are one family, while `220` and `221` are not.
 _Avoid_: Variation set
+
+**Catalog value**:
+The normalized catalog number that identifies a Catalog entry: `22a` and `22b` are different values in one Catalog family.
+_Avoid_: Variation, family (as the identity)
 
 **Collection**:
 A named group of notes forming one archive. Each note belongs to exactly one collection, and a collection's notes have an order.

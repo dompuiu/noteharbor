@@ -16,7 +16,11 @@ export function TableBulkBar({
   onMove,
   onMoveSelectionDown,
   onMoveSelectionUp,
+  onOwnership,
   onTags,
+  ownershipButtonRef,
+  ownershipOpen = false,
+  ownershipSaving = false,
   selectedCount,
   selectionContiguous = false,
   saving = false,
@@ -26,6 +30,7 @@ export function TableBulkBar({
 }) {
   const [working, setWorking] = useState(false);
   const workingRef = useRef(false);
+  const busy = working || ownershipSaving;
   const moveReasonId = useId();
   const moveUpReasonId = `${moveReasonId}-up`;
   const moveDownReasonId = `${moveReasonId}-down`;
@@ -47,8 +52,8 @@ export function TableBulkBar({
 
   const moveUpReason = moveReason("up", canMoveSelectionUp);
   const moveDownReason = moveReason("down", canMoveSelectionDown);
-  const moveUpDisabled = working || moveUpReason != null;
-  const moveDownDisabled = working || moveDownReason != null;
+  const moveUpDisabled = busy || moveUpReason != null;
+  const moveDownDisabled = busy || moveDownReason != null;
 
   async function handleDelete() {
     // The disabled button already blocks a second click, but the flag makes the
@@ -190,7 +195,7 @@ export function TableBulkBar({
       ) : null}
       {canMove ? (
         <button
-          disabled={working}
+          disabled={busy}
           onClick={onMove}
           type="button"
         >
@@ -202,7 +207,7 @@ export function TableBulkBar({
         aria-expanded={tagsOpen}
         aria-haspopup="dialog"
         className="table-bulk-bar-tags"
-        disabled={working || tagsSaving}
+        disabled={busy || tagsSaving}
         onClick={onTags}
         ref={tagsButtonRef}
         type="button"
@@ -210,8 +215,20 @@ export function TableBulkBar({
         Tags…
       </button>
       <button
+        aria-controls={ownershipOpen ? "bulk-ownership-panel" : undefined}
+        aria-expanded={ownershipOpen}
+        aria-haspopup="dialog"
+        className="table-bulk-bar-ownership"
+        disabled={busy || tagsSaving}
+        onClick={onOwnership}
+        ref={ownershipButtonRef}
+        type="button"
+      >
+        Ownership…
+      </button>
+      <button
         className="table-bulk-bar-delete"
-        disabled={working}
+        disabled={busy}
         onClick={handleDelete}
         type="button"
       >

@@ -59,39 +59,47 @@ describe("showcase note/grouping card heights", () => {
     }
   });
 
-  test("edit cells and grouping edit cards keep the same tight bottom pad", () => {
+  test("the reorder cell is a window: a bar, then the photo, one frame", () => {
     const cell = styles.match(/\n\.showcase-reorder-cell\s*\{([^}]*)\}/);
+    const bar = styles.match(/\n\.showcase-reorder-bar\s*\{([^}]*)\}/);
+    const title = styles.match(/\n\.showcase-reorder-title\s*\{([^}]*)\}/);
     const editcard = styles.match(
       /\n\.showcase-grouping-editcard\s*\{([^}]*)\}/,
     );
     expect(cell).not.toBeNull();
+    expect(bar).not.toBeNull();
+    expect(title).not.toBeNull();
     expect(editcard).not.toBeNull();
-    expect(cell[1]).toMatch(/padding-top:\s*36px/);
-    expect(cell[1]).toMatch(/padding:\s*10px 10px 6px/);
+    expect(cell[1]).toMatch(/padding:\s*0 0 6px/);
+    expect(cell[1]).not.toMatch(/padding-top/);
+    expect(bar[1]).toMatch(/height:\s*34px/);
+    expect(bar[1]).toMatch(/border-bottom:\s*1px solid var\(--border-soft\)/);
+    expect(title[1]).toMatch(/text-overflow:\s*ellipsis/);
     expect(editcard[1]).toMatch(/padding:\s*10px 10px 6px/);
   });
 
-  test("edit card fills its reorder cell so bottoms align", () => {
-    // Notes lack the grouping's 22px rename button, so their card ends ~3px
-    // short: without filling, the stretched row leaves a bigger gap under
-    // notes than under groupings. The inner card absorbs the row height so
-    // every cell ends on the same uniform bottom pad.
+  test("the card fills its reorder cell so cell and content end together", () => {
     const fill = styles.match(
-      /\.showcase-reorder-cell > \.showcase-cell > \.showcase-card--note,[\s\S]*?\.showcase-grouping-editcard\s*\{([^}]*)\}/,
+      /\.showcase-reorder-cell > \.showcase-card,[\s\S]*?\.showcase-reorder-cell > \.showcase-cell > \.showcase-card\s*\{([^}]*)\}/,
     );
     expect(fill).not.toBeNull();
     expect(fill[1]).toMatch(/flex:\s*1/);
+    // One frame per item: the cell owns the border, the card inside never
+    // paints a second one.
+    expect(fill[1]).toMatch(/border-color:\s*transparent/);
+    expect(fill[1]).toMatch(/background:\s*transparent/);
   });
 
   test("add tiles never drive the edit row taller than a note", () => {
     // The tiles stretch by design (flex children), so their minimum must sit
-    // at or below the true note height (min / 2 + ~67px of chrome). Anything
+    // at or below the true note height (min / 2 + ~49px of chrome: the 34px
+    // title bar, the 6px cell pad, borders, and the 8px card pads). Anything
     // above stretches the whole grid row and leaves dead space under cards,
     // which reads as extra gap on photo sizes whose columns sit near the min.
     const tiles = styles.match(/\n\.showcase-add-tiles\s*\{([^}]*)\}/);
     expect(tiles).not.toBeNull();
     expect(tiles[1]).toMatch(
-      /min-height:\s*calc\(var\(--showcase-card-min,\s*200px\)\s*\/\s*2\s*\+\s*67px\)/,
+      /min-height:\s*calc\(var\(--showcase-card-min,\s*200px\)\s*\/\s*2\s*\+\s*49px\)/,
     );
   });
 
@@ -164,30 +172,29 @@ describe("showcase note-card flip control", () => {
   });
 });
 
-describe("showcase edit-mode selection", () => {
-  test("the inner card never paints its own wash, so the cell is one tone", () => {
+describe("showcase focus: one plane", () => {
+  test("the cell paints the only focus ring, with no wash", () => {
     const rule = styles.match(
-      /\.showcase-screen--edit \.showcase-card:focus-visible\s*\{([^}]*)\}/,
+      /\.showcase-reorder-cell:has\(:focus-visible\)\s*\{([^}]*)\}/,
+    );
+    expect(rule).not.toBeNull();
+    expect(rule[1]).toMatch(/border-color:\s*transparent/);
+    expect(rule[1]).toMatch(/box-shadow:\s*inset 0 0 0 2px var\(--accent\)/);
+    expect(rule[1]).not.toMatch(/background:/);
+  });
+
+  test("the inner card never paints a second ring or wash", () => {
+    const rule = styles.match(
+      /\.showcase-reorder-cell:has\(:focus-visible\) \.showcase-card:focus-visible\s*\{([^}]*)\}/,
     );
     expect(rule).not.toBeNull();
     expect(rule[1]).toMatch(/background:\s*transparent/);
     expect(rule[1]).toMatch(/box-shadow:\s*none/);
   });
 
-  test("a selected cell blends its inner note and grouping into the wash", () => {
+  test("the grouping keeps only its spine once the cell is focused", () => {
     expect(styles).toMatch(
-      /\.showcase-screen--edit[\s\S]*?\.showcase-reorder-cell:has\(:focus-visible\)[\s\S]*?\.showcase-card--note/,
-    );
-    expect(styles).toMatch(
-      /\.showcase-screen--edit[\s\S]*?\.showcase-reorder-cell:has\(:focus-visible\)[\s\S]*?\.showcase-grouping-editcard/,
-    );
-    const blend = styles.match(
-      /\.showcase-grouping-editcard\s*\{[^}]*\}[\s\S]*?border-color:\s*transparent/,
-    );
-    expect(blend).not.toBeNull();
-    // The grouping keeps only its spine once blended.
-    expect(styles).toMatch(
-      /\.showcase-reorder-cell:has\(:focus-visible\)[\s\S]*?\.showcase-grouping-editcard\s*\{[^}]*box-shadow:\s*inset 3px 0 0 var\(--accent\)/,
+      /\.showcase-reorder-cell:has\(:focus-visible\)[\s\S]*?\.showcase-card--grouping:focus-visible\s*\{[^}]*box-shadow:\s*inset 3px 0 0 var\(--accent\)/,
     );
   });
 });

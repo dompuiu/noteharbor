@@ -1,5 +1,5 @@
 import { MemoryRouter } from "react-router-dom";
-import { render, screen, waitFor } from "@testing-library/react";
+import { render, screen, waitFor, within } from "@testing-library/react";
 import userEvent from "@testing-library/user-event";
 import { beforeEach, describe, expect, test, vi } from "vitest";
 
@@ -7,6 +7,7 @@ import { beforeEach, describe, expect, test, vi } from "vitest";
 // web API mocked. The other screens are stubbed so the assertions land on the
 // showcase canvas, not their unrelated data loads.
 vi.mock("./lib/api.js", () => ({
+  createCatalogEntry: vi.fn(),
   createCategory: vi.fn(),
   createCollection: vi.fn(),
   createShowcase: vi.fn(),
@@ -21,8 +22,11 @@ vi.mock("./lib/api.js", () => ({
   renameCategory: vi.fn(),
   renameCollection: vi.fn(),
   reorderCollections: vi.fn(),
+  updateCatalogEntry: vi.fn(),
   updateNode: vi.fn(),
+  updateNodeNotes: vi.fn(),
   reorderNodes: vi.fn(),
+  replaceCatalogEntryWithNote: vi.fn(),
 }));
 
 vi.mock("./components/NotesTable.jsx", () => ({
@@ -119,18 +123,19 @@ beforeEach(() => {
 });
 
 describe("the showcase category canvas", () => {
-  test("edit mode shows an expanded section per top-level category", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+  test("shows an expanded section per top-level category", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
     expect(
       await screen.findByRole("heading", { name: "Summer" }),
     ).toBeInTheDocument();
+    expect(screen.getByText("0 entries")).toBeInTheDocument();
     expect(
       screen.getByRole("button", { name: "Create a category" }),
     ).toBeInTheDocument();
   });
 
-  test("view mode shows the expanded section and no add tile", async () => {
+  test("shows the expanded section and the add tile", async () => {
     getShowcaseTree.mockResolvedValue({
       showcase_id: 1,
       nodes: [
@@ -160,20 +165,69 @@ describe("the showcase category canvas", () => {
       await screen.findByRole("heading", { name: "Summer" }),
     ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Create a category" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Create a category" }),
+    ).toBeInTheDocument();
   });
 
-  test("view mode hides an empty category", async () => {
+  test("view mode prints the direct entry and grouping counts under the title", async () => {
+    const note = {
+      id: 40,
+      node_type: "note",
+      name: null,
+      category_id: null,
+      parent_node_id: 10,
+      note_id: 100,
+      cover_note_id: null,
+      position: 1,
+      note: { id: 100, denomination: "1", issue_date: "2020" },
+      cover_note: null,
+      children: [],
+    };
+    const nestedNote = {
+      ...note,
+      id: 42,
+      parent_node_id: 41,
+      note_id: 101,
+      note: { id: 101, denomination: "2", issue_date: "2021" },
+    };
+    getShowcaseTree.mockResolvedValue({
+      showcase_id: 1,
+      nodes: [
+        {
+          ...SUMMER_NODE,
+          children: [
+            note,
+            {
+              id: 41,
+              node_type: "grouping",
+              name: "Proofs",
+              category_id: null,
+              parent_node_id: 10,
+              note_id: null,
+              cover_note_id: 101,
+              position: 2,
+              note: null,
+              cover_note: null,
+              children: [nestedNote],
+            },
+          ],
+        },
+      ],
+    });
     renderAt(SHOWCASE_ROUTES.showcase(1));
 
-    await waitFor(() => {
-      expect(screen.queryByRole("heading", { name: "Summer" })).not.toBeInTheDocument();
-    });
-    expect(screen.queryByText("No notes here yet.")).not.toBeInTheDocument();
+    expect(await screen.findByText("1 entry · 1 grouping")).toBeInTheDocument();
   });
 
-  test("adding a typed name stages the placement and saves it on Save", async () => {
+  test("keeps an empty category visible so it can be filled", async () => {
+    renderAt(SHOWCASE_ROUTES.showcase(1));
+
+    expect(
+      await screen.findByRole("heading", { name: "Summer" }),
+    ).toBeInTheDocument();
+  });
+
+  test("adding a typed name creates the placement immediately", async () => {
     const user = userEvent.setup();
     createShowcaseNode.mockResolvedValue({
       node: {
@@ -186,7 +240,7 @@ describe("the showcase category canvas", () => {
         children: [],
       },
     });
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
     await user.click(
       await screen.findByRole("button", { name: "Create a category" }),
@@ -194,21 +248,16 @@ describe("the showcase category canvas", () => {
     await user.type(screen.getByLabelText("Category name"), "Winter");
     await user.click(screen.getByRole("button", { name: "Add category" }));
 
-    // Staging is local: the card shows with no network calls.
-    expect(
-      await screen.findByRole("heading", { name: "Winter" }),
-    ).toBeInTheDocument();
-    expect(createCategory).not.toHaveBeenCalled();
-    expect(createShowcaseNode).not.toHaveBeenCalled();
-
-    await user.click(screen.getByRole("button", { name: "Save", exact: true }));
-
     await waitFor(() => {
       expect(createShowcaseNode).toHaveBeenCalledWith(1, {
         type: "category",
         name: "Winter",
       });
     });
+    expect(
+      await screen.findByRole("heading", { name: "Winter" }),
+    ).toBeInTheDocument();
+    expect(createCategory).not.toHaveBeenCalled();
   });
 
   test("keyboard navigates suggestions and Enter fills the field", async () => {
@@ -287,80 +336,47 @@ describe("the showcase category canvas", () => {
       screen.getByRole("button", { name: "Create a category" }),
     ).toBeInTheDocument();
   });
-  test("renaming a placement stages the rename and saves it on Save", async () => {
+  test("renaming a category writes immediately from its menu", async () => {
     const user = userEvent.setup();
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
     await user.click(
-      await screen.findByRole("button", { name: "Rename Summer" }),
+      await screen.findByRole("button", { name: "Actions for Summer" }),
     );
-    const input = screen.getByLabelText("New name for Summer");
+    await user.click(screen.getByRole("menuitem", { name: "Rename category…" }));
+    const input = screen.getByLabelText("Name");
     await user.clear(input);
     await user.type(input, "Monsoon");
-    // The cell Save applies the rename to the draft only.
-    const saves = screen.getAllByRole("button", { name: "Save" });
-    await user.click(saves[saves.length - 1]);
-
-    expect(
-      await screen.findByRole("heading", { name: "Monsoon" }),
-    ).toBeInTheDocument();
-    expect(updateNode).not.toHaveBeenCalled();
-
-    await user.click(screen.getAllByRole("button", { name: "Save" })[0]);
+    await user.click(screen.getByRole("button", { name: "Save name" }));
 
     await waitFor(() => {
       expect(updateNode).toHaveBeenCalledWith(10, { name: "Monsoon" });
     });
+    expect(
+      await screen.findByRole("heading", { name: "Monsoon" }),
+    ).toBeInTheDocument();
   });
 
-  test("removing a placement stages the removal and deletes on Save", async () => {
+  test("removing a category confirms and deletes immediately", async () => {
     const user = userEvent.setup();
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
     await user.click(
-      await screen.findByRole("button", { name: "Remove Summer" }),
+      await screen.findByRole("button", { name: "Actions for Summer" }),
     );
-
-    expect(
-      screen.queryByRole("heading", { name: "Summer" }),
-    ).not.toBeInTheDocument();
-    expect(deleteNode).not.toHaveBeenCalled();
-    expect(
-      screen.getByRole("button", { name: "Create a category" }),
-    ).toBeInTheDocument();
-
-    await user.click(screen.getByRole("button", { name: "Save" }));
+    await user.click(screen.getByRole("menuitem", { name: "Remove category…" }));
+    const dialog = await screen.findByRole("dialog");
+    await user.click(within(dialog).getByRole("button", { name: "Remove" }));
 
     await waitFor(() => {
       expect(deleteNode).toHaveBeenCalledWith(10);
     });
+    expect(
+      screen.queryByRole("heading", { name: "Summer" }),
+    ).not.toBeInTheDocument();
   });
 
-  test("two placements show move controls with the ends disabled", async () => {
-    getShowcaseTree.mockResolvedValue({
-      showcase_id: 1,
-      nodes: [
-        SUMMER_NODE,
-        {
-          ...SUMMER_NODE,
-          id: 11,
-          name: "Winter",
-          category_id: 2,
-          position: 2,
-        },
-      ],
-    });
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
-
-    await screen.findByRole("heading", { name: "Winter" });
-
-    expect(screen.getByRole("button", { name: "Move Summer up" })).toBeDisabled();
-    expect(screen.getByRole("button", { name: "Move Summer down" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Move Winter up" })).toBeEnabled();
-    expect(screen.getByRole("button", { name: "Move Winter down" })).toBeDisabled();
-  });
-
-  test("moving a placement down stages the order and saves it on Save", async () => {
+  test("moving a category down persists the root order immediately", async () => {
     const user = userEvent.setup();
     getShowcaseTree.mockResolvedValue({
       showcase_id: 1,
@@ -375,36 +391,46 @@ describe("the showcase category canvas", () => {
         },
       ],
     });
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
-    await user.click(
-      await screen.findByRole("button", { name: "Move Summer down" }),
-    );
-
-    // Staged locally: the headings swap with no network call.
-    const headings = screen
-      .getAllByRole("heading")
-      .map((heading) => heading.textContent);
-    expect(headings).toEqual(["Winter", "Summer"]);
-    expect(reorderNodes).not.toHaveBeenCalled();
-
-    await user.click(screen.getByRole("button", { name: "Save", exact: true }));
+    await screen.findByRole("heading", { name: "Summer" });
+    await user.click(screen.getByRole("button", { name: "Actions for Summer" }));
+    await user.click(screen.getByRole("menuitem", { name: "Move down" }));
 
     await waitFor(() => {
       expect(reorderNodes).toHaveBeenCalledWith(1, null, [11, 10]);
     });
+    const headings = screen
+      .getAllByRole("heading", { level: 2 })
+      .map((heading) => heading.textContent);
+    expect(headings).toEqual(["Winter", "Summer"]);
   });
 
-  test("a single placement shows no move controls", async () => {
-    renderAt(SHOWCASE_ROUTES.showcaseEdit(1));
+  test("a category section exposes its own actions menu", async () => {
+    getShowcaseTree.mockResolvedValue({
+      showcase_id: 1,
+      nodes: [
+        SUMMER_NODE,
+        {
+          ...SUMMER_NODE,
+          id: 11,
+          name: "Winter",
+          category_id: 2,
+          position: 2,
+        },
+      ],
+    });
+    renderAt(SHOWCASE_ROUTES.showcase(1));
 
     await screen.findByRole("heading", { name: "Summer" });
-
     expect(
-      screen.queryByRole("button", { name: "Move Summer up" }),
-    ).not.toBeInTheDocument();
+      screen.getByRole("button", { name: "Actions for Summer" }),
+    ).toBeInTheDocument();
     expect(
-      screen.queryByRole("button", { name: "Move Summer down" }),
+      screen.getByRole("button", { name: "Actions for Winter" }),
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("button", { name: /Move Summer/ }),
     ).not.toBeInTheDocument();
   });
 });

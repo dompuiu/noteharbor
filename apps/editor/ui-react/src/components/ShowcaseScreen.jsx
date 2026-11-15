@@ -1,12 +1,16 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Link, useLocation, useNavigate, useParams } from "react-router-dom";
+import { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation, useNavigate, useParams } from "react-router-dom";
 import {
+  createCatalogEntry,
   createShowcaseNode,
   deleteNode,
   getCategories,
   getShowcaseTree,
   reorderNodes,
+  replaceCatalogEntryWithNote,
+  updateCatalogEntry,
   updateNode,
+  updateNote,
 } from "../lib/api.js";
 import { isEditableElement } from "../lib/editableElement.js";
 import {
@@ -14,23 +18,32 @@ import {
   useImagePreload,
 } from "../lib/imagePreload.js";
 import { usePhotoSize } from "../lib/photoSize.js";
+import { useCatalogLayout } from "../lib/catalogLayout.js";
 import { showcaseNoteDisplayParts } from "../lib/showcaseNoteLabels.js";
 import {
   DEFAULT_DESTINATION,
-  NEW_SHOWCASE_ID,
   SHOWCASE_ROUTES,
   showcaseNodeSearch,
 } from "../lib/routes.js";
 import {
   appendChildren,
+  catalogCounts,
+  catalogEntryIdentity,
+  catalogPresentationNotes,
   countNoteNodes,
+  filterCatalogTree,
   findNodeById,
+  findNodeIdForNote,
   findNodeIdPath,
   findNodePath,
+  findParentId,
+  hasCatalogEntries,
+  isCatalogEntry,
+  noteOwnedInTree,
   removeNodeTree,
   reorderNodeTree,
+  setNoteOwned,
   updateNodeTree,
-  visibleChildNodes,
 } from "../lib/showcaseTree.js";
 import {
   buildShowcasePreviewSearch,
@@ -39,48 +52,70 @@ import {
   getShowcasePreviewItems,
   parseShowcasePreviewParam,
 } from "../lib/showcasePreview.js";
-import {
-  isTempId,
-  makeDraftCategoryNode,
-  makeDraftGroupingNode,
-  makeDraftNoteNode,
-  resetTempIds,
-  saveShowcaseDraft,
-} from "../lib/showcaseDraft.js";
 import { useShowcases } from "../lib/showcases.jsx";
 import { useCollections } from "../lib/collections.jsx";
-import { SHOWCASE_DRAFT_DISCARDED } from "../lib/draftMessages.js";
-import { useShowcaseReorder } from "../lib/showcaseReorder.jsx";
+import { ActionsMenu } from "./ActionsMenu.jsx";
 import { ShowcaseCategorySection } from "./ShowcaseCategorySection.jsx";
 import { ShowcaseCategoryTile } from "./ShowcaseCategoryTile.jsx";
-import { ShowcaseAddTiles } from "./ShowcaseAddTiles.jsx";
+import { ShowcaseAddDialog } from "./ShowcaseAddDialog.jsx";
 import { ShowcaseBreadcrumb } from "./ShowcaseBreadcrumb.jsx";
-import { ShowcaseGrid } from "./ShowcaseGrid.jsx";
-import { ShowcaseGroupingCard } from "./ShowcaseGroupingCard.jsx";
-import { ShowcaseGroupingEditor } from "./ShowcaseGroupingEditor.jsx";
-import { ShowcaseNoteCard } from "./ShowcaseNoteCard.jsx";
-import { ShowcaseNoteEditor } from "./ShowcaseNoteEditor.jsx";
+import { ShowcaseCatalogCard } from "./ShowcaseCatalogCard.jsx";
+import { ShowcaseCatalogShellForm } from "./ShowcaseCatalogShellForm.jsx";
+import { ShowcaseDialog } from "./ShowcaseDialog.jsx";
+import { ShowcaseItemsGrid } from "./ShowcaseItemsGrid.jsx";
+import { ShowcaseNameDialog } from "./ShowcaseNameDialog.jsx";
 import { ShowcaseNotePicker } from "./ShowcaseNotePicker.jsx";
+import { ShowcaseLayoutControl } from "./ShowcaseLayoutControl.jsx";
 import { ShowcasePhotoSizeControl } from "./ShowcasePhotoSizeControl.jsx";
-import { ShowcaseReorderableCell } from "./ShowcaseReorderableCell.jsx";
 import { KeyboardShortcutsHelp } from "./KeyboardShortcutsHelp.jsx";
-import { ImagePopover } from "./Slideshow.jsx";
+import { ImagePopover, Slideshow } from "./Slideshow.jsx";
 import { useConfirmation } from "./ConfirmDialog.jsx";
 import { useToastHost } from "./Toast.jsx";
 
-// One showcase, rendered in one of two near-identical modes. View mode is the
-// read-only presentation; edit mode is a draft canvas with Save/Cancel.
-// Both share the same shell, grid, and cards so the two never drift.
+// One showcase, one always-editable canvas. Adds, renames, removals, and drag
+// reorders write immediately (with a toast when a write fails); there is no
+// draft, Save, Cancel, or separate edit route. A Catalog shell is a planned
+// card: it carries metadata only and becomes a real note in place when the
+// collector picks one.
 
 // The drag handle's accessible name for a note node.
 function noteNodeLabel(node) {
   const note = node.note ?? {};
-  return (
-    showcaseNoteDisplayParts(note).join(" ") || "note"
-  );
+  return showcaseNoteDisplayParts(note).join(" ") || "note";
 }
 
-function ShowcaseScreen({ mode }) {
+// Focus a control inside the showcase canvas on the next frame. Closers and
+// state flips remount the trigger, so the lookup waits for the committed DOM.
+function focusShowcaseControl(sectionRef, selector) {
+  requestAnimationFrame(() => {
+    sectionRef.current?.querySelector(selector)?.focus?.();
+  });
+}
+
+const CATALOG_FILTERS = [
+  { value: "all", label: "All" },
+  {
+    value: "owned",
+    label: "Owned",
+    emptyText:
+      "Mark a seen note owned, or add a catalog shell, to start the checklist.",
+    emptyTitle: "No owned cards.",
+  },
+  {
+    value: "seen",
+    label: "Seen",
+    emptyText: "Every card in this showcase is owned or still a shell.",
+    emptyTitle: "No seen cards.",
+  },
+  {
+    value: "unseen",
+    label: "Unseen",
+    emptyText: "Every catalog shell already has a note.",
+    emptyTitle: "No unseen cards.",
+  },
+];
+
+function ShowcaseScreen() {
   const { id } = useParams();
   const location = useLocation();
   const navigate = useNavigate();
@@ -88,209 +123,89 @@ function ShowcaseScreen({ mode }) {
     showcases,
     deleteShowcase,
     renameShowcase,
-    createShowcase,
-    pendingShowcase,
-    beginPendingShowcase,
-    updatePendingShowcaseName,
-    discardPendingShowcase,
+    refreshShowcases,
   } = useShowcases();
-  // `new` is the not-yet-saved draft from `+ New showcase`: no server row,
-  // no tree load; Save POSTs it, Cancel discards it.
-  const isNew = id === NEW_SHOWCASE_ID;
-  const showcaseId = isNew ? null : Number(id);
-  const showcase = isNew
-    ? null
-    : (showcases.find((entry) => entry.id === showcaseId) ?? null);
-  const showcaseName = isNew
-    ? (pendingShowcase?.name ?? "Showcase")
-    : (showcase?.name ?? "Showcase");
-  const editMode = mode === "edit";
-  // Arriving from `+ New showcase` opens the name field focused (and selected)
-  // so the user can name the showcase immediately.
-  const justCreated = editMode && Boolean(location.state?.justCreated);
-  const nameFieldRef = useRef(null);
-  // Entering edit mode always lands focus in the name field (once per
-  // showcase), so the header is the keyboard starting point.
-  const editFocusDoneRef = useRef(false);
+  const { collections } = useCollections();
+  const toastHost = useToastHost();
+  const { confirm, dialog, isOpen: confirmOpen } = useConfirmation();
+  const showcaseId = Number(id);
+  const showcase = showcases.find((entry) => entry.id === showcaseId) ?? null;
+  const showcaseName = showcase?.name ?? "Showcase";
+  const sectionRef = useRef(null);
+
   const [nameDraft, setNameDraft] = useState(showcaseName);
   const [nameError, setNameError] = useState("");
+  // The title becomes a field while renaming, matching the collection table
+  // header: Rename in the actions menu opens it, Save/Cancel close it.
+  const [renamingName, setRenamingName] = useState(false);
+  const [savingName, setSavingName] = useState(false);
+  const nameFieldRef = useRef(null);
+  const nameTitleButtonRef = useRef(null);
   const [deleting, setDeleting] = useState(false);
-  const { confirm, dialog, isOpen: confirmOpen } = useConfirmation();
-  const toastHost = useToastHost();
-  // The name the draft started with. The provider's pending row follows every
-  // keystroke, so its live name cannot also answer "did the user rename this
-  // draft?" for the unsaved-changes guard.
-  const draftStartNameRef = useRef(showcaseName);
-  const confirmOpenRef = useRef(false);
-  confirmOpenRef.current = confirmOpen;
-  // The unsaved-changes guard reads the latest draft state through this ref,
-  // so the window key listener never closes over a stale value.
-  const exitGuardRef = useRef({ hasUnsavedEdits: false, isNew: false });
-  const { collections } = useCollections();
-  // The picker's target node id (not the node object) so the open popup reads
-  // the node's current children after an add updates the tree.
-  const [pickerNodeId, setPickerNodeId] = useState(null);
-  // The photo size is a per-browser preference shared by view and edit mode.
-  const [photoSize, setPhotoSize] = usePhotoSize();
-  // The shortcut help overlay. `?` opens it; it guards the card shortcuts.
-  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
-  // The screen element that owns the card grid; the keyboard listener scopes
-  // its card lookup to it so a card on another screen can never be reached.
-  const sectionRef = useRef(null);
-  // After a drill or a step back, focus the card for this node id when it is on the
-  // new level. Null means "do not restore".
-  const restoreFocusNodeIdRef = useRef(null);
-
   const [nodes, setNodes] = useState([]);
-  const [baselineNodes, setBaselineNodes] = useState([]);
+  const nodesRef = useRef(nodes);
+  nodesRef.current = nodes;
   const [categories, setCategories] = useState([]);
   const [loading, setLoading] = useState(true);
   const [loadError, setLoadError] = useState("");
-  // Edit mode is a draft: every canvas change updates `nodes` only. Save
-  // replays the diff to the server; Cancel restores `baselineNodes`.
-  const [treeDirty, setTreeDirty] = useState(false);
-  const [saving, setSaving] = useState(false);
-  const [saveError, setSaveError] = useState("");
-  // The drilled node ids, root first. View mode derives this from the URL
-  // below; edit mode keeps it in memory and live-syncs it back to `?node=`
-  // (see the sync effect), so both addresses name the same level.
-  const [drillIds, setDrillIds] = useState([]);
-  // Whether the entry `?node=` has been consumed (or found absent) already;
-  // without this the mount effect would fight in-edit drill changes.
-  const consumedEditEntryRef = useRef(false);
-  // What the polite live region announces on each node entry.
+  const [actionError, setActionError] = useState("");
   const [announcement, setAnnouncement] = useState("");
-  // `?node=` names the entry drill. View mode derives its drill from it; edit
-  // mode adopts it once on mount (the header Edit toggle carries it over so
-  // the mode switch lands on the same level).
-  const entryNode = new URLSearchParams(location.search).get("node");
-  const nodeParam = editMode ? null : entryNode;
-  const editEntryNode = editMode ? entryNode : null;
+  const [catalogFilter, setCatalogFilter] = useState("all");
+  const [photoSize, setPhotoSize] = usePhotoSize();
+  const [catalogLayout, setCatalogLayout] = useCatalogLayout();
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
-  useEffect(() => {
-    setDrillIds([]);
-    consumedEditEntryRef.current = false;
-    editFocusDoneRef.current = false;
-    draftStartNameRef.current = showcaseName;
-    // The starting name is captured on entry only: later keystrokes change
-    // `showcaseName` on purpose and must not reset the guard's baseline.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [showcaseId, isNew]);
+  // The merged add dialog's insertion point. `parent` is the container whose
+  // grid the add tile or item menu belongs to; `afterId` null means append.
+  const [addTarget, setAddTarget] = useState(null);
+  // A catalog shell waiting for the one library note that replaces it.
+  const [replaceShellId, setReplaceShellId] = useState(null);
+  // The name dialog: adding a grouping after an item, or renaming a node.
+  const [nameDialog, setNameDialog] = useState(null);
+  // The catalog shell whose metadata is being edited.
+  const [editShellId, setEditShellId] = useState(null);
 
+  const [presentIndex, setPresentIndex] = useState(null);
+  const presentReturnNodeIdRef = useRef(null);
+  const ownershipFocusRef = useRef(null);
+  const restoreFocusNodeIdRef = useRef(null);
+
+  // Keep the local name draft in step with the provider row. The draft only
+  // exists while the title is a field; opening the field seeds it from the row
+  // and closing it drops back to the row's name.
   useEffect(() => {
-    if (!justCreated) {
+    if (renamingName) {
       return;
     }
 
-    editFocusDoneRef.current = true;
+    setNameDraft(showcaseName);
+  }, [renamingName, showcaseName]);
+
+  // Entering the rename lands the cursor in the title field, selected, so the
+  // name can be retyped at once.
+  useEffect(() => {
+    if (!renamingName) {
+      return;
+    }
+
     const field = nameFieldRef.current;
 
     if (field) {
       field.focus();
       field.select?.();
     }
-  }, [justCreated]);
+  }, [renamingName]);
 
-  // The last showcase row name the draft was reconciled against. The draft
-  // adopts a new row name whenever it still holds the previous one — even
-  // while focused — so a list that arrives after the load never goes stale
-  // (a blur would otherwise commit the stale text back); text the user
-  // actually typed is never clobbered.
-  const showcaseNameRef = useRef(showcaseName);
-
-  // The heading and the sidebar both read the provider's row, so a rename is
-  // reflected everywhere from one applied server row. Keep the local draft in
-  // step with it (a list load can arrive after the first render, and a saved
-  // rename normalises whitespace).
   useEffect(() => {
-    const prev = showcaseNameRef.current;
-    showcaseNameRef.current = showcaseName;
-
-    if (showcaseName === prev || nameDraft !== prev) {
-      return;
+    // The hub-owned `new` draft route is retired: a showcase row exists before
+    // its view opens, so a non-numeric id can only be a stale bookmark.
+    if (!Number.isInteger(showcaseId) || showcaseId <= 0) {
+      navigate(SHOWCASE_ROUTES.showcases, { replace: true });
     }
-
-    setNameDraft(showcaseName);
-  }, [showcaseName, nameDraft]);
-
-  // Entering edit mode lands focus in the name field. A new showcase focuses
-  // immediately (see justCreated); an existing one waits for the load and the
-  // showcase row, so the draft sync above settles from the list first (it
-  // skips while the field is focused, which is why this runs after it). Only
-  // unclaimed focus is taken: a fresh entry leaves focus on <body>, while
-  // focus already in the sidebar or the canvas is never yanked.
-  useEffect(() => {
-    if (
-      !editMode ||
-      justCreated ||
-      loading ||
-      editFocusDoneRef.current ||
-      (!isNew && showcase == null)
-    ) {
-      return;
-    }
-
-    const active = document.activeElement;
-
-    if (active != null && active !== document.body) {
-      return;
-    }
-
-    editFocusDoneRef.current = true;
-    nameFieldRef.current?.focus();
-  }, [editMode, isNew, justCreated, loading, showcase]);
-
-  // A direct load of the draft URL (reload, share) has no provider draft yet;
-  // stage one so the sidebar row and the canvas agree. Entry only: after a
-  // Save clears the draft, the rail already shows the real row, and staging a
-  // fresh draft in the gap before the view route lands would be a ghost.
-  useEffect(() => {
-    if (isNew) {
-      beginPendingShowcase();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isNew]);
+  }, [navigate, showcaseId]);
 
   useEffect(() => {
     let active = true;
-
-    // The draft has no server tree: start empty and load only the label pool.
-    if (isNew) {
-      setLoading(true);
-      setLoadError("");
-
-      async function loadDraftPool() {
-        try {
-          const pool = editMode
-            ? await getCategories()
-            : { categories: [] };
-
-          if (!active) {
-            return;
-          }
-
-          setNodes([]);
-          setBaselineNodes([]);
-          setCategories(pool.categories ?? []);
-          setTreeDirty(false);
-          setSaveError("");
-          resetTempIds();
-        } catch (error) {
-          if (active) {
-            setLoadError(error.message || "Could not load the showcase.");
-          }
-        } finally {
-          if (active) {
-            setLoading(false);
-          }
-        }
-      }
-
-      loadDraftPool();
-      return () => {
-        active = false;
-      };
-    }
 
     if (!Number.isInteger(showcaseId) || showcaseId <= 0) {
       setNodes([]);
@@ -305,7 +220,7 @@ function ShowcaseScreen({ mode }) {
       try {
         const [tree, pool] = await Promise.all([
           getShowcaseTree(showcaseId),
-          editMode ? getCategories() : Promise.resolve({ categories: [] }),
+          getCategories(),
         ]);
 
         if (!active) {
@@ -313,11 +228,8 @@ function ShowcaseScreen({ mode }) {
         }
 
         setNodes(tree.nodes ?? []);
-        setBaselineNodes(tree.nodes ?? []);
         setCategories(pool.categories ?? []);
-        setTreeDirty(false);
-        setSaveError("");
-        resetTempIds();
+        setActionError("");
       } catch (error) {
         if (active) {
           setLoadError(error.message || "Could not load the showcase.");
@@ -333,12 +245,106 @@ function ShowcaseScreen({ mode }) {
     return () => {
       active = false;
     };
-  }, [showcaseId, editMode, isNew]);
+  }, [showcaseId]);
 
-  // In edit mode the name field is part of the draft: blur/Enter only validate
-  // locally, and Save persists the rename together with the tree.
-  function commitName() {
-    if (!showcase && !isNew) {
+  function reportActionError(error, fallback) {
+    const message = error?.message || fallback;
+    setActionError(message);
+    toastHost?.current?.show(message, "danger");
+  }
+
+  function replaceServerNode(updated) {
+    if (!updated?.id) {
+      return;
+    }
+
+    setNodes((current) =>
+      updateNodeTree(current, updated.id, (node) => ({
+        ...node,
+        ...updated,
+        children: node.children,
+      })),
+    );
+  }
+
+  // Put freshly created nodes immediately after the item the menu named, or at
+  // the end of the parent. The server appends on create, so an insert-after is
+  // a follow-up reorder of the whole sibling list.
+  async function placeCreated(parentId, afterId, created) {
+    if (!created.length) {
+      return;
+    }
+
+    const createdIds = created.map((node) => node.id);
+    const parent = parentId == null ? null : findNodeById(nodesRef.current, parentId);
+    const siblings = parentId == null ? nodesRef.current : (parent?.children ?? []);
+    const existingIds = siblings
+      .map((node) => node.id)
+      .filter((nodeId) => !createdIds.includes(nodeId));
+    const anchor = afterId == null ? -1 : existingIds.indexOf(afterId);
+    const insertAt = anchor < 0 ? existingIds.length : anchor + 1;
+    const desired = [
+      ...existingIds.slice(0, insertAt),
+      ...createdIds,
+      ...existingIds.slice(insertAt),
+    ];
+
+    if (afterId != null) {
+      try {
+        await reorderNodes(showcaseId, parentId, desired);
+      } catch (error) {
+        reportActionError(error, "Could not place the new item.");
+
+        // The server created the nodes but kept them at the end. Refetch so
+        // the canvas never claims an order the server did not accept.
+        try {
+          const tree = await getShowcaseTree(showcaseId);
+          setNodes(tree.nodes ?? []);
+        } catch {
+          // The action error is already on screen.
+        }
+        return;
+      }
+    }
+
+    setNodes((current) => {
+      let next = appendChildren(current, parentId, created);
+
+      if (next === current) {
+        // The parent vanished during the request; fall back to the root.
+        next = [...current, ...created];
+      }
+
+      return reorderNodeTree(next, parentId, desired);
+    });
+    refreshShowcases?.().catch(() => {});
+  }
+
+  function startNameRename() {
+    if (!showcase) {
+      return;
+    }
+
+    setNameDraft(showcase.name);
+    setNameError("");
+    setRenamingName(true);
+  }
+
+  function cancelNameRename() {
+    if (savingName) {
+      return;
+    }
+
+    setRenamingName(false);
+    setNameDraft(showcaseName);
+    setNameError("");
+    requestAnimationFrame(() => nameTitleButtonRef.current?.focus?.());
+  }
+
+  async function submitNameRename(event) {
+    event?.preventDefault?.();
+
+    if (!showcase || savingName) {
       return;
     }
 
@@ -349,35 +355,27 @@ function ShowcaseScreen({ mode }) {
       return;
     }
 
-    const currentName = isNew
-      ? (pendingShowcase?.name ?? "Showcase")
-      : showcase.name;
-
-    if (trimmed === currentName) {
-      setNameDraft(currentName);
-      setNameError("");
+    if (trimmed === showcase.name) {
+      cancelNameRename();
       return;
     }
 
-    setNameDraft(trimmed);
+    setSavingName(true);
     setNameError("");
 
-    if (isNew) {
-      // The rail shows the name that will be saved: drop the surrounding
-      // whitespace the field still holds.
-      updatePendingShowcaseName(trimmed);
+    try {
+      await renameShowcase(showcase.id, trimmed);
+      setNameDraft(trimmed);
+      setRenamingName(false);
+      requestAnimationFrame(() => nameTitleButtonRef.current?.focus?.());
+    } catch (error) {
+      setNameError(error.message || "Could not rename the showcase.");
+    } finally {
+      setSavingName(false);
     }
   }
 
   function handleNameKeyDown(event) {
-    if (event.key === "Enter") {
-      event.preventDefault();
-      commitName();
-      event.currentTarget?.blur?.();
-      return;
-    }
-
-    // Down moves focus from the name field to the first card.
     if (event.key === "ArrowDown") {
       event.preventDefault();
       focusCardAt(0);
@@ -387,41 +385,9 @@ function ShowcaseScreen({ mode }) {
     if (event.key === "Escape") {
       event.preventDefault();
       event.stopPropagation();
-      // A new showcase starts with the name field focused: Escape bails out
-      // of the whole draft, exactly like Cancel (guarded when edited),
-      // instead of only leaving the field.
-      if (isNew) {
-        handleCancel();
-        return;
-      }
-      // Escape never silently clears the field: blur stages the typed name
-      // through `commitName` (like Enter) and a further Escape leaves edit
-      // mode through the unsaved-changes guard, mirroring the Note editor
-      // (first Escape blurs, second asks).
-      event.currentTarget?.blur?.();
+      cancelNameRename();
     }
   }
-
-  const nameDirty =
-    editMode && !isNew && showcase
-      ? nameDraft.trim() !== "" && nameDraft.trim() !== showcase.name
-      : false;
-  // A draft showcase is itself unsaved, so Save stays enabled whenever the
-  // name is non-empty — even with an empty canvas.
-  const dirty = editMode && (isNew ? nameDraft.trim() !== "" : treeDirty || nameDirty);
-  // Cancel and Escape only prompt when the user actually changed something: an
-  // untouched draft (the starting name on an empty canvas) exits silently,
-  // exactly like an untouched Note editor. `dirty` above stays broader on
-  // purpose — a fresh draft is still saveable — so the guard tracks edits
-  // against the draft's starting name instead.
-  const newNameEdited =
-    isNew &&
-    nameDraft.trim() !== "" &&
-    nameDraft.trim() !== draftStartNameRef.current;
-  const hasUnsavedEdits = isNew
-    ? treeDirty || newNameEdited
-    : treeDirty || nameDirty;
-  exitGuardRef.current = { hasUnsavedEdits, isNew };
 
   async function handleDelete() {
     if (!showcase || deleting) {
@@ -444,7 +410,7 @@ function ShowcaseScreen({ mode }) {
       const { nextShowcaseId } = await deleteShowcase(showcase.id);
 
       if (nextShowcaseId != null) {
-        navigate(SHOWCASE_ROUTES.showcaseEdit(nextShowcaseId));
+        navigate(SHOWCASE_ROUTES.showcase(nextShowcaseId));
       } else {
         navigate(DEFAULT_DESTINATION);
       }
@@ -454,13 +420,13 @@ function ShowcaseScreen({ mode }) {
     }
   }
 
-  // Edit mode is a draft: adds/renames/removes only touch `nodes`. Save
-  // replays the diff; nothing here calls the network.
   async function handleAddCategory(name) {
     const trimmed = String(name ?? "").trim();
+
     if (!trimmed) {
       throw new Error("Category name is required.");
     }
+
     const match = categories.find(
       (entry) => entry.name.toLowerCase() === trimmed.toLowerCase(),
     );
@@ -470,115 +436,460 @@ function ShowcaseScreen({ mode }) {
         : entry.node_type === "category" &&
           String(entry.name ?? "").toLowerCase() === trimmed.toLowerCase(),
     );
+
     if (alreadyPlaced) {
       throw new Error("This category is already in the showcase.");
     }
-    const draft = makeDraftCategoryNode({
-      name: match ? match.name : trimmed,
-      categoryId: match ? match.id : null,
-    });
-    setNodes((current) => [...current, draft]);
-    setTreeDirty(true);
-    setSaveError("");
-  }
 
-  async function handleRenameCategory(node, name) {
-    const trimmed = String(name ?? "").trim();
-    setNodes((current) =>
-      updateNodeTree(current, node.id, (entry) => ({
-        ...entry,
-        name: trimmed,
-        _pendingCategoryName:
-          isTempId(entry.id) && entry.category_id == null ? trimmed : entry._pendingCategoryName ?? null,
-      })),
-    );
-    setTreeDirty(true);
-    setSaveError("");
-  }
+    try {
+      const { node } = await createShowcaseNode(showcaseId, {
+        ...(match
+          ? { type: "category", category_id: match.id }
+          : { type: "category", name: trimmed }),
+      });
+      setNodes((current) => [...current, node]);
+      setActionError("");
 
-  async function handleRemoveCategory(node) {
-    setNodes((current) => current.filter((entry) => entry.id !== node.id));
-    // A removed drill level falls back to the root.
-    setDrillIds((current) => current.filter((id) => id !== node.id));
-    setTreeDirty(true);
-    setSaveError("");
-  }
-
-  // Arrow reorder for top-level categories (many items make drag impractical).
-  // Draft only: swap the placement with its neighbour and persist on Save.
-  function handleMoveCategory(node, direction) {
-    setNodes((current) => {
-      const index = current.findIndex((entry) => entry.id === node.id);
-      const nextIndex = index + direction;
-
-      if (index < 0 || nextIndex < 0 || nextIndex >= current.length) {
-        return current;
+      try {
+        const pool = await getCategories();
+        setCategories(pool.categories ?? []);
+      } catch {
+        // The new placement is already on the canvas; suggestions can lag.
       }
 
-      const orderedIds = current.map((entry) => entry.id);
-      [orderedIds[index], orderedIds[nextIndex]] = [
-        orderedIds[nextIndex],
-        orderedIds[index],
-      ];
-
-      return reorderNodeTree(current, null, orderedIds);
-    });
-    setTreeDirty(true);
-    setSaveError("");
+      refreshShowcases?.().catch(() => {});
+    } catch (error) {
+      reportActionError(error, "Could not add the category.");
+      throw error;
+    }
   }
 
-  // View mode is URL-synced: `?node=<id>` names the current node and the root
-  // has no parameter. Edit mode keeps the drill in memory.
-  const urlDrillIds =
-    !editMode && nodeParam ? findNodeIdPath(nodes, Number(nodeParam)) : [];
-  const effectiveDrillIds = editMode ? drillIds : urlDrillIds;
-  // The current drill level. `currentParentId` is the node a new Grouping is
-  // created under (null at the top level, where only Categories live).
-  const currentPath = findNodePath(nodes, effectiveDrillIds);
+  async function handleReorder(parentId, orderedIds) {
+    const previous = nodesRef.current;
+
+    setNodes((current) => reorderNodeTree(current, parentId, orderedIds));
+
+    try {
+      await reorderNodes(showcaseId, parentId, orderedIds);
+      setActionError("");
+    } catch (error) {
+      setNodes(previous);
+      reportActionError(error, "Could not reorder the items.");
+    }
+  }
+
+  function openAdd(parent, afterId = null, mode = "notes") {
+    if (!parent) {
+      return;
+    }
+
+    setAddTarget({ parent, afterId, mode });
+  }
+
+  function openAddAfter(parent, node, mode) {
+    if (mode === "grouping") {
+      setNameDialog({
+        kind: "add-grouping",
+        parentId: parent?.id ?? null,
+        afterId: node?.id ?? null,
+        title: "Add grouping",
+        subtitle: `The grouping lands after “${node?.name ?? "this item"}”.`,
+        label: "Grouping name",
+        initialValue: "",
+        submitLabel: "Add grouping",
+      });
+      return;
+    }
+
+    openAdd(parent, node?.id ?? null, mode);
+  }
+
+  async function handleAddNotes(noteIds, allNotes) {
+    if (!addTarget?.parent?.id) {
+      throw new Error("Notes need a category or grouping.");
+    }
+
+    const byId = new Map((allNotes ?? []).map((note) => [note.id, note]));
+    const orderedIds = (noteIds ?? []).filter((noteId) =>
+      Number.isInteger(noteId) && byId.has(noteId),
+    );
+
+    if (!orderedIds.length) {
+      return;
+    }
+
+    try {
+      const result = await createShowcaseNode(showcaseId, {
+        type: "notes",
+        parent_id: addTarget.parent.id,
+        note_ids: orderedIds,
+      });
+      await placeCreated(addTarget.parent.id, addTarget.afterId, result.nodes ?? []);
+      setActionError("");
+    } catch (error) {
+      reportActionError(error, "Could not add the notes.");
+      throw error;
+    }
+  }
+
+  async function handleAddShells(entries) {
+    if (!addTarget?.parent?.id) {
+      throw new Error("A catalog shell needs a category or grouping.");
+    }
+
+    const created = [];
+
+    try {
+      for (const entry of entries ?? []) {
+        const { node } = await createCatalogEntry(showcaseId, {
+          parentId: addTarget.parent.id,
+          entry,
+        });
+        created.push(node);
+      }
+
+      await placeCreated(addTarget.parent.id, addTarget.afterId, created);
+      setActionError("");
+    } catch (error) {
+      reportActionError(error, "Could not add the catalog shells.");
+      throw error;
+    }
+  }
+
+  async function handleAddGrouping(name) {
+    if (!addTarget?.parent?.id) {
+      throw new Error("A grouping needs a category or grouping.");
+    }
+
+    try {
+      const { node } = await createShowcaseNode(showcaseId, {
+        type: "grouping",
+        parent_id: addTarget.parent.id,
+        name,
+      });
+      await placeCreated(addTarget.parent.id, addTarget.afterId, [node]);
+      setActionError("");
+    } catch (error) {
+      reportActionError(error, "Could not add the grouping.");
+      throw error;
+    }
+  }
+
+  async function submitNameDialog(trimmed) {
+    if (!nameDialog) {
+      return;
+    }
+
+    if (nameDialog.kind === "add-grouping") {
+      if (nameDialog.parentId == null) {
+        throw new Error("A grouping needs a category or grouping.");
+      }
+
+      const { node } = await createShowcaseNode(showcaseId, {
+        type: "grouping",
+        parent_id: nameDialog.parentId,
+        name: trimmed,
+      });
+      await placeCreated(nameDialog.parentId, nameDialog.afterId, [node]);
+      setActionError("");
+      return;
+    }
+
+    const target = findNodeById(nodesRef.current, nameDialog.node.id);
+
+    if (!target || trimmed === target.name) {
+      return;
+    }
+
+    try {
+      const { node } = await updateNode(target.id, { name: trimmed });
+      replaceServerNode(node);
+      setActionError("");
+
+      if (target.node_type === "category") {
+        const pool = await getCategories();
+        setCategories(pool.categories ?? []);
+        refreshShowcases?.().catch(() => {});
+      }
+    } catch (error) {
+      reportActionError(error, "Could not rename the item.");
+      throw error;
+    }
+  }
+
+  function openRename(node) {
+    setNameDialog({
+      kind: "rename",
+      node,
+      title: `Rename ${node.node_type === "category" ? "category" : "grouping"}`,
+      subtitle: "The new name is saved immediately.",
+      label: "Name",
+      initialValue: node.name ?? "",
+      submitLabel: "Save name",
+    });
+  }
+
+  async function handleMoveCategory(node, direction) {
+    const ids = nodesRef.current.map((entry) => entry.id);
+    const index = ids.indexOf(node.id);
+    const nextIndex = index + direction;
+
+    if (index < 0 || nextIndex < 0 || nextIndex >= ids.length) {
+      return;
+    }
+
+    [ids[index], ids[nextIndex]] = [ids[nextIndex], ids[index]];
+    await handleReorder(null, ids);
+  }
+
+  async function handleRemove(node) {
+    if (!node) {
+      return;
+    }
+
+    const label =
+      node.node_type === "grouping"
+        ? node.name
+        : node.node_type === "category"
+          ? node.name
+          : node.node_type === "note"
+            ? noteNodeLabel(node)
+            : catalogEntryIdentity(node.entry);
+    const confirmed = await confirm({
+      title: `Remove “${label}” from this showcase?`,
+      body:
+        node.node_type === "grouping"
+          ? "The grouping and everything inside it leave this showcase. The notes stay in their collections."
+          : "The card leaves this showcase. The note stays in its collection.",
+      confirmLabel: "Remove",
+      cancelLabel: "Keep",
+    });
+
+    if (!confirmed) {
+      return;
+    }
+
+    const parentId = findParentId(nodesRef.current, node.id);
+
+    try {
+      await deleteNode(node.id);
+      setNodes((current) => removeNodeTree(current, node.id));
+      setActionError("");
+      refreshShowcases?.().catch(() => {});
+
+      const onCurrentPath = urlDrillIds.includes(node.id);
+
+      if (onCurrentPath) {
+        navigate({ search: showcaseNodeSearch(parentId) });
+      }
+    } catch (error) {
+      reportActionError(error, "Could not remove the item.");
+    }
+  }
+
+  async function handleSetCover(noteNode) {
+    if (!displayNode || displayNode.node_type !== "grouping") {
+      return;
+    }
+
+    const coverNoteId = noteNode.note_id ?? noteNode.note?.id ?? null;
+
+    try {
+      const { node } = await updateNode(displayNode.id, {
+        cover_note_id: coverNoteId,
+      });
+      replaceServerNode(node);
+      setActionError("");
+    } catch (error) {
+      reportActionError(error, "Could not set the cover.");
+    }
+  }
+
+  async function handleClearCover(groupingNode) {
+    try {
+      const { node } = await updateNode(groupingNode.id, {
+        cover_note_id: null,
+      });
+      replaceServerNode(node);
+      setActionError("");
+    } catch (error) {
+      reportActionError(error, "Could not clear the cover.");
+    }
+  }
+
+  async function handleEditShell(entries) {
+    const target = editShellId == null ? null : findNodeById(nodesRef.current, editShellId);
+
+    if (!target) {
+      return;
+    }
+
+    try {
+      const { node } = await updateCatalogEntry(target.id, entries[0] ?? {});
+      replaceServerNode(node);
+      setActionError("");
+    } catch (error) {
+      reportActionError(error, "Could not save the catalog shell.");
+      throw error;
+    }
+  }
+
+  async function handleReplaceShell(noteIds) {
+    const target =
+      replaceShellId == null ? null : findNodeById(nodesRef.current, replaceShellId);
+    const noteId = noteIds?.[0];
+
+    if (!target || noteId == null) {
+      return;
+    }
+
+    try {
+      const { node } = await replaceCatalogEntryWithNote(target.id, noteId);
+      let replaced =
+        node?.node_type === "note" && node.note_id === noteId ? node : null;
+
+      if (!replaced) {
+        // A write that answers 200 without converting the node is not a
+        // success. Adopt the server's tree so the canvas shows what the server
+        // actually holds before the mismatch is reported.
+        const tree = await getShowcaseTree(showcaseId).catch(() => null);
+
+        if (tree) {
+          setNodes(tree.nodes ?? []);
+          replaced = findNodeById(tree.nodes ?? [], target.id);
+        }
+      }
+
+      if (!replaced || replaced.node_type !== "note" || replaced.note_id !== noteId) {
+        throw new Error("The catalog shell was not replaced.");
+      }
+
+      replaceServerNode(replaced);
+      setReplaceShellId(null);
+      setActionError("");
+      refreshShowcases?.().catch(() => {});
+      toastHost?.current?.show("Catalog shell replaced with a note.", "success");
+    } catch (error) {
+      reportActionError(error, "Could not replace the shell.");
+      throw error;
+    }
+  }
+
+  // ── Catalog checklist writes ─────────────────────────────────────────────
+  function noteOwnershipPayload(note, owned) {
+    return {
+      catalog_number: note.catalog_number ?? "",
+      denomination: note.denomination ?? "",
+      grading_company: note.grading_company ?? "",
+      grade: note.grade ?? "",
+      issue_date: note.issue_date ?? "",
+      notes: note.notes ?? "",
+      owned,
+      scraped_data: note.scraped_data ?? null,
+      serial: note.serial ?? "",
+      tags: (Array.isArray(note.tags) ? note.tags : [])
+        .map((tag) => (typeof tag === "string" ? tag : tag?.name))
+        .filter(Boolean),
+      url: note.url ?? "",
+      watermark: note.watermark ?? "",
+    };
+  }
+
+  async function applyNoteOwnership(
+    note,
+    owned,
+    { nodeId = null, announce = true } = {},
+  ) {
+    const previous = noteOwnedInTree(nodes, note.id) ?? note.owned;
+    const targetNodeId = nodeId ?? findNodeIdForNote(nodes, note.id);
+    const label = showcaseNoteDisplayParts(note).join(" · ") || "Note";
+
+    setNodes((current) => setNoteOwned(current, note.id, owned));
+    ownershipFocusRef.current = {
+      nodeId: targetNodeId,
+      role: owned ? "check" : "ownership",
+    };
+
+    try {
+      await updateNote(
+        note.id,
+        noteOwnershipPayload(note, owned),
+        note.collection_id,
+      );
+      refreshShowcases?.().catch(() => {});
+
+      if (!announce) {
+        return;
+      }
+
+      toastHost?.current?.show(
+        `${label} marked ${owned ? "owned" : "not owned"}`,
+        "success",
+        {
+          label: "Undo",
+          onClick: () => {
+            applyNoteOwnership(note, previous, {
+              announce: false,
+              nodeId: targetNodeId,
+            });
+          },
+        },
+      );
+    } catch (error) {
+      setNodes((current) => setNoteOwned(current, note.id, previous));
+      toastHost?.current?.show(
+        error.message || "Could not update ownership.",
+        "danger",
+      );
+    }
+  }
+
+  function handleOwnershipToggle(note, owned, nodeId = null) {
+    if (note) {
+      applyNoteOwnership(note, owned, { nodeId });
+    }
+  }
+
+  // ── Preview and presentation ─────────────────────────────────────────────
+  const entryNode = new URLSearchParams(location.search).get("node");
+  const urlDrillIds = entryNode
+    ? findNodeIdPath(nodes, Number(entryNode))
+    : [];
+  const currentPath = findNodePath(nodes, urlDrillIds);
   const currentNode = currentPath.length
     ? currentPath[currentPath.length - 1]
     : null;
-  const currentParentId = currentNode ? currentNode.id : null;
-  const currentChildren = currentNode ? (currentNode.children ?? []) : nodes;
-
-  // Categories always render expanded at the root, so a drill that lands on a
-  // Category (an old `?node=<categoryId>` link, or an edit drill from before)
-  // is shown as the expanded root instead of a single-category level.
+  const catalogMode = hasCatalogEntries(nodes);
+  // Catalog chrome waits for the tree, so the trailing controls never render
+  // in one place and then jump to another as the data lands.
+  const catalogChrome = catalogMode && !loading && !loadError;
   const displayNode =
     currentNode?.node_type === "category" ? null : currentNode;
   const displayPath = displayNode ? currentPath : [];
-  const displayChildren = displayNode
-    ? (displayNode.children ?? [])
-    : nodes;
+  const displayChildren = displayNode ? (displayNode.children ?? []) : nodes;
+  const filterActive = catalogMode && catalogFilter !== "all";
+  const filteredDisplayChildren = filterActive
+    ? filterCatalogTree(displayChildren, catalogFilter)
+    : displayChildren;
   const isRootExpanded = displayNode == null;
-  // View mode hides empty Categories (no notes anywhere beneath them) so the
-  // presentation never shows an empty section; edit mode keeps them so they
-  // can be filled.
-  const visibleRootNodes =
-    isRootExpanded && !editMode
-      ? nodes.filter((node) =>
-          node.node_type !== "category"
-            ? true
-            : countNoteNodes([node]) > 0,
-        )
-      : nodes;
-  const rootCategories = visibleRootNodes.filter(
-    (node) => node.node_type === "category",
+  const filterEmpty =
+    filterActive && filteredDisplayChildren.length === 0;
+  const activeFilter =
+    CATALOG_FILTERS.find((filter) => filter.value === catalogFilter) ??
+    CATALOG_FILTERS[0];
+  const presentationNotes = useMemo(
+    () => (catalogMode ? catalogPresentationNotes(nodes) : []),
+    [catalogMode, nodes],
   );
-  const showCategoryMove = editMode && rootCategories.length > 1;
+  const catalogTotals = catalogCounts(nodes);
 
-  // Showcase-wide image preview (view mode only): `?preview=<nodeId>:<kind>`
-  // alongside `?node=`. The slideshow flattens every visible note in display
-  // order; closing strips only `preview` so the drill level is preserved.
-  const previewParamRaw = editMode
-    ? null
-    : new URLSearchParams(location.search).get("preview");
+  const previewParamRaw = new URLSearchParams(location.search).get("preview");
   const previewRequest = previewParamRaw
     ? parseShowcasePreviewParam(previewParamRaw)
     : null;
   const previewItems = useMemo(
-    () => (editMode ? [] : getShowcasePreviewItems(nodes)),
-    [editMode, nodes],
+    () => getShowcasePreviewItems(nodes),
+    [nodes],
   );
   const previewIndex = previewRequest
     ? findShowcasePreviewIndex(
@@ -587,13 +898,11 @@ function ShowcaseScreen({ mode }) {
         previewRequest.kind,
       )
     : -1;
-  const previewOpen = !editMode && previewRequest != null && previewIndex >= 0;
+  const previewOpen = previewRequest != null && previewIndex >= 0;
   const activePreviewItem = previewOpen ? previewItems[previewIndex] : null;
   const neighbouringPreviewImages = useMemo(
     () =>
-      previewOpen
-        ? neighbouringImageSources(previewItems, previewIndex)
-        : [],
+      previewOpen ? neighbouringImageSources(previewItems, previewIndex) : [],
     [previewIndex, previewItems, previewOpen],
   );
   useImagePreload(neighbouringPreviewImages, { delay: 120 });
@@ -601,7 +910,7 @@ function ShowcaseScreen({ mode }) {
   const wasPreviewOpenRef = useRef(false);
 
   function openShowcasePreview(node, kind) {
-    if (editMode || node?.node_type !== "note") {
+    if (node?.node_type !== "note") {
       return;
     }
 
@@ -611,8 +920,7 @@ function ShowcaseScreen({ mode }) {
       return;
     }
 
-    const item =
-      nodeItems.find((entry) => entry.kind === kind) ?? nodeItems[0];
+    const item = nodeItems.find((entry) => entry.kind === kind) ?? nodeItems[0];
     restorePreviewFocusNodeIdRef.current = node.id;
     const nodeRaw = new URLSearchParams(location.search).get("node");
     navigate({
@@ -625,9 +933,6 @@ function ShowcaseScreen({ mode }) {
   }
 
   function replaceShowcasePreview(item) {
-    // The drill tracks the shown image's containing level (deepest grouping
-    // ancestor, or the expanded root), so the address never names a level
-    // the current image is not on, and closing lands on its level.
     const levelId = getShowcasePreviewContainingLevelId(nodes, item.nodeId);
     restorePreviewFocusNodeIdRef.current = item.nodeId;
     navigate(
@@ -657,8 +962,6 @@ function ShowcaseScreen({ mode }) {
     }
   }
 
-  // The showcase sequence drops missing sides, so a step would land on
-  // another note. A side choice therefore jumps by node id and kind.
   function selectShowcaseSide(kind) {
     if (!activePreviewItem) {
       return;
@@ -726,10 +1029,8 @@ function ShowcaseScreen({ mode }) {
     navigate({ search: showcaseNodeSearch(levelId) }, { replace: true });
   }
 
-  // An unresolvable `preview` (stale deep link, or a note that lost its
-  // images) never opens the overlay; drop the parameter once loaded.
   useEffect(() => {
-    if (editMode || loading || previewParamRaw == null || previewOpen) {
+    if (loading || previewParamRaw == null || previewOpen) {
       return;
     }
 
@@ -740,7 +1041,6 @@ function ShowcaseScreen({ mode }) {
       navigate({ search: text ? `?${text}` : "" }, { replace: true });
     }
   }, [
-    editMode,
     loading,
     location.search,
     navigate,
@@ -750,69 +1050,41 @@ function ShowcaseScreen({ mode }) {
     previewRequest,
   ]);
 
-  // Closing the preview (button, Esc, overlay click, or Back) restores focus
-  // to the card the preview opened from, when it is still rendered.
   useEffect(() => {
     if (wasPreviewOpenRef.current && !previewOpen) {
       const nodeId = restorePreviewFocusNodeIdRef.current;
       restorePreviewFocusNodeIdRef.current = null;
 
       if (nodeId != null) {
-        requestAnimationFrame(() => {
-          sectionRef.current
-            ?.querySelector(
-              `.showcase-card[data-showcase-node-id="${nodeId}"]`,
-            )
-            ?.focus?.();
-        });
+        focusShowcaseControl(
+          sectionRef,
+          `.showcase-card[data-showcase-node-id="${nodeId}"]`,
+        );
       }
     }
 
     wasPreviewOpenRef.current = previewOpen;
   }, [previewOpen]);
 
-  // A `?node=` that no longer resolves (a node removed in another tab, or a
-  // stale deep link) falls back to the root and drops the parameter.
+  // A `?node=` that no longer resolves falls back to the root.
   useEffect(() => {
-    if (editMode || loading || !nodeParam) {
+    if (loading || !entryNode) {
       return;
     }
 
-    if (findNodeIdPath(nodes, Number(nodeParam)).length === 0) {
+    if (findNodeIdPath(nodes, Number(entryNode)).length === 0) {
       const params = new URLSearchParams(location.search);
       params.delete("node");
       const text = params.toString();
       navigate({ search: text ? `?${text}` : "" }, { replace: true });
     }
-  }, [editMode, loading, location.search, navigate, nodeParam, nodes]);
+  }, [entryNode, loading, location.search, navigate, nodes]);
 
-  // Edit mode adopts the entry `?node=` into the in-memory drill once the tree
-  // loads (the header Edit toggle carries it over; a drilled edit URL also
-  // restores on reload or share). The sync effect below keeps the address
-  // naming the level from then on.
-  useEffect(() => {
-    if (!editMode || loading || consumedEditEntryRef.current) {
-      return;
-    }
+  const announcedCount = isRootExpanded
+    ? filteredDisplayChildren.filter((node) => node.node_type === "category")
+        .length
+    : filteredDisplayChildren.length;
 
-    consumedEditEntryRef.current = true;
-
-    if (editEntryNode == null) {
-      return;
-    }
-
-    const entryPath = findNodeIdPath(nodes, Number(editEntryNode));
-
-    if (entryPath.length) {
-      setDrillIds(entryPath);
-    }
-  }, [editEntryNode, editMode, loading, nodes]);
-  // Announce each node entry through a polite live region; the root announces
-  // the showcase itself.
-  // View mode hides empty Groupings (no notes beneath them); edit mode keeps
-  // them so they can be filled.
-  const visibleDisplayChildren = visibleChildNodes(displayChildren, editMode);
-  const announcedCount = isRootExpanded ? visibleRootNodes.length : visibleDisplayChildren.length;
   useEffect(() => {
     if (loading) {
       return;
@@ -822,365 +1094,82 @@ function ShowcaseScreen({ mode }) {
     setAnnouncement(`${name}, ${announcedCount} items`);
   }, [announcedCount, displayNode, loading, showcaseName]);
 
-  // Dragging a note or a Grouping reorders it among the current level's
-  // children, so notes and groupings share one order. Categories only exist at
-  // the top level and are not draggable here (the sidebar owns showcase order).
-  // The expanded root gives each Category section its own reorder state; this
-  // hook serves the drilled Grouping level.
-  const reorder = useShowcaseReorder({
-    nodes: currentChildren,
-    onReorder: handleReorderChildren,
-  });
-
-  async function handleReorderChildren(orderedIds) {
-    handleReorderChildrenFor(currentParentId, orderedIds);
-  }
-
-  function handleReorderChildrenFor(parentId, orderedIds) {
-    // Draft only: the order persists on Save.
-    setNodes((current) =>
-      reorderNodeTree(current, parentId, orderedIds),
-    );
-    setTreeDirty(true);
-    setSaveError("");
-  }
-
   function openNode(node) {
-    // Categories always render expanded, so they never drill. Groupings still
-    // open into their own level.
     if (node?.node_type === "category") {
       return;
     }
 
-    // Focus the card we leave from when it is on the new level (it is not, for
-    // a drill, but a step back to this level restores it).
     restoreFocusNodeIdRef.current = node.id;
-
-    if (editMode) {
-      setDrillIds(findNodeIdPath(nodes, node.id));
-      return;
-    }
-
     navigate({ search: showcaseNodeSearch(node.id) });
   }
 
-  // `-1` is the Showcase root; any other index opens that breadcrumb level.
-  // A Category never has its own level (it renders expanded), so navigating to
-  // one lands on the root instead of a `?node=<categoryId>` URL.
   function navigateTo(targetIndex) {
-    // Going up or sideways restores focus to the node we are leaving when its
-    // card is on the destination level.
     restoreFocusNodeIdRef.current = displayNode?.id ?? null;
-
-    if (editMode) {
-      setDrillIds((current) => {
-        const next =
-          targetIndex < 0 ? [] : current.slice(0, targetIndex + 1);
-
-        while (next.length) {
-          const last = findNodeById(nodes, next[next.length - 1]);
-
-          if (last?.node_type === "category") {
-            next.pop();
-            continue;
-          }
-
-          break;
-        }
-
-        return next;
-      });
-      return;
-    }
-
     const rawTargetId =
-      targetIndex < 0 ? null : (effectiveDrillIds[targetIndex] ?? null);
+      targetIndex < 0 ? null : (urlDrillIds[targetIndex] ?? null);
     const target =
       rawTargetId == null ? null : findNodeById(nodes, rawTargetId);
-    const targetId =
-      target?.node_type === "category" ? null : rawTargetId;
+    const targetId = target?.node_type === "category" ? null : rawTargetId;
     navigate({ search: showcaseNodeSearch(targetId) });
   }
 
-  async function handleAddGrouping(name) {
-    handleAddGroupingFor(currentParentId, name);
-  }
-
-  // The per-category add tile in the expanded root passes its own parent id;
-  // the drilled grouping level passes the current drill parent.
-  function handleAddGroupingFor(parentId, name) {
-    const trimmed = String(name ?? "").trim();
-    if (!trimmed || parentId == null) {
+  function openPresentation(nodeId = null) {
+    if (!presentationNotes.length) {
       return;
     }
-    const draft = makeDraftGroupingNode({ name: trimmed, parentId });
-    setNodes((current) =>
-      updateNodeTree(current, parentId, (parent) => ({
-        ...parent,
-        children: [...(parent.children ?? []), draft],
-      })),
+
+    const index =
+      nodeId == null
+        ? 0
+        : presentationNotes.findIndex((item) => item.nodeId === nodeId);
+    const resolved = index >= 0 ? index : 0;
+
+    presentReturnNodeIdRef.current = presentationNotes[resolved]?.nodeId ?? null;
+    setPresentIndex(resolved);
+  }
+
+  function closePresentation() {
+    setPresentIndex(null);
+  }
+
+  useEffect(() => {
+    if (presentIndex != null) {
+      return;
+    }
+
+    const nodeId = presentReturnNodeIdRef.current;
+
+    if (nodeId == null) {
+      return;
+    }
+
+    presentReturnNodeIdRef.current = null;
+    focusShowcaseControl(
+      sectionRef,
+      `.showcase-card[data-showcase-node-id="${nodeId}"]`,
     );
-    setTreeDirty(true);
-    setSaveError("");
-  }
+  }, [presentIndex]);
 
-  async function handleRenameGrouping(node, name) {
-    const trimmed = String(name ?? "").trim();
-    setNodes((current) =>
-      updateNodeTree(current, node.id, (entry) => ({
-        ...entry,
-        name: trimmed,
-        children: entry.children,
-      })),
-    );
-    setTreeDirty(true);
-    setSaveError("");
-  }
+  useEffect(() => {
+    const target = ownershipFocusRef.current;
 
-  async function handleRemoveGrouping(node) {
-    setNodes((current) => removeNodeTree(current, node.id));
-    setDrillIds((current) => current.filter((id) => id !== node.id));
-    setTreeDirty(true);
-    setSaveError("");
-  }
-
-  function handleOpenNotePicker(node) {
-    setPickerNodeId(node.id);
-  }
-
-  // Draft only: stage note nodes under the picker target. The picker passes
-  // its loaded notes so the cards render before Save.
-  async function handleAddNotes(noteIds, allNotes = []) {
-    if (pickerNodeId == null) {
-      return;
-    }
-    const byId = new Map((allNotes ?? []).map((note) => [note.id, note]));
-    const drafts = (noteIds ?? []).map((noteId) =>
-      makeDraftNoteNode({
-        note: byId.get(noteId) ?? { id: noteId },
-        parentId: pickerNodeId,
-      }),
-    );
-    if (!drafts.length) {
-      return;
-    }
-    setNodes((current) => appendChildren(current, pickerNodeId, drafts));
-    setTreeDirty(true);
-    setSaveError("");
-  }
-
-  async function handleRemoveNote(noteNode) {
-    setNodes((current) => removeNodeTree(current, noteNode.id));
-    setTreeDirty(true);
-    setSaveError("");
-  }
-
-  // Set the current Grouping's manual cover to a direct-child note (user story
-  // 37). Draft only: the cover persists on Save.
-  function handleSetCover(noteNode) {
-    if (!displayNode || displayNode.node_type !== "grouping") {
+    if (!target || target.nodeId == null || loading) {
       return;
     }
 
-    const coverNoteId = noteNode.note_id ?? noteNode.note?.id ?? null;
-    setNodes((current) =>
-      updateNodeTree(current, displayNode.id, (entry) => ({
-        ...entry,
-        cover_note_id: coverNoteId,
-        cover_note: noteNode.note ?? entry.cover_note,
-        children: entry.children,
-      })),
-    );
-    setTreeDirty(true);
-    setSaveError("");
-  }
+    ownershipFocusRef.current = null;
+    const targetSelector =
+      `.showcase-catalog-cell[data-showcase-node-id="${target.nodeId}"] ` +
+      `[data-showcase-focus="${target.role}"]`;
+    const selector = sectionRef.current?.querySelector(targetSelector)
+      ? targetSelector
+      : `[data-showcase-filter="${catalogFilter}"]`;
+    focusShowcaseControl(sectionRef, selector);
+  }, [catalogFilter, loading, nodes]);
 
-  // Clearing returns the Grouping to its derived cover (ticket 09).
-  function handleClearCover() {
-    if (!displayNode || displayNode.node_type !== "grouping") {
-      return;
-    }
+  // ── Keyboard navigation ─────────────────────────────────────────────────
+  const drillDepth = urlDrillIds.length;
 
-    setNodes((current) =>
-      updateNodeTree(current, displayNode.id, (entry) => ({
-        ...entry,
-        cover_note_id: null,
-        cover_note: null,
-        children: entry.children,
-      })),
-    );
-    setTreeDirty(true);
-    setSaveError("");
-  }
-
-  async function handleSave() {
-    if (!editMode || saving || loading) {
-      return;
-    }
-    const trimmedName = nameDraft.trim();
-    if (!trimmedName) {
-      setNameError("A showcase name is required.");
-      return;
-    }
-    // Preserve the drilled level across the save when it is a saved node;
-    // staged (temporary) levels fall back to the root.
-    const savedDisplayId =
-      displayNode && !isTempId(displayNode.id) ? displayNode.id : null;
-    setSaving(true);
-    setSaveError("");
-    setNameError("");
-    try {
-      if (isNew) {
-        // Deferred creation: the POST happens here, not on `+ New showcase`.
-        // An untouched "Showcase" name omits the name so the server picks a
-        // unique default instead of hitting the duplicate-name error.
-        const created = await createShowcase(
-          trimmedName === "Showcase" ? undefined : trimmedName,
-        );
-        if (created?.id == null) {
-          throw new Error("Could not save the showcase.");
-        }
-        await saveShowcaseDraft({
-          showcaseId: created.id,
-          baselineNodes: [],
-          draftNodes: nodes,
-          api: { createShowcaseNode, updateNode, deleteNode, reorderNodes },
-        });
-        // createShowcase clears the pending draft; land on the real view.
-        navigate({
-          pathname: SHOWCASE_ROUTES.showcase(created.id),
-          search: showcaseNodeSearch(savedDisplayId),
-        });
-        return;
-      }
-      if (showcase && trimmedName !== showcase.name) {
-        await renameShowcase(showcase.id, trimmedName);
-      }
-      await saveShowcaseDraft({
-        showcaseId,
-        baselineNodes,
-        draftNodes: nodes,
-        api: { createShowcaseNode, updateNode, deleteNode, reorderNodes },
-      });
-      // The mode switch remounts the screen (see the route keys), so view
-      // loads the saved tree fresh; no local reset is needed here.
-      navigate({
-        pathname: SHOWCASE_ROUTES.showcase(showcaseId),
-        search: showcaseNodeSearch(savedDisplayId),
-      });
-    } catch (error) {
-      setSaveError(error.message || "Could not save the showcase.");
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  // Guarded exits share one prompt, mirroring the Note editor's
-  // unsaved-changes dialog: "Keep editing" is the safe default, and the copy
-  // names what is about to be lost. The draft state travels through a ref so
-  // the callback (and the window key listener through it) stays stable.
-  const guardShowcaseExit = useCallback(
-    async (action) => {
-      if (confirmOpenRef.current) {
-        return;
-      }
-
-      const { hasUnsavedEdits: unsaved, isNew: draft } = exitGuardRef.current;
-
-      if (!unsaved) {
-        action();
-        return;
-      }
-
-      const confirmed = await confirm({
-        title: draft ? "Discard new showcase?" : "Discard changes?",
-        body: draft
-          ? "Your new showcase will be lost."
-          : "Your changes will be lost.",
-        cancelLabel: "Keep editing",
-        confirmLabel: "Discard",
-      });
-
-      if (confirmed) {
-        action();
-      }
-    },
-    [confirm],
-  );
-
-  const doCancel = useCallback(() => {
-    // A draft showcase has no view to return to: discard it and land on the
-    // last showcase in the list (or home when the list is empty) so the
-    // sidebar row disappears with it.
-    if (isNew) {
-      if (discardPendingShowcase()) {
-        toastHost?.current?.show(SHOWCASE_DRAFT_DISCARDED, "info");
-      }
-      const lastShowcase = showcases[showcases.length - 1] ?? null;
-      navigate(
-        lastShowcase
-          ? SHOWCASE_ROUTES.showcase(lastShowcase.id)
-          : DEFAULT_DESTINATION,
-      );
-      return;
-    }
-    // Cancel discards the draft and returns to view on the same level when
-    // it is a saved node. The mode switch remounts the screen (see the route
-    // keys), so no local reset is needed: the draft state is discarded with
-    // the edit instance and view loads fresh from the entry `?node=`.
-    const cancelDisplayId =
-      displayNode && !isTempId(displayNode.id) ? displayNode.id : null;
-    navigate({
-      pathname: SHOWCASE_ROUTES.showcase(showcaseId),
-      search: showcaseNodeSearch(cancelDisplayId),
-    });
-  }, [
-    discardPendingShowcase,
-    displayNode,
-    isNew,
-    navigate,
-    showcaseId,
-    showcases,
-    toastHost,
-  ]);
-
-  function handleCancel() {
-    if (saving) {
-      return;
-    }
-    guardShowcaseExit(doCancel);
-  }
-
-  // Escape at the root leaves edit mode entirely, exactly like Cancel; a
-  // draft takes Cancel's destination since it has no view to return to,
-  // while a saved showcase drops to its root level.
-  const exitEditModeToRoot = useCallback(() => {
-    if (isNew) {
-      doCancel();
-      return;
-    }
-
-    if (Number.isInteger(showcaseId) && showcaseId > 0) {
-      navigate({
-        pathname: SHOWCASE_ROUTES.showcase(showcaseId),
-        search: showcaseNodeSearch(null),
-      });
-    }
-  }, [doCancel, isNew, navigate, showcaseId]);
-
-  // --- Keyboard navigation ------------------------------------------------
-  // The number of levels deep the canvas is drilled. The Escape step uses it to
-  // decide whether there is a level to go up to.
-  const drillDepth = effectiveDrillIds.length;
-
-  // The arrow-key sequence is every card (`.showcase-card`), every
-  // edit-mode category header (`.showcase-category-focus`), plus every
-  // edit-mode add tile (`.showcase-tile`: Add notes, Add grouping, Create a
-  // category), in DOM order — which is the grid's reading order. An open
-  // create tile is a form, not a tile button, so it drops out of the sequence
-  // while its field (an editable) owns the arrows anyway. All sequence
-  // members are natively focusable (no roving tabindex); the shortcuts only
-  // move `document.activeElement`.
   function showcaseCardElements() {
     const root = sectionRef.current;
 
@@ -1189,17 +1178,10 @@ function ShowcaseScreen({ mode }) {
     }
 
     return Array.from(
-      root.querySelectorAll(
-        ".showcase-card, .showcase-tile, .showcase-category-focus",
-      ),
+      root.querySelectorAll(".showcase-card, .showcase-tile"),
     );
   }
 
-  // The card (or category header, or add tile) under focus, or the card of
-  // the cell the focused control sits in (a Rename/Remove/Reorder control
-  // belongs to the card's own cell). Reorder handles sit in the surrounding
-  // `.showcase-reorder-cell` (a sibling of the `.showcase-cell`), so the
-  // fallback looks through both wrappers.
   function focusedShowcaseCard() {
     const active = document.activeElement;
 
@@ -1208,14 +1190,10 @@ function ShowcaseScreen({ mode }) {
     }
 
     return (
-      active.closest(
-        ".showcase-card, .showcase-tile, .showcase-category-focus",
-      ) ??
+      active.closest(".showcase-card, .showcase-tile") ??
       active
         .closest(".showcase-reorder-cell, .showcase-cell")
-        ?.querySelector(
-          ".showcase-card, .showcase-tile, .showcase-category-focus",
-        ) ??
+        ?.querySelector(".showcase-card, .showcase-tile") ??
       null
     );
   }
@@ -1249,9 +1227,6 @@ function ShowcaseScreen({ mode }) {
     cards[clamped]?.focus();
   }
 
-  // How many cards a page step covers: the columns on the first row times the
-  // rows a viewport holds. Measured from the rendered cards; a layout that
-  // cannot be measured falls back to one row.
   function cardPageStep(cards) {
     if (cards.length < 2) {
       return 1;
@@ -1286,17 +1261,20 @@ function ShowcaseScreen({ mode }) {
     focusCardAt(baseIndex + direction * cardPageStep(cards));
   }
 
-  // One window listener drives card navigation and the edit actions, mirroring
-  // the Banknotes table. Guards, in order: an open dialog, a text field, the
-  // sidebar, and a Meta/Ctrl/Alt chord.
   useEffect(() => {
     function handleGlobalKeyDown(event) {
-      if (showShortcutsHelp || pickerNodeId != null || confirmOpen) {
+      if (
+        showShortcutsHelp ||
+        addTarget != null ||
+        replaceShellId != null ||
+        nameDialog != null ||
+        editShellId != null ||
+        confirmOpen ||
+        presentIndex != null
+      ) {
         return;
       }
 
-      // While the image preview is open it owns the keyboard (arrows page,
-      // Esc closes); the card grid stays inert behind it.
       if (previewOpen) {
         return;
       }
@@ -1357,10 +1335,24 @@ function ShowcaseScreen({ mode }) {
         return;
       }
 
-      if (event.key === "Enter" || event.key === " ") {
-        // Grouping and note cards are native buttons in both modes, so
-        // Enter/Space activate through the button itself. No manual handling
-        // here, otherwise a card would open or toggle twice.
+      if (event.key === "a") {
+        const card = focusedShowcaseCard();
+        const nodeId =
+          card?.dataset?.showcaseNodeId != null
+            ? Number(card.dataset.showcaseNodeId)
+            : null;
+        const node = Number.isInteger(nodeId)
+          ? findNodeById(nodesRef.current, nodeId)
+          : null;
+        const parentId = node ? findParentId(nodesRef.current, node.id) : null;
+        const parent =
+          parentId == null ? null : findNodeById(nodesRef.current, parentId);
+
+        if (node && parent) {
+          event.preventDefault();
+          openAddAfter(parent, node, "notes");
+        }
+
         return;
       }
 
@@ -1380,129 +1372,28 @@ function ShowcaseScreen({ mode }) {
         if (drillDepth > 0) {
           event.preventDefault();
           navigateTo(drillDepth - 2);
-          return;
         }
-
-        // Edit mode at the root with nothing focused leaves edit mode
-        // entirely, exactly like Cancel: the in-memory draft is discarded
-        // with the edit instance and view loads fresh. Unsaved changes
-        // prompt first, mirroring the Note editor.
-        if (editMode) {
-          event.preventDefault();
-          guardShowcaseExit(exitEditModeToRoot);
-        }
-        return;
-      }
-
-      // Edit mode's single-key actions act on the focused card: `a` opens the
-      // note picker for that card's node (a Category or Grouping; a note cannot
-      // hold notes), `e` its rename field, `d` its remove control. `g` is the
-      // current level's add-grouping tile, which is not inside a cell.
-      // View mode's `e` with no card focused enters edit mode on the same
-      // level (mirroring the table's `e` editing the collection when no row
-      // is focused); with a focused card the view-mode keys stay inert.
-      if (!editMode && event.key === "e") {
-        if (focusedShowcaseCard()) {
-          return;
-        }
-
-        if (isNew || !Number.isInteger(showcaseId) || showcaseId <= 0) {
-          return;
-        }
-
-        event.preventDefault();
-        navigate({
-          pathname: SHOWCASE_ROUTES.showcaseEdit(showcaseId),
-          search: location.search,
-        });
-        return;
-      }
-
-      if (
-        editMode &&
-        (event.key === "a" ||
-          event.key === "g" ||
-          event.key === "e" ||
-          event.key === "d")
-      ) {
-        const card = focusedShowcaseCard();
-
-        if (!card) {
-          return;
-        }
-
-        event.preventDefault();
-        const cell = card.closest(".showcase-cell");
-
-        if (event.key === "a") {
-          const nodeId =
-            card.dataset?.showcaseNodeId != null
-              ? Number(card.dataset.showcaseNodeId)
-              : null;
-          const node = Number.isInteger(nodeId)
-            ? findNodeById(nodes, nodeId)
-            : null;
-
-          if (node && node.node_type !== "note") {
-            setPickerNodeId(node.id);
-          }
-
-          return;
-        }
-
-        if (event.key === "g") {
-          sectionRef.current
-            ?.querySelector('[aria-label="Add grouping"]')
-            ?.click();
-          return;
-        }
-
-        const action = event.key === "e" ? "rename" : "remove";
-        cell?.querySelector(`[data-showcase-action="${action}"]`)?.click();
       }
     }
 
     window.addEventListener("keydown", handleGlobalKeyDown);
     return () => window.removeEventListener("keydown", handleGlobalKeyDown);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [
+    addTarget,
+    catalogFilter,
     confirmOpen,
-    discardPendingShowcase,
+    displayNode,
     drillDepth,
-    editMode,
-    exitEditModeToRoot,
-    guardShowcaseExit,
-    isNew,
-    location.search,
-    navigate,
-    nodes,
-    pickerNodeId,
+    editShellId,
+    nameDialog,
+    presentIndex,
     previewOpen,
-    showcaseId,
-    showcases,
+    replaceShellId,
     showShortcutsHelp,
   ]);
 
-  // After a drill or a step back, bring focus back to the card for the node we left
-  // when it is on the new level. A card that is no longer rendered is skipped,
-  // so a drill into a node simply leaves focus unfocused.
-  const drillKey = effectiveDrillIds.join("/");
-
-  // Edit mode live-syncs the in-memory drill to `?node=` so the address always
-  // names the current level. Staged (unsaved) nodes have temporary ids and are
-  // never written to the URL.
-  const editDrillSearch = showcaseNodeSearch(
-    displayNode && !isTempId(displayNode.id) ? displayNode.id : null,
-  );
-
-  useEffect(() => {
-    if (!editMode || loading) {
-      return;
-    }
-
-    if (location.search !== editDrillSearch) {
-      navigate({ search: editDrillSearch }, { replace: true });
-    }
-  }, [editDrillSearch, editMode, loading, location.search, navigate]);
+  const drillKey = urlDrillIds.join("/");
 
   useEffect(() => {
     if (loading) {
@@ -1518,34 +1409,21 @@ function ShowcaseScreen({ mode }) {
     restoreFocusNodeIdRef.current = null;
 
     const card = sectionRef.current?.querySelector(
-      `.showcase-card[data-showcase-node-id="${nodeId}"], .showcase-category-focus[data-showcase-node-id="${nodeId}"]`,
+      `.showcase-card[data-showcase-node-id="${nodeId}"]`,
     );
 
     card?.focus();
   }, [drillKey, loading]);
 
-  const pickerNode =
-    pickerNodeId == null ? null : findNodeById(nodes, pickerNodeId);
+  const pickerShell =
+    replaceShellId == null ? null : findNodeById(nodes, replaceShellId);
+  const editShellNode =
+    editShellId == null ? null : findNodeById(nodes, editShellId);
+  const ownedPercent = catalogTotals.total
+    ? Math.round((catalogTotals.owned / catalogTotals.total) * 100)
+    : 0;
 
   const showEmpty = !loading && !loadError && nodes.length === 0;
-  // Both modes share the dashed empty-state box so view mode never reads as
-  // a missing string; edit mode adds the create tile, view mode a hint plus
-  // a way forward.
-  const showViewEmpty = showEmpty && !editMode;
-  const showEditEmpty = showEmpty && editMode;
-  // A resolvable node with nothing visible under it is not the same as an
-  // empty showcase: a Grouping holding only non-empty sub-Groupings is not
-  // empty. Categories render expanded with their own per-section empty copy,
-  // so this only covers a drilled Grouping. In view mode empty Groupings are
-  // hidden, so the empty state reads the visible children, not the raw ones.
-  const showEmptyNode =
-    !loading &&
-    !loadError &&
-    displayNode != null &&
-    visibleDisplayChildren.length === 0;
-  const showViewEmptyNode = showEmptyNode && !editMode;
-  // A label can be placed at most once per Showcase, so do not suggest the ones
-  // already on the canvas (including staged draft placements by name).
   const placedCategoryIds = new Set(
     nodes
       .map((node) => node.category_id)
@@ -1561,112 +1439,150 @@ function ShowcaseScreen({ mode }) {
       !placedCategoryIds.has(category.id) &&
       !placedCategoryNames.has(String(category.name ?? "").toLowerCase()),
   );
-  // The header's muted total (presentation spec §1): the loaded tree's note
-  // count, or the showcase row's count until the tree arrives.
-  const noteCount = loading
-    ? (showcase?.note_count ?? 0)
-    : countNoteNodes(nodes);
+  const noteCount = loading ? (showcase?.note_count ?? 0) : countNoteNodes(nodes);
+  const reorderEnabled = !filterActive;
+
+  const gridProps = {
+    catalogLayout,
+    catalogMode,
+    onAdd: (parent) => openAdd(parent, null, "notes"),
+    onAddGroupingAfter: openAddAfter,
+    onAddNoteAfter: openAddAfter,
+    onAddShellAfter: openAddAfter,
+    onClearCover: handleClearCover,
+    onEditShell: (node) => setEditShellId(node.id),
+    onOpenGrouping: openNode,
+    onOpenNote: openShowcasePreview,
+    onOpenShell: (node) => setReplaceShellId(node.id),
+    onOwnershipToggle: handleOwnershipToggle,
+    onPresent: (node) => openPresentation(node.id),
+    onRemove: handleRemove,
+    onRenameGrouping: openRename,
+    onReorder: handleReorder,
+    onSetCover: handleSetCover,
+    photoSize,
+    reorderEnabled,
+  };
+
+  const showcaseActionItems = showcase
+    ? [
+        {
+          key: "rename",
+          label: "Rename",
+          icon: "edit",
+          onSelect: startNameRename,
+        },
+        {
+          key: "delete",
+          label: "Delete showcase…",
+          icon: "delete",
+          danger: true,
+          disabled: deleting,
+          separated: true,
+          onSelect: handleDelete,
+        },
+      ]
+    : [];
 
   return (
     <section
-      className={`screen-stack showcase-screen showcase-screen--${editMode ? "edit" : "view"}`}
+      className="screen-stack showcase-screen"
       ref={sectionRef}
     >
       <div className="screen-body">
         <div className="panel-heading">
           <div className="panel-heading-copy">
-            {editMode ? (
-              <input
-                aria-label="Showcase name"
-                className="showcase-name-field"
-                onBlur={commitName}
-                onChange={(event) => {
-                  setNameDraft(event.target.value);
-                  updatePendingShowcaseName(event.target.value);
-                  setNameError("");
-                  setSaveError("");
-                }}
-                onKeyDown={handleNameKeyDown}
-                ref={nameFieldRef}
-                value={nameDraft}
-              />
+            {renamingName ? (
+              <form
+                className="collection-rename-form"
+                onSubmit={submitNameRename}
+              >
+                <input
+                  aria-label="Showcase name"
+                  className="showcase-name-field"
+                  disabled={savingName}
+                  onChange={(event) => {
+                    setNameDraft(event.target.value);
+                    setNameError("");
+                    setActionError("");
+                  }}
+                  onKeyDown={handleNameKeyDown}
+                  ref={nameFieldRef}
+                  value={nameDraft}
+                />
+                <button
+                  className="button button-primary"
+                  disabled={savingName}
+                  title="Save (Enter)"
+                  type="submit"
+                >
+                  {savingName ? "Saving…" : "Save"}
+                </button>
+                <button
+                  className="button"
+                  disabled={savingName}
+                  onClick={cancelNameRename}
+                  title="Cancel (Esc)"
+                  type="button"
+                >
+                  Cancel
+                </button>
+              </form>
             ) : (
-              <h1>{showcaseName}</h1>
-            )}
-            <p className="muted showcase-note-count">{`${noteCount} notes`}</p>
-            {editMode && dirty && !loading ? (
-              <p className="muted showcase-dirty">Unsaved changes</p>
-            ) : null}
-          </div>
-          <div className="showcase-header-controls">
-            <div className="showcase-photo-size">
-              <ShowcasePhotoSizeControl
-                onArrowDown={() => focusCardAt(0)}
-                onChange={setPhotoSize}
-                value={photoSize}
-              />
-            </div>
-            <div className="panel-heading-actions">
-              {/* Edit mode is a draft: Save persists the canvas and the name,
-              Cancel discards both and returns to view. */}
-              {editMode ? (
-                <>
-                  {showcase ? (
+              <div className="collection-title-row">
+                {showcase ? (
+                  <h1 aria-label={showcaseName}>
                     <button
-                      className="button button-danger"
-                      disabled={deleting}
-                      onClick={handleDelete}
+                      aria-label={`Rename showcase: ${showcaseName}`}
+                      className="collection-title-button"
+                      onClick={startNameRename}
+                      ref={nameTitleButtonRef}
+                      title="Rename showcase"
                       type="button"
                     >
-                      Delete showcase
+                      {showcaseName}
                     </button>
-                  ) : null}
-                  <button
-                    className="button"
-                    disabled={saving}
-                    onClick={handleCancel}
-                    type="button"
-                  >
-                    Cancel
-                  </button>
-                  <button
-                    className="button button-primary"
-                    disabled={!dirty || saving || loading}
-                    onClick={handleSave}
-                    type="button"
-                  >
-                    {saving ? "Saving…" : "Save"}
-                  </button>
-                </>
-              ) : (
-                <Link
-                  className="button"
-                  to={{
-                    pathname: SHOWCASE_ROUTES.showcaseEdit(showcaseId),
-                    search: location.search,
-                  }}
-                >
-                  Edit
-                </Link>
-              )}
-            </div>
+                  </h1>
+                ) : (
+                  <h1>{showcaseName}</h1>
+                )}
+                {showcase ? (
+                  <ActionsMenu
+                    items={showcaseActionItems}
+                    label="Showcase actions"
+                  />
+                ) : null}
+              </div>
+            )}
+            {catalogMode ? null : (
+              <p className="muted showcase-note-count">{`${noteCount} notes`}</p>
+            )}
+            {nameError ? (
+              <p className="error-text" role="alert">
+                {nameError}
+              </p>
+            ) : null}
           </div>
+          {catalogChrome ? null : (
+            <div className="showcase-header-controls">
+              <div className="showcase-photo-size">
+                <ShowcasePhotoSizeControl
+                  onArrowDown={() => focusCardAt(0)}
+                  onChange={setPhotoSize}
+                  value={photoSize}
+                />
+              </div>
+            </div>
+          )}
         </div>
 
-        {/* Politeness only: the current level is announced on every entry. */}
         <p aria-live="polite" className="showcase-announcer" role="status">
           {announcement}
         </p>
 
-        {nameError ? (
-          <p className="muted showcase-name-error" role="alert">
-            {nameError}
-          </p>
-        ) : null}
-
-        {saveError ? (
+        {actionError ? (
           <p className="showcase-error" role="alert">
-            {saveError}
+            {actionError}
           </p>
         ) : null}
 
@@ -1680,65 +1596,99 @@ function ShowcaseScreen({ mode }) {
           </p>
         ) : null}
 
-        {showViewEmpty ? (
-          <div className="showcase-empty-box">
-            <svg
-              aria-hidden="true"
-              className="showcase-empty-art"
-              focusable="false"
-              height="48"
-              viewBox="0 0 48 48"
-              width="48"
+        {catalogChrome ? (
+          <div className="showcase-filter-bar">
+            <div
+              aria-label="Catalog filters"
+              className="showcase-filter-chips"
+              role="group"
             >
-              <rect
-                height="26"
-                rx="3"
-                width="30"
-                x="9"
-                y="13"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth="2"
-              />
-              <rect
-                height="26"
-                rx="3"
-                width="30"
-                x="13"
-                y="9"
-                fill="var(--surface)"
-                stroke="currentColor"
-                strokeWidth="2"
-              />
-              <circle cx="20" cy="17" fill="currentColor" r="2" />
-              <path
-                d="M15 29 L22 22 L27 27 L30 24 L35 29 Z"
-                fill="none"
-                stroke="currentColor"
-                strokeLinejoin="round"
-                strokeWidth="2"
-              />
-            </svg>
-            <p className="showcase-empty-title">This showcase is empty.</p>
-            <p className="showcase-empty-text muted">
-              Nothing to present yet. Add categories, groupings, and notes in
-              edit mode to start the story.
-            </p>
-            <div className="showcase-empty-actions">
-              <Link
-                className="button"
-                to={SHOWCASE_ROUTES.showcaseEdit(showcaseId)}
+              {CATALOG_FILTERS.map((filter) => {
+                const count =
+                  filter.value === "all"
+                    ? catalogTotals.total
+                    : catalogTotals[filter.value];
+
+                return (
+                  <button
+                    aria-label={`${filter.label} (${count})`}
+                    aria-pressed={catalogFilter === filter.value}
+                    className="showcase-filter-chip"
+                    data-showcase-filter={filter.value}
+                    key={filter.value}
+                    onClick={() => setCatalogFilter(filter.value)}
+                    type="button"
+                  >
+                    <span>{filter.label}</span>
+                    <span className="showcase-filter-count">{count}</span>
+                  </button>
+                );
+              })}
+            </div>
+            {/* The one progress reading for the checklist: the chips carry
+                the three counts, so the rail adds only the owned share. */}
+            <span className="showcase-filter-progress">
+              <span
+                aria-label="Owned cards"
+                aria-valuemax={catalogTotals.total}
+                aria-valuemin={0}
+                aria-valuenow={catalogTotals.owned}
+                aria-valuetext={`${catalogTotals.owned} of ${catalogTotals.total} owned`}
+                className="showcase-progress"
+                role="progressbar"
+                title={`${catalogTotals.owned} of ${catalogTotals.total} owned`}
               >
-                Edit showcase
-              </Link>
+                <span
+                  className="showcase-progress-fill"
+                  style={{ width: `${ownedPercent}%` }}
+                />
+              </span>
+              <span aria-hidden="true" className="showcase-progress-pct">
+                {`${ownedPercent}%`}
+              </span>
+              {catalogTotals.complete ? (
+                <span className="showcase-complete-chip">
+                  <span aria-hidden="true" className="showcase-complete-mark">
+                    ✓
+                  </span>
+                  Complete
+                </span>
+              ) : null}
+            </span>
+            <div className="showcase-filter-actions">
+              <ShowcaseLayoutControl
+                onArrowDown={() => focusCardAt(0)}
+                onChange={setCatalogLayout}
+                value={catalogLayout}
+              />
+              <ShowcasePhotoSizeControl
+                onArrowDown={() => focusCardAt(0)}
+                onChange={setPhotoSize}
+                value={photoSize}
+              />
+              <button
+                className="button"
+                disabled={catalogTotals.owned === 0}
+                onClick={() => openPresentation()}
+                title={
+                  catalogTotals.owned
+                    ? "Show the notes you own as a slideshow"
+                    : "Add an owned note to start a slideshow"
+                }
+                type="button"
+              >
+                Slideshow
+              </button>
             </div>
           </div>
         ) : null}
 
-        {showEditEmpty ? (
+        {showEmpty ? (
           <div className="showcase-empty-box">
-            <p className="showcase-empty-text">
-              No categories yet. Reuse a label or create a new one.
+            <p className="showcase-empty-title">This showcase is empty.</p>
+            <p className="showcase-empty-text muted">
+              Start with a category, then add notes, groupings, and catalog
+              shells inside it.
             </p>
             <ShowcaseCategoryTile
               categories={availableCategories}
@@ -1748,169 +1698,124 @@ function ShowcaseScreen({ mode }) {
           </div>
         ) : null}
 
-        {showViewEmptyNode ? (
+        {!loading && !loadError && displayNode ? (
+          <ShowcaseBreadcrumb
+            showcaseName={showcaseName}
+            onNavigate={navigateTo}
+            path={displayPath}
+          />
+        ) : null}
+
+        {filterEmpty ? (
           <div className="showcase-empty-box">
-            <p className="showcase-empty-title">No notes here yet.</p>
-            <p className="showcase-empty-text muted">
-              This level has nothing to present yet. Check back later or add
-              notes to it in edit mode.
-            </p>
+            <p className="showcase-empty-title">{activeFilter.emptyTitle}</p>
+            <p className="showcase-empty-text muted">{activeFilter.emptyText}</p>
           </div>
         ) : null}
 
-        {!loading && !loadError ? (
-          <>
-            {displayNode ? (
-              <ShowcaseBreadcrumb
-                showcaseName={showcaseName}
-                onNavigate={navigateTo}
-                path={displayPath}
-              />
-            ) : null}
-
-            {editMode && displayNode?.node_type === "grouping" ? (
-              <div className="showcase-node-cover">
-                <span className="muted">
-                  {displayNode.cover_note_id != null
-                    ? "Cover set by hand."
-                    : "Cover derives from the first note."}
-                </span>
-                {displayNode.cover_note_id != null ? (
-                  <button
-                    className="button"
-                    onClick={handleClearCover}
-                    type="button"
-                  >
-                    Clear cover
-                  </button>
-                ) : null}
-              </div>
-            ) : null}
-
-            {isRootExpanded ? (
-              <>
-                {visibleRootNodes.map((node) => {
-                  if (node.node_type !== "category") {
-                    return null;
-                  }
-
-                  const categoryIndex = rootCategories.findIndex(
-                    (entry) => entry.id === node.id,
-                  );
-
-                  return (
-                    <ShowcaseCategorySection
-                      category={node}
-                      editMode={editMode}
-                      key={node.id}
-                      onAddGrouping={handleAddGroupingFor}
-                      onAddNotes={handleOpenNotePicker}
-                      onOpenGrouping={openNode}
-                      onOpenNote={openShowcasePreview}
-                      onRemoveCategory={handleRemoveCategory}
-                      onRemoveGrouping={handleRemoveGrouping}
-                      onRemoveNote={handleRemoveNote}
-                      onRenameCategory={handleRenameCategory}
-                      onRenameGrouping={handleRenameGrouping}
-                      onReorder={handleReorderChildrenFor}
-                      onMoveCategory={
-                        showCategoryMove ? handleMoveCategory : undefined
-                      }
-                      canMoveUp={showCategoryMove && categoryIndex > 0}
-                      canMoveDown={
-                        showCategoryMove &&
-                        categoryIndex < rootCategories.length - 1
-                      }
-                      photoSize={photoSize}
-                    />
-                  );
-                })}
-
-                {editMode && !showEditEmpty ? (
-                  <ShowcaseCategoryTile
-                    categories={availableCategories}
-                    onAdd={handleAddCategory}
-                  />
-                ) : null}
-              </>
-            ) : (
-              <ShowcaseGrid size={photoSize}>
-                {visibleDisplayChildren.map((node) => {
-                  if (node.node_type === "grouping") {
-                    return editMode ? (
-                      <ShowcaseReorderableCell
-                        key={node.id}
-                        label={node.name}
-                        nodeId={node.id}
-                        reorder={reorder}
-                      >
-                        <ShowcaseGroupingEditor
-                          node={node}
-                          onOpen={() => openNode(node)}
-                          onRemove={handleRemoveGrouping}
-                          onRename={handleRenameGrouping}
-                          photoSize={photoSize}
-                        />
-                      </ShowcaseReorderableCell>
-                    ) : (
-                      <ShowcaseGroupingCard
-                        key={node.id}
-                        node={node}
-                        onOpen={() => openNode(node)}
-                      />
-                    );
-                  }
-
-                  if (node.node_type === "note") {
-                    return editMode ? (
-                      <ShowcaseReorderableCell
-                        key={node.id}
-                        label={noteNodeLabel(node)}
-                        nodeId={node.id}
-                        reorder={reorder}
-                      >
-                        <ShowcaseNoteEditor
-                          node={node}
-                          onRemove={handleRemoveNote}
-                          onSetCover={
-                            displayNode?.node_type === "grouping"
-                              ? handleSetCover
-                              : undefined
-                          }
-                        />
-                      </ShowcaseReorderableCell>
-                    ) : (
-                      <ShowcaseNoteCard
-                        key={node.id}
-                        mode="view"
-                        nodeId={node.id}
-                        note={node.note}
-                        onOpen={(kind) => openShowcasePreview(node, kind)}
-                      />
-                    );
-                  }
-
+        {!loading && !loadError && !showEmpty && !filterEmpty ? (
+          isRootExpanded ? (
+            <>
+              {filteredDisplayChildren.map((node) => {
+                if (node.node_type !== "category") {
                   return null;
-                })}
+                }
 
-                {editMode && displayNode ? (
-                  <ShowcaseAddTiles
-                    onAddGrouping={handleAddGrouping}
-                    onAddNotes={() => handleOpenNotePicker(displayNode)}
+                const rootIndex = nodes.findIndex(
+                  (entry) => entry.id === node.id,
+                );
+
+                return (
+                  <ShowcaseCategorySection
+                    canMoveDown={rootIndex >= 0 && rootIndex < nodes.length - 1}
+                    canMoveUp={rootIndex > 0}
+                    category={node}
+                    key={node.id}
+                    {...gridProps}
+                    onMoveDown={(target) => handleMoveCategory(target, 1)}
+                    onMoveUp={(target) => handleMoveCategory(target, -1)}
+                    onRemove={handleRemove}
+                    onRename={openRename}
                   />
-                ) : null}
-              </ShowcaseGrid>
-            )}
-          </>
+                );
+              })}
+              <ShowcaseCategoryTile
+                categories={availableCategories}
+                onAdd={handleAddCategory}
+              />
+            </>
+          ) : (
+            <ShowcaseItemsGrid
+              items={filteredDisplayChildren}
+              parent={displayNode}
+              {...gridProps}
+            />
+          )
         ) : null}
       </div>
 
-      {pickerNode ? (
+      {addTarget ? (
+        <ShowcaseAddDialog
+          afterId={addTarget.afterId}
+          collections={collections}
+          initialMode={addTarget.mode}
+          onAddGrouping={handleAddGrouping}
+          onAddNotes={handleAddNotes}
+          onAddShells={handleAddShells}
+          onClose={() => setAddTarget(null)}
+          parent={addTarget.parent}
+        />
+      ) : null}
+
+      {pickerShell && isCatalogEntry(pickerShell) ? (
         <ShowcaseNotePicker
           collections={collections}
-          node={pickerNode}
-          onAdd={handleAddNotes}
-          onClose={() => setPickerNodeId(null)}
+          node={{
+            ...pickerShell,
+            name: catalogEntryIdentity(pickerShell.entry),
+          }}
+          onAdd={handleReplaceShell}
+          onClose={() => setReplaceShellId(null)}
+          singleSelect
+        />
+      ) : null}
+
+      {nameDialog ? (
+        <ShowcaseNameDialog
+          initialValue={nameDialog.initialValue}
+          label={nameDialog.label}
+          onClose={() => setNameDialog(null)}
+          onSubmit={submitNameDialog}
+          submitLabel={nameDialog.submitLabel}
+          subtitle={nameDialog.subtitle}
+          title={nameDialog.title}
+        />
+      ) : null}
+
+      {editShellNode && isCatalogEntry(editShellNode) ? (
+        <ShowcaseDialog
+          onClose={() => setEditShellId(null)}
+          subtitle="Only this planned card's catalog metadata changes."
+          title="Edit catalog shell"
+        >
+          <ShowcaseCatalogShellForm
+            entry={editShellNode.entry}
+            onAdd={handleEditShell}
+            onClose={() => setEditShellId(null)}
+            submitLabel="Save details"
+          />
+        </ShowcaseDialog>
+      ) : null}
+
+      {presentIndex != null && presentationNotes[presentIndex] ? (
+        <Slideshow
+          collectionName={showcaseName}
+          currentIndex={presentIndex}
+          notes={presentationNotes.map((item) => item.note)}
+          onChangeIndex={setPresentIndex}
+          onClose={closePresentation}
+          onJump={(position) => setPresentIndex(position - 1)}
+          readOnly
         />
       ) : null}
 

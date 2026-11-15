@@ -1,50 +1,16 @@
 import { useId } from "react";
 import { PHOTO_SIZE_OPTIONS } from "../lib/photoSize.js";
 
-// The card-width icon for each size: one frame outline that grows with the
-// grid minimum (Small 200px / Medium 320px / Large 480px). The label text
-// stays as the accessible name (screen-reader only + input aria-label) and
-// the `title` gives sighted users the same word on hover.
-const PHOTO_SIZE_ICON_WIDTHS = {
-  small: 12,
-  medium: 18,
-  large: 24,
-};
-
-function PhotoSizeIcon({ value }) {
-  const width = PHOTO_SIZE_ICON_WIDTHS[value] ?? 18;
-  const height = 12;
-  const x = (26 - width) / 2;
-  const y = (16 - height) / 2;
-
-  return (
-    <svg
-      aria-hidden="true"
-      focusable="false"
-      height="16"
-      viewBox="0 0 26 16"
-      width="26"
-    >
-      <rect
-        fill="none"
-        height={height}
-        rx="2"
-        stroke="currentColor"
-        strokeWidth="1.8"
-        width={width}
-        x={x}
-        y={y}
-      />
-    </svg>
-  );
-}
-
 // The three-way note photo size control (Small / Medium / Large). It is a
 // labelled radio group so a keyboard or screen reader gets one-of-three
 // semantics; the screen owns the remembered value and this stays
-// presentational. A `div[role=group]` (not fieldset/legend) keeps the caption
-// and the pill on one flex row so the pill centers exactly with the header's
-// Edit/View button — a legend always renders on its own row above the pill.
+// presentational. The options print their initial as a compact letter in the
+// pill (the prototype's S / M / L), while the full word stays as the
+// accessible name and the hover `title`.
+//
+// A `div[role=group]` (not fieldset/legend) keeps the caption and the pill on
+// one flex row so the pill centers exactly with the header's Edit/View button —
+// a legend always renders on its own row above the pill.
 //
 // Only Left/Right change the size (the radios' native behaviour); Up never
 // changes it, and Down hands focus to the current level's cards through
@@ -89,7 +55,9 @@ function ShowcasePhotoSizeControl({ onArrowDown, onChange, value }) {
               type="radio"
               value={option.value}
             />
-            <PhotoSizeIcon value={option.value} />
+            <span aria-hidden="true" className="showcase-photo-size-letter">
+              {option.letter}
+            </span>
             <span className="showcase-photo-size-label">{option.label}</span>
           </label>
         ))}

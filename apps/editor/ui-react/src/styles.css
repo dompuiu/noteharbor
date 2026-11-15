@@ -990,11 +990,6 @@ input[type="radio"] {
   align-items: center;
 }
 
-.showcase-name-error {
-  margin-bottom: 12px;
-  color: var(--danger);
-}
-
 .showcase-empty {
   padding: 24px 0;
 }
@@ -1028,7 +1023,8 @@ input[type="radio"] {
 /* The three-way note photo size control (Small 200px / Medium 320px / Large
    480px). It sits in the showcase header's trailing cluster in both view and
    edit mode and only sets the grid's minimum card width. The options are
-   icons (one growing frame); the words survive as accessible names. */
+   letters in one pill; the chosen size is the white disc with its own ring,
+   and the words stay as the accessible names. */
 .showcase-photo-size {
   align-self: center;
   display: flex;
@@ -1045,12 +1041,15 @@ input[type="radio"] {
 }
 
 .showcase-photo-size-legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
   padding: 0;
-  color: var(--text-muted);
-  text-transform: uppercase;
-  letter-spacing: 0.1em;
-  font-size: 0.72rem;
-  font-weight: 700;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
 }
 
 .showcase-photo-size-options {
@@ -1059,7 +1058,7 @@ input[type="radio"] {
   padding: 2px;
   border: 1px solid var(--border-control);
   border-radius: var(--radius-pill);
-  background: var(--surface);
+  background: var(--surface-2);
   min-height: 34px;
 }
 
@@ -1068,16 +1067,21 @@ input[type="radio"] {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  min-width: 40px;
-  min-height: 28px;
-  padding: 4px 8px;
+  width: 28px;
+  height: 28px;
+  padding: 0;
   border-radius: var(--radius-pill);
   color: var(--text-muted);
   cursor: pointer;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  line-height: 1;
 }
 
-.showcase-photo-size-option svg {
+.showcase-photo-size-letter {
   display: block;
+  text-transform: uppercase;
 }
 
 .showcase-photo-size-option input {
@@ -1090,7 +1094,7 @@ input[type="radio"] {
 }
 
 /* The word stays in the accessibility tree (radio name + tooltip) while
-   sighted users get the icon only. */
+   sighted users get the letter only. */
 .showcase-photo-size-label {
   position: absolute;
   width: 1px;
@@ -1104,11 +1108,97 @@ input[type="radio"] {
 }
 
 .showcase-photo-size-option:has(input:checked) {
-  background: var(--accent-soft);
-  color: var(--accent-strong);
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border-control);
 }
 
 .showcase-photo-size-option:has(input:focus-visible) {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+/* The two-way catalog card layout control beside the photo-size pill. The
+   options are small card diagrams: caption-over-photo for the Library label,
+   photo-beside-rail for the Auction rail. The selected option is the white
+   disc, exactly like the S / M / L pill. */
+.showcase-layout-control {
+  display: flex;
+  align-items: center;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+
+.showcase-layout-legend {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.showcase-layout-options {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  min-height: 34px;
+}
+
+.showcase-layout-option {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 28px;
+  padding: 0;
+  border-radius: var(--radius-pill);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+
+.showcase-layout-option input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+}
+
+.showcase-layout-icon {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
+.showcase-layout-label {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  white-space: nowrap;
+  border: 0;
+}
+
+.showcase-layout-option:has(input:checked) {
+  background: var(--surface);
+  color: var(--text);
+  box-shadow: inset 0 0 0 1px var(--border-control);
+}
+
+.showcase-layout-option:has(input:focus-visible) {
   outline: 2px solid var(--accent);
   outline-offset: 2px;
 }
@@ -1161,6 +1251,14 @@ input[type="radio"] {
   margin-bottom: 16px;
 }
 
+.showcase-category-head {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  text-align: center;
+}
+
 .showcase-category-title {
   margin: 0;
   font-size: 1.4rem;
@@ -1168,6 +1266,29 @@ input[type="radio"] {
   letter-spacing: -0.01em;
   text-align: center;
   text-transform: uppercase;
+}
+
+/* The quiet second line of the section header: direct card counts, then a
+   hairline that closes the title block and opens the grid. Edit mode hangs the
+   same line inside the category cell, above its own rule. */
+.showcase-category-meta,
+.showcase-node-subtitle {
+  margin: 0;
+  color: var(--text-faint);
+  font-size: 0.75rem;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.showcase-node-subtitle {
+  flex-basis: 100%;
+}
+
+.showcase-category-rule {
+  width: 100%;
+  height: 1px;
+  margin-top: 8px;
+  background: var(--border-soft);
 }
 
 .showcase-category-focus {
@@ -1333,18 +1454,8 @@ input[type="radio"] {
     inset 0 0 0 1px var(--accent);
 }
 
-/* Edit mode selection lives on the outer reorder cell only: the inner card
-   never paints its own wash/ring, so a focused grouping cover, note card, or
-   action (Set as cover) all read as one accent-soft cell instead of three
-   stacked tones. */
-.showcase-screen--edit .showcase-card:focus-visible {
-  background: transparent;
-  box-shadow: none;
-}
-
-.showcase-screen--edit .showcase-card--grouping:focus-visible {
-  box-shadow: inset 3px 0 0 var(--accent);
-}
+/* A focused card can only be reached outside a reorder cell (the category
+   header); inside a cell the cell itself owns the focus ring. */
 
 .showcase-card--category {
   aspect-ratio: 2 / 1;
@@ -1513,101 +1624,124 @@ input[type="radio"] {
   gap: 8px;
 }
 
-/* Edit mode wraps each draggable card in a reorder cell. The cell is the
-   bordered card so the grip, the preview, and the Rename / Remove read as one
-   item; the grip floats over the card's top-left corner so it never shifts the
-   grid alignment. The hovered edge shows the line the drop will land on; the
-   dragged cell dims. */
+/* The always-editable canvas wraps each draggable card in a reorder cell. The
+   cell is the bordered card, so its bar, the photo, and its one frame read as
+   a single item. The bar is the item's window chrome: the grip on the left,
+   the actions menu on the right, and — when the card has no footer of its own
+   — the caption centred between them. A hairline closes the chrome from the
+   photo plate below. */
 .showcase-reorder-cell {
   position: relative;
   display: flex;
   flex-direction: column;
   min-width: 0;
   height: 100%;
-  padding: 10px 10px 6px;
-  padding-top: 36px;
+  padding: 0 0 6px;
   border: 1px solid var(--border);
   border-radius: var(--radius-md);
   background: var(--surface);
 }
 
+.showcase-reorder-bar {
+  position: relative;
+  display: flex;
+  flex: none;
+  align-items: center;
+  height: 34px;
+  padding: 0 5px;
+  border-bottom: 1px solid var(--border-soft);
+  cursor: grab;
+}
+
+/* The title is absolutely centred so its length never moves the grip or the
+   menu; a long catalog line ellipses and keeps the full string in `title`. */
+.showcase-reorder-title {
+  position: absolute;
+  top: 0;
+  right: 36px;
+  left: 36px;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.78rem;
+  font-weight: 600;
+  line-height: 34px;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/* A Small card is narrow enough that the title's leading and trailing inset is
+   the difference between `P17 · 03/12/1915 · 1 Leu` fitting and losing the
+   denomination to the ellipsis. Three pixels still separate the text from the
+   grip and the menu. */
+.showcase-grid[data-photo-size="small"] .showcase-reorder-title {
+  right: 32px;
+  left: 32px;
+}
+
 .showcase-reorder-cell > .showcase-cell {
-  gap: 8px;
+  gap: 0;
   border: 0;
   background: transparent;
 }
 
-/* The inner card fills its reorder cell so every cell in a stretched grid row
-   ends on the same uniform bottom pad. Without this, the tallest card sets
-   the row and shorter ones float: notes lack the grouping's 22px rename
-   button, so a note row always left a bigger gap under notes than groupings.
-   The leftover row height lands inside the card below its caption, where the
-   single-line caption and fixed 2/1 image well keep it invisible. */
-.showcase-reorder-cell > .showcase-cell > .showcase-card--note,
-.showcase-reorder-cell > .showcase-cell > .showcase-grouping-editcard {
+.showcase-reorder-cell--draggable:hover {
+  border-color: var(--border-control);
+}
+
+/* One frame per item: the cell draws it, so the card inside never adds a
+   second border, a second surface, or a second focus wash. */
+.showcase-reorder-cell > .showcase-card,
+.showcase-reorder-cell > .showcase-cell > .showcase-card {
   flex: 1 1 auto;
-}
-
-/* An edit cell is the showcase's catalog row: while Tab sits on the card or
-   any of its controls, the cell paints the row wash with an inset 1px ring.
-   Inner controls keep their own outlines, mirroring `.table-row-link`. While
-   a Category is being renamed the wash stays off: the rename field carries
-   its own focus style, and painting the whole header row would read as one
-   giant input box. */
-.showcase-reorder-cell:has(:focus-visible),
-.showcase-category-section
-  > .showcase-cell--category:not(:has(.showcase-node-rename-form)):has(
-    :focus-visible
-  ) {
-  background: var(--accent-soft);
-  box-shadow: inset 0 0 0 1px var(--accent);
-}
-
-/* A selected edit cell shows one wash tone: the inner grouping wrapper and
-   note card go transparent and borderless while selected, keeping only the
-   grouping spine. Without this the outer wash, the inner surface, and the
-   image well read as three backgrounds, and the outer ring plus the inner
-   border read as a double border — while a note (outer and inner both washed)
-   reads as one. */
-.showcase-screen--edit
-  .showcase-reorder-cell:has(:focus-visible)
-  > .showcase-cell
-  > .showcase-card--note {
   border-color: transparent;
+  background: transparent;
+}
+
+/* A catalog card carries its identity in the bar, so its photo gets even
+   padding; a note card keeps its caption row as the info trigger. */
+.showcase-reorder-cell > .showcase-cell > .showcase-card--catalog {
+  padding: 8px;
+}
+
+/* Focus paints the cell only, at 2px: no wash over the photo, and never a
+   second ring on the card inside it. */
+.showcase-reorder-cell:has(:focus-visible) {
+  border-color: transparent;
+  box-shadow: inset 0 0 0 2px var(--accent);
+}
+
+.showcase-reorder-cell:has(:focus-visible) .showcase-card:focus-visible {
   background: transparent;
   box-shadow: none;
 }
 
-.showcase-screen--edit
-  .showcase-reorder-cell:has(:focus-visible)
-  .showcase-grouping-editcard {
-  border-color: transparent;
-  background: transparent;
+/* The grouping spine is identity, not focus, so it survives the cell ring. */
+.showcase-reorder-cell:has(:focus-visible)
+  .showcase-card--grouping:focus-visible {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
+/* The handle is a drag affordance: a quiet ghost control until hover. */
 .showcase-reorder-handle {
-  position: absolute;
-  top: 8px;
-  left: 8px;
-  z-index: 1;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 28px;
-  height: 22px;
+  width: 24px;
+  height: 24px;
   padding: 0;
-  border: 1px solid var(--border-control);
+  border: 0;
   border-radius: var(--radius-sm);
-  background: var(--surface-2);
-  color: var(--text-muted);
+  background: transparent;
+  color: var(--text-faint);
   cursor: grab;
 }
 
 .showcase-reorder-handle:hover,
 .showcase-reorder-handle:focus-visible {
-  border-color: var(--accent);
-  color: var(--accent-strong);
+  background: var(--surface-4);
+  color: var(--text);
 }
 
 .showcase-reorder-handle:active {
@@ -1615,7 +1749,9 @@ input[type="radio"] {
 }
 
 .showcase-reorder-grip {
-  line-height: 1;
+  display: block;
+  width: 12px;
+  height: 12px;
 }
 
 /* Prototype: grouping / note edit icons. The remove icon sits top-right on
@@ -2110,18 +2246,851 @@ input[type="radio"] {
   gap: 4px;
 }
 
-/* The edit-mode contents of one node nest in the parent grid. The stacked
-   `+` actions fill one grid cell, so the pair reads as a single note-sized
-   tile whether it sits beside notes or wraps onto its own row. The minimum
-   tracks the note editor height at the grid minimum: half the column width
-   for the 2/1 image ((min - 44px of side chrome) / 2) plus ~89px of vertical
-   chrome (36px reorder top pad + 4px bottom pad + borders, 10px + 4px card
-   pads, 8px gap, ~19px caption), i.e. min / 2 + 67px, via the grid's own
-   `--showcase-card-min`. Keep it at or below the true note height: the tiles
-   stretch by design (flex children), so an underestimate only stretches the
-   tiles, while an overestimate stretches the whole row and leaves dead space
-   under the cards. Update this when any of those paddings change.
-   (No action-row allowance: edit controls are icons now, not a bottom row.) */
+/* ── Catalog checklist ────────────────────────────────────────────────
+   Catalog chrome only exists when the tree holds Catalog entries. One row
+   carries every count: the filters are pills with their own counts, and the
+   rail at the far end is the single owned-share reading. A card keeps the
+   existing showcase card metrics and adds only the three state cues (check,
+   SEEN tag, empty well). */
+
+.showcase-progress {
+  flex: none;
+  width: 120px;
+  height: 4px;
+  overflow: hidden;
+  border-radius: var(--radius-pill);
+  background: var(--surface-4);
+}
+
+.showcase-progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+  background: var(--accent);
+  transition: width 160ms ease;
+}
+
+/* The rail rides the filter row's far end, beside the view controls, so the
+   chips are the only place the three counts appear. */
+.showcase-filter-progress {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-left: auto;
+}
+
+.showcase-progress-pct {
+  color: var(--text-faint);
+  font-size: 0.72rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Photo size and Slideshow keep the header's trailing cluster, moved down to
+   the checklist row so the counts, the rail, and the view controls read as one
+   toolbar. */
+.showcase-filter-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+.showcase-filter-actions .button {
+  min-height: 34px;
+  padding: 0 14px;
+}
+
+.showcase-complete-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 2px 8px;
+  border: 1px solid rgba(21, 122, 58, 0.22);
+  border-radius: var(--radius-pill);
+  background: var(--success-bg);
+  color: var(--success);
+  font-size: 0.72rem;
+  font-weight: 700;
+}
+
+.showcase-complete-mark {
+  font-size: 0.7rem;
+  line-height: 1;
+}
+
+.showcase-filter-bar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 11px 0 12px;
+  margin-bottom: 4px;
+  border-bottom: 1px solid var(--border-soft);
+  flex-wrap: wrap;
+}
+
+.showcase-filter-chips {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.showcase-filter-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  min-height: 30px;
+  padding: 3px 10px;
+  border: 1px solid var(--border);
+  border-radius: 7px;
+  background: var(--surface);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.showcase-filter-chip:hover,
+.showcase-filter-chip:focus-visible {
+  border-color: var(--accent);
+  color: var(--accent-strong);
+}
+
+.showcase-filter-chip[aria-pressed="true"] {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+  color: var(--accent-ink);
+}
+
+.showcase-filter-count {
+  min-width: 20px;
+  padding: 0 5px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: center;
+}
+
+.showcase-filter-chip[aria-pressed="true"] .showcase-filter-count {
+  background: rgba(255, 255, 255, 0.18);
+  color: var(--accent-ink);
+}
+
+/* The wrapper keeps the card and its siblings (check, strip) one grid item,
+   and anchors the check over the photo's corner. */
+.showcase-catalog-cell {
+  position: relative;
+  gap: 0;
+}
+
+.showcase-card--catalog {
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 10px 10px 6px;
+  align-items: stretch;
+  transition:
+    border-color 0.14s ease,
+    box-shadow 0.14s ease;
+}
+
+/* The catalog card keeps the cell's single frame: hover lives on the cell, so
+   the inner card never reveals a border of its own. */
+
+/* The state label: Seen and Owned are one pill in the photo's corner, so the
+   two states read as the same kind of thing. The label is the ownership
+   toggle; the card body opens the note. The photo never changes opacity or
+   colour, because the label alone carries the state. */
+.showcase-card-state {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-height: 22px;
+  padding: 1px 7px;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.94);
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1.4;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition:
+    border-color 0.12s ease,
+    background 0.12s ease,
+    color 0.12s ease,
+    box-shadow 0.12s ease;
+}
+
+.showcase-card-state-icon {
+  display: block;
+  flex: none;
+}
+
+.showcase-card-state--owned {
+  border-color: rgba(21, 122, 58, 0.4);
+  color: var(--success);
+}
+
+/* The label turns into the "change ownership" affordance on hover/focus: the
+   mark fills in, so the click target reads as the toggle it is. */
+.showcase-card-state--seen:hover,
+.showcase-card-state--seen:focus-visible {
+  border-color: var(--accent-strong);
+  background: var(--accent-strong);
+  color: var(--accent-ink);
+  box-shadow: 0 2px 6px rgba(37, 40, 43, 0.22);
+}
+
+.showcase-card-state--owned:hover,
+.showcase-card-state--owned:focus-visible {
+  border-color: var(--success);
+  background: var(--success);
+  color: #fff;
+  box-shadow: 0 2px 6px rgba(21, 122, 58, 0.32);
+}
+
+/* ── Catalog card layouts ──────────────────────────────────────────────────
+   The cell is the card frame: the catalog card draws its own rail, so the
+   generic title bar is suppressed and the grip moves inside. Both layouts end
+   in the same ownership footer, which keeps Seen and Owned identical across
+   the two. */
+.showcase-reorder-cell--embedded {
+  padding: 0;
+}
+
+.showcase-reorder-cell--embedded > .showcase-cell {
+  flex: 1 1 auto;
+}
+
+.showcase-reorder-cell--embedded > .showcase-cell > .showcase-card--catalog {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+}
+
+.showcase-card--labels,
+.showcase-card--rail {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  align-items: stretch;
+  justify-content: flex-start;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+}
+
+/* The rail above the photo: grip, compact catalog code, and the actions menu
+   anchored in the cell's top-right corner. */
+.showcase-catalog-topline {
+  display: flex;
+  flex: none;
+  align-items: center;
+  gap: 8px;
+  min-height: 33px;
+  padding: 3px 32px 3px 7px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.showcase-catalog-code {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The photo well is its own hairline plate, so the specimen reads as a
+   mounted object rather than a full-bleed image. */
+.showcase-card--labels .showcase-catalog-photo {
+  flex: none;
+  width: calc(100% - 20px);
+  margin: 10px 10px 0;
+  border: 1px solid var(--border-soft);
+  border-radius: 2px;
+  background: var(--surface-2);
+}
+
+.showcase-catalog-meta {
+  display: flex;
+  flex: none;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-height: 34px;
+  padding: 2px 11px 6px;
+}
+
+.showcase-catalog-line {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text-muted);
+  font-size: 0.72rem;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase-catalog-grade {
+  display: inline-flex;
+  flex: none;
+  align-items: baseline;
+  gap: 4px;
+  padding-left: 8px;
+  border-left: 1px solid var(--border-soft);
+  font-variant-numeric: tabular-nums;
+}
+
+.showcase-catalog-grade b {
+  font-size: 0.875rem;
+  font-weight: 650;
+  letter-spacing: -0.02em;
+  line-height: 1.1;
+}
+
+.showcase-catalog-grade span {
+  color: var(--text-faint);
+  font-size: 0.47rem;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+}
+
+/* The ownership footer: one quiet action row, the same in both layouts. */
+.showcase-card-state--footer {
+  position: static;
+  top: auto;
+  left: auto;
+  display: flex;
+  justify-content: flex-start;
+  width: 100%;
+  min-height: 28px;
+  padding: 5px 11px;
+  border: 0;
+  border-top: 1px solid var(--border-soft);
+  border-radius: 0;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  box-shadow: none;
+}
+
+.showcase-card-state--footer:hover,
+.showcase-card-state--footer:focus-visible {
+  border-color: var(--border-soft);
+  background: var(--surface-2);
+  color: var(--text);
+  box-shadow: none;
+}
+
+.showcase-card-state--owned.showcase-card-state--footer {
+  border-top-color: var(--border-soft);
+  color: var(--success);
+}
+
+.showcase-card-state--owned.showcase-card-state--footer:hover,
+.showcase-card-state--owned.showcase-card-state--footer:focus-visible {
+  border-top-color: var(--border-soft);
+  background: var(--surface-2);
+  color: var(--success);
+  box-shadow: none;
+}
+
+.showcase-card-state--footer .showcase-card-state-icon {
+  flex: none;
+}
+
+/* The Auction rail: photo on the left, fixed identity rail on the right. The
+   minimum grid width keeps this split readable at Small. */
+.showcase-catalog-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 148px;
+}
+
+.showcase-card--rail .showcase-catalog-body {
+  padding: 9px 0 9px 9px;
+}
+
+.showcase-card--rail .showcase-catalog-photo {
+  flex: 1 1 auto;
+  width: auto;
+  min-width: 0;
+  height: auto;
+  aspect-ratio: auto;
+  border: 0;
+  background: transparent;
+}
+
+.showcase-catalog-rail {
+  display: flex;
+  flex: 0 0 132px;
+  flex-direction: column;
+  min-width: 0;
+  padding: 0 9px 0 11px;
+}
+
+.showcase-catalog-railtop {
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-height: 20px;
+  padding-right: 30px;
+}
+
+.showcase-catalog-kicker {
+  margin-top: 5px;
+  color: var(--text-faint);
+  font-size: 0.47rem;
+  font-weight: 800;
+  letter-spacing: 0.17em;
+  text-transform: uppercase;
+}
+
+.showcase-catalog-rail .showcase-catalog-code {
+  margin-top: 1px;
+  font-size: 0.95rem;
+  font-weight: 650;
+  letter-spacing: 0.01em;
+  line-height: 1.15;
+}
+
+.showcase-catalog-date {
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 0.66rem;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.3;
+}
+
+.showcase-catalog-denom {
+  margin-top: 2px;
+  overflow: hidden;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.3;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase-catalog-grade--rail {
+  align-items: flex-start;
+  gap: 5px;
+  margin-top: auto;
+  padding-top: 8px;
+  padding-left: 0;
+  border-top: 1px solid var(--border-soft);
+  border-left: 0;
+}
+
+.showcase-catalog-grade--rail b {
+  font-size: 1.45rem;
+  font-weight: 700;
+  letter-spacing: -0.035em;
+  line-height: 0.92;
+}
+
+.showcase-catalog-grade--rail span {
+  max-width: 62px;
+  padding-top: 1px;
+  font-size: 0.47rem;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  line-height: 1.25;
+  text-transform: uppercase;
+}
+
+.showcase-catalog-empty {
+  margin-top: auto;
+  color: var(--text-faint);
+  font-size: 0.58rem;
+  line-height: 1.4;
+}
+
+/* Empty positions keep the same footer as an owned/seen card, but the footer
+   is not a second control: the whole card opens the finder. */
+.showcase-catalog-add {
+  display: flex;
+  flex: none;
+  align-items: center;
+  width: 100%;
+  min-height: 28px;
+  padding: 5px 11px;
+  border-top: 1px solid var(--border-soft);
+  color: var(--text-muted);
+  font-size: 0.55rem;
+  font-weight: 800;
+  letter-spacing: 0.15em;
+  text-transform: uppercase;
+}
+
+.showcase-card--unseen:hover .showcase-catalog-add,
+.showcase-card--unseen:focus-visible .showcase-catalog-add {
+  color: var(--accent-strong);
+}
+
+.showcase-card--labels .showcase-catalog-add {
+  margin-top: auto;
+}
+
+.showcase-catalog-wellshot {
+  position: relative;
+  display: flex;
+  flex: none;
+  width: 100%;
+  min-width: 0;
+}
+
+.showcase-card--labels .showcase-catalog-wellshot {
+  width: calc(100% - 20px);
+  margin: 10px 10px 0;
+}
+
+.showcase-card--labels .showcase-catalog-wellshot .showcase-catalog-well {
+  border-radius: 2px;
+}
+
+.showcase-card--rail .showcase-catalog-wellshot {
+  flex: 1 1 auto;
+  margin: 0;
+  border-radius: 2px;
+}
+
+.showcase-card--rail .showcase-catalog-wellshot .showcase-catalog-well {
+  height: 100%;
+  aspect-ratio: auto;
+  border-radius: 2px;
+}
+
+/* A small-screen fallback: the rail itself stays fixed, but the fixed grade
+   column's label wraps before the number. */
+@media (max-width: 560px) {
+  .showcase-catalog-rail {
+    flex-basis: 118px;
+    padding-right: 7px;
+    padding-left: 9px;
+  }
+
+  .showcase-catalog-grade--rail span {
+    max-width: 46px;
+  }
+}
+
+/* The ownership footer is the shell form's call to action; the card itself is
+   the toggle, so the grid never paints a second row. */
+.showcase-catalog-foot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  min-height: 28px;
+  margin-top: 1px;
+  padding-top: 7px;
+  border-top: 1px solid var(--border-soft);
+  color: var(--accent-strong);
+  font-size: 0.79rem;
+  font-weight: 700;
+}
+
+.showcase-catalog-arrow {
+  display: inline-block;
+  font-size: 0.9rem;
+  transition: transform 0.14s ease;
+}
+
+/* A position with no record is a recessed specimen well, not an error: the
+   catalogue identity sits in the middle and the dashed inset reads as a place
+   waiting to be filled. */
+.showcase-catalog-well {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  width: 100%;
+  aspect-ratio: 2 / 1;
+  overflow: hidden;
+  border-radius: var(--radius-md);
+  background:
+    linear-gradient(135deg, rgba(37, 40, 43, 0.018) 25%, transparent 25%) 0 0 /
+      10px 10px,
+    linear-gradient(315deg, rgba(37, 40, 43, 0.018) 25%, transparent 25%) 0 0 /
+      10px 10px,
+    var(--surface-2);
+}
+
+.showcase-catalog-well::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1.5px dashed var(--border-control);
+  border-radius: 4px;
+  pointer-events: none;
+  transition: border-color 0.14s ease;
+}
+
+.showcase-card--unseen:hover .showcase-catalog-well::after,
+.showcase-card--unseen:focus-visible .showcase-catalog-well::after {
+  border-color: var(--text-faint);
+}
+
+.showcase-catalog-eyebrow {
+  position: absolute;
+  top: 8px;
+  left: 10px;
+  z-index: 1;
+  color: var(--text-faint);
+  font-size: 0.56rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.showcase-catalog-glyph {
+  width: 64px;
+  max-width: 60%;
+  color: var(--text-faint);
+}
+
+.showcase-catalog-identity {
+  position: relative;
+  z-index: 1;
+  max-width: 85%;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.95rem;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* One entry, several notes: a quiet strip, never a wall of badges. */
+.showcase-catalog-strip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 5px;
+  width: 100%;
+  min-height: 26px;
+  margin-top: 2px;
+  padding: 6px 0 0;
+  border: 0;
+  border-top: 1px solid var(--border-soft);
+  background: none;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.72rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.showcase-catalog-strip:hover,
+.showcase-catalog-strip:focus-visible {
+  color: var(--accent-strong);
+}
+
+.showcase-catalog-strip-icon {
+  flex: none;
+}
+
+/* Edit mode's Catalog entry card: the same body as the checklist card, with a
+   draft-local remove icon, a details action, and a quiet specimen line that
+   opens the local manager. */
+.showcase-catalog-editcard {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  gap: 8px;
+  width: 100%;
+  padding: 10px 10px 6px;
+  border: 1px solid var(--border-control);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.showcase-catalog-edit-open {
+  flex: 1 1 auto;
+  justify-content: flex-start;
+  gap: 8px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  text-align: left;
+  align-items: stretch;
+}
+
+.showcase-catalog-edit-open .showcase-card-caption-row {
+  justify-content: center;
+}
+
+.showcase-catalog-edit-source {
+  overflow: hidden;
+  color: var(--text-faint);
+  font-size: 0.72rem;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* The add/edit entry form: fields on the left, the live unseen-card preview on
+   the right. It reuses the manager shell, so the backdrop, scrolling body, and
+   sticky footer (including the phone bottom sheet) stay identical. */
+.showcase-manager.showcase-entry-dialog {
+  width: min(720px, 100%);
+}
+
+.showcase-entry-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 250px);
+  gap: 16px;
+}
+
+.showcase-entry-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.showcase-entry-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.showcase-entry-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-md);
+  background: var(--surface-2);
+}
+
+.showcase-entry-preview-label {
+  margin: 0;
+  font-size: 0.68rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.showcase-entry-preview-card {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 8px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+}
+
+.showcase-entry-count {
+  margin: 0;
+  font-size: 0.78rem;
+}
+
+@media (max-width: 560px) {
+  .showcase-entry-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* The Undo affordance rides inside the transient toast. */
+.toast-action {
+  flex: none;
+  padding: 2px 8px;
+  border: 1px solid currentColor;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-size: 0.75rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.toast-action:hover,
+.toast-action:focus-visible {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+/* Two columns at phone width, and the check stays inside the card's corner. */
+@media (max-width: 560px) {
+  .showcase-screen:not(.showcase-screen--edit) .showcase-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 10px;
+  }
+
+  .showcase-card--catalog {
+    padding: 6px 6px 4px;
+    gap: 6px;
+  }
+
+  .showcase-card-state {
+    top: 9px;
+    left: 9px;
+  }
+
+  .showcase-filter-bar {
+    gap: 6px;
+  }
+
+  /* The rail joins the chips' flow instead of holding the far right alone. */
+  .showcase-filter-progress {
+    margin-left: 0;
+  }
+
+  .showcase-filter-actions {
+    margin-left: auto;
+  }
+}
+
+/* The always-editable contents of one node nest in the parent grid. The
+   stacked `+` actions fill one grid cell, so the pair reads as a single
+   note-sized tile whether it sits beside notes or wraps onto its own row. The
+   minimum tracks the note cell at the grid minimum: half the column width for
+   the 2/1 image ((min - 18px of card chrome) / 2) plus ~58px of vertical
+   chrome (34px title bar + 6px bottom pad + borders and 8px card pads), i.e.
+   min / 2 + 49px, via the grid's own `--showcase-card-min`. Keep it at or
+   below the true note height: the tiles stretch by design (flex children), so
+   an underestimate only stretches the tiles, while an overestimate stretches
+   the whole row and leaves dead space under the cards. Update this when any of
+   those paddings change. (No action-row allowance: actions are icons now, not
+   a bottom row.) */
 .showcase-node-items {
   width: 100%;
   margin-top: 4px;
@@ -2130,22 +3099,24 @@ input[type="radio"] {
 .showcase-add-tiles {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: 8px;
   width: 100%;
   height: 100%;
-  min-height: calc(var(--showcase-card-min, 200px) / 2 + 67px);
+  min-height: calc(var(--showcase-card-min, 200px) / 2 + 49px);
 }
 
+/* The three add actions share one cell at the grid minimum, so each keeps a
+   compact row rather than the old half-cell height. */
 .showcase-add-tiles > .showcase-tile {
   flex: 1 1 0;
   height: auto;
-  min-height: 72px;
+  min-height: 48px;
 }
 
 .showcase-add-tiles > .showcase-category-combobox {
   flex: 1 1 0;
   height: auto;
-  min-height: 72px;
+  min-height: 48px;
 }
 
 .showcase-tile--note {
@@ -2225,6 +3196,46 @@ input[type="radio"] {
   margin: 0;
   color: var(--text-muted);
   font-size: 0.82rem;
+}
+
+/* Add notes can stage note leaves or catalog positions; the switch sits under
+   the filter row and keeps the picked notes when it flips. */
+.showcase-picker-modes {
+  display: flex;
+  gap: 2px;
+  align-self: flex-start;
+  padding: 2px;
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-pill);
+  background: var(--surface-2);
+}
+
+.showcase-picker-mode {
+  padding: 4px 12px;
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: transparent;
+  color: var(--text-muted);
+  font: inherit;
+  font-size: 0.78rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.showcase-picker-mode[aria-pressed="true"] {
+  background: var(--surface);
+  color: var(--accent-strong);
+  box-shadow: 0 0 0 1px var(--border-control);
+}
+
+.showcase-picker-notice {
+  margin: 0;
+  padding: 6px 10px;
+  border-left: 3px solid var(--accent);
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--text);
+  font-size: 0.8rem;
 }
 
 .showcase-picker-count {
@@ -2369,6 +3380,223 @@ input[type="radio"] {
   flex-wrap: wrap;
 }
 
+/* The manager's append-mode finder sits inside the manager dialog: no second
+   modal shell, no duplicate action row, and its list gets the room the dialog
+   leaves. */
+.showcase-picker--embedded {
+  width: 100%;
+  max-height: none;
+  padding: 0;
+  border: 0;
+  background: none;
+  box-shadow: none;
+  gap: 8px;
+}
+
+.showcase-picker-title--embedded {
+  margin: 0;
+  font-size: 0.92rem;
+}
+
+.showcase-picker--embedded .showcase-picker-list {
+  min-height: 160px;
+  max-height: min(38vh, 320px);
+}
+
+.showcase-note-row-pill--owned {
+  background: var(--success-bg);
+  color: var(--success);
+  font-weight: 700;
+}
+
+.showcase-note-row-pill--seen {
+  background: var(--surface-3);
+  color: var(--text-muted);
+}
+
+/* The specimen manager: the entry's notes in server order, then the finder.
+   The footer stays below the scrolling body so Done is always reachable. */
+.showcase-manager-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 155;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px;
+  background: rgba(37, 40, 43, 0.55);
+}
+
+.showcase-manager {
+  display: flex;
+  flex-direction: column;
+  width: min(760px, 100%);
+  max-height: calc(100vh - 96px);
+  padding: 16px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.showcase-manager-head {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.showcase-manager-title {
+  margin: 0;
+  font-size: 1.05rem;
+}
+
+.showcase-manager-subtitle {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.showcase-manager-scroll {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px 2px 4px;
+}
+
+.showcase-manager-list {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.showcase-manager-row {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 6px 10px;
+  border-bottom: 1px solid var(--border-soft);
+}
+
+.showcase-manager-row:last-child {
+  border-bottom: 0;
+}
+
+.showcase-manager-choice {
+  display: flex;
+  flex: 1 1 auto;
+  gap: 8px;
+  align-items: center;
+  min-width: 0;
+  cursor: pointer;
+}
+
+.showcase-manager-choice input {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent-strong);
+}
+
+.showcase-manager-note {
+  overflow: hidden;
+  font-size: 0.86rem;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.showcase-manager-chip {
+  flex: none;
+  padding: 2px 8px;
+  border-radius: var(--radius-pill);
+  background: var(--surface-3);
+  color: var(--text-muted);
+  font-size: 0.7rem;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.showcase-manager-chip--owned {
+  background: var(--success-bg);
+  color: var(--success);
+}
+
+.showcase-manager-remove {
+  flex: none;
+  min-height: 30px;
+  padding: 2px 10px;
+  font-size: 0.76rem;
+}
+
+.showcase-manager-warning {
+  margin: 0;
+  padding: 8px 10px;
+  border: 1px solid var(--border-soft);
+  border-left: 3px solid var(--text-faint);
+  border-radius: var(--radius-sm);
+  background: var(--surface-2);
+  color: var(--text-muted);
+  font-size: 0.82rem;
+}
+
+.showcase-manager-add {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding-top: 10px;
+  border-top: 1px solid var(--border-soft);
+}
+
+.showcase-manager-foot {
+  display: flex;
+  gap: 12px;
+  align-items: center;
+  justify-content: space-between;
+  padding-top: 12px;
+  border-top: 1px solid var(--border-soft);
+  background: var(--surface);
+}
+
+.showcase-manager-foot-note {
+  font-size: 0.78rem;
+}
+
+/* Phone width: the manager is a bottom sheet and its footer stays pinned
+   below the scrolling list, so Done is reachable without scrolling back. */
+@media (max-width: 560px) {
+  .showcase-manager-backdrop {
+    align-items: flex-end;
+    padding: 0;
+  }
+
+  .showcase-manager {
+    width: 100%;
+    max-height: 92vh;
+    padding: 14px 14px 0;
+    border-bottom: 0;
+    border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  }
+
+  .showcase-manager-row {
+    flex-wrap: wrap;
+  }
+
+  .showcase-manager-note {
+    white-space: normal;
+  }
+
+  .showcase-manager-foot {
+    padding-bottom: 14px;
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .sidebar-dock,
   .sidebar,
@@ -2396,6 +3624,13 @@ input[type="radio"] {
   }
 
   .showcase-card-face {
+    transition: none;
+  }
+
+  .showcase-progress-fill,
+  .showcase-card-state,
+  .showcase-catalog-well::after,
+  .showcase-catalog-arrow {
     transition: none;
   }
 
@@ -2914,7 +4149,8 @@ input[type="radio"] {
    move, only the edge the three of them clip at. */
 .collection-screen,
 .collection-screen > .screen-stack,
-.collection-screen .screen-body {
+.collection-screen .screen-body,
+.showcase-screen .screen-body {
   padding-inline: 8px;
   margin-inline: -8px;
 }
@@ -3305,9 +4541,10 @@ input[type="radio"] {
   background: #ffffff;
 }
 
-/* The bulk Tag panel hangs above the selection bar as a non-modal surface:
-   the rows it will change stay visible and the table is not dimmed. */
-.bulk-tag-panel {
+/* The panels the selection bar opens (Tags, Ownership) hang above it as
+   non-modal surfaces: the rows they will change stay visible and the table is
+   not dimmed. */
+.bulk-panel {
   position: fixed;
   z-index: 105;
   display: flex;
@@ -3319,11 +4556,11 @@ input[type="radio"] {
   box-shadow: var(--shadow-lg);
 }
 
-.bulk-tag-panel:focus {
+.bulk-panel:focus {
   outline: none;
 }
 
-.bulk-tag-panel-header {
+.bulk-panel-header {
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -3331,20 +4568,20 @@ input[type="radio"] {
   border-bottom: 1px solid var(--border-soft);
 }
 
-.bulk-tag-panel-title {
+.bulk-panel-title {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 800;
   letter-spacing: -0.01em;
 }
 
-.bulk-tag-panel-scope {
+.bulk-panel-scope {
   margin: 2px 0 0;
   font-size: 0.78rem;
   color: var(--text-muted);
 }
 
-.bulk-tag-panel-close {
+.bulk-panel-close {
   flex: none;
   width: 26px;
   height: 26px;
@@ -3359,12 +4596,12 @@ input[type="radio"] {
   cursor: pointer;
 }
 
-.bulk-tag-panel-close:hover {
+.bulk-panel-close:hover {
   background: var(--surface-3);
   color: var(--text);
 }
 
-.bulk-tag-panel-body {
+.bulk-panel-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -3377,7 +4614,7 @@ input[type="radio"] {
   border-top: 1px solid var(--border-soft);
 }
 
-.bulk-tag-label {
+.bulk-panel-label {
   display: block;
   margin-bottom: 6px;
   color: var(--text-faint);
@@ -3387,6 +4624,56 @@ input[type="radio"] {
   text-transform: uppercase;
 }
 
+/* The Ownership panel stages one of two states for the whole selection. The
+   options read as a two-row choice, not a segmented control: each row carries
+   its current coverage, so the panel says what the write will change. */
+.bulk-ownership-options {
+  display: grid;
+  gap: 8px;
+}
+
+.bulk-ownership-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.bulk-ownership-option:hover {
+  background: var(--surface-2);
+}
+
+.bulk-ownership-option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.bulk-ownership-option input {
+  flex: none;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.bulk-ownership-option-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bulk-ownership-option-label {
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.bulk-ownership-option-hint {
+  color: var(--text-faint);
+  font-size: 0.74rem;
+}
+
 .bulk-tag-section-heading {
   display: flex;
   align-items: baseline;
@@ -3394,7 +4681,7 @@ input[type="radio"] {
   margin-bottom: 6px;
 }
 
-.bulk-tag-section-heading .bulk-tag-label {
+.bulk-tag-section-heading .bulk-panel-label {
   margin: 0;
 }
 
@@ -3491,13 +4778,13 @@ input[type="radio"] {
   text-decoration: none;
 }
 
-.bulk-tag-error {
+.bulk-panel-error {
   margin: 0 14px 10px;
   padding: 8px 10px;
   font-size: 0.82rem;
 }
 
-.bulk-tag-panel-footer {
+.bulk-panel-footer {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -3506,7 +4793,7 @@ input[type="radio"] {
   background: var(--surface-2);
 }
 
-.bulk-tag-footer-spacer {
+.bulk-panel-spacer {
   margin-left: auto;
 }
 
@@ -3532,7 +4819,7 @@ input[type="radio"] {
   cursor: default;
 }
 
-.bulk-tag-announcer {
+.bulk-panel-announcer {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -3544,11 +4831,11 @@ input[type="radio"] {
   border: 0;
 }
 
-.bulk-tag-panel-close:disabled {
+.bulk-panel-close:disabled {
   cursor: default;
 }
 
-.bulk-tag-panel-footer .button {
+.bulk-panel-footer .button {
   height: 32px;
   min-height: 32px;
   padding: 0 14px;
@@ -6817,6 +8104,13 @@ button.tag {
   opacity: 0.55;
 }
 
+/* A short sentence under a checkbox control, aligned with its label:
+   15px checkbox + the .field-checkbox gap. */
+.field-checkbox-hint {
+  margin: 0 0 0 23px;
+  font-size: 0.8rem;
+}
+
 /* The Move dialog reuses the confirmation shell, but holds fields rather than
    one destructive sentence, so it is a little wider and scrolls on a short
    window instead of clipping its position picker. */
@@ -8740,4 +10034,252 @@ kbd {
    one step behind the catalog number it identifies. */
 td.table-col-collection {
   color: var(--text-muted);
+}
+
+/* ── One-view showcase canvas ────────────────────────────────────────────
+   There is no edit mode: every card is always draggable and always carries
+   its actions menu. The old edit-mode-only paddings and washes stay useful as
+   the cell chrome, so the rules are shared. */
+
+.showcase-screen .showcase-grid {
+  align-items: stretch;
+}
+
+.showcase-screen .showcase-reorder-cell {
+  padding-top: 0;
+  transition:
+    border-color 0.12s ease,
+    box-shadow 0.12s ease,
+    opacity 0.12s ease;
+}
+
+.showcase-reorder-cell--draggable {
+  cursor: grab;
+}
+
+.showcase-reorder-cell--draggable:active {
+  cursor: grabbing;
+}
+
+.showcase-reorder-cell--dragging {
+  opacity: 0.45;
+}
+
+.showcase-reorder-cell--drop-before {
+  box-shadow: inset 3px 0 0 var(--accent);
+  border-color: var(--accent);
+}
+
+.showcase-reorder-cell--drop-after {
+  box-shadow: inset -3px 0 0 var(--accent);
+  border-color: var(--accent);
+}
+
+/* The grip is an affordance, not a separate drag source: the whole item is
+   draggable, so the grip is a plain span the pointer can pass through. */
+.showcase-reorder-cell > .showcase-reorder-handle {
+  pointer-events: none;
+}
+
+.showcase-item-menu-trigger {
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text-faint);
+  cursor: pointer;
+}
+
+.showcase-item-menu-trigger:hover,
+.showcase-item-menu-trigger:focus-visible,
+.showcase-item-menu-trigger[aria-expanded="true"] {
+  background: var(--surface-4);
+  color: var(--accent-strong);
+}
+
+.showcase-item-menu-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+/* The menu owns the top-right corner; the state label stays top-left, so the
+   two never compete. */
+.showcase-item-menu {
+  position: fixed;
+  z-index: 170;
+  min-width: 220px;
+  padding: 4px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  background: var(--surface);
+  box-shadow: var(--shadow-lg);
+}
+
+.showcase-item-menu-list {
+  display: flex;
+  flex-direction: column;
+}
+
+.showcase-item-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.82rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.showcase-item-menu-item .row-actions-menu-icon {
+  color: var(--text-muted);
+}
+
+.showcase-item-menu-item:hover .row-actions-menu-icon,
+.showcase-item-menu-item:focus-visible .row-actions-menu-icon,
+.showcase-item-menu-item--danger .row-actions-menu-icon {
+  color: currentColor;
+}
+
+.showcase-item-menu-item:disabled {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.showcase-item-menu-item:hover,
+.showcase-item-menu-item:focus-visible {
+  background: var(--accent-soft);
+  color: var(--accent-strong);
+  outline: none;
+}
+
+.showcase-item-menu-item--danger {
+  color: var(--danger, #b3261e);
+}
+
+.showcase-item-menu-item--danger:hover,
+.showcase-item-menu-item--danger:focus-visible {
+  background: var(--danger-bg, #fdecea);
+  color: var(--danger, #b3261e);
+}
+
+/* The section header's menu sits at the right edge of the title block. */
+.showcase-category-head {
+  position: relative;
+  padding-right: 36px;
+}
+
+.showcase-category-head > .showcase-item-menu-trigger,
+.showcase-category-head > .showcase-item-menu {
+  position: absolute;
+}
+
+.showcase-category-head > .showcase-item-menu-trigger {
+  top: 50%;
+  right: 0;
+  transform: translateY(-50%);
+}
+
+/* One add tile replaces the old stack of edit-only tiles. */
+.showcase-tile--add {
+  justify-content: center;
+}
+
+.showcase-add-dialog {
+  width: min(920px, 100%);
+}
+
+.showcase-add-close {
+  align-self: flex-end;
+}
+
+.showcase-add-modes {
+  margin: 10px 0 4px;
+}
+
+.showcase-add-body {
+  min-height: 0;
+  overflow-y: auto;
+}
+
+.showcase-picker-mode[aria-selected="true"] {
+  background: var(--surface);
+  color: var(--accent-strong);
+  box-shadow: 0 0 0 1px var(--border-control);
+}
+
+.showcase-shell-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 4px 2px;
+}
+
+.showcase-shell-form-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(220px, 0.55fr);
+  gap: 20px;
+  align-items: start;
+}
+
+.showcase-shell-form-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.showcase-name-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding-top: 12px;
+}
+
+.showcase-dialog {
+  width: min(560px, 100%);
+}
+
+@media (max-width: 720px) {
+  .showcase-shell-form-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.showcase-reorder-cell > .showcase-card,
+.showcase-reorder-cell > .showcase-cell {
+  flex: 1 1 auto;
+}
+
+.showcase-item-menu-item:disabled {
+  color: var(--text-faint);
+  cursor: not-allowed;
+}
+
+.showcase-item-menu-item:disabled:hover {
+  background: transparent;
+}
+
+.showcase-add-dialog .showcase-manager-head {
+  position: relative;
+  padding-right: 72px;
+}
+
+.showcase-add-dialog .showcase-add-close {
+  position: absolute;
+  top: 0;
+  right: 0;
 }

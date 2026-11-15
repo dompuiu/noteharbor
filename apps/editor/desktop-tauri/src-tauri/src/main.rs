@@ -26,7 +26,8 @@ use tauri_plugin_opener::OpenerExt;
 
 /// JS bridge injected before any page script runs. Defines the
 /// `window.noteHarborDesktop` surface the UI reads (`appMode.js`,
-/// `photoSize.js`, `NoteEditForm.jsx`), backed by Tauri `invoke`.
+/// `photoSize.js`, `catalogLayout.js`, `NoteEditForm.jsx`), backed by Tauri
+/// `invoke`.
 /// `showNoteEditorTextMenu` is intentionally absent: without it
 /// the UI keeps the WebView's native context menu (see ticket resolution).
 /// A solitary Alt press is cancelled because the shell has no menu bar: on
@@ -50,6 +51,8 @@ if (window.__TAURI__ && !window.noteHarborDesktop) {
     openScrapeBrowser: () => invoke('open_scrape_browser'),
     getShowcasePhotoSize: () => invoke('get_showcase_photo_size'),
     setShowcasePhotoSize: (photoSize) => invoke('set_showcase_photo_size', { value: photoSize }),
+    getShowcaseCatalogLayout: () => invoke('get_showcase_catalog_layout'),
+    setShowcaseCatalogLayout: (catalogLayout) => invoke('set_showcase_catalog_layout', { value: catalogLayout }),
     getLastVisitedRoute: () => invoke('get_last_visited_route'),
     setLastVisitedRoute: (route) => invoke('set_last_visited_route', { value: route }),
   };
@@ -382,6 +385,20 @@ fn set_showcase_photo_size(app: tauri::AppHandle, value: String) -> String {
 }
 
 #[tauri::command]
+fn get_showcase_catalog_layout(app: tauri::AppHandle) -> String {
+    prefs::read_showcase_catalog_layout(&desktop_preferences_path(&app))
+}
+
+#[tauri::command]
+fn set_showcase_catalog_layout(app: tauri::AppHandle, value: String) -> String {
+    let path = desktop_preferences_path(&app);
+    if let Some(parent) = path.parent() {
+        let _ = std::fs::create_dir_all(parent);
+    }
+    prefs::write_showcase_catalog_layout(&path, &value).unwrap_or(value)
+}
+
+#[tauri::command]
 fn get_last_visited_route(app: tauri::AppHandle) -> Option<String> {
     prefs::read_last_visited_route(&desktop_preferences_path(&app))
 }
@@ -406,6 +423,8 @@ pub fn run() {
             open_scrape_browser,
             get_showcase_photo_size,
             set_showcase_photo_size,
+            get_showcase_catalog_layout,
+            set_showcase_catalog_layout,
             get_last_visited_route,
             set_last_visited_route
         ])

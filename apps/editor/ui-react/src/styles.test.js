@@ -2722,13 +2722,13 @@ describe("slideshow overlay styles", () => {
     expect(panel[1]).toMatch(/overflow-y:\s*auto/);
   });
 
-  // The category header's focus wash must stay off while renaming: the rename
-  // field carries its own focus style, and painting the whole header row would
-  // read as one giant input box.
-  test("the category header wash stays off while renaming", () => {
+  // The always-editable canvas paints focus once, on the cell: the card inside
+  // is neutralised, so no card can ever stack a second ring or a second wash.
+  test("the showcase cell owns the only focus plane", () => {
     expect(styles).toMatch(
-      /\.showcase-cell--category:not\(:has\(\.showcase-node-rename-form\)\):has\(\s*:focus-visible\s*\)/,
+      /\.showcase-reorder-cell:has\(:focus-visible\)\s*\{[^}]*box-shadow:\s*inset 0 0 0 2px var\(--accent\)/,
     );
+    expect(styles).not.toMatch(/\.showcase-screen--edit \.showcase-card/);
   });
 
   // A full-screen overlay owns scrolling while open: the body's bar would
@@ -2803,7 +2803,7 @@ describe("catalog header", () => {
   // band back instead, which keeps the layout where it was.
   test("the page head leaves room for the title's focus ring", () => {
     const clip = styles.match(
-      /\.collection-screen,\s*\.collection-screen > \.screen-stack,\s*\.collection-screen \.screen-body\s*\{([^}]*)\}/,
+      /\.collection-screen,\s*\.collection-screen > \.screen-stack,\s*\.collection-screen \.screen-body,\s*\.showcase-screen \.screen-body\s*\{([^}]*)\}/,
     );
     expect(clip).not.toBeNull();
     expect(clip[1]).toMatch(/padding-inline:\s*8px/);

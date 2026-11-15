@@ -4,6 +4,13 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+### Changed
+
+- Showcase cards: each card is titled once, in a window bar at the top with the drag grip and the actions menu on either side, instead of a caption under the photo. The title reads catalog · date · denomination, and shows a short **P17** on Small cards and **Pick 17** on Medium and Large, so a narrow card keeps the whole line.
+- Note editor: an **I own this note** toggle on both create and edit saves the note's library-wide ownership flag with the rest of the note; it applies to every Showcase the note appears in.
+- Note editor: new notes start unowned, including notes restored from a database or archive that predates ownership; tick **I own this note** when the note is in hand.
+- Table screen: the selection bar sets ownership through one **Ownership…** panel — pick **Owned** or **Unowned**, then apply — so a whole collection can be brought into ownership state without opening notes one by one. The panel shows how much of the selection already carries each state, and Escape or Cancel leaves the notes untouched.
+
 ## [2.13.2] - 2026-11-14
 
 ### Fixed

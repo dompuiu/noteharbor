@@ -92,6 +92,7 @@ pub struct Note {
     pub serial: Option<String>,
     pub url: Option<String>,
     pub notes: Option<String>,
+    pub owned: bool,
     pub scraped_data: Option<Value>,
     pub images: Vec<ImageRecord>,
     pub created_at: Option<String>,
@@ -99,7 +100,7 @@ pub struct Note {
     pub tags: Vec<Tag>,
 }
 
-const NOTE_FIELDS: &str = "id,
+pub(crate) const NOTE_FIELDS: &str = "id,
     collection_id,
     display_order,
     denomination,
@@ -114,7 +115,8 @@ const NOTE_FIELDS: &str = "id,
     scraped_data,
     images,
     created_at,
-    updated_at";
+    updated_at,
+    owned";
 
 fn parse_json_text(value: Option<String>) -> Value {
     match value {
@@ -124,7 +126,7 @@ fn parse_json_text(value: Option<String>) -> Value {
     }
 }
 
-fn map_note(row: &rusqlite::Row<'_>) -> rusqlite::Result<Note> {
+pub(crate) fn map_note(row: &rusqlite::Row<'_>) -> rusqlite::Result<Note> {
     let scraped_raw: Option<String> = row.get(12)?;
     let images_raw: Option<String> = row.get(13)?;
     let scraped = parse_json_text(scraped_raw);
@@ -145,6 +147,7 @@ fn map_note(row: &rusqlite::Row<'_>) -> rusqlite::Result<Note> {
         images: images::normalize_images(&parse_json_text(images_raw)),
         created_at: row.get(14)?,
         updated_at: row.get(15)?,
+        owned: row.get::<_, i64>(16)? != 0,
         tags: Vec::new(),
     })
 }
@@ -236,6 +239,7 @@ enum ProjectedField {
     Serial,
     Url,
     Notes,
+    Owned,
     ScrapedData,
     Images,
     CreatedAt,
@@ -258,6 +262,7 @@ impl ProjectedField {
             "serial" => Self::Serial,
             "url" => Self::Url,
             "notes" => Self::Notes,
+            "owned" => Self::Owned,
             "scraped_data" => Self::ScrapedData,
             "images" => Self::Images,
             "created_at" => Self::CreatedAt,
@@ -282,6 +287,7 @@ impl ProjectedField {
             Self::Serial => "serial",
             Self::Url => "url",
             Self::Notes => "notes",
+            Self::Owned => "owned",
             Self::ScrapedData => "scraped_data",
             Self::Images => "images",
             Self::CreatedAt => "created_at",
@@ -362,6 +368,7 @@ fn projected_note(
             ProjectedField::Id => json!(id),
             ProjectedField::CollectionId => json!(row.get::<_, i64>(*index)?),
             ProjectedField::DisplayOrder => json!(row.get::<_, Option<i64>>(*index)?),
+            ProjectedField::Owned => json!(row.get::<_, i64>(*index)? != 0),
             ProjectedField::ScrapedData => {
                 let parsed = parse_json_text(row.get(*index)?);
                 if parsed.is_null() { Value::Null } else { parsed }
@@ -550,6 +557,37 @@ fn normalize_tag_list(names: &[String]) -> Vec<String> {
     normalized_names
 }
 
+/// Whether every id names a Note in the collection. A bulk write checks this
+/// before its transaction so an unknown or foreign id answers 404 and writes
+/// nothing.
+fn notes_belong_to_collection(
+    conn: &Connection,
+    note_ids: &[i64],
+    collection_id: i64,
+) -> Result<bool, DbError> {
+    let existing_ids: HashSet<i64> = list_notes(conn, collection_id)?
+        .into_iter()
+        .map(|note| note.id)
+        .collect();
+    Ok(note_ids.iter().all(|id| existing_ids.contains(id)))
+}
+
+/// The affected Notes after a bulk write, in the order the caller sent.
+fn notes_in_caller_order(
+    conn: &Connection,
+    note_ids: &[i64],
+    collection_id: i64,
+) -> Result<Vec<Note>, DbError> {
+    let updated: HashMap<i64, Note> = list_notes(conn, collection_id)?
+        .into_iter()
+        .map(|note| (note.id, note))
+        .collect();
+    Ok(note_ids
+        .iter()
+        .filter_map(|id| updated.get(id).cloned())
+        .collect())
+}
+
 /// Adds and removes Tags across several Notes in one transaction. `None` means
 /// at least one note id was unknown or belonged to another collection: nothing
 /// was written, and the route answers the documented 404. Adds find or create
@@ -562,11 +600,7 @@ fn update_note_tags_row(
     remove: &[String],
     collection_id: i64,
 ) -> Result<Option<Vec<Note>>, DbError> {
-    let existing_ids: HashSet<i64> = list_notes(conn, collection_id)?
-        .into_iter()
-        .map(|note| note.id)
-        .collect();
-    if note_ids.iter().any(|id| !existing_ids.contains(id)) {
+    if !notes_belong_to_collection(conn, note_ids, collection_id)? {
         return Ok(None);
     }
 
@@ -606,18 +640,38 @@ fn update_note_tags_row(
     tx.commit().map_err(classify)?;
 
     // One fresh list after the commit carries the new links and the Tag rows
-    // they point at; the response only needs the affected notes, in the order
-    // the caller sent.
-    let updated: HashMap<i64, Note> = list_notes(conn, collection_id)?
-        .into_iter()
-        .map(|note| (note.id, note))
-        .collect();
-    Ok(Some(
-        note_ids
-            .iter()
-            .filter_map(|id| updated.get(id).cloned())
-            .collect(),
-    ))
+    // they point at.
+    Ok(Some(notes_in_caller_order(conn, note_ids, collection_id)?))
+}
+
+/// Sets the library-wide `owned` flag across several Notes in one
+/// transaction. `None` means at least one note id was unknown or belonged to
+/// another collection: nothing was written, and the route answers the
+/// documented 404.
+fn update_notes_owned_row(
+    conn: &mut Connection,
+    note_ids: &[i64],
+    owned: bool,
+    collection_id: i64,
+) -> Result<Option<Vec<Note>>, DbError> {
+    if !notes_belong_to_collection(conn, note_ids, collection_id)? {
+        return Ok(None);
+    }
+
+    let tx = conn.transaction().map_err(classify)?;
+    for note_id in note_ids {
+        tx.execute(
+            "UPDATE banknotes
+             SET owned = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND collection_id = ?3",
+            params![owned, note_id, collection_id],
+        )
+        .map_err(classify)?;
+    }
+    tx.commit().map_err(classify)?;
+
+    // One fresh list after the commit carries the new flag.
+    Ok(Some(notes_in_caller_order(conn, note_ids, collection_id)?))
 }
 
 // ---------------------------------------------------------------------------
@@ -636,6 +690,7 @@ pub struct NotePayload {
     pub serial: String,
     pub url: String,
     pub notes: String,
+    pub owned: bool,
     pub tags: Vec<String>,
     pub scraped_data: Option<Value>,
 }
@@ -721,6 +776,30 @@ fn payload_string(body: &Value, key: &str) -> String {
     body.get(key).map(node_string).unwrap_or_default().trim().to_owned()
 }
 
+/// `owned` is the Note's library-wide flag. A new Note is unowned unless the
+/// payload says otherwise; JSON booleans and numbers and the multipart form's
+/// `true`/`false` text all read the same way. Anything else is an invalid
+/// body, reported as a 400 like an unparsable `scraped_data`.
+fn parse_owned(value: &Value) -> Result<bool, String> {
+    match value {
+        Value::Bool(flag) => Ok(*flag),
+        Value::Number(number) => Ok(number.as_f64().is_some_and(|value| value != 0.0)),
+        Value::String(text) => match text.trim().to_lowercase().as_str() {
+            "1" | "true" | "yes" | "on" => Ok(true),
+            "0" | "false" | "no" | "off" | "" => Ok(false),
+            _ => Err("owned must be a boolean.".to_owned()),
+        },
+        _ => Err("owned must be a boolean.".to_owned()),
+    }
+}
+
+fn payload_owned(body: &Value) -> Result<bool, String> {
+    match body.get("owned") {
+        None | Some(Value::Null) => Ok(false),
+        Some(value) => parse_owned(value),
+    }
+}
+
 /// Sanitizes the note payload, including the falsy-`scraped_data` rule: a
 /// missing, null, empty-string, `false`, or numeric payload means null; a
 /// non-empty string must parse as JSON; any other object passes through.
@@ -747,6 +826,7 @@ pub fn sanitize_payload(body: &Value) -> Result<NotePayload, String> {
         serial: payload_string(body, "serial"),
         url: payload_string(body, "url"),
         notes: payload_string(body, "notes"),
+        owned: payload_owned(body)?,
         tags: normalize_tags(body.get("tags")),
         scraped_data,
     })
@@ -767,11 +847,11 @@ fn create_note_row(
         "INSERT INTO banknotes (
            collection_id, display_order, denomination, issue_date,
            catalog_number, grading_company, grade, watermark, serial, url,
-           notes, scraped_data, images, created_at, updated_at
+           notes, owned, scraped_data, images, created_at, updated_at
          )
          VALUES (
            ?1, (SELECT COALESCE(MAX(display_order), 0) + 1 FROM banknotes WHERE collection_id = ?1),
-           ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12,
+           ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13,
            datetime('now'), datetime('now')
          )",
         params![
@@ -785,6 +865,7 @@ fn create_note_row(
             payload.serial,
             payload.url,
             payload.notes,
+            payload.owned,
             scraped_data_json(payload),
             images_json,
         ],
@@ -813,9 +894,9 @@ fn update_note_row(
         "UPDATE banknotes
          SET denomination = ?1, issue_date = ?2, catalog_number = ?3,
              grading_company = ?4, grade = ?5, watermark = ?6, serial = ?7,
-             url = ?8, notes = ?9, scraped_data = ?10, images = ?11,
-             updated_at = datetime('now')
-         WHERE id = ?12",
+             url = ?8, notes = ?9, owned = ?10, scraped_data = ?11,
+             images = ?12, updated_at = datetime('now')
+         WHERE id = ?13",
         params![
             payload.denomination,
             payload.issue_date,
@@ -826,6 +907,7 @@ fn update_note_row(
             payload.serial,
             payload.url,
             payload.notes,
+            payload.owned,
             scraped_data_json(payload),
             images_json,
             note_id,
@@ -1946,6 +2028,58 @@ async fn update_notes_tags_handler(
     }
 }
 
+async fn update_notes_owned_handler(
+    State(state): State<AppState>,
+    collection: Option<Path<Vec<String>>>,
+    req: Request,
+) -> Response {
+    let raw = captures(collection);
+    let collection_id = match resolve_for_write(&state.pool, raw.first().cloned()).await {
+        Ok(id) => id,
+        Err((status, message)) => return status_response(status, &message),
+    };
+    let body = read_json_body(req).await;
+
+    let ids_message = "A valid list of note IDs is required.";
+    let Some(raw_ids) = body.get("note_ids").and_then(Value::as_array) else {
+        return bad_request(ids_message);
+    };
+    if raw_ids.is_empty() {
+        return bad_request("Select at least one note.");
+    }
+    let mut note_ids = Vec::with_capacity(raw_ids.len());
+    let mut seen_ids = HashSet::with_capacity(raw_ids.len());
+    for item in raw_ids {
+        match js_number(item) {
+            Some(id) if id > 0 => {
+                if !seen_ids.insert(id) {
+                    return bad_request("Each note can only be updated once.");
+                }
+                note_ids.push(id);
+            }
+            _ => return bad_request(ids_message),
+        }
+    }
+
+    let Some(raw_owned) = body.get("owned") else {
+        return bad_request("owned must be a boolean.");
+    };
+    let owned = match parse_owned(raw_owned) {
+        Ok(owned) => owned,
+        Err(message) => return bad_request(&message),
+    };
+
+    match db::with_conn(&state.pool, move |conn| {
+        update_notes_owned_row(conn, &note_ids, owned, collection_id)
+    })
+    .await
+    {
+        Ok(Some(notes)) => ok(json!({ "notes": notes })),
+        Ok(None) => not_found("Note not found."),
+        Err(error) => db_failure(error),
+    }
+}
+
 async fn list_tags_handler(
     State(state): State<AppState>,
     collection: Option<Path<Vec<String>>>,
@@ -1970,6 +2104,10 @@ pub fn notes_router() -> Router<AppState> {
         .route(
             "/api/collections/{collectionId}/notes/tags",
             post(update_notes_tags_handler),
+        )
+        .route(
+            "/api/collections/{collectionId}/notes/ownership",
+            post(update_notes_owned_handler),
         )
         .route(
             "/api/collections/{collectionId}/notes/{id}",

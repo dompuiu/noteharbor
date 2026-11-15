@@ -365,6 +365,22 @@ async function updateNotesTags(collectionId, noteIds, add, remove) {
   return handleResponse(response);
 }
 
+async function updateNotesOwned(collectionId, noteIds, owned) {
+  const response = await request(
+    `/api/collections/${collectionId}/notes/ownership`,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        note_ids: noteIds,
+        owned
+      })
+    }
+  );
+
+  return handleResponse(response);
+}
+
 async function importArchive(file, onProgress, mode = 'replace') {
   if (!isFileValue(file)) {
     throw new Error('Choose a .zip archive before importing.');
@@ -527,6 +543,40 @@ async function updateNode(id, payload) {
   return handleResponse(response);
 }
 
+// Create a catalog shell: its own catalog metadata, no notes. Picking a note
+// later converts this same node with `replaceCatalogEntryWithNote`.
+async function createCatalogEntry(showcaseId, { parentId, entry } = {}) {
+  return createShowcaseNode(showcaseId, {
+    node_type: 'catalog_entry',
+    parent_id: parentId,
+    entry
+  });
+}
+
+// Catalog metadata lives on the entry node, never on the linked Note.
+async function updateCatalogEntry(id, entry) {
+  return updateNode(id, { entry });
+}
+
+// Turn a planned catalog shell into a real note card in place. The server keeps
+// the node's parent and position; the shell stops being a catalog entry.
+async function replaceCatalogEntryWithNote(id, noteId) {
+  return updateNode(id, { node_type: 'note', note_id: noteId });
+}
+
+// Replace an entry's specimen set atomically. The payload is the full ordered
+// `{ note_ids, primary_note_id? }`: adding, removing, reordering, and promoting
+// are all this one call, so Undo is a repeat of the previous payload.
+async function updateNodeNotes(id, payload) {
+  const response = await request(`/api/nodes/${id}/notes`, {
+    method: 'PUT',
+    headers,
+    body: JSON.stringify(payload)
+  });
+
+  return handleResponse(response);
+}
+
 async function deleteNode(id) {
   const response = await request(`/api/nodes/${id}`, {
     method: 'DELETE'
@@ -625,6 +675,7 @@ async function scrapePreview(url, { timeoutMs } = {}) {
 
 export {
   clearAppData,
+  createCatalogEntry,
   createCategory,
   createCollection,
   createNote,
@@ -655,9 +706,13 @@ export {
   reorderNodes,
   reorderNotes,
   reorderShowcases,
+  replaceCatalogEntryWithNote,
   scrapePreview,
   scrapeTimeoutMessage,
+  updateCatalogEntry,
   updateNode,
+  updateNodeNotes,
   updateNote,
+  updateNotesOwned,
   updateNotesTags
 };

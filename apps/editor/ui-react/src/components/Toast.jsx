@@ -17,15 +17,39 @@ export const TOAST_DURATION_MS = 4000;
 // the bottom-right corner, ruled by its tone's semantic edge. Success and
 // information stay polite; a failure is assertive so it is announced at once.
 // It portals to the body so no panel's overflow or stacking context can clip
-// it, whichever screen raised the message.
-export function Toast({ tone = "success", children }) {
+// it, whichever screen raised the message. An optional action turns the toast
+// into an Undo affordance: the action runs once, then the toast clears. The
+// timer pauses while the pointer or keyboard is inside the toast, so an Undo
+// never disappears under a reader who is reaching for it.
+export function Toast({
+  action,
+  onBlur,
+  onFocus,
+  onMouseEnter,
+  onMouseLeave,
+  tone = "success",
+  children,
+}) {
   return createPortal(
     <div
       className={`toast toast--${tone}`}
+      onBlur={onBlur}
+      onFocus={onFocus}
+      onMouseEnter={onMouseEnter}
+      onMouseLeave={onMouseLeave}
       role={tone === "danger" ? "alert" : "status"}
     >
       <span aria-hidden="true" className="toast-mark" />
       <span className="toast-message">{children}</span>
+      {action ? (
+        <button
+          className="toast-action"
+          onClick={action.onClick}
+          type="button"
+        >
+          {action.label}
+        </button>
+      ) : null}
     </div>,
     document.body,
   );
@@ -34,6 +58,8 @@ export function Toast({ tone = "success", children }) {
 export function ToastHost({ toastRef }) {
   const [toast, setToast] = useState(null);
   const timerRef = useRef(null);
+  const toastRefCurrent = useRef(null);
+  toastRefCurrent.current = toast;
 
   function clearTimer() {
     if (timerRef.current) {
@@ -42,18 +68,45 @@ export function ToastHost({ toastRef }) {
     }
   }
 
+  function startTimer() {
+    clearTimer();
+    timerRef.current = setTimeout(() => setToast(null), TOAST_DURATION_MS);
+  }
+
+  function pauseTimer() {
+    if (toastRefCurrent.current) {
+      clearTimer();
+    }
+  }
+
+  function resumeTimer() {
+    if (toastRefCurrent.current) {
+      startTimer();
+    }
+  }
+
   useEffect(() => clearTimer, []);
 
   useImperativeHandle(
     toastRef,
     () => ({
-      show(message, tone = "success") {
+      show(message, tone = "success", action = null) {
         clearTimer();
-        setToast({ message, tone });
-        timerRef.current = setTimeout(
-          () => setToast(null),
-          TOAST_DURATION_MS,
-        );
+        setToast({
+          action: action
+            ? {
+                label: action.label,
+                onClick: () => {
+                  clearTimer();
+                  setToast(null);
+                  action.onClick();
+                },
+              }
+            : null,
+          message,
+          tone,
+        });
+        startTimer();
       },
     }),
     [],
@@ -63,7 +116,18 @@ export function ToastHost({ toastRef }) {
     return null;
   }
 
-  return <Toast tone={toast.tone}>{toast.message}</Toast>;
+  return (
+    <Toast
+      action={toast.action}
+      onBlur={resumeTimer}
+      onFocus={pauseTimer}
+      onMouseEnter={pauseTimer}
+      onMouseLeave={resumeTimer}
+      tone={toast.tone}
+    >
+      {toast.message}
+    </Toast>
+  );
 }
 
 const ToastContext = createContext(null);

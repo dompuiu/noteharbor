@@ -1,13 +1,14 @@
 //! Desktop prefs.
 //!
-//! The showcase photo size is the only file-backed desktop preference so
-//! far. Writes are atomic (`<path>.tmp` + rename) and preserve unrelated
-//! keys.
+//! The showcase photo size and catalog layout are the file-backed desktop
+//! display preferences. Writes are atomic (`<path>.tmp` + rename) and preserve
+//! unrelated keys.
 
 use std::{collections::HashMap, fs, path::Path};
 
 pub const DESKTOP_PREFERENCES_FILENAME: &str = "preferences.json";
 pub const DEFAULT_SHOWCASE_PHOTO_SIZE: &str = "small";
+pub const DEFAULT_SHOWCASE_CATALOG_LAYOUT: &str = "labels";
 pub const LAST_VISITED_ROUTE_KEY: &str = "lastVisitedRoute";
 /// Upper bound for a persisted route (pathname + search + hash).
 pub const MAX_LAST_VISITED_ROUTE_LEN: usize = 2000;
@@ -16,6 +17,13 @@ pub fn normalize_showcase_photo_size(value: Option<&str>) -> String {
     match value {
         Some("small" | "medium" | "large") => value.unwrap().to_owned(),
         _ => DEFAULT_SHOWCASE_PHOTO_SIZE.to_owned(),
+    }
+}
+
+pub fn normalize_showcase_catalog_layout(value: Option<&str>) -> String {
+    match value {
+        Some("labels" | "rail") => value.unwrap().to_owned(),
+        _ => DEFAULT_SHOWCASE_CATALOG_LAYOUT.to_owned(),
     }
 }
 
@@ -47,6 +55,28 @@ pub fn write_showcase_photo_size(path: &Path, value: &str) -> std::io::Result<St
     let mut prefs = load_preferences(path);
     prefs.insert(
         "showcasePhotoSize".to_owned(),
+        serde_json::Value::String(normalized.clone()),
+    );
+    let tmp = path.with_extension("json.tmp");
+    fs::write(&tmp, serde_json::to_string(&prefs).unwrap())?;
+    fs::rename(&tmp, path)?;
+    Ok(normalized)
+}
+
+pub fn read_showcase_catalog_layout(path: &Path) -> String {
+    let prefs = load_preferences(path);
+    let raw = prefs
+        .get("showcaseCatalogLayout")
+        .and_then(|v| v.as_str())
+        .map(str::to_owned);
+    normalize_showcase_catalog_layout(raw.as_deref())
+}
+
+pub fn write_showcase_catalog_layout(path: &Path, value: &str) -> std::io::Result<String> {
+    let normalized = normalize_showcase_catalog_layout(Some(value));
+    let mut prefs = load_preferences(path);
+    prefs.insert(
+        "showcaseCatalogLayout".to_owned(),
         serde_json::Value::String(normalized.clone()),
     );
     let tmp = path.with_extension("json.tmp");
@@ -221,6 +251,36 @@ mod tests {
         );
         assert_eq!(read_showcase_photo_size(&path), "small");
         assert_eq!(normalize_showcase_photo_size(None), "small");
+    }
+
+    #[test]
+    fn catalog_layout_defaults_to_labels_when_no_file_exists() {
+        let dir = tempfile::tempdir().unwrap();
+        assert_eq!(read_showcase_catalog_layout(&temp_path(&dir)), "labels");
+    }
+
+    #[test]
+    fn catalog_layout_round_trips_across_restarts() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = temp_path(&dir);
+        assert_eq!(
+            write_showcase_catalog_layout(&path, "rail").unwrap(),
+            "rail"
+        );
+        assert_eq!(read_showcase_catalog_layout(&path), "rail");
+        assert!(!path.with_extension("json.tmp").exists());
+    }
+
+    #[test]
+    fn catalog_layout_normalizes_unknown_values() {
+        let dir = tempfile::tempdir().unwrap();
+        let path = temp_path(&dir);
+        assert_eq!(
+            write_showcase_catalog_layout(&path, "gallery").unwrap(),
+            "labels"
+        );
+        assert_eq!(read_showcase_catalog_layout(&path), "labels");
+        assert_eq!(normalize_showcase_catalog_layout(None), "labels");
     }
 
     #[test]

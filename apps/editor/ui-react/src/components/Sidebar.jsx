@@ -3,17 +3,16 @@ import { Link, useLocation, useNavigate } from "react-router-dom";
 import { useCollections } from "../lib/collections.jsx";
 import { ownsPrintableShortcut } from "../lib/editableElement.js";
 import { useShowcases } from "../lib/showcases.jsx";
+import { showcaseCountLabel } from "../lib/showcaseTree.js";
 import { loadSidebarPinned, saveSidebarPinned } from "../lib/sidebarPin.js";
 import { APP_VERSION } from "../lib/version.js";
 import { useToastHost } from "./Toast.jsx";
 import {
   COLLECTION_DRAFT_DISCARDED,
-  SHOWCASE_DRAFT_DISCARDED,
 } from "../lib/draftMessages.js";
 import {
   CATALOG_ROUTES,
   NEW_COLLECTION_ID,
-  NEW_SHOWCASE_ID,
   SHOWCASE_ROUTES,
 } from "../lib/routes.js";
 
@@ -129,6 +128,18 @@ function railIdentity(item) {
     return String(item.count);
   }
 
+  // A catalog row counts owned over total entries; the collapsed mark drops
+  // the spaces so the fraction fits the same slot as a note count. Only a
+  // showcase label is a string here; a collection's count stays numeric (or
+  // falls back to initials when its payload omitted one).
+  if (
+    item.showcaseId != null &&
+    typeof item.count === "string" &&
+    item.count.trim()
+  ) {
+    return item.count.replace(/\s+/g, "");
+  }
+
   return initialsOf(item.label);
 }
 
@@ -191,9 +202,7 @@ function Sidebar({ pageFocusRef }) {
   const navigate = useNavigate();
   const {
     showcases,
-    pendingShowcase,
-    beginPendingShowcase,
-    discardPendingShowcase,
+    createShowcase,
     reorderShowcases,
   } = useShowcases();
   const {
@@ -274,38 +283,19 @@ function Sidebar({ pageFocusRef }) {
   };
 
   // The showcase rows, then the create action, hang off the Showcases group.
-  // A showcase row stays highlighted in both of its modes: view and edit are
-  // siblings under the showcase, so a prefix check on the view URL no longer
-  // covers the edit one. A pending (not-yet-saved) showcase renders as a draft
-  // row that vanishes on Cancel or on leaving its route.
+  // A new showcase is created immediately and opens its one editable view.
   const showcaseItems = showcases.map((showcase) => ({
     icon: "showcases",
     key: `showcase-${showcase.id}`,
     label: showcase.name,
     to: SHOWCASE_ROUTES.showcase(showcase.id),
     // No new fetch from the rail: only a count the list payload already
-    // carries reaches the collapsed mark.
-    count: showcase.note_count,
-    matches: (pathname) =>
-      pathname === SHOWCASE_ROUTES.showcase(showcase.id) ||
-      pathname === SHOWCASE_ROUTES.showcaseEdit(showcase.id),
+    // carries reaches the collapsed mark. A catalog showcase paints
+    // owned / entry_count; a presentation-only one keeps its note count.
+    count: showcaseCountLabel(showcase),
+    matches: (pathname) => pathname === SHOWCASE_ROUTES.showcase(showcase.id),
     showcaseId: showcase.id,
   }));
-
-  if (pendingShowcase) {
-    const draftLabel = pendingShowcase.name.trim() || "Showcase";
-    showcaseItems.push({
-      icon: "showcases",
-      key: "showcase-new",
-      label: draftLabel,
-      ariaLabel: `Unsaved showcase: ${draftLabel}`,
-      to: SHOWCASE_ROUTES.showcaseEdit(NEW_SHOWCASE_ID),
-      matches: (pathname) =>
-        pathname === SHOWCASE_ROUTES.showcaseEdit(NEW_SHOWCASE_ID),
-      showcaseId: NEW_SHOWCASE_ID,
-      pending: true,
-    });
-  }
 
   const newShowcaseItem = {
     icon: "plus",
@@ -399,16 +389,22 @@ function Sidebar({ pageFocusRef }) {
   // cursor on that row's link in its new place.
   const pendingMoveFocusRef = useRef(null);
 
-  const newShowcaseTo = SHOWCASE_ROUTES.showcaseEdit(NEW_SHOWCASE_ID);
   const newCollectionTo = CATALOG_ROUTES.collectionEdit(NEW_COLLECTION_ID);
 
-  function handleNewShowcase() {
-    // Deferred creation: stage a draft row and open its edit canvas. Nothing
-    // POSTs until Save; Cancel or leaving the route discards the draft.
-    beginPendingShowcase();
-    navigate(newShowcaseTo, {
-      state: { justCreated: true },
-    });
+  async function handleNewShowcase() {
+    // A showcase is a live document now: create the row, then open its one
+    // editable view. There is no draft route to save.
+    try {
+      const created = await createShowcase();
+      if (created?.id != null) {
+        navigate(SHOWCASE_ROUTES.showcase(created.id));
+      }
+    } catch (error) {
+      toastHost?.current?.show(
+        error.message || "Could not create the showcase.",
+        "danger",
+      );
+    }
   }
 
   function handleNewCollection() {
@@ -430,16 +426,9 @@ function Sidebar({ pageFocusRef }) {
     leaveCursor();
   }
 
-  // Leaving a draft route drops its staged row. Say so from here (or from the
-  // draft screen's Cancel) because the row otherwise disappears without a
-  // trace; the provider answers which call actually dropped a row, so a Save
-  // (which clears the row and navigates in one batch) is never announced as a
-  // discard. `nextPath` keeps the draft's own destination from discarding it.
+  // Leaving a collection draft route drops its staged row. Showcases have no
+  // draft route any more: a new one is a real server row from the start.
   function discardPendingFor(nextPath) {
-    if (nextPath !== newShowcaseTo && discardPendingShowcase()) {
-      toastHost?.current?.show(SHOWCASE_DRAFT_DISCARDED, "info");
-    }
-
     if (nextPath !== newCollectionTo && discardPendingCollection()) {
       toastHost?.current?.show(COLLECTION_DRAFT_DISCARDED, "info");
     }
@@ -730,7 +719,7 @@ function Sidebar({ pageFocusRef }) {
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [cursorIndex, pathname, pinned, showcases, pendingShowcase, collections, pendingCollection, dragActive, cursorStops.length]);
+  }, [cursorIndex, pathname, pinned, showcases, collections, pendingCollection, dragActive, cursorStops.length]);
 
   function handleLinkClick(to) {
     // A click means "I'm leaving the rail". The browser focuses a clicked

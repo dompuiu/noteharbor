@@ -181,6 +181,7 @@ describe("bulk Tag editing from the selection bar", () => {
       "Move 1 selected note down",
       "Move to…",
       "Tags…",
+      "Ownership…",
       "Delete",
       "Clear selection",
     ]);
