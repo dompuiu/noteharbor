@@ -4,6 +4,12 @@ All notable changes to the Note Harbor Editor (desktop, server, and web) are doc
 
 ## [Unreleased]
 
+## [2.13.2] - 2026-11-14
+
+### Fixed
+
+- Desktop: the window now remembers where you put it on screen as well as its size, and un-maximizing — or relaunching after a maximized session — returns to the last normal window bounds instead of staying full-screen-sized.
+
 ## [2.13.1] - 2026-11-14
 
 ### Fixed
