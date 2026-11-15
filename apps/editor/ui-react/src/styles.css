@@ -4083,9 +4083,10 @@ input[type="radio"] {
   background: #ffffff;
 }
 
-/* The bulk Tag panel hangs above the selection bar as a non-modal surface:
-   the rows it will change stay visible and the table is not dimmed. */
-.bulk-tag-panel {
+/* The panels the selection bar opens (Tags, Ownership) hang above it as
+   non-modal surfaces: the rows they will change stay visible and the table is
+   not dimmed. */
+.bulk-panel {
   position: fixed;
   z-index: 105;
   display: flex;
@@ -4097,11 +4098,11 @@ input[type="radio"] {
   box-shadow: var(--shadow-lg);
 }
 
-.bulk-tag-panel:focus {
+.bulk-panel:focus {
   outline: none;
 }
 
-.bulk-tag-panel-header {
+.bulk-panel-header {
   display: flex;
   align-items: flex-start;
   gap: 12px;
@@ -4109,20 +4110,20 @@ input[type="radio"] {
   border-bottom: 1px solid var(--border-soft);
 }
 
-.bulk-tag-panel-title {
+.bulk-panel-title {
   margin: 0;
   font-size: 0.95rem;
   font-weight: 800;
   letter-spacing: -0.01em;
 }
 
-.bulk-tag-panel-scope {
+.bulk-panel-scope {
   margin: 2px 0 0;
   font-size: 0.78rem;
   color: var(--text-muted);
 }
 
-.bulk-tag-panel-close {
+.bulk-panel-close {
   flex: none;
   width: 26px;
   height: 26px;
@@ -4137,12 +4138,12 @@ input[type="radio"] {
   cursor: pointer;
 }
 
-.bulk-tag-panel-close:hover {
+.bulk-panel-close:hover {
   background: var(--surface-3);
   color: var(--text);
 }
 
-.bulk-tag-panel-body {
+.bulk-panel-body {
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
@@ -4155,7 +4156,7 @@ input[type="radio"] {
   border-top: 1px solid var(--border-soft);
 }
 
-.bulk-tag-label {
+.bulk-panel-label {
   display: block;
   margin-bottom: 6px;
   color: var(--text-faint);
@@ -4165,6 +4166,56 @@ input[type="radio"] {
   text-transform: uppercase;
 }
 
+/* The Ownership panel stages one of two states for the whole selection. The
+   options read as a two-row choice, not a segmented control: each row carries
+   its current coverage, so the panel says what the write will change. */
+.bulk-ownership-options {
+  display: grid;
+  gap: 8px;
+}
+
+.bulk-ownership-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-control);
+  background: var(--surface);
+  cursor: pointer;
+}
+
+.bulk-ownership-option:hover {
+  background: var(--surface-2);
+}
+
+.bulk-ownership-option:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+}
+
+.bulk-ownership-option input {
+  flex: none;
+  margin: 2px 0 0;
+  accent-color: var(--accent);
+}
+
+.bulk-ownership-option-copy {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.bulk-ownership-option-label {
+  font-size: 0.88rem;
+  font-weight: 700;
+}
+
+.bulk-ownership-option-hint {
+  color: var(--text-faint);
+  font-size: 0.74rem;
+}
+
 .bulk-tag-section-heading {
   display: flex;
   align-items: baseline;
@@ -4172,7 +4223,7 @@ input[type="radio"] {
   margin-bottom: 6px;
 }
 
-.bulk-tag-section-heading .bulk-tag-label {
+.bulk-tag-section-heading .bulk-panel-label {
   margin: 0;
 }
 
@@ -4269,13 +4320,13 @@ input[type="radio"] {
   text-decoration: none;
 }
 
-.bulk-tag-error {
+.bulk-panel-error {
   margin: 0 14px 10px;
   padding: 8px 10px;
   font-size: 0.82rem;
 }
 
-.bulk-tag-panel-footer {
+.bulk-panel-footer {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -4284,7 +4335,7 @@ input[type="radio"] {
   background: var(--surface-2);
 }
 
-.bulk-tag-footer-spacer {
+.bulk-panel-spacer {
   margin-left: auto;
 }
 
@@ -4310,7 +4361,7 @@ input[type="radio"] {
   cursor: default;
 }
 
-.bulk-tag-announcer {
+.bulk-panel-announcer {
   position: absolute;
   width: 1px;
   height: 1px;
@@ -4322,11 +4373,11 @@ input[type="radio"] {
   border: 0;
 }
 
-.bulk-tag-panel-close:disabled {
+.bulk-panel-close:disabled {
   cursor: default;
 }
 
-.bulk-tag-panel-footer .button {
+.bulk-panel-footer .button {
   height: 32px;
   min-height: 32px;
   padding: 0 14px;

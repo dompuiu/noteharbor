@@ -120,8 +120,22 @@ beforeEach(() => {
   });
 });
 
+async function openOwnershipPanel(user) {
+  await user.click(screen.getByRole("button", { name: "Ownership…" }));
+  return screen.findByRole("dialog", { name: "Ownership" });
+}
+
+async function chooseOwnership(user, panel, label, count) {
+  await user.click(within(panel).getByRole("radio", { name: label }));
+  await user.click(
+    within(panel).getByRole("button", {
+      name: `Apply to ${count} note${count === 1 ? "" : "s"}`,
+    }),
+  );
+}
+
 describe("bulk ownership from the selection bar", () => {
-  test("select all then Mark owned writes every selected note", async () => {
+  test("one Ownership… action opens a panel and writes only after Apply", async () => {
     const user = userEvent.setup();
     renderTable();
 
@@ -131,8 +145,25 @@ describe("bulk ownership from the selection bar", () => {
 
     const bar = screen.getByRole("region", { name: "Selection actions" });
     expect(within(bar).getByText("3 selected")).toBeInTheDocument();
+    // The pair of write-on-click buttons is gone: one panel stages the state.
+    expect(
+      within(bar).queryByRole("button", { name: "Mark owned" }),
+    ).not.toBeInTheDocument();
+    expect(
+      within(bar).queryByRole("button", { name: "Mark unowned" }),
+    ).not.toBeInTheDocument();
 
-    await user.click(within(bar).getByRole("button", { name: "Mark owned" }));
+    const ownershipButton = within(bar).getByRole("button", {
+      name: "Ownership…",
+    });
+    expect(ownershipButton).toHaveAttribute("aria-haspopup", "dialog");
+    expect(ownershipButton).toHaveAttribute("aria-expanded", "false");
+
+    const panel = await openOwnershipPanel(user);
+    expect(ownershipButton).toHaveAttribute("aria-expanded", "true");
+    expect(updateNotesOwned).not.toHaveBeenCalled();
+
+    await chooseOwnership(user, panel, "Owned", 3);
 
     await waitFor(() => {
       expect(updateNotesOwned).toHaveBeenCalledWith(1, [1, 2, 3], true);
@@ -140,17 +171,22 @@ describe("bulk ownership from the selection bar", () => {
     expect(await screen.findByText("Marked 3 notes as owned")).toBeInTheDocument();
     expect(getNotes).toHaveBeenCalledTimes(2);
     expect(notesDb.every((entry) => entry.owned)).toBe(true);
+    expect(
+      screen.queryByRole("dialog", { name: "Ownership" }),
+    ).not.toBeInTheDocument();
   });
 
-  test("Mark unowned writes only the selected rows, in table order", async () => {
+  test("Unowned writes only the selected rows, in table order", async () => {
     notesDb = [note(1, "AAAA", true), note(2, "BBBB", true), note(3, "CCCC", true)];
     const user = userEvent.setup();
     renderTable();
 
     await selectRows(user, ["AAAA", "CCCC"]);
 
-    const bar = screen.getByRole("region", { name: "Selection actions" });
-    await user.click(within(bar).getByRole("button", { name: "Mark unowned" }));
+    const panel = await openOwnershipPanel(user);
+    expect(within(panel).getByText("2 of 2 currently owned")).toBeInTheDocument();
+
+    await chooseOwnership(user, panel, "Unowned", 2);
 
     await waitFor(() => {
       expect(updateNotesOwned).toHaveBeenCalledWith(1, [1, 3], false);
@@ -158,7 +194,27 @@ describe("bulk ownership from the selection bar", () => {
     expect(notesDb.map((entry) => entry.owned)).toEqual([false, true, false]);
   });
 
-  test("a failed write keeps the selection and names the failure", async () => {
+  test("Escape closes the panel without writing", async () => {
+    const user = userEvent.setup();
+    renderTable();
+
+    await selectRows(user, ["AAAA"]);
+
+    const panel = await openOwnershipPanel(user);
+    expect(within(panel).getByRole("radio", { name: "Owned" })).toHaveFocus();
+
+    await user.keyboard("{Escape}");
+
+    expect(
+      screen.queryByRole("dialog", { name: "Ownership" }),
+    ).not.toBeInTheDocument();
+    expect(updateNotesOwned).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(screen.getByRole("button", { name: "Ownership…" })).toHaveFocus();
+    });
+  });
+
+  test("a failed write keeps the panel and names the failure", async () => {
     updateNotesOwned.mockRejectedValueOnce(
       new Error("Ownership could not be saved."),
     );
@@ -167,14 +223,23 @@ describe("bulk ownership from the selection bar", () => {
 
     await selectRows(user, ["AAAA"]);
 
-    const bar = screen.getByRole("region", { name: "Selection actions" });
-    await user.click(within(bar).getByRole("button", { name: "Mark owned" }));
+    const panel = await openOwnershipPanel(user);
+    await chooseOwnership(user, panel, "Owned", 1);
 
     expect(
-      await screen.findByText("Ownership could not be saved."),
+      await within(panel).findByText("Ownership could not be saved."),
     ).toBeInTheDocument();
+    expect(screen.getByRole("dialog", { name: "Ownership" })).toHaveFocus();
     expect(
       screen.getByRole("region", { name: "Selection actions" }),
     ).toBeInTheDocument();
+
+    // The failed write keeps the panel dismissible: Escape still reaches it.
+    await user.keyboard("{Escape}");
+
+    expect(
+      screen.queryByRole("dialog", { name: "Ownership" }),
+    ).not.toBeInTheDocument();
+    expect(updateNotesOwned).toHaveBeenCalledTimes(1);
   });
 });

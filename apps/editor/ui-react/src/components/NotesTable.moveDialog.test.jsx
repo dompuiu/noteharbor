@@ -156,8 +156,7 @@ describe("moving notes from the table", () => {
       "Move 1 selected note down",
       "Move to…",
       "Tags…",
-      "Mark owned",
-      "Mark unowned",
+      "Ownership…",
       "Delete",
       "Clear selection",
     ]);

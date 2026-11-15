@@ -1277,7 +1277,7 @@ describe("Selection actions tab cycle", () => {
     expect(moveDown).toHaveFocus();
   });
 
-  test("Tab walks Move down, Tags, the ownership pair, Delete, Clear, then the last selected row's checkbox", async () => {
+  test("Tab walks Move down, Tags, Ownership, Delete, Clear, then the last selected row's checkbox", async () => {
     const user = userEvent.setup();
     getNotes.mockResolvedValue({ notes: threeNotes });
     renderTable();
@@ -1291,9 +1291,8 @@ describe("Selection actions tab cycle", () => {
       name: "Move 1 selected note down",
     });
     const tagsButton = within(bar).getByRole("button", { name: "Tags…" });
-    const markOwned = within(bar).getByRole("button", { name: "Mark owned" });
-    const markUnowned = within(bar).getByRole("button", {
-      name: "Mark unowned",
+    const ownershipButton = within(bar).getByRole("button", {
+      name: "Ownership…",
     });
     const deleteButton = within(bar).getByRole("button", { name: "Delete" });
     const clearButton = within(bar).getByRole("button", {
@@ -1307,10 +1306,7 @@ describe("Selection actions tab cycle", () => {
     expect(tagsButton).toHaveFocus();
 
     await user.tab();
-    expect(markOwned).toHaveFocus();
-
-    await user.tab();
-    expect(markUnowned).toHaveFocus();
+    expect(ownershipButton).toHaveFocus();
 
     await user.tab();
     expect(deleteButton).toHaveFocus();
@@ -1355,9 +1351,8 @@ describe("Selection actions tab cycle", () => {
 
     // After the bar, focus returns to the row the cursor now sits on.
     const tagsButton = within(bar).getByRole("button", { name: "Tags…" });
-    const markOwned = within(bar).getByRole("button", { name: "Mark owned" });
-    const markUnowned = within(bar).getByRole("button", {
-      name: "Mark unowned",
+    const ownershipButton = within(bar).getByRole("button", {
+      name: "Ownership…",
     });
     const deleteButton = within(bar).getByRole("button", { name: "Delete" });
     const clearButton = within(bar).getByRole("button", {
@@ -1366,9 +1361,7 @@ describe("Selection actions tab cycle", () => {
     await user.tab();
     expect(tagsButton).toHaveFocus();
     await user.tab();
-    expect(markOwned).toHaveFocus();
-    await user.tab();
-    expect(markUnowned).toHaveFocus();
+    expect(ownershipButton).toHaveFocus();
     await user.tab();
     expect(deleteButton).toHaveFocus();
     await user.tab();
@@ -1390,9 +1383,8 @@ describe("Selection actions tab cycle", () => {
       name: "Selection actions",
     });
     const tagsButton = within(bar).getByRole("button", { name: "Tags…" });
-    const markOwned = within(bar).getByRole("button", { name: "Mark owned" });
-    const markUnowned = within(bar).getByRole("button", {
-      name: "Mark unowned",
+    const ownershipButton = within(bar).getByRole("button", {
+      name: "Ownership…",
     });
     const deleteButton = within(bar).getByRole("button", { name: "Delete" });
     const clearButton = within(bar).getByRole("button", {
@@ -1403,10 +1395,7 @@ describe("Selection actions tab cycle", () => {
     expect(tagsButton).toHaveFocus();
 
     await user.tab();
-    expect(markOwned).toHaveFocus();
-
-    await user.tab();
-    expect(markUnowned).toHaveFocus();
+    expect(ownershipButton).toHaveFocus();
 
     await user.tab();
     expect(deleteButton).toHaveFocus();
@@ -1715,13 +1704,7 @@ describe("Escape clears the selection before the row cursor", () => {
     await user.tab();
     expect(
       within(bar).getByRole("button", {
-        name: "Mark owned",
-      }),
-    ).toHaveFocus();
-    await user.tab();
-    expect(
-      within(bar).getByRole("button", {
-        name: "Mark unowned",
+        name: "Ownership…",
       }),
     ).toHaveFocus();
     await user.tab();

@@ -13,11 +13,13 @@ export function TableBulkBar({
   onDelete,
   onLeaveBackward,
   onLeaveForward,
-  onSetOwnership,
   onMove,
   onMoveSelectionDown,
   onMoveSelectionUp,
+  onOwnership,
   onTags,
+  ownershipButtonRef,
+  ownershipOpen = false,
   ownershipSaving = false,
   selectedCount,
   selectionContiguous = false,
@@ -213,20 +215,16 @@ export function TableBulkBar({
         Tags…
       </button>
       <button
-        className="table-bulk-bar-owned"
-        disabled={busy}
-        onClick={() => onSetOwnership(true)}
+        aria-controls={ownershipOpen ? "bulk-ownership-panel" : undefined}
+        aria-expanded={ownershipOpen}
+        aria-haspopup="dialog"
+        className="table-bulk-bar-ownership"
+        disabled={busy || tagsSaving}
+        onClick={onOwnership}
+        ref={ownershipButtonRef}
         type="button"
       >
-        Mark owned
-      </button>
-      <button
-        className="table-bulk-bar-unowned"
-        disabled={busy}
-        onClick={() => onSetOwnership(false)}
-        type="button"
-      >
-        Mark unowned
+        Ownership…
       </button>
       <button
         className="table-bulk-bar-delete"
