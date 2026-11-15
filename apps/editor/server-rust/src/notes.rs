@@ -557,6 +557,37 @@ fn normalize_tag_list(names: &[String]) -> Vec<String> {
     normalized_names
 }
 
+/// Whether every id names a Note in the collection. A bulk write checks this
+/// before its transaction so an unknown or foreign id answers 404 and writes
+/// nothing.
+fn notes_belong_to_collection(
+    conn: &Connection,
+    note_ids: &[i64],
+    collection_id: i64,
+) -> Result<bool, DbError> {
+    let existing_ids: HashSet<i64> = list_notes(conn, collection_id)?
+        .into_iter()
+        .map(|note| note.id)
+        .collect();
+    Ok(note_ids.iter().all(|id| existing_ids.contains(id)))
+}
+
+/// The affected Notes after a bulk write, in the order the caller sent.
+fn notes_in_caller_order(
+    conn: &Connection,
+    note_ids: &[i64],
+    collection_id: i64,
+) -> Result<Vec<Note>, DbError> {
+    let updated: HashMap<i64, Note> = list_notes(conn, collection_id)?
+        .into_iter()
+        .map(|note| (note.id, note))
+        .collect();
+    Ok(note_ids
+        .iter()
+        .filter_map(|id| updated.get(id).cloned())
+        .collect())
+}
+
 /// Adds and removes Tags across several Notes in one transaction. `None` means
 /// at least one note id was unknown or belonged to another collection: nothing
 /// was written, and the route answers the documented 404. Adds find or create
@@ -569,11 +600,7 @@ fn update_note_tags_row(
     remove: &[String],
     collection_id: i64,
 ) -> Result<Option<Vec<Note>>, DbError> {
-    let existing_ids: HashSet<i64> = list_notes(conn, collection_id)?
-        .into_iter()
-        .map(|note| note.id)
-        .collect();
-    if note_ids.iter().any(|id| !existing_ids.contains(id)) {
+    if !notes_belong_to_collection(conn, note_ids, collection_id)? {
         return Ok(None);
     }
 
@@ -613,18 +640,38 @@ fn update_note_tags_row(
     tx.commit().map_err(classify)?;
 
     // One fresh list after the commit carries the new links and the Tag rows
-    // they point at; the response only needs the affected notes, in the order
-    // the caller sent.
-    let updated: HashMap<i64, Note> = list_notes(conn, collection_id)?
-        .into_iter()
-        .map(|note| (note.id, note))
-        .collect();
-    Ok(Some(
-        note_ids
-            .iter()
-            .filter_map(|id| updated.get(id).cloned())
-            .collect(),
-    ))
+    // they point at.
+    Ok(Some(notes_in_caller_order(conn, note_ids, collection_id)?))
+}
+
+/// Sets the library-wide `owned` flag across several Notes in one
+/// transaction. `None` means at least one note id was unknown or belonged to
+/// another collection: nothing was written, and the route answers the
+/// documented 404.
+fn update_notes_owned_row(
+    conn: &mut Connection,
+    note_ids: &[i64],
+    owned: bool,
+    collection_id: i64,
+) -> Result<Option<Vec<Note>>, DbError> {
+    if !notes_belong_to_collection(conn, note_ids, collection_id)? {
+        return Ok(None);
+    }
+
+    let tx = conn.transaction().map_err(classify)?;
+    for note_id in note_ids {
+        tx.execute(
+            "UPDATE banknotes
+             SET owned = ?1, updated_at = datetime('now')
+             WHERE id = ?2 AND collection_id = ?3",
+            params![owned, note_id, collection_id],
+        )
+        .map_err(classify)?;
+    }
+    tx.commit().map_err(classify)?;
+
+    // One fresh list after the commit carries the new flag.
+    Ok(Some(notes_in_caller_order(conn, note_ids, collection_id)?))
 }
 
 // ---------------------------------------------------------------------------
@@ -729,21 +776,27 @@ fn payload_string(body: &Value, key: &str) -> String {
     body.get(key).map(node_string).unwrap_or_default().trim().to_owned()
 }
 
-/// `owned` is the Note's library-wide flag. A body that omits it keeps the
-/// schema default (owned); JSON booleans and numbers and the multipart form's
+/// `owned` is the Note's library-wide flag. A new Note is unowned unless the
+/// payload says otherwise; JSON booleans and numbers and the multipart form's
 /// `true`/`false` text all read the same way. Anything else is an invalid
 /// body, reported as a 400 like an unparsable `scraped_data`.
-fn payload_owned(body: &Value) -> Result<bool, String> {
-    match body.get("owned") {
-        None | Some(Value::Null) => Ok(true),
-        Some(Value::Bool(flag)) => Ok(*flag),
-        Some(Value::Number(number)) => Ok(number.as_f64().is_some_and(|value| value != 0.0)),
-        Some(Value::String(text)) => match text.trim().to_lowercase().as_str() {
+fn parse_owned(value: &Value) -> Result<bool, String> {
+    match value {
+        Value::Bool(flag) => Ok(*flag),
+        Value::Number(number) => Ok(number.as_f64().is_some_and(|value| value != 0.0)),
+        Value::String(text) => match text.trim().to_lowercase().as_str() {
             "1" | "true" | "yes" | "on" => Ok(true),
             "0" | "false" | "no" | "off" | "" => Ok(false),
             _ => Err("owned must be a boolean.".to_owned()),
         },
-        Some(_) => Err("owned must be a boolean.".to_owned()),
+        _ => Err("owned must be a boolean.".to_owned()),
+    }
+}
+
+fn payload_owned(body: &Value) -> Result<bool, String> {
+    match body.get("owned") {
+        None | Some(Value::Null) => Ok(false),
+        Some(value) => parse_owned(value),
     }
 }
 
@@ -1975,6 +2028,58 @@ async fn update_notes_tags_handler(
     }
 }
 
+async fn update_notes_owned_handler(
+    State(state): State<AppState>,
+    collection: Option<Path<Vec<String>>>,
+    req: Request,
+) -> Response {
+    let raw = captures(collection);
+    let collection_id = match resolve_for_write(&state.pool, raw.first().cloned()).await {
+        Ok(id) => id,
+        Err((status, message)) => return status_response(status, &message),
+    };
+    let body = read_json_body(req).await;
+
+    let ids_message = "A valid list of note IDs is required.";
+    let Some(raw_ids) = body.get("note_ids").and_then(Value::as_array) else {
+        return bad_request(ids_message);
+    };
+    if raw_ids.is_empty() {
+        return bad_request("Select at least one note.");
+    }
+    let mut note_ids = Vec::with_capacity(raw_ids.len());
+    let mut seen_ids = HashSet::with_capacity(raw_ids.len());
+    for item in raw_ids {
+        match js_number(item) {
+            Some(id) if id > 0 => {
+                if !seen_ids.insert(id) {
+                    return bad_request("Each note can only be updated once.");
+                }
+                note_ids.push(id);
+            }
+            _ => return bad_request(ids_message),
+        }
+    }
+
+    let Some(raw_owned) = body.get("owned") else {
+        return bad_request("owned must be a boolean.");
+    };
+    let owned = match parse_owned(raw_owned) {
+        Ok(owned) => owned,
+        Err(message) => return bad_request(&message),
+    };
+
+    match db::with_conn(&state.pool, move |conn| {
+        update_notes_owned_row(conn, &note_ids, owned, collection_id)
+    })
+    .await
+    {
+        Ok(Some(notes)) => ok(json!({ "notes": notes })),
+        Ok(None) => not_found("Note not found."),
+        Err(error) => db_failure(error),
+    }
+}
+
 async fn list_tags_handler(
     State(state): State<AppState>,
     collection: Option<Path<Vec<String>>>,
@@ -1999,6 +2104,10 @@ pub fn notes_router() -> Router<AppState> {
         .route(
             "/api/collections/{collectionId}/notes/tags",
             post(update_notes_tags_handler),
+        )
+        .route(
+            "/api/collections/{collectionId}/notes/ownership",
+            post(update_notes_owned_handler),
         )
         .route(
             "/api/collections/{collectionId}/notes/{id}",

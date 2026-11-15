@@ -136,25 +136,25 @@ async fn note_created_is_retrievable_with_tags() {
 }
 
 #[tokio::test]
-async fn note_owned_defaults_true_when_the_payload_omits_it() {
+async fn note_owned_defaults_false_when_the_payload_omits_it() {
     let (_dir, state) = fresh_state();
     let app = create_app(state);
     let collection = create_collection(app.clone(), "Notes Owned Default").await;
     let id = collection["id"].as_i64().unwrap();
 
     let created = create_note(app.clone(), id, json!({})).await;
-    assert_eq!(created["owned"], json!(true));
+    assert_eq!(created["owned"], json!(false));
 
     let (_, reread) =
         call(app.clone(), "GET", &format!("/api/collections/{id}/notes/{}", created["id"]), None)
             .await;
-    assert_eq!(reread["note"]["owned"], json!(true));
+    assert_eq!(reread["note"]["owned"], json!(false));
 
     // The property is a boolean in the projected list too, not a 0/1 column.
     let (status, listed) =
         call(app, "GET", &format!("/api/collections/{id}/notes?fields=id,owned"), None).await;
     assert_eq!(status, StatusCode::OK, "{listed:?}");
-    assert_eq!(listed["notes"][0]["owned"], json!(true));
+    assert_eq!(listed["notes"][0]["owned"], json!(false));
 }
 
 #[tokio::test]
@@ -187,7 +187,7 @@ async fn note_update_without_owned_restores_the_default() {
     let app = create_app(state);
     let collection = create_collection(app.clone(), "Notes Owned Reset").await;
     let id = collection["id"].as_i64().unwrap();
-    let created = create_note(app.clone(), id, json!({ "owned": false })).await;
+    let created = create_note(app.clone(), id, json!({ "owned": true })).await;
     let note_id = created["id"].as_i64().unwrap();
 
     // An update replaces the whole payload, so an omitted flag falls back to
@@ -197,7 +197,89 @@ async fn note_update_without_owned_restores_the_default() {
         Some(json!({ "denomination": "5 Lei" })),
     ).await;
     assert_eq!(status, StatusCode::OK, "{body:?}");
-    assert_eq!(body["note"]["owned"], json!(true));
+    assert_eq!(body["note"]["owned"], json!(false));
+}
+
+#[tokio::test]
+async fn bulk_ownership_marks_several_notes_both_ways() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let collection = create_collection(app.clone(), "Notes Owned Bulk").await;
+    let id = collection["id"].as_i64().unwrap();
+    let first = create_note(app.clone(), id, json!({ "denomination": "1 Leu" })).await;
+    let second = create_note(app.clone(), id, json!({ "denomination": "5 Lei" })).await;
+    let third = create_note(app.clone(), id, json!({ "denomination": "10 Lei" })).await;
+    let note_ids = vec![
+        first["id"].as_i64().unwrap(),
+        second["id"].as_i64().unwrap(),
+        third["id"].as_i64().unwrap(),
+    ];
+    let path = format!("/api/collections/{id}/notes/ownership");
+
+    let (status, body) = call(
+        app.clone(), "POST", &path,
+        Some(json!({ "note_ids": [note_ids[1], note_ids[0]], "owned": true })),
+    ).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert_eq!(body["notes"][0]["id"], json!(note_ids[1]));
+    assert_eq!(body["notes"][0]["owned"], json!(true));
+    assert_eq!(body["notes"][1]["id"], json!(note_ids[0]));
+    assert_eq!(body["notes"][1]["owned"], json!(true));
+
+    // Untouched notes keep their flag.
+    let (_, reread) =
+        call(app.clone(), "GET", &format!("/api/collections/{id}/notes/{}", note_ids[2]), None)
+            .await;
+    assert_eq!(reread["note"]["owned"], json!(false));
+
+    let (status, body) = call(
+        app.clone(), "POST", &path,
+        Some(json!({ "note_ids": note_ids, "owned": false })),
+    ).await;
+    assert_eq!(status, StatusCode::OK, "{body:?}");
+    assert!(body["notes"].as_array().unwrap().iter().all(|note| note["owned"] == json!(false)));
+}
+
+#[tokio::test]
+async fn bulk_ownership_is_all_or_nothing_on_an_unknown_id() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let collection = create_collection(app.clone(), "Notes Owned Bulk 404").await;
+    let id = collection["id"].as_i64().unwrap();
+    let note = create_note(app.clone(), id, json!({ "owned": false })).await;
+    let note_id = note["id"].as_i64().unwrap();
+
+    let (status, body) = call(
+        app.clone(), "POST", &format!("/api/collections/{id}/notes/ownership"),
+        Some(json!({ "note_ids": [note_id, 999_999], "owned": true })),
+    ).await;
+    assert_eq!(status, StatusCode::NOT_FOUND, "{body:?}");
+
+    let (_, reread) =
+        call(app.clone(), "GET", &format!("/api/collections/{id}/notes/{note_id}"), None).await;
+    assert_eq!(reread["note"]["owned"], json!(false));
+}
+
+#[tokio::test]
+async fn bulk_ownership_rejects_a_missing_or_invalid_flag() {
+    let (_dir, state) = fresh_state();
+    let app = create_app(state);
+    let collection = create_collection(app.clone(), "Notes Owned Bulk Invalid").await;
+    let id = collection["id"].as_i64().unwrap();
+    let note = create_note(app.clone(), id, json!({})).await;
+    let note_id = note["id"].as_i64().unwrap();
+    let path = format!("/api/collections/{id}/notes/ownership");
+
+    for body in [
+        json!({ "note_ids": [note_id] }),
+        json!({ "note_ids": [note_id], "owned": "maybe" }),
+        json!({ "note_ids": [note_id], "owned": {} }),
+        json!({ "note_ids": [], "owned": true }),
+        json!({ "note_ids": [note_id, note_id], "owned": true }),
+    ] {
+        let (status, answer) = call(app.clone(), "POST", &path, Some(body)).await;
+        assert_eq!(status, StatusCode::BAD_REQUEST, "{answer:?}");
+    }
 }
 
 #[tokio::test]

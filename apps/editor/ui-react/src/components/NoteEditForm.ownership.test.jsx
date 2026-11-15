@@ -74,7 +74,7 @@ beforeEach(() => {
 });
 
 describe("Note editor ownership toggle", () => {
-  test("create mode starts owned and submits the toggle value", async () => {
+  test("create mode starts unowned and submits the toggle value", async () => {
     const onSaveSuccess = vi.fn();
     const user = userEvent.setup();
     renderForm({ noteId: null, onSaveSuccess });
@@ -82,21 +82,21 @@ describe("Note editor ownership toggle", () => {
     const toggle = await screen.findByRole("checkbox", {
       name: "I own this note",
     });
-    expect(toggle).toBeChecked();
+    expect(toggle).not.toBeChecked();
 
     await user.click(toggle);
-    expect(toggle).not.toBeChecked();
+    expect(toggle).toBeChecked();
 
     await user.click(screen.getByRole("button", { name: "Add" }));
 
     await waitFor(() => expect(onSaveSuccess).toHaveBeenCalledTimes(1));
     expect(createNote).toHaveBeenCalledWith(
-      expect.objectContaining({ owned: false }),
+      expect.objectContaining({ owned: true }),
       1,
     );
   });
 
-  test("create mode without a change submits owned true", async () => {
+  test("create mode without a change submits unowned", async () => {
     const onSaveSuccess = vi.fn();
     const user = userEvent.setup();
     renderForm({ noteId: null, onSaveSuccess });
@@ -106,7 +106,7 @@ describe("Note editor ownership toggle", () => {
 
     await waitFor(() => expect(onSaveSuccess).toHaveBeenCalledTimes(1));
     expect(createNote).toHaveBeenCalledWith(
-      expect.objectContaining({ owned: true }),
+      expect.objectContaining({ owned: false }),
       1,
     );
   });

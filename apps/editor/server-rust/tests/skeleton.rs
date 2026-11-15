@@ -387,6 +387,33 @@ mod catalog_schema {
     }
 
     #[test]
+    fn adding_owned_to_a_legacy_database_keeps_existing_notes_owned() {
+        let dir = tempfile::tempdir().expect("tempdir");
+        let conn = initialized(&dir);
+        let collection_id = {
+            conn.execute("INSERT INTO collections (name) VALUES ('Legacy')", [])
+                .expect("insert collection");
+            conn.last_insert_rowid()
+        };
+        let legacy = seed_note(&conn, collection_id, "1");
+        conn.execute("UPDATE banknotes SET owned = 1 WHERE id = ?1", params![legacy])
+            .expect("mark owned");
+        conn.execute("ALTER TABLE banknotes DROP COLUMN owned", [])
+            .expect("column drops");
+        drop(conn);
+
+        let conn = initialized(&dir);
+        assert_eq!(
+            read_owned(&conn, legacy),
+            1,
+            "the rows that predate ownership migrate as owned"
+        );
+
+        let fresh = seed_note(&conn, collection_id, "2");
+        assert_eq!(read_owned(&conn, fresh), 0, "the column default stays unowned");
+    }
+
+    #[test]
     fn fresh_database_has_the_catalog_schema() {
         let dir = tempfile::tempdir().expect("tempdir");
         let conn = initialized(&dir);
@@ -444,7 +471,7 @@ mod catalog_schema {
     }
 
     #[test]
-    fn owned_defaults_to_one_and_keeps_the_flag_across_reopens() {
+    fn owned_defaults_to_zero_and_keeps_the_flag_across_reopens() {
         let dir = tempfile::tempdir().expect("tempdir");
         let conn = initialized(&dir);
         let collection_id = {
@@ -452,18 +479,18 @@ mod catalog_schema {
                 .expect("insert collection");
             conn.last_insert_rowid()
         };
-        let owned = seed_note(&conn, collection_id, "1");
-        let seen = seed_note(&conn, collection_id, "2");
-        conn.execute("UPDATE banknotes SET owned = 0 WHERE id = ?1", params![seen])
-            .expect("mark seen");
+        let unowned = seed_note(&conn, collection_id, "1");
+        let owned = seed_note(&conn, collection_id, "2");
+        conn.execute("UPDATE banknotes SET owned = 1 WHERE id = ?1", params![owned])
+            .expect("mark owned");
 
-        assert_eq!(read_owned(&conn, owned), 1, "existing notes migrate as owned");
-        assert_eq!(read_owned(&conn, seen), 0);
+        assert_eq!(read_owned(&conn, unowned), 0, "a new note is unowned by default");
+        assert_eq!(read_owned(&conn, owned), 1);
         drop(conn);
 
         let conn = initialized(&dir);
+        assert_eq!(read_owned(&conn, unowned), 0);
         assert_eq!(read_owned(&conn, owned), 1);
-        assert_eq!(read_owned(&conn, seen), 0);
     }
 
     #[test]

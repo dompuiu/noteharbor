@@ -1707,7 +1707,8 @@ pub fn merge_archive_into_live(
     let mut image_copy_plan: Vec<CopyEntry> = Vec::new();
     let mut note_map: HashMap<i64, i64> = HashMap::new();
     // Ownership arrived after the first archives: an archive without the
-    // column restores every note as owned, the same default the migration uses.
+    // column predates the flag, when every note was owned, so it restores them
+    // all owned rather than applying the new-note default.
     let archive_note_columns = column_names(&archive, "banknotes")?;
     let owned_select =
         if archive_note_columns.contains("owned") { "owned" } else { "1" };

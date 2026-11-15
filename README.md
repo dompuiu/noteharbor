@@ -343,6 +343,7 @@ Body: {
   serial,
   url,
   notes,
+  owned: false, // library-wide; omitted on create means unowned
   tags: ["tag1", "tag2"],
   image_front_full?,
   image_front_thumbnail?,
@@ -395,6 +396,17 @@ Body: {
 // One transaction, all-or-nothing: unknown/foreign ids are 404, duplicate
 // ids, the same tag in both lists, or two empty lists are 400. `add` finds
 // or creates in the collection's scope; `remove` drops only the link.
+// Scoped route only; the answer follows `note_ids` order.
+
+POST /api/collections/:collectionId/notes/ownership
+Body: {
+  note_ids: [number, ...],
+  owned: boolean
+}
+-> { notes: [NoteWithTags, ...] }
+// One transaction, all-or-nothing: unknown/foreign ids are 404, an empty
+// list or a missing/non-boolean `owned` is 400. `owned` is the Note's
+// library-wide flag, so the change applies wherever the Note appears.
 // Scoped route only; the answer follows `note_ids` order.
 ```
 

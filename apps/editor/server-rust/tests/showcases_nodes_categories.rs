@@ -921,7 +921,7 @@ async fn tree_child(app: Router, showcase_id: i64, node_id: Value) -> Value {
 
 #[tokio::test]
 async fn catalog_entry_creates_with_zero_one_and_many_specimens() {
-    let (_dir, state) = fresh_state();
+    let (dir, state) = fresh_state();
     let app = create_app(state);
     let showcase = create_showcase(app.clone(), Some("Catalog entries")).await;
     let showcase_id = showcase["id"].as_i64().unwrap();
@@ -932,6 +932,7 @@ async fn catalog_entry_creates_with_zero_one_and_many_specimens() {
     let first = create_note(app.clone(), collection_id, "1 leu").await;
     let second = create_note(app.clone(), collection_id, "2 lei").await;
     let third = create_note(app.clone(), collection_id, "3 lei").await;
+    set_owned(&dir, second["id"].as_i64().unwrap(), true);
 
     // Zero specimens: a planned position, still a catalog entry.
     let (status, body) = add_catalog_entry(app.clone(), showcase_id, category_id, None).await;
@@ -1368,6 +1369,8 @@ async fn showcase_counts_positions_by_ownership() {
     let seen_note = create_note(app.clone(), collection_id, "seen").await;
     let owned_specimen = create_note(app.clone(), collection_id, "owned specimen").await;
     let seen_specimen = create_note(app.clone(), collection_id, "seen specimen").await;
+    set_owned(&dir, owned_note["id"].as_i64().unwrap(), true);
+    set_owned(&dir, owned_specimen["id"].as_i64().unwrap(), true);
     set_owned(&dir, seen_note["id"].as_i64().unwrap(), false);
     set_owned(&dir, seen_specimen["id"].as_i64().unwrap(), false);
 

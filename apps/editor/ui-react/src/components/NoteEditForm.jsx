@@ -88,7 +88,7 @@ const emptyForm = {
   serial: "",
   url: "",
   notes: "",
-  owned: true,
+  owned: false,
   tags: [],
 };
 
@@ -566,7 +566,7 @@ function NoteEditForm({
             serial: notePayload.note.serial ?? "",
             url: notePayload.note.url ?? "",
             notes: notePayload.note.notes ?? "",
-            owned: notePayload.note.owned ?? true,
+            owned: notePayload.note.owned ?? false,
             tags: notePayload.note.tags.map((tag) => tag.name),
           });
           setCurrentImages(notePayload.note.images ?? []);

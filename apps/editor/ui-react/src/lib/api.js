@@ -365,6 +365,22 @@ async function updateNotesTags(collectionId, noteIds, add, remove) {
   return handleResponse(response);
 }
 
+async function updateNotesOwned(collectionId, noteIds, owned) {
+  const response = await request(
+    `/api/collections/${collectionId}/notes/ownership`,
+    {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        note_ids: noteIds,
+        owned
+      })
+    }
+  );
+
+  return handleResponse(response);
+}
+
 async function importArchive(file, onProgress, mode = 'replace') {
   if (!isFileValue(file)) {
     throw new Error('Choose a .zip archive before importing.');
@@ -697,5 +713,6 @@ export {
   updateNode,
   updateNodeNotes,
   updateNote,
+  updateNotesOwned,
   updateNotesTags
 };

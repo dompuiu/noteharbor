@@ -15,6 +15,7 @@ import {
   getNotes,
   getTags,
   reorderNotes as saveNotesOrder,
+  updateNotesOwned,
   updateNotesTags,
 } from "../lib/api.js";
 import {
@@ -779,6 +780,7 @@ function NotesTable({
   const [tagsSaving, setTagsSaving] = useState(false);
   const [tagsError, setTagsError] = useState("");
   const bulkTagsButtonRef = useRef(null);
+  const [ownershipSaving, setOwnershipSaving] = useState(false);
 
   // A staged Tag change belongs to the selection it was built against: any
   // row checkbox or Select all change closes the panel and discards it.
@@ -3324,6 +3326,43 @@ function NotesTable({
     requestAnimationFrame(() => bulkTagsButtonRef.current?.focus());
   }
 
+  async function applyOwnership(owned) {
+    if (ownershipSaving) {
+      return;
+    }
+
+    const noteIds = selectedNotes.map((note) => note.id);
+
+    if (!noteIds.length) {
+      return;
+    }
+
+    setActionError("");
+    setOwnershipSaving(true);
+
+    try {
+      await updateNotesOwned(collectionId, noteIds, owned);
+    } catch (actionError) {
+      setActionError(actionError.message);
+      setOwnershipSaving(false);
+      return;
+    }
+
+    try {
+      // Repaint from the server so the rows carry the flag the write landed,
+      // not just the one the button asked for.
+      await loadNotes();
+    } catch (loadFailure) {
+      // The write landed; a failed repaint must not read as a failed write.
+      setActionError(loadFailure.message);
+    }
+
+    setOwnershipSaving(false);
+    toastRef.current?.show(
+      `Marked ${noteIds.length} note${noteIds.length === 1 ? "" : "s"} as ${owned ? "owned" : "unowned"}`,
+    );
+  }
+
   async function handleClearAllTags(tagNames) {
     if (tagsSaving || !tagNames.length) {
       return;
@@ -4634,6 +4673,7 @@ function NotesTable({
                   onMove={openMoveForSelection}
                   onMoveSelectionDown={() => handleSelectionReorder(1)}
                   onMoveSelectionUp={() => handleSelectionReorder(-1)}
+                  onSetOwnership={applyOwnership}
                   onTags={toggleTagsPanel}
                   onLeaveBackward={() => {
                     selectionTabArmedRef.current = false;
@@ -4646,6 +4686,7 @@ function NotesTable({
                   selectedCount={selectedIds.length}
                   selectionContiguous={selectionReorderRun != null}
                   saving={reorderLoading}
+                  ownershipSaving={ownershipSaving}
                   tagsButtonRef={bulkTagsButtonRef}
                   tagsOpen={tagsOpen}
                   tagsSaving={tagsSaving}

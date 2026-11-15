@@ -13,10 +13,12 @@ export function TableBulkBar({
   onDelete,
   onLeaveBackward,
   onLeaveForward,
+  onSetOwnership,
   onMove,
   onMoveSelectionDown,
   onMoveSelectionUp,
   onTags,
+  ownershipSaving = false,
   selectedCount,
   selectionContiguous = false,
   saving = false,
@@ -26,6 +28,7 @@ export function TableBulkBar({
 }) {
   const [working, setWorking] = useState(false);
   const workingRef = useRef(false);
+  const busy = working || ownershipSaving;
   const moveReasonId = useId();
   const moveUpReasonId = `${moveReasonId}-up`;
   const moveDownReasonId = `${moveReasonId}-down`;
@@ -47,8 +50,8 @@ export function TableBulkBar({
 
   const moveUpReason = moveReason("up", canMoveSelectionUp);
   const moveDownReason = moveReason("down", canMoveSelectionDown);
-  const moveUpDisabled = working || moveUpReason != null;
-  const moveDownDisabled = working || moveDownReason != null;
+  const moveUpDisabled = busy || moveUpReason != null;
+  const moveDownDisabled = busy || moveDownReason != null;
 
   async function handleDelete() {
     // The disabled button already blocks a second click, but the flag makes the
@@ -190,7 +193,7 @@ export function TableBulkBar({
       ) : null}
       {canMove ? (
         <button
-          disabled={working}
+          disabled={busy}
           onClick={onMove}
           type="button"
         >
@@ -202,7 +205,7 @@ export function TableBulkBar({
         aria-expanded={tagsOpen}
         aria-haspopup="dialog"
         className="table-bulk-bar-tags"
-        disabled={working || tagsSaving}
+        disabled={busy || tagsSaving}
         onClick={onTags}
         ref={tagsButtonRef}
         type="button"
@@ -210,8 +213,24 @@ export function TableBulkBar({
         Tags…
       </button>
       <button
+        className="table-bulk-bar-owned"
+        disabled={busy}
+        onClick={() => onSetOwnership(true)}
+        type="button"
+      >
+        Mark owned
+      </button>
+      <button
+        className="table-bulk-bar-unowned"
+        disabled={busy}
+        onClick={() => onSetOwnership(false)}
+        type="button"
+      >
+        Mark unowned
+      </button>
+      <button
         className="table-bulk-bar-delete"
-        disabled={working}
+        disabled={busy}
         onClick={handleDelete}
         type="button"
       >

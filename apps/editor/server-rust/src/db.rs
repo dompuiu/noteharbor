@@ -408,7 +408,7 @@ fn banknotes_definition(table: &str) -> String {
            scrape_error TEXT,
            created_at TEXT DEFAULT (datetime('now')),
            updated_at TEXT DEFAULT (datetime('now')),
-           owned INTEGER NOT NULL DEFAULT 1
+           owned INTEGER NOT NULL DEFAULT 0
          )"
     )
 }
@@ -481,13 +481,18 @@ fn migrate_banknotes_foreign_key(conn: &mut Connection) -> Result<(), DbError> {
     Ok(())
 }
 
-/// `banknotes.owned`: whether the collector holds the physical note. Runs after
-/// the rebuilds so a database that predates the column gains it; every existing
-/// row migrates as owned.
+/// `banknotes.owned`: whether the collector holds the physical note. Runs
+/// before the rebuilds so a database that predates the column gains it before
+/// its rows are copied. The column keeps the same `DEFAULT 0` as a fresh
+/// schema, while the rows that were there before ownership existed migrate as
+/// owned.
 fn ensure_banknotes_owned(conn: &Connection) -> Result<(), DbError> {
     if !has_column(conn, "banknotes", "owned")? {
-        conn.execute_batch("ALTER TABLE banknotes ADD COLUMN owned INTEGER NOT NULL DEFAULT 1")
-            .map_err(classify)?;
+        conn.execute_batch(
+            "ALTER TABLE banknotes ADD COLUMN owned INTEGER NOT NULL DEFAULT 0;
+             UPDATE banknotes SET owned = 1;",
+        )
+        .map_err(classify)?;
     }
     Ok(())
 }
@@ -752,6 +757,10 @@ fn initialize_schema(conn: &mut Connection) -> Result<(), DbError> {
 
     conn.execute_batch(&banknotes_definition("banknotes"))
         .map_err(classify)?;
+    // Runs before the rebuilds: a database that predates the column gains it
+    // here, so its existing rows are copied as owned instead of falling to the
+    // new table's unowned default.
+    ensure_banknotes_owned(conn)?;
 
     conn.execute_batch(
         "CREATE TABLE IF NOT EXISTS tags (
@@ -825,7 +834,6 @@ fn initialize_schema(conn: &mut Connection) -> Result<(), DbError> {
     migrate_banknotes_for_collection_scope(conn, first_collection_id)?;
     migrate_tags_for_collection_scope(conn, first_collection_id)?;
     migrate_banknotes_foreign_key(conn)?;
-    ensure_banknotes_owned(conn)?;
 
     conn.execute_batch(
         "CREATE INDEX IF NOT EXISTS idx_banknotes_collection_display_order
