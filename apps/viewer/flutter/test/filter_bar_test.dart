@@ -12,6 +12,16 @@ import 'package:note_harbor_viewer/features/table/notes_table_screen.dart';
 import 'package:note_harbor_viewer/models/viewer_dataset.dart';
 
 void main() {
+  TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUpAll(() async {
+    // Layout assertions depend on Inter's real line widths; the test harness
+    // otherwise measures with the wide Ahem fallback.
+    final inter = FontLoader('Inter')
+      ..addFont(rootBundle.load('assets/fonts/InterVariable.ttf'));
+    await inter.load();
+  });
+
   testWidgets('filter scope select blends into the bar', (tester) async {
     final controller = DatasetController(repository: _FakeViewerRepository());
     await controller.load();
@@ -313,12 +323,8 @@ void main() {
     tester.view.physicalSize = const Size(400, 900);
     addTearDown(tester.view.reset);
 
-    // The test font (Ahem) is much wider than Inter; load the bundled face so
-    // the label-fit assertion reflects the real app.
-    final inter = FontLoader('Inter')
-      ..addFont(rootBundle.load('assets/fonts/InterVariable.ttf'));
-    await inter.load();
-
+    // The test font (Ahem) is much wider than Inter; the suite loads the
+    // bundled face in setUpAll so the label-fit assertion reflects the app.
     final controller = DatasetController(repository: _FakeViewerRepository());
     await controller.load();
 
@@ -332,7 +338,9 @@ void main() {
 
     final scope = find.byKey(const ValueKey('filterScope'));
     final scopeRect = tester.getRect(scope);
-    expect(scopeRect.width, inInclusiveRange(180, 200));
+    // The select hugs its longest option instead of reserving a fixed slot,
+    // leaving the freed width to the input.
+    expect(scopeRect.width, lessThan(180));
 
     // The longest scope label must fit on one line, not ellipsize.
     await tester.tap(scope);
@@ -344,7 +352,40 @@ void main() {
     );
     expect(label.didExceedMaxLines, isFalse);
 
-    expect(tester.getSize(find.byType(TextField)).width, greaterThan(180));
+    expect(tester.getSize(find.byType(TextField)).width, greaterThan(200));
+  });
+
+  testWidgets('scope select is its longest option plus its chrome', (
+    tester,
+  ) async {
+    tester.view.devicePixelRatio = 1.0;
+    tester.view.physicalSize = const Size(1400, 900);
+    addTearDown(tester.view.reset);
+
+    // Measure in the app's real face, loaded in setUpAll; the test font is
+    // much wider than Inter.
+    final controller = DatasetController(repository: _FakeViewerRepository());
+    await controller.load();
+
+    await tester.pumpWidget(
+      MaterialApp(home: NotesTableScreen(controller: controller)),
+    );
+    await tester.pumpAndSettle();
+
+    // Pick the longest label so the button paints it, then compare the
+    // select's width to that label.
+    await tester.tap(find.byKey(const ValueKey('filterScope')));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Denomination').last);
+    await tester.pumpAndSettle();
+
+    const chrome = 12 * 2 + 24 + 8;
+    final scopeRect = tester.getRect(find.byKey(const ValueKey('filterScope')));
+    final label = tester.renderObject<RenderParagraph>(
+      find.text('Denomination'),
+    );
+    expect(label.didExceedMaxLines, isFalse);
+    expect(scopeRect.width, closeTo(label.size.width + chrome, 1));
   });
 
   testWidgets('All notes opens on the Catalog filter scope', (tester) async {

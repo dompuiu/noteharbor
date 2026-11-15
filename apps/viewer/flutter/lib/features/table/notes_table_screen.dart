@@ -94,6 +94,16 @@ const Color _kTagChipBorder = ViewerPalette.tagBorder;
 const Color _kTagChipText = ViewerPalette.tagText;
 const double _kFilterBarHeight = 40;
 const double _kFilterBarMaxWidth = 560;
+
+/// What the scope select spends beside its longest label: the button's 12px
+/// padding on each side, its 24px arrow, and an 8px gap so the label never
+/// touches the arrow.
+const double _kFilterScopeChromeWidth = 12 * 2 + 24 + 8;
+
+/// The filter field keeps at least this much of the bar, so a very large text
+/// scale or a very narrow window ellipsizes the scope label instead of
+/// squeezing the field out.
+const double _kFilterFieldMinWidth = 120;
 const double _kHeaderControlHeight = 40;
 const double _kTagChipHorizontalPadding = 10;
 const double _kTagChipHorizontalGap = 6;
@@ -266,6 +276,35 @@ const List<({String value, String label, String hint})> _kFilterScopes = [
   (value: 'tags', label: 'Tags', hint: 'Filter tags…'),
 ];
 
+/// The filter bar's scope width: its longest option at the select's own text
+/// style and scale, plus the chrome around it.
+///
+/// Measured from [_kFilterScopes] instead of fixed, so a new scope with a
+/// longer label widens the select on its own; [maxWidth] is the bar's width,
+/// which the select never fills past.
+double _filterScopeWidth(BuildContext context, {required double maxWidth}) {
+  final painter = TextPainter(
+    textDirection: Directionality.of(context),
+    textScaler: MediaQuery.textScalerOf(context),
+    maxLines: 1,
+  );
+  var longestLabel = 0.0;
+  for (final scope in _kFilterScopes) {
+    painter.text = TextSpan(text: scope.label, style: _kFilterScopeTextStyle);
+    painter.layout();
+    longestLabel = math.max(longestLabel, painter.width);
+  }
+  painter.dispose();
+  final needed = longestLabel.ceilToDouble() + _kFilterScopeChromeWidth;
+  // Leave the divider and a usable filter field their width first; on a bar
+  // too narrow for both, the scope label ellipsizes.
+  final roomForScope = math.max(
+    _kFilterScopeChromeWidth,
+    maxWidth - 1 - _kFilterFieldMinWidth,
+  );
+  return math.min(needed, roomForScope);
+}
+
 /// The cursor shown while the columns are being panned. The Windows embedder
 /// has no open/closed-hand cursor: `grab`/`grabbing` are absent from its cursor
 /// map and silently fall back to the plain arrow, so Windows gets the pointing
@@ -340,6 +379,15 @@ const TextStyle _kFilterInputTextStyle = TextStyle(
   fontFamily: 'Inter',
   color: ViewerPalette.text,
   fontSize: 13,
+);
+
+/// The scope select's label, shared by the button, its option rows, and the
+/// measurement that sizes the button to its longest option.
+const TextStyle _kFilterScopeTextStyle = TextStyle(
+  fontFamily: 'Inter',
+  color: ViewerPalette.text,
+  fontSize: 13,
+  fontWeight: FontWeight.w700,
 );
 
 const TextStyle _kFilterHintTextStyle = TextStyle(
@@ -2727,13 +2775,14 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                           ),
                           child: LayoutBuilder(
                             builder: (context, barConstraints) {
-                              // The scope select keeps 180–200px: enough for
-                              // "Denomination" at 400px, capped so the text
-                              // input keeps the rest of the bar.
-                              final scopeWidth =
-                                  (barConstraints.maxWidth * 0.34)
-                                      .clamp(180.0, 200.0)
-                                      .toDouble();
+                              // The scope select is exactly as wide as its
+                              // longest option plus its chrome, so the filter
+                              // field takes every pixel the labels don't
+                              // need.
+                              final scopeWidth = _filterScopeWidth(
+                                context,
+                                maxWidth: barConstraints.maxWidth,
+                              );
                               final filterFocused =
                                   _searchFocusNode.hasFocus ||
                                   _scopeFocusNode.hasFocus;
@@ -2813,13 +2862,8 @@ class _NotesTableScreenState extends State<NotesTableScreen> {
                                                         const EdgeInsets.symmetric(
                                                           horizontal: 12,
                                                         ),
-                                                    style: const TextStyle(
-                                                      fontFamily: 'Inter',
-                                                      color: ViewerPalette.text,
-                                                      fontSize: 13,
-                                                      fontWeight:
-                                                          FontWeight.w700,
-                                                    ),
+                                                    style:
+                                                        _kFilterScopeTextStyle,
                                                     // The button shows plain
                                                     // labels; the hover wash
                                                     // lives on the option rows
