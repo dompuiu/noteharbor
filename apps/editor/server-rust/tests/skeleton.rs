@@ -387,7 +387,7 @@ mod catalog_schema {
     }
 
     #[test]
-    fn adding_owned_to_a_legacy_database_keeps_existing_notes_owned() {
+    fn adding_owned_to_a_legacy_database_leaves_existing_notes_unowned() {
         let dir = tempfile::tempdir().expect("tempdir");
         let conn = initialized(&dir);
         let collection_id = {
@@ -396,8 +396,6 @@ mod catalog_schema {
             conn.last_insert_rowid()
         };
         let legacy = seed_note(&conn, collection_id, "1");
-        conn.execute("UPDATE banknotes SET owned = 1 WHERE id = ?1", params![legacy])
-            .expect("mark owned");
         conn.execute("ALTER TABLE banknotes DROP COLUMN owned", [])
             .expect("column drops");
         drop(conn);
@@ -405,8 +403,8 @@ mod catalog_schema {
         let conn = initialized(&dir);
         assert_eq!(
             read_owned(&conn, legacy),
-            1,
-            "the rows that predate ownership migrate as owned"
+            0,
+            "the rows that predate ownership are unowned"
         );
 
         let fresh = seed_note(&conn, collection_id, "2");
@@ -704,7 +702,7 @@ mod catalog_schema {
             .expect("cover survives"),
             Some(7)
         );
-        assert_eq!(read_owned(&conn, 7), 1, "an old note is owned");
+        assert_eq!(read_owned(&conn, 7), 0, "an old note is left unowned");
         assert_eq!(
             sorted_columns(&conn, "showcase_nodes"),
             SHOWCASE_NODE_COLUMNS,

@@ -1274,7 +1274,7 @@ async fn import_round_trip_keeps_a_seen_note_seen() {
 }
 
 #[tokio::test]
-async fn import_restores_notes_owned_when_the_archive_predates_the_column() {
+async fn import_leaves_notes_unowned_when_the_archive_predates_the_column() {
     let (_dir, state) = archive_state();
     seed_seen_note(&state).await;
 
@@ -1287,7 +1287,7 @@ async fn import_restores_notes_owned_when_the_archive_predates_the_column() {
 
     let (status, bytes) = import_bytes(state.clone(), &older_zip, "replace").await;
     assert_eq!(status, StatusCode::OK, "{}", String::from_utf8_lossy(&bytes));
-    assert_eq!(stored_owned(&state).await, 1);
+    assert_eq!(stored_owned(&state).await, 0);
 }
 
 #[tokio::test]

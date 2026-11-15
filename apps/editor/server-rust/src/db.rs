@@ -484,15 +484,11 @@ fn migrate_banknotes_foreign_key(conn: &mut Connection) -> Result<(), DbError> {
 /// `banknotes.owned`: whether the collector holds the physical note. Runs
 /// before the rebuilds so a database that predates the column gains it before
 /// its rows are copied. The column keeps the same `DEFAULT 0` as a fresh
-/// schema, while the rows that were there before ownership existed migrate as
-/// owned.
+/// schema, so rows from before ownership existed are unowned like new notes.
 fn ensure_banknotes_owned(conn: &Connection) -> Result<(), DbError> {
     if !has_column(conn, "banknotes", "owned")? {
-        conn.execute_batch(
-            "ALTER TABLE banknotes ADD COLUMN owned INTEGER NOT NULL DEFAULT 0;
-             UPDATE banknotes SET owned = 1;",
-        )
-        .map_err(classify)?;
+        conn.execute_batch("ALTER TABLE banknotes ADD COLUMN owned INTEGER NOT NULL DEFAULT 0")
+            .map_err(classify)?;
     }
     Ok(())
 }
