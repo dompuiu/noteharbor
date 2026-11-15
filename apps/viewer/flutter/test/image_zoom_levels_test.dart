@@ -5,22 +5,12 @@ import 'package:note_harbor_viewer/features/slideshow/image_zoom_levels.dart';
 void main() {
   group('imageZoomStops', () {
     test('steps up from the fitted image in the Editor ladder', () {
-      expect(
-        imageZoomStops(maxScale: 12),
-        <double>[1, 1.25, 1.5, 2, 3, 4],
-      );
+      expect(imageZoomStops(realSizeScale: 4), kImageZoomLevels);
     });
 
-    test('caps the ladder and folds every higher stop onto the cap', () {
-      expect(
-        imageZoomStops(maxScale: 3),
-        <double>[1, 1.25, 1.5, 2, 3],
-      );
-      expect(imageZoomStops(maxScale: 1.5), <double>[1, 1.25, 1.5]);
-    });
-
-    test('never drops below the fit view', () {
-      expect(imageZoomStops(maxScale: 0.5), <double>[1]);
+    test('offers only the fit view when fit already enlarges the scan', () {
+      expect(imageZoomStops(realSizeScale: 1), <double>[1]);
+      expect(imageZoomStops(realSizeScale: 0.5), <double>[1]);
     });
   });
 

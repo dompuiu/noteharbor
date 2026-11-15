@@ -1,27 +1,21 @@
 /// Zoom stops for the Image popover, as multiples of the fitted image.
 ///
-/// Mirrors the Editor's `POPOVER_ZOOM_LEVELS` ([1, 1.25, 1.5, 2, 3, 4]): the
-/// first step above the fit view grows the image by a quarter, so a scan that
-/// fits at a fraction of its natural size is not thrown straight to 1:1. The
-/// fit view is always the first stop, so the popover is never shown smaller
-/// than fit. Actual size is not on this ladder; the header's own 1:1 stop
-/// lands on the scan's real size from wherever the ladder is.
+/// Mirrors the Editor's ladder (`apps/editor/ui-react/src/components/
+/// Slideshow.jsx`): the first step above fit grows the image by a quarter, so a
+/// large scan is not thrown straight to 1:1. Actual size is not on the ladder;
+/// the header's 1:1 stop lands on the scan's real size from any rung.
 const List<double> kImageZoomLevels = <double>[1, 1.25, 1.5, 2, 3, 4];
 
-/// The ladder capped at [maxScale], in ascending order.
+/// The stops for a scan whose natural 1:1 size is [realSizeScale] times its
+/// fit size.
 ///
-/// A stop above the cap is folded onto the cap and deduplicated, so the
-/// stepper never offers a scale the pinch's own limit would refuse.
-List<double> imageZoomStops({required double maxScale}) {
-  final ceiling = maxScale < 1 ? 1.0 : maxScale;
-  final stops = <double>[];
-  for (final level in kImageZoomLevels) {
-    final value = level < ceiling ? level : ceiling;
-    if (stops.isEmpty || (value - stops.last).abs() > 1e-6) {
-      stops.add(value);
-    }
+/// A scan that fit already draws at or above its natural size has no more
+/// pixels to reveal, so the fit view is its only stop.
+List<double> imageZoomStops({required double realSizeScale}) {
+  if (realSizeScale <= 1) {
+    return const <double>[1];
   }
-  return stops;
+  return kImageZoomLevels;
 }
 
 /// The next stop above [currentScale], or null when already at the top stop.

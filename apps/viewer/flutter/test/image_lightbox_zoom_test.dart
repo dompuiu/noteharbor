@@ -322,16 +322,13 @@ void main() {
     tester,
   ) async {
     await pumpPopover(tester);
-    final fitPercent = _percentOf(_levelText(tester));
     // The scan fits well below its natural size, so a ladder that starts at
     // natural pixels would land the first step on exactly 1:1.
-    expect(fitPercent, lessThan(100));
+    expect(_percentOf(_levelText(tester)), lessThan(100));
 
     await _zoomInWithKeyboard(tester);
-    final keyStep = _maxZoom(tester);
-    expect(keyStep, closeTo(kImageZoomLevels[1], 0.001));
+    expect(_maxZoom(tester), closeTo(kImageZoomLevels[1], 0.001));
     expect(_levelText(tester), isNot('100%'));
-    expect(_percentOf(_levelText(tester)), closeTo(fitPercent * keyStep, 1));
 
     // The wheel takes the same first step from the same fit view.
     await tester.tap(find.text('Fit'));
@@ -342,7 +339,7 @@ void main() {
     await tester.sendEventToBinding(pointer.scroll(const Offset(0, -120)));
     await tester.pump();
 
-    expect(_maxZoom(tester), closeTo(keyStep, 0.001));
+    expect(_maxZoom(tester), closeTo(kImageZoomLevels[1], 0.001));
     expect(_levelText(tester), isNot('100%'));
   });
 
@@ -884,6 +881,54 @@ void main() {
     expect(_headerButton(tester, 'Fit').onPressed, isNotNull);
   });
 
+  testWidgets('1:1 sits off the ladder and the stepper resumes from it', (
+    tester,
+  ) async {
+    await pumpPopover(tester);
+
+    await tester.tap(find.text('1:1'));
+    await tester.pumpAndSettle();
+    expect(_levelText(tester), '100%');
+    final realScale = _maxZoom(tester);
+
+    // The next rung above the real size, not a step back to fit.
+    await tester.tap(find.text('+'));
+    await tester.pumpAndSettle();
+    expect(_maxZoom(tester), greaterThan(realScale));
+    expect(_levelText(tester), isNot('100%'));
+
+    await tester.tap(find.text('1:1'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('\u2212'));
+    await tester.pumpAndSettle();
+    expect(_maxZoom(tester), lessThan(realScale));
+  });
+
+  testWidgets('a scan larger than the ladder top still reaches 1:1', (
+    tester,
+  ) async {
+    const hugeImagePath = 'noteharbor-huge-zoom-test.png';
+    await seedImage(tester, hugeImagePath, 3200, 2000);
+    await pumpSequence(tester, imageItems([zoomNote(file: hugeImagePath)]));
+
+    // The ladder tops at 4× the fit, which is still below this scan's real
+    // size, so stepping alone never reaches 1:1.
+    while (_headerButton(tester, '+').onPressed != null) {
+      await tester.tap(find.text('+'));
+      await tester.pumpAndSettle();
+    }
+    expect(_maxZoom(tester), closeTo(kImageZoomLevels.last, 0.001));
+    expect(_percentOf(_levelText(tester)), lessThan(100));
+
+    // The 1:1 stop is still one command away, and the stepper holds there
+    // rather than stepping past the ladder.
+    await tester.tap(find.text('1:1'));
+    await tester.pumpAndSettle();
+    expect(_levelText(tester), '100%');
+    expect(_headerButton(tester, '+').onPressed, isNull);
+    expect(_headerButton(tester, '\u2212').onPressed, isNotNull);
+  });
+
   testWidgets('the plus and minus buttons step the level and its readout', (
     tester,
   ) async {
@@ -1094,9 +1139,10 @@ void main() {
     await pumpSequence(tester, imageItems([zoomNote(file: smallImagePath)]));
 
     // Fit already draws the scan larger than its real size, so the level must
-    // not claim 100%, and the 1:1 stop has nothing to return to.
+    // not claim 100%, the 1:1 stop has nothing to return to, and no stop can
+    // reveal pixels the scan does not have.
     expect(_percentOf(_levelText(tester)), greaterThan(100));
-    expect(_headerButton(tester, '1:1').onPressed, isNull);
+    expectInstrumentInert(tester);
   });
 
   testWidgets('the pressed fit stop and the current face are announced', (

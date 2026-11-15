@@ -1726,7 +1726,7 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
       return;
     }
 
-    final stops = imageZoomStops(maxScale: _maxScale);
+    final stops = imageZoomStops(realSizeScale: _realSizeScale(_viewport));
     final nextScale = direction > 0
         ? nextImageZoomStop(stops, _scale)
         : previousImageZoomStop(stops, _scale);
@@ -1796,14 +1796,14 @@ class _ZoomableImagePageState extends State<_ZoomableImagePage> {
     }
 
     final realScale = _realSizeScale(_viewport);
-    final stops = imageZoomStops(maxScale: _maxScale);
+    final stops = imageZoomStops(realSizeScale: realScale);
     widget.controller.publish(
       _ImageZoomState(
         hasPage: true,
         ready: true,
         scale: _scale,
         realScale: realScale,
-        topStop: stops.isEmpty ? 1 : stops.last,
+        topStop: stops.last,
         noteId: widget.noteId,
         pageKey: pageKey,
       ),
