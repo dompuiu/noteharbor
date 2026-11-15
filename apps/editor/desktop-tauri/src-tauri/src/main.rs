@@ -15,7 +15,7 @@
 use std::{
     path::{Path, PathBuf},
     sync::{
-        Arc,
+        Arc, Mutex,
         atomic::{AtomicBool, Ordering},
     },
 };
@@ -120,71 +120,102 @@ fn read_saved_window_state(app: &tauri::AppHandle) -> window_state::WindowState 
     // The on-any-display guard runs after the window exists (monitors are
     // queryable there); here the position restores unfiltered. A fully
     // off-screen restore after a monitor change is dropped post-build.
-    window_state::parse_window_state(&raw).unwrap_or(fallback)
+    window_state::parse_window_state(&raw)
+        .map(window_state::trusted_normal_bounds)
+        .unwrap_or(fallback)
+}
+
+/// The window's current DPI scale factor, guarding only against the
+/// unreadable (`0`) case: fractional factors below 1 are legitimate.
+fn window_scale(window: &tauri::WebviewWindow) -> f64 {
+    match window.scale_factor() {
+        Ok(scale) if scale > 0.0 => scale,
+        _ => 1.0,
+    }
 }
 
 fn window_position_is_visible(
-    x: i32,
-    y: i32,
-    width: i32,
-    height: i32,
+    x: f64,
+    y: f64,
+    width: f64,
+    height: f64,
     window: &tauri::WebviewWindow,
 ) -> bool {
     let Ok(monitors) = window.available_monitors() else {
         return false;
     };
+    // Saved geometry is logical; `Monitor::position`/`size` are physical on
+    // every platform, so scale the saved rect up into the physical space the
+    // monitors report. This is exact on a single-DPI setup; with mixed DPI it
+    // is an approximation, since the saved rect was expressed at the window's
+    // then-current factor.
+    let scale = window_scale(window);
     let areas: Vec<window_state::WorkArea> = monitors
         .iter()
         .map(|monitor| {
-            let scale = monitor.scale_factor().max(1.0);
             let position = monitor.position();
             let size = monitor.size();
             window_state::WorkArea {
-                x: (f64::from(position.x) / scale).round() as i32,
-                y: (f64::from(position.y) / scale).round() as i32,
-                width: (f64::from(size.width) / scale).round() as i32,
-                height: (f64::from(size.height) / scale).round() as i32,
+                x: position.x,
+                y: position.y,
+                width: size.width as i32,
+                height: size.height as i32,
             }
         })
         .collect();
-    window_state::is_window_visible_on_any_display(x, y, width, height, &areas)
+    window_state::is_window_visible_on_any_display(
+        x * scale,
+        y * scale,
+        width * scale,
+        height * scale,
+        &areas,
+    )
 }
 
-fn save_window_state_for_window(window: &tauri::WebviewWindow) {
-    let state_path = app_data_file(
-        window.app_handle(),
-        window_state::WINDOW_STATE_FILENAME,
-    );
-    // `inner_size` is physical pixels; the builder takes logical ones, so
-    // scale back for a HiDPI-stable restore. Tauri exposes no normal-bounds
-    // API, so a maximized save restores as a large plain window (recorded gap).
-    let scale = window.scale_factor().unwrap_or(1.0).max(1.0);
-    let (width, height) = window
-        .inner_size()
-        .map(|size| {
-            (
-                (f64::from(size.width) / scale).round() as i32,
-                (f64::from(size.height) / scale).round() as i32,
-            )
-        })
-        .unwrap_or((
-            window_state::DEFAULT_WINDOW_WIDTH,
-            window_state::DEFAULT_WINDOW_HEIGHT,
-        ));
-    let state = window_state::WindowState {
-        x: None,
-        y: None,
-        width: width.max(window_state::MIN_WINDOW_WIDTH),
-        height: height.max(window_state::MIN_WINDOW_HEIGHT),
-        is_maximized: window.is_maximized().unwrap_or(false),
-        is_full_screen: window.is_fullscreen().unwrap_or(false),
-    };
+fn write_window_state(app: &tauri::AppHandle, state: &window_state::WindowState) {
+    let state_path = app_data_file(app, window_state::WINDOW_STATE_FILENAME);
     if let Some(parent) = state_path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    if let Ok(body) = serde_json::to_string(&state) {
+    if let Ok(body) = serde_json::to_string(state) {
         let _ = std::fs::write(&state_path, body);
     }
+}
+
+/// Reads the window's current geometry and flags. `outer_position` and
+/// `inner_size` are physical pixels; the builder and `set_position` take
+/// logical ones, so scale back for a HiDPI-stable restore. Keeping the
+/// fraction (instead of rounding to whole pixels) avoids a few px of drift on
+/// 125%/150% displays.
+fn observe_window(window: &tauri::WebviewWindow) -> Option<window_state::WindowObservation> {
+    let (position, size) = (window.outer_position().ok()?, window.inner_size().ok()?);
+    let scale = window_scale(window);
+    Some(window_state::WindowObservation {
+        x: f64::from(position.x) / scale,
+        y: f64::from(position.y) / scale,
+        width: f64::from(size.width) / scale,
+        height: f64::from(size.height) / scale,
+        is_maximized: window.is_maximized().unwrap_or(false),
+        is_full_screen: window.is_fullscreen().unwrap_or(false),
+        is_minimized: window.is_minimized().unwrap_or(false),
+    })
+}
+
+fn save_window_state_for_window(
+    window: &tauri::WebviewWindow,
+    persisted: &Mutex<window_state::WindowState>,
+) {
+    // A window that is gone enough that either read fails keeps the last good
+    // state already on disk.
+    let Some(observed) = observe_window(window) else {
+        return;
+    };
+    let mut state = persisted
+        .lock()
+        .unwrap_or_else(|poisoned| poisoned.into_inner());
+    let next = window_state::state_after_observation(&state, &observed);
+    *state = next;
+    write_window_state(window.app_handle(), &state);
 }
 
 async fn is_scrape_browser_available() -> bool {
@@ -411,7 +442,7 @@ pub fn run() {
                 &app_url,
                 prefs::read_last_visited_route(&desktop_preferences_path(app.handle())).as_deref(),
             );
-            let mut builder = tauri::WebviewWindowBuilder::new(
+            let builder = tauri::WebviewWindowBuilder::new(
                 app,
                 "main",
                 WebviewUrl::External(
@@ -421,10 +452,10 @@ pub fn run() {
                 ),
             )
             .title("Note Harbor Editor")
-            .inner_size(f64::from(saved.width), f64::from(saved.height))
+            .inner_size(saved.width, saved.height)
             .min_inner_size(
-                f64::from(window_state::MIN_WINDOW_WIDTH),
-                f64::from(window_state::MIN_WINDOW_HEIGHT),
+                window_state::MIN_WINDOW_WIDTH,
+                window_state::MIN_WINDOW_HEIGHT,
             )
             .visible(false)
             .initialization_script(DESKTOP_BRIDGE_JS)
@@ -447,28 +478,48 @@ pub fn run() {
                     let _ = window.show();
                 }
             });
-            if saved.is_full_screen {
-                builder = builder.fullscreen(true);
-            } else if saved.is_maximized {
-                builder = builder.maximized(true);
-            }
             let window = builder.build()?;
-            // Saved positions restore only when visible on a current monitor,
-            // mirroring `isWindowVisibleOnAnyDisplay()` in `main.js`.
+            // Restore geometry while the window is still hidden, then apply
+            // maximize/fullscreen. The window is created at the stored normal
+            // bounds so Windows remembers those as the un-maximize target;
+            // creating it already maximized makes the restored size the new
+            // "normal" bounds, which left un-maximize at full-screen size.
+            let mut persisted_state = saved;
+            let mut position_restored = false;
             if let (Some(x), Some(y)) = (saved.x, saved.y) {
                 if window_position_is_visible(x, y, saved.width, saved.height, &window) {
-                    let _ = window.set_position(tauri::Position::Logical(
-                        tauri::LogicalPosition {
-                            x: f64::from(x),
-                            y: f64::from(y),
-                        },
-                    ));
+                    position_restored = window
+                        .set_position(tauri::Position::Logical(tauri::LogicalPosition {
+                            x,
+                            y,
+                        }))
+                        .is_ok();
                 }
+            }
+            if !position_restored {
+                // No usable saved position (first run, legacy file, or an
+                // unplugged monitor): remember where the OS put the window.
+                // Otherwise a later save while maximized would keep pinning a
+                // position that was never restored, and the window would never
+                // relearn its spot.
+                if let Some(observed) = observe_window(&window) {
+                    persisted_state =
+                        window_state::state_after_observation(&saved, &observed);
+                }
+            }
+            if saved.is_full_screen {
+                let _ = window.set_fullscreen(true);
+            } else if saved.is_maximized {
+                let _ = window.maximize();
             }
             // Saves run synchronously on each event: the payload is a small
             // JSON write and correctness (state survives a crash) beats
-            // write coalescing here.
+            // write coalescing here. Attached after the restore steps so any
+            // move/resize they queue is handled by the state normalized above;
+            // the merge also ignores maximized/fullscreen geometry, so a late
+            // event cannot clobber the normal bounds either.
             let persist_window = window.clone();
+            let persisted = Mutex::new(persisted_state);
             window.on_window_event(move |event| {
                 if matches!(
                     event,
@@ -476,7 +527,7 @@ pub fn run() {
                         | tauri::WindowEvent::Moved(_)
                         | tauri::WindowEvent::CloseRequested { .. }
                 ) {
-                    save_window_state_for_window(&persist_window);
+                    save_window_state_for_window(&persist_window, &persisted);
                 }
             });
             Ok(())
