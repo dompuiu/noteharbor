@@ -543,10 +543,9 @@ function ImagePopover({
   const [zoomScale, setZoomScale] = useState(0);
   // Panning updates the offset on every pointer move; the key handler reads
   // it through a ref so its window listener is not torn down and re-added for
-  // each of those renders. The zoom scale is mirrored for the same reason: a
-  // measurement can be delivered after the reader has already left the zoom,
-  // and it must read the scale in hand rather than the one it was scheduled
-  // with.
+  // each of those renders. The zoom scale is mirrored because a measurement
+  // queued by the previous render can arrive after the reader has left the
+  // zoom: it must read the scale in hand, not the one it was scheduled with.
   useLayoutEffect(() => {
     offsetRef.current = offset;
   }, [offset]);
@@ -1265,9 +1264,8 @@ function ImagePopover({
   // occupies below the topbar.
   const imageWrapStyle =
     zoomed && fitSize.height ? { height: `${fitSize.height}px` } : undefined;
-  // The lifted plate is sized and placed from state rather than from a class,
-  // so the fit measurement can drop the lift for one read and React restores
-  // it on the next render even if a measurement never returns.
+  // The lifted plate is sized and placed from state, so the fit measurement
+  // can drop the lift for one read and React puts it back on the next render.
   const imageStyle =
     zoomed && scaledSize.width && scaledSize.height
       ? {

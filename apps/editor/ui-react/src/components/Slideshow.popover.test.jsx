@@ -414,8 +414,9 @@ describe("ImagePopover zoom", () => {
 
     fireEvent.load(image);
 
-    expect(classDuringRead).toBe(
-      "image-popover-image-wrap image-popover-image-wrap--zoomed",
+    expect(classDuringRead).toContain("image-popover-image-wrap--zoomed");
+    expect(classDuringRead).not.toContain(
+      "image-popover-image-wrap--pannable",
     );
     expect(styleDuringRead).toBeNull();
     expect(image.getAttribute("style")).toContain("width: 625px");

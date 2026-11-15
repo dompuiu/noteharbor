@@ -2222,7 +2222,7 @@ describe("slideshow overlay styles", () => {
     expect(well[1]).toMatch(/overflow:\s*hidden/);
     // The well takes its height from the component's fit measurement, so it
     // must never stretch to the panel and collapse the row to the arrows.
-    expect(well[1]).not.toMatch(/height:\s*\d*%/);
+    expect(well[1]).not.toMatch(/height:\s*[^;]*%/);
 
     // The lifted plate is placed and sized from state, so no rule can re-lift
     // it after React has returned to Fit.

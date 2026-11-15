@@ -7416,10 +7416,8 @@ button.tag {
   width: min(1400px, 96vw);
   max-width: 100%;
   margin: auto;
-  /* The panel hugs the plate in both views: the zoomed well keeps the fit
-     box's height, so the room never grows when the reader chooses 1:1 or
-     shrinks when the wheel steps back to Fit. This cap only keeps a tall scan
-     inside a short window. */
+  /* The panel hugs the plate in both views, so this cap only keeps a tall scan
+     inside a short window; the zoomed well keeps the fit height itself. */
   max-height: min(92vh, 960px);
   display: grid;
   gap: 18px;
@@ -7701,7 +7699,6 @@ button.tag {
    stepping the ladder never resizes the room. */
 .image-popover-image-wrap--zoomed {
   overflow: hidden;
-  position: relative;
 }
 
 .image-popover-image-wrap--pannable img {
