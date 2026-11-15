@@ -1,29 +1,27 @@
-/// Zoom stops for the Image popover.
+/// Zoom stops for the Image popover, as multiples of the fitted image.
 ///
-/// Mirrors the Editor's `POPOVER_ZOOM_LEVELS` ([1, 1.25, 1.5, 2, 3, 4]), but
-/// expressed as multiples of the image's natural (1:1) scale rather than as
-/// absolute scales. The fit view is always the first stop, so the popover is
-/// never shown smaller than fit.
+/// Mirrors the Editor's `POPOVER_ZOOM_LEVELS` ([1, 1.25, 1.5, 2, 3, 4]): the
+/// first step above the fit view grows the image by a quarter, so a scan that
+/// fits at a fraction of its natural size is not thrown straight to 1:1. The
+/// fit view is always the first stop, so the popover is never shown smaller
+/// than fit. Actual size is not on this ladder; the header's own 1:1 stop
+/// lands on the scan's real size from wherever the ladder is.
 const List<double> kImageZoomLevels = <double>[1, 1.25, 1.5, 2, 3, 4];
 
-/// Zoom stops for an image whose natural 1:1 size is [realSizeScale] times its
-/// fit size, capped at [maxScale].
+/// The ladder capped at [maxScale], in ascending order.
 ///
-/// Stops are clamped to `[fitScale, maxScale]`, deduplicated, and returned in
-/// ascending order. When [realSizeScale] does not exceed [fitScale] the image
-/// cannot be zoomed and the only stop is the fit view.
-List<double> imageZoomStops({
-  required double realSizeScale,
-  required double maxScale,
-  double fitScale = 1,
-}) {
-  final stops = <double>[fitScale];
-  if (realSizeScale > fitScale) {
-    for (final level in kImageZoomLevels) {
-      stops.add(realSizeScale * level);
+/// A stop above the cap is folded onto the cap and deduplicated, so the
+/// stepper never offers a scale the pinch's own limit would refuse.
+List<double> imageZoomStops({required double maxScale}) {
+  final ceiling = maxScale < 1 ? 1.0 : maxScale;
+  final stops = <double>[];
+  for (final level in kImageZoomLevels) {
+    final value = level < ceiling ? level : ceiling;
+    if (stops.isEmpty || (value - stops.last).abs() > 1e-6) {
+      stops.add(value);
     }
   }
-  return _normalizeStops(stops, minScale: fitScale, maxScale: maxScale);
+  return stops;
 }
 
 /// The next stop above [currentScale], or null when already at the top stop.
@@ -53,19 +51,4 @@ double? previousImageZoomStop(
     }
   }
   return result;
-}
-
-List<double> _normalizeStops(
-  List<double> stops, {
-  required double minScale,
-  required double maxScale,
-}) {
-  final normalized = <double>[];
-  for (final raw in stops) {
-    final value = raw.clamp(minScale, maxScale);
-    if (normalized.isEmpty || (value - normalized.last).abs() > 1e-6) {
-      normalized.add(value);
-    }
-  }
-  return normalized;
 }

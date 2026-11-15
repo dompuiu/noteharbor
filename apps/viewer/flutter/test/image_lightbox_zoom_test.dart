@@ -9,6 +9,7 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 import 'package:note_harbor_viewer/features/slideshow/image_lightbox.dart';
+import 'package:note_harbor_viewer/features/slideshow/image_zoom_levels.dart';
 import 'package:note_harbor_viewer/models/note_record.dart';
 
 void main() {
@@ -317,6 +318,34 @@ void main() {
     expect(_levelText(tester), fitLevel);
   });
 
+  testWidgets('the first wheel or key step grows from fit, not to 1:1', (
+    tester,
+  ) async {
+    await pumpPopover(tester);
+    final fitPercent = _percentOf(_levelText(tester));
+    // The scan fits well below its natural size, so a ladder that starts at
+    // natural pixels would land the first step on exactly 1:1.
+    expect(fitPercent, lessThan(100));
+
+    await _zoomInWithKeyboard(tester);
+    final keyStep = _maxZoom(tester);
+    expect(keyStep, closeTo(kImageZoomLevels[1], 0.001));
+    expect(_levelText(tester), isNot('100%'));
+    expect(_percentOf(_levelText(tester)), closeTo(fitPercent * keyStep, 1));
+
+    // The wheel takes the same first step from the same fit view.
+    await tester.tap(find.text('Fit'));
+    await tester.pumpAndSettle();
+
+    final pointer = TestPointer(1, PointerDeviceKind.mouse);
+    pointer.hover(tester.getCenter(find.byType(Image).first));
+    await tester.sendEventToBinding(pointer.scroll(const Offset(0, -120)));
+    await tester.pump();
+
+    expect(_maxZoom(tester), closeTo(keyStep, 0.001));
+    expect(_levelText(tester), isNot('100%'));
+  });
+
   testWidgets('plus and minus keys zoom in and out', (tester) async {
     await pumpPopover(tester);
 
@@ -411,11 +440,14 @@ void main() {
     tester,
   ) async {
     await pumpPopover(tester);
-    await _zoomInWithKeyboard(tester);
-    expect(_maxZoom(tester), greaterThan(1.0));
+    // Walk to 2× fit so the narrowing pinch below lands back on the ladder's
+    // 1.5× stop, well outside the fit snap margin.
+    for (var step = 0; step < 3; step++) {
+      await _zoomInWithKeyboard(tester);
+    }
+    expect(_maxZoom(tester), closeTo(2, 0.001));
 
     final center = tester.getCenter(find.byType(PageView));
-    // Start wider so the pinch lands well outside the snap margin.
     final first = await tester.startGesture(
       center + const Offset(-200, 0),
       pointer: 1,
@@ -431,7 +463,7 @@ void main() {
     await second.up();
     await tester.pumpAndSettle();
 
-    expect(_maxZoom(tester), greaterThan(1 + 0.2));
+    expect(_maxZoom(tester), closeTo(1.5, 0.001));
   });
 
   testWidgets('dragging a zoomed image pans it', (tester) async {
